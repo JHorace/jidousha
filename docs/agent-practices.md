@@ -1,0 +1,387 @@
+# Agent Practices
+
+Practices for keeping this codebase legible, navigable, and safely modifiable by AI agents.
+This engine is **agent-developed** and **agent-used**: the practices below serve both the
+agents that build the engine and the agents that build games with it.
+
+This document is the *rationale* reference. The enforceable subset lives in `CLAUDE.md`
+(always in an agent's context) and in hooks/CI (enforced mechanically). When this document
+and CLAUDE.md disagree, CLAUDE.md is wrong — fix it in the same commit.
+
+Status: adopted at project start. Language assumed Rust; formalize in ADR-0001.
+
+---
+
+## The two meta-principles
+
+Every practice below derives from these. When a situation isn't covered, derive the answer
+from these.
+
+**1. Unenforced scaffolding rots, and rotted scaffolding is worse than none.**
+A human treats a stale comment with suspicion; an agent treats it as ground truth. Every
+practice therefore names its *enforcement mechanism* — a hook, a CI check, a type, or a
+definition-of-done step. A rule that lives only in prose is a rule scheduled for deletion
+or mechanization.
+
+**2. Agents read selectively under context pressure.**
+A working agent pulls in perhaps 5% of the repo and must pick the right 5%. Everything is
+therefore designed for discoverability and summary-first reading: greppable names, fixed-shape
+module headers, routing tables, small files. Completeness is worthless if the reader never
+finds the file.
+
+---
+
+## 1. Comments
+
+Comment the things that are **not recoverable from the code**: invariants, cross-file
+contracts, units and conventions, and the intent behind surprising decisions. Do not write
+narrative "what the code does" comments — they rot fastest and displace useful context.
+
+### 1.1 Structured comment tags
+
+A small, fixed, greppable vocabulary, placed **at the point of relevance** (constraints
+stated at the point of temptation get respected; constraints stated elsewhere get missed):
+
+| Tag | Meaning | Must include |
+|---|---|---|
+| `INVARIANT:` | A condition that must remain true across this code | The condition and *why* |
+| `CONTRACT:` | A cross-boundary obligation on callers or callees | Who owes what, when |
+| `SAFETY:` | Justification for an `unsafe` block (Rust-idiomatic) | Why the invariants hold |
+| `PERF:` | Looks improvable but is deliberate for performance | Benchmark or measurement reference |
+| `DELIBERATE:` | Looks wrong/unidiomatic but is intentional | Link to the ADR (`see ADR-00NN`) |
+
+`DELIBERATE:` is the load-bearing tag in an agent-developed codebase: agents have a strong
+drive to "clean up" anything surprising. A `DELIBERATE` tag at the site of the surprise is
+the effective defense; a rationale buried in a distant doc is not.
+
+No other tags. A growing tag vocabulary is itself scaffolding rot.
+
+*Enforcement:* tag format checked by lint script in CI (`tools/check-tags`); `DELIBERATE:`
+without an ADR reference fails CI.
+
+### 1.2 Module headers
+
+Every module (file) opens with a doc comment of fixed shape:
+
+```rust
+//! One-sentence purpose.
+//!
+//! Key types: `Foo`, `BarHandle`.
+//! Depends on: `core::alloc`. Must never be depended on by: `platform`.
+//! INVARIANT: <any module-wide invariant>
+```
+
+This header is what an agent reads when deciding whether the file is relevant. A good header
+saves reading the whole file; a missing one forces the read.
+
+*Enforcement:* `#![deny(missing_docs)]` on all crates; header shape spot-checked in review
+and by `tools/check-headers`.
+
+### 1.3 Conventions live in types, not comments
+
+Cross-cutting conventions (coordinate handedness, Y direction, angle units, time units,
+color space) are stated **once** in `docs/conventions.md` and **echoed in type signatures**
+via newtypes. `Radians(f32)` beats a hundred `// in radians` comments and cannot drift.
+
+*Enforcement:* the type system; clippy lint against bare `f32` in public APIs where a
+newtype exists (custom lint in `tools/`, aspirational until written).
+
+---
+
+## 2. Documentation
+
+Three layers, organized by *when the content enters an agent's context*:
+
+### 2.1 Always-in-context: `CLAUDE.md`
+
+Ruthlessly small — one to two pages. Contains: build/test/run commands, the five most
+important conventions, the routing table ("touching X → read Y first"), the definition of
+done, and the never-do list. Its job is **navigation, not knowledge**. The most common
+failure mode is CLAUDE.md bloat; anything that can live a layer down, must.
+
+*Enforcement:* hard size cap (150 lines), checked in CI.
+
+### 2.2 Read-on-demand: `docs/internal/` and `docs/adr/`
+
+`docs/internal/<subsystem>.md` — one file per subsystem, written for a reader with **zero
+session memory**. Fixed shape: what it does (one paragraph), core data flow, invariants,
+how to test it, known sharp edges. Written at subsystem-completion time; updated as part of
+the definition of done for any change to that subsystem.
+
+`docs/adr/NNNN-title.md` — short architecture decision records: context, decision,
+consequences, alternatives rejected. Written **at decision time**. ADRs are the only durable
+defense against a future session re-litigating a settled decision. Every `DELIBERATE:` tag
+points at one. ADRs are immutable once accepted; supersede, don't edit.
+
+*Enforcement:* doc-drift hook — if `src/<subsystem>/` changed and `docs/internal/<subsystem>.md`
+did not, the hook flags it (warning, not block; the agent must explicitly state "no doc
+impact" in the commit message to silence it).
+
+### 2.3 Generated: `docs/api/`
+
+The game-agent-facing public API reference, generated from source doc comments into a
+**single compact file** designed to fit in a game-building agent's context (~20–30k tokens).
+Never hand-maintain anything that duplicates code.
+
+`docs/api/` is a **product surface** — arguably the most important one. Its quality metric:
+can a fresh agent, given only `docs/api/` and `examples/`, produce a working prototype?
+It gets evaluated like a product, not proofread like a doc.
+
+*Enforcement:* `tools/gen-api-doc` regenerates it; CI fails if the committed copy is stale.
+
+### 2.4 Two audiences, strict separation
+
+Agents *developing* the engine read `docs/internal/`. Agents *using* the engine read
+`docs/api/`. Never mix: internal details leaking into `docs/api/` waste the game agent's
+context and invite dependence on non-guaranteed behavior.
+
+---
+
+## 3. Skills (`.claude/skills/`)
+
+Skills encode **procedures** (multi-step workflows with a known good order). Docs encode
+**facts**. Keeping that boundary clean prevents duplication and drift.
+
+**When to write one:** the second time a workflow is performed manually *and* the agent
+needed correction either time. Not before — during initial development, workflows aren't
+stable, and a premature skill enforces a procedure about to change.
+
+**Expected skills (write when triggered, not preemptively):**
+
+- `add-subsystem` — scaffold module + tests + internal doc + ADR in the canonical shape.
+- `run-verification` — run and interpret the headless verification harness.
+- `make-game` — the flagship: how a game-building session uses the engine. Points at
+  `docs/api/` and `examples/`; owns the prototype workflow.
+
+**Form:** a checklist that points into repo docs rather than restating them. One source of
+truth. Skills live in `.claude/skills/` and version with the code, so an engine change and
+its skill change land in the same commit.
+
+*Enforcement:* review rule — a skill that restates facts from docs is rejected; it must link.
+
+---
+
+## 4. Repository organization
+
+Everything versioned in the repo. Nothing lives in session memory, chat history, or
+external notes.
+
+```
+CLAUDE.md            always-in-context router (≤150 lines, CI-enforced)
+.claude/
+  skills/            procedural workflows (§3)
+  hooks/             fmt, clippy, doc-drift, api-doc staleness
+  commands/          repeated prompt shortcuts, if any emerge
+docs/
+  adr/               numbered, immutable decision records
+  internal/          per-subsystem contributor docs (fixed shape, §2.2)
+  api/               generated game-agent-facing reference (§2.3)
+  conventions.md     units, coordinates, naming vocabulary, error style
+  agent-practices.md this file
+  templates/         BLOCKED.md handoff template (§6.4)
+examples/            small canonical programs; compiled AND run in CI
+tools/
+  doctor             environment self-diagnosis (§6.1) — build FIRST
+  test               test wrapper: report file, timeouts, failure counter (§6.2)
+  verify, gen-api-doc, check-tags, check-headers, …
+src/ or crates/      engine code
+BLOCKED.md           present only while blocked on a human (§6.4); removed when resolved
+```
+
+Hooks are the enforcement layer and deserve real investment: every rule moved from prose
+into a hook stops consuming context and starts being unbreakable. Priority order:
+format-on-edit, clippy with `-D warnings`, api-doc staleness, doc-drift warning, tag lint.
+
+---
+
+## 5. Code and design practices
+
+### 5.1 Examples are the strongest prompt
+
+Agents pattern-match from working code more reliably than from any documentation. Each
+example in `examples/` is minimal, canonical (exactly one way to do each thing), and
+CI-tested so it cannot rot. **Shipping any public API includes adding or updating the
+example that demonstrates it** — this is in the definition of done.
+
+### 5.2 Tests are the spec
+
+Behavioral tests are how a future session learns what a subsystem is *supposed* to do —
+the only intent-description that cannot drift. Test names are sentences
+(`sprite_draw_order_follows_z_then_submission`), because test names are what greps well.
+Prefer many small tests over few large ones. Property tests where invariants allow.
+
+### 5.3 One way to do everything
+
+No convenience overloads, no aliases, no second path "for ergonomics." Every alternative
+doubles the ways generated code can diverge from the examples. Fixed verb vocabulary
+(recorded in `docs/conventions.md`):
+
+- `create` / `destroy` — object lifetime
+- `load` / `unload` — assets
+- `get_*` — infallible; `find_*` — returns `Option`; `try_*` — returns `Result`
+- No synonyms: never `make`, `new_*` (outside `T::new`), `fetch`, `lookup`, `remove`-vs-`delete` splits
+
+Half the API becomes guessable; guessable is the goal.
+
+### 5.4 Greppability is a design constraint
+
+Unique, searchable symbol names. No macro-generated *public* symbols (grep can't find them;
+an API that can't be grepped doesn't exist to an agent). File names match the primary type
+they contain. No deep re-export chains that hide a symbol's home.
+
+### 5.5 Errors are written for the repair loop
+
+Agents paste errors back into their own context: error text is documentation delivered at
+exactly the right moment. Every engine error states **what happened, the likely cause, and
+the fix**:
+
+```
+TextureLoad failed: "sprites/player.png" not found under asset root "assets/".
+Likely cause: path is relative to the project root, not the asset root.
+Fix: use "player.png" if the file is at assets/player.png, or check asset_root config.
+```
+
+**Silent failure is banned at the design level.** No no-op fallbacks, no degraded
+continues. Debug builds panic loudly; release builds return `Result`. `#[must_use]` on
+every `Result`-returning and handle-returning API.
+
+### 5.6 Determinism from day one
+
+Seeded RNG, fixed-timestep option, replayable input recording. Near-impossible to retrofit,
+and they are what make agent *self-verification* possible — the property this entire engine
+exists to maximize. The verification harness (headless run + structured assertions +
+frame/state dumps) is a core subsystem, not tooling.
+
+### 5.7 File sizing
+
+Soft cap ~500 lines per file, so any file is a single cheap read. Split by concept, not by
+line count alone. Locality beats maximal DRY: a small amount of duplication that keeps
+related behavior in one readable place is preferred over indirection that scatters it.
+
+### 5.8 Dependency budget
+
+Rust dependency trees grow ambiently and each crate costs build time — the core
+resource of the agent repair loop. Every **new direct dependency** records, in the
+adding commit: what it's for, why not hand-rolled, and its measured `cargo tree`
+delta (count of new transitive crates). Preference order: no dependency > tiny
+pure-Rust dependency > large pure-Rust dependency > C-linking dependency (the last
+needs an ADR, per ADR-0001). CI reports total dependency count so growth is a
+visible number in every PR, not an ambient drift.
+
+*Enforcement:* CI dependency-count report; review rule for the commit-message
+justification.
+
+### 5.9 Make illegal states unrepresentable
+
+Newtypes for units and IDs, typestate where lifecycle matters (an unloaded asset handle
+cannot be drawn), enums over booleans, non-optional fields over "maybe set later." Every
+state the type system excludes is a bug class the repair loop never has to enter.
+
+---
+
+## 6. Environment failures and escalation
+
+The root failure mode: an agent cannot natively distinguish *"my code is wrong"* from
+*"the world is wrong."* Both arrive as a failed command or unreadable output, and the
+agent's prior is that it caused the problem — so it "fixes" code that was never broken,
+or flails at infrastructure it cannot repair. The guards: make the distinction detectable
+(§6.1–6.2), make stopping a defined behavior (§6.3), make deferring cheap and legitimate
+(§6.4), and shrink the failure class structurally (§6.5).
+
+### 6.1 `tools/doctor` — detection
+
+A fast self-diagnosis script, built **before the first engine subsystem**. Checks:
+toolchain version vs `rust-toolchain.toml`, required system libraries, network
+reachability to crates.io, disk space, git state, headless-graphics capability,
+stale lock/target state. Emits a machine-readable verdict:
+
+- `ENV_OK` — environment healthy; the failure is in your code. Go debug it.
+- `ENV_FIXABLE: <exact command>` — run the named fix and nothing else.
+- `ENV_BROKEN: <description>` — human required. Stop and escalate (§6.4).
+
+Paired rule (in CLAUDE.md): on any build/test failure that is not plainly a compile
+error in code just changed, run `tools/doctor` **before attempting any fix**. This
+converts the agent's worst guessing game into a lookup.
+
+### 6.2 Two channels for every critical signal
+
+A garbled or truncated terminal must not be able to masquerade as a test failure.
+`tools/test` wraps the suite and, in addition to normal output, writes a structured
+report — pass/fail counts, failed test names, exit code — to `target/verify/report.json`.
+
+**The report file is ground truth; terminal scrollback is advisory.** If the two
+disagree, or the terminal is unreadable, that disagreement *is* the diagnosis: the
+tooling channel broke, not the tests.
+
+The wrapper also enforces **timeouts on every phase**, so a hang (e.g. windowing code
+trying to open a display in a headless environment) becomes a diagnosable
+`TIMEOUT in phase X` instead of a dead terminal.
+
+### 6.3 Circuit breaker — behavior
+
+Detection is not enough; agents are biased toward action. Explicit stop-rules:
+
+1. The same command fails the same way twice after a fix attempt → **stop**. No third
+   variation. Run `tools/doctor`, then escalate per §6.4.
+2. Infrastructure (non-code) failures get a hard budget of two fix attempts total.
+   Code failures get normal debugging.
+3. Some failure classes are **never agent-fixable, by decree**: missing system
+   dependencies, toolchain installation, network/registry outages, GPU/driver problems,
+   permission errors, disk exhaustion. On these the only correct move is escalation.
+4. **Forbidden flailing** — never, without explicit human sign-off: delete or
+   `#[ignore]` a test to get green; downgrade dependencies; edit `rust-toolchain.toml`
+   or CI config to route around a failure; switch to `--offline`; `rm -rf target` more
+   than once per incident.
+
+Because prose rules decay under context pressure (meta-principle 1), the stop-rule is
+also delivered **in the error channel at the moment of temptation**: `tools/test` counts
+consecutive identical failures and on the second prints
+*"Second identical failure. Per policy: run tools/doctor, then write BLOCKED.md. Do not
+retry."* — the same trick as the `DELIBERATE:` tag. A Claude Code hook may later harden
+this further.
+
+### 6.4 `BLOCKED.md` — make deferring cheap and legitimate
+
+Agents resist stopping partly because stopping has no defined form. Give it one: on
+escalation, fill `docs/templates/BLOCKED.md` and write it to the repo root — what I was
+doing, the exact command, full error text, doctor output, hypotheses ruled out, and the
+specific thing a human should do. Then continue any workable unrelated task, or end the
+session cleanly.
+
+Stated policy, verbatim in CLAUDE.md: **writing a good BLOCKED.md for an environment
+issue is a successful outcome, not a failure.** A five-minute human read of a well-formed
+handoff beats an hour of token burn. In an interactive session, also ask the human
+directly at this point; BLOCKED.md covers the unattended case and preserves state across
+sessions either way. Delete BLOCKED.md in the commit that resolves the blockage.
+
+### 6.5 Shrink the surface structurally
+
+The best environment failure is one that cannot occur.
+
+- Commit `Cargo.lock`; pin the toolchain in `rust-toolchain.toml`.
+- Prefer pure-Rust dependencies over anything linking system C libraries. This is a
+  standing evaluation criterion in dependency ADRs.
+- **Headless-first testing**: the default `cargo test` path never opens a window and
+  never touches a real GPU, so the display/driver failure class barely exists. (This is
+  the same harness that serves determinism and self-verification, §5.6.)
+- Document every unavoidable system requirement in `tools/doctor`, so the doctor's
+  knowledge is the single source of truth for "what this repo needs from the machine."
+
+*Enforcement:* doctor and the test wrapper are mechanical. The circuit breaker is policy
+plus the in-channel nudge (§6.3); hook-based hardening is a follow-up once the wrapper
+exists.
+
+---
+
+## 7. Definition of done
+
+A change is done when all of the following hold. (Mirrored in CLAUDE.md; enforced by hooks
+where mechanizable.)
+
+1. `cargo fmt` clean, `cargo clippy -- -D warnings` clean, all tests pass.
+2. New/changed behavior has a behavioral test whose name states the behavior.
+3. Public API changes: example added/updated, `docs/api/` regenerated.
+4. Subsystem docs (`docs/internal/`) updated, or "no doc impact" stated in the commit.
+5. Any deliberate oddity carries a `DELIBERATE:` tag pointing at an ADR (write the ADR if
+   the decision is new).
+6. No new warnings, no `unwrap()` outside tests, no silent fallback paths.
