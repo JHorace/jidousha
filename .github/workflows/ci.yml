@@ -1,0 +1,102 @@
+# CI gates, one job per signal (implementation-plan §1.3). Every job is required
+# from the first commit: a gate added later is a gate that finds nothing.
+#
+# The toolchain is not installed by an action — rustup honors rust-toolchain.toml
+# on the first cargo invocation, so CI and a developer machine run the identical
+# pinned toolchain, components and targets (agent-practices §6.5).
+#
+# The tools/ scripts are invoked as `python tools/<name>`: `setup-python`
+# guarantees `python` on every runner OS, while the shebang path (`tools/test`)
+# is Unix-only.
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fmt:
+    name: fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo fmt --all --check
+
+  clippy:
+    name: clippy (-D warnings)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: tools/test
+        run: python tools/test
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report-${{ matrix.os }}
+          path: target/verify/report.json
+          if-no-files-found: warn
+
+  wasm:
+    name: check wasm32
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # No `rustup target add` step: rust-toolchain.toml pins the target (ADR-0005).
+      - run: cargo check --workspace --target wasm32-unknown-unknown
+
+  doctor:
+    name: doctor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # A healthy runner must produce ENV_OK. If doctor cries wolf here, it will
+      # be ignored when it matters (agent-practices §6.1).
+      - run: python tools/doctor
+
+  claude-md:
+    name: CLAUDE.md size
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python tools/check-claude-md
+
+  deps:
+    name: dependency count
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # Reports only — the dependency budget is enforced by review of the
+      # justification each new dependency records in its commit (practices §5.8).
+      - run: python tools/dep-count

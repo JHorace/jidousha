@@ -12,8 +12,8 @@ boundary (ADR-0003) · winit (ADR-0004) · targets Linux/Windows/Web (ADR-0005).
 ```
 cargo check                 # fast validation — run after every edit
 cargo check --target wasm32-unknown-unknown  # web target — CI-gated, keep it green
-tools/test                  # test wrapper — ALWAYS use this, not bare cargo test [TODO: build]
-tools/doctor                # environment self-diagnosis                          [TODO: build]
+tools/test                  # test wrapper — ALWAYS use this, not bare cargo test
+tools/doctor                # environment self-diagnosis
 cargo clippy -- -D warnings # lint; warnings are errors
 cargo fmt                   # format (also runs via hook)
 cargo run --example <name>  # run a canonical example

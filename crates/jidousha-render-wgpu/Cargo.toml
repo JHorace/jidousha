@@ -1,0 +1,12 @@
+[package]
+name = "jidousha-render-wgpu"
+description = "wgpu backend for the Jidousha renderer. The only crate that may depend on wgpu."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

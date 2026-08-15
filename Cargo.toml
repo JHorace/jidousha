@@ -1,0 +1,26 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94"
+publish = false
+
+# Lints are set once here and pulled into every crate with `[lints] workspace = true`,
+# so there is one place to read the enforced rules (agent-practices §4).
+[workspace.lints.rust]
+# Every public item carries docs; `docs/api/` is generated from them (practices §2.3).
+missing_docs = "deny"
+# Denied by default so `unsafe` is never ambient. A crate that genuinely needs it
+# (archetype storage is the expected first case) overrides at the point of
+# temptation with `#![allow(unsafe_code)]` plus a SAFETY: comment — an in-source
+# attribute outranks this table, which is exactly the intended escape hatch.
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+# CLAUDE.md "Never use unwrap()/expect() outside tests and examples", mechanized.
+# clippy.toml exempts test code; examples opt out per file.
+unwrap_used = "deny"
+expect_used = "deny"

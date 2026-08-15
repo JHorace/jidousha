@@ -1,0 +1,5 @@
+/target
+# tools/test and tools/doctor write their reports under target/verify/.
+**/*.rs.bk
+__pycache__/
+*.pyc

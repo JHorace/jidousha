@@ -1,0 +1,12 @@
+[package]
+name = "jidousha-platform"
+description = "winit wrapper for the Jidousha engine: window, event pump, real-time loop driver."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

@@ -1,0 +1,47 @@
+#!/usr/bin/env python3
+"""tools/check-claude-md — enforce the CLAUDE.md size cap (agent-practices §2.1).
+
+CLAUDE.md is in every agent's context on every turn, so its cost is paid
+constantly. The cap is what stops it growing into a second design document:
+navigation belongs there, knowledge belongs a layer down in `docs/`.
+
+Exit codes: 0 within cap · 1 over cap · 2 file missing.
+
+Key functions: `check_line_count`.
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+CLAUDE_MD = REPO_ROOT / "CLAUDE.md"
+LINE_CAP = 150
+
+
+def check_line_count(path: Path, cap: int) -> "tuple[bool, int]":
+    """Return (within_cap, line_count) for `path`."""
+    count = len(path.read_text(encoding="utf-8").splitlines())
+    return count <= cap, count
+
+
+def main() -> int:
+    if not CLAUDE_MD.is_file():
+        print("[check-claude-md] CLAUDE.md is missing from the repo root")
+        return 2
+    within_cap, count = check_line_count(CLAUDE_MD, LINE_CAP)
+    if not within_cap:
+        print(
+            f"[check-claude-md] CLAUDE.md is {count} lines; the cap is {LINE_CAP}.\n"
+            "  likely cause: knowledge was added to the router instead of a docs/ file.\n"
+            "  fix: move the detail into docs/internal/ or docs/conventions.md and leave\n"
+            "       a routing-table row pointing at it (agent-practices §2.1)."
+        )
+        return 1
+    print(f"[check-claude-md] CLAUDE.md is {count}/{LINE_CAP} lines — ok")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

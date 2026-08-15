@@ -10,10 +10,11 @@ commit that completes a milestone.
    first commit.
 2. `rust-toolchain.toml` pinning current stable; workspace `Cargo.toml` with the
    crate layout from core doc §1 (crates may start empty).
-3. CI provider: GitHub Actions assumed (**TODO: confirm with owner if repo
-   isn't on GitHub**). Jobs from day one: fmt, clippy `-D warnings`, test
-   (Linux + Windows), `cargo check --target wasm32-unknown-unknown`,
-   CLAUDE.md line-count.
+3. CI provider: GitHub Actions (confirmed — the repo lives on GitHub). Jobs from
+   day one: fmt, clippy `-D warnings`, test (Linux + Windows),
+   `cargo check --target wasm32-unknown-unknown`, CLAUDE.md line-count, plus
+   `tools/doctor` on a healthy runner and a dependency-count report
+   (practices §5.8). See `docs/internal/tooling.md`.
 4. Then start M0.
 
 ## 2. Per-session protocol
@@ -78,12 +79,12 @@ v1 is done and the deferred lists become the roadmap conversation.
 
 Tick in the completing commit. (All unticked at handoff.)
 
-- [ ] session-zero  - [ ] M0  - [ ] M1  - [ ] M2  - [ ] M3  - [ ] M4
+- [x] session-zero  - [x] M0  - [ ] M1  - [ ] M2  - [ ] M3  - [ ] M4
 - [ ] A0  - [ ] I0  - [ ] R0  - [ ] M5  - [ ] R1  - [ ] A1  - [ ] R2
 - [ ] R3  - [ ] I1  - [ ] A2  - [ ] I2  - [ ] R4  - [ ] A3  - [ ] F0
 - [ ] E0  - [ ] make-game skill
 
-## 5. Document map (what exists at handoff)
+## 5. Document map
 
 ```
 CLAUDE.md                        router — always read first
@@ -96,5 +97,6 @@ docs/internal/renderer.md        submissions, backend seam (R-milestones)
 docs/internal/assets.md          handles, readiness determinism (A-milestones)
 docs/internal/input.md           snapshots, replay (I-milestones)
 docs/internal/public-api.md      facade inventory, docs/api spec (F0/E0)
+docs/internal/tooling.md         tools/ scripts, CI jobs, enforcement (M0)
 docs/templates/BLOCKED.md        escalation template
 ```

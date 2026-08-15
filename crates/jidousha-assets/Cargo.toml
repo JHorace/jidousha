@@ -1,0 +1,12 @@
+[package]
+name = "jidousha-assets"
+description = "Poll-based asset loading for the Jidousha engine: handles, readiness, deterministic visibility."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true
