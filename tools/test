@@ -39,6 +39,7 @@ REPORT_PATH = REPO_ROOT / "target" / "verify" / "report.json"
 STREAK_PATH = REPO_ROOT / "target" / "verify" / "failure-streak.json"
 
 SELFTEST_TIMEOUT_S = 120
+EXAMPLE_TIMEOUT_S = 120
 BUILD_TIMEOUT_S = 900
 TEST_TIMEOUT_S = 600
 DOCTEST_TIMEOUT_S = 300
@@ -87,6 +88,44 @@ def parse_test_output(text: str) -> dict:
         if match and match.group(1) not in failed_tests:
             failed_tests.append(match.group(1))
     return {"passed": passed, "failed": failed, "ignored": ignored, "failed_tests": failed_tests}
+
+
+def parse_example_targets(metadata: dict) -> "list[tuple[str, str]]":
+    """Every example target in the workspace, as (package, example name).
+
+    Sorted, so the run order is the same everywhere — examples are part of the
+    public surface and are run, not just compiled (agent-practices §5.1).
+    """
+    members = set(metadata.get("workspace_members", []))
+    examples = [
+        (package["name"], target["name"])
+        for package in metadata.get("packages", [])
+        if package["id"] in members
+        for target in package.get("targets", [])
+        if "example" in target.get("kind", [])
+    ]
+    return sorted(examples)
+
+
+def discover_examples() -> "list[tuple[str, str]]":
+    """Ask cargo what examples exist. An empty list means none are defined."""
+    try:
+        proc = subprocess.run(
+            ["cargo", "metadata", "--format-version", "1", "--no-deps"],
+            cwd=REPO_ROOT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=120,
+            text=True,
+        )
+    except (OSError, subprocess.TimeoutExpired) as err:
+        print(f"[tools/test] could not list examples: {err}", file=sys.stderr)
+        return []
+    if proc.returncode != 0:
+        # The build phase will report the same failure with better output.
+        print(f"[tools/test] could not list examples: {proc.stderr.strip()}", file=sys.stderr)
+        return []
+    return parse_example_targets(json.loads(proc.stdout))
 
 
 def parse_selftest_output(text: str) -> dict:
@@ -248,6 +287,15 @@ def main(argv: "list[str]") -> int:
         "doc-test": DOCTEST_TIMEOUT_S,
     }
 
+    # Examples are run, not merely compiled: each one asserts its own behaviour,
+    # so a broken example fails here rather than in a game agent's face.
+    examples = discover_examples()
+    print(f"[tools/test] examples to run: {len(examples)}")
+    for package, example in examples:
+        name = f"example:{example}"
+        phases.append(Phase(name, ["cargo", "run", "--quiet", "-p", package, "--example", example]))
+        timeouts[name] = EXAMPLE_TIMEOUT_S
+
     counts = {"passed": 0, "failed": 0, "ignored": 0}
     failed_tests: "list[str]" = []
     status = "pass"
@@ -283,6 +331,7 @@ def main(argv: "list[str]") -> int:
         "status": status,
         "exit_code": exit_code,
         **counts,
+        "examples": [f"{package}:{example}" for package, example in examples],
         "failed_tests": failed_tests,
         "phases": [asdict(phase) for phase in phases],
     }

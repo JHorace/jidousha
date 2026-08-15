@@ -110,9 +110,12 @@ that's exactly what acceptance milestone E0 tests (implementation plan).
   CI; the budget is the point — it must fit comfortably in a game-writing
   agent's context alongside the game itself).
 - Fixed structure: **Quickstart** (one complete ~60-line game, compiling,
-  CI-tested — it IS an example file, included verbatim) → **Concepts** (six
+  CI-tested — it IS an example file, included verbatim) → **Concepts** (seven
   short paragraphs: world/systems/phases, determinism & the tick, drawing,
-  assets & placeholders, input, coordinates) → **Reference** (the §2 inventory,
+  assets & placeholders, input, coordinates, and **the read-pass/write-pass
+  pattern** — reading other entities while mutating, per ADR-0013; content
+  lands at F0, drawn from core.md §5 and the `homing` example, stated in game
+  vocabulary with no mention of archetypes or borrows) → **Reference** (the §2 inventory,
   grouped as above, one entry per item: signature, one-liner, tiny example) →
   **Conventions digest** (auto-included from conventions.md) → **Testing your
   game** (headless + InputScript, brief).
@@ -124,6 +127,15 @@ that's exactly what acceptance milestone E0 tests (implementation plan).
 ## 5. Examples as API fixtures
 
 `examples/` is part of the public surface (practices §5.1): `headless_sim`,
-`window_clear`, `sprites`, `prototype_kit`, `input_echo`, plus `quickstart`
-(the docs/api embed). CONTRACT: every §2 item appears in at least one example;
-`tools/check-api-coverage` (grep-level) enforces in CI.
+`window_clear`, `sprites`, `prototype_kit`, `input_echo`, `homing`, plus
+`quickstart` (the docs/api embed). CONTRACT: every §2 item appears in at least
+one example; `tools/check-api-coverage` (grep-level) enforces in CI.
+
+**Before F0**, the facade does not exist, so an example has no `jidousha` crate
+to depend on. Examples written in the meantime live beside the crate they
+exercise (`crates/<crate>/examples/`) and name that internal crate — `homing`,
+added with ADR-0013's refinements, is the first. This is a knowing, temporary
+breach of the "games depend on `jidousha` only" contract above: at F0 these
+examples move to the root `examples/` directory, are rewritten against the
+facade, and the CI grep that enforces the contract lands with them. `tools/test`
+already runs every workspace example, wherever it lives.

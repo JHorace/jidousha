@@ -34,6 +34,7 @@ agent ──> tools/test ──> phase: tool-selftest  (python -m unittest, tool
                          phase: build          (cargo test --no-run)
                          phase: test           (cargo test --all-targets)
                          phase: doc-test       (cargo test --doc)
+                         phase: example:<name> (cargo run --example, one per example)
                               │
                               ├─> terminal (advisory)
                               └─> target/verify/report.json     (GROUND TRUTH)
@@ -49,6 +50,12 @@ a compile error and a hanging test are different, individually timed-out phases 
 
 Counts from the Rust tests and from the tools' own unittest run land in the same
 totals: one run, one set of numbers.
+
+Examples are discovered from `cargo metadata` and **run**, not merely compiled
+(practices §5.1) — each asserts its own results, so a broken example fails here
+rather than in a game agent's face. One phase per example keeps the report
+specific about which one broke, and the discovered list is printed and recorded
+so a vanished example cannot pass as silence.
 
 ## 3. Invariants
 
@@ -93,7 +100,14 @@ a row (stop rule printed, `failure-streak.json` count 2).
 - **`unwrap`/`expect` are clippy-denied workspace-wide.** `clippy.toml` exempts
   test code (`allow-unwrap-in-tests`); examples are separate compilation targets
   and are not exempt, so an example that unwraps puts
-  `#![allow(clippy::unwrap_used)]` at the top of the file.
+  `#![allow(clippy::unwrap_used)]` at the top of the file. The exemption also
+  covers only `#[test]` functions themselves, **not helper functions beside
+  them** in an integration test — a helper that unwraps fails clippy while the
+  test calling it would not.
+- **Every example is run, which assumes every example is headless.** True
+  through M4; `window_blank` (M5) will open a window and hang a headless
+  runner. That milestone owns the decision — a headless flag, an exclusion
+  list, or a separate phase — and until then the examples phase runs the lot.
 - **`cargo clean` deletes the reports.** `target/verify/` lives under `target/`,
   so a clean also resets the failure streak.
 - **CI invokes `python tools/<name>`, not `tools/<name>`.** The shebang path is

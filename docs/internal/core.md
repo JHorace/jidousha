@@ -159,8 +159,51 @@ for (e, pos) in world.query::<&Position>() { ... }
   component twice, `(&mut Position, &Position)` — panics with the §9 format,
   naming the component.
 - Sharp edge (ADR-0013): a mutable query borrows the whole world, so game code
-  cannot point-read another entity while iterating. Collect what you need in a
-  read-only pass first, or defer the work through commands (§6).
+  cannot point-read another entity while iterating. See the pattern below.
+
+### Reading other entities while mutating: the read-pass/write-pass pattern
+
+This is the one workaround for ADR-0013's sharp edge, and it is canonical: any
+system where entity A's write depends on entity B's data is written this way.
+The tempting version does not compile, which is the point — the error arrives
+at `cargo check`, not in a playtest:
+
+```rust
+for (_, position, target) in world.query_mut::<(&mut Position, &Target)>() {
+    let goal = world.component::<Position>(target.0);   // ✗ world is exclusively borrowed
+}
+```
+
+Split it into a read pass that collects and a write pass that consumes:
+
+```rust
+let mut goals: Vec<(Entity, Position)> = Vec::new();
+for (missile, _, target) in world.query::<(&Position, &Target)>() {
+    if let Some(goal) = world.find_component::<Position>(target.0) {
+        goals.push((missile, *goal));       // read pass: world stays readable
+    }
+}
+for (missile, goal) in goals {              // write pass: consumes what was read
+    let position = world.component_mut::<Position>(missile);
+    position.x += (goal.x - position.x).signum();
+}
+```
+
+Working code: `crates/jidousha-core/examples/homing.rs` (homing missiles), which
+runs in CI and asserts its own results.
+
+- The `Vec` is the whole pattern. **No helper API exists, and none should be
+  added**: one way to do everything (practices §5.3) applies to patterns as much
+  as to functions, and a `collect_then_write` helper would be a second spelling
+  of `collect()` that hides where the allocation happens.
+- The read pass is also the natural place to filter, so the write pass usually
+  touches fewer entities than a nested version would have.
+- From M3 there is a second legitimate form: record the work as **commands**
+  (§6) during the read pass and let them apply at the end of the system. Use
+  that when the work is structural (spawn/despawn/insert/remove); use the
+  collect form when it is a plain component write.
+- Determinism is unaffected either way: both passes iterate in the same
+  archetype-and-row order (§4), and the `Vec` preserves it.
 - Point access: `world.component::<T>(e) -> &T` (panics with agent-grade message
   if absent/dead), `world.find_component::<T>(e) -> Option<&T>`, plus `_mut`
   variants. Per conventions: `get`-class infallible, `find`-class Option.

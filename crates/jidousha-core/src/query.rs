@@ -40,30 +40,68 @@ pub struct With<T: Component>(PhantomData<fn() -> T>);
 /// Match only entities that do **not** carry `T`. Yields `()`, like [`With`].
 pub struct Without<T: Component>(PhantomData<fn() -> T>);
 
+/// One component access a query part declared.
+struct Borrow {
+    type_id: TypeId,
+    name: &'static str,
+    /// Which part of the query tuple asked for it, counting from zero.
+    position: usize,
+    /// `&mut T` rather than `&T`.
+    exclusive: bool,
+}
+
+impl Borrow {
+    /// How the part spells the access, for the error message.
+    fn spelling(&self) -> String {
+        if self.exclusive {
+            format!("&mut {}", self.name)
+        } else {
+            format!("&{}", self.name)
+        }
+    }
+}
+
 /// What a query needs from an archetype, declared by its parts.
 ///
 /// Each part records the components it reads, writes, or merely filters on;
 /// the world then decides which archetypes match. Keeping the access set a
-/// value — rather than a predicate buried in the trait — is also what a future
+/// value — rather than a predicate buried in the trait — is what makes the
+/// conflict check possible before iteration starts, and is what a future
 /// parallel scheduler needs to build conflict graphs (ADR-0007).
 pub struct QueryAccess {
-    borrowed: Vec<TypeId>,
+    borrowed: Vec<Borrow>,
+    borrowed_type_ids: Vec<TypeId>,
     with: Vec<TypeId>,
     without: Vec<TypeId>,
+    /// The part currently declaring; tuples set it before each part.
+    position: usize,
 }
 
 impl QueryAccess {
     pub(crate) fn new() -> Self {
         Self {
             borrowed: Vec::new(),
+            borrowed_type_ids: Vec::new(),
             with: Vec::new(),
             without: Vec::new(),
+            position: 0,
         }
     }
 
-    /// Declare that the query borrows `T`'s column, to read or to write.
-    pub fn borrows<T: Component>(&mut self) {
-        self.borrowed.push(TypeId::of::<T>());
+    /// Set which part of the query tuple is declaring next.
+    pub fn at(&mut self, position: usize) -> &mut Self {
+        self.position = position;
+        self
+    }
+
+    /// Declare that the query reads `T`.
+    pub fn reads<T: Component>(&mut self) {
+        self.borrow::<T>(false);
+    }
+
+    /// Declare that the query writes `T`.
+    pub fn writes<T: Component>(&mut self) {
+        self.borrow::<T>(true);
     }
 
     /// Declare that only entities carrying `T` match.
@@ -76,12 +114,45 @@ impl QueryAccess {
         self.without.push(TypeId::of::<T>());
     }
 
+    fn borrow<T: Component>(&mut self, exclusive: bool) {
+        self.borrowed.push(Borrow {
+            type_id: TypeId::of::<T>(),
+            name: type_name::<T>(),
+            position: self.position,
+            exclusive,
+        });
+        self.borrowed_type_ids.push(TypeId::of::<T>());
+    }
+
     pub(crate) fn borrowed_type_ids(&self) -> &[TypeId] {
-        &self.borrowed
+        &self.borrowed_type_ids
+    }
+
+    /// Reject a query whose parts would alias each other.
+    ///
+    /// CONTRACT: this runs when the query is *constructed*, not when it first
+    /// yields, so an empty world reports the mistake exactly like a full one —
+    /// the first test run of a new system surfaces it whether or not anything
+    /// has been spawned yet (ADR-0013).
+    ///
+    /// Two shared reads of one component are fine; anything involving a write
+    /// is not.
+    ///
+    /// # Panics
+    ///
+    /// If two parts access the same component and either one writes.
+    pub(crate) fn validate(&self) {
+        for (index, part) in self.borrowed.iter().enumerate() {
+            for other in &self.borrowed[index + 1..] {
+                if part.type_id == other.type_id && (part.exclusive || other.exclusive) {
+                    panic!("{}", conflicting_access_message(part, other));
+                }
+            }
+        }
     }
 
     pub(crate) fn matches(&self, archetype: &Archetype) -> bool {
-        self.borrowed
+        self.borrowed_type_ids
             .iter()
             .chain(&self.with)
             .all(|type_id| archetype.contains(*type_id))
@@ -92,78 +163,124 @@ impl QueryAccess {
     }
 }
 
-/// The columns one archetype lends to one query, exclusively.
+fn conflicting_access_message(part: &Borrow, other: &Borrow) -> String {
+    message(
+        &format!(
+            "query accesses the component {} twice: parts {} and {}",
+            part.name, part.position, other.position
+        ),
+        &format!(
+            "part {} takes {}, part {} takes {} — the two accesses would alias",
+            part.position,
+            part.spelling(),
+            other.position,
+            other.spelling()
+        ),
+        "the query tuple lists the same component type more than once, such as \
+         (&mut Position, &Position)",
+        &format!(
+            "keep one access to {} in this query — a `&mut` access already lets you read it",
+            part.name
+        ),
+    )
+}
+
+/// How much of a column a query part still holds.
+enum Lent<'w> {
+    Exclusive(&'w mut dyn Column),
+    /// Downgraded by the first `&T` part; further `&T` parts copy it.
+    Shared(&'w dyn Column),
+}
+
+/// The columns one archetype lends to a query that may write.
 ///
-/// Each column can be taken exactly once: naming the same component twice in a
-/// query would otherwise alias it.
+/// A column is lent exclusively once, or shared any number of times.
+/// [`QueryAccess::validate`] has already rejected the combinations that would
+/// alias, so the panics here report engine bugs, not game mistakes.
 pub struct ColumnsMut<'w> {
-    columns: Vec<Option<(TypeId, &'w mut dyn Column)>>,
+    columns: Vec<Option<(TypeId, Lent<'w>)>>,
 }
 
 impl<'w> ColumnsMut<'w> {
     pub(crate) fn new(columns: Vec<(TypeId, &'w mut dyn Column)>) -> Self {
         Self {
-            columns: columns.into_iter().map(Some).collect(),
+            columns: columns
+                .into_iter()
+                .map(|(type_id, column)| Some((type_id, Lent::Exclusive(column))))
+                .collect(),
+        }
+    }
+
+    fn slot(&mut self, wanted: TypeId) -> &mut Option<(TypeId, Lent<'w>)> {
+        let index = self
+            .columns
+            .iter()
+            .position(|slot| slot.as_ref().is_some_and(|(type_id, _)| *type_id == wanted));
+        match index {
+            Some(index) => &mut self.columns[index],
+            None => unreachable!("{}", UNAVAILABLE_COLUMN),
         }
     }
 
     /// Take exclusive access to the values of `T` in this archetype.
-    ///
-    /// # Panics
-    ///
-    /// If `T` was already taken — the query names it more than once.
-    pub fn take<T: Component>(&mut self) -> &'w mut Vec<T> {
-        match take_column(&mut self.columns, TypeId::of::<T>()) {
-            Some(column) => &mut typed_mut::<T>(column).values,
-            None => panic!("{}", repeated_component_message::<T>()),
-        }
-    }
-}
-
-/// The columns one archetype lends to a read-only query.
-pub struct ColumnsRef<'w> {
-    columns: Vec<Option<(TypeId, &'w dyn Column)>>,
-}
-
-impl<'w> ColumnsRef<'w> {
-    pub(crate) fn new(columns: Vec<(TypeId, &'w dyn Column)>) -> Self {
-        Self {
-            columns: columns.into_iter().map(Some).collect(),
+    pub fn take_mut<T: Component>(&mut self) -> &'w mut Vec<T> {
+        let slot = self.slot(TypeId::of::<T>());
+        match slot.take() {
+            Some((_, Lent::Exclusive(column))) => &mut typed_mut::<T>(column).values,
+            _ => unreachable!("{}", UNAVAILABLE_COLUMN),
         }
     }
 
     /// Take shared access to the values of `T` in this archetype.
     ///
-    /// # Panics
-    ///
-    /// If `T` was already taken — the query names it more than once.
+    /// The first caller downgrades the exclusive borrow to a shared one, which
+    /// later callers copy — that is what makes `(&T, &T)` legal.
+    pub fn take_ref<T: Component>(&mut self) -> &'w Vec<T> {
+        let slot = self.slot(TypeId::of::<T>());
+        let shared = match slot.take() {
+            Some((type_id, Lent::Exclusive(column))) => {
+                let shared: &'w dyn Column = column;
+                *slot = Some((type_id, Lent::Shared(shared)));
+                shared
+            }
+            Some((type_id, Lent::Shared(shared))) => {
+                *slot = Some((type_id, Lent::Shared(shared)));
+                shared
+            }
+            None => unreachable!("{}", UNAVAILABLE_COLUMN),
+        };
+        &typed::<T>(shared).values
+    }
+}
+
+/// The columns one archetype lends to a read-only query.
+///
+/// Every borrow here is shared, so any number of parts may take the same one.
+pub struct ColumnsRef<'w> {
+    columns: Vec<(TypeId, &'w dyn Column)>,
+}
+
+impl<'w> ColumnsRef<'w> {
+    pub(crate) fn new(columns: Vec<(TypeId, &'w dyn Column)>) -> Self {
+        Self { columns }
+    }
+
+    /// Take shared access to the values of `T` in this archetype.
     pub fn take<T: Component>(&mut self) -> &'w Vec<T> {
-        match take_column(&mut self.columns, TypeId::of::<T>()) {
-            Some(column) => &typed::<T>(column).values,
-            None => panic!("{}", repeated_component_message::<T>()),
+        let wanted = TypeId::of::<T>();
+        match self.columns.iter().find(|(type_id, _)| *type_id == wanted) {
+            Some((_, column)) => &typed::<T>(*column).values,
+            None => unreachable!("{}", UNAVAILABLE_COLUMN),
         }
     }
 }
 
-fn take_column<C>(columns: &mut [Option<(TypeId, C)>], wanted: TypeId) -> Option<C> {
-    columns
-        .iter_mut()
-        .find(|slot| slot.as_ref().is_some_and(|(type_id, _)| *type_id == wanted))
-        .and_then(Option::take)
-        .map(|(_, column)| column)
-}
-
-fn repeated_component_message<T: Component>() -> String {
-    let name = type_name::<T>();
-    message(
-        &format!("query names the component {name} more than once"),
-        "a component can be accessed once per query, or its two accesses could alias",
-        "the query tuple lists the same type twice, such as (&mut Position, &Position)",
-        &format!(
-            "keep one access to {name} in this query — a `&mut` access already lets you read it"
-        ),
-    )
-}
+/// Panic text for a column the query layer asked for and cannot have.
+const UNAVAILABLE_COLUMN: &str = "[jidousha] engine bug: a query part asked for a column that was absent or already lent \
+     exclusively\n  \
+     likely cause: QueryAccess::validate accepted a query whose parts alias, or an archetype \
+     matched without holding the component\n  \
+     fix: report this with the reproduction — game code cannot cause it";
 
 /// What a query asks of each entity: a component access, a filter, or a tuple
 /// of them.
@@ -215,11 +332,11 @@ impl<'w, T: Component> Query<'w> for &'w T {
     type Yield = (Entity, &'w T);
 
     fn access(access: &mut QueryAccess) {
-        access.borrows::<T>();
+        access.reads::<T>();
     }
 
     fn cursor(columns: &mut ColumnsMut<'w>) -> Self::Cursor {
-        columns.take::<T>().iter()
+        columns.take_ref::<T>().iter()
     }
 
     fn next(cursor: &mut Self::Cursor) -> Option<Self::Item> {
@@ -243,11 +360,11 @@ impl<'w, T: Component> Query<'w> for &'w mut T {
     type Yield = (Entity, &'w mut T);
 
     fn access(access: &mut QueryAccess) {
-        access.borrows::<T>();
+        access.writes::<T>();
     }
 
     fn cursor(columns: &mut ColumnsMut<'w>) -> Self::Cursor {
-        columns.take::<T>().iter_mut()
+        columns.take_mut::<T>().iter_mut()
     }
 
     fn next(cursor: &mut Self::Cursor) -> Option<Self::Item> {
@@ -320,7 +437,16 @@ macro_rules! impl_query_tuple {
             type Yield = (Entity, $($part::Item,)+);
 
             fn access(access: &mut QueryAccess) {
-                $($part::access(access);)+
+                // Each part declares under its own position, so a conflict
+                // message can name where in the tuple the two accesses are.
+                #[allow(unused_assignments)]
+                {
+                    let mut position = 0;
+                    $(
+                        $part::access(access.at(position));
+                        position += 1;
+                    )+
+                }
             }
 
             fn cursor(columns: &mut ColumnsMut<'w>) -> Self::Cursor {
@@ -388,6 +514,9 @@ impl<'w, Q: ReadOnlyQuery<'w>> QueryIter<'w, Q> {
     pub(crate) fn new(archetypes: slice::Iter<'w, Archetype>) -> Self {
         let mut access = QueryAccess::new();
         Q::access(&mut access);
+        // Before any archetype is touched, so an empty world reports a
+        // conflicting query exactly like a populated one (ADR-0013).
+        access.validate();
         Self {
             archetypes,
             walk: None,
@@ -444,6 +573,9 @@ impl<'w, Q: Query<'w>> QueryIterMut<'w, Q> {
     pub(crate) fn new(archetypes: slice::IterMut<'w, Archetype>) -> Self {
         let mut access = QueryAccess::new();
         Q::access(&mut access);
+        // Before any archetype is touched, so an empty world reports a
+        // conflicting query exactly like a populated one (ADR-0013).
+        access.validate();
         Self {
             archetypes,
             walk: None,
