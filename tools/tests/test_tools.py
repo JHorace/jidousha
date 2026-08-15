@@ -80,6 +80,17 @@ class DoctorToolchainTest(unittest.TestCase):
         self.assertEqual(check.status, doctor.FIXABLE)
         self.assertEqual(check.fix, "rustup toolchain install 1.94.1")
 
+    def test_toolchain_check_looks_past_rustup_install_chatter_for_the_version(self):
+        # Verbatim from a fresh CI runner materializing the pinned toolchain.
+        output = (
+            "info: syncing channel updates for 1.94.1-x86_64-unknown-linux-gnu\n"
+            "info: latest update on 2026-03-26 for version 1.94.1 (e408947bf 2026-03-25)\n"
+            "info: downloading 6 components\n"
+            "rustc 1.94.1 (e408947bf 2026-03-25)"
+        )
+        check = doctor.compare_toolchain("1.94.1", output)
+        self.assertEqual(check.status, doctor.OK)
+
     def test_toolchain_check_accepts_a_named_channel_without_comparing_versions(self):
         check = doctor.compare_toolchain("stable", "rustc 1.94.1 (e408947bf 2026-03-25)")
         self.assertEqual(check.status, doctor.OK)

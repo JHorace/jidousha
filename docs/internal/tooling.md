@@ -101,6 +101,11 @@ a row (stop rule printed, `failure-streak.json` count 2).
 - **Doctor's registry probe hits `https://index.crates.io/config.json`** — the
   sparse index cargo itself uses. A proxy that allows the crates.io web front end
   but not the index would still fail a build, and doctor would still catch it.
+- **Tool output is not the first line of tool output.** The first cargo/rustc
+  call on a machine that has not yet materialized the pinned toolchain is
+  preceded by rustup's `info: syncing channel updates…` chatter on the same
+  merged stream. Doctor's version check searches for the `rustc <version>` line
+  rather than matching at position zero; any new parsing does the same.
 - **Doctor treats a `cargo metadata` manifest error as `INFO`, not an
   environment fault**: a malformed `Cargo.toml` is the agent's own code, so the
   verdict stays `ENV_OK` ("go debug it") with the parse error quoted.

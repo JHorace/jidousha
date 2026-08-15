@@ -121,7 +121,11 @@ def compare_toolchain(channel: "str | None", rustc_version_output: str) -> Check
             BROKEN,
             "rust-toolchain.toml has no [toolchain] channel — the repo's pin is missing",
         )
-    match = re.match(r"rustc (\S+)", rustc_version_output)
+    # `rustc --version` is preceded by rustup's install chatter ("info: syncing
+    # channel updates…") the first time a machine materializes the pinned
+    # toolchain, so the version line is found anywhere in the output, not just
+    # at the start. Getting this wrong made doctor cry wolf on a healthy runner.
+    match = re.search(r"^rustc (\S+)", rustc_version_output, re.MULTILINE)
     if match is None:
         return Check(
             "rust-toolchain",
