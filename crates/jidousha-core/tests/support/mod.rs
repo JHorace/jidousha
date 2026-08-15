@@ -48,7 +48,7 @@ impl ComponentKind {
 }
 
 /// A component value, type-erased the naive way: one variant per kind.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ComponentValue {
     Position(i32),
     Velocity(i32),
@@ -173,6 +173,70 @@ impl ReferenceWorld {
     pub fn entity_count(&self) -> usize {
         self.slots.iter().filter(|slot| slot.alive).count()
     }
+
+    /// Every live entity carrying all of `yielded` and `required` and none of
+    /// `excluded`, with the values of the `yielded` kinds in the order asked for.
+    ///
+    /// `required` is what a `With<T>` filter contributes: the component must be
+    /// present, but a filter yields nothing, so its value is not part of the
+    /// answer.
+    ///
+    /// The naive answer to what a query should have found.
+    pub fn matching(
+        &self,
+        yielded: &[ComponentKind],
+        required: &[ComponentKind],
+        excluded: &[ComponentKind],
+    ) -> Vec<(String, Vec<ComponentValue>)> {
+        let mut found = Vec::new();
+        for (index, slot) in self.slots.iter().enumerate() {
+            if !slot.alive {
+                continue;
+            }
+            if excluded
+                .iter()
+                .any(|kind| slot.components.contains_key(kind))
+            {
+                continue;
+            }
+            if !required
+                .iter()
+                .all(|kind| slot.components.contains_key(kind))
+            {
+                continue;
+            }
+            let mut values = Vec::new();
+            for kind in yielded {
+                match slot.components.get(kind) {
+                    Some(value) => values.push(*value),
+                    None => break,
+                }
+            }
+            if values.len() == yielded.len() {
+                let entity = ReferenceEntity {
+                    index: index as u32,
+                    generation: slot.generation,
+                };
+                found.push((entity.debug(), values));
+            }
+        }
+        found.sort();
+        found
+    }
+
+    /// Add one to every live `Position`, mirroring a `query_mut` pass.
+    pub fn bump_positions(&mut self) {
+        for slot in &mut self.slots {
+            if !slot.alive {
+                continue;
+            }
+            if let Some(ComponentValue::Position(value)) =
+                slot.components.get_mut(&ComponentKind::Position)
+            {
+                *value += 1;
+            }
+        }
+    }
 }
 
 /// One operation in a generated sequence. Entity references are indices into
@@ -183,6 +247,8 @@ pub enum Op {
     Despawn(usize),
     Insert(usize, ComponentValue),
     Remove(usize, ComponentKind),
+    /// Add one to every `Position` in the world, through a mutable query.
+    BumpPositions,
 }
 
 /// splitmix64 — enough randomness for op sequences, and reproducible from a
@@ -225,13 +291,14 @@ pub fn generate(seed: u64, length: usize) -> Vec<Op> {
         }
         let target = rng.below(handles as u32) as usize;
         let op = match rng.below(100) {
-            0..=34 => {
+            0..=32 => {
                 handles += 1;
                 Op::Spawn
             }
-            35..=59 => Op::Insert(target, random_value(&mut rng)),
-            60..=79 => Op::Despawn(target),
-            _ => Op::Remove(target, random_kind(&mut rng)),
+            33..=57 => Op::Insert(target, random_value(&mut rng)),
+            58..=77 => Op::Despawn(target),
+            78..=91 => Op::Remove(target, random_kind(&mut rng)),
+            _ => Op::BumpPositions,
         };
         ops.push(op);
     }

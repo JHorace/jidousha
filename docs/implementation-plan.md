@@ -79,7 +79,7 @@ v1 is done and the deferred lists become the roadmap conversation.
 
 Tick in the completing commit. (All unticked at handoff.)
 
-- [x] session-zero  - [x] M0  - [x] M1  - [ ] M2  - [ ] M3  - [ ] M4
+- [x] session-zero  - [x] M0  - [x] M1  - [x] M2  - [ ] M3  - [ ] M4
 - [ ] A0  - [ ] I0  - [ ] R0  - [ ] M5  - [ ] R1  - [ ] A1  - [ ] R2
 - [ ] R3  - [ ] I1  - [ ] A2  - [ ] I2  - [ ] R4  - [ ] A3  - [ ] F0
 - [ ] E0  - [ ] make-game skill

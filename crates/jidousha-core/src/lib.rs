@@ -8,8 +8,8 @@
 //! (ADR-0005). Nothing here reads a `HashMap` in an order-observable path, so
 //! world state stays a pure function of the operation history (core.md §4).
 //!
-//! Built so far (`docs/internal/core.md` §11): M1 — entities and single-table
-//! component storage. Queries and archetypes land in M2, the schedule in M3.
+//! Built so far (`docs/internal/core.md` §11): M2 — entities, archetype
+//! storage, and queries. The schedule, resources and commands land in M3.
 //!
 //! ```
 //! use jidousha_core::{Component, World};
@@ -29,13 +29,18 @@
 //! assert_eq!(world.component::<Position>(entity), &Position { x: 1, y: 3 });
 //! ```
 
+mod archetype;
 mod component;
 mod entity;
 mod error;
-mod storage;
+mod query;
 mod world;
 
 pub use component::Component;
 pub use entity::Entity;
 pub use error::EntityDeadError;
+pub use query::{
+    ColumnsMut, ColumnsRef, Query, QueryAccess, QueryIter, QueryIterMut, ReadOnlyQuery, With,
+    Without,
+};
 pub use world::World;
