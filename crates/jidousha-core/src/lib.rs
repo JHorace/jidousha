@@ -8,8 +8,9 @@
 //! (ADR-0005). Nothing here reads a `HashMap` in an order-observable path, so
 //! world state stays a pure function of the operation history (core.md §4).
 //!
-//! Built so far (`docs/internal/core.md` §11): M2 — entities, archetype
-//! storage, and queries. The schedule, resources and commands land in M3.
+//! Built so far (`docs/internal/core.md` §11): M3 — entities, archetype
+//! storage, queries, resources, commands, the schedule, and the fixed-timestep
+//! clock. The app lifecycle and Draw phase land in M4.
 //!
 //! ```
 //! use jidousha_core::{Component, World};
@@ -29,18 +30,31 @@
 //! assert_eq!(world.component::<Position>(entity), &Position { x: 1, y: 3 });
 //! ```
 
+mod access;
 mod archetype;
+mod command;
 mod component;
 mod entity;
 mod error;
 mod query;
+mod resource;
+mod rng;
+mod schedule;
+mod simulation;
+mod time;
+mod units;
 mod world;
 
+pub use access::{ColumnsMut, ColumnsRef, QueryAccess};
+pub use command::{Bundle, CommandKind, Commands};
 pub use component::Component;
 pub use entity::Entity;
 pub use error::EntityDeadError;
-pub use query::{
-    ColumnsMut, ColumnsRef, Query, QueryAccess, QueryIter, QueryIterMut, ReadOnlyQuery, With,
-    Without,
-};
+pub use query::{Query, QueryIter, QueryIterMut, ReadOnlyQuery, With, Without};
+pub use resource::Resource;
+pub use rng::Rng;
+pub use schedule::{Phase, Startup, Update};
+pub use simulation::Simulation;
+pub use time::Time;
+pub use units::Seconds;
 pub use world::World;
