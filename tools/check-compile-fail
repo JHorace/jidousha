@@ -1,0 +1,166 @@
+#!/usr/bin/env python3
+"""tools/check-compile-fail — assert that bad code fails to compile, and says why.
+
+Some of the engine's most important guarantees are compile errors: a `&mut T`
+in a Draw query, an Update-shaped function registered in Draw (ADR-0008). Those
+errors carry hand-written `#[diagnostic::on_unimplemented]` text, and text with
+no test rots. This checks each snippet under
+`crates/*/tests/compile-fail/*.rs` fails to compile and that its `.expected`
+file's lines all appear in the compiler's output.
+
+DELIBERATE: hand-rolled rather than `trybuild`, which the milestone suggested.
+trybuild measured 27 transitive crates as a dev-dependency, against a standing
+budget that prefers no dependency to a large one (agent-practices §5.8), and
+the whole mechanism is the sixty lines below. Recorded in
+docs/internal/tooling.md; revisit if snapshot management gets painful.
+
+Exit codes: 0 every snippet failed as expected · 1 a snippet compiled or its
+text drifted · 2 the harness could not build the crate under test.
+
+Key functions: `missing_expectations`, `find_rlib`.
+"""
+
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+CRATE = "jidousha-core"
+CRATE_LIB = "jidousha_core"
+BUILD_TIMEOUT_S = 600
+COMPILE_TIMEOUT_S = 120
+
+
+def find_rlib(build_output: str, crate_name: str) -> "str | None":
+    """The rlib cargo just built for `crate_name`, from its JSON message stream."""
+    newest = None
+    for line in build_output.splitlines():
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            message = json.loads(line)
+        except ValueError:
+            continue
+        if message.get("reason") != "compiler-artifact":
+            continue
+        if message.get("target", {}).get("name") != crate_name:
+            continue
+        for filename in message.get("filenames", []):
+            if filename.endswith(".rlib"):
+                newest = filename
+    return newest
+
+
+def missing_expectations(expected: str, actual: str) -> "list[str]":
+    """Expected lines that do not appear in the compiler's output.
+
+    Each non-empty, non-comment line of the `.expected` file is a substring the
+    error must contain. Substrings rather than a full snapshot: rustc's framing
+    (line numbers, carets, note ordering) changes between releases, while the
+    engine's own sentences are what this is guarding.
+    """
+    wanted = [
+        line.strip()
+        for line in expected.splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+    return [line for line in wanted if line not in actual]
+
+
+def build_crate() -> "str | None":
+    proc = subprocess.run(
+        ["cargo", "build", "-p", CRATE, "--message-format=json"],
+        cwd=REPO_ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=BUILD_TIMEOUT_S,
+        text=True,
+    )
+    if proc.returncode != 0:
+        print(f"[check-compile-fail] could not build {CRATE}:\n{proc.stderr}", file=sys.stderr)
+        return None
+    # cargo reports the *lib target* name, which is underscored.
+    return find_rlib(proc.stdout, CRATE_LIB)
+
+
+def compile_snippet(snippet: Path, rlib: str) -> "tuple[int, str]":
+    """Compile one snippet against the built crate, returning (exit code, stderr)."""
+    proc = subprocess.run(
+        [
+            "rustc",
+            "--edition",
+            "2024",
+            "--crate-type",
+            "bin",
+            "--emit=metadata",
+            "-o",
+            "/dev/null" if sys.platform != "win32" else "NUL",
+            "-L",
+            f"dependency={Path(rlib).parent}",
+            "-L",
+            f"dependency={Path(rlib).parent / 'deps'}",
+            "--extern",
+            f"{CRATE_LIB}={rlib}",
+            str(snippet),
+        ],
+        cwd=REPO_ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=COMPILE_TIMEOUT_S,
+        text=True,
+    )
+    return proc.returncode, proc.stderr
+
+
+def main() -> int:
+    snippets = sorted(REPO_ROOT.glob("crates/*/tests/compile-fail/*.rs"))
+    print(f"[check-compile-fail] snippets: {len(snippets)}")
+    if not snippets:
+        return 0
+    rlib = build_crate()
+    if rlib is None:
+        print("[check-compile-fail] no rlib to compile against", file=sys.stderr)
+        return 2
+
+    failures = 0
+    for snippet in snippets:
+        expected_path = snippet.with_suffix(".expected")
+        if not expected_path.is_file():
+            print(f"  [missing] {snippet.name}: no .expected file beside it")
+            failures += 1
+            continue
+        code, stderr = compile_snippet(snippet, rlib)
+        if code == 0:
+            print(f"  [compiled] {snippet.name}: expected a compile error, got none")
+            failures += 1
+            continue
+        missing = missing_expectations(expected_path.read_text(encoding="utf-8"), stderr)
+        if missing:
+            print(f"  [drifted] {snippet.name}: the error no longer says")
+            for line in missing:
+                print(f"      {line!r}")
+            print("    actual error:")
+            for line in stderr.splitlines()[:20]:
+                print(f"      {line}")
+            failures += 1
+            continue
+        print(f"  [ok] {snippet.name}")
+
+    if failures:
+        print(
+            f"[check-compile-fail] {failures} snippet(s) wrong.\n"
+            "  likely cause: an error message was reworded, or a compile error became legal code.\n"
+            "  fix: if the new wording is better, update the .expected file beside the snippet;\n"
+            "       if the code now compiles, that is a guarantee that has been lost."
+        )
+        return 1
+    print("[check-compile-fail] every snippet fails as designed")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

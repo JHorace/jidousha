@@ -3,3 +3,30 @@
 # `unwrap` puts `#![allow(clippy::unwrap_used)]` at the top of the file.
 allow-unwrap-in-tests = true
 allow-expect-in-tests = true
+
+# ADR-0009: std trigonometry varies by platform's libm, which would break the
+# cross-platform determinism contract. The engine's own `math::sin_cos` and
+# `math::atan2` are polynomial and bit-identical everywhere. glam's angle
+# constructors route through libm too, so they are banned alongside.
+disallowed-methods = [
+    { path = "f32::sin", reason = "use jidousha_core::math::sin_cos (ADR-0009)" },
+    { path = "f32::cos", reason = "use jidousha_core::math::sin_cos (ADR-0009)" },
+    { path = "f32::sin_cos", reason = "use jidousha_core::math::sin_cos (ADR-0009)" },
+    { path = "f32::tan", reason = "use jidousha_core::math::sin_cos and divide (ADR-0009)" },
+    { path = "f32::atan2", reason = "use jidousha_core::math::atan2 (ADR-0009)" },
+    { path = "f32::atan", reason = "use jidousha_core::math::atan2 (ADR-0009)" },
+    { path = "f32::asin", reason = "use jidousha_core::math::atan2 (ADR-0009)" },
+    { path = "f32::acos", reason = "use jidousha_core::math::atan2 (ADR-0009)" },
+    { path = "f64::sin", reason = "use jidousha_core::math::sin_cos (ADR-0009)" },
+    { path = "f64::cos", reason = "use jidousha_core::math::sin_cos (ADR-0009)" },
+    { path = "f64::sin_cos", reason = "use jidousha_core::math::sin_cos (ADR-0009)" },
+    { path = "f64::tan", reason = "use jidousha_core::math::sin_cos and divide (ADR-0009)" },
+    { path = "f64::atan2", reason = "use jidousha_core::math::atan2 (ADR-0009)" },
+    { path = "f64::atan", reason = "use jidousha_core::math::atan2 (ADR-0009)" },
+    { path = "glam::Vec2::from_angle", reason = "use jidousha_core::math::rotate (ADR-0009)" },
+    { path = "glam::Mat2::from_angle", reason = "use jidousha_core::math::sin_cos (ADR-0009)" },
+    { path = "glam::Mat3::from_angle", reason = "use jidousha_core::math::sin_cos (ADR-0009)" },
+    { path = "glam::Mat4::from_rotation_x", reason = "use jidousha_core::math::sin_cos (ADR-0009)" },
+    { path = "glam::Mat4::from_rotation_y", reason = "use jidousha_core::math::sin_cos (ADR-0009)" },
+    { path = "glam::Mat4::from_rotation_z", reason = "use jidousha_core::math::sin_cos (ADR-0009)" },
+]

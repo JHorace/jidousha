@@ -22,6 +22,7 @@ exactly what broke.
 | `tools/test` | What actually passed? | 0 pass · 1 tests failed · 2 tooling/env fault |
 | `tools/check-claude-md` | Is the always-in-context router still small? | 0 ok · 1 over cap · 2 missing |
 | `tools/dep-count` | How big is the dependency graph? | always 0 (reports only) |
+| `tools/check-compile-fail` | Do the errors that must be compile errors still say the right thing? | 0 ok · 1 drifted · 2 harness broke |
 
 Not built yet (later milestones): `tools/verify` (headless deterministic run,
 lands with M4/E0), `tools/gen-api-doc` (F0), `tools/check-tags`,
@@ -34,6 +35,7 @@ agent ──> tools/test ──> phase: tool-selftest  (python -m unittest, tool
                          phase: build          (cargo test --no-run)
                          phase: test           (cargo test --all-targets)
                          phase: doc-test       (cargo test --doc)
+                         phase: compile-fail   (tools/check-compile-fail)
                          phase: example:<name> (cargo run --example, one per example)
                               │
                               ├─> terminal (advisory)
@@ -104,6 +106,19 @@ a row (stop rule printed, `failure-streak.json` count 2).
   covers only `#[test]` functions themselves, **not helper functions beside
   them** in an integration test — a helper that unwraps fails clippy while the
   test calling it would not.
+- **Compile-fail snippets are checked by substring, not by snapshot.** Each
+  `crates/*/tests/compile-fail/<name>.rs` has a `<name>.expected` listing
+  sentences the compiler's output must contain. rustc's framing (line numbers,
+  carets, note ordering) changes between releases; the engine's own sentences
+  are what is being guarded. DELIBERATE: hand-rolled instead of `trybuild`,
+  which measured 27 transitive dev-dependencies against a budget that prefers
+  none (practices §5.8) — revisit if managing the snippets ever gets painful.
+- **Not every wrong shape reaches our own error text.** Registering a
+  Draw-shaped function in Update is caught by rustc's own signature mismatch
+  (E0631) before `IntoSystem`'s `on_unimplemented` message fires, so those
+  snippets lock rustc's wording plus the `IntoSystem<Phase>` mention. The
+  `&mut T`-in-a-Draw-query case — the mistake ADR-0008 actually predicts — does
+  show the engine's sentence.
 - **Every example is run, which assumes every example is headless.** True
   through M4; `window_blank` (M5) will open a window and hang a headless
   runner. That milestone owns the decision — a headless flag, an exclusion

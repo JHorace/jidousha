@@ -22,10 +22,17 @@ use crate::entity::Entity;
 ///   fix: <the concrete change to make>
 /// ```
 ///
-/// The system name that core.md §9 also requires arrives with the schedule in
-/// M4; there is no running system to name until then.
+/// When a system is running, an `in system: <name> (<Phase>)` line is inserted
+/// after the specifics — §9's full shape. Outside a system (setup, a test
+/// driving the world directly) there is nothing to name and the line is
+/// omitted rather than filled with a placeholder.
 pub(crate) fn message(what: &str, specifics: &str, likely_cause: &str, fix: &str) -> String {
-    format!("[jidousha] {what}\n  {specifics}\n  likely cause: {likely_cause}\n  fix: {fix}")
+    // The running system, when there is one — §9 asks for it in every message,
+    // and the schedule is the only thing that knows it.
+    let in_system = crate::panic_hook::in_system_line();
+    format!(
+        "[jidousha] {what}\n  {specifics}{in_system}\n  likely cause: {likely_cause}\n  fix: {fix}"
+    )
 }
 
 /// A structural operation was asked to act on an entity that is not alive.

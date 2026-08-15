@@ -1,0 +1,5 @@
+# The mirror case; see update_system_in_draw.expected for why this locks
+# rustc's signature error rather than the engine's own sentence.
+expected function signature
+&'a mut World
+`IntoSystem<Update>`

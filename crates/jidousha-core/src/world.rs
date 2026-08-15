@@ -319,6 +319,20 @@ impl World {
         }
     }
 
+    /// A cheap summary of the world's structure, for the Draw-phase check.
+    ///
+    /// Structural only — entity count and archetype layout. A component's
+    /// *value* changing through interior mutability escapes this, which is why
+    /// ADR-0008 puts the real enforcement in the type system and calls this
+    /// defense in depth.
+    pub(crate) fn shape(&self) -> (usize, usize, usize) {
+        (
+            self.entity_count(),
+            self.archetypes.all().len(),
+            self.locations.iter().flatten().count(),
+        )
+    }
+
     /// Apply everything recorded since the last application, in order.
     ///
     /// The schedule calls this after every system, which is what makes the
