@@ -1,0 +1,355 @@
+#!/usr/bin/env python3
+"""tools/doctor — environment self-diagnosis (agent-practices §6.1).
+
+Answers exactly one question: is my code wrong, or is the world wrong? Run it
+before attempting any fix for a failure that is not a plain compile error in code
+you just changed (CLAUDE.md "When builds/tests fail").
+
+Verdict — the last line of stdout, and `verdict` in `target/verify/doctor.json`:
+
+    ENV_OK                  exit 0   environment healthy; the failure is in your code
+    ENV_FIXABLE: <command>  exit 1   run exactly that command and nothing else
+    ENV_BROKEN: <what>      exit 2   human required; stop and write BLOCKED.md
+
+Key functions: `verdict` (aggregation), `compare_toolchain`, `main`.
+Depends on: the Python 3.8+ standard library only — no third-party imports, so
+doctor keeps working when the package ecosystem is exactly what is broken.
+INVARIANT: every check is bounded by a timeout. Doctor is what you run when
+something hangs, so doctor must never hang.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import urllib.request
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+REPORT_PATH = REPO_ROOT / "target" / "verify" / "doctor.json"
+
+# The sparse index is the endpoint cargo actually talks to; probing it (rather
+# than crates.io's web front end) tests the path a build depends on.
+REGISTRY_PROBE_URL = "https://index.crates.io/config.json"
+WASM_TARGET = "wasm32-unknown-unknown"
+
+COMMAND_TIMEOUT_S = 30
+NETWORK_TIMEOUT_S = 15
+# `cargo metadata` takes the build lock; a hang here means another cargo holds it.
+METADATA_TIMEOUT_S = 60
+
+DISK_BROKEN_BYTES = 1 * 1024**3
+DISK_WARN_BYTES = 3 * 1024**3
+MIN_PYTHON = (3, 8)
+
+OK = "ok"
+INFO = "info"
+FIXABLE = "fixable"
+BROKEN = "broken"
+
+
+@dataclass
+class Check:
+    """One environment probe and what it concluded.
+
+    CONTRACT: `fix` is a runnable command and is non-empty exactly when
+    `status == FIXABLE` — the agent is told to run it verbatim.
+    """
+
+    name: str
+    status: str
+    detail: str
+    fix: str = ""
+
+
+def verdict(checks: "list[Check]") -> "tuple[str, int]":
+    """Aggregate checks into the verdict line and process exit code.
+
+    Broken outranks fixable outranks healthy: a human-required problem is never
+    hidden behind a command the agent could run.
+    """
+    broken = [c for c in checks if c.status == BROKEN]
+    if broken:
+        return "ENV_BROKEN: " + "; ".join(f"{c.name}: {c.detail}" for c in broken), 2
+    fixable = [c for c in checks if c.status == FIXABLE]
+    if fixable:
+        return "ENV_FIXABLE: " + " && ".join(c.fix for c in fixable), 1
+    return "ENV_OK", 0
+
+
+def run(cmd: "list[str]", timeout_s: int = COMMAND_TIMEOUT_S) -> "tuple[int, str]":
+    """Run `cmd`, returning (exit code, combined output). -1 = timeout, 127 = not found."""
+    try:
+        proc = subprocess.run(
+            cmd,
+            cwd=REPO_ROOT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=timeout_s,
+            text=True,
+        )
+    except FileNotFoundError:
+        return 127, f"{cmd[0]}: not found on PATH"
+    except subprocess.TimeoutExpired:
+        return -1, f"{' '.join(cmd)}: no output after {timeout_s}s"
+    except OSError as err:  # e.g. permission denied on the executable
+        return 126, f"{cmd[0]}: {err}"
+    return proc.returncode, (proc.stdout or "").strip()
+
+
+def pinned_channel(toolchain_toml: str) -> "str | None":
+    """Read `channel` out of rust-toolchain.toml without a TOML parser.
+
+    DELIBERATE: regex rather than `tomllib`, which is 3.11+; doctor must run on
+    whatever Python the machine has (agent-practices §6.1).
+    """
+    match = re.search(r'^\s*channel\s*=\s*"([^"]+)"', toolchain_toml, re.MULTILINE)
+    return match.group(1) if match else None
+
+
+def compare_toolchain(channel: "str | None", rustc_version_output: str) -> Check:
+    """Compare the pinned channel against the active `rustc --version` output."""
+    if channel is None:
+        return Check(
+            "rust-toolchain",
+            BROKEN,
+            "rust-toolchain.toml has no [toolchain] channel — the repo's pin is missing",
+        )
+    # `rustc --version` is preceded by rustup's install chatter ("info: syncing
+    # channel updates…") the first time a machine materializes the pinned
+    # toolchain, so the version line is found anywhere in the output, not just
+    # at the start. Getting this wrong made doctor cry wolf on a healthy runner.
+    match = re.search(r"^rustc (\S+)", rustc_version_output, re.MULTILINE)
+    if match is None:
+        return Check(
+            "rust-toolchain",
+            BROKEN,
+            f"could not parse `rustc --version` output: {rustc_version_output!r}",
+        )
+    active = match.group(1)
+    # Named channels (stable/beta/nightly) carry no version to compare against.
+    if not re.match(r"^\d", channel):
+        return Check("rust-toolchain", OK, f"channel {channel}, active rustc {active}")
+    if active != channel:
+        return Check(
+            "rust-toolchain",
+            FIXABLE,
+            f"rust-toolchain.toml pins {channel} but active rustc is {active}",
+            fix=f"rustup toolchain install {channel}",
+        )
+    return Check("rust-toolchain", OK, f"rustc {active} matches the pin")
+
+
+def check_python() -> Check:
+    version = ".".join(str(part) for part in sys.version_info[:3])
+    if sys.version_info < MIN_PYTHON:
+        return Check(
+            "python",
+            BROKEN,
+            f"Python {version} is older than the {'.'.join(str(p) for p in MIN_PYTHON)} "
+            "the tools/ scripts require",
+        )
+    return Check("python", OK, f"Python {version}")
+
+
+def check_toolchain() -> Check:
+    toolchain_file = REPO_ROOT / "rust-toolchain.toml"
+    if not toolchain_file.is_file():
+        return Check("rust-toolchain", BROKEN, "rust-toolchain.toml is missing from the repo root")
+    code, output = run(["rustc", "--version"])
+    if code == 127:
+        return Check("rust-toolchain", BROKEN, "rustc is not on PATH — Rust is not installed")
+    if code != 0:
+        return Check("rust-toolchain", BROKEN, f"`rustc --version` failed: {output}")
+    return compare_toolchain(pinned_channel(toolchain_file.read_text(encoding="utf-8")), output)
+
+
+def check_components() -> Check:
+    missing = []
+    for component, cmd in (("rustfmt", ["cargo", "fmt", "--version"]), ("clippy", ["cargo", "clippy", "--version"])):
+        code, _ = run(cmd)
+        if code != 0:
+            missing.append(component)
+    if missing:
+        return Check(
+            "rust-components",
+            FIXABLE,
+            f"missing toolchain component(s): {', '.join(missing)}",
+            fix=f"rustup component add {' '.join(missing)}",
+        )
+    return Check("rust-components", OK, "rustfmt and clippy present")
+
+
+def check_wasm_target() -> Check:
+    code, output = run(["rustup", "target", "list", "--installed"])
+    if code == 127:
+        return Check(
+            "wasm-target",
+            BROKEN,
+            "rustup is not on PATH, but the repo pins its toolchain via rust-toolchain.toml",
+        )
+    if code != 0:
+        return Check("wasm-target", BROKEN, f"`rustup target list --installed` failed: {output}")
+    if WASM_TARGET not in output.split():
+        return Check(
+            "wasm-target",
+            FIXABLE,
+            f"{WASM_TARGET} std is not installed; the web target is CI-gated (ADR-0005)",
+            fix=f"rustup target add {WASM_TARGET}",
+        )
+    return Check("wasm-target", OK, f"{WASM_TARGET} installed")
+
+
+def check_registry() -> Check:
+    try:
+        with urllib.request.urlopen(REGISTRY_PROBE_URL, timeout=NETWORK_TIMEOUT_S) as response:
+            status = response.status
+    except Exception as err:  # noqa: BLE001 — any failure here means "no registry"
+        return Check(
+            "crates-io",
+            BROKEN,
+            f"crates.io sparse index unreachable ({REGISTRY_PROBE_URL}): {err}",
+        )
+    if status != 200:
+        return Check("crates-io", BROKEN, f"crates.io sparse index returned HTTP {status}")
+    return Check("crates-io", OK, "crates.io sparse index reachable")
+
+
+def check_disk() -> Check:
+    usage = shutil.disk_usage(REPO_ROOT)
+    free_gib = usage.free / 1024**3
+    if usage.free < DISK_BROKEN_BYTES:
+        return Check("disk", BROKEN, f"only {free_gib:.1f} GiB free — a Rust build needs more")
+    if usage.free < DISK_WARN_BYTES:
+        return Check("disk", INFO, f"{free_gib:.1f} GiB free — tight; `cargo clean` if a build fails on space")
+    return Check("disk", OK, f"{free_gib:.1f} GiB free")
+
+
+def check_git() -> Check:
+    code, output = run(["git", "rev-parse", "--is-inside-work-tree"])
+    if code == 127:
+        return Check("git", BROKEN, "git is not on PATH")
+    if code != 0 or output.strip() != "true":
+        return Check("git", BROKEN, f"{REPO_ROOT} is not a git work tree: {output}")
+    _, branch = run(["git", "rev-parse", "--abbrev-ref", "HEAD"])
+    _, porcelain = run(["git", "status", "--porcelain"])
+    dirty = len([line for line in porcelain.splitlines() if line.strip()])
+    return Check("git", OK, f"branch {branch}, {dirty} uncommitted path(s)")
+
+
+def check_build_dir() -> Check:
+    probe_dir = REPO_ROOT / "target" / "verify"
+    try:
+        probe_dir.mkdir(parents=True, exist_ok=True)
+        probe = probe_dir / ".doctor-write-probe"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+    except OSError as err:
+        return Check("build-dir", BROKEN, f"target/ is not writable: {err}")
+    return Check("build-dir", OK, "target/ writable")
+
+
+def check_cargo_metadata() -> Check:
+    """Exercise cargo end to end: manifests parse and the build lock is free."""
+    code, output = run(
+        ["cargo", "metadata", "--format-version", "1", "--no-deps"],
+        timeout_s=METADATA_TIMEOUT_S,
+    )
+    if code == 127:
+        return Check("cargo", BROKEN, "cargo is not on PATH")
+    if code == -1:
+        return Check(
+            "cargo",
+            BROKEN,
+            "cargo did not respond — another cargo process is likely holding the build lock",
+        )
+    if code != 0:
+        # A manifest error is the agent's own code, not the environment. Say so
+        # plainly rather than letting it read as an environment fault.
+        return Check(
+            "cargo",
+            INFO,
+            f"`cargo metadata` failed — this is a manifest/code error, not an environment "
+            f"fault, so ENV_OK still applies: {output.splitlines()[-1] if output else 'no output'}",
+        )
+    return Check("cargo", OK, "cargo runs and every manifest parses")
+
+
+def check_graphics() -> Check:
+    """Report display capability. Never blocking: nothing before R0 needs a GPU."""
+    if sys.platform.startswith("linux"):
+        display = os.environ.get("WAYLAND_DISPLAY") or os.environ.get("DISPLAY")
+        if not display:
+            return Check(
+                "graphics",
+                INFO,
+                "no DISPLAY/WAYLAND_DISPLAY — headless. Fine: tests are headless-first "
+                "(practices §6.5); windowed examples (M5+) need a display",
+            )
+        return Check("graphics", INFO, f"display {display} available")
+    return Check("graphics", INFO, f"platform {sys.platform} — display capability not probed")
+
+
+CHECKS = (
+    check_python,
+    check_toolchain,
+    check_components,
+    check_wasm_target,
+    check_cargo_metadata,
+    check_registry,
+    check_disk,
+    check_git,
+    check_build_dir,
+    check_graphics,
+)
+
+
+def write_report(checks: "list[Check]", verdict_line: str, exit_code: int) -> None:
+    report = {
+        "tool": "tools/doctor",
+        "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "verdict": verdict_line,
+        "exit_code": exit_code,
+        "checks": [asdict(check) for check in checks],
+    }
+    try:
+        REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        REPORT_PATH.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    except OSError as err:
+        # The build-dir check already reports this; never let it mask the verdict.
+        print(f"[doctor] could not write {REPORT_PATH}: {err}", file=sys.stderr)
+
+
+def main() -> int:
+    print("jidousha doctor — environment self-diagnosis\n")
+    checks = []
+    for probe in CHECKS:
+        check = probe()
+        checks.append(check)
+        print(f"  [{check.status:<7}] {check.name}: {check.detail}")
+        if check.fix:
+            print(f"            fix: {check.fix}")
+    verdict_line, exit_code = verdict(checks)
+    write_report(checks, verdict_line, exit_code)
+    print(f"\nreport: {REPORT_PATH.relative_to(REPO_ROOT)}")
+    if exit_code == 0:
+        print("Environment is healthy. A failing build or test is your code — go debug it.")
+    elif exit_code == 1:
+        print("Run the fix command above and nothing else, then retry the failing command.")
+    else:
+        print(
+            "Human required. Copy docs/templates/BLOCKED.md to the repo root, fill it in "
+            "(paste this output), and stop."
+        )
+    print(f"\n{verdict_line}")
+    return exit_code
+
+
+if __name__ == "__main__":
+    sys.exit(main())

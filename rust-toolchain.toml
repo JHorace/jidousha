@@ -1,0 +1,9 @@
+# Pinned toolchain (ADR-0001, agent-practices §6.5). Changing this is a human
+# decision — never edit it to route around a build failure (CLAUDE.md "Never").
+# `targets` keeps the web target (ADR-0005) installed on every machine and CI
+# runner, so `cargo check --target wasm32-unknown-unknown` never needs a setup step.
+[toolchain]
+channel = "1.94.1"
+components = ["rustfmt", "clippy"]
+targets = ["wasm32-unknown-unknown"]
+profile = "minimal"

@@ -1,0 +1,60 @@
+#!/usr/bin/env python3
+"""tools/dep-count — report the workspace dependency count (agent-practices §5.8).
+
+Rust dependency trees grow ambiently and every crate costs build time — the core
+resource of the agent repair loop. This makes the total a visible number in every
+CI run, so growth is noticed rather than drifting in unremarked.
+
+Reports only; never fails a build. The budget is enforced by the commit-message
+rule (justification + `cargo tree` delta) and by review.
+
+Key functions: `count_dependencies`.
+"""
+
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+METADATA_TIMEOUT_S = 120
+
+
+def count_dependencies(metadata: dict) -> "tuple[int, list[str]]":
+    """Return (transitive count, sorted names) of non-workspace packages."""
+    workspace_ids = set(metadata.get("workspace_members", []))
+    external = [
+        f"{package['name']} {package['version']}"
+        for package in metadata.get("packages", [])
+        if package["id"] not in workspace_ids
+    ]
+    return len(external), sorted(external)
+
+
+def main() -> int:
+    try:
+        proc = subprocess.run(
+            ["cargo", "metadata", "--format-version", "1"],
+            cwd=REPO_ROOT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=METADATA_TIMEOUT_S,
+            text=True,
+        )
+    except (OSError, subprocess.TimeoutExpired) as err:
+        print(f"[dep-count] could not run cargo metadata: {err}")
+        return 0
+    if proc.returncode != 0:
+        print(f"[dep-count] cargo metadata failed: {proc.stderr.strip()}")
+        return 0
+    total, names = count_dependencies(json.loads(proc.stdout))
+    print(f"[dep-count] external crates in the dependency graph: {total}")
+    for name in names:
+        print(f"    {name}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

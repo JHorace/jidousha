@@ -1,0 +1,5 @@
+# Tests may unwrap/expect (CLAUDE.md); engine code may not. Examples are separate
+# compilation targets and are not covered by these flags — an example that needs
+# `unwrap` puts `#![allow(clippy::unwrap_used)]` at the top of the file.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true

@@ -1,0 +1,311 @@
+#!/usr/bin/env python3
+"""tools/test — the test wrapper. Always use this instead of bare `cargo test`.
+
+Two channels for one signal (agent-practices §6.2): the terminal shows cargo's
+output, and `target/verify/report.json` records what actually happened. **The
+report file is ground truth; scrollback is advisory.** If they disagree, the
+tooling broke — not the tests.
+
+Every phase is timed out, so a hang becomes `TIMEOUT in phase <name>` instead of
+a dead terminal. Consecutive identical failures are counted, and on the second
+one the circuit-breaker rule (§6.3) is printed into the error channel itself.
+
+Usage:  tools/test [extra cargo test args...]     e.g. `tools/test entity_alloc`
+
+Exit codes: 0 everything passed · 1 tests failed · 2 tooling/environment fault.
+
+Key functions: `parse_test_output`, `failure_fingerprint`, `run_phase`, `main`.
+Depends on: the Python 3.8+ standard library only.
+INVARIANT: the report file is written on every path out of `main`, including
+timeouts and crashes — an absent report means the wrapper itself died.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import re
+import subprocess
+import sys
+import threading
+import time
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+REPORT_PATH = REPO_ROOT / "target" / "verify" / "report.json"
+STREAK_PATH = REPO_ROOT / "target" / "verify" / "failure-streak.json"
+
+SELFTEST_TIMEOUT_S = 120
+BUILD_TIMEOUT_S = 900
+TEST_TIMEOUT_S = 600
+DOCTEST_TIMEOUT_S = 300
+
+# libtest summary, one per test binary: "test result: ok. 3 passed; 0 failed; ..."
+TEST_RESULT_RE = re.compile(r"^test result: \S+\. (\d+) passed; (\d+) failed; (\d+) ignored")
+FAILED_TEST_RE = re.compile(r"^test (\S+) \.\.\. FAILED")
+
+# Python unittest summary for the tools' own tests: "Ran 21 tests in 0.4s".
+SELFTEST_RAN_RE = re.compile(r"^Ran (\d+) tests? in")
+SELFTEST_FAILURE_RE = re.compile(r"^(?:FAIL|ERROR): (\S+)")
+
+STOP_RULE = (
+    "Second identical failure. Per policy: run tools/doctor, then write BLOCKED.md. "
+    "Do not retry."
+)
+
+
+@dataclass
+class Phase:
+    """One timed command in the run."""
+
+    name: str
+    command: "list[str]"
+    status: str = "skipped"  # ok | failed | timeout | error | skipped
+    exit_code: "int | None" = None
+    duration_s: float = 0.0
+    output_tail: "list[str]" = field(default_factory=list)
+
+
+def parse_test_output(text: str) -> dict:
+    """Extract counts and failed test names from libtest output.
+
+    Counts are summed across every test binary in the run.
+    """
+    passed = failed = ignored = 0
+    for line in text.splitlines():
+        match = TEST_RESULT_RE.match(line.strip())
+        if match:
+            passed += int(match.group(1))
+            failed += int(match.group(2))
+            ignored += int(match.group(3))
+    failed_tests = []
+    for line in text.splitlines():
+        match = FAILED_TEST_RE.match(line.strip())
+        if match and match.group(1) not in failed_tests:
+            failed_tests.append(match.group(1))
+    return {"passed": passed, "failed": failed, "ignored": ignored, "failed_tests": failed_tests}
+
+
+def parse_selftest_output(text: str) -> dict:
+    """Extract counts and failed test names from Python unittest output.
+
+    Reported in the same totals as the Rust tests: one run, one set of numbers.
+    """
+    ran = 0
+    failed_tests = []
+    for line in text.splitlines():
+        line = line.strip()
+        match = SELFTEST_RAN_RE.match(line)
+        if match:
+            ran += int(match.group(1))
+            continue
+        match = SELFTEST_FAILURE_RE.match(line)
+        if match and match.group(1) not in failed_tests:
+            failed_tests.append(match.group(1))
+    failed = len(failed_tests)
+    return {
+        "passed": max(ran - failed, 0),
+        "failed": failed,
+        "ignored": 0,
+        "failed_tests": failed_tests,
+    }
+
+
+def failure_fingerprint(report: dict) -> str:
+    """Identity of *this* failure, for the consecutive-failure counter.
+
+    Deliberately coarse: the failing phase plus the set of failed test names.
+    Timings, counts of passing tests, and file paths must not perturb it, or the
+    circuit breaker never trips.
+    """
+    failing_phase = next(
+        (phase["name"] for phase in report["phases"] if phase["status"] not in ("ok", "skipped")),
+        "",
+    )
+    parts = [report["status"], failing_phase, *sorted(report["failed_tests"])]
+    if not report["failed_tests"]:
+        # Nothing named a test (compile error, harness crash, timeout), so the
+        # failure is identified by the tail of the phase that broke. Digits are
+        # normalized: timings and counts must not defeat the counter.
+        tail = next(
+            (phase.get("output_tail", []) for phase in report["phases"] if phase["name"] == failing_phase),
+            [],
+        )
+        parts += [re.sub(r"\d+", "N", line) for line in tail[-3:]]
+    return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()[:16]
+
+
+def update_streak(fingerprint: str) -> int:
+    """Record this failure and return how many times in a row it has now occurred."""
+    previous = {}
+    if STREAK_PATH.is_file():
+        try:
+            previous = json.loads(STREAK_PATH.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            previous = {}
+    count = previous.get("count", 0) + 1 if previous.get("fingerprint") == fingerprint else 1
+    try:
+        STREAK_PATH.parent.mkdir(parents=True, exist_ok=True)
+        STREAK_PATH.write_text(
+            json.dumps({"fingerprint": fingerprint, "count": count}) + "\n", encoding="utf-8"
+        )
+    except OSError:
+        pass  # the streak counter is a nicety; never fail a run over it
+    return count
+
+
+def clear_streak() -> None:
+    try:
+        STREAK_PATH.unlink()
+    except OSError:
+        pass
+
+
+def run_phase(phase: Phase, timeout_s: int) -> str:
+    """Run one phase, streaming output to the terminal while capturing it.
+
+    A watchdog kills the process at `timeout_s`; the phase status becomes
+    "timeout" so a hang is diagnosable rather than silent.
+    """
+    env = dict(os.environ, CARGO_TERM_COLOR="never")
+    print(f"\n[tools/test] phase {phase.name}: {' '.join(phase.command)}", flush=True)
+    started = time.monotonic()
+    try:
+        proc = subprocess.Popen(
+            phase.command,
+            cwd=REPO_ROOT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            env=env,
+        )
+    except (FileNotFoundError, OSError) as err:
+        phase.status = "error"
+        phase.exit_code = 127
+        phase.output_tail = [str(err)]
+        return str(err)
+
+    timed_out = threading.Event()
+
+    def _kill() -> None:
+        timed_out.set()
+        proc.kill()
+
+    watchdog = threading.Timer(timeout_s, _kill)
+    watchdog.start()
+    captured: "list[str]" = []
+    try:
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            sys.stdout.write(line)
+            captured.append(line)
+        proc.wait()
+    finally:
+        watchdog.cancel()
+        sys.stdout.flush()
+
+    phase.duration_s = round(time.monotonic() - started, 2)
+    phase.exit_code = proc.returncode
+    text = "".join(captured)
+    phase.output_tail = [line.rstrip() for line in text.splitlines()[-20:]]
+    if timed_out.is_set():
+        phase.status = "timeout"
+        print(f"\n[tools/test] TIMEOUT in phase {phase.name} after {timeout_s}s", flush=True)
+    else:
+        phase.status = "ok" if proc.returncode == 0 else "failed"
+    return text
+
+
+def write_report(report: dict) -> None:
+    try:
+        REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        REPORT_PATH.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    except OSError as err:
+        print(f"[tools/test] could not write {REPORT_PATH}: {err}", file=sys.stderr)
+
+
+def main(argv: "list[str]") -> int:
+    cargo_args = argv[1:]
+    phases = [
+        # The wrapper's own tests run first: if the wrapper is broken, its report
+        # of the engine tests cannot be trusted either.
+        Phase(
+            "tool-selftest",
+            [sys.executable, "-m", "unittest", "discover", "-s", "tools/tests", "-t", "tools/tests"],
+        ),
+        Phase("build", ["cargo", "test", "--workspace", "--all-targets", "--no-run"]),
+        Phase("test", ["cargo", "test", "--workspace", "--all-targets", "--no-fail-fast", *cargo_args]),
+        Phase("doc-test", ["cargo", "test", "--workspace", "--doc", "--no-fail-fast"]),
+    ]
+    timeouts = {
+        "tool-selftest": SELFTEST_TIMEOUT_S,
+        "build": BUILD_TIMEOUT_S,
+        "test": TEST_TIMEOUT_S,
+        "doc-test": DOCTEST_TIMEOUT_S,
+    }
+
+    counts = {"passed": 0, "failed": 0, "ignored": 0}
+    failed_tests: "list[str]" = []
+    status = "pass"
+    for phase in phases:
+        text = run_phase(phase, timeouts[phase.name])
+        parsed = None
+        if phase.name in ("test", "doc-test"):
+            parsed = parse_test_output(text)
+        elif phase.name == "tool-selftest":
+            parsed = parse_selftest_output(text)
+        if parsed is not None:
+            for key in counts:
+                counts[key] += parsed[key]
+            failed_tests.extend(name for name in parsed["failed_tests"] if name not in failed_tests)
+        if phase.status == "timeout":
+            status = "timeout"
+            break
+        if phase.status == "error":
+            status = "error"
+            break
+        if phase.status == "failed":
+            status = "fail"
+            # A failed build or selftest makes every later phase meaningless:
+            # stop rather than emit a report full of zeros.
+            if phase.name in ("build", "tool-selftest"):
+                break
+
+    exit_code = {"pass": 0, "fail": 1, "timeout": 2, "error": 2}[status]
+    report = {
+        "tool": "tools/test",
+        "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "argv": argv[1:],
+        "status": status,
+        "exit_code": exit_code,
+        **counts,
+        "failed_tests": failed_tests,
+        "phases": [asdict(phase) for phase in phases],
+    }
+    write_report(report)
+
+    print(
+        f"\n[tools/test] {status.upper()} — {counts['passed']} passed, {counts['failed']} failed, "
+        f"{counts['ignored']} ignored"
+    )
+    for name in failed_tests:
+        print(f"    failed: {name}")
+    print(f"[tools/test] report (ground truth): {REPORT_PATH.relative_to(REPO_ROOT)}")
+
+    if status == "pass":
+        clear_streak()
+        return exit_code
+
+    streak = update_streak(failure_fingerprint(report))
+    print("[tools/test] this failure is not a plain compile error? run tools/doctor before fixing.")
+    if streak >= 2:
+        print(f"[tools/test] {STOP_RULE}")
+    return exit_code
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
