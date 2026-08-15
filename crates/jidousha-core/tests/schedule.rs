@@ -156,7 +156,8 @@ fn the_schedule_listing_names_every_system_in_run_order() {
         simulation.schedule_debug(),
         "schedule:\n  \
          Startup (1)\n    0. setup\n  \
-         Update (2)\n    0. first\n    1. second\n"
+         Update (2)\n    0. first\n    1. second\n  \
+         Draw (0)\n"
     );
 }
 

@@ -11,7 +11,7 @@
 //! CONTRACT).
 
 use crate::rng::Rng;
-use crate::schedule::{Phase, Schedule, Startup, Update};
+use crate::schedule::{IntoSystem, Phase, Schedule, Startup, Update};
 use crate::time::Time;
 use crate::units::Seconds;
 use crate::world::World;
@@ -95,7 +95,7 @@ impl Simulation {
     pub fn add_system<P, F>(&mut self, phase: P, system: F)
     where
         P: Phase,
-        F: Fn(&mut P::Context) + Send + Sync + 'static,
+        F: IntoSystem<P>,
     {
         self.schedule.add_system(phase, system);
     }
@@ -150,6 +150,32 @@ impl Simulation {
             time.alpha = alpha;
         }
         steps
+    }
+
+    /// Run the Draw phase once.
+    ///
+    /// Draw reads the world and cannot write it, so unlike [`Simulation::tick`]
+    /// this changes nothing. In debug builds the world's shape is compared
+    /// before and after as defense-in-depth against interior-mutability
+    /// escapes that no type can see (core.md §7, ADR-0008).
+    ///
+    /// # Panics
+    ///
+    /// In debug builds, if the world's shape changed across the phase.
+    pub fn draw(&mut self) {
+        self.start();
+        let before = self.world.shape();
+        self.schedule.run_draw(&self.world);
+        let after = self.world.shape();
+        debug_assert_eq!(
+            before, after,
+            "[jidousha] a Draw system changed the world\n  \
+             Draw runs once per rendered frame, so a change here makes the simulation depend on \
+             frame rate\n  \
+             likely cause: a component or resource holding a Cell, RefCell, atomic, or other \
+             interior mutability, written from a Draw system\n  \
+             fix: move the change to an Update system (ADR-0008)"
+        );
     }
 
     /// The world, for reading state.

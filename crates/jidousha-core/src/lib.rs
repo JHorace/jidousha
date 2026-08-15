@@ -31,11 +31,15 @@
 //! ```
 
 mod access;
+mod app;
 mod archetype;
 mod command;
 mod component;
+mod draw;
 mod entity;
 mod error;
+pub mod math;
+mod panic_hook;
 mod query;
 mod resource;
 mod rng;
@@ -46,14 +50,16 @@ mod units;
 mod world;
 
 pub use access::{ColumnsMut, ColumnsRef, QueryAccess};
+pub use app::{App, GameConfig, HeadlessSim, headless};
 pub use command::{Bundle, CommandKind, Commands};
 pub use component::Component;
+pub use draw::{DrawCtx, WorldView};
 pub use entity::Entity;
 pub use error::EntityDeadError;
 pub use query::{Query, QueryIter, QueryIterMut, ReadOnlyQuery, With, Without};
 pub use resource::Resource;
 pub use rng::Rng;
-pub use schedule::{Phase, Startup, Update};
+pub use schedule::{Draw, IntoSystem, Phase, Startup, Update};
 pub use simulation::Simulation;
 pub use time::Time;
 pub use units::Seconds;

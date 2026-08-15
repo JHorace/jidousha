@@ -1,8 +1,9 @@
 # Engine core — design and contracts
 
 Status: **living internal doc**, part spec and part record. Implemented through
-M3 (entities, archetypes, queries, resources, commands, schedule, time);
-everything from M4 on is still the spec the implementing agent builds against. Sections describing shipped code say what
+M4 (the engine core, end to end: ECS, schedule, time, app lifecycle, math);
+M5 and the subsystem milestones are still the spec the implementing agent
+builds against. Sections describing shipped code say what
 the code does — where the two ever disagree, the code is the bug. Contracts
 marked **CONTRACT** are binding — tests must encode them, and changing one
 requires an ADR.
@@ -321,8 +322,22 @@ Implemented (M3):
   read its name: `type_name` on a fn item gives the path, and the last segment
   is what the listing shows. Registering a closure yields `{{closure}}`, which
   is self-punishing and therefore the whole enforcement.
-- `schedule_debug` landed here rather than in M4 — it costs nothing once names
+- `schedule_debug` landed in M3 rather than M4 — it costs nothing once names
   are captured, and a schedule you cannot print is a schedule you cannot debug.
+- Implemented (M4): `Draw` joins the phase set. `IntoSystem<P>` is where a
+  phase's signature is enforced, and it carries the `on_unimplemented` text.
+  A caveat worth knowing, found by the compile-fail harness: registering a
+  Draw-shaped function in Update trips rustc's own signature mismatch (E0631)
+  *before* that text fires, so what an agent sees there is rustc naming both
+  signatures and mentioning `IntoSystem<Update>` — informative, but not our
+  sentence. The `&mut T`-in-a-Draw-query case, which ADR-0008 predicts is the
+  common mistake, does show the engine's own message.
+- Implemented (M4): the world-hash check ADR-0008 asks for is a *structural*
+  comparison across Draw (entity count, archetype count, live locations),
+  asserted in debug builds. A component mutated through a `Cell` would slip
+  past it; catching that needs hashing component bytes, which the engine cannot
+  do for types it does not know. The type system remains the real enforcement,
+  and this is the defense in depth behind it.
 
 ### Time and the fixed timestep
 
@@ -444,12 +459,13 @@ only on the failure path).
 ## 10. Open questions (deferred, tracked here)
 
 - ~~Math crate~~ — resolved: glam (`scalar-math`) + engine-owned deterministic
-  trig, clippy-enforced (ADR-0009). ~~`jidousha-core::math` lands in M3~~ —
-  moved to M4, where transforms give it a consumer. Nothing in M3 needed a
-  vector or a trig call (`Time` needs `Seconds`, which landed as its own
-  newtype), and adding the workspace's first dependency plus a deterministic-trig
-  test suite ahead of any caller would have been budget spent on nothing
-  (practices §5.8). The decision itself is unchanged.
+  trig, clippy-enforced (ADR-0009). Landed in M4 (moved from M3, which needed no
+  vectors). `math::{sin_cos, atan2, rotate}` evaluate polynomials in `f64` over
+  IEEE add/multiply/round only, so the same angle gives the same bits on every
+  platform; a test locks those bits, and the accuracy tests compare against std
+  trig — the one sanctioned use of it, since the ban exists because *platforms*
+  disagree, not because std is wrong here. glam's measured cost: **1 crate, zero
+  transitive** (practices §5.8), exactly as the ADR predicted.
 - ~~Draw-phase immutability~~ — resolved: type-enforced via `DrawCtx` (ADR-0008).
 - **Change detection / events / parallelism**: explicitly out of v1 (ADR-0006).
   Each returns only via its own ADR with a driving use case.
@@ -493,13 +509,26 @@ agent works one milestone per session-ish; BLOCKED.md protocol applies throughou
   (spawns, freezes, reaps) and that seed and inputs each reach the simulation.
   `schedule_debug` landed here rather than in M4, since system names are
   captured at registration anyway.
-- **M4 — app + headless.** `GameConfig`, `run`/`headless` with the shared loop,
-  `schedule_debug`, panic hook with system names. Typed phases + `DrawCtx` with
-  the read-only world view (ADR-0008); submission sink stubbed until the
-  renderer lands. Compile-fail tests (`trybuild`) locking in the
-  `on_unimplemented` error text for `&mut` access in Draw. First example:
-  `examples/headless_sim.rs` (pure simulation, asserts on state, no window).
-  Exit: example runs in CI on all targets incl. wasm.
+- **M4 — app + headless.** ✅ Done. `GameConfig` (title, seed, fixed_dt; the
+  asset/window/camera fields arrive with their subsystems), `App`, `headless` →
+  `HeadlessSim`, `schedule_debug`, and the panic hook that names the running
+  system — which also inserts §9's `in system:` line into every engine message.
+  Typed phases with `IntoSystem<P>`: `Draw` takes `&mut DrawCtx`, whose
+  `WorldView` has no method that mutates (ADR-0008). Compile-fail tests lock the
+  error text, via `tools/check-compile-fail` rather than `trybuild` (27
+  transitive dev-dependencies against a budget that prefers none; the mechanism
+  is sixty lines). `jidousha-core::math` landed here: glam with `scalar-math`
+  (+1 crate, zero transitive) and engine-owned polynomial trig, with std trig
+  and glam's angle constructors clippy-banned.
+  `examples/headless_sim.rs` runs a whole game with no window and asserts a
+  bit-identical replay of itself; CI builds every example for wasm as well as
+  running them natively.
+  Two things the milestone named that are **not** here, with reasons:
+  `run` (the windowed driver) belongs to the platform crate and lands in M5 —
+  core has no window to drive; and the submission sink stays absent rather than
+  stubbed, because the renderer owns its vocabulary and a placeholder would
+  only have to be unlearned. What M4 delivers is the Draw *signature*, so no
+  game's draw systems need rewriting when the sink arrives.
 - **M5 — platform crate.** winit wrapper, window, event pump → `InputSnapshot`
   scaffold (full input system is its own doc), real-time loop driver feeding the
   accumulator. `examples/window_blank.rs` opens a window natively and on web

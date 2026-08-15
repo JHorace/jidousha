@@ -66,6 +66,10 @@ jobs:
       - uses: actions/checkout@v4
       # No `rustup target add` step: rust-toolchain.toml pins the target (ADR-0005).
       - run: cargo check --workspace --target wasm32-unknown-unknown
+      # M4's exit criterion: the examples must build for the web too. They are
+      # *run* on Linux and Windows (tools/test); running them under wasm needs a
+      # runtime, which arrives with the platform milestone.
+      - run: cargo check --workspace --examples --target wasm32-unknown-unknown
 
   doctor:
     name: doctor

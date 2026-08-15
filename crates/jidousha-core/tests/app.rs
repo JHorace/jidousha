@@ -1,0 +1,229 @@
+//! The app lifecycle and the Draw phase (core.md §7–§8, ADR-0008).
+
+use jidousha_core::{
+    Component, Draw, DrawCtx, GameConfig, Rng, Seconds, Startup, Time, Update, World, headless,
+};
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Position(i32);
+impl Component for Position {}
+
+fn spawn_two(world: &mut World) {
+    for value in [1, 2] {
+        let entity = world.spawn();
+        world.insert(entity, Position(value));
+    }
+}
+
+fn advance(world: &mut World) {
+    for (_, position) in world.query_mut::<&mut Position>() {
+        position.0 += 10;
+    }
+}
+
+/// A Draw system: it can read everything and write nothing.
+fn record_positions(ctx: &mut DrawCtx) {
+    let mut seen: Vec<i32> = ctx
+        .world
+        .query::<&Position>()
+        .map(|(_, position)| position.0)
+        .collect();
+    seen.sort_unstable();
+    // Reading a resource from Draw is fine; writing one is not expressible.
+    let _ = ctx.world.resource::<Time>().tick;
+    println!("drew {seen:?}");
+}
+
+#[test]
+fn the_default_config_is_a_sixty_tick_second() {
+    let config = GameConfig::default();
+    assert_eq!(config.fixed_dt, Seconds(1.0 / 60.0));
+    assert_eq!(config.seed, 0);
+}
+
+#[test]
+fn a_config_can_be_written_as_a_diff_from_the_default() {
+    let config = GameConfig {
+        title: "asteroids",
+        seed: 42,
+        ..GameConfig::default()
+    };
+    assert_eq!(config.title, "asteroids");
+    assert_eq!(config.seed, 42);
+    assert_eq!(config.fixed_dt, GameConfig::default().fixed_dt);
+}
+
+#[test]
+fn headless_runs_startup_then_update_like_the_windowed_driver_will() {
+    let mut sim = headless(GameConfig::default(), |app| {
+        app.add_system(Startup, spawn_two);
+        app.add_system(Update, advance);
+    });
+    sim.tick();
+    sim.tick();
+
+    let mut values: Vec<i32> = sim
+        .world()
+        .query::<&Position>()
+        .map(|(_, position)| position.0)
+        .collect();
+    values.sort_unstable();
+    assert_eq!(values, [21, 22]);
+}
+
+#[test]
+fn the_seed_in_the_config_reaches_the_generator() {
+    let draw_from = |seed| {
+        let mut sim = headless(
+            GameConfig {
+                seed,
+                ..GameConfig::default()
+            },
+            |_| {},
+        );
+        sim.world_mut().resource_mut::<Rng>().next_u32()
+    };
+    assert_eq!(draw_from(7), draw_from(7));
+    assert_ne!(draw_from(7), draw_from(8));
+}
+
+#[test]
+fn the_fixed_step_in_the_config_reaches_the_clock() {
+    let sim = headless(
+        GameConfig {
+            fixed_dt: Seconds(0.25),
+            ..GameConfig::default()
+        },
+        |_| {},
+    );
+    assert_eq!(sim.world().resource::<Time>().fixed_dt, Seconds(0.25));
+}
+
+#[test]
+fn draw_systems_run_when_a_frame_is_drawn() {
+    let mut sim = headless(GameConfig::default(), |app| {
+        app.add_system(Startup, spawn_two);
+        app.add_system(Draw, record_positions);
+    });
+    sim.tick();
+    sim.draw();
+    // Drawing changed nothing.
+    assert_eq!(sim.world().entity_count(), 2);
+}
+
+#[test]
+fn drawing_without_ticking_still_runs_startup_first() {
+    let mut sim = headless(GameConfig::default(), |app| {
+        app.add_system(Startup, spawn_two);
+        app.add_system(Draw, record_positions);
+    });
+    sim.draw();
+    assert_eq!(sim.world().entity_count(), 2);
+}
+
+#[test]
+fn a_draw_system_sees_what_update_left_behind() {
+    fn count_into_resource(ctx: &mut DrawCtx) {
+        let seen: Vec<i32> = ctx
+            .world
+            .query::<&Position>()
+            .map(|(_, position)| position.0)
+            .collect();
+        // A Draw system cannot write the world, so it reports through a
+        // channel outside it — here, stdout. The renderer's submission sink
+        // is the real answer (R0).
+        println!("{seen:?}");
+    }
+
+    let mut sim = headless(GameConfig::default(), |app| {
+        app.add_system(Startup, spawn_two);
+        app.add_system(Update, advance);
+        app.add_system(Draw, count_into_resource);
+    });
+    sim.tick();
+    sim.draw();
+    let mut values: Vec<i32> = sim
+        .world()
+        .query::<&Position>()
+        .map(|(_, position)| position.0)
+        .collect();
+    values.sort_unstable();
+    assert_eq!(values, [11, 12]);
+}
+
+#[test]
+fn the_schedule_listing_covers_all_three_phases() {
+    let sim = headless(GameConfig::default(), |app| {
+        app.add_system(Startup, spawn_two);
+        app.add_system(Update, advance);
+        app.add_system(Draw, record_positions);
+    });
+    assert_eq!(
+        sim.schedule_debug(),
+        "schedule:\n  \
+         Startup (1)\n    0. spawn_two\n  \
+         Update (1)\n    0. advance\n  \
+         Draw (1)\n    0. record_positions\n"
+    );
+}
+
+#[test]
+fn an_engine_message_names_the_system_that_hit_it() {
+    fn reads_a_missing_component(world: &mut World) {
+        let entity = world.spawn();
+        // Contract violation: the entity has no Position.
+        let _ = world.component::<Position>(entity);
+    }
+
+    let mut sim = headless(GameConfig::default(), |app| {
+        app.add_system(Update, reads_a_missing_component);
+    });
+    let message = panic_message(move || sim.tick());
+    assert!(
+        message.contains("in system: reads_a_missing_component (Update)"),
+        "{message}"
+    );
+    // The §9 shape survives the addition.
+    assert!(
+        message.starts_with("[jidousha] component access failed"),
+        "{message}"
+    );
+    assert!(message.contains("likely cause:"), "{message}");
+    assert!(message.contains("fix:"), "{message}");
+}
+
+#[test]
+fn a_message_outside_any_system_names_none() {
+    let mut world = World::new();
+    let entity = world.spawn();
+    let message = panic_message(move || {
+        let _ = world.component::<Position>(entity);
+    });
+    assert!(!message.contains("in system:"), "{message}");
+}
+
+/// Run `body`, returning the message it panicked with.
+///
+/// `AssertUnwindSafe` because a `HeadlessSim` holds boxed systems and the
+/// world's command cell: nothing here observes the sim after the panic — it is
+/// dropped — so there is no torn state to see.
+///
+/// No `expect` here: `allow-expect-in-tests` covers `#[test]` functions, not
+/// helpers beside them (docs/internal/tooling.md §5).
+fn panic_message(body: impl FnOnce()) -> String {
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+    let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(body));
+    std::panic::set_hook(previous);
+    let payload = match caught {
+        Ok(()) => panic!("expected a panic"),
+        Err(payload) => payload,
+    };
+    match payload.downcast::<String>() {
+        Ok(message) => *message,
+        Err(payload) => match payload.downcast::<&str>() {
+            Ok(message) => (*message).to_owned(),
+            Err(_) => panic!("panicked with a payload that is not a string"),
+        },
+    }
+}

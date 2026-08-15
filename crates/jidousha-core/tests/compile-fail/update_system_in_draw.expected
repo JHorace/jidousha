@@ -1,0 +1,8 @@
+# Registering an Update-shaped fn in Draw. Note what this locks: rustc reports
+# the signature mismatch itself (E0631) before IntoSystem's on_unimplemented
+# text gets a chance, so what is guarded here is that the error names both
+# signatures and points at IntoSystem<Draw>. The custom text still fires for
+# shapes that are not functions at all.
+expected function signature
+DrawCtx
+`IntoSystem<Draw>`

@@ -37,6 +37,16 @@ HeadlessSim::world(&self) / world_mut(&mut self)
 Startup, Update, Draw                     // phase types
 ```
 
+Built in M4, in `jidousha-core` until the facade re-exports them: `App`,
+`headless`, `HeadlessSim`, `GameConfig`, and the three phase types. Two
+differences from the signatures above, both waiting on milestones rather than
+decisions: `HeadlessSim::tick` takes no argument yet (`TickInput` needs input
+and assets to exist), and `GameConfig` carries `title`, `seed` and `fixed_dt`
+only — the asset, window and camera fields arrive with their subsystems, and
+`..GameConfig::default()` means adding them disturbs nothing already written.
+`run` lands with the platform crate (M5); it is the same loop with a different
+driver (core.md §8).
+
 **ECS (core doc §2–6)**
 ```rust
 Entity
@@ -48,6 +58,9 @@ World::commands() -> Commands             // spawn/despawn/insert/remove, deferr
 DrawCtx { world: &WorldView, ... }        // WorldView: read-only query/component/resource
 derive(Component)
 ```
+
+Built in M4: `Radians`, `math::{sin_cos, atan2, rotate}`, and the `Vec2`/`Vec3`
+re-exports, all in `jidousha_core::math`.
 
 **Math & primitives (ADR-0009, conventions)**
 ```rust
@@ -127,8 +140,8 @@ that's exactly what acceptance milestone E0 tests (implementation plan).
 ## 5. Examples as API fixtures
 
 `examples/` is part of the public surface (practices §5.1): `headless_sim`,
-`window_clear`, `sprites`, `prototype_kit`, `input_echo`, `homing`, plus
-`quickstart` (the docs/api embed). CONTRACT: every §2 item appears in at least
+`window_clear`, `sprites`, `prototype_kit`, `input_echo`, `homing`,
+`spawn_and_reap`, plus `quickstart` (the docs/api embed). CONTRACT: every §2 item appears in at least
 one example; `tools/check-api-coverage` (grep-level) enforces in CI.
 
 **Before F0**, the facade does not exist, so an example has no `jidousha` crate
