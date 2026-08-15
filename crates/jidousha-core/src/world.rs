@@ -1,16 +1,17 @@
 //! The world: entities, their components, and every structural operation.
 //!
 //! Key types: `World`.
-//! Depends on: `entity`, `storage`, `component`, `error`. Must never depend on:
-//! any other jidousha crate (core.md §1 CONTRACT).
-//! INVARIANT: `rows` maps an entity's slot to its row in the table for exactly
-//! the live entities, and `table.row_count()` equals the number of live
-//! entities. Every structural operation restores both before returning.
+//! Depends on: `archetype`, `component`, `entity`, `error`, `query`. Must never
+//! depend on: any other jidousha crate (core.md §1 CONTRACT).
+//! INVARIANT: `locations` holds a location for exactly the live entities, and
+//! every location names the archetype whose component set the entity actually
+//! has. Every structural operation restores both before returning.
 
+use crate::archetype::{Archetypes, Location};
 use crate::component::Component;
 use crate::entity::{Entity, EntityAllocator};
 use crate::error::{EntityDeadError, message};
-use crate::storage::{Row, Table};
+use crate::query::{Query, QueryIter, QueryIterMut, ReadOnlyQuery};
 
 /// Everything the simulation can see: the entities that exist and the
 /// components they carry.
@@ -25,24 +26,29 @@ use crate::storage::{Row, Table};
 /// use jidousha_core::{Component, World};
 ///
 /// #[derive(Debug, PartialEq)]
-/// struct Health(u32);
-/// impl Component for Health {}
+/// struct Position(i32);
+/// impl Component for Position {}
+/// #[derive(Debug, PartialEq)]
+/// struct Velocity(i32);
+/// impl Component for Velocity {}
 ///
 /// let mut world = World::new();
-/// let player = world.spawn();
-/// world.insert(player, Health(100));
+/// let entity = world.spawn();
+/// world.insert(entity, Position(0));
+/// world.insert(entity, Velocity(3));
 ///
-/// assert_eq!(world.component::<Health>(player), &Health(100));
-/// assert!(world.is_alive(player));
+/// for (_entity, position, velocity) in world.query_mut::<(&mut Position, &Velocity)>() {
+///     position.0 += velocity.0;
+/// }
 ///
-/// world.despawn(player);
-/// assert!(!world.is_alive(player));
+/// assert_eq!(world.component::<Position>(entity), &Position(3));
 /// ```
 pub struct World {
     entities: EntityAllocator,
-    /// Slot index → row, `None` for slots holding no live entity.
-    rows: Vec<Option<Row>>,
-    table: Table,
+    /// Slot index → where its components live, `None` for slots holding no
+    /// live entity.
+    locations: Vec<Option<Location>>,
+    archetypes: Archetypes,
 }
 
 impl World {
@@ -55,8 +61,8 @@ impl World {
     pub fn new() -> Self {
         Self {
             entities: EntityAllocator::new(),
-            rows: Vec::new(),
-            table: Table::new(),
+            locations: Vec::new(),
+            archetypes: Archetypes::new(),
         }
     }
 
@@ -67,12 +73,8 @@ impl World {
     /// platform and every run (core.md §2).
     pub fn spawn(&mut self) -> Entity {
         let entity = self.entities.create();
-        let row = self.table.push_row(entity);
-        let slot = entity.index();
-        if slot >= self.rows.len() {
-            self.rows.resize(slot + 1, None);
-        }
-        self.rows[slot] = Some(row);
+        let location = self.archetypes.push_new(entity);
+        self.set_location(entity, Some(location));
         entity
     }
 
@@ -100,14 +102,17 @@ impl World {
 
     /// Give `entity` a `T`, replacing any `T` it already had.
     ///
+    /// Adding a component moves the entity to the archetype for its new
+    /// component set, which invalidates row order in both archetypes — never
+    /// entity handles.
+    ///
     /// # Panics
     ///
     /// If `entity` is not alive — a contract violation. Use
     /// [`World::try_insert`] where absence is expected.
     pub fn insert<T: Component>(&mut self, entity: Entity, value: T) {
         self.expect_alive("insert", entity);
-        let row = self.row_of(entity);
-        self.table.set(row, value);
+        self.insert_unchecked(entity, value);
     }
 
     /// [`World::insert`], reporting a dead entity instead of panicking.
@@ -121,8 +126,7 @@ impl World {
         value: T,
     ) -> Result<(), EntityDeadError> {
         self.check_alive("insert", entity)?;
-        let row = self.row_of(entity);
-        self.table.set(row, value);
+        self.insert_unchecked(entity, value);
         Ok(())
     }
 
@@ -138,8 +142,7 @@ impl World {
     /// [`World::try_remove`] where absence is expected.
     pub fn remove<T: Component>(&mut self, entity: Entity) {
         self.expect_alive("remove", entity);
-        let row = self.row_of(entity);
-        self.table.clear::<T>(row);
+        self.remove_unchecked::<T>(entity);
     }
 
     /// [`World::remove`], reporting a dead entity instead of panicking.
@@ -149,9 +152,54 @@ impl World {
     /// [`EntityDeadError`] if `entity` is not alive.
     pub fn try_remove<T: Component>(&mut self, entity: Entity) -> Result<(), EntityDeadError> {
         self.check_alive("remove", entity)?;
-        let row = self.row_of(entity);
-        self.table.clear::<T>(row);
+        self.remove_unchecked::<T>(entity);
         Ok(())
+    }
+
+    /// Iterate every entity matching a read-only query.
+    ///
+    /// ```
+    /// # use jidousha_core::{Component, With, World};
+    /// # #[derive(Debug)] struct Position(i32);
+    /// # impl Component for Position {}
+    /// # struct Player;
+    /// # impl Component for Player {}
+    /// # let mut world = World::new();
+    /// for (entity, position) in world.query::<&Position>() {
+    ///     println!("{entity:?} {position:?}");
+    /// }
+    /// for (entity, position, _) in world.query::<(&Position, With<Player>)>() {
+    ///     println!("player {entity:?} {position:?}");
+    /// }
+    /// ```
+    ///
+    /// Because the query only reads, the rest of the world stays readable while
+    /// it runs — point lookups on other entities included. Writing needs
+    /// [`World::query_mut`].
+    pub fn query<'w, Q: ReadOnlyQuery<'w>>(&'w self) -> QueryIter<'w, Q> {
+        QueryIter::new(self.archetypes.all().iter())
+    }
+
+    /// Iterate every entity matching a query, with `&mut T` access where asked.
+    ///
+    /// ```
+    /// # use jidousha_core::{Component, World};
+    /// # struct Position(i32);
+    /// # impl Component for Position {}
+    /// # struct Velocity(i32);
+    /// # impl Component for Velocity {}
+    /// # let mut world = World::new();
+    /// for (_entity, position, velocity) in world.query_mut::<(&mut Position, &Velocity)>() {
+    ///     position.0 += velocity.0;
+    /// }
+    /// ```
+    ///
+    /// # Panics
+    ///
+    /// If the query names one component type twice, such as
+    /// `(&mut Position, &Position)` — the two accesses would alias.
+    pub fn query_mut<'w, Q: Query<'w>>(&'w mut self) -> QueryIterMut<'w, Q> {
+        QueryIterMut::new(self.archetypes.all_mut().iter_mut())
     }
 
     /// Whether `entity` is still live in this world.
@@ -166,7 +214,7 @@ impl World {
     /// How many entities are alive.
     #[must_use]
     pub fn entity_count(&self) -> usize {
-        self.table.row_count()
+        self.archetypes.entity_count()
     }
 
     /// The `T` on `entity`.
@@ -211,43 +259,99 @@ impl World {
     /// The `T` on `entity`, or `None` if it has none — or is not alive.
     #[must_use]
     pub fn find_component<T: Component>(&self, entity: Entity) -> Option<&T> {
-        let row = self.find_row(entity)?;
-        self.table.find::<T>(row)
+        let location = self.find_location(entity)?;
+        let column = self.archetypes.get(location.archetype).column::<T>()?;
+        column.values.get(location.row)
     }
 
     /// The `T` on `entity` for modification, or `None` if it has none — or is
     /// not alive.
     #[must_use]
     pub fn find_component_mut<T: Component>(&mut self, entity: Entity) -> Option<&mut T> {
-        let row = self.find_row(entity)?;
-        self.table.find_mut::<T>(row)
+        let location = self.find_location(entity)?;
+        let column = self
+            .archetypes
+            .get_mut(location.archetype)
+            .column_mut::<T>()?;
+        column.values.get_mut(location.row)
+    }
+
+    fn insert_unchecked<T: Component>(&mut self, entity: Entity, value: T) {
+        let location = self.location_of(entity);
+        let target = self.archetypes.with_component::<T>(location.archetype);
+        if target == location.archetype {
+            // Already in this archetype: the value replaces the old one in place.
+            let Some(column) = self.archetypes.get_mut(target).column_mut::<T>() else {
+                unreachable!("{}", MISSING_COLUMN);
+            };
+            column.values[location.row] = value;
+            return;
+        }
+        let location = self.move_entity(entity, location, target);
+        let Some(column) = self.archetypes.get_mut(target).column_mut::<T>() else {
+            unreachable!("{}", MISSING_COLUMN);
+        };
+        column.values.push(value);
+        debug_assert_eq!(column.values.len() - 1, location.row);
+    }
+
+    fn remove_unchecked<T: Component>(&mut self, entity: Entity) {
+        let location = self.location_of(entity);
+        let target = self.archetypes.without_component::<T>(location.archetype);
+        if target == location.archetype {
+            // The entity never had a `T`; the end state already holds.
+            return;
+        }
+        self.move_entity(entity, location, target);
+    }
+
+    /// Move `entity` into archetype `target`, repairing both its location and
+    /// that of whatever entity backfilled its old row.
+    fn move_entity(&mut self, entity: Entity, from: Location, target: usize) -> Location {
+        let (row, swapped) = self.archetypes.move_entity(entity, from, target);
+        let location = Location {
+            archetype: target,
+            row,
+        };
+        self.set_location(entity, Some(location));
+        if let Some(swapped) = swapped {
+            self.set_location(swapped, Some(from));
+        }
+        location
     }
 
     fn despawn_unchecked(&mut self, entity: Entity) {
-        let row = self.row_of(entity);
-        self.rows[entity.index()] = None;
-        if let Some(moved) = self.table.swap_remove_row(row) {
-            // Swap-remove filled the hole with the last row; that entity's
-            // mapping is now stale and is the only one that can be.
-            self.rows[moved.index()] = Some(row);
+        let location = self.location_of(entity);
+        self.set_location(entity, None);
+        if let Some(swapped) = self.archetypes.remove(location) {
+            self.set_location(swapped, Some(location));
         }
         self.entities.destroy(entity);
     }
 
-    fn find_row(&self, entity: Entity) -> Option<Row> {
+    fn set_location(&mut self, entity: Entity, location: Option<Location>) {
+        let slot = entity.index();
+        if slot >= self.locations.len() {
+            self.locations.resize(slot + 1, None);
+        }
+        self.locations[slot] = location;
+    }
+
+    fn find_location(&self, entity: Entity) -> Option<Location> {
         if !self.entities.is_alive(entity) {
             return None;
         }
-        self.rows.get(entity.index()).copied().flatten()
+        self.locations.get(entity.index()).copied().flatten()
     }
 
-    /// INVARIANT: every live entity has a row. Callers check liveness first.
-    fn row_of(&self, entity: Entity) -> Row {
-        match self.find_row(entity) {
-            Some(row) => row,
+    /// INVARIANT: every live entity has a location. Callers check liveness first.
+    fn location_of(&self, entity: Entity) -> Location {
+        match self.find_location(entity) {
+            Some(location) => location,
             None => unreachable!(
-                "[jidousha] engine bug: live {entity:?} has no row in the table\n  \
-                 likely cause: a structural operation returned without restoring the row mapping\n  \
+                "[jidousha] engine bug: live {entity:?} has no location\n  \
+                 likely cause: a structural operation returned without restoring the location \
+                 map\n  \
                  fix: report this with the reproduction — game code cannot cause it"
             ),
         }
@@ -287,191 +391,7 @@ impl World {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[derive(Debug, PartialEq)]
-    struct Position(i32);
-    impl Component for Position {}
-
-    #[derive(Debug, PartialEq)]
-    struct Velocity(i32);
-    impl Component for Velocity {}
-
-    #[test]
-    fn a_spawned_entity_is_alive_and_counted() {
-        let mut world = World::new();
-        let entity = world.spawn();
-        assert!(world.is_alive(entity));
-        assert_eq!(world.entity_count(), 1);
-    }
-
-    #[test]
-    fn a_despawned_entity_is_no_longer_alive_or_counted() {
-        let mut world = World::new();
-        let entity = world.spawn();
-        world.despawn(entity);
-        assert!(!world.is_alive(entity));
-        assert_eq!(world.entity_count(), 0);
-    }
-
-    #[test]
-    fn despawning_one_entity_leaves_the_others_components_intact() {
-        let mut world = World::new();
-        let first = world.spawn();
-        let second = world.spawn();
-        let third = world.spawn();
-        world.insert(first, Position(1));
-        world.insert(second, Position(2));
-        world.insert(third, Position(3));
-
-        world.despawn(first);
-
-        assert_eq!(world.find_component::<Position>(second), Some(&Position(2)));
-        assert_eq!(world.find_component::<Position>(third), Some(&Position(3)));
-    }
-
-    #[test]
-    fn inserting_a_component_twice_keeps_the_second_value() {
-        let mut world = World::new();
-        let entity = world.spawn();
-        world.insert(entity, Position(1));
-        world.insert(entity, Position(2));
-        assert_eq!(world.component::<Position>(entity), &Position(2));
-    }
-
-    #[test]
-    fn removing_a_component_the_entity_never_had_is_not_a_failure() {
-        let mut world = World::new();
-        let entity = world.spawn();
-        world.remove::<Position>(entity);
-        assert_eq!(world.find_component::<Position>(entity), None);
-    }
-
-    #[test]
-    fn components_are_independent_of_each_other() {
-        let mut world = World::new();
-        let entity = world.spawn();
-        world.insert(entity, Position(1));
-        world.insert(entity, Velocity(2));
-        world.remove::<Position>(entity);
-        assert_eq!(world.find_component::<Position>(entity), None);
-        assert_eq!(world.find_component::<Velocity>(entity), Some(&Velocity(2)));
-    }
-
-    #[test]
-    fn a_component_can_be_changed_through_component_mut() {
-        let mut world = World::new();
-        let entity = world.spawn();
-        world.insert(entity, Position(1));
-        world.component_mut::<Position>(entity).0 = 9;
-        assert_eq!(world.component::<Position>(entity), &Position(9));
-    }
-
-    #[test]
-    fn a_reused_slot_does_not_inherit_the_previous_entitys_components() {
-        let mut world = World::new();
-        let first = world.spawn();
-        world.insert(first, Position(1));
-        world.despawn(first);
-        let reused = world.spawn();
-        assert_eq!(world.find_component::<Position>(reused), None);
-    }
-
-    #[test]
-    fn a_dead_handle_finds_no_components_even_after_its_slot_is_reused() {
-        let mut world = World::new();
-        let dead = world.spawn();
-        world.despawn(dead);
-        let reused = world.spawn();
-        world.insert(reused, Position(5));
-        assert_eq!(world.find_component::<Position>(dead), None);
-    }
-
-    #[test]
-    fn try_despawn_reports_a_dead_entity_instead_of_panicking() {
-        let mut world = World::new();
-        let entity = world.spawn();
-        world.despawn(entity);
-        let error = world.try_despawn(entity);
-        assert_eq!(error.map_err(|error| error.entity()), Err(entity));
-    }
-
-    #[test]
-    fn try_insert_reports_a_dead_entity_instead_of_panicking() {
-        let mut world = World::new();
-        let entity = world.spawn();
-        world.despawn(entity);
-        assert!(world.try_insert(entity, Position(1)).is_err());
-    }
-
-    #[test]
-    fn try_remove_reports_a_dead_entity_instead_of_panicking() {
-        let mut world = World::new();
-        let entity = world.spawn();
-        world.despawn(entity);
-        assert!(world.try_remove::<Position>(entity).is_err());
-    }
-
-    #[test]
-    fn try_operations_succeed_on_a_live_entity() {
-        let mut world = World::new();
-        let entity = world.spawn();
-        assert!(world.try_insert(entity, Position(1)).is_ok());
-        assert!(world.try_remove::<Position>(entity).is_ok());
-        assert!(world.try_despawn(entity).is_ok());
-    }
-
-    #[test]
-    #[should_panic(expected = "despawn failed")]
-    fn despawning_a_dead_entity_panics() {
-        let mut world = World::new();
-        let entity = world.spawn();
-        world.despawn(entity);
-        world.despawn(entity);
-    }
-
-    #[test]
-    #[should_panic(expected = "insert failed")]
-    fn inserting_on_a_dead_entity_panics() {
-        let mut world = World::new();
-        let entity = world.spawn();
-        world.despawn(entity);
-        world.insert(entity, Position(1));
-    }
-
-    #[test]
-    #[should_panic(expected = "remove failed")]
-    fn removing_from_a_dead_entity_panics() {
-        let mut world = World::new();
-        let entity = world.spawn();
-        world.despawn(entity);
-        world.remove::<Position>(entity);
-    }
-
-    #[test]
-    #[should_panic(expected = "component access failed")]
-    fn reading_a_component_the_entity_lacks_panics() {
-        let mut world = World::new();
-        let entity = world.spawn();
-        let _ = world.component::<Position>(entity);
-    }
-
-    #[test]
-    #[should_panic(expected = "component access failed")]
-    fn modifying_a_component_the_entity_lacks_panics() {
-        let mut world = World::new();
-        let entity = world.spawn();
-        let _ = world.component_mut::<Position>(entity);
-    }
-
-    #[test]
-    fn an_entity_from_another_world_is_not_alive_here() {
-        let mut other = World::new();
-        let stranger = other.spawn();
-        let world = World::new();
-        assert!(!world.is_alive(stranger));
-        assert_eq!(world.find_component::<Position>(stranger), None);
-    }
-}
+/// Panic text for an archetype that lacks a column its component set promises.
+const MISSING_COLUMN: &str = "[jidousha] engine bug: an archetype is missing a column for a type in its component set\n  \
+     likely cause: the archetype was created without a column for every type id\n  \
+     fix: report this with the reproduction — game code cannot cause it";

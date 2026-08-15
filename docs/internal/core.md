@@ -120,19 +120,47 @@ Forbidden in `jidousha-core`: `HashMap`/`HashSet` iteration in any code path tha
 feeds observable state or ordering. Use `Vec`, index maps with stable order, or
 sorted iteration. (Grep-checkable; part of `tools/check-*` lints.)
 
+Implemented (M2), for the reader who needs to know how the promises are kept:
+
+- An archetype's identity is its **sorted** `Vec<TypeId>`, so inserting the same
+  components in different orders lands both entities in the same archetype.
+  Sorting is by `TypeId`, whose ordering is not stable across compilations —
+  that is fine, because nothing observable depends on *column* order.
+- Archetypes live in a `Vec` in creation order and are found by linear scan of
+  that `Vec`. No hash map is involved anywhere in the lookup, which is what
+  makes the visit-order contract hold rather than merely happen to hold.
+- Adding or removing a component moves the entity: its row is appended to the
+  target archetype, every shared component is moved value-by-value, and the
+  vacated row is swap-removed. The entity swapped into the hole is the only
+  other one whose location changes, and the world repairs it before returning.
+- `World` keeps a `Vec<Option<Location>>` from entity slot to (archetype, row).
+  Entity handles never change; rows do, constantly.
+
 ## 5. Queries
 
 ```rust
-for (e, pos, vel) in world.query::<(&mut Position, &Velocity)>() { ... }
+for (e, pos, vel) in world.query_mut::<(&mut Position, &Velocity)>() { ... }
+for (e, pos) in world.query::<&Position>() { ... }
 ```
 
 - Tuple of `&T` / `&mut T` component accesses, plus minimal filters:
-  `With<T>`, `Without<T>`. Entity is always available as the first yield.
-- Queries take `&World`; column-level borrow flags (RefCell-style, per component
-  type) enforce aliasing rules at runtime. Sequential single-threaded systems
-  make conflicts rare — they arise only from nested/overlapping queries — and
-  when they occur the panic message names both queries, the component type, and
-  the running system (§8 format).
+  `With<T>`, `Without<T>`. Entity is always available as the first yield. A
+  filter yields `()`, so it holds a position in the item tuple:
+  `for (e, pos, _) in world.query::<(&Position, With<Player>)>()`.
+- **Reading takes `&World` (`query`), writing takes `&mut World` (`query_mut`)**
+  — ADR-0013, which supersedes this section's original "queries take `&World`
+  plus runtime borrow flags". That pairing was unsound next to bare-reference
+  point access below: a `&mut T` yielded from a `&World` query and a `&T` from
+  `component()` could alias with nothing to stop them. Overlapping access is now
+  a compile error rather than a runtime panic, and `jidousha-core` needs no
+  `unsafe`. `&mut T` in a read-only `query` is rejected by an
+  `on_unimplemented` message in the §9 style.
+- The one aliasing case the type system cannot see — a query naming the same
+  component twice, `(&mut Position, &Position)` — panics with the §9 format,
+  naming the component.
+- Sharp edge (ADR-0013): a mutable query borrows the whole world, so game code
+  cannot point-read another entity while iterating. Collect what you need in a
+  read-only pass first, or defer the work through commands (§6).
 - Point access: `world.component::<T>(e) -> &T` (panics with agent-grade message
   if absent/dead), `world.find_component::<T>(e) -> Option<&T>`, plus `_mut`
   variants. Per conventions: `get`-class infallible, `find`-class Option.
@@ -352,13 +380,17 @@ agent works one milestone per session-ish; BLOCKED.md protocol applies throughou
   sequences) — this reference model is load-bearing for every later milestone.
   The generator is seeded and stdlib-only, so a failure names the seed and the
   shortest failing prefix; a second test guards that the sequences keep
-  exercising dead-entity paths. Storage is one table with an absent-slot
-  `Option` per row, swap-removed on despawn: the archetype graph is M2's job,
-  and M1 exists to pin the observable semantics first.
-- **M2 — archetypes + queries.** Archetype graph, entity moves on insert/remove,
-  tuple queries + `With`/`Without`, borrow flags with the §9 message format.
+  exercising dead-entity paths. Storage was one table with an absent-slot
+  `Option` per row — replaced by real archetypes in M2, which the same model
+  tests then held to the same semantics.
+- **M2 — archetypes + queries.** ✅ Done. Archetypes keyed by their sorted
+  component set, entity moves on insert/remove, tuple queries + `With`/`Without`.
+  Aliasing is enforced by the borrow checker rather than runtime borrow flags —
+  the original plan was unsound beside bare-reference point access (ADR-0013) —
+  leaving one runtime check, for a component named twice in one query.
   Iteration-determinism tests (same op script twice → identical iteration
-  transcripts). Exit: model + determinism tests green.
+  transcripts) live in `tests/query.rs`; the reference model gained query
+  comparison and a `query_mut` operation.
 - **M3 — resources, commands, schedule, time.** Phases, registration-order
   execution, command buffers with end-of-system application, `Time` +
   accumulator loop (driven manually), seeded `Rng`. **Replay test: random system

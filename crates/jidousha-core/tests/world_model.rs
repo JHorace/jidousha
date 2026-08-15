@@ -6,7 +6,7 @@
 
 mod support;
 
-use jidousha_core::{Entity, World};
+use jidousha_core::{Entity, With, Without, World};
 use support::{
     ComponentKind, ComponentValue, Frozen, Op, Position, ReferenceEntity, ReferenceWorld, Velocity,
     generate,
@@ -81,6 +81,12 @@ impl Pair {
                     self.dead_targets += 1;
                 }
             }
+            Op::BumpPositions => {
+                for (_, position) in self.world.query_mut::<&mut Position>() {
+                    position.0 += 1;
+                }
+                self.model.bump_positions();
+            }
             Op::Remove(target, kind) => {
                 let (entity, reference) = self.handle(target);
                 let got = match kind {
@@ -132,7 +138,86 @@ impl Pair {
                 }
             }
         }
-        Ok(())
+        self.compare_queries()
+    }
+
+    /// Compare what queries find with what the model says they should.
+    ///
+    /// Results are compared as sets: iteration *order* is a separate contract,
+    /// covered by the transcript tests in `tests/query.rs`.
+    fn compare_queries(&self) -> Result<(), String> {
+        let position_only: Vec<(String, Vec<ComponentValue>)> = self
+            .world
+            .query::<&Position>()
+            .map(|(entity, position)| {
+                (
+                    format!("{entity:?}"),
+                    vec![ComponentValue::Position(position.0)],
+                )
+            })
+            .collect();
+        compare_set(
+            "query::<&Position>",
+            position_only,
+            self.model.matching(&[ComponentKind::Position], &[], &[]),
+        )?;
+
+        let position_and_velocity: Vec<(String, Vec<ComponentValue>)> = self
+            .world
+            .query::<(&Position, &Velocity)>()
+            .map(|(entity, position, velocity)| {
+                (
+                    format!("{entity:?}"),
+                    vec![
+                        ComponentValue::Position(position.0),
+                        ComponentValue::Velocity(velocity.0),
+                    ],
+                )
+            })
+            .collect();
+        compare_set(
+            "query::<(&Position, &Velocity)>",
+            position_and_velocity,
+            self.model.matching(
+                &[ComponentKind::Position, ComponentKind::Velocity],
+                &[],
+                &[],
+            ),
+        )?;
+
+        let frozen: Vec<(String, Vec<ComponentValue>)> = self
+            .world
+            .query::<(&Position, With<Frozen>)>()
+            .map(|(entity, position, ())| {
+                (
+                    format!("{entity:?}"),
+                    vec![ComponentValue::Position(position.0)],
+                )
+            })
+            .collect();
+        compare_set(
+            "query::<(&Position, With<Frozen>)>",
+            frozen,
+            self.model
+                .matching(&[ComponentKind::Position], &[ComponentKind::Frozen], &[]),
+        )?;
+
+        let thawed: Vec<(String, Vec<ComponentValue>)> = self
+            .world
+            .query::<(&Position, Without<Frozen>)>()
+            .map(|(entity, position, ())| {
+                (
+                    format!("{entity:?}"),
+                    vec![ComponentValue::Position(position.0)],
+                )
+            })
+            .collect();
+        compare_set(
+            "query::<(&Position, Without<Frozen>)>",
+            thawed,
+            self.model
+                .matching(&[ComponentKind::Position], &[], &[ComponentKind::Frozen]),
+        )
     }
 
     fn component(&self, entity: Entity, kind: ComponentKind) -> Option<ComponentValue> {
@@ -157,6 +242,21 @@ impl Pair {
     fn handle(&self, target: usize) -> (Entity, ReferenceEntity) {
         self.handles[target % self.handles.len()]
     }
+}
+
+/// Compare a query's results with the model's, order-independently.
+fn compare_set(
+    query: &str,
+    mut actual: Vec<(String, Vec<ComponentValue>)>,
+    expected: Vec<(String, Vec<ComponentValue>)>,
+) -> Result<(), String> {
+    actual.sort();
+    if actual != expected {
+        return Err(format!(
+            "{query} found {actual:?}, model expected {expected:?}"
+        ));
+    }
+    Ok(())
 }
 
 /// Run a sequence, returning how many operations named a dead entity.
@@ -235,6 +335,11 @@ fn the_same_operation_sequence_produces_the_same_handles_every_run() {
                         ComponentValue::Velocity(v) => world.try_insert(entity, Velocity(v)),
                         ComponentValue::Frozen => world.try_insert(entity, Frozen),
                     };
+                }
+                Op::BumpPositions => {
+                    for (_, position) in world.query_mut::<&mut Position>() {
+                        position.0 += 1;
+                    }
                 }
                 Op::Remove(target, kind) => {
                     let entity = handles[target % handles.len()];
