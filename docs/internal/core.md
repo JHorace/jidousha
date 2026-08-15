@@ -1,8 +1,8 @@
 # Engine core — design and contracts
 
 Status: **living internal doc**, part spec and part record. Implemented through
-M1 (entities and single-table storage); everything from M2 on is still the spec
-the implementing agent builds against. Sections describing shipped code say what
+M3 (entities, archetypes, queries, resources, commands, schedule, time);
+everything from M4 on is still the spec the implementing agent builds against. Sections describing shipped code say what
 the code does — where the two ever disagree, the code is the bug. Contracts
 marked **CONTRACT** are binding — tests must encode them, and changing one
 requires an ADR.
@@ -240,9 +240,39 @@ cmd.despawn(e);
   system always sees the previous system's structural changes.
 - Command application is itself part of operation history (§4 determinism).
 
+Implemented (M3):
+
+- `world.commands()` takes `&World` and hands back a recorder over a buffer the
+  world owns behind a `RefCell`. That interior mutability is what lets a system
+  record while a read-only query holds the world — it guards the buffer only,
+  never component or resource data, so it cannot be used to reach around
+  ADR-0013. Taking a second recorder while one is alive panics.
+- The schedule calls the world's flush after **every** system, which is what
+  makes the "applied when the system returns" contract true rather than
+  aspirational. A command that records more commands (a spawn applying its
+  bundle) is still applied in the same flush, in order.
+- CONTRACT: a command naming an entity that is no longer alive is a **no-op**,
+  not a failure. Deferral exists because the world moves between recording and
+  application: another system may legitimately have despawned the entity first,
+  and the command's intent is then already satisfied or moot. This is the same
+  reasoning that makes `remove` idempotent (§2).
+- `commands.spawn(bundle)` returns nothing: the handle is allocated at
+  application time. Give the entity what it needs through the bundle; a system
+  that must hold the handle spawns directly on `&mut World`. Bundles are tuples
+  of components, so one component is `(Frozen,)`.
+- Determinism note learned from the mutation checks: the replay test does *not*
+  catch a reordered command buffer, because reversal is still deterministic.
+  Replay proves repeatability; the recording-order CONTRACT needs its own test,
+  and has one (`tests/commands.rs`).
+
 **Engine RNG** — a seeded PCG-class `Rng` resource created from `GameConfig::seed`.
 CONTRACT: `jidousha-core` and game simulation code use only this. `rand::thread_rng`
 and OS entropy are banned in simulation paths (doctor/lint-checked).
+
+Implemented (M3): PCG32 (XSH-RR), integer arithmetic only, so the sequence is
+bit-identical everywhere. `next_u32`, `below(limit)` (rejection-sampled, so the
+distribution is even), and `next_f32` built from the top 24 bits. Until M4's
+`GameConfig` exists the seed is an argument to `Simulation::new`.
 
 ## 7. Schedule, time, and the loop
 
@@ -280,6 +310,19 @@ app.add_system(Update, physics_system);   // appended; runs in registration orde
 - The full schedule is printable: `app.schedule_debug()` lists phases and system
   names (function-name-derived) in run order — one call answers "what runs when"
   for any debugging agent.
+
+Implemented (M3):
+
+- Phases are types (`Startup`, `Update`) with an associated `Context`, which is
+  how Draw will refuse Update-shaped functions once it lands with `DrawCtx`
+  (ADR-0008). Each phase owns its list; the lists are `Vec`s, so registration
+  order *is* run order.
+- `add_system` is generic over the function's own type, which is the only way to
+  read its name: `type_name` on a fn item gives the path, and the last segment
+  is what the listing shows. Registering a closure yields `{{closure}}`, which
+  is self-punishing and therefore the whole enforcement.
+- `schedule_debug` landed here rather than in M4 — it costs nothing once names
+  are captured, and a schedule you cannot print is a schedule you cannot debug.
 
 ### Time and the fixed timestep
 
@@ -401,7 +444,12 @@ only on the failure path).
 ## 10. Open questions (deferred, tracked here)
 
 - ~~Math crate~~ — resolved: glam (`scalar-math`) + engine-owned deterministic
-  trig, clippy-enforced (ADR-0009). `jidousha-core::math` lands in M3.
+  trig, clippy-enforced (ADR-0009). ~~`jidousha-core::math` lands in M3~~ —
+  moved to M4, where transforms give it a consumer. Nothing in M3 needed a
+  vector or a trig call (`Time` needs `Seconds`, which landed as its own
+  newtype), and adding the workspace's first dependency plus a deterministic-trig
+  test suite ahead of any caller would have been budget spent on nothing
+  (practices §5.8). The decision itself is unchanged.
 - ~~Draw-phase immutability~~ — resolved: type-enforced via `DrawCtx` (ADR-0008).
 - **Change detection / events / parallelism**: explicitly out of v1 (ADR-0006).
   Each returns only via its own ADR with a driving use case.
@@ -434,11 +482,17 @@ agent works one milestone per session-ish; BLOCKED.md protocol applies throughou
   Iteration-determinism tests (same op script twice → identical iteration
   transcripts) live in `tests/query.rs`; the reference model gained query
   comparison and a `query_mut` operation.
-- **M3 — resources, commands, schedule, time.** Phases, registration-order
-  execution, command buffers with end-of-system application, `Time` +
-  accumulator loop (driven manually), seeded `Rng`. **Replay test: random system
-  soup + scripted inputs, run twice, world state hash identical — the ADR-level
-  determinism contract becomes a regression test here.** Exit: replay green.
+- **M3 — resources, commands, schedule, time.** ✅ Done. Phases with
+  registration-order execution, command buffers applied after every system,
+  `Time` + the accumulator loop, and the seeded `Rng`. The loop lives in
+  `Simulation` (`src/simulation.rs`) — one implementation that M4's `run` and
+  `headless` both wrap, per §8's CONTRACT. **The replay test** (`tests/replay.rs`)
+  runs a system soup against a scripted input track for 200 ticks, twice,
+  hashing the world after every tick; the hash covers iteration order, so an
+  ordering change fails it too. Sibling tests guard that the run actually churns
+  (spawns, freezes, reaps) and that seed and inputs each reach the simulation.
+  `schedule_debug` landed here rather than in M4, since system names are
+  captured at registration anyway.
 - **M4 — app + headless.** `GameConfig`, `run`/`headless` with the shared loop,
   `schedule_debug`, panic hook with system names. Typed phases + `DrawCtx` with
   the read-only world view (ADR-0008); submission sink stubbed until the

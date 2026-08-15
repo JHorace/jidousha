@@ -1,17 +1,24 @@
 //! The world: entities, their components, and every structural operation.
 //!
 //! Key types: `World`.
-//! Depends on: `archetype`, `component`, `entity`, `error`, `query`. Must never
-//! depend on: any other jidousha crate (core.md §1 CONTRACT).
+//! Depends on: `archetype`, `command`, `component`, `entity`, `error`, `query`,
+//! `resource`. Must never depend on: any other jidousha crate (core.md §1
+//! CONTRACT).
+//! The world's *resource* API lives in `resource.rs`, beside the store it
+//! reaches — this file is entities, components, and queries.
 //! INVARIANT: `locations` holds a location for exactly the live entities, and
 //! every location names the archetype whose component set the entity actually
 //! has. Every structural operation restores both before returning.
 
+use core::cell::RefCell;
+
 use crate::archetype::{Archetypes, Location};
+use crate::command::{CommandBuffer, Commands};
 use crate::component::Component;
 use crate::entity::{Entity, EntityAllocator};
 use crate::error::{EntityDeadError, message};
 use crate::query::{Query, QueryIter, QueryIterMut, ReadOnlyQuery};
+use crate::resource::Resources;
 
 /// Everything the simulation can see: the entities that exist and the
 /// components they carry.
@@ -49,6 +56,15 @@ pub struct World {
     /// live entity.
     locations: Vec<Option<Location>>,
     archetypes: Archetypes,
+    /// Read through the `impl World` block in `resource.rs`.
+    pub(crate) resources: Resources,
+    /// Structural changes recorded by the running system.
+    ///
+    /// DELIBERATE: interior mutability, so a system can record commands while a
+    /// read-only query holds the world (core.md §6). The cell guards the buffer
+    /// only — never component or resource data — so it cannot be used to reach
+    /// around the aliasing rules of ADR-0013.
+    commands: RefCell<CommandBuffer>,
 }
 
 impl World {
@@ -63,6 +79,8 @@ impl World {
             entities: EntityAllocator::new(),
             locations: Vec::new(),
             archetypes: Archetypes::new(),
+            resources: Resources::new(),
+            commands: RefCell::new(CommandBuffer::new()),
         }
     }
 
@@ -284,6 +302,45 @@ impl World {
         column.values.get_mut(location.row)
     }
 
+    /// Record structural changes to apply at the end of the running system.
+    ///
+    /// The recorder holds no borrow on entities or components, so a system can
+    /// read the world — queries included — while recording (core.md §6).
+    ///
+    /// # Panics
+    ///
+    /// If another recorder from this world is still alive. Take one at a time:
+    /// a system needs only one.
+    #[must_use]
+    pub fn commands(&self) -> Commands<'_> {
+        match self.commands.try_borrow_mut() {
+            Ok(buffer) => Commands::new(buffer),
+            Err(_) => panic!("{}", SECOND_RECORDER),
+        }
+    }
+
+    /// Apply everything recorded since the last application, in order.
+    ///
+    /// The schedule calls this after every system, which is what makes the
+    /// "applied when the system returns" contract true (core.md §6). Nothing in
+    /// game code needs to call it.
+    pub(crate) fn apply_commands(&mut self) {
+        loop {
+            // Applying a command may record more (a spawned entity's setup, a
+            // despawn cascade); those apply in this same flush, still in order.
+            let batch = match self.commands.try_borrow_mut() {
+                Ok(mut buffer) => {
+                    if buffer.is_empty() {
+                        return;
+                    }
+                    buffer.drain()
+                }
+                Err(_) => panic!("{}", SECOND_RECORDER),
+            };
+            CommandBuffer::apply(self, batch);
+        }
+    }
+
     fn insert_unchecked<T: Component>(&mut self, entity: Entity, value: T) {
         let location = self.location_of(entity);
         let target = self.archetypes.with_component::<T>(location.archetype);
@@ -398,6 +455,12 @@ impl World {
         )
     }
 }
+
+/// Panic text for a second live command recorder.
+const SECOND_RECORDER: &str = "[jidousha] this world already has a command recorder in use\n  \
+     world.commands() was called while an earlier recorder is still alive\n  \
+     likely cause: two `let mut commands = world.commands()` bindings in one system\n  \
+     fix: take one recorder per system and record everything through it";
 
 /// Panic text for an archetype that lacks a column its component set promises.
 const MISSING_COLUMN: &str = "[jidousha] engine bug: an archetype is missing a column for a type in its component set\n  \
