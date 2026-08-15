@@ -185,7 +185,7 @@ fn reading_other_entities_is_possible_during_a_read_only_query() {
 }
 
 #[test]
-#[should_panic(expected = "more than once")]
+#[should_panic(expected = "accesses the component")]
 fn naming_one_component_twice_in_a_query_panics() {
     let mut world = World::new();
     let entity = world.spawn();
@@ -195,6 +195,82 @@ fn naming_one_component_twice_in_a_query_panics() {
         .query_mut::<(&mut Position, &Position)>()
         .next()
         .is_some();
+}
+
+#[test]
+#[should_panic(expected = "accesses the component")]
+fn a_conflicting_query_panics_on_an_empty_world_without_iterating() {
+    // The mistake is in the query, not the data: it must surface on the first
+    // run of a new system, before anything has been spawned (ADR-0013).
+    let mut world = World::new();
+    let _ = world.query_mut::<(&mut Position, &Position)>();
+}
+
+#[test]
+#[should_panic(expected = "accesses the component")]
+fn naming_one_component_twice_mutably_panics() {
+    let mut world = World::new();
+    let _ = world.query_mut::<(&mut Position, &mut Position)>();
+}
+
+#[test]
+fn reading_one_component_twice_is_allowed() {
+    // Two shared borrows alias nothing, so this is legal — pointless, but the
+    // rule is about writes, and a rule with arbitrary exceptions is worse.
+    let mut world = World::new();
+    let entity = world.spawn();
+    world.insert(entity, Position(4));
+    let found: Vec<(i32, i32)> = world
+        .query::<(&Position, &Position)>()
+        .map(|(_, first, second)| (first.0, second.0))
+        .collect();
+    assert_eq!(found, [(4, 4)]);
+
+    let found: Vec<i32> = world
+        .query_mut::<(&Position, &Position)>()
+        .map(|(_, first, _)| first.0)
+        .collect();
+    assert_eq!(found, [4]);
+}
+
+#[test]
+fn the_conflicting_query_message_names_the_component_and_both_positions() {
+    let message = panic_message(|| {
+        let mut world = World::new();
+        let _ = world.query_mut::<(&Velocity, &mut Position, &Position)>();
+    });
+    let name = std::any::type_name::<Position>();
+    assert_eq!(
+        message,
+        format!(
+            "[jidousha] query accesses the component {name} twice: parts 1 and 2\n  \
+             part 1 takes &mut {name}, part 2 takes &{name} — the two accesses would alias\n  \
+             likely cause: the query tuple lists the same component type more than once, such as \
+             (&mut Position, &Position)\n  \
+             fix: keep one access to {name} in this query — a `&mut` access already lets you read it"
+        )
+    );
+}
+
+/// Run `body`, returning the message it panicked with.
+fn panic_message(body: impl FnOnce() + std::panic::UnwindSafe) -> String {
+    // No `expect` here: `allow-expect-in-tests` covers `#[test]` functions, not
+    // helpers beside them (docs/internal/tooling.md §5).
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+    let caught = std::panic::catch_unwind(body);
+    std::panic::set_hook(previous);
+    let payload = match caught {
+        Ok(()) => panic!("expected a panic, but the query was constructed"),
+        Err(payload) => payload,
+    };
+    match payload.downcast::<String>() {
+        Ok(message) => *message,
+        Err(payload) => match payload.downcast::<&str>() {
+            Ok(message) => (*message).to_owned(),
+            Err(_) => panic!("panicked with a payload that is not a string"),
+        },
+    }
 }
 
 #[test]

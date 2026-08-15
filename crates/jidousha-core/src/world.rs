@@ -194,10 +194,18 @@ impl World {
     /// }
     /// ```
     ///
+    /// A mutable query borrows the whole world, so nothing else can be read
+    /// while it iterates: to use one entity's data when writing another, take a
+    /// read pass with [`World::query`] that collects what you need, then a write
+    /// pass that consumes it — the read-pass/write-pass pattern, spelled out in
+    /// `docs/internal/core.md` §5 and shown working in
+    /// `crates/jidousha-core/examples/homing.rs` (ADR-0013).
+    ///
     /// # Panics
     ///
-    /// If the query names one component type twice, such as
-    /// `(&mut Position, &Position)` — the two accesses would alias.
+    /// When the query is constructed, if it names one component type twice with
+    /// at least one `&mut` — such as `(&mut Position, &Position)` — since the
+    /// two accesses would alias. Two shared reads of one component are allowed.
     pub fn query_mut<'w, Q: Query<'w>>(&'w mut self) -> QueryIterMut<'w, Q> {
         QueryIterMut::new(self.archetypes.all_mut().iter_mut())
     }

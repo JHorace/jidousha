@@ -227,6 +227,43 @@ class ClaudeMdSizeTest(unittest.TestCase):
         self.assertTrue(within_cap, f"CLAUDE.md is {count} lines")
 
 
+class ExampleDiscoveryTest(unittest.TestCase):
+    METADATA = {
+        "workspace_members": ["core-id", "facade-id"],
+        "packages": [
+            {
+                "id": "core-id",
+                "name": "jidousha-core",
+                "targets": [
+                    {"name": "jidousha-core", "kind": ["lib"]},
+                    {"name": "homing", "kind": ["example"]},
+                ],
+            },
+            {
+                "id": "facade-id",
+                "name": "jidousha",
+                "targets": [{"name": "quickstart", "kind": ["example"]}],
+            },
+            {
+                "id": "dependency-id",
+                "name": "some-dependency",
+                "targets": [{"name": "demo", "kind": ["example"]}],
+            },
+        ],
+    }
+
+    def test_every_workspace_example_is_discovered(self):
+        found = test_wrapper.parse_example_targets(self.METADATA)
+        self.assertEqual(found, [("jidousha", "quickstart"), ("jidousha-core", "homing")])
+
+    def test_examples_belonging_to_dependencies_are_not_run(self):
+        found = test_wrapper.parse_example_targets(self.METADATA)
+        self.assertNotIn(("some-dependency", "demo"), found)
+
+    def test_a_workspace_with_no_examples_discovers_none(self):
+        self.assertEqual(test_wrapper.parse_example_targets({}), [])
+
+
 class DepCountTest(unittest.TestCase):
     def test_workspace_members_are_not_counted_as_dependencies(self):
         metadata = {
