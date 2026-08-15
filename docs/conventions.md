@@ -49,8 +49,13 @@ the enforcement. Every entry here is assumed by all subsystem docs.
 - `create` / `destroy` — object lifetime · `load` / `unload` — assets
 - `get`-class (`component`, `resource`) — infallible, panics per §9 taxonomy
 - `find_*` — returns `Option` · `try_*` — returns `Result`
-- Banned synonyms: `make`, `fetch`, `lookup`, `obtain`, `remove` (use `destroy`
-  or the specific verb), `new_*` functions outside `T::new`.
+- `insert` / `remove` — components and resources on an entity or world
+  (`core.md` §2, §6). `remove` is banned only as a *synonym for `destroy`*:
+  destroying an object is `destroy`, taking a component off a live entity is
+  `remove`.
+- Banned synonyms: `make`, `fetch`, `lookup`, `obtain`, `new_*` functions
+  outside `T::new`. One constructor per type; `Default` only where the default
+  value is itself meaningful (ADR-0012).
 - Files are snake_case and named for the primary type they contain.
 
 ## Math

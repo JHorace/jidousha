@@ -1,9 +1,11 @@
 # Engine core — design and contracts
 
-Status: **design draft, pre-implementation.** This document becomes the living
-internal doc for `jidousha-core` once implementation starts; until then it is the
-spec the implementing agent builds against. Contracts marked **CONTRACT** are
-binding — tests must encode them, and changing one requires an ADR.
+Status: **living internal doc**, part spec and part record. Implemented through
+M1 (entities and single-table storage); everything from M2 on is still the spec
+the implementing agent builds against. Sections describing shipped code say what
+the code does — where the two ever disagree, the code is the bug. Contracts
+marked **CONTRACT** are binding — tests must encode them, and changing one
+requires an ADR.
 
 Covers: workspace layout, ECS (entities, components, storage, queries, resources,
 commands), schedule, time and the main loop, app lifecycle, error taxonomy, and
@@ -65,11 +67,24 @@ Liveness API (per the verb conventions):
   (`despawn`, `insert`, `remove`) on a dead entity are contract violations —
   loud panic in debug with the entity, its generation, and when it died if known;
   `try_*` variants exist for the rare legitimately-racy gameplay cases.
+- Implemented (M1): the panic and the `try_*` `Result` carry the *same* text —
+  one message, two deliveries. "When it died" is reported as the generation the
+  slot now holds, since there is no clock to name a tick until M3.
+- CONTRACT (M1): `remove::<T>` states an end state — the entity has no `T`
+  afterwards — so it is idempotent; removing a component the entity never had is
+  not a failure. Only the entity being dead is. Likewise `insert::<T>` replaces
+  any `T` already present.
+- `world.entity_count()` reports how many entities are alive.
 
 ## 3. Components
 
 - Plain Rust structs/enums. `derive(Component)` implements the marker trait only —
   the derive generates **no new public symbols** (greppability rule).
+  Implemented (M1): the trait, with `impl Component for Foo {}` written by hand.
+  The derive needs a proc-macro crate, which is not in the layout (§1) and would
+  be the workspace's first dependencies; it lands with the facade (F0), where the
+  public ergonomics are settled. Because the derive expands to exactly the manual
+  impl, nothing written against the trait today changes when it arrives.
 - Bounds: `'static + Send + Sync`. (Single-threaded today; these bounds are free
   now and unlockable later — adding them retroactively breaks every game.)
 - No component registration step: types are registered lazily on first use.
@@ -326,15 +341,20 @@ Each milestone = mergeable, tested, green CI (fmt, clippy `-D warnings`, tests,
 wasm check). Ordered so every step has something verifiable. The implementing
 agent works one milestone per session-ish; BLOCKED.md protocol applies throughout.
 
-- **M0 — scaffold.** Workspace + empty crates, CI pipeline, `tools/doctor`,
-  `tools/test` (report file + timeouts + failure counter), CLAUDE.md size check.
-  Exit: CI green on Linux/Windows/wasm targets; doctor gives correct verdicts on
-  a healthy env.
-- **M1 — entities + single-archetype storage.** Entity allocator (generational,
-  LIFO free list), one-archetype world: spawn/despawn/insert/remove/point access.
-  **Property tests against a naive reference model** (`Vec<HashMap>`-style world
-  compared under thousands of random op sequences) — this reference model is
-  load-bearing for every later milestone. Exit: model tests green.
+- **M0 — scaffold.** ✅ Done. Workspace + empty crates, CI pipeline,
+  `tools/doctor`, `tools/test` (report file + timeouts + failure counter),
+  CLAUDE.md size check. Tooling is documented in `docs/internal/tooling.md`.
+- **M1 — entities + single-archetype storage.** ✅ Done. Entity allocator
+  (generational, LIFO free list), one-archetype world:
+  spawn/despawn/insert/remove/point access. **Property tests against a naive
+  reference model** (`crates/jidousha-core/tests/support/`, a `Vec` of slots
+  holding a `BTreeMap` of components, compared under 2000 random operation
+  sequences) — this reference model is load-bearing for every later milestone.
+  The generator is seeded and stdlib-only, so a failure names the seed and the
+  shortest failing prefix; a second test guards that the sequences keep
+  exercising dead-entity paths. Storage is one table with an absent-slot
+  `Option` per row, swap-removed on despawn: the archetype graph is M2's job,
+  and M1 exists to pin the observable semantics first.
 - **M2 — archetypes + queries.** Archetype graph, entity moves on insert/remove,
   tuple queries + `With`/`Without`, borrow flags with the §9 message format.
   Iteration-determinism tests (same op script twice → identical iteration
