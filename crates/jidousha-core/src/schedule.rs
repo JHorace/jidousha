@@ -83,10 +83,16 @@ impl<F: for<'w> Fn(&mut DrawCtx<'w>) + Send + Sync + 'static> IntoSystem<Draw> f
     }
 }
 
-/// Runs once, before the first tick.
+/// Runs once, at the start of the first tick.
 ///
 /// Startup is where a game builds its world: spawning the level, inserting
 /// resources, loading what it needs.
+///
+/// Inside that first tick the order is Startup, then the clock, then Update —
+/// so the world is empty until `tick()` *returns*, not before you call it. A
+/// harness that reads the world between building the sim and its first tick
+/// finds nothing there. This said "before the first tick" until E0 run 1 read
+/// it the other reasonable way and took a panic for it (e0-findings.md F-007).
 #[derive(Clone, Copy, Debug)]
 pub struct Startup;
 

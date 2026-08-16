@@ -32,6 +32,12 @@ the enforcement. Every entry here is assumed by all subsystem docs.
 - `Color` = f32 RGBA, **sRGB-encoded, 0.0–1.0**, straight (non-premultiplied)
   alpha. What agents and humans mean by "0.5 gray" — linearization happens inside
   the render backend, invisibly.
+- **Alpha is the exception to "invisibly": it reads brighter than the number
+  looks.** Blending happens in *linear* light, where it is physically right, so
+  a low alpha over a dark background lands much higher than the figure suggests
+  — 0.06 white on near-black reads as solid grey, not as a hint. Pick faint
+  overlays (grid lines, field markings, dimmers) by eye from a capture rather
+  than by arithmetic, and start lower than feels right.
 - Constructors: `Color::rgb(r, g, b)`, `Color::rgba(...)`, plus a small named set
   (`Color::WHITE`, `Color::MAGENTA`, …). No 0–255 constructors in v1 (one way).
 
