@@ -17,7 +17,7 @@
 use std::sync::Arc;
 
 use jidousha_core::{GameConfig, Simulation};
-use jidousha_input::{InputEvent, SnapshotBuilder};
+use jidousha_input::{InputEvent, PointerId, SnapshotBuilder};
 use jidousha_render_core::{PhysicalSize, RenderBackend, TextureTable, create_builtin_textures};
 use jidousha_render_wgpu::WgpuBackend;
 use winit::application::ApplicationHandler;
@@ -27,6 +27,7 @@ use winit::window::{Window, WindowId};
 
 use crate::clock::FrameClock;
 use crate::error::RunError;
+use crate::translate;
 
 mod frame;
 #[cfg(test)]
@@ -104,6 +105,27 @@ impl Driver {
             self.failure = Some(error);
         }
         event_loop.exit();
+    }
+
+    /// Translate one key event and give it to the builder.
+    ///
+    /// Split out from the `WindowEvent::KeyboardInput` arm so that it can be
+    /// tested: `winit::event::KeyEvent` has a private field and cannot be built
+    /// outside winit, so that one arm is the only part of this module a test
+    /// cannot drive with a real event. Taking the fields instead leaves the arm
+    /// with nothing in it but the destructuring — and the two `bool`s it could
+    /// conceivably swap are filtered identically, so even that has no wrong
+    /// version to reach.
+    fn record_key(
+        &mut self,
+        physical_key: winit::keyboard::PhysicalKey,
+        state: winit::event::ElementState,
+        repeat: bool,
+        is_synthetic: bool,
+    ) {
+        if let Some(translated) = translate::key_event(physical_key, state, repeat, is_synthetic) {
+            self.input.record(translated);
+        }
     }
 }
 
@@ -240,11 +262,34 @@ impl Driver {
             // nothing to do here that the arm above will not do.
             WindowEvent::ScaleFactorChanged { .. } => {}
 
-            // Keyboard and pointer events translate to `InputEvent` at I1,
-            // which owns the winit tables (input.md §8). The seam they will
-            // arrive through — `self.input` — is already here and already
-            // driving the per-tick snapshots above, so I1 adds a translation
-            // and nothing else.
+            // Keyboard and pointer, translated into the engine's vocabulary and
+            // handed to the same builder the focus events above use. Each arm
+            // does nothing but destructure and delegate: the decisions — which
+            // keys exist, what a repeat means, how many lines a pixel is — are
+            // all in `translate`, where they can be tested without a window
+            // (input.md §6).
+            WindowEvent::KeyboardInput {
+                event,
+                is_synthetic,
+                ..
+            } => self.record_key(event.physical_key, event.state, event.repeat, *is_synthetic),
+            WindowEvent::CursorMoved { position, .. } => {
+                self.input.record(translate::pointer_moved(*position));
+            }
+            WindowEvent::MouseInput { state, button, .. } => {
+                if let Some(translated) = translate::button_event(*state, *button) {
+                    self.input.record(translated);
+                }
+            }
+            WindowEvent::MouseWheel { delta, .. } => {
+                self.input.record(InputEvent::Scrolled {
+                    id: PointerId::PRIMARY,
+                    lines: translate::scroll_lines(*delta),
+                });
+            }
+
+            // Everything else winit reports is not input: file drops, IME,
+            // theme changes, occlusion. Adding one is adding an arm here.
             _ => {}
         }
         Response::Continue
@@ -255,7 +300,127 @@ impl Driver {
 mod tests {
     use super::testing::{Seen, driver, frames_worth};
     use super::*;
-    use jidousha_input::Key;
+    use jidousha_core::math::Vec2;
+    use jidousha_input::{Input, Key, PointerButton};
+    use winit::dpi::PhysicalPosition;
+    use winit::event::{DeviceId, ElementState, MouseButton, MouseScrollDelta};
+    use winit::keyboard::{KeyCode, PhysicalKey};
+
+    /// What the pointer looked like on the last tick that ran.
+    fn pointer(driver: &Driver) -> jidousha_input::PointerState {
+        driver
+            .simulation
+            .world()
+            .resource::<Input>()
+            .pointer()
+            .clone()
+    }
+
+    #[test]
+    fn a_key_press_reaches_the_next_tick_as_an_edge() {
+        // As close to the `KeyboardInput` arm as a test can get: winit's
+        // `KeyEvent` cannot be constructed outside winit, so this drives the
+        // method that arm delegates to. What is left untested is the
+        // destructuring itself.
+        let mut driver = driver();
+        driver.record_key(
+            PhysicalKey::Code(KeyCode::KeyA),
+            ElementState::Pressed,
+            false,
+            false,
+        );
+        driver.frame(frames_worth(1));
+        assert_eq!(
+            driver.simulation.world().resource::<Seen>().pressed,
+            vec![true],
+            "the press reached a tick"
+        );
+
+        // And auto-repeat, which the operating system sends while a key is
+        // held, must not produce a second edge.
+        driver.record_key(
+            PhysicalKey::Code(KeyCode::KeyA),
+            ElementState::Pressed,
+            true,
+            false,
+        );
+        driver.frame(frames_worth(1));
+        assert_eq!(
+            driver.simulation.world().resource::<Seen>().pressed,
+            vec![true, false],
+            "held, not pressed again"
+        );
+    }
+
+    #[test]
+    fn a_cursor_move_reaches_the_next_tick_as_a_screen_position() {
+        // The wiring, not the translation: `translate` is tested on its own, and
+        // this is the arm that has to call it. winit's `DeviceId::dummy` exists
+        // for exactly this, so three of the four input arms can be driven with
+        // real `WindowEvent`s rather than reached past.
+        let mut driver = driver();
+        assert_eq!(
+            driver.on_window_event(&WindowEvent::CursorMoved {
+                device_id: DeviceId::dummy(),
+                position: PhysicalPosition::new(120.0, 45.0),
+            }),
+            Response::Continue
+        );
+        driver.frame(frames_worth(1));
+        assert_eq!(pointer(&driver).screen, Vec2::new(120.0, 45.0));
+    }
+
+    #[test]
+    fn a_click_reaches_the_next_tick_as_a_button_edge() {
+        let mut driver = driver();
+        driver.on_window_event(&WindowEvent::MouseInput {
+            device_id: DeviceId::dummy(),
+            state: ElementState::Pressed,
+            button: MouseButton::Left,
+        });
+        driver.frame(frames_worth(1));
+        assert!(pointer(&driver).just_pressed(PointerButton::Primary));
+        assert!(pointer(&driver).held(PointerButton::Primary));
+
+        // And the edge is spent: the next tick still holds it, without a new
+        // press (input.md §2).
+        driver.frame(frames_worth(1));
+        assert!(!pointer(&driver).just_pressed(PointerButton::Primary));
+        assert!(pointer(&driver).held(PointerButton::Primary));
+    }
+
+    #[test]
+    fn a_button_winit_reports_and_the_engine_does_not_have_is_dropped_quietly() {
+        // Not an error — a documented boundary. What must not happen is a panic
+        // or a stray edge on some other button.
+        let mut driver = driver();
+        driver.on_window_event(&WindowEvent::MouseInput {
+            device_id: DeviceId::dummy(),
+            state: ElementState::Pressed,
+            button: MouseButton::Back,
+        });
+        driver.frame(frames_worth(1));
+        for button in PointerButton::ALL {
+            assert!(!pointer(&driver).held(*button), "{button:?}");
+        }
+    }
+
+    #[test]
+    fn a_wheel_notch_reaches_the_next_tick_as_one_line() {
+        let mut driver = driver();
+        driver.on_window_event(&WindowEvent::MouseWheel {
+            device_id: DeviceId::dummy(),
+            delta: MouseScrollDelta::LineDelta(0.0, -1.0),
+            phase: winit::event::TouchPhase::Moved,
+        });
+        driver.frame(frames_worth(1));
+        assert_eq!(pointer(&driver).scroll, 1.0, "one line, toward the end");
+
+        // Scroll is spent like an edge: a tick that follows sees none of it, or
+        // one flick would scroll for as long as the frame rate stayed low.
+        driver.frame(frames_worth(1));
+        assert_eq!(pointer(&driver).scroll, 0.0);
+    }
 
     #[test]
     fn closing_the_window_stops_the_loop() {

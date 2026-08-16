@@ -1,8 +1,8 @@
 # Input system — design and contracts
 
-Status: **living doc for `jidousha-input`; I0 implemented, I1–I2 still design.**
-Sections carry `Implemented (I0)` notes where code exists; everything else is
-design ahead of the code. **CONTRACT** items are binding and tested.
+Status: **living doc for `jidousha-input`; I0 and I1 implemented, I2 still
+design.** Sections carry `Implemented (IN)` notes where code exists; everything
+else is design ahead of the code. **CONTRACT** items are binding and tested.
 
 Inherits: the per-tick snapshot choke point and replay contract (core §7), winit
 translation confined to the platform crate (ADR-0004), pointer-not-mouse headroom
@@ -127,6 +127,30 @@ pub struct PointerState {
   snapshot; whatever it produces is what's recorded — replay is exact even if
   normalization heuristics later improve.
 
+Implemented (I1):
+
+- **One line is a hundred pixels**, and the number has exactly one job: make a
+  browser wheel notch feel like a native one. winit reports a native notch as
+  one line and needs no conversion; browsers report a notch as a hundred pixels.
+  The honest version asks the platform for its real line height, which winit
+  does not expose — so this is a heuristic, tagged as one, and the §3 sentence
+  above is why improving it later costs nothing.
+- **The sign is flipped at the seam.** winit's positive means "the content moves
+  down", which is scrolling *back*; a game asking for `scroll` means the
+  direction Page Down goes. One negation, in one place.
+- **Horizontal scroll is dropped**, because `PointerState::scroll` is one
+  number. Folding it in would make a sideways swipe zoom the game.
+- **`PointerState.world` is not a field yet.** The sketch in this section shows
+  one and the CONTRACT above describes how it would be derived; deriving it
+  needs a `Camera`, which this crate must not name, so the driver would have to
+  write it into the snapshot after building it. That runs straight into the
+  codec: a derived field either gets encoded — breaking "the recording stores
+  raw screen position only" — or is excluded from equality, which is a decision
+  about what a recorded snapshot *is*. Both questions belong to **I2**, which
+  owns the stream format. Until then a game converts with
+  `camera.screen_to_world(input.pointer().screen)`, which is the sanctioned
+  conversion anyway and is what `examples/input_echo.rs` does.
+
 ## 4. Focus loss and window edge cases
 
 - CONTRACT: on focus loss (alt-tab, browser tab switch), the engine
@@ -247,7 +271,7 @@ overlap contradictorily (hold 5..10 + release at 7) are a debug panic with the
   still pending. Both mutants die. The lesson generalizes — when a mutant
   survives, check whether the contract is weaker than it sounds before assuming
   the test is.
-- **I1 — platform translation.** winit tables, accumulator, scroll
+- **I1 — platform translation.** ✅ winit tables, accumulator, scroll
   normalization, focus-loss synthesis. `examples/input_echo.rs` (draws pressed
   keys + pointer state as text — also exercises renderer text).
   Exit: manual check on all three targets; translation-table unit tests.
@@ -261,6 +285,39 @@ overlap contradictorily (hold 5..10 + release at 7) are a debug panic with the
   scroll normalization**: winit's `KeyCode` → `Key`, `MouseButton` →
   `PointerButton`, and line-vs-pixel scroll deltas. The seam they arrive through
   exists and is under test, so I1 adds a mapping and nothing structural.
+
+  That prediction held: `translate.rs` is a table and four small functions, and
+  the driver's four new arms destructure and delegate.
+
+  **Two winit events are dropped on purpose**, and both would otherwise produce
+  edges no player made:
+
+  - **Auto-repeat.** Holding a key makes the operating system send a press every
+    few tens of milliseconds. Passing those on would fire `just_pressed` about
+    thirty times a second for a held key — the single most likely way this
+    translation goes wrong, and invisible in a game that only asks `held`.
+  - **Synthetic focus events.** winit reports the keys that were down when a
+    window gained or lost focus. The engine already synthesizes its own releases
+    on focus loss, above this seam and under test (§4), so taking winit's as
+    well would release every held key twice and re-press them all on the way
+    back in.
+
+  **What the tests are.** The table's two coverage tests are the interesting
+  ones: every `Key` the engine names must be reachable from some winit code — an
+  unreachable variant is a key a game can ask about and never receive — and no
+  two winit codes may map to one `Key`, which would make two physical keys
+  indistinguishable and leave the second one dead. Both are the kind of typo a
+  table this long invites.
+
+  Three of the four driver arms are driven with real `WindowEvent`s in tests,
+  using winit's `DeviceId::dummy`. The fourth cannot be: `KeyEvent` has a
+  private field and is unconstructible outside winit. Mutation testing found
+  that gap, so the arm now delegates to `Driver::record_key`, which takes the
+  fields and *is* tested — leaving the arm with nothing but destructuring.
+
+  **What the mutation checks said.** Seventeen deliberate breakages, sixteen
+  caught first time. The escape was the keyboard arm above, and the fix was to
+  move the untestable boundary rather than to write a weaker test.
 - **I2 — recording + verify.** Stream format (with asset-readiness interleave),
   record/replay round-trip test (record scripted session → replay → identical
   world hash per tick), `tools/verify` wiring.

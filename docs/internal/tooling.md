@@ -124,9 +124,19 @@ a row (stop rule printed, `failure-streak.json` count 2).
   engine compiles for the web; this builds an example, runs `wasm-bindgen`,
   writes `tools/web/index.html` with the example's name substituted in, and
   serves it. `--check` drives a headless Chromium at the page, screenshots it,
-  decodes the PNG, and asserts the canvas differs from the page background.
+  decodes the PNG, and asserts the canvas was drawn on.
   Stdlib only, including the PNG decoder — forty lines of `zlib` and
   un-filtering, for the same reason the input codec is hand-written (ADR-0014).
+- **"Was the canvas drawn on" takes two questions, not one.** The original check
+  asked only whether the canvas differed from the page's own background, and I1
+  found its blind spot: `input_echo` clears to rgb(15, 18, 26) against a page of
+  rgb(16, 16, 20), so a correct, fully-drawn readout registered as 1% different
+  and failed. It now also accepts a canvas that is *not one flat colour* — if
+  anything was drawn over the clear, there is more than one colour up there.
+  Either piece of evidence passes; a blank canvas has neither, because it is the
+  page background, uniformly. Both directions are tested, including the one that
+  matters most: a page that merely cleared to something near the background and
+  drew nothing must still fail.
 - **The `wasm-bindgen` CLI must match the `wasm-bindgen` crate exactly.** They
   generate two halves of one interface, and a skew produces glue that fails at
   run time with a message about nothing in particular. `serve-web` reads the
@@ -149,7 +159,7 @@ a row (stop rule printed, `failure-streak.json` count 2).
 - **Almost every example is run; windowed ones are built and not run.**
   Resolved in M5, which is when it first mattered. `tools/test` carries a
   `WINDOWED_EXAMPLES` set (`window_blank` from M5, `window_clear` from R1,
-  `sprites` from R2, `prototype_kit` from R3); a
+  `sprites` from R2, `prototype_kit` from R3, `input_echo` from I1); a
   name in it gets `cargo build --example` under a
   phase called `example-build:<name>` instead of `cargo run`, and the runner
   prints which examples it built rather than ran. Three reasons for a list over

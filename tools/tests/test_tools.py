@@ -381,6 +381,25 @@ class ServeWebTest(unittest.TestCase):
         drawn, detail = serve_web.canvas_is_drawn(png_bytes(8, 8, painted))
         self.assertTrue(drawn, detail)
 
+    def test_a_canvas_cleared_to_the_pages_own_color_still_reads_as_drawn(self):
+        # The blind spot the first rule alone has, found by `input_echo`: it
+        # clears to a color a shade off the page's, so almost nothing "differs
+        # from the background" — but it drew a readout, and a blank canvas would
+        # not have. Two shades of near-black plus one bright row is what that
+        # looks like at this size.
+        rows = [[(15, 18, 26)] * 8 for _ in range(8)]
+        rows[6] = [(200, 220, 255)] * 8
+        drawn, detail = serve_web.canvas_is_drawn(png_bytes(8, 8, rows))
+        self.assertTrue(drawn, detail)
+
+    def test_a_canvas_of_one_flat_color_near_the_background_reads_as_blank(self):
+        # And the other side of it: the second rule must not accept a page that
+        # merely cleared to something close to the background and drew nothing,
+        # or it would pass the exact failure this whole check exists for.
+        rows = [[(15, 18, 26)] * 8 for _ in range(8)]
+        drawn, detail = serve_web.canvas_is_drawn(png_bytes(8, 8, rows))
+        self.assertFalse(drawn, detail)
+
     def test_the_wasm_bindgen_version_is_read_from_the_lockfile(self):
         # The CLI and the crate generate two halves of one interface, so this
         # is what stops a skew from becoming a runtime mystery.
