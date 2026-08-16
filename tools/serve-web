@@ -297,10 +297,22 @@ def canvas_is_drawn(png: bytes) -> "tuple[bool, str]":
     """Whether the engine put a color on the canvas.
 
     Samples the lower two thirds of the page — the status line is at the top and
-    the canvas fills the rest — and asks whether most of it differs from the
-    page's own background. Deliberately not a golden image: what is being
-    checked is "the engine drew", not "it drew exactly this", and the example's
-    color moves with simulated time anyway.
+    the canvas fills the rest — and accepts either of two pieces of evidence:
+
+    1. **Most of it differs from the page's own background.** An example that
+       clears to a color of its own looks like this, and it is what
+       `window_clear` and `sprites` show.
+    2. **It is not one flat color.** An example whose clear color happens to sit
+       near the page's background is invisible to the first test — `input_echo`
+       clears to rgb(15, 18, 26) against a page of rgb(16, 16, 20) — but if it
+       drew anything at all there is more than one color up there.
+
+    Either is enough, because a blank canvas satisfies neither: it is the page
+    background, uniformly. The second rule was added after the first one failed
+    a working example, which is the failure mode a single heuristic invites.
+
+    Deliberately not a golden image: what is being checked is "the engine drew",
+    not "it drew exactly this", and an example's colors move with simulated time.
     """
     decoded = decode_png(png)
     if decoded is None:
@@ -322,11 +334,18 @@ def canvas_is_drawn(png: bytes) -> "tuple[bool, str]":
         return (False, "the screenshot had nothing to sample")
     share = matched / total
     common = max(sampled.items(), key=lambda item: item[1])[0]
-    detail = f"{share:.0%} of the canvas area differs from the page background; commonest pixel rgb{common}"
-    # Half is generous: the canvas does not fill the whole sampled region on
-    # every window size, and the point is to tell "drew something" from "drew
-    # nothing at all".
-    return (share > 0.5, detail)
+    # How much of the canvas is *not* its own commonest color. A blank page is
+    # entirely one color; anything drawn on top of a clear is not.
+    drawn_on = 1.0 - sampled[common] / total
+    detail = (
+        f"{share:.0%} of the canvas differs from the page background, "
+        f"{drawn_on:.0%} from its own commonest pixel rgb{common}"
+    )
+    # Half is generous for the first rule: the canvas does not fill the whole
+    # sampled region at every window size. The second is deliberately small —
+    # a readout in one corner is a few percent of the page, and a blank canvas
+    # is zero.
+    return (share > 0.5 or drawn_on > 0.005, detail)
 
 
 def chromium() -> "str | None":

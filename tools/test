@@ -96,7 +96,7 @@ def parse_test_output(text: str) -> dict:
 # says nothing about the code. Every other example is run, and asserts its own
 # behaviour (agent-practices §5.1). M5 owns this decision; tooling.md records it.
 WINDOWED_EXAMPLES = frozenset(
-    {"window_blank", "window_clear", "sprites", "prototype_kit"}
+    {"window_blank", "window_clear", "sprites", "prototype_kit", "input_echo"}
 )
 
 

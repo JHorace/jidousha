@@ -194,6 +194,14 @@ Note for F0: `InputScript` belongs behind `jidousha::testing` per the list above
 and the facade does not exist yet. Until it does it lives beside the types it
 builds, and moving it is a re-export, not a rewrite.
 
+Built in I1: nothing new. The translation from winit's vocabulary to the
+engine's is entirely inside `jidousha-platform` and no type crosses out of it
+(ADR-0004) — a game sees the same `Input` it saw at I0, now with real keys and a
+real pointer behind it. `examples/input_echo.rs` is written from the list above
+plus one thing not on it: `Input::snapshot()`, for the unusual case of wanting
+*every* key that is down rather than asking about one. A readout is what that is
+for; a game asks `held(Key::W)`.
+
 Rough count: ~45 types/functions. CONTRACT: the v1 prototype substrate
 ("agent Pong/asteroids/breakout") must be expressible with this list alone —
 that's exactly what acceptance milestone E0 tests (implementation plan).
