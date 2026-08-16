@@ -270,6 +270,21 @@ mod tests {
     }
 
     #[test]
+    fn nothing_at_all_may_differ_under_the_exact_tolerance() {
+        // What `EXACT` is for: comparing one machine against itself, where any
+        // difference is a real one. A widened `EXACT` would let the
+        // render-twice stability check pass against a backend that drew
+        // slightly differently each frame — and that check is what makes a
+        // blessed reference reproducible in the first place.
+        let base = solid(4, 4, [10, 20, 30, 255]);
+        let result = compare(&base, &nudged(&base, 0, 1), Tolerance::EXACT);
+        assert!(!result.matched, "one level is a difference: {result}");
+        assert_eq!(result.differing, 1);
+        assert_eq!(Tolerance::EXACT.per_channel, 0);
+        assert_eq!(Tolerance::EXACT.differing_fraction, 0.0);
+    }
+
+    #[test]
     fn a_difference_within_the_channel_tolerance_is_not_counted() {
         // The rounding one driver does and another does not.
         let base = solid(4, 4, [10, 20, 30, 255]);

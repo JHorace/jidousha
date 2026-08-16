@@ -44,7 +44,12 @@ const HANDSHAKE_POLLS: usize = 10_000;
 
 /// A backend with a GPU behind it, or `None` on a machine that has none.
 fn offscreen() -> Option<WgpuBackend> {
-    let mut backend = WgpuBackend::offscreen(SIZE);
+    offscreen_at(SIZE)
+}
+
+/// The same, at a size the caller picks.
+fn offscreen_at(size: PhysicalSize) -> Option<WgpuBackend> {
+    let mut backend = WgpuBackend::offscreen(size);
     for _ in 0..HANDSHAKE_POLLS {
         match backend.poll() {
             Ok(()) if backend.is_ready() => return Some(backend),
@@ -325,6 +330,22 @@ fn the_clear_color_reaches_the_corners() {
             "corner pixel {corner:?} is not the clear colour {expect:?}"
         );
     }
+}
+
+#[test]
+fn a_target_with_no_pixels_is_refused_by_size() {
+    // Asking for a zero-sized capture is a caller's mistake, and the honest
+    // answer names the size rather than handing back a one-pixel picture or an
+    // empty buffer that would encode as nothing (renderer.md §10).
+    let Some(mut backend) = offscreen_at(PhysicalSize::new(0, 0)) else {
+        return;
+    };
+    let Err(error) = backend.capture() else {
+        panic!("a target with no pixels has nothing to read back");
+    };
+    let text = error.to_string();
+    assert!(text.contains("0x0"), "{text}");
+    assert!(text.contains("no pixels"), "{text}");
 }
 
 #[test]
