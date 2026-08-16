@@ -119,10 +119,19 @@ a row (stop rule printed, `failure-streak.json` count 2).
   snippets lock rustc's wording plus the `IntoSystem<Phase>` mention. The
   `&mut T`-in-a-Draw-query case — the mistake ADR-0008 actually predicts — does
   show the engine's sentence.
-- **Every example is run, which assumes every example is headless.** True
-  through M4; `window_blank` (M5) will open a window and hang a headless
-  runner. That milestone owns the decision — a headless flag, an exclusion
-  list, or a separate phase — and until then the examples phase runs the lot.
+- **Almost every example is run; windowed ones are built and not run.**
+  Resolved in M5, which is when it first mattered. `tools/test` carries a
+  `WINDOWED_EXAMPLES` set; a name in it gets `cargo build --example` under a
+  phase called `example-build:<name>` instead of `cargo run`, and the runner
+  prints which examples it built rather than ran. Three reasons for a list over
+  the alternatives: a headless flag would put test-runner concerns into engine
+  code, a separate phase would still need to know which examples belong in it,
+  and a name in a set is greppable. Building still catches every compile error,
+  and CI's wasm job builds it too — what is lost is only the assertion that it
+  *runs*, which for a window means "a person looked at it". Two self-tests guard
+  the list: that a windowed example is built and not run, and that every name in
+  it is an example that exists, so a rename cannot silently start running a
+  window or keep skipping something deleted.
 - **`cargo clean` deletes the reports.** `target/verify/` lives under `target/`,
   so a clean also resets the failure streak.
 - **CI invokes `python tools/<name>`, not `tools/<name>`.** The shebang path is

@@ -91,6 +91,31 @@ def parse_test_output(text: str) -> dict:
     return {"passed": passed, "failed": failed, "ignored": ignored, "failed_tests": failed_tests}
 
 
+# Examples that open a window and wait for a person. They are built, never run:
+# a headless runner has no display, so running one would fail for a reason that
+# says nothing about the code. Every other example is run, and asserts its own
+# behaviour (agent-practices §5.1). M5 owns this decision; tooling.md records it.
+WINDOWED_EXAMPLES = frozenset({"window_blank"})
+
+
+def example_phase(package: str, example: str) -> "tuple[str, list[str]]":
+    """The phase name and command for one example.
+
+    Windowed examples are compiled and no more, under a phase name that says so
+    — a skipped check should be visible in the log, not inferred from its
+    absence.
+    """
+    if example in WINDOWED_EXAMPLES:
+        return (
+            f"example-build:{example}",
+            ["cargo", "build", "--quiet", "-p", package, "--example", example],
+        )
+    return (
+        f"example:{example}",
+        ["cargo", "run", "--quiet", "-p", package, "--example", example],
+    )
+
+
 def parse_example_targets(metadata: dict) -> "list[tuple[str, str]]":
     """Every example target in the workspace, as (package, example name).
 
@@ -295,10 +320,13 @@ def main(argv: "list[str]") -> int:
     # Examples are run, not merely compiled: each one asserts its own behaviour,
     # so a broken example fails here rather than in a game agent's face.
     examples = discover_examples()
-    print(f"[tools/test] examples to run: {len(examples)}")
+    windowed = [example for _, example in examples if example in WINDOWED_EXAMPLES]
+    print(f"[tools/test] examples to run: {len(examples) - len(windowed)}")
+    if windowed:
+        print(f"[tools/test] examples built but not run (windowed): {', '.join(windowed)}")
     for package, example in examples:
-        name = f"example:{example}"
-        phases.append(Phase(name, ["cargo", "run", "--quiet", "-p", package, "--example", example]))
+        name, command = example_phase(package, example)
+        phases.append(Phase(name, command))
         timeouts[name] = EXAMPLE_TIMEOUT_S
 
     counts = {"passed": 0, "failed": 0, "ignored": 0}

@@ -251,6 +251,16 @@ overlap contradictorily (hold 5..10 + release at 7) are a debug panic with the
   normalization, focus-loss synthesis. `examples/input_echo.rs` (draws pressed
   keys + pointer state as text — also exercises renderer text).
   Exit: manual check on all three targets; translation-table unit tests.
+
+  Two of those four are already done and I1 should not redo them. The
+  accumulator and the focus-loss synthesis landed in I0, in `SnapshotBuilder`
+  (§6 records why they sit above the winit seam rather than below it), and M5
+  wired that builder into the windowed driver — it already produces the per-tick
+  snapshots, already gives a frame's edges to its first tick, and already feeds
+  focus events through. **What is left for I1 is the translation tables and
+  scroll normalization**: winit's `KeyCode` → `Key`, `MouseButton` →
+  `PointerButton`, and line-vs-pixel scroll deltas. The seam they arrive through
+  exists and is under test, so I1 adds a mapping and nothing structural.
 - **I2 — recording + verify.** Stream format (with asset-readiness interleave),
   record/replay round-trip test (record scripted session → replay → identical
   world hash per tick), `tools/verify` wiring.

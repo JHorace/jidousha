@@ -103,7 +103,7 @@ fn main() {
 
     // Real time in, whole ticks out: sixty frames of a sixtieth of a second.
     for _ in 0..60 {
-        simulation.advance(Seconds(1.0 / 60.0));
+        simulation.advance(Seconds(1.0 / 60.0), |_, _| {});
     }
 
     let time = simulation.world().resource::<Time>();
@@ -126,7 +126,7 @@ fn main() {
     again.add_system(Update, drift);
     again.add_system(Update, reap_the_strays);
     for _ in 0..60 {
-        again.advance(Seconds(1.0 / 60.0));
+        again.advance(Seconds(1.0 / 60.0), |_, _| {});
     }
     assert_eq!(again.world().entity_count(), alive);
     assert_eq!(again.world().resource::<Reaped>().0, reaped);

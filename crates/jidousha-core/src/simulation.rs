@@ -135,10 +135,20 @@ impl Simulation {
     /// ticks come out, and the remainder is carried to the next frame. Frames
     /// longer than a quarter second are clamped.
     ///
+    /// `before_tick` runs immediately before each tick, with the world and the
+    /// tick's index within this frame — zero for the first. That index is what
+    /// a driver needs to honor the input contract: a frame's events belong to
+    /// its first tick, and the catch-up ticks behind it see state without edges
+    /// (input.md §2). The callback exists because core cannot name an
+    /// `InputSnapshot` — it depends on no other jidousha crate (§1, CONTRACT) —
+    /// so the driver reaches in rather than core reaching out.
+    ///
     /// DELIBERATE: this is the *only* place real time enters the engine, and it
     /// arrives as an argument. Nothing in `jidousha-core` reads a clock
-    /// (ADR-0005).
-    pub fn advance(&mut self, frame: Seconds) -> u32 {
+    /// (ADR-0005). It is also the only accumulator: the windowed driver calls
+    /// this rather than keeping its own, which is what makes §8's one-loop
+    /// CONTRACT true.
+    pub fn advance(&mut self, frame: Seconds, mut before_tick: impl FnMut(&mut World, u32)) -> u32 {
         self.start();
         let frame = if frame > MAX_FRAME { MAX_FRAME } else { frame };
         self.accumulator += frame;
@@ -146,6 +156,7 @@ impl Simulation {
         let mut steps = 0;
         while self.accumulator >= fixed_dt {
             self.accumulator -= fixed_dt;
+            before_tick(&mut self.world, steps);
             self.tick();
             steps += 1;
         }

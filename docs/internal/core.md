@@ -421,6 +421,14 @@ sim.world();                          // inspect state
   every core integration test. CONTRACT: `run` and `headless` execute Startup and
   Update identically — one loop implementation, two drivers.
 
+Implemented (M5): the CONTRACT is now structural. Both drivers call
+`jidousha_core::build(config, setup)` to construct the simulation, and both run
+ticks through `Simulation::advance`, which owns the accumulator. `run` lives in
+`jidousha-platform` and adds only the two things a window brings: when a frame
+happens, and how long it was. On the web `run` returns immediately and the
+browser keeps calling back — the one `cfg` branch in the engine, in the crate
+that exists to absorb exactly this difference.
+
 ## 9. Error taxonomy
 
 Two classes, engine-wide (renderer/assets docs inherit this):
@@ -536,10 +544,66 @@ agent works one milestone per session-ish; BLOCKED.md protocol applies throughou
   (§1, CONTRACT) and so cannot name a texture asset. **ADR-0015** records how
   that was resolved: core carries an opaque id, and every crate that knows what
   a texture *is* sits above it. No game's draw systems were rewritten.
-- **M5 — platform crate.** winit wrapper, window, event pump → `InputSnapshot`
+- **M5 — platform crate.** ✅ winit wrapper, window, event pump → `InputSnapshot`
   scaffold (full input system is its own doc), real-time loop driver feeding the
   accumulator. `examples/window_blank.rs` opens a window natively and on web
   (manual check; headless CI proxy per ADR-0005). Exit: blank window on all
   three targets; core still has zero platform deps.
+
+  `jidousha_platform::run(config, setup)` is the windowed driver, taking the
+  same closure `headless` takes. Two small additions to core made that share one
+  loop rather than two:
+
+  - `jidousha_core::build(config, setup) -> Simulation` — the construction both
+    drivers go through. `headless` is now a wrapper around it. The CONTRACT in
+    §8 stops being a promise about the code and becomes a fact about it.
+  - `Simulation::advance` gained a per-tick callback, `(&mut World, tick_index)`.
+    The driver needs it to honor input.md §2: a frame's events belong to its
+    first tick and the catch-up ticks behind it see no edges. Core cannot name
+    an `InputSnapshot` (§1, CONTRACT), so the driver reaches in rather than core
+    reaching out. The accumulator stays in one place, which was the point.
+
+  **Verified, and not.** The engine side is tested: the driver's frame logic
+  runs headless in unit tests (edges to the first tick only, edges surviving a
+  frame that ran no ticks, focus loss releasing held keys, one draw per frame,
+  no spiral of death), and both targets compile in CI. **The window itself is
+  unverified.** This environment has no display — `run` correctly reports
+  `no display to open a window on` and names `headless` as the thing to do
+  instead — so "a blank window appears on Linux, Windows and the web" is still
+  waiting on a human with a screen. That was always specified as a manual check
+  (ADR-0005's headless CI proxy); it is called out here so nobody reads the tick
+  above as more than it is.
+
+  What the mutation checks said. Seven deliberate breakages, six caught. Three
+  of the six were caught only after the tests were strengthened — the first pass
+  asserted `submissions().is_empty()` for "did the frame draw", which is true
+  whether it drew or not, and reached past winit's event vocabulary by recording
+  on the builder directly, so the whole `WindowEvent` arm was unexercised. Both
+  are now real: a Draw-phase counter, and the event handling extracted into a
+  method that needs no `ActiveEventLoop` to call.
+
+  The seventh is genuinely equivalent and is left standing: giving every tick
+  `first_tick_snapshot()` instead of splitting on the tick index changes
+  nothing, because that call spends the builder's edges and the second call
+  returns what the catch-up snapshot would. The split stays in the code because
+  it states the contract, and carries a `DELIBERATE:` tag saying it is currently
+  unobservable — the opposite of I0's finding, where the contract turned out to
+  be stronger than the test rather than weaker.
+
+  A bug this milestone's tests caught, worth keeping: the first version took the
+  frame's input snapshot *before* `advance` decided how many ticks to run, which
+  spends the builder's edges. On a machine drawing faster than it ticks — every
+  machine, most frames — a key pressed during a frame that ran no ticks was
+  silently dropped. Taking the snapshot inside the per-tick callback fixes it,
+  and `a_frame_too_short_for_a_tick_runs_none_and_keeps_the_edges` is the test
+  that found it.
+
+  Dependency delta (practices §5.8): `winit` 0.30, the first non-glam dependency
+  and the one ADR-0004 already accepted. 1 → 183 external crates workspace-wide,
+  70 in a native build's tree. Features are listed rather than inherited so the
+  footprint changes only when someone decides it does; `wayland-csd-adwaita` is
+  in the list deliberately, because without it a Wayland window has no title bar
+  or close button, which would make the milestone's own manual check worse.
+  `web-time` comes with it and is the wall-clock shim ADR-0005 asked for.
 
 Renderer design doc picks up from M5.

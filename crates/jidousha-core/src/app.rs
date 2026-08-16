@@ -130,12 +130,29 @@ impl App {
 /// ```
 #[must_use]
 pub fn headless(config: GameConfig, setup: impl FnOnce(&mut App)) -> HeadlessSim {
+    HeadlessSim {
+        simulation: build(config, setup),
+    }
+}
+
+/// Build the simulation a driver will run.
+///
+/// Both drivers go through here: [`headless`] wraps it, and the platform
+/// crate's `run` wraps it too. That shared path is what makes §8's CONTRACT
+/// — that windowed and headless execution run Startup and Update identically —
+/// a fact about the code rather than a promise about it (core.md §8).
+///
+/// Games do not call this. It is public because the windowed driver lives in
+/// another crate, and core depends on no other jidousha crate (§1, CONTRACT),
+/// so the driver cannot reach in.
+#[must_use]
+pub fn build(config: GameConfig, setup: impl FnOnce(&mut App)) -> Simulation {
+    // Installed here rather than in each driver, so every path that runs a
+    // system gets the `in system:` line in its panics (core.md §9).
     panic_hook::install();
     let mut app = App::new(config);
     setup(&mut app);
-    HeadlessSim {
-        simulation: app.simulation,
-    }
+    app.simulation
 }
 
 /// A game running without a window, advanced one tick at a time.

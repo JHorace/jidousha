@@ -117,23 +117,23 @@ fn a_system_sees_the_tick_it_is_part_of() {
 fn real_time_becomes_whole_ticks_with_the_remainder_carried_over() {
     let mut simulation = Simulation::new(1, Seconds(0.1));
     // 0.25s buys two ticks and carries 0.05s.
-    assert_eq!(simulation.advance(Seconds(0.25)), 2);
+    assert_eq!(simulation.advance(Seconds(0.25), |_, _| {}), 2);
     // 0.05s carried + 0.06s is enough for one more.
-    assert_eq!(simulation.advance(Seconds(0.06)), 1);
+    assert_eq!(simulation.advance(Seconds(0.06), |_, _| {}), 1);
     assert_eq!(simulation.world().resource::<Time>().tick, 3);
 }
 
 #[test]
 fn a_frame_shorter_than_a_tick_runs_nothing() {
     let mut simulation = Simulation::new(1, Seconds(0.1));
-    assert_eq!(simulation.advance(Seconds(0.05)), 0);
+    assert_eq!(simulation.advance(Seconds(0.05), |_, _| {}), 0);
     assert_eq!(simulation.world().resource::<Time>().tick, 0);
 }
 
 #[test]
 fn alpha_reports_how_far_into_the_next_tick_the_frame_fell() {
     let mut simulation = Simulation::new(1, Seconds(0.1));
-    simulation.advance(Seconds(0.25));
+    simulation.advance(Seconds(0.25), |_, _| {});
     let alpha = simulation.world().resource::<Time>().alpha;
     assert!((alpha - 0.5).abs() < 1e-6, "{alpha}");
 }
@@ -142,7 +142,7 @@ fn alpha_reports_how_far_into_the_next_tick_the_frame_fell() {
 fn a_stalled_frame_is_clamped_instead_of_spiralling() {
     let mut simulation = Simulation::new(1, Seconds(0.1));
     // Ten seconds of stall would be a hundred ticks without the clamp.
-    let steps = simulation.advance(Seconds(10.0));
+    let steps = simulation.advance(Seconds(10.0), |_, _| {});
     assert_eq!(steps, 2, "a quarter second of catch-up, no more");
 }
 

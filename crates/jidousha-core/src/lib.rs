@@ -52,7 +52,7 @@ mod visual;
 mod world;
 
 pub use access::{ColumnsMut, ColumnsRef, QueryAccess};
-pub use app::{App, GameConfig, HeadlessSim, headless};
+pub use app::{App, GameConfig, HeadlessSim, build, headless};
 pub use command::{Bundle, CommandKind, Commands};
 pub use component::Component;
 pub use draw::{DrawCtx, Submissions, WorldView};
