@@ -1,7 +1,7 @@
 # Asset loading basics — design and contracts
 
-Status: **living doc for `jidousha-assets`; A0, A1 and A2 implemented, A3 still
-design.**
+Status: **living doc for `jidousha-assets`; A0, A1 and A2 implemented, plus the
+I2 replay seam; A3 still design.**
 Sections carry `Implemented (AN)` notes where code exists; everything else is
 design ahead of the code. **CONTRACT** items are binding and tested.
 
@@ -148,6 +148,23 @@ Implemented (A0):
   only at a numbered tick — and `MemorySource`'s scripted ticks stand in for the
   recording meanwhile, which is what makes the exit tests replayable today.
 
+Implemented (I2): the recording exists, and the CONTRACT above is now tested end
+to end.
+
+- `Assets::resolved()` reports what the last `commit` resolved — a
+  `Resolution { request, arrived }` per asset, in request order, cleared at each
+  commit. A recorder reads it after committing and writes it into that tick's
+  record; it is deliberately request *ids* rather than handles, because the
+  recording lives in `jidousha-input`, which cannot name this crate's types.
+- `ReplaySource` (§7) applies the recording on the way back: it wraps whatever
+  source the replay actually has and releases each completion on the tick the
+  recording gives it, so a disk that is fast today cannot change a session that
+  was recorded on a slow one.
+- `jidousha-platform/tests/record_replay.rs` is the proof, and its
+  negative control is the part that matters: the same replay with the readiness
+  records thrown away must *not* match. Without that assertion the whole
+  mechanism could be inert and every other test here would still pass.
+
 ## 5. Internals: the platform seam and threading
 
 ```
@@ -259,6 +276,21 @@ Implemented (A0):
 - `tools/verify` uses `MemorySource` with scripted readiness ticks by default —
   zero filesystem dependence, fully reproducible; a flag switches to real I/O
   for integration smoke tests.
+
+Implemented (I2): `tools/verify` exists, and `examples/prototype_kit.rs`'s
+`--verify` mode is the first user of it — a `MemorySource` with one scripted
+arrival tick, so the placeholder is on screen for a known number of frames and
+the art for the rest. No flag for real I/O yet: nothing has asked for one, and a
+verify run that reads the disk is a verify run that can fail for reasons that say
+nothing about the game.
+
+Implemented (I2): `ReplaySource` (`replay.rs`) is the other half of §4 — it
+wraps any source and releases its completions on the ticks a recording says,
+holding early ones back. `outstanding()` counts what it is holding, so a game's
+`all_ready` gate stays shut exactly as long as it did on the day; releasing
+without that would open a loading screen several ticks early on replay and quietly
+change what the replay proves. `Assets::resolved()` reports what a commit
+resolved, in request order, which is what a recorder writes down.
 - Golden transcript tests cover: placeholder → real texture swap at the
   scripted tick; Failed → placeholder + single error; unload → debug panic on
   use (a `should_panic` test locking the message).

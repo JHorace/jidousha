@@ -121,6 +121,12 @@ impl fmt::Display for PointerButton {
 ///
 /// The button lists follow the same rule the keyboard does: edges are recorded
 /// data, not the difference between two ticks (input.md §2).
+///
+/// DELIBERATE: there is no `world` position here (see ADR-0017). Everything in
+/// this struct is what the platform said; a world position is what a camera
+/// makes of it, and the camera can change during the tick. Write
+/// `camera.screen_to_world(input.pointer().screen)` at the point you know which
+/// camera you mean.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PointerState {
     /// Which pointer this is.

@@ -15,6 +15,7 @@ mod builder;
 mod codec;
 mod key;
 mod pointer;
+mod recording;
 mod script;
 mod snapshot;
 
@@ -22,5 +23,6 @@ pub use builder::{InputEvent, SnapshotBuilder};
 pub use codec::DecodeError;
 pub use key::Key;
 pub use pointer::{PointerButton, PointerId, PointerState};
+pub use recording::{AssetReady, Recording, RecordingError, TickRecord};
 pub use script::InputScript;
 pub use snapshot::{Input, InputSnapshot};

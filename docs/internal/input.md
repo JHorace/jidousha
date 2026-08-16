@@ -1,8 +1,9 @@
 # Input system — design and contracts
 
-Status: **living doc for `jidousha-input`; I0 and I1 implemented, I2 still
-design.** Sections carry `Implemented (IN)` notes where code exists; everything
-else is design ahead of the code. **CONTRACT** items are binding and tested.
+Status: **living doc for `jidousha-input`; I0, I1 and I2 implemented — the
+crate's v1 scope is complete.** Sections carry `Implemented (IN)` notes where
+code exists; everything else is design ahead of the code. **CONTRACT** items are
+binding and tested.
 
 Inherits: the per-tick snapshot choke point and replay contract (core §7), winit
 translation confined to the platform crate (ADR-0004), pointer-not-mouse headroom
@@ -108,7 +109,6 @@ sugar that is all v1 games touch:
 pub struct PointerState {
     pub id: PointerId,           // Primary = the mouse / first touch
     pub screen: Vec2,            // pixels, origin top-left (same orientation as world)
-    pub world: Vec2,             // via the Camera resource — see below
     pub held / just_pressed / just_released (PointerButton),  // Primary/Secondary/Middle
     pub scroll: f32,             // lines this tick; normalized by the platform layer
 }
@@ -116,12 +116,12 @@ pub struct PointerState {
 
 - `input.pointer()` → primary pointer. `input.pointers()` → all (length 1 until
   touch platforms arrive; game code written against `pointer()` never breaks).
-- **`world` is derived, not recorded**: the recorded snapshot stores raw screen
-  position only; `world` is computed at the tick commit from that tick's
-  `Camera` resource. Camera state is deterministic simulation state, so replay
-  re-derives identical world positions — recording stays raw and minimal, and
-  a replayed session with a code-modified camera stays *honest* (world pos
-  reflects the camera the replayed code actually has). CONTRACT.
+- **World position is derived, not recorded**: the recorded snapshot stores raw
+  screen position only, and world space is computed from the tick's `Camera`.
+  Camera state is deterministic simulation state, so replay re-derives identical
+  world positions — recording stays raw and minimal, and a replayed session with
+  a code-modified camera stays *honest* (world pos reflects the camera the
+  replayed code actually has). CONTRACT.
 - Scroll normalization (line-mode vs pixel-mode deltas differ across
   platforms/browsers): the platform layer normalizes to "lines" before the
   snapshot; whatever it produces is what's recorded — replay is exact even if
@@ -140,16 +140,20 @@ Implemented (I1):
   direction Page Down goes. One negation, in one place.
 - **Horizontal scroll is dropped**, because `PointerState::scroll` is one
   number. Folding it in would make a sideways swipe zoom the game.
-- **`PointerState.world` is not a field yet.** The sketch in this section shows
-  one and the CONTRACT above describes how it would be derived; deriving it
-  needs a `Camera`, which this crate must not name, so the driver would have to
-  write it into the snapshot after building it. That runs straight into the
-  codec: a derived field either gets encoded — breaking "the recording stores
-  raw screen position only" — or is excluded from equality, which is a decision
-  about what a recorded snapshot *is*. Both questions belong to **I2**, which
-  owns the stream format. Until then a game converts with
-  `camera.screen_to_world(input.pointer().screen)`, which is the sanctioned
-  conversion anyway and is what `examples/input_echo.rs` does.
+- **`PointerState.world` is not a field**, and I1 deferred the question of
+  whether it should be to I2, which owns the stream format.
+
+Resolved (I2), **ADR-0017**: it stays out. The snapshot is the recording's unit,
+and the I0 codec asserts both round trips — a field excluded from encoding breaks
+bytes→value→bytes, and a field included in it breaks the CONTRACT above and makes
+a replayed session use the *recording's* camera rather than the code's. On top of
+that, this crate cannot name a `Camera`, so only the driver could fill the field
+— leaving a scripted snapshot and a windowed one carrying different values under
+one type. A game converts with `camera.screen_to_world(input.pointer().screen)`
+at the point it knows which camera it means, which is the sanctioned conversion
+(renderer §4), is what `examples/input_echo.rs` does, and is the only answer that
+survives a split screen. The sketch above is corrected to match, and
+`PointerState` carries a `DELIBERATE:` tag pointing at the ADR.
 
 ## 4. Focus loss and window edge cases
 
@@ -185,6 +189,32 @@ reason "byte-stable across platforms" is a property we own rather than one we
 hope a format crate preserves. The stream *around* the snapshots — the
 append-only header, the asset-readiness interleave — is I2.
 
+Implemented (I2): `Recording`, in `recording.rs`. Magic `JDRC`, a version byte,
+then the seed and the fixed timestep — everything a second run needs to be the
+same run, so a recording is played back from itself rather than from a config
+somebody has to remember. After the header, one `TickRecord` per tick: the tick
+number, the snapshot, and the asset readiness that resolved on it.
+
+- **Strict inside a record, tolerant at the tail.** A record that starts must
+  finish: a truncated one is a decode error, because guessing at half a snapshot
+  is how a repro quietly becomes a different session. A file that *ends* between
+  records decodes to every whole tick it contains, which is the append-only
+  CONTRACT from the outside — a crashed session's recording is valid up to the
+  crash, and `tests/record_replay.rs` replays a deliberately truncated one to
+  prove it.
+- **Tick numbers are recorded, not implied.** They are checked to be strictly
+  increasing on decode. A stream that carried only snapshots would decode a
+  dropped tick as a shorter session rather than as the corruption it is.
+- **Readiness carries request ids, not handles.** `AssetReady { request, arrived }`
+  is two numbers, because this crate must not depend on `jidousha-assets` — the
+  same opaque-id shape ADR-0015 uses for textures. `ReplaySource` on the assets
+  side turns those numbers back into a schedule, which is what makes the two
+  crates able to share a timeline without knowing about each other.
+- **`arrived` is a bool, not the payload.** What simulation can observe is
+  `Ready` vs `Failed` and *when* (assets §4); the bytes are not in the recording
+  and should not be — a recording is a timeline, not an archive of everybody's
+  art.
+
 - `tools/verify` scripting is a builder over the same types:
 
 ```rust
@@ -207,6 +237,22 @@ directives panic at the point they are added, naming both directives and both
 source lines; the check runs on add, so it fires whichever order they are
 written in. A hold that *ends* where another begins is not a contradiction —
 that is a real thing a player does.
+
+Implemented (I2): the loop, end to end, including the draw transcript.
+`examples/prototype_kit.rs` grows a `--verify` mode that runs the *same* systems
+and the same `GameConfig` the window does, differing only in what a person would
+otherwise supply — input comes from an `InputScript`, and the art from a store
+with a scripted arrival tick. It then asserts on both halves: where the paddle
+travelled and where it stopped, and what the `NullBackend` recorded (one frame
+per tick, the placeholder before the art and not after, and something drawn at
+the position the world reports for the paddle). `tools/verify prototype_kit`
+runs it and writes `target/verify/prototype_kit.json`; `tools/test` runs it as a
+phase, so the example is checked rather than merely compiled.
+
+The assertions are written to be *reachable*: the script holds each key longer
+than the travel available, so the clamp is exercised rather than merely not
+violated, and the direction check is on the *order* the two extremes are reached
+in — swapping W and S still reaches both, so only the order tells it apart.
 - Record-on-native → replay-headless is the bug-repro workflow: a human (or
   playtest session) records a session; the agent replays it deterministically
   in tests, bisecting freely.

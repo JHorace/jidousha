@@ -182,6 +182,13 @@ a game could notice is that `texture_of` returns `None` once the renderer has
 taken the texels (ADR-0016), which matters only to code that reads texels, and
 simulation is forbidden from doing that anyway.
 
+Built in I2: `ReplaySource`, `Resolution`, `Assets::resolved()` and
+`RequestId::bits()` — the recording seam. All four are for whoever is writing or
+replaying a recording, which today is the driver and a test; a game touches none
+of them. `ReplaySource` is the one a test agent has reason to name, and it names
+it the same way it already names `MemorySource`: as the source it hands to
+`Assets::new`.
+
 **Input (input doc)**
 ```rust
 Input::{held, just_pressed, just_released, pointer, pointers, window_focused}  // resource
@@ -209,6 +216,13 @@ real pointer behind it. `examples/input_echo.rs` is written from the list above
 plus one thing not on it: `Input::snapshot()`, for the unusual case of wanting
 *every* key that is down rather than asking about one. A readout is what that is
 for; a game asks `held(Key::W)`.
+
+Built in I2: `Recording`, `TickRecord`, `AssetReady` and `RecordingError` — the
+stream around the snapshots. Driver-and-tooling vocabulary, like `Assets::commit`:
+a game writes a recording only in the sense that the driver writes one for it.
+The list a game touches is still the four lines above, and I2 did not change
+them — `PointerState` in particular still has no `world` field, which ADR-0017
+now settles rather than defers.
 
 Rough count: ~45 types/functions. CONTRACT: the v1 prototype substrate
 ("agent Pong/asteroids/breakout") must be expressible with this list alone —

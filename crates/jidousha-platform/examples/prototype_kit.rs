@@ -13,16 +13,20 @@
 //!
 //! Run it: `cargo run -p jidousha-platform --example prototype_kit`
 //! On the web: `tools/serve-web prototype_kit`
+//! Check it:  `tools/verify prototype_kit`
 //!
-//! DELIBERATE: built but not run by `tools/test`, like the other windowed
-//! examples — it opens a window and waits for a person (tooling.md).
+//! The last of those is I2's exit criterion and the engine's thesis in one
+//! command: the same systems and the same config as the window, driven by a
+//! script instead of a person, asserting on world state and on the draw
+//! transcript, with no display anywhere. See `mod verify` at the bottom.
 
 use jidousha_assets::Assets;
 use jidousha_core::{
-    Color, Component, Depth, Draw, DrawCtx, GameConfig, Rect, Startup, Time, Transform, Update,
-    World,
+    App, Color, Component, Depth, Draw, DrawCtx, GameConfig, Rect, Startup, Time, Transform,
+    Update, World,
     math::{Radians, Vec2, sin_cos},
 };
+use jidousha_input::{Input, Key};
 use jidousha_render_core::{Camera, Sprite, Submit, TextStyle, draw_sprites};
 
 /// Where the art lives, relative to the workspace root (assets.md §2).
@@ -61,22 +65,50 @@ impl Component for Bounce {}
 struct Spin(f32);
 impl Component for Spin {}
 
+/// A paddle the player moves, and how far it may travel.
+#[derive(Clone, Copy)]
+struct Paddle {
+    /// World units per tick.
+    speed: f32,
+    /// Half the travel allowed either side of the centre.
+    limit: f32,
+}
+impl Component for Paddle {}
+
+/// The game's configuration, shared by the window and the verify run so that
+/// what is verified is what a person sees.
+fn config() -> GameConfig {
+    GameConfig {
+        title: "jidousha — prototype kit",
+        ..GameConfig::default()
+    }
+}
+
+/// Every system this game has, in one place.
+///
+/// Named rather than written inline so `tools/verify` runs the *same* game the
+/// window does. A verify run that registered a different set of systems would
+/// be verifying a different program.
+fn register(app: &mut App) {
+    app.add_system(Startup, set_the_scene);
+    app.add_system(Update, drive_the_paddle);
+    app.add_system(Update, bounce);
+    app.add_system(Update, turn);
+    app.add_system(Draw, draw_sprites);
+    app.add_system(Draw, draw_the_field);
+    app.add_system(Draw, draw_the_hitboxes);
+    app.add_system(Draw, draw_the_readout);
+}
+
 fn main() -> Result<(), jidousha_platform::RunError> {
-    jidousha_platform::run(
-        GameConfig {
-            title: "jidousha — prototype kit",
-            ..GameConfig::default()
-        },
-        |app| {
-            app.add_system(Startup, set_the_scene);
-            app.add_system(Update, bounce);
-            app.add_system(Update, turn);
-            app.add_system(Draw, draw_sprites);
-            app.add_system(Draw, draw_the_field);
-            app.add_system(Draw, draw_the_hitboxes);
-            app.add_system(Draw, draw_the_readout);
-        },
-    )
+    // `tools/verify` runs this same binary with `--verify`: same systems, same
+    // config, no window, scripted input, and assertions instead of a person.
+    if std::env::args().any(|argument| argument == "--verify") {
+        verify::run();
+        return Ok(());
+    }
+    println!("W and S move the left paddle. close the window to quit");
+    jidousha_platform::run(config(), register)
 }
 
 fn set_the_scene(world: &mut World) {
@@ -85,7 +117,12 @@ fn set_the_scene(world: &mut World) {
         height: VIEW_HEIGHT,
         ..Camera::default()
     });
-    world.insert_resource(art());
+    // Only if nothing has installed one already. A verify run puts a scripted
+    // store in before Startup so that *when* the art arrives is part of the
+    // script rather than a question about the disk (assets.md §7).
+    if world.find_resource::<Assets>().is_none() {
+        world.insert_resource(art());
+    }
 
     let hero = world
         .resource_mut::<Assets>()
@@ -110,7 +147,32 @@ fn set_the_scene(world: &mut World) {
         },
     );
 
-    println!("window open — close it to quit");
+    // The player's paddle, on the left.
+    let paddle = world.spawn();
+    world.insert(paddle, Transform::at(Vec2::new(-14.0, 0.0)));
+    world.insert(
+        paddle,
+        Paddle {
+            speed: 0.25,
+            limit: 7.0,
+        },
+    );
+}
+
+/// Move the paddle with W and S, clamped to the field.
+///
+/// The one system that reads input, and therefore the one a script can drive.
+fn drive_the_paddle(world: &mut World) {
+    let step = match world.find_resource::<Input>() {
+        // The first tick of a run can happen before any input is set, and a
+        // game that assumed otherwise would panic on startup.
+        None => return,
+        Some(input) => f32::from(input.held(Key::S)) - f32::from(input.held(Key::W)),
+    };
+    for (_, transform, paddle) in world.query_mut::<(&mut Transform, &Paddle)>() {
+        transform.pos.y =
+            (transform.pos.y + step * paddle.speed).clamp(-paddle.limit, paddle.limit);
+    }
 }
 
 /// Slide the bouncers along X, on simulated time.
@@ -174,11 +236,22 @@ fn draw_the_field(ctx: &mut DrawCtx) {
         depth,
     );
 
-    // A paddle each side, which in a real game would be entities.
-    for x in [field.min.x + 1.2, field.max.x - 1.2] {
+    // The right-hand paddle is scenery; the left one is an entity the player
+    // moves, drawn below from its `Transform`.
+    ctx.rect(
+        Rect::from_center_size(Vec2::new(field.max.x - 1.2, 0.0), Vec2::new(0.5, 4.0)),
+        Color::rgb(0.85, 0.85, 0.9),
+        Depth::layer(layers::PLAY),
+    );
+    let paddles: Vec<Vec2> = ctx
+        .world
+        .query::<(&Transform, &Paddle)>()
+        .map(|(_, transform, _)| transform.pos)
+        .collect();
+    for at in paddles {
         ctx.rect(
-            Rect::from_center_size(Vec2::new(x, 0.0), Vec2::new(0.5, 4.0)),
-            Color::rgb(0.85, 0.85, 0.9),
+            Rect::from_center_size(at, Vec2::new(0.5, 4.0)),
+            Color::rgb(0.4, 1.0, 0.7),
             Depth::layer(layers::PLAY),
         );
     }
@@ -288,4 +361,266 @@ fn draw_the_readout(ctx: &mut DrawCtx) {
 /// remarking on.
 fn art() -> Assets {
     Assets::new(jidousha_platform::asset_source(ASSET_ROOT))
+}
+
+/// The §5 loop: script input, run headless, assert, print the transcript.
+///
+/// This is what `tools/verify prototype_kit` runs, and it is the engine's whole
+/// thesis in one function — an agent drives the game, asks what the world did
+/// and what was drawn, and never opens a window (input.md §5, renderer.md §9).
+///
+/// It runs the *same* systems and the same config the window does. What differs
+/// is only what a person would otherwise supply: the input comes from a script,
+/// and the art from a store with scripted arrival ticks, so the run is the same
+/// on every machine and on every day.
+mod verify {
+    use super::{Paddle, config, register};
+    use jidousha_assets::{Assets, MemorySource, decode_png};
+    use jidousha_core::math::Vec2;
+    use jidousha_core::{Transform, headless};
+    use jidousha_input::{Input, InputScript, Key};
+    use jidousha_render_core::{
+        Camera, NullBackend, RenderBackend, create_builtin_textures, plan_frame,
+    };
+    use std::cmp::Ordering;
+
+    /// How long the scripted session runs.
+    ///
+    /// Long enough for the script below to push the paddle into *both* ends of
+    /// its clamp — a shorter run would still pass every assertion here, and the
+    /// clamp would be asserted only in the sense of never having been reached.
+    const TICKS: u64 = 130;
+
+    /// The tick the art is scripted to arrive on.
+    ///
+    /// Partway through, so the run spends time on both sides of it and the
+    /// placeholder is part of what gets verified.
+    const ART_ARRIVES: u64 = 30;
+
+    /// How far the paddle may travel from the centre, matching its component.
+    const LIMIT: f32 = 7.0;
+
+    /// Fail with the engine's message shape, and a non-zero exit.
+    fn fail(what: &str, specifics: &str) -> ! {
+        eprintln!(
+            "{}",
+            jidousha_core::message(
+                what,
+                specifics,
+                "the game changed, or the engine did",
+                "run `cargo run -p jidousha-platform --example prototype_kit` and watch it, then \
+                 compare with the assertion above",
+            )
+        );
+        std::process::exit(1);
+    }
+
+    /// `a > b`, and false when either is NaN.
+    ///
+    /// Spelled out rather than written `!(a > b)` because the negation of a
+    /// float comparison silently means something else — a NaN that crept into a
+    /// position would satisfy every plain `<=` check and pass this verification
+    /// (the same reason `circle_quads` spells its radius test out).
+    fn greater(a: f32, b: f32) -> bool {
+        matches!(a.partial_cmp(&b), Some(Ordering::Greater))
+    }
+
+    /// Within a thousandth, and false when either is NaN.
+    fn near(a: f32, b: f32) -> bool {
+        greater(0.001, (a - b).abs())
+    }
+
+    /// Where in `track` the largest value first appears.
+    fn peak_at(track: &[f32], pick: fn(f32, f32) -> bool) -> usize {
+        let mut best = 0;
+        for (index, value) in track.iter().enumerate() {
+            if pick(*value, track[best]) {
+                best = index;
+            }
+        }
+        best
+    }
+
+    /// The art, arriving on a scripted tick rather than whenever a disk says.
+    ///
+    /// The real PNG, baked into the binary. A verify run reads no files at all —
+    /// it is the same on a machine that checked the repository out somewhere
+    /// else, and the bytes are the ones the window would have shown, so a
+    /// picture that stopped decoding fails here rather than passing on a stub.
+    fn store() -> Assets {
+        let Ok(hero) = decode_png(include_bytes!("../../../assets/sprites/hero.png")) else {
+            fail(
+                "the example's own art no longer decodes",
+                "assets/sprites/hero.png is baked into this binary and read by nothing else",
+            );
+        };
+        let mut source = MemorySource::new();
+        source.insert_texture("sprites/hero.png", hero);
+        source.complete_at("sprites/hero.png", ART_ARRIVES);
+        Assets::new(source)
+    }
+
+    /// Hold S until the paddle jams against the bottom, then W until it jams
+    /// against the top.
+    ///
+    /// Both holds deliberately last longer than the travel they have available,
+    /// so the clamp is *exercised* rather than merely not violated.
+    fn script() -> InputScript {
+        InputScript::new().hold(Key::S, 5..45).hold(Key::W, 50..130)
+    }
+
+    pub(super) fn run() {
+        let mut sim = headless(config(), register);
+        // Before Startup, which is what `set_the_scene` checks for.
+        sim.world_mut().insert_resource(store());
+
+        let script = script();
+        let mut backend = NullBackend::new();
+        let mut textures = create_builtin_textures(&mut backend);
+        let mut paddle_track = Vec::new();
+        let mut paddle_pos = Vec2::ZERO;
+        let mut placeholder_frames = 0;
+
+        for tick in 1..=TICKS {
+            let Some(assets) = sim.world_mut().find_resource_mut::<Assets>() else {
+                fail(
+                    "the store vanished",
+                    "Startup installs one and nothing removes it",
+                );
+            };
+            assets.commit(tick);
+            jidousha_render_core::upload_ready_textures(assets, &mut backend, &mut textures);
+
+            sim.world_mut()
+                .insert_resource(Input::new(script.snapshot_at(tick)));
+            sim.tick();
+
+            let paddle = sim
+                .world()
+                .query::<(&Transform, &Paddle)>()
+                .map(|(_, transform, _)| transform.pos)
+                .next();
+            match paddle {
+                Some(pos) => {
+                    paddle_pos = pos;
+                    paddle_track.push(pos.y);
+                }
+                None => fail("the paddle is gone", "Startup spawns exactly one"),
+            }
+
+            // Draw every tick, so the transcript covers the frames before the
+            // art arrives as well as the ones after.
+            let camera = *sim.world().resource::<Camera>();
+            let quads = sim.draw().quads().to_vec();
+            let plan = plan_frame(&camera, &quads, &textures);
+            if plan
+                .batches
+                .iter()
+                .any(|batch| batch.texture == textures.placeholder())
+            {
+                placeholder_frames += 1;
+            }
+            let Ok(()) = backend.render(&plan) else {
+                fail(
+                    "the null backend refused a frame",
+                    "it cannot fail to record",
+                );
+            };
+        }
+
+        // --- what the world did ------------------------------------------
+        // Y is down (ADR-0010), so the bottom of the screen is the larger number.
+        let start = paddle_track[0];
+        let bottom_at = peak_at(&paddle_track, greater);
+        let top_at = peak_at(&paddle_track, |a, b| greater(b, a));
+        let (bottom, top) = (paddle_track[bottom_at], paddle_track[top_at]);
+
+        if !near(bottom, LIMIT) || !near(top, -LIMIT) {
+            fail(
+                "the paddle did not come to rest against both ends of its field",
+                &format!(
+                    "it reached {bottom:.3} and {top:.3}; the clamp is +/-{LIMIT:.1}, and the \
+                     script holds each key long enough to run past it"
+                ),
+            );
+        }
+        // Down first, then up: S and W the right way round. Both extremes are
+        // reached either way, so only the order tells a swap apart.
+        if bottom_at >= top_at {
+            fail(
+                "S and W move the paddle the wrong way round",
+                &format!(
+                    "the script holds S first, but the paddle was at the top on tick \
+                     {top} before it was at the bottom on tick {bottom}",
+                    top = top_at + 1,
+                    bottom = bottom_at + 1,
+                ),
+            );
+        }
+        if !greater(bottom, start) {
+            fail(
+                "the paddle did not start between the two ends it reached",
+                &format!("it started at {start:.3}, which is not above {bottom:.3}"),
+            );
+        }
+
+        // --- what was drawn ----------------------------------------------
+        let frames = backend.frames().len();
+        if frames != TICKS as usize {
+            fail(
+                "one frame per tick was expected",
+                &format!("{frames} frames for {TICKS} ticks"),
+            );
+        }
+        let Some(last) = backend.last_frame() else {
+            fail("no frame was recorded", "the loop above draws every tick");
+        };
+        // The field markings, the paddles, the ball and the text: several
+        // batches, because they do not all sample the same texture.
+        if last.plan.batches.len() < 3 {
+            fail(
+                "the last frame is too simple to be this game",
+                &format!(
+                    "{} batches; expected shapes, art and text",
+                    last.plan.batches.len()
+                ),
+            );
+        }
+        if placeholder_frames == 0 {
+            fail(
+                "the placeholder never appeared",
+                "the art is scripted to arrive partway through, so the frames before it must \
+                 show the checkered placeholder (renderer.md §5)",
+            );
+        }
+        if placeholder_frames as u64 >= TICKS {
+            fail(
+                "the placeholder never went away",
+                "the art is scripted to arrive, so the later frames must draw it",
+            );
+        }
+        // And the paddle really is on screen where the world says it is — the
+        // position is read back out of the world rather than written down here,
+        // so this asks whether drawing agrees with simulation.
+        if last.covering(paddle_pos).is_empty() {
+            fail(
+                "nothing was drawn where the paddle is",
+                &format!(
+                    "the world puts it at ({:.2}, {:.2})",
+                    paddle_pos.x, paddle_pos.y
+                ),
+            );
+        }
+
+        println!("verified prototype_kit over {TICKS} ticks");
+        println!(
+            "  paddle: {start:.2} -> {bottom:.2} (tick {}) -> {top:.2} (tick {}), clamped to \
+             +/-{LIMIT:.1}",
+            bottom_at + 1,
+            top_at + 1,
+        );
+        println!("  frames: {frames}, {placeholder_frames} of them with the placeholder");
+        println!("  last frame: {} batches", last.plan.batches.len());
+        print!("{}", last.transcript());
+    }
 }

@@ -27,6 +27,15 @@ impl RequestId {
     pub const fn from_bits(bits: u64) -> Self {
         Self(bits)
     }
+
+    /// The raw value, for recording which request resolved when.
+    ///
+    /// A recording cannot name an asset handle — `jidousha-input` does not
+    /// depend on this crate — so it carries this number instead (input.md §5).
+    #[must_use]
+    pub const fn bits(self) -> u64 {
+        self.0
+    }
 }
 
 /// A request that has finished, one way or the other.

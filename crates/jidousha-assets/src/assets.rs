@@ -63,6 +63,20 @@ impl AssetFailure {
     }
 }
 
+/// One asset that resolved at a commit, one way or the other.
+///
+/// What a recorder writes down: which request, and whether it arrived. Not the
+/// payload — a recording is a timeline, not an archive of everybody's art, and
+/// the payload is the one part simulation is forbidden to observe anyway
+/// (assets.md §4, input.md §5).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Resolution {
+    /// Which request this answers.
+    pub request: RequestId,
+    /// Whether it arrived. `false` is a load that failed.
+    pub arrived: bool,
+}
+
 /// One texture's texels, on their way to the GPU.
 ///
 /// Handed over by [`Assets::take_uploads`] exactly once, and **moved** rather
@@ -142,6 +156,12 @@ pub struct Assets {
     /// Request → where it landed, so a completion finds its slot.
     routes: BTreeMap<RequestId, (AssetKind, AssetId)>,
     failures: Vec<AssetFailure>,
+    /// What the most recent commit resolved, in the order it applied them.
+    ///
+    /// Kept for one commit only: a recorder reads it immediately after
+    /// committing, and holding it longer would invite reading a stale tick's
+    /// answer as if it were this one's.
+    resolved: Vec<Resolution>,
     /// Textures that turned `Ready` and have not been handed to a renderer yet,
     /// in the order they committed.
     ///
@@ -170,6 +190,7 @@ impl Assets {
             source: Box::new(source),
             routes: BTreeMap::new(),
             failures: Vec::new(),
+            resolved: Vec::new(),
             pending_uploads: Vec::new(),
             last_commit: None,
         }
@@ -348,6 +369,7 @@ impl Assets {
             );
         }
         self.last_commit = Some(tick);
+        self.resolved.clear();
 
         for completion in self.source.drain_completed(tick) {
             // A route is absent when the handle was unloaded while its bytes
@@ -362,6 +384,10 @@ impl Assets {
             let Some(Some(entry)) = table.entries.get_mut(id.index()) else {
                 continue;
             };
+            self.resolved.push(Resolution {
+                request: completion.request,
+                arrived: completion.result.is_ok(),
+            });
             match completion.result {
                 Ok(payload) => {
                     entry.status = AssetStatus::Ready;
@@ -387,6 +413,17 @@ impl Assets {
             }
         }
         core::mem::take(&mut self.failures)
+    }
+
+    /// What the most recent [`commit`](Assets::commit) resolved, in order.
+    ///
+    /// The recorder's half of the commit point: readiness is part of the
+    /// recorded timeline (assets.md §4), and this is how it gets written down.
+    /// Cleared and refilled by every commit, so it always describes the last
+    /// one.
+    #[must_use]
+    pub fn resolved(&self) -> &[Resolution] {
+        &self.resolved
     }
 
     #[track_caller]
