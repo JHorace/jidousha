@@ -97,7 +97,7 @@ def parse_test_output(text: str) -> dict:
 # says nothing about the code. Every other example is run, and asserts its own
 # behaviour (agent-practices §5.1). M5 owns this decision; tooling.md records it.
 WINDOWED_EXAMPLES = frozenset(
-    {"window_blank", "window_clear", "sprites", "prototype_kit", "input_echo"}
+    {"window_blank", "window_clear", "sprites", "prototype_kit", "input_echo", "quickstart"}
 )
 
 # Windowed examples that carry a `--verify` mode: scripted input, headless
@@ -330,6 +330,11 @@ def main(argv: "list[str]") -> int:
         # (assets.md §2, §7). Cheap, and it turns a mistyped path from a
         # runtime placeholder hunt into a named line.
         Phase("check-assets", [sys.executable, "tools/check-assets"]),
+        # The public surface: every item is shown in an example, no example
+        # reaches past the facade, and docs/api is what the facade generates
+        # (public-api.md §4, §5).
+        Phase("check-api-coverage", [sys.executable, "tools/check-api-coverage"]),
+        Phase("api-doc", [sys.executable, "tools/gen-api-doc", "--check"]),
     ]
     timeouts = {
         "tool-selftest": SELFTEST_TIMEOUT_S,
@@ -338,6 +343,8 @@ def main(argv: "list[str]") -> int:
         "doc-test": DOCTEST_TIMEOUT_S,
         "compile-fail": COMPILE_FAIL_TIMEOUT_S,
         "check-assets": SELFTEST_TIMEOUT_S,
+        "check-api-coverage": SELFTEST_TIMEOUT_S,
+        "api-doc": SELFTEST_TIMEOUT_S,
     }
 
     # Examples are run, not merely compiled: each one asserts its own behaviour,

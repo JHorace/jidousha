@@ -1,0 +1,392 @@
+#!/usr/bin/env python3
+"""tools/gen-api-doc — regenerate `docs/api/jidousha-api.md` from the facade.
+
+The one file a game-writing agent reads. Its structure is fixed (public-api.md
+§4): Quickstart, Concepts, Reference, Conventions digest, Testing your game.
+
+**Generated, never hand-edited.** The Reference section is built from the
+facade's own `pub use` lists, so an item that is not re-exported cannot appear
+in the documentation and an item that is cannot be forgotten. The prose sections
+live in `tools/api-doc/` where they are reviewed like code; the quickstart is an
+example file, embedded verbatim, so the thing an agent copies is the thing CI
+compiles.
+
+Not rustdoc JSON: that needs a nightly toolchain, and `rust-toolchain.toml` pins
+a stable one (ADR-0005, tooling.md). Summaries are lifted from the `///` line
+above each item's definition instead — a bounded text problem with tests, rather
+than a second toolchain.
+
+Usage:  tools/gen-api-doc [--check]
+
+`--check` regenerates into memory and fails if the committed file differs, which
+is what CI runs. Exit codes: 0 written/current · 1 stale or over budget · 2 the
+generator could not run.
+
+Key functions: `facade_exports`, `doc_summaries`, `render`, `token_estimate`,
+`main`.
+Depends on: the Python 3.8+ standard library only.
+INVARIANT (public-api.md §4): the generated file must never name an internal
+crate, the backend seam, or any implementation vocabulary. `forbidden_words`
+enforces it, and the check runs on the generated text rather than on the sources
+it came from.
+"""
+
+from __future__ import annotations
+
+import re
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+FACADE = REPO_ROOT / "crates" / "jidousha" / "src" / "lib.rs"
+QUICKSTART = REPO_ROOT / "crates" / "jidousha" / "examples" / "quickstart.rs"
+PROSE = REPO_ROOT / "tools" / "api-doc"
+CONVENTIONS = REPO_ROOT / "docs" / "conventions.md"
+OUTPUT = REPO_ROOT / "docs" / "api" / "jidousha-api.md"
+
+# The budget from public-api.md §4. The point is that the whole surface fits in
+# a game-writing agent's context beside the game itself; growth past it is a
+# curation conversation, not a bigger doc.
+TOKEN_BUDGET = 25_000
+
+# No tokenizer in the standard library, so this is the usual approximation:
+# English prose and code average close to four characters a token. Deliberately
+# rough — the budget is an order-of-magnitude guard, and a check that needed a
+# dependency would be the first thing to break when the ecosystem does.
+CHARS_PER_TOKEN = 4
+
+# Vocabulary that must never reach a game-writing agent (§4 CONTRACT). These are
+# the words that would send one reading engine internals instead of writing a
+# game.
+FORBIDDEN = (
+    "jidousha_core",
+    "jidousha_assets",
+    "jidousha_input",
+    "jidousha_render_core",
+    "jidousha_render_wgpu",
+    "jidousha_platform",
+    "archetype",
+    "wgpu",
+    "winit",
+    "RenderBackend",
+    "FramePlan",
+)
+
+# `pub use jidousha_core::{App, Draw, ...};` — possibly across several lines.
+PUB_USE_RE = re.compile(r"pub use (jidousha_\w+)(?:::(\w+))?::\{([^}]*)\}\s*;", re.S)
+# `pub use jidousha_core::math;` and other single-item forms.
+PUB_USE_ONE_RE = re.compile(r"pub use (jidousha_\w+)::(\w+)\s*;")
+
+# A section banner in the facade: `// --- App and lifecycle ---...`
+SECTION_RE = re.compile(r"^// --- (.+?) -+$", re.M)
+
+
+def facade_exports(text: str) -> "list[tuple[str, list[str]]]":
+    """The facade's root re-exports, grouped under their section banners.
+
+    Grouping comes from the banner comments in the facade rather than from any
+    knowledge here about what a `Sprite` is. Move an item to another section in
+    that file and the documentation follows.
+    """
+    # Everything before `pub mod prelude` is the root surface; the prelude is a
+    # re-export of it, and `testing` is a different audience.
+    root = text.split("pub mod prelude")[0]
+    groups: "list[tuple[str, list[str]]]" = []
+    positions = [(match.start(), match.group(1)) for match in SECTION_RE.finditer(root)]
+    for index, (start, title) in enumerate(positions):
+        end = positions[index + 1][0] if index + 1 < len(positions) else len(root)
+        chunk = root[start:end]
+        names: "list[str]" = []
+        for _, _, items in PUB_USE_RE.findall(chunk):
+            names += [item.strip() for item in items.split(",") if item.strip()]
+        for _, item in PUB_USE_ONE_RE.findall(chunk):
+            names.append(item)
+        if names:
+            groups.append((title, sorted(set(names), key=str.lower)))
+    return groups
+
+
+def testing_exports(text: str) -> "list[str]":
+    """Everything `jidousha::testing` re-exports, sorted."""
+    if "pub mod testing" not in text:
+        return []
+    chunk = text.split("pub mod testing")[1]
+    names: "list[str]" = []
+    for _, _, items in PUB_USE_RE.findall(chunk):
+        names += [item.strip() for item in items.split(",") if item.strip()]
+    for _, item in PUB_USE_ONE_RE.findall(chunk):
+        names.append(item)
+    return sorted(set(names), key=str.lower)
+
+
+# `pub struct Sprite {`, `pub fn headless(`, `pub enum AssetStatus {`, ...
+DEFINITION_RE = re.compile(
+    r"^\s*pub (?:struct|enum|trait|fn|const|type|mod)\s+(\w+)", re.M
+)
+
+
+def doc_summaries(sources: "list[Path]") -> "dict[str, str]":
+    """The first line of each public item's doc comment, by item name.
+
+    The summary a game-writing agent reads is the one the code carries, so a
+    doc comment and its documentation cannot disagree. Only the first sentence
+    is taken: the reference is an index, not a manual.
+    """
+    summaries: "dict[str, str]" = {}
+    for source in sources:
+        try:
+            lines = source.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+        for index, line in enumerate(lines):
+            match = DEFINITION_RE.match(line)
+            if not match:
+                continue
+            name = match.group(1)
+            if name in summaries:
+                continue
+            # Walk back over attributes to the doc comment above.
+            cursor = index - 1
+            while cursor >= 0 and lines[cursor].lstrip().startswith("#["):
+                cursor -= 1
+            if cursor < 0 or not lines[cursor].lstrip().startswith("///"):
+                continue
+            # And back to the start of that comment block, then take its first
+            # sentence — the summary, by the convention every file here follows.
+            start = cursor
+            while start > 0 and lines[start - 1].lstrip().startswith("///"):
+                start -= 1
+            block = [line.lstrip()[3:].strip() for line in lines[start : cursor + 1]]
+            summary = first_sentence(block)
+            if summary:
+                summaries[name] = summary
+    return summaries
+
+
+def first_sentence(block: "list[str]") -> str:
+    """The first sentence of a doc comment, joined across the lines it wraps.
+
+    Taking the first *line* instead is what produces a reference full of
+    summaries that stop mid-clause — these doc comments are wrapped at eighty
+    columns, so a one-sentence summary routinely spans two lines.
+    """
+    text = ""
+    for line in block:
+        if not line and text:
+            break
+        text = f"{text} {line}".strip()
+        if text.endswith("."):
+            break
+    sentence = text.split(". ")[0].rstrip(".").strip()
+    # rustdoc intra-doc links mean nothing in a markdown file read by an agent;
+    # the brackets around an already-code-spanned name are noise.
+    return re.sub(r"\[(`[^`]+`)\]", r"\1", sentence)
+
+
+def crate_sources(repo: Path) -> "list[Path]":
+    """Every Rust source the facade could be re-exporting from."""
+    return sorted(repo.glob("crates/jidousha-*/src/**/*.rs"))
+
+
+def conventions_digest(text: str) -> str:
+    """The parts of `docs/conventions.md` a game needs, without the rationale.
+
+    Sections are taken whole; the file is written for exactly this audience and
+    summarizing it here would create a second copy to keep true.
+    """
+    keep = ("Coordinates and space", "Time", "Color", "Draw ordering", "Math")
+    out: "list[str]" = []
+    current = None
+    for line in text.splitlines():
+        if line.startswith("## "):
+            current = line[3:].strip()
+            if current in keep:
+                out.append(f"### {current}")
+            continue
+        if current in keep:
+            out.append(line)
+    return "\n".join(out).strip()
+
+
+def render(repo: Path) -> str:
+    """The whole document."""
+    facade = FACADE.read_text(encoding="utf-8") if FACADE.exists() else ""
+    if repo != REPO_ROOT:
+        facade = (repo / "crates/jidousha/src/lib.rs").read_text(encoding="utf-8")
+    quickstart = (repo / "crates/jidousha/examples/quickstart.rs").read_text(encoding="utf-8")
+    concepts = (repo / "tools/api-doc/concepts.md").read_text(encoding="utf-8").strip()
+    testing = (repo / "tools/api-doc/testing.md").read_text(encoding="utf-8").strip()
+    conventions = (repo / "docs/conventions.md").read_text(encoding="utf-8")
+    summaries = doc_summaries(crate_sources(repo))
+
+    out = [
+        "# Jidousha — the API a game is written against",
+        "",
+        "GENERATED by `tools/gen-api-doc`. Do not edit; edit the facade crate, the",
+        "example, or `tools/api-doc/` and regenerate.",
+        "",
+        "Everything here is reachable from one import:",
+        "",
+        "```rust",
+        "use jidousha::prelude::*;",
+        "```",
+        "",
+        "There is no other crate to depend on and nothing below this surface to",
+        "reach for. If something you want is not here, it is not part of v1.",
+        "",
+        "## Quickstart",
+        "",
+        "A whole game. Copy it, run it, start changing things.",
+        "",
+        "```rust",
+        quickstart.rstrip(),
+        "```",
+        "",
+        "## Concepts",
+        "",
+        concepts,
+        "",
+        "## Reference",
+        "",
+    ]
+    for title, names in facade_exports(facade):
+        out.append(f"### {title}")
+        out.append("")
+        for name in names:
+            summary = summaries.get(name, "")
+            out.append(f"- **`{name}`** — {summary}" if summary else f"- **`{name}`**")
+        out.append("")
+
+    testing_names = testing_exports(facade)
+    if testing_names:
+        out += [
+            "### Testing (`jidousha::testing`)",
+            "",
+            "Not part of a shipped game — this is the vocabulary a test or a",
+            "`--verify` mode uses. See *Testing your game* below.",
+            "",
+        ]
+        for name in testing_names:
+            summary = summaries.get(name, "")
+            out.append(f"- **`{name}`** — {summary}" if summary else f"- **`{name}`**")
+        out.append("")
+
+    out += [
+        "## Conventions",
+        "",
+        conventions_digest(conventions),
+        "",
+        "## Testing your game",
+        "",
+        testing,
+        "",
+    ]
+    return "\n".join(out)
+
+
+def token_estimate(text: str) -> int:
+    """Roughly how many tokens the document costs. See `CHARS_PER_TOKEN`."""
+    return len(text) // CHARS_PER_TOKEN
+
+
+# The one section that is allowed to name a backend, because it is the section
+# about taking a picture of your game (`jidousha::testing`, added at R4).
+TESTING_HEADING = "### Testing (`jidousha::testing`)"
+
+
+def game_facing(text: str) -> str:
+    """The document minus the testing reference block.
+
+    Everything an agent reads while *writing* a game. The testing block is
+    exempt from the vocabulary rule for one reason: a golden image has to be
+    drawn by something, and naming that thing is the whole point of the entry.
+    Exempting a named block beats exempting words globally, which would let the
+    same words back into the game surface unnoticed.
+    """
+    if TESTING_HEADING not in text:
+        return text
+    before, rest = text.split(TESTING_HEADING, 1)
+    after = rest.split("\n## ", 1)
+    return before + ("\n## " + after[1] if len(after) > 1 else "")
+
+
+def forbidden_words(text: str) -> "list[str]":
+    """Implementation vocabulary that reached the game-facing document.
+
+    §4 CONTRACT: `docs/api/` never mentions internal crates, the backend seam,
+    archetype storage, or any implementation vocabulary. Checked on the output,
+    because that is what an agent reads.
+    """
+    lowered = game_facing(text).lower()
+    return [word for word in FORBIDDEN if word.lower() in lowered]
+
+
+def problem(what: str, specifics: str, cause: str, fix: str) -> str:
+    return f"[jidousha] {what}\n  {specifics}\n  likely cause: {cause}\n  fix: {fix}"
+
+
+def main(argv: "list[str]") -> int:
+    check_only = "--check" in argv[1:]
+    try:
+        text = render(REPO_ROOT)
+    except OSError as error:
+        print(
+            problem(
+                "could not generate the API document",
+                str(error),
+                "a source the generator reads was moved or removed",
+                "check that the facade crate, examples/quickstart.rs and tools/api-doc/ exist",
+            ),
+            file=sys.stderr,
+        )
+        return 2
+
+    tokens = token_estimate(text)
+    leaked = forbidden_words(text)
+    print(f"[gen-api-doc] {len(text)} chars, ~{tokens} tokens of {TOKEN_BUDGET}")
+
+    failures = []
+    if tokens > TOKEN_BUDGET:
+        failures.append(
+            problem(
+                f"the API document is ~{tokens} tokens, over the {TOKEN_BUDGET} budget",
+                "it has to fit in a game-writing agent's context beside the game",
+                "the public surface grew, or a prose section did",
+                "curate the surface down rather than raising the budget "
+                "(public-api.md §4) — the budget is the point",
+            )
+        )
+    if leaked:
+        failures.append(
+            problem(
+                "implementation vocabulary reached the API document",
+                f"found: {', '.join(leaked)}",
+                "a doc comment on a public item names an internal crate or the backend seam",
+                "reword the doc comment at the definition; docs/api never mentions "
+                "internals (public-api.md §4)",
+            )
+        )
+
+    if check_only:
+        current = OUTPUT.read_text(encoding="utf-8") if OUTPUT.is_file() else None
+        if current != text:
+            failures.append(
+                problem(
+                    "docs/api/jidousha-api.md is stale",
+                    "the committed file differs from what the facade generates",
+                    "the public surface or a prose section changed without regenerating",
+                    "run `tools/gen-api-doc` and commit the result",
+                )
+            )
+    else:
+        OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+        OUTPUT.write_text(text, encoding="utf-8")
+        print(f"[gen-api-doc] wrote {OUTPUT.relative_to(REPO_ROOT)}")
+
+    for failure in failures:
+        print(f"\n{failure}", file=sys.stderr)
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

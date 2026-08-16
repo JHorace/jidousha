@@ -10,13 +10,11 @@
 //! on every machine and on every day.
 
 use crate::{Paddle, config, register};
-use jidousha_assets::{Assets, MemorySource, decode_png};
-use jidousha_core::math::Vec2;
-use jidousha_core::{Transform, headless};
-use jidousha_input::{Input, InputScript, Key};
-use jidousha_render_core::{
-    BackendTextureId, Camera, FONT_TEXTURE, FramePlan, NullBackend, PhysicalSize, RenderBackend,
-    Sprite, create_builtin_textures, plan_frame,
+use jidousha::prelude::*;
+use jidousha::testing::{
+    BackendTextureId, FONT_TEXTURE, FramePlan, InputScript, MemorySource, NullBackend,
+    PhysicalSize, RenderBackend, create_builtin_textures, decode_png, plan_frame,
+    upload_ready_textures,
 };
 use std::cmp::Ordering;
 
@@ -58,11 +56,11 @@ const BALL_Y: f32 = -4.0;
 pub(super) fn fail(what: &str, specifics: &str) -> ! {
     eprintln!(
         "{}",
-        jidousha_core::message(
+        message(
             what,
             specifics,
             "the game changed, or the engine did",
-            "run `cargo run -p jidousha-platform --example prototype_kit` and watch it, then \
+            "run `cargo run -p jidousha --example prototype_kit` and watch it, then \
              compare with the assertion above",
         )
     );
@@ -168,7 +166,7 @@ pub(super) fn play(backend: &mut dyn RenderBackend, viewport: PhysicalSize) -> R
             );
         };
         assets.commit(tick);
-        jidousha_render_core::upload_ready_textures(assets, backend, &mut textures);
+        upload_ready_textures(assets, backend, &mut textures);
 
         sim.world_mut()
             .insert_resource(Input::new(script.snapshot_at(tick)));

@@ -10,12 +10,10 @@
 //! No window and no GPU: this is the asset system end to end, and it runs
 //! headless.
 //!
-//! Run it: `cargo run -p jidousha-platform --example load_from_disk`
+//! Run it: `cargo run -p jidousha --example load_from_disk`
 
 #[cfg(not(target_arch = "wasm32"))]
-use jidousha_assets::{AssetStatus, Assets};
-#[cfg(not(target_arch = "wasm32"))]
-use jidousha_platform::FileSource;
+use jidousha::prelude::*;
 
 /// Where the art lives, relative to the workspace root.
 #[cfg(not(target_arch = "wasm32"))]
@@ -34,7 +32,7 @@ fn main() {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
-    let mut assets = Assets::new(FileSource::new(ASSET_ROOT));
+    let mut assets = Assets::new(asset_source(ASSET_ROOT));
 
     // Forward slashes on every platform (assets.md §2). All four return
     // immediately; none of them has been read yet.
@@ -59,7 +57,12 @@ fn main() {
     // has been scheduled once — which is a fair description of what "the disk
     // is slower than your loop" means, and the first thing this example got
     // wrong. A real frame takes about sixteen milliseconds; two is enough here.
-    let mut failures = Vec::new();
+    // Bytes, not a picture: `load_bytes` hands back exactly what is in the file,
+    // for the level formats and data tables a game invents. Same store, same
+    // commit point, same waiting.
+    let raw: BytesHandle = assets.load_bytes("sprites/hero.png");
+
+    let mut failures: Vec<AssetFailure> = Vec::new();
     let mut tick = 0;
     while !assets.all_ready() && tick < 600 {
         tick += 1;
@@ -113,6 +116,31 @@ fn main() {
         println!("{}\n", failure.message());
     }
     assert_eq!(failures.len(), 2, "one per failed asset, and only once");
+
+    // The failures are typed, so a game can branch on *why* rather than parse a
+    // sentence. A case mismatch is the one worth telling apart: it works on a
+    // case-insensitive filesystem and 404s on a web server, and the error names
+    // the file that is actually there.
+    let near_miss = failures.iter().find_map(|failure| match &failure.error {
+        AssetError::CaseMismatch { on_disk } => Some(on_disk.clone()),
+        _ => None,
+    });
+    assert_eq!(near_miss.as_deref(), Some("sprites/hero.png"));
+    assert!(
+        failures
+            .iter()
+            .any(|failure| matches!(failure.error, AssetError::NotFound)),
+        "and one that is simply absent"
+    );
+
+    // The same file, undecoded. A PNG starts with a fixed eight-byte signature,
+    // which is a cheap way for the example to prove these are the file's own
+    // bytes rather than something the engine made up.
+    let Some(bytes) = assets.bytes_of(raw) else {
+        panic!("the file is there, so its bytes are too");
+    };
+    assert_eq!(&bytes[..4], b"\x89PNG", "the bytes are the file's own");
+    println!("read {} raw byte(s) from sprites/hero.png", bytes.len());
 
     // Committing again reports nothing: a failure is news exactly once, and the
     // placeholder does the per-frame signalling from then on (assets.md §6).

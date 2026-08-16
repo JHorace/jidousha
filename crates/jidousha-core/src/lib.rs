@@ -38,6 +38,7 @@ mod component;
 mod draw;
 mod entity;
 mod error;
+/// Deterministic maths: the trigonometry and vector types a game may use.
 pub mod math;
 mod panic_hook;
 mod query;

@@ -16,18 +16,13 @@
 //!   a media key. Nothing happens, which is a documented boundary rather than a
 //!   failure.
 //!
-//! Run it: `cargo run -p jidousha-platform --example input_echo`
+//! Run it: `cargo run -p jidousha --example input_echo`
 //! On the web: `tools/serve-web input_echo`
 //!
 //! DELIBERATE: built but not run by `tools/test`, like the other windowed
 //! examples — it opens a window and waits for a person (tooling.md).
 
-use jidousha_core::{
-    Color, Depth, Draw, DrawCtx, GameConfig, Rect, Resource, Startup, Time, Update, World,
-    math::Vec2,
-};
-use jidousha_input::Input;
-use jidousha_render_core::{Camera, Submit, TextStyle};
+use jidousha::prelude::*;
 
 /// How many world units the window spans vertically.
 const VIEW_HEIGHT: f32 = 20.0;
@@ -61,8 +56,8 @@ struct Echo {
 }
 impl Resource for Echo {}
 
-fn main() -> Result<(), jidousha_platform::RunError> {
-    jidousha_platform::run(
+fn main() -> Result<(), RunError> {
+    run(
         GameConfig {
             title: "jidousha — input echo",
             ..GameConfig::default()

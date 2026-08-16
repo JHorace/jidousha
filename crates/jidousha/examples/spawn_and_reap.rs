@@ -6,9 +6,9 @@
 //! The same seed always produces the same run, which is why the assertions at
 //! the end can be exact numbers rather than ranges.
 //!
-//! Run it: `cargo run -p jidousha-core --example spawn_and_reap`
+//! Run it: `cargo run -p jidousha --example spawn_and_reap`
 
-use jidousha_core::{Component, Resource, Rng, Seconds, Simulation, Startup, Time, Update, World};
+use jidousha::prelude::*;
 
 /// Where a mote is, in whole units.
 #[derive(Clone, Copy, Debug)]
@@ -91,44 +91,70 @@ fn reap_the_strays(world: &mut World) {
     }
 }
 
+/// Despawn one mote by hand, tolerating one that is already gone.
+///
+/// `despawn` panics on a dead entity, because a game that despawns something
+/// twice has a bug worth hearing about. `try_despawn` is the version for the
+/// rare case where absence is expected, and it is the one place a game meets
+/// [`EntityDeadError`].
+fn retire(world: &mut World, mote: Entity) -> Result<(), EntityDeadError> {
+    world.try_despawn(mote)
+}
+
+/// The game, built the same way twice — which is the point of the example.
+fn field() -> HeadlessSim {
+    let mut sim = headless(
+        GameConfig {
+            seed: 2026,
+            // Units live in types (conventions): a tick is a `Seconds`, not a
+            // bare f32 that might have been milliseconds.
+            fixed_dt: Seconds(1.0 / 60.0),
+            ..GameConfig::default()
+        },
+        |app| {
+            app.add_system(Startup, seed_the_field);
+            app.add_system(Update, spawn_motes);
+            app.add_system(Update, drift);
+            app.add_system(Update, reap_the_strays);
+        },
+    );
+    sim.world_mut().insert_resource(Reaped::default());
+    sim
+}
+
 fn main() {
-    let mut simulation = Simulation::new(2026, Seconds(1.0 / 60.0));
-    simulation.world_mut().insert_resource(Reaped::default());
-    simulation.add_system(Startup, seed_the_field);
-    simulation.add_system(Update, spawn_motes);
-    simulation.add_system(Update, drift);
-    simulation.add_system(Update, reap_the_strays);
-
-    println!("{}", simulation.schedule_debug());
-
-    // Real time in, whole ticks out: sixty frames of a sixtieth of a second.
+    let mut sim = field();
     for _ in 0..60 {
-        simulation.advance(Seconds(1.0 / 60.0), |_, _| {});
+        sim.tick();
     }
 
-    let time = simulation.world().resource::<Time>();
-    let alive = simulation.world().entity_count();
-    let reaped = simulation.world().resource::<Reaped>().0;
+    let time = sim.world().resource::<Time>();
+    let alive = sim.world().entity_count();
+    let reaped = sim.world().resource::<Reaped>().0;
     println!(
         "after {} ticks ({}): {alive} motes in the field, {reaped} reaped",
         time.tick, time.elapsed
     );
 
-    assert_eq!(time.tick, 60, "sixty frames at one tick each");
+    assert_eq!(time.tick, 60, "sixty ticks");
     assert!(reaped > 0, "some motes should have left the field");
     assert!(alive > 0, "the field should not be empty");
 
     // The seed is the whole story: a second run of the same length matches.
-    let mut again = Simulation::new(2026, Seconds(1.0 / 60.0));
-    again.world_mut().insert_resource(Reaped::default());
-    again.add_system(Startup, seed_the_field);
-    again.add_system(Update, spawn_motes);
-    again.add_system(Update, drift);
-    again.add_system(Update, reap_the_strays);
+    let mut again = field();
     for _ in 0..60 {
-        again.advance(Seconds(1.0 / 60.0), |_, _| {});
+        again.tick();
     }
     assert_eq!(again.world().entity_count(), alive);
     assert_eq!(again.world().resource::<Reaped>().0, reaped);
     println!("replayed from the same seed: identical field");
+
+    // A mote retired by hand, and then retired again: the second attempt is an
+    // error value rather than a panic, because this is the one call that
+    // expects to find nothing.
+    if let Some((mote, _)) = sim.world().query::<&Position>().next() {
+        assert!(retire(sim.world_mut(), mote).is_ok(), "it was alive");
+        assert!(retire(sim.world_mut(), mote).is_err(), "and now it is not");
+        println!("retired one mote by hand; retiring it again is an error, not a panic");
+    }
 }

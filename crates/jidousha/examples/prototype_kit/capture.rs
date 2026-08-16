@@ -9,8 +9,7 @@
 //! rest of the verification stands, exactly as the golden tests do
 //! (renderer.md §9).
 
-use jidousha_render_core::{PhysicalSize, RenderBackend, encode_png};
-use jidousha_render_wgpu::WgpuBackend;
+use jidousha::testing::{PhysicalSize, RenderBackend, WgpuBackend, encode_png};
 use std::path::{Path, PathBuf};
 
 use crate::verify::{fail, play};
