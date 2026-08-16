@@ -283,6 +283,21 @@ that's exactly what acceptance milestone E0 tests (implementation plan).
   CI fails when stale (practices §2.3) or when over **25k tokens** (counted in
   CI; the budget is the point — it must fit comfortably in a game-writing
   agent's context alongside the game itself).
+
+  Implemented (impl): not rustdoc JSON — that needs a nightly toolchain and
+  `rust-toolchain.toml` pins stable (ADR-0005) — but a text extractor over the
+  crate sources, with tests. Blocks close on indentation rather than brace
+  depth, which `cargo fmt` guarantees and string literals defeat.
+
+  **The signature half of the bullet below went unimplemented until E0 run 1
+  measured what it cost** (e0-findings.md F-001): the Reference shipped as ~90
+  name-and-one-liner bullets, and the run reported it could not make a single
+  call from the document. Fixed by extracting declarations — fields with types,
+  enum variants, trait and inherent method signatures, associated consts,
+  `Default` values — at ~12.9k tokens of the 25k budget. The gap survived
+  because a thin entry is indistinguishable from a complete one to the agent
+  reading it, so `completeness_failures` now fails the run when an exported item
+  yields no declaration. A generator that can under-report silently will.
 - Fixed structure: **Quickstart** (one complete ~60-line game, compiling,
   CI-tested — it IS an example file, included verbatim) → **Concepts** (seven
   short paragraphs: world/systems/phases, determinism & the tick, drawing,

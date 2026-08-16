@@ -134,7 +134,7 @@ Class: docs · Run: 1 · Fixed in: open
 > I also wanted `Key::Escape` (to quit) and `Key::Digit1`/`Key::P` (pause) and
 > gave up on all of them rather than play compile-error roulette.
 
-**Root cause.** All 96 variants exist, including every one the run abandoned —
+**Root cause.** All 83 variants exist, including every one the run abandoned —
 `Escape`, `Digit1`, `P`, and the four arrows. The document lists the type and
 not one variant, and the run correctly refused to guess repeatedly at a surface
 it could not see.
