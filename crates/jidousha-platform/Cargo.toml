@@ -8,6 +8,7 @@ publish.workspace = true
 
 [dependencies]
 jidousha-core = { path = "../jidousha-core" }
+jidousha-assets = { path = "../jidousha-assets" }
 jidousha-input = { path = "../jidousha-input" }
 jidousha-render-core = { path = "../jidousha-render-core" }
 # The composition root picks a backend, so this is the one place that names a
@@ -42,6 +43,12 @@ winit = { version = "0.30", default-features = false, features = [
     "wayland-csd-adwaita",
     "rwh_06",
 ] }
+
+[dev-dependencies]
+# The file-source tests write real PNGs to a temporary directory, so they need
+# an encoder. Dev-only: it is already in the tree through jidousha-assets, and
+# nothing shipped depends on it from here.
+png = "0.18"
 
 [lints]
 workspace = true

@@ -10,17 +10,37 @@
 
 use std::collections::BTreeMap;
 
+use crate::handle::AssetKind;
+use crate::payload::{AssetError, Payload, TextureData};
+
 /// Identifies one outstanding request, from asking to arriving.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RequestId(pub(crate) u64);
 
+impl RequestId {
+    /// A request id from a raw counter.
+    ///
+    /// For sources outside this crate — the platform crates implement
+    /// [`ByteSource`] and have to mint their own. Ids need only be unique
+    /// within one source, which is why a plain counter is enough.
+    #[must_use]
+    pub const fn from_bits(bits: u64) -> Self {
+        Self(bits)
+    }
+}
+
 /// A request that has finished, one way or the other.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Completion {
     /// The request this answers.
     pub request: RequestId,
-    /// The bytes, or why they never came.
-    pub result: Result<Vec<u8>, String>,
+    /// What arrived, or why it did not.
+    ///
+    /// CONTRACT: the payload matches the [`AssetKind`] the request asked for.
+    /// A source that fetched a texture returns decoded texels, not the file it
+    /// read — decoding belongs to whoever has the bytes and a thread to spare
+    /// (assets.md §5).
+    pub result: Result<Payload, AssetError>,
 }
 
 /// Where bytes come from.
@@ -41,7 +61,12 @@ pub struct Completion {
 pub trait ByteSource: Send + Sync + 'static {
     /// Begin fetching `path`. Never blocks, never fails here — a path that
     /// cannot be read fails later, as a completion.
-    fn request(&mut self, path: &str) -> RequestId;
+    ///
+    /// `kind` says what to return: raw bytes, or decoded texels. A source that
+    /// can decode off the frame should, and one that cannot decodes wherever it
+    /// is able to — the requirement is only that the payload matches
+    /// (assets.md §3, §5).
+    fn request(&mut self, path: &str, kind: AssetKind) -> RequestId;
 
     /// Everything that finished by `tick`, in a deterministic order.
     ///
@@ -82,8 +107,8 @@ pub trait ByteSource: Send + Sync + 'static {
 /// assert_eq!(assets.status(player), AssetStatus::Ready);
 /// ```
 pub struct MemorySource {
-    /// Path → bytes, or an error to report instead.
-    content: BTreeMap<String, Result<Vec<u8>, String>>,
+    /// Path → what it holds, or an error to report instead.
+    content: BTreeMap<String, Result<Payload, AssetError>>,
     /// Path → the tick its request completes on. Absent means "immediately",
     /// i.e. at the first commit after the request.
     schedule: BTreeMap<String, u64>,
@@ -116,13 +141,29 @@ impl MemorySource {
     }
 
     /// Put bytes at `path`.
+    ///
+    /// Handed back as-is, whatever kind is asked for. Scripting a store is
+    /// about *timing*, not about round-tripping a file format, so a test that
+    /// loads this as a texture gets these bytes rather than a decode error —
+    /// use [`insert_texture`](MemorySource::insert_texture) when the texels
+    /// themselves matter.
     pub fn insert(&mut self, path: &str, bytes: Vec<u8>) {
-        self.content.insert(path.to_owned(), Ok(bytes));
+        self.content
+            .insert(path.to_owned(), Ok(Payload::Bytes(bytes)));
     }
 
-    /// Make `path` fail with `reason`, as a missing or unreadable file would.
-    pub fn fail(&mut self, path: &str, reason: &str) {
-        self.content.insert(path.to_owned(), Err(reason.to_owned()));
+    /// Put a decoded image at `path`.
+    ///
+    /// What the native loader produces, without needing a real PNG in the
+    /// test: a size and some texels are the part a renderer test cares about.
+    pub fn insert_texture(&mut self, path: &str, texture: TextureData) {
+        self.content
+            .insert(path.to_owned(), Ok(Payload::Texture(texture)));
+    }
+
+    /// Make `path` fail, as a missing or unreadable file would.
+    pub fn fail(&mut self, path: &str, error: AssetError) {
+        self.content.insert(path.to_owned(), Err(error));
     }
 
     /// Hold `path`'s completion until `tick`.
@@ -134,7 +175,7 @@ impl MemorySource {
 }
 
 impl ByteSource for MemorySource {
-    fn request(&mut self, path: &str) -> RequestId {
+    fn request(&mut self, path: &str, _kind: AssetKind) -> RequestId {
         let request = RequestId(self.next_request);
         self.next_request += 1;
         self.pending.push(Pending {
@@ -157,9 +198,8 @@ impl ByteSource for MemorySource {
                 continue;
             }
             let result = match self.content.get(&entry.path) {
-                Some(Ok(bytes)) => Ok(bytes.clone()),
-                Some(Err(reason)) => Err(reason.clone()),
-                None => Err(format!("no such asset: {:?}", entry.path)),
+                Some(content) => content.clone(),
+                None => Err(AssetError::NotFound),
             };
             completed.push(Completion {
                 request: entry.request,
@@ -183,11 +223,11 @@ mod tests {
     fn a_request_completes_at_the_first_commit_by_default() {
         let mut source = MemorySource::new();
         source.insert("a.png", vec![1, 2, 3]);
-        let request = source.request("a.png");
+        let request = source.request("a.png", AssetKind::Bytes);
         let completed = source.drain_completed(0);
         assert_eq!(completed.len(), 1);
         assert_eq!(completed[0].request, request);
-        assert_eq!(completed[0].result.as_deref(), Ok(&[1, 2, 3][..]));
+        assert_eq!(completed[0].result, Ok(Payload::Bytes(vec![1, 2, 3])));
     }
 
     #[test]
@@ -195,7 +235,7 @@ mod tests {
         let mut source = MemorySource::new();
         source.insert("a.png", vec![1]);
         source.complete_at("a.png", 5);
-        source.request("a.png");
+        source.request("a.png", AssetKind::Bytes);
         assert!(source.drain_completed(4).is_empty());
         assert_eq!(source.drain_completed(5).len(), 1);
     }
@@ -204,7 +244,7 @@ mod tests {
     fn a_completion_is_handed_back_exactly_once() {
         let mut source = MemorySource::new();
         source.insert("a.png", vec![1]);
-        source.request("a.png");
+        source.request("a.png", AssetKind::Bytes);
         assert_eq!(source.drain_completed(0).len(), 1);
         assert!(source.drain_completed(0).is_empty());
     }
@@ -212,7 +252,7 @@ mod tests {
     #[test]
     fn an_unknown_path_fails_rather_than_hanging() {
         let mut source = MemorySource::new();
-        let request = source.request("missing.png");
+        let request = source.request("missing.png", AssetKind::Bytes);
         let completed = source.drain_completed(0);
         assert_eq!(completed[0].request, request);
         assert!(completed[0].result.is_err());
@@ -221,12 +261,19 @@ mod tests {
     #[test]
     fn a_scripted_failure_reports_its_reason() {
         let mut source = MemorySource::new();
-        source.fail("bad.png", "decode failed at byte 12");
-        source.request("bad.png");
+        source.fail(
+            "bad.png",
+            AssetError::Decode {
+                detail: "bad chunk at byte 12".to_owned(),
+            },
+        );
+        source.request("bad.png", AssetKind::Bytes);
         let completed = source.drain_completed(0);
         assert_eq!(
-            completed[0].result.as_ref().err().map(String::as_str),
-            Some("decode failed at byte 12")
+            completed[0].result.as_ref().err(),
+            Some(&AssetError::Decode {
+                detail: "bad chunk at byte 12".to_owned(),
+            })
         );
     }
 
@@ -236,7 +283,9 @@ mod tests {
         for path in ["a", "b", "c"] {
             source.insert(path, vec![0]);
         }
-        let requests: Vec<RequestId> = ["c", "a", "b"].map(|path| source.request(path)).into();
+        let requests: Vec<RequestId> = ["c", "a", "b"]
+            .map(|path| source.request(path, AssetKind::Bytes))
+            .into();
         let completed = source.drain_completed(0);
         let order: Vec<RequestId> = completed.iter().map(|entry| entry.request).collect();
         assert_eq!(order, requests, "request order, not path order");
@@ -247,7 +296,7 @@ mod tests {
         let mut source = MemorySource::new();
         source.insert("a", vec![0]);
         source.complete_at("a", 9);
-        source.request("a");
+        source.request("a", AssetKind::Bytes);
         assert_eq!(source.outstanding(), 1);
         source.drain_completed(9);
         assert_eq!(source.outstanding(), 0);

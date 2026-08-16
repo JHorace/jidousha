@@ -31,9 +31,13 @@
 mod clock;
 mod driver;
 mod error;
+#[cfg(not(target_arch = "wasm32"))]
+mod files;
 
 pub use clock::FrameClock;
 pub use error::RunError;
+#[cfg(not(target_arch = "wasm32"))]
+pub use files::FileSource;
 
 use jidousha_core::{App, GameConfig};
 

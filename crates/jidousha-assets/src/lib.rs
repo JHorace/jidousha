@@ -36,9 +36,13 @@
 //! ```
 
 mod assets;
+mod decode;
 mod handle;
+mod payload;
 mod source;
 
 pub use assets::{AssetFailure, AssetStatus, Assets};
+pub use decode::decode_png;
 pub use handle::{AssetHandle, AssetKind, BytesHandle, TextureHandle};
+pub use payload::{AssetError, MAX_TEXTURE_SIZE, Payload, TextureData};
 pub use source::{ByteSource, Completion, MemorySource, RequestId};

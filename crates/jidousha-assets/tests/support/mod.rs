@@ -18,7 +18,7 @@
 // are an artifact of that, not a signal about the code.
 #![allow(dead_code)]
 
-use jidousha_assets::{AssetStatus, Assets, BytesHandle, MemorySource, TextureHandle};
+use jidousha_assets::{AssetError, AssetStatus, Assets, BytesHandle, MemorySource, TextureHandle};
 
 /// What the world does when asked for a path.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -95,7 +95,12 @@ pub fn source() -> MemorySource {
     for entry in CATALOG {
         match entry.content {
             Content::Present(bytes) => source.insert(entry.path, bytes.to_vec()),
-            Content::Unreadable(reason) => source.fail(entry.path, reason),
+            Content::Unreadable(reason) => source.fail(
+                entry.path,
+                AssetError::Decode {
+                    detail: reason.to_owned(),
+                },
+            ),
             // Absent means the source has never heard of it: insert nothing.
             Content::Absent => {}
         }

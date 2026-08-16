@@ -141,6 +141,16 @@ The `ByteSource` seam (`ByteSource`, `MemorySource`, `Completion`, `RequestId`)
 is public because the platform crates implement it from outside. `MemorySource`
 is the only part of it a game agent has reason to name, and only in tests.
 
+Built in A1: `FileSource` in `jidousha-platform`, which a game names once when
+building its `Assets`. Everything else A1 added is seam vocabulary that games do
+not touch — `Payload`, `TextureData`, `AssetError`, `decode_png`,
+`MAX_TEXTURE_SIZE`, `RequestId::from_bits` — plus `Assets::texture_of`, which is
+for the renderer. CONTRACT: **simulation must not read `texture_of`**, because
+nothing in a game's logic may depend on texture dimensions (renderer.md §3).
+`AssetFailure` swapped its `reason: String` for a typed `error: AssetError`,
+which is what lets each failure class say something specific; `message()` is
+unchanged.
+
 **Input (input doc)**
 ```rust
 Input::{held, just_pressed, just_released, pointer, pointers, window_focused}  // resource

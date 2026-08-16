@@ -1,8 +1,9 @@
 # Asset loading basics — design and contracts
 
-Status: **living doc for `jidousha-assets`; A0 implemented, A1–A3 still design.**
-Sections carry `Implemented (A0)` notes where code exists; everything else is
-design ahead of the code. **CONTRACT** items are binding and tested.
+Status: **living doc for `jidousha-assets`; A0 and A1 implemented, A2–A3 still
+design.**
+Sections carry `Implemented (A0)` and `Implemented (A1)` notes where code
+exists; everything else is design ahead of the code. **CONTRACT** items are binding and tested.
 
 Inherits: async-by-design + no-wall-clock (ADR-0005), poll-based API / no async
 runtime (ADR-0011), placeholder policy and TextureHandle consumption
@@ -134,10 +135,12 @@ Implemented (A0):
   the timeline, and a timeline that runs backwards is a bug in the driver, not a
   state to tolerate (§9's no-silent-failure rule). Committing the same tick
   twice is legal and changes nothing.
-- **Not yet wired**: nothing calls `commit` automatically, because the frame
-  loop does not exist yet — the driver arrives with the platform crate (M5), and
-  wires this in at "before the first Update tick of the frame". Until then a
-  test or an example calls it directly, once per simulated frame.
+- **Still not wired into the frame loop**: M5 built the driver, but it does not
+  yet call `commit` — the store is a resource a game inserts, and the driver has
+  no reason to know it is there until the renderer needs textures at R2. That is
+  where "before the first Update tick of the frame" gets implemented. Until
+  then, a test or an example commits directly, once per simulated frame, which
+  is exactly what `examples/load_from_disk.rs` does.
 - **Deferred to the replay recording**: the per-tick record of *which* assets
   committed is a change to core's input stream, and lands when that recording
   format does. A0 delivers the half that makes it possible — readiness moves
@@ -234,6 +237,13 @@ Implemented (A0):
   scripted tick; Failed → placeholder + single error; unload → debug panic on
   use (a `should_panic` test locking the message).
 
+Implemented (A1): `tests/file_source.rs` covers the §6 error set against real
+files in a temporary asset root — missing, case mismatch, not-a-PNG, oversized,
+a directory asked for as a file — and each assertion is on the *sentence*, so a
+message that stopped naming the near-miss file would fail. The temporary root is
+why these tests can create `Hero.png` beside `hero.png`, which is not something
+to check into a repository that people clone onto case-insensitive filesystems.
+
 Implemented (A0): the transcript tests exist in `tests/asset_replay.rs`, minus
 the placeholder half, which needs a renderer (R2). The `should_panic` tests
 locking the unload message are in `tests/asset_ops.rs`.
@@ -269,9 +279,48 @@ Sequenced against renderer milestones (renderer needs textures at R2):
   deterministic, and replay is blind to a bug it reproduces faithfully. This is
   the same lesson core §6 recorded about reordered command buffers. Replay
   proves repeatability and nothing else; correctness needs the model.
-- **A1 — native loader.** Loader thread + mpsc, fs ByteSource, `png` decode
+- **A1 — native loader.** ✅ Loader thread + mpsc, fs ByteSource, `png` decode
   (dep delta recorded), case-strict check, limits, §6 error set.
-  Exit: `examples/sprites.rs` loads real files; error-message snapshot tests.
+  Exit: ~~`examples/sprites.rs` loads real files~~; error-message snapshot tests.
+
+  **Exit criterion corrected.** `examples/sprites.rs` belongs to R2, which comes
+  after this in the order — A1 could not deliver an example that does not exist
+  yet without also delivering the sprite pipeline. `examples/load_from_disk.rs`
+  stands in its place and is arguably the better test of *this* milestone: it
+  loads real files, asserts the decoded texels, and shows every failure message,
+  with no window and no GPU anywhere in it.
+
+  `FileSource` lives in `jidousha-platform` and runs one loader thread. The
+  `Mutex` around the `mpsc::Receiver` that A0's `ByteSource` doc predicted is
+  exactly what landed, for exactly the predicted reason.
+
+  Three changes to A0's seam, all forced by "decode off the frame":
+
+  - `request` takes an `AssetKind`, so a source knows whether to decode.
+  - `Completion` carries a `Payload` — bytes, or decoded `TextureData` — rather
+    than a `Vec<u8>`. A source returns finished work.
+  - The failure type is `AssetError` rather than a `String`, which is what lets
+    §6's classes each say something specific.
+
+  **Where decoding lives, and why it looks wrong.** `decode_png` is in
+  `jidousha-assets`, not in the platform crate that reads the files. §3 wants
+  one code path on every platform; §5 wants native decoding off the frame. Both
+  hold if the *code* lives with the format and the *call* happens wherever the
+  bytes landed — the native source calls it from its loader thread, and A2's web
+  source will call it at the commit point. What would break §3 is each platform
+  bringing its own decoder, which is what putting it in the platform crates
+  invites.
+
+  What the mutation checks said. Ten deliberate breakages, nine caught at once.
+  The survivor was reversing the order completions come back in — the §5
+  CONTRACT that keeps replay stable — which nothing noticed because every test
+  had at most one failure in flight. `failures_are_reported_in_the_order_they_were_asked_for`
+  now asks for three broken files in an order that is neither alphabetical nor
+  reversed, so neither sorting by name nor reversing passes by accident.
+
+  Dependency delta (practices §5.8): `png` 0.18, plus `simd-adler32`. 251 → 258
+  external crates workspace-wide, 10 in the assets crate's own tree — "a handful
+  of crates", as §3 predicted. No `image` mega-crate.
 - **A2 — web loader.** fetch ByteSource, decode-at-commit, HTTP error mapping.
   Exit: sprites example loads over HTTP in the browser; wasm CI covers the
   non-fetch logic, manual check covers the rest (ADR-0005 proxy note).
