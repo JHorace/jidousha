@@ -1,0 +1,504 @@
+#!/usr/bin/env python3
+"""Build a Jidousha example for the web and serve it.
+
+The third target's missing half. `cargo check --target wasm32-unknown-unknown`
+proves the engine compiles for the web and CI has gated it since M0; this turns
+that into something a browser can load, which is what "works on the web" has to
+mean before any milestone claims it.
+
+    tools/serve-web window_clear            # build and serve on :8080
+    tools/serve-web window_clear --check    # build, serve, drive a headless
+                                            # browser at it, report, exit
+
+Stdlib only, like every other tool here (tooling.md). The one thing it needs
+that pip and cargo cannot provide on demand is the `wasm-bindgen` CLI, whose
+version must match the `wasm-bindgen` crate in Cargo.lock exactly — a mismatch
+produces glue that fails at run time with a message about nothing in
+particular. This checks for that before it can happen and says how to fix it.
+"""
+
+import argparse
+import http.server
+import os
+import struct
+import zlib
+import re
+import shutil
+import socketserver
+import subprocess
+import sys
+import threading
+import time
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+PAGE = REPO_ROOT / "tools" / "web" / "index.html"
+OUT_DIR = REPO_ROOT / "target" / "web"
+TARGET = "wasm32-unknown-unknown"
+
+# How much *page* time the headless check lets run before dumping the DOM.
+# Small on purpose: the engine draws every frame, so virtual time is spent at
+# whatever rate the software rasterizer manages, and a large budget does not
+# finish. Enough for the module to load, ask for a GPU, and draw.
+CHECK_VIRTUAL_MS = 4000
+# The wall-clock ceiling on the browser itself, which is a different question
+# from how much page time it simulates.
+CHECK_TIMEOUT_S = 120
+
+
+def fail(what: str, specifics: str, cause: str, fix: str) -> int:
+    """Report in the engine's message format (core.md §9)."""
+    print(f"[jidousha] {what}\n  {specifics}\n  likely cause: {cause}\n  fix: {fix}")
+    return 1
+
+
+def locked_wasm_bindgen_version() -> "str | None":
+    """The `wasm-bindgen` version Cargo.lock pins, which the CLI must match."""
+    lock = REPO_ROOT / "Cargo.lock"
+    if not lock.exists():
+        return None
+    text = lock.read_text(encoding="utf-8")
+    match = re.search(
+        r'^\[\[package\]\]\nname = "wasm-bindgen"\nversion = "([^"]+)"',
+        text,
+        re.MULTILINE,
+    )
+    return match.group(1) if match else None
+
+
+def installed_wasm_bindgen_version() -> "str | None":
+    """The CLI's version, or `None` if it is not on PATH."""
+    binary = shutil.which("wasm-bindgen")
+    if binary is None:
+        return None
+    proc = subprocess.run(
+        [binary, "--version"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+    )
+    match = re.search(r"(\d+\.\d+\.\d+)", proc.stdout)
+    return match.group(1) if match else None
+
+
+def check_toolchain(wanted: "str | None") -> int:
+    """Verify the `wasm-bindgen` CLI is present and matches the lockfile."""
+    if wanted is None:
+        return fail(
+            "cannot tell which wasm-bindgen version this workspace needs",
+            "Cargo.lock has no wasm-bindgen entry",
+            "the workspace does not depend on wasm-bindgen yet, or Cargo.lock is missing",
+            "run `cargo check --target wasm32-unknown-unknown` once to populate the lockfile",
+        )
+    found = installed_wasm_bindgen_version()
+    if found is None:
+        return fail(
+            "the wasm-bindgen CLI is not installed",
+            f"this workspace needs exactly {wanted}",
+            "it is a separate tool from the crate, and cargo does not install it for you",
+            f"cargo install wasm-bindgen-cli --version {wanted} --locked",
+        )
+    if found != wanted:
+        return fail(
+            f"the wasm-bindgen CLI is {found}, but this workspace needs {wanted}",
+            "the CLI and the crate generate two halves of one interface",
+            "a version skew, usually from a global install made for another project",
+            f"cargo install wasm-bindgen-cli --version {wanted} --locked",
+        )
+    return 0
+
+
+def run(command: "list[str]", what: str) -> int:
+    """Run a build step, echoing it first."""
+    print(f"[serve-web] {' '.join(command)}")
+    proc = subprocess.run(command, cwd=REPO_ROOT)
+    if proc.returncode != 0:
+        return fail(
+            f"{what} failed",
+            f"`{' '.join(command)}` exited {proc.returncode}",
+            "the error above says which; this tool only orchestrates",
+            "fix the reported error and run this again",
+        )
+    return 0
+
+
+def find_example(name: str) -> "tuple[str, str] | None":
+    """The package owning `name`, and the name itself."""
+    proc = subprocess.run(
+        ["cargo", "metadata", "--format-version", "1", "--no-deps"],
+        cwd=REPO_ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if proc.returncode != 0:
+        return None
+    import json
+
+    metadata = json.loads(proc.stdout)
+    members = set(metadata.get("workspace_members", []))
+    for package in metadata.get("packages", []):
+        if package["id"] not in members:
+            continue
+        for target in package.get("targets", []):
+            if "example" in target.get("kind", []) and target["name"] == name:
+                return (package["name"], name)
+    return None
+
+
+def build(package: str, example: str) -> int:
+    """Compile the example to wasm and generate its JS glue."""
+    step = run(
+        [
+            "cargo",
+            "build",
+            "--target",
+            TARGET,
+            "-p",
+            package,
+            "--example",
+            example,
+        ],
+        "the wasm build",
+    )
+    if step != 0:
+        return step
+
+    wasm = REPO_ROOT / "target" / TARGET / "debug" / "examples" / f"{example}.wasm"
+    if not wasm.exists():
+        return fail(
+            "the wasm build produced no module",
+            f"expected {wasm.relative_to(REPO_ROOT)}",
+            "the example built for a different profile, or cargo changed its output layout",
+            "check the build output above for where the artifact went",
+        )
+
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    step = run(
+        [
+            "wasm-bindgen",
+            "--target",
+            "web",
+            "--no-typescript",
+            "--out-dir",
+            str(OUT_DIR),
+            "--out-name",
+            example,
+            str(wasm),
+        ],
+        "wasm-bindgen",
+    )
+    if step != 0:
+        return step
+
+    # The page names the example in three places; substituting beats keeping a
+    # copy per example in the repository.
+    page = PAGE.read_text(encoding="utf-8").replace("__EXAMPLE__", example)
+    (OUT_DIR / "index.html").write_text(page, encoding="utf-8")
+    print(f"[serve-web] wrote {(OUT_DIR / 'index.html').relative_to(REPO_ROOT)}")
+    return 0
+
+
+class Handler(http.server.SimpleHTTPRequestHandler):
+    """A static server that says as little as possible."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=str(OUT_DIR), **kwargs)
+
+    def log_message(self, format, *args):  # noqa: A002 - stdlib signature
+        # One line per request would bury the build output; failures still show
+        # through the browser and through --check.
+        pass
+
+    def guess_type(self, path):
+        """Serve wasm as `application/wasm`.
+
+        Overriding the guess rather than adding a header in `end_headers`:
+        the base class has already sent a Content-Type by then, and a second
+        one is ignored. The symptom is a browser warning about falling back
+        from `instantiateStreaming` — mild, and a lie about what is wrong.
+        """
+        if str(path).endswith(".wasm"):
+            return "application/wasm"
+        return super().guess_type(path)
+
+
+def serve(port: int) -> socketserver.TCPServer:
+    """Start the static server on a background thread."""
+    socketserver.TCPServer.allow_reuse_address = True
+    server = socketserver.TCPServer(("127.0.0.1", port), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server
+
+
+def decode_png(data: bytes) -> "tuple[int, int, list[tuple[int, int, int]]] | None":
+    """Decode a non-interlaced 8-bit RGB/RGBA PNG into rows of pixels.
+
+    Hand-written for the same reason the input codec is (ADR-0014): `zlib` is
+    stdlib, the format's un-filtering is forty lines, and the alternative is a
+    dependency for a tool that exists to check one screenshot.
+    """
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        return None
+    width = height = depth = color = None
+    idat = bytearray()
+    at = 8
+    while at + 8 <= len(data):
+        (length,) = struct.unpack(">I", data[at : at + 4])
+        kind = data[at + 4 : at + 8]
+        body = data[at + 8 : at + 8 + length]
+        at += 12 + length  # 4 length + 4 kind + body + 4 crc
+        if kind == b"IHDR":
+            width, height, depth, color = struct.unpack(">IIBB", body[:10])
+            if body[12] != 0:  # interlaced
+                return None
+        elif kind == b"IDAT":
+            idat += body
+        elif kind == b"IEND":
+            break
+    if width is None or depth != 8 or color not in (2, 6):
+        return None
+
+    channels = 3 if color == 2 else 4
+    stride = width * channels
+    raw = zlib.decompress(bytes(idat))
+    pixels: "list[tuple[int, int, int]]" = []
+    previous = bytearray(stride)
+    at = 0
+    for _ in range(height):
+        filter_kind = raw[at]
+        at += 1
+        line = bytearray(raw[at : at + stride])
+        at += stride
+        for index in range(stride):
+            left = line[index - channels] if index >= channels else 0
+            up = previous[index]
+            up_left = previous[index - channels] if index >= channels else 0
+            if filter_kind == 1:
+                line[index] = (line[index] + left) & 0xFF
+            elif filter_kind == 2:
+                line[index] = (line[index] + up) & 0xFF
+            elif filter_kind == 3:
+                line[index] = (line[index] + (left + up) // 2) & 0xFF
+            elif filter_kind == 4:
+                estimate = left + up - up_left
+                distances = (
+                    abs(estimate - left),
+                    abs(estimate - up),
+                    abs(estimate - up_left),
+                )
+                nearest = (left, up, up_left)[distances.index(min(distances))]
+                line[index] = (line[index] + nearest) & 0xFF
+        previous = line
+        for x in range(width):
+            base = x * channels
+            pixels.append((line[base], line[base + 1], line[base + 2]))
+    return (width, height, pixels)
+
+
+def canvas_is_drawn(png: bytes) -> "tuple[bool, str]":
+    """Whether the engine put a color on the canvas.
+
+    Samples the lower two thirds of the page — the status line is at the top and
+    the canvas fills the rest — and asks whether most of it differs from the
+    page's own background. Deliberately not a golden image: what is being
+    checked is "the engine drew", not "it drew exactly this", and the example's
+    color moves with simulated time anyway.
+    """
+    decoded = decode_png(png)
+    if decoded is None:
+        return (False, "the screenshot could not be decoded")
+    width, height, pixels = decoded
+    # The page background, from tools/web/index.html.
+    background = (0x10, 0x10, 0x14)
+    matched = 0
+    total = 0
+    sampled: "dict[tuple[int, int, int], int]" = {}
+    for y in range(height // 3, height, max(1, height // 40)):
+        for x in range(0, width, max(1, width // 40)):
+            pixel = pixels[y * width + x]
+            total += 1
+            sampled[pixel] = sampled.get(pixel, 0) + 1
+            if max(abs(a - b) for a, b in zip(pixel, background)) > 12:
+                matched += 1
+    if total == 0:
+        return (False, "the screenshot had nothing to sample")
+    share = matched / total
+    common = max(sampled.items(), key=lambda item: item[1])[0]
+    detail = f"{share:.0%} of the canvas area differs from the page background; commonest pixel rgb{common}"
+    # Half is generous: the canvas does not fill the whole sampled region on
+    # every window size, and the point is to tell "drew something" from "drew
+    # nothing at all".
+    return (share > 0.5, detail)
+
+
+def chromium() -> "str | None":
+    """A headless-capable Chromium, if this machine has one."""
+    for candidate in (
+        os.environ.get("JIDOUSHA_CHROMIUM"),
+        "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
+        shutil.which("chromium"),
+        shutil.which("chromium-browser"),
+        shutil.which("google-chrome"),
+    ):
+        if candidate and Path(candidate).exists():
+            return candidate
+    # A glob, so a browser update does not silently disable the check.
+    for path in sorted(Path("/opt/pw-browsers").glob("chromium-*/chrome-linux/chrome")):
+        return str(path)
+    return None
+
+
+def check(port: int, example: str) -> int:
+    """Load the page in a headless browser and report what it said.
+
+    This is what makes the web target *checkable* rather than merely
+    compilable. It is not a golden-image test — it answers "did the module
+    load, start, and reach the engine" — and a machine with no GPU will still
+    fail to get an adapter, which the report says plainly rather than hiding.
+    """
+    browser = chromium()
+    if browser is None:
+        return fail(
+            "no headless browser to check with",
+            "looked for chromium on PATH and under /opt/pw-browsers",
+            "this machine has no browser installed",
+            "install Chromium, or set JIDOUSHA_CHROMIUM to one, or drop --check and look "
+            "at the page yourself",
+        )
+
+    profile = OUT_DIR / "browser-profile"
+    log = OUT_DIR / "browser.log"
+    shot = OUT_DIR / "check.png"
+    print(f"[serve-web] checking with {browser}")
+    command = [
+        browser,
+        "--headless=new",
+        "--no-sandbox",
+        "--disable-gpu-sandbox",
+        # Software rasterization: there is no GPU on a CI runner or in a
+        # container, and WebGL over SwiftShader is exactly the WebGL2 path
+        # ADR-0003 §4 keeps viable. It is ANGLE that provides it — asking for
+        # `--use-gl=swiftshader` gets "Requested GL implementation not found"
+        # and a GPU process that exits during initialization.
+        "--enable-unsafe-swiftshader",
+        "--use-angle=swiftshader",
+        "--enable-logging=stderr",
+        "--v=0",
+        f"--user-data-dir={profile}",
+        f"--virtual-time-budget={CHECK_VIRTUAL_MS}",
+        "--window-size=640,480",
+        f"--screenshot={shot}",
+        "--dump-dom",
+        f"http://127.0.0.1:{port}/index.html",
+    ]
+    started = time.monotonic()
+    try:
+        proc = subprocess.run(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=CHECK_TIMEOUT_S,
+        )
+    except subprocess.TimeoutExpired:
+        return fail(
+            "the headless browser did not finish",
+            f"it ran for {CHECK_TIMEOUT_S}s without dumping the page",
+            "a software rasterizer spending virtual time on every frame, or a hung module",
+            "lower CHECK_VIRTUAL_MS, or run without --check and look at the page yourself",
+        )
+    elapsed = time.monotonic() - started
+    log.write_text(proc.stderr, encoding="utf-8")
+    dom = proc.stdout
+
+    print(f"[serve-web] browser finished in {elapsed:.1f}s; log: {log.relative_to(REPO_ROOT)}")
+
+    # The page records what happened in a data attribute and a status line.
+    state = "unknown"
+    if 'data-jidousha="running"' in dom:
+        state = "running"
+    elif 'data-jidousha="failed"' in dom:
+        state = "failed"
+    status = re.search(r'<div id="status"[^>]*>(.*?)</div>', dom, re.S)
+    message = (status.group(1).strip() if status else "").replace("\n", " ")
+
+    print(f"[serve-web] page state: {state}")
+    if message:
+        print(f"[serve-web] page said: {message}")
+
+    if state == "running":
+        # Starting is not drawing. Checking the pixels is what makes this a
+        # verification rather than a smoke test — and it is not hypothetical:
+        # the WebGPU-with-no-fallback bug this tool found on its first run
+        # produced a page that started perfectly and drew nothing.
+        if not shot.exists():
+            return fail(
+                f"{example} started but produced no screenshot",
+                f"expected {shot.relative_to(REPO_ROOT)}",
+                "the browser exited before compositing a frame",
+                "raise CHECK_VIRTUAL_MS, or run without --check and look yourself",
+            )
+        drawn, detail = canvas_is_drawn(shot.read_bytes())
+        print(f"[serve-web] {detail}")
+        if not drawn:
+            return fail(
+                f"{example} started but drew nothing",
+                detail,
+                "the engine got no GPU adapter, or the surface is not the canvas on the page",
+                f"look at {shot.relative_to(REPO_ROOT)} and {log.relative_to(REPO_ROOT)}",
+            )
+        print(f"[serve-web] PASS — {example} started and drew in a browser")
+        return 0
+    return fail(
+        f"{example} did not start in the browser",
+        f"page state: {state}; page said: {message or '(nothing)'}",
+        "the wasm module failed to load or panicked on startup; the browser log has the detail",
+        f"read {log.relative_to(REPO_ROOT)}, then run without --check and open the page yourself",
+    )
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("example", help="the example to build, e.g. window_clear")
+    parser.add_argument("--port", type=int, default=8080)
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="drive a headless browser at the page, report, and exit",
+    )
+    args = parser.parse_args()
+
+    wanted = locked_wasm_bindgen_version()
+    step = check_toolchain(wanted)
+    if step != 0:
+        return step
+
+    found = find_example(args.example)
+    if found is None:
+        return fail(
+            f"no example named {args.example!r}",
+            "the workspace defines no example target with that name",
+            "a typo, or the example lives outside this workspace",
+            "run `cargo metadata` or look under crates/*/examples/ for the list",
+        )
+    package, example = found
+
+    step = build(package, example)
+    if step != 0:
+        return step
+
+    server = serve(args.port)
+    try:
+        if args.check:
+            return check(args.port, example)
+        print(f"[serve-web] http://127.0.0.1:{args.port}/  —  Ctrl-C to stop")
+        try:
+            while True:
+                time.sleep(3600)
+        except KeyboardInterrupt:
+            print("\n[serve-web] stopped")
+            return 0
+    finally:
+        server.shutdown()
+
+
+if __name__ == "__main__":
+    sys.exit(main())
