@@ -310,6 +310,51 @@ That is a genuinely good substitute for a screenshot, and it is the reason I am
 reasonably confident about the layout despite never having looked at it. The
 `--verify` run prints it.
 
+### Postscript: someone else ran it, and the window did not open
+
+Added after the notes above were written. The repository's owner ran the game on
+a real Linux desktop. Two things came out of it, and both are worth having here
+even though neither is about the API document.
+
+**The game is fine.** Controls felt good, the opponent was judged hard but
+enjoyable at roughly a one-in-four or one-in-five win rate, the ball's top speed
+was not a problem, and first-to-five was the right match length. No constant was
+changed as a result. That is the acceptance criterion this run could not check
+for itself, and it passed.
+
+**The window did not open, for reasons entirely below the game.** On a machine
+with a discrete NVIDIA GPU (the compositor's) and an integrated AMD one, every
+windowed example — `pong` and the two-shape `window_clear` alike — dies at surface
+setup with `error 7: importing the supplied dmabufs failed`. wgpu selects the
+*integrated* GPU, and cross-vendor dmabuf import into an NVIDIA-driven compositor
+fails. `VK_DRIVER_FILES=/usr/share/vulkan/icd.d/nvidia_icd.json` fixes it
+completely; `WGPU_POWER_PREF=high` does not, which says the platform crate is not
+consulting `PowerPreference::from_env()` and is passing wgpu's default —
+`PowerPreference::None`, which performs no adapter sorting whatsoever.
+Filed as [#23](https://github.com/JHorace/jidousha/issues/23), with
+`PowerPreference::HighPerformance` as the suggested fix.
+
+Two observations that do belong in a document about writing games against this
+engine:
+
+- **A game author cannot diagnose this and should not try.** Adapter selection is
+  behind the backend boundary, four crates away from anything `DrawCtx` exposes.
+  The only reason it got diagnosed at all is that `window_clear` exists — a
+  windowed example small enough to prove the failure is not yours. That example
+  earns its place in the repository on this alone.
+- **The failure message points the wrong way.** `RunError::EventLoop` says "the
+  display server went away mid-run" and advises restarting. The display server
+  was fine and restarting never helped; the real cause was printed by the Wayland
+  client library one line above and never reached the engine's message. For a
+  project whose rule is that an error states what happened, its likely cause and
+  its fix, this is the one message encountered in the whole exercise that got all
+  three wrong — and it is the message a new user is most likely to hit first,
+  because it fires before their game runs at all.
+
+So the honest final state of the "I have never seen this game" note above: I still
+have not. Someone else has, on the second attempt, after being handed an
+environment variable.
+
 ---
 
 ## What worked, briefly
