@@ -97,7 +97,15 @@ def parse_test_output(text: str) -> dict:
 # says nothing about the code. Every other example is run, and asserts its own
 # behaviour (agent-practices §5.1). M5 owns this decision; tooling.md records it.
 WINDOWED_EXAMPLES = frozenset(
-    {"window_blank", "window_clear", "sprites", "prototype_kit", "input_echo", "quickstart"}
+    {
+        "window_blank",
+        "window_clear",
+        "sprites",
+        "prototype_kit",
+        "input_echo",
+        "quickstart",
+        "pong",
+    }
 )
 
 # Windowed examples that carry a `--verify` mode: scripted input, headless
@@ -107,7 +115,7 @@ WINDOWED_EXAMPLES = frozenset(
 # name here must also be windowed (tested): an example that already runs
 # headless asserts in its normal mode, and a second mode would be a second way
 # to do one thing.
-VERIFIABLE_EXAMPLES = frozenset({"prototype_kit"})
+VERIFIABLE_EXAMPLES = frozenset({"prototype_kit", "pong"})
 
 
 def example_phase(package: str, example: str) -> "tuple[str, list[str]]":
