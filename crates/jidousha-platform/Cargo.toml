@@ -7,6 +7,36 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+jidousha-core = { path = "../jidousha-core" }
+jidousha-input = { path = "../jidousha-input" }
+
+# The engine's only wall clock (ADR-0005). `std::time::Instant` compiles on wasm
+# and then panics at run time, which would pass CI and fail in a browser;
+# web-time is std on native and performance.now() on the web. It arrives with
+# winit's wasm build anyway, so on that target it costs nothing.
+web-time = "1.1"
+
+# DELIBERATE: features listed rather than inherited. winit's default set is
+# upstream's to change, and this crate's dependency footprint should change only
+# when someone decides it does (practices §5.8). The list below is winit's
+# default minus nothing that matters — measured at 60 crates in the host tree
+# against 70 for the full defaults, so the difference is small and the choice is
+# about knowing what is in there.
+#
+# `wayland-csd-adwaita` is the one worth naming: it draws client-side window
+# decorations, which a Wayland compositor requires for a window to have a title
+# bar and a close button at all. Dropping it saves those same ~10 crates and
+# costs the human check that is M5's exit criterion — a window nobody can close
+# is a worse deliverable than a slightly larger tree.
+#
+# `rwh_06` is what wgpu will need to make a surface at R1.
+winit = { version = "0.30", default-features = false, features = [
+    "x11",
+    "wayland",
+    "wayland-dlopen",
+    "wayland-csd-adwaita",
+    "rwh_06",
+] }
 
 [lints]
 workspace = true

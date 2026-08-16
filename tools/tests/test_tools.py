@@ -263,6 +263,31 @@ class ExampleDiscoveryTest(unittest.TestCase):
     def test_a_workspace_with_no_examples_discovers_none(self):
         self.assertEqual(test_wrapper.parse_example_targets({}), [])
 
+    def test_an_ordinary_example_is_run(self):
+        name, command = test_wrapper.example_phase("jidousha-core", "homing")
+        self.assertEqual(name, "example:homing")
+        self.assertIn("run", command)
+
+    def test_a_windowed_example_is_built_and_not_run(self):
+        # It would open a window and wait for a person; a headless runner has
+        # no display and would fail for a reason that says nothing about the
+        # code. Building still catches every compile error.
+        example = sorted(test_wrapper.WINDOWED_EXAMPLES)[0]
+        name, command = test_wrapper.example_phase("jidousha-platform", example)
+        self.assertEqual(name, f"example-build:{example}")
+        self.assertIn("build", command)
+        self.assertNotIn("run", command)
+
+    def test_the_windowed_list_names_examples_that_exist(self):
+        # A stale name here would silently start running a windowed example, or
+        # keep skipping one that was deleted.
+        root = Path(__file__).resolve().parents[2]
+        existing = {path.stem for path in root.glob("crates/*/examples/*.rs")}
+        self.assertTrue(
+            test_wrapper.WINDOWED_EXAMPLES <= existing,
+            f"unknown windowed examples: {test_wrapper.WINDOWED_EXAMPLES - existing}",
+        )
+
 
 class DepCountTest(unittest.TestCase):
     def test_workspace_members_are_not_counted_as_dependencies(self):

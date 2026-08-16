@@ -47,6 +47,14 @@ only — the asset, window and camera fields arrive with their subsystems, and
 `run` lands with the platform crate (M5); it is the same loop with a different
 driver (core.md §8).
 
+Built in M5: `run(config, setup) -> Result<(), RunError>` in `jidousha-platform`,
+with the signature above. Two additions the inventory does not list, both for
+drivers rather than games: `jidousha_core::build`, the construction both drivers
+share, and a per-tick callback on `Simulation::advance` that lets a driver set
+the input resource per tick without core naming an `InputSnapshot`. `RunError`
+is the §9 environmental class the inventory already anticipated; its commonest
+variant tells a headless caller to use `headless` instead.
+
 **ECS (core doc §2–6)**
 ```rust
 Entity
