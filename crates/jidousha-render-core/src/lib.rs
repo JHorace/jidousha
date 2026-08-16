@@ -9,8 +9,9 @@
 //!
 //! Built so far (`docs/internal/renderer.md` §11): R0 — sprite submission, the
 //! camera, sort and batch into a `FramePlan`, and the null backend that records
-//! frames instead of drawing them. The wgpu backend (R1, R2), the debug
-//! primitives and text (R3), and golden images (R4) land next.
+//! frames instead of drawing them; R2 — the built-in textures and the upload
+//! loop that hands loaded art to whichever backend is there. The debug
+//! primitives and text (R3) and golden images (R4) land next.
 //!
 //! ```
 //! use jidousha_core::{Draw, GameConfig, Transform, headless, math::Vec2};
@@ -50,6 +51,7 @@ mod null;
 mod plan;
 mod sprite;
 mod submit;
+mod textures;
 
 pub use backend::{
     BackendTextureId, PhysicalSize, RawImage, RenderBackend, RenderError, TextureDesc,
@@ -59,3 +61,4 @@ pub use null::{DrawnQuad, FrameRecord, NullBackend};
 pub use plan::{Batch, FramePlan, QuadVertex, TextureTable, plan_frame};
 pub use sprite::Sprite;
 pub use submit::{Submit, draw_sprites};
+pub use textures::{create_builtin_textures, upload_ready_textures};

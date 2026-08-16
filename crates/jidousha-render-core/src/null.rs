@@ -195,7 +195,12 @@ fn channel(value: f32) -> u8 {
 /// is a different job (renderer.md §9).
 pub struct NullBackend {
     frames: Vec<FrameRecord>,
-    textures: Vec<TextureDesc>,
+    /// Every texture created, with the texels it was given.
+    ///
+    /// The texels are kept, not counted: renderer.md §5's CONTRACT is that the
+    /// placeholder is *bit-identical* across backends, and a backend that
+    /// discarded what it was handed could not be asked whether that is true.
+    textures: Vec<(TextureDesc, Vec<u8>)>,
     destroyed: Vec<BackendTextureId>,
     surface: PhysicalSize,
 }
@@ -258,6 +263,17 @@ impl NullBackend {
         self.textures.len()
     }
 
+    /// What `id` was uploaded with: its description and its texels.
+    ///
+    /// `None` for an id this backend never issued. A destroyed id still answers
+    /// — the record is of what was uploaded, which is a question about the past.
+    #[must_use]
+    pub fn uploaded(&self, id: BackendTextureId) -> Option<(TextureDesc, &[u8])> {
+        self.textures
+            .get(id.0 as usize)
+            .map(|(desc, texels)| (*desc, texels.as_slice()))
+    }
+
     /// Textures that were destroyed, in the order they were.
     #[must_use]
     pub fn destroyed(&self) -> &[BackendTextureId] {
@@ -266,8 +282,8 @@ impl NullBackend {
 }
 
 impl RenderBackend for NullBackend {
-    fn create_texture(&mut self, desc: &TextureDesc, _texels: &[u8]) -> BackendTextureId {
-        self.textures.push(*desc);
+    fn create_texture(&mut self, desc: &TextureDesc, texels: &[u8]) -> BackendTextureId {
+        self.textures.push((*desc, texels.to_vec()));
         // Ids count up and are never reused: a test that draws with a stale id
         // should see the stale id, not something that quietly still works.
         BackendTextureId(u32::try_from(self.textures.len() - 1).unwrap_or(u32::MAX))

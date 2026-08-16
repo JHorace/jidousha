@@ -11,16 +11,20 @@
 //! decide things are two backends that disagree (renderer.md §1).
 //!
 //! Built so far (`docs/internal/renderer.md` §11): R1 — surface, clear, present
-//! and resize. The sprite pipeline and texture upload land at R2, which is when
-//! the batches in a plan start being drawn rather than counted.
+//! and resize; R2 — the sprite pipeline, texture upload, and one draw call per
+//! batch. Offscreen capture for golden images is R4's.
 
+mod color;
 mod init;
+mod pipeline;
 
 use jidousha_render_core::{
     BackendTextureId, FramePlan, PhysicalSize, RawImage, RenderBackend, RenderError, TextureDesc,
 };
 
+use crate::color::linear;
 use crate::init::{Gpu, Pending, configure};
+use crate::pipeline::SpritePipeline;
 
 /// A renderer backed by wgpu.
 ///
@@ -32,17 +36,43 @@ use crate::init::{Gpu, Pending, configure};
 pub struct WgpuBackend {
     state: State,
     /// Textures the engine asked for, indexed by [`BackendTextureId`].
-    textures: Vec<Option<wgpu::Texture>>,
+    textures: Vec<Option<Slot>>,
+    /// This frame's vertex bytes, kept between frames so the allocation is not
+    /// made sixty times a second.
+    scratch: Vec<u8>,
 }
 
 enum State {
     /// Waiting for an adapter and a device.
     Starting(Box<Pending>),
     /// Ready to draw.
-    Running(Box<Gpu>),
+    Running(Box<Live>),
     /// The machine cannot provide a GPU; the error is reported once per frame
     /// asked, not stored, because `render` is where a caller can act on it.
     Failed(RenderError),
+}
+
+/// A GPU with a pipeline on it.
+struct Live {
+    gpu: Gpu,
+    pipeline: SpritePipeline,
+}
+
+/// One texture the engine asked for.
+enum Slot {
+    /// Uploaded, with the bind group the pipeline draws it through.
+    Ready { bind_group: wgpu::BindGroup },
+    /// Asked for before the device arrived, and uploaded the moment it does.
+    ///
+    /// DELIBERATE: the texels are held rather than dropped, so
+    /// [`create_texture`](RenderBackend::create_texture) means "this texture
+    /// will be on the GPU" with no timing rider attached. Art usually finishes
+    /// loading before the GPU handshake does — a small PNG off a warm disk
+    /// beats an adapter and device negotiation — so this is the common path
+    /// during startup rather than a corner. The alternative, making every
+    /// caller ask whether the device has arrived first, is an unwritten rule
+    /// that would be forgotten exactly once.
+    Waiting { desc: TextureDesc, texels: Vec<u8> },
 }
 
 /// Which backends to let wgpu choose from.
@@ -104,6 +134,7 @@ impl WgpuBackend {
         Ok(Self {
             state: State::Starting(Box::new(Pending::new(&instance, surface, size))),
             textures: Vec::new(),
+            scratch: Vec::new(),
         })
     }
 
@@ -128,7 +159,15 @@ impl WgpuBackend {
         match pending.poll() {
             Ok(None) => Ok(()),
             Ok(Some(gpu)) => {
-                self.state = State::Running(Box::new(gpu));
+                // The pipeline is built for the surface's format and kept for
+                // the life of the backend. `configure` picks that format from
+                // the surface and the adapter, neither of which changes, so a
+                // resize cannot invalidate it — and if that ever stopped being
+                // true, wgpu's validation would say so rather than draw wrong.
+                let pipeline = SpritePipeline::new(&gpu.device, gpu.config.format);
+                let live = Live { gpu, pipeline };
+                self.state = State::Running(Box::new(live));
+                self.upload_waiting();
                 Ok(())
             }
             Err(error) => {
@@ -137,48 +176,80 @@ impl WgpuBackend {
             }
         }
     }
+
+    /// Upload every texture that was asked for before the device existed.
+    ///
+    /// Runs once, on the frame the GPU arrives. The texels are dropped as each
+    /// one lands, so the wait costs memory only while it lasts.
+    fn upload_waiting(&mut self) {
+        let State::Running(live) = &mut self.state else {
+            return;
+        };
+        for slot in &mut self.textures {
+            if !matches!(slot, Some(Slot::Waiting { .. })) {
+                continue;
+            }
+            // Taken out rather than read in place: the upload replaces the slot,
+            // and the texels have to stop borrowing from it first.
+            let Some(Slot::Waiting { desc, texels }) = slot.take() else {
+                continue;
+            };
+            *slot = Some(upload(live, &desc, &texels));
+        }
+    }
+}
+
+/// Put texels on the GPU and make the bind group that draws them.
+fn upload(live: &Live, desc: &TextureDesc, texels: &[u8]) -> Slot {
+    let texture = live.gpu.device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("jidousha texture"),
+        size: wgpu::Extent3d {
+            width: desc.size.width,
+            height: desc.size.height,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        // sRGB, so the GPU converts to linear light as it samples — the other
+        // half of the conversion `color.rs` does for vertex colors.
+        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    live.gpu.queue.write_texture(
+        texture.as_image_copy(),
+        texels,
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(desc.size.width * 4),
+            rows_per_image: Some(desc.size.height),
+        },
+        wgpu::Extent3d {
+            width: desc.size.width,
+            height: desc.size.height,
+            depth_or_array_layers: 1,
+        },
+    );
+    Slot::Ready {
+        bind_group: live.pipeline.bind_texture(&live.gpu.device, &texture),
+    }
 }
 
 impl RenderBackend for WgpuBackend {
     fn create_texture(&mut self, desc: &TextureDesc, texels: &[u8]) -> BackendTextureId {
         let id = BackendTextureId(u32::try_from(self.textures.len()).unwrap_or(u32::MAX));
-        let State::Running(gpu) = &self.state else {
-            // Before the device exists there is nothing to upload to. The id is
-            // still handed out and still valid: the engine's texture table maps
-            // ids it does not have to the placeholder, so a sprite waiting on
-            // this draws the placeholder rather than nothing (renderer.md §5).
-            self.textures.push(None);
-            return id;
+        let slot = match &self.state {
+            State::Running(live) => upload(live, desc, texels),
+            // No device yet. Hold the texels and upload them when there is one;
+            // the caller is told nothing, because from its side this texture is
+            // on its way regardless.
+            State::Starting(_) | State::Failed(_) => Slot::Waiting {
+                desc: *desc,
+                texels: texels.to_vec(),
+            },
         };
-        let texture = gpu.device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("jidousha texture"),
-            size: wgpu::Extent3d {
-                width: desc.size.width,
-                height: desc.size.height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        });
-        gpu.queue.write_texture(
-            texture.as_image_copy(),
-            texels,
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(desc.size.width * 4),
-                rows_per_image: Some(desc.size.height),
-            },
-            wgpu::Extent3d {
-                width: desc.size.width,
-                height: desc.size.height,
-                depth_or_array_layers: 1,
-            },
-        );
-        self.textures.push(Some(texture));
+        self.textures.push(Some(slot));
         id
     }
 
@@ -192,9 +263,11 @@ impl RenderBackend for WgpuBackend {
 
     fn resize_surface(&mut self, size: PhysicalSize) {
         match &mut self.state {
-            State::Running(gpu) => {
-                if let Ok(config) = configure(&gpu.surface, &gpu.adapter, &gpu.device, size) {
-                    gpu.config = config;
+            State::Running(live) => {
+                if let Ok(config) =
+                    configure(&live.gpu.surface, &live.gpu.adapter, &live.gpu.device, size)
+                {
+                    live.gpu.config = config;
                 }
             }
             // Not ready yet: remember it, so the surface is configured at the
@@ -208,26 +281,35 @@ impl RenderBackend for WgpuBackend {
 
     fn render(&mut self, plan: &FramePlan) -> Result<(), RenderError> {
         self.poll()?;
-        let gpu = match &mut self.state {
-            State::Running(gpu) => gpu,
+        let Self {
+            state,
+            textures,
+            scratch,
+        } = self;
+        let live = match state {
+            State::Running(live) => live,
             State::Starting(_) => return Ok(()),
             State::Failed(error) => return Err(error.clone()),
         };
 
-        let frame = match gpu.surface.get_current_texture() {
+        let frame = match live.gpu.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame) => frame,
             // Suboptimal still draws: the picture is correct, the swap chain is
             // merely no longer ideal. Reconfiguring next frame is enough, and
             // throwing this one away would flicker.
             wgpu::CurrentSurfaceTexture::Suboptimal(frame) => {
-                gpu.surface.configure(&gpu.device, &gpu.config);
+                live.gpu
+                    .surface
+                    .configure(&live.gpu.device, &live.gpu.config);
                 frame
             }
             // The window changed under us, or there is nothing to draw into.
             // Reconfiguring and skipping the frame is the standard recovery,
             // and one dropped frame is invisible at sixty a second.
             wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
-                gpu.surface.configure(&gpu.device, &gpu.config);
+                live.gpu
+                    .surface
+                    .configure(&live.gpu.device, &live.gpu.config);
                 return Ok(());
             }
             // Occluded means nobody can see it; a timeout means the compositor
@@ -242,30 +324,37 @@ impl RenderBackend for WgpuBackend {
             }
         };
 
+        let ranges = live.pipeline.prepare(
+            &live.gpu.device,
+            &live.gpu.queue,
+            plan.view_projection,
+            &plan.batches,
+            scratch,
+        );
+
         let view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
-        let mut encoder = gpu
+        let mut encoder = live
+            .gpu
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("jidousha frame"),
             });
         {
-            // R1 draws the clear and nothing else. The plan's batches are
-            // carried, sorted and batched by render-core already, and start
-            // being drawn at R2 when there is a pipeline to draw them with.
-            let _pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("jidousha clear"),
+            let clear = linear(plan.clear_color);
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("jidousha sprites"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: f64::from(plan.clear_color.r),
-                            g: f64::from(plan.clear_color.g),
-                            b: f64::from(plan.clear_color.b),
-                            a: f64::from(plan.clear_color.a),
+                            r: f64::from(clear[0]),
+                            g: f64::from(clear[1]),
+                            b: f64::from(clear[2]),
+                            a: f64::from(clear[3]),
                         }),
                         store: wgpu::StoreOp::Store,
                     },
@@ -275,9 +364,32 @@ impl RenderBackend for WgpuBackend {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
+            live.pipeline.bind(&mut pass);
+            // In plan order, one draw call each. No sorting, no merging, no
+            // skipping: those decisions were made in render-core.
+            for (batch, range) in plan.batches.iter().zip(ranges) {
+                let Some(Some(Slot::Ready { bind_group })) = textures.get(batch.texture.0 as usize)
+                else {
+                    // An id the backend does not have. Either it was destroyed
+                    // while still in a texture table, or it is still waiting for
+                    // a device that this branch says has arrived — both are
+                    // engine bugs rather than anything a game can cause, so the
+                    // frame draws without it and says nothing per-frame.
+                    debug_assert!(
+                        false,
+                        "[jidousha] a frame plan named backend texture {} which is not uploaded\n  \
+                         likely cause: destroy_texture was called without TextureTable::forget\n  \
+                         fix: report this with the reproduction — game code cannot cause it",
+                        batch.texture.0
+                    );
+                    continue;
+                };
+                pass.set_bind_group(1, bind_group, &[]);
+                pass.draw(range, 0..1);
+            }
         }
-        gpu.queue.submit(Some(encoder.finish()));
-        gpu.queue.present(frame);
+        live.gpu.queue.submit(Some(encoder.finish()));
+        live.gpu.queue.present(frame);
         Ok(())
     }
 

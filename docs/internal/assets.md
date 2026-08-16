@@ -135,12 +135,13 @@ Implemented (A0):
   the timeline, and a timeline that runs backwards is a bug in the driver, not a
   state to tolerate (§9's no-silent-failure rule). Committing the same tick
   twice is legal and changes nothing.
-- **Still not wired into the frame loop**: M5 built the driver, but it does not
-  yet call `commit` — the store is a resource a game inserts, and the driver has
-  no reason to know it is there until the renderer needs textures at R2. That is
-  where "before the first Update tick of the frame" gets implemented. Until
-  then, a test or an example commits directly, once per simulated frame, which
-  is exactly what `examples/load_from_disk.rs` does.
+- **Wired into the frame loop at R2** (this bullet previously said it was not):
+  the driver's `settle_assets` runs Startup, commits at the frame's tick, and
+  uploads, all before `advance` runs the frame's ticks — which is
+  "before the first Update tick of the frame", implemented. Startup comes first
+  because that is where a game builds its store and asks for its art; without it
+  the first frame would find no store to commit. A game with no `Assets`
+  resource is skipped, which is what most first prototypes are.
 - **Deferred to the replay recording**: the per-tick record of *which* assets
   committed is a change to core's input stream, and lands when that recording
   format does. A0 delivers the half that makes it possible — readiness moves
@@ -187,6 +188,24 @@ Implemented (A0):
 - GPU upload: at commit, newly-Ready textures are handed to render-core, which
   calls `backend.create_texture` at the next frame start. CPU-side pixels are
   then dropped (assets keep only metadata; `capture()`/goldens read from GPU).
+
+Implemented (R2): `Assets::take_uploads` is the hand-off, and it **moves** the
+texels out rather than lending them, which is what makes "then dropped" above a
+property of the code rather than a step someone has to remember (ADR-0016).
+Three details the sketch does not have:
+
+- The queue holds ids and waits. There is frequently no renderer — a window
+  arrives several frames into a program, and a headless run never has one — so
+  nothing may be handed over eagerly or lost while waiting.
+- Ids are queued at `commit`, so upload order follows commit order, which is on
+  the timeline. Backend texture ids are assigned in upload order, so this is
+  what makes two runs of the same script produce the same ids.
+- A texture unloaded between the commit that readied it and the upload is
+  dropped, checked by the generation on the queued id.
+
+The upload happens at the *same* frame's start rather than the next one: the
+driver commits, uploads, then ticks and draws, so art that became ready this
+frame is drawn this frame.
 
 ## 6. Errors (§9 taxonomy applied)
 
@@ -247,6 +266,14 @@ to check into a repository that people clone onto case-insensitive filesystems.
 Implemented (A0): the transcript tests exist in `tests/asset_replay.rs`, minus
 the placeholder half, which needs a renderer (R2). The `should_panic` tests
 locking the unload message are in `tests/asset_ops.rs`.
+
+Implemented (R2): the placeholder half is
+`jidousha-render-core/tests/loading_frames.rs` — a sprite drawn from the first
+frame, whose texture is scripted to arrive at a known tick, asserted on both
+sides of it; a sprite whose texture never arrives, drawing the placeholder
+forever; and two sprites that share the placeholder's batch while waiting and
+stop sharing when their art lands. It lives with the renderer rather than here
+because the placeholder is the renderer's policy; the scripting is this crate's.
 
 Wrinkle for A3: `examples/loading_gate.rs` loads from a `MemorySource`, so its
 paths deliberately do not exist on disk. `tools/check-assets` must skip loads
@@ -324,6 +351,13 @@ Sequenced against renderer milestones (renderer needs textures at R2):
 - **A2 — web loader.** fetch ByteSource, decode-at-commit, HTTP error mapping.
   Exit: sprites example loads over HTTP in the browser; wasm CI covers the
   non-fetch logic, manual check covers the rest (ADR-0005 proxy note).
+
+  Waiting for A2: `examples/sprites.rs` compiles its three PNGs in and decodes
+  them into a `MemorySource` on wasm, because `FileSource` is native-only and
+  there is nothing else yet. It exists so R2 could be *checked* in a real
+  browser rather than asserted to work there. A2 deletes that function and its
+  `cfg`; the rest of the example does not change, which is the `ByteSource`
+  seam doing its job.
 - **A3 — CI + verify integration.** `tools/check-assets`, doctor checks,
   `verify` wired to MemorySource scripting. Exit: a deliberately broken path in
   an example fails CI with the §6 message.

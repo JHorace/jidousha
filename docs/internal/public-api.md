@@ -123,6 +123,13 @@ is maintained by the driver on resize — and `jidousha_render_wgpu::WgpuBackend
 exists but is named only by the composition root. A game never mentions a
 backend, which is the point of ADR-0003.
 
+Built in R2: again nothing new for games, which is the interesting part — every
+item the §2 inventory lists for sprites was already here, and R2 made them draw.
+`Sprite`, `Transform`, `Camera` and `draw_sprites` are unchanged, and
+`examples/sprites.rs` is written entirely out of them. Two additions, both for
+drivers: `create_builtin_textures` and `upload_ready_textures` in render-core,
+which the platform crate calls once a frame. A game never names either.
+
 **Assets (assets doc)**
 ```rust
 Assets::{load_texture, load_bytes, status, all_ready, unload}   // resource
@@ -150,6 +157,12 @@ nothing in a game's logic may depend on texture dimensions (renderer.md §3).
 `AssetFailure` swapped its `reason: String` for a typed `error: AssetError`,
 which is what lets each failure class say something specific; `message()` is
 unchanged.
+
+Built in R2: `Assets::take_uploads` and `TextureUpload`, the renderer's side of
+the store. Driver-facing, like `commit` — a game never calls either. The change
+a game could notice is that `texture_of` returns `None` once the renderer has
+taken the texels (ADR-0016), which matters only to code that reads texels, and
+simulation is forbidden from doing that anyway.
 
 **Input (input doc)**
 ```rust

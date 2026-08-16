@@ -9,10 +9,11 @@
 //! INVARIANT: no filesystem, no network. Bytes arrive through the
 //! [`ByteSource`] seam, which the platform crates implement (assets.md §5).
 //!
-//! Built so far (`docs/internal/assets.md` §8): A0 — the store, the states, the
-//! commit point, and [`MemorySource`]. The native loader (A1), the web loader
-//! (A2), and PNG decoding land next; until then a "texture" is the bytes that
-//! arrived.
+//! Built so far (`docs/internal/assets.md` §8): A0 — the store, the states and
+//! the commit point; A1 — PNG decoding and, in `jidousha-platform`, the native
+//! loader. The web loader is A2's. [`Assets::take_uploads`] is the renderer's
+//! side of the store, added at R2 when there was finally a GPU to hand texels
+//! to.
 //!
 //! ```
 //! use jidousha_assets::{Assets, AssetStatus, MemorySource};
@@ -41,7 +42,7 @@ mod handle;
 mod payload;
 mod source;
 
-pub use assets::{AssetFailure, AssetStatus, Assets};
+pub use assets::{AssetFailure, AssetStatus, Assets, TextureUpload};
 pub use decode::decode_png;
 pub use handle::{AssetHandle, AssetKind, BytesHandle, TextureHandle};
 pub use payload::{AssetError, MAX_TEXTURE_SIZE, Payload, TextureData};

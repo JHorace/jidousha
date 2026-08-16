@@ -566,7 +566,11 @@ agent works one milestone per session-ish; BLOCKED.md protocol applies throughou
   **Verified.** The engine side is tested: the driver's frame logic runs
   headless in unit tests (edges to the first tick only, edges surviving a frame
   that ran no ticks, focus loss releasing held keys, one draw per frame, no
-  spiral of death), and both targets compile in CI. The window itself could not
+  spiral of death), and both targets compile in CI. (R2 split the module in two
+  — `driver/mod.rs` owns the window and translates winit's events, `driver/frame.rs`
+  owns the frame and names no winit type — when the file passed 800 lines. The
+  split falls where the platform actually ends, which is why the frame half can
+  be tested with no display and no GPU.) The window itself could not
   be checked from the environment this was built in — no display, so `run`
   correctly reported `no display to open a window on` and named `headless` as
   the thing to do instead — and **a human has since confirmed the window opens
