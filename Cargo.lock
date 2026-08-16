@@ -29,6 +29,9 @@ dependencies = [
 [[package]]
 name = "jidousha-input"
 version = "0.1.0"
+dependencies = [
+ "jidousha-core",
+]
 
 [[package]]
 name = "jidousha-platform"
