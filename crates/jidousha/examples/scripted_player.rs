@@ -6,11 +6,11 @@
 //! machine — which is what makes "did my change break the jump?" a question a
 //! test can answer.
 //!
-//! Run it: `cargo run -p jidousha-input --example scripted_player`
+//! Run it: `cargo run -p jidousha --example scripted_player`
 
-use jidousha_core::math::Vec2;
-use jidousha_core::{Component, GameConfig, Startup, Time, Update, World, headless};
-use jidousha_input::{Input, InputScript, InputSnapshot, Key, PointerButton};
+use jidousha::prelude::*;
+// Scripting input is a testing facility, not something a shipped game does.
+use jidousha::testing::{InputScript, InputSnapshot};
 
 /// Where the player is, in world units.
 #[derive(Clone, Copy, Debug)]

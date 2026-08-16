@@ -16,9 +16,9 @@
 //! needs, then `query_mut` consumes it. Nothing in the engine helps you do
 //! this, on purpose — plain `collect()` is the one way (agent-practices §5.3).
 //!
-//! Run it: `cargo run -p jidousha-core --example homing`
+//! Run it: `cargo run -p jidousha --example homing`
 
-use jidousha_core::{Component, Entity, World};
+use jidousha::prelude::*;
 
 /// Where something is. Integers keep the example's arithmetic exact.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

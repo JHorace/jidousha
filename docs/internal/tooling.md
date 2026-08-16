@@ -12,7 +12,7 @@ subsystems (`docs/internal/<subsystem>.md`) or the decisions behind the rules
 
 ## 1. What it does
 
-Seven scripts, each answering one question (plus `tools/serve-web`, which drives a
+Nine scripts, each answering one question (plus `tools/serve-web`, which drives a
 browser — §3). All are Python 3.8+, standard library only — no third-party
 import, so they keep working when the package ecosystem is exactly what broke.
 
@@ -25,9 +25,10 @@ import, so they keep working when the package ecosystem is exactly what broke.
 | `tools/check-compile-fail` | Do the errors that must be compile errors still say the right thing? | 0 ok · 1 drifted · 2 harness broke |
 | `tools/verify` | What did the game actually do, with nobody watching? | 0 verified · 1 the example's assertions failed · 2 tooling/env fault |
 | `tools/check-assets` | Does every asset path in the code name a file that exists? | 0 all resolve · 1 a reference is broken · 2 the check could not run |
+| `tools/gen-api-doc` | Is `docs/api/` what the facade actually says? | 0 written/current · 1 stale or over budget · 2 could not run |
+| `tools/check-api-coverage` | Is every public item shown in an example, written against the facade? | 0 covered · 1 a gap or a breach · 2 could not run |
 
-Not built yet (later milestones): `tools/gen-api-doc` (F0), `tools/check-tags`,
-`tools/check-headers`.
+Not built yet: `tools/check-tags`, `tools/check-headers`.
 
 ## 2. Core data flow
 
@@ -38,6 +39,8 @@ agent ──> tools/test ──> phase: tool-selftest  (python -m unittest, tool
                          phase: doc-test       (cargo test --doc)
                          phase: compile-fail   (tools/check-compile-fail)
                          phase: check-assets   (tools/check-assets)
+                         phase: check-api-coverage (tools/check-api-coverage)
+                         phase: api-doc        (tools/gen-api-doc --check)
                          phase: example:<name> (cargo run --example, one per example)
                               │
                               ├─> terminal (advisory)
@@ -148,6 +151,29 @@ a row (stop rule printed, `failure-streak.json` count 2).
   snippets lock rustc's wording plus the `IntoSystem<Phase>` mention. The
   `&mut T`-in-a-Draw-query case — the mistake ADR-0008 actually predicts — does
   show the engine's sentence.
+- **`docs/api/` is generated, never written.** `tools/gen-api-doc` builds it
+  from the facade's own `pub use` lists plus the prose in `tools/api-doc/`, so an
+  item that is not re-exported cannot appear in the documentation and one that is
+  cannot be forgotten. CI runs `--check`, which fails when the committed file
+  differs — stale documentation is worse than none, because an agent believes it.
+  Not rustdoc JSON, which needs nightly while `rust-toolchain.toml` pins stable;
+  summaries are lifted from the `///` line above each definition, which is a
+  bounded text problem with tests rather than a second toolchain.
+- **The API document has a token budget, and it is enforced.** 25k
+  (public-api.md §4), counted at roughly four characters a token because there is
+  no tokenizer in the standard library and the budget is an order-of-magnitude
+  guard. Growth past it is a curation conversation, not a bigger doc. It also
+  refuses implementation vocabulary — internal crate names, the backend seam,
+  "archetype" — in every section except the testing reference, which is allowed
+  to name a backend because a golden image has to be drawn by something.
+- **Script entry points get end-to-end tests of their failure paths.** Four
+  milestones running, the surviving mutation was the same one: the judgement at
+  the top of a script — "is this a pass?", "should this exit 1?" — is the part
+  that unit tests over its helpers never touch. `tools/verify` (I2) reported
+  silence as success, `verdict_status` (R4) was unreachable, `check-assets` (A3)
+  could find problems and return 0, and `gen-api-doc` (F0) could skip its
+  staleness check entirely. Write the test that runs `main` and asserts the
+  non-zero exit, at the same time as the script.
 - **A mistyped asset path fails before anything runs.** `tools/check-assets`
   extracts the string literals from `load_texture`/`load_bytes` call sites and
   checks each against the asset root, case-strictly, walking each path component

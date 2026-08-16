@@ -16,11 +16,12 @@ tools/test                  # test wrapper — ALWAYS use this, not bare cargo t
 tools/doctor                # environment self-diagnosis
 cargo clippy -- -D warnings # lint; warnings are errors
 cargo fmt                   # format (also runs via hook)
-cargo run --example <name>  # run a canonical example
+cargo run -p jidousha --example <name>   # run a canonical example
 tools/verify <example>      # headless deterministic run + assertions + a captured PNG
 tools/check-assets          # every asset path in the code names a file that exists
 tools/serve-web <example>   # build for web, serve it; --check drives a browser
-tools/gen-api-doc           # regenerate docs/api/ (CI fails if stale)  [TODO: build]
+tools/gen-api-doc           # regenerate docs/api/ (CI fails if stale)
+tools/check-api-coverage    # every public item is shown in an example
 ```
 
 ## When builds/tests fail

@@ -11,7 +11,7 @@
 //! below PLAY and it goes behind instead. That choice belongs to the game
 //! precisely because there is no separate debug pass to overrule it.
 //!
-//! Run it: `cargo run -p jidousha-platform --example prototype_kit`
+//! Run it: `cargo run -p jidousha --example prototype_kit`
 //! On the web: `tools/serve-web prototype_kit`
 //! Check it:  `tools/verify prototype_kit`
 //!
@@ -22,14 +22,8 @@
 //! file — the first example to be a directory rather than one file, because the
 //! game and the check on the game are two things to read.
 
-use jidousha_assets::Assets;
-use jidousha_core::{
-    App, Color, Component, Depth, Draw, DrawCtx, GameConfig, Rect, Startup, Time, Transform,
-    Update, World,
-    math::{Radians, Vec2, sin_cos},
-};
-use jidousha_input::{Input, Key};
-use jidousha_render_core::{Camera, Sprite, Submit, TextStyle, draw_sprites};
+use jidousha::math::sin_cos;
+use jidousha::prelude::*;
 
 /// Where the art lives, relative to the workspace root (assets.md §2).
 const ASSET_ROOT: &str = "assets";
@@ -111,7 +105,7 @@ fn register(app: &mut App) {
 mod capture;
 mod verify;
 
-fn main() -> Result<(), jidousha_platform::RunError> {
+fn main() -> Result<(), RunError> {
     // `tools/verify` runs this same binary with `--verify`: same systems, same
     // config, no window, scripted input, and assertions instead of a person.
     if std::env::args().any(|argument| argument == "--verify") {
@@ -119,7 +113,7 @@ fn main() -> Result<(), jidousha_platform::RunError> {
         return Ok(());
     }
     println!("W and S move the left paddle. close the window to quit");
-    jidousha_platform::run(config(), register)
+    run(config(), register)
 }
 
 fn set_the_scene(world: &mut World) {
@@ -371,5 +365,5 @@ fn draw_the_readout(ctx: &mut DrawCtx) {
 /// One line, no `cfg` — see `examples/sprites.rs` for why that is worth
 /// remarking on.
 fn art() -> Assets {
-    Assets::new(jidousha_platform::asset_source(ASSET_ROOT))
+    Assets::new(asset_source(ASSET_ROOT))
 }

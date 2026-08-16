@@ -11,18 +11,13 @@
 //! `Transform` and a `Sprite`, registers `draw_sprites`, and that is the whole
 //! of it (renderer.md §2).
 //!
-//! Run it: `cargo run -p jidousha-platform --example sprites`
+//! Run it: `cargo run -p jidousha --example sprites`
 //! On the web: `tools/serve-web sprites`
 //!
 //! DELIBERATE: built but not run by `tools/test`, like the other windowed
 //! examples — it opens a window and waits for a person (tooling.md).
 
-use jidousha_assets::Assets;
-use jidousha_core::{
-    Color, Component, GameConfig, Rect, Startup, Time, Transform, Update, World,
-    math::{Radians, Vec2, sin_cos},
-};
-use jidousha_render_core::{Camera, Sprite, draw_sprites};
+use jidousha::prelude::*;
 
 /// Where the art lives, relative to the workspace root (assets.md §2).
 const ASSET_ROOT: &str = "assets";
@@ -41,8 +36,8 @@ struct Orbit {
 }
 impl Component for Orbit {}
 
-fn main() -> Result<(), jidousha_platform::RunError> {
-    jidousha_platform::run(
+fn main() -> Result<(), RunError> {
+    run(
         GameConfig {
             title: "jidousha — sprites",
             ..GameConfig::default()
@@ -53,7 +48,7 @@ fn main() -> Result<(), jidousha_platform::RunError> {
             app.add_system(Update, walk_the_circle);
             // The provided Draw system: every entity with a Transform and a
             // Sprite, submitted in query order (renderer.md §2).
-            app.add_system(jidousha_core::Draw, draw_sprites);
+            app.add_system(jidousha::Draw, draw_sprites);
         },
     )
 }
@@ -180,5 +175,5 @@ fn walk_the_circle(world: &mut World) {
 /// the second body went away without the rest of the example changing, which is
 /// the `ByteSource` seam doing exactly what it was for (assets.md §5).
 fn art() -> Assets {
-    Assets::new(jidousha_platform::asset_source(ASSET_ROOT))
+    Assets::new(asset_source(ASSET_ROOT))
 }

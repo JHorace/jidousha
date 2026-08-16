@@ -5,7 +5,7 @@
 //! tick. The gate itself is optional; the note at the bottom explains why most
 //! games should not write one.
 //!
-//! Run it: `cargo run -p jidousha-assets --example loading_gate`
+//! Run it: `cargo run -p jidousha --example loading_gate`
 //!
 //! DELIBERATE: this example drives the commit point by hand. The frame loop
 //! arrives with the platform crate (M5) and will call `commit` before the
@@ -16,8 +16,7 @@
 //! `tools/check-assets` must not treat them as broken asset references
 //! (assets.md §7).
 
-use jidousha_assets::{AssetStatus, Assets, MemorySource, TextureHandle};
-use jidousha_core::{Component, GameConfig, Resource, Startup, Time, Update, World, headless};
+use jidousha::prelude::*;
 
 /// What the game is doing right now.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

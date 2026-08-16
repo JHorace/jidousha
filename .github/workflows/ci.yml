@@ -118,6 +118,20 @@ jobs:
       # still compiling.
       - run: python tools/check-assets
 
+  api:
+    name: public API surface
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # Every public item is shown in an example, no example reaches past the
+      # facade, and docs/api/ is what the facade generates — stale documentation
+      # is worse than none, because an agent believes it (public-api.md §4).
+      - run: python tools/check-api-coverage
+      - run: python tools/gen-api-doc --check
+
   claude-md:
     name: CLAUDE.md size
     runs-on: ubuntu-latest

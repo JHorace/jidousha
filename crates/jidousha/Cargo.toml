@@ -7,6 +7,17 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+# Every crate a game's surface is drawn from. This is the only crate that
+# depends on all of them, and nothing depends on it (public-api.md §1).
+jidousha-core = { path = "../jidousha-core" }
+jidousha-assets = { path = "../jidousha-assets" }
+jidousha-input = { path = "../jidousha-input" }
+jidousha-render-core = { path = "../jidousha-render-core" }
+jidousha-platform = { path = "../jidousha-platform" }
+# For `testing::WgpuBackend` only — a golden image has to come from somewhere,
+# and there is exactly one thing that makes pixels. No `wgpu` type crosses this
+# edge; `WgpuBackend` is opaque and speaks engine types (ADR-0003).
+jidousha-render-wgpu = { path = "../jidousha-render-wgpu" }
 
 [lints]
 workspace = true

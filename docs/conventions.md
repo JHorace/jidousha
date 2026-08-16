@@ -62,7 +62,7 @@ the enforcement. Every entry here is assumed by all subsystem docs.
 
 - glam types (`Vec2`, `Vec3`, `Mat4`) with `scalar-math`; engine newtypes for
   units (`Radians`, `Seconds`). Std float trig is clippy-banned engine-wide —
-  use `jidousha_core::math::{sin_cos, atan2, ...}` (ADR-0009).
+  use `jidousha::math::{sin_cos, atan2, ...}` (ADR-0009).
 
 ## Error messages
 

@@ -611,6 +611,14 @@ dependencies = [
 [[package]]
 name = "jidousha"
 version = "0.1.0"
+dependencies = [
+ "jidousha-assets",
+ "jidousha-core",
+ "jidousha-input",
+ "jidousha-platform",
+ "jidousha-render-core",
+ "jidousha-render-wgpu",
+]
 
 [[package]]
 name = "jidousha-assets"

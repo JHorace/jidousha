@@ -11,13 +11,12 @@
 //! a stutter changes nothing about which color belongs to which tick. Resize
 //! the window and it should keep filling it, without stretching or tearing.
 //!
-//! Run it: `cargo run -p jidousha-platform --example window_clear`
+//! Run it: `cargo run -p jidousha --example window_clear`
 //!
 //! DELIBERATE: built but not run by `tools/test`, like `window_blank` — it
 //! opens a window and waits for a person (tooling.md).
 
-use jidousha_core::{Color, GameConfig, Startup, Time, Update, World};
-use jidousha_render_core::Camera;
+use jidousha::prelude::*;
 
 /// How long one trip around the color wheel takes, in simulated seconds.
 const CYCLE: f32 = 6.0;
@@ -60,8 +59,8 @@ fn cycle_the_color(world: &mut World) {
 /// terminal as well as on screen.
 fn report_resizes(world: &mut World) {
     #[derive(Debug)]
-    struct LastSeen(jidousha_render_core::PhysicalSize);
-    impl jidousha_core::Resource for LastSeen {}
+    struct LastSeen(PhysicalSize);
+    impl Resource for LastSeen {}
 
     let viewport = world.resource::<Camera>().viewport;
     match world.find_resource::<LastSeen>() {
@@ -74,7 +73,7 @@ fn report_resizes(world: &mut World) {
 }
 
 fn main() {
-    let result = jidousha_platform::run(
+    let result = run(
         GameConfig {
             title: "window clear",
             ..GameConfig::default()

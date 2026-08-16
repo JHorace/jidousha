@@ -5,12 +5,9 @@
 //! chase a drifting anchor; the run asserts exact positions, because the same
 //! seed and the same systems always produce them.
 //!
-//! Run it: `cargo run -p jidousha-core --example headless_sim`
+//! Run it: `cargo run -p jidousha --example headless_sim`
 
-use jidousha_core::math::{Radians, Vec2, rotate};
-use jidousha_core::{
-    Component, Draw, DrawCtx, GameConfig, Rng, Startup, Time, Update, With, World, headless,
-};
+use jidousha::prelude::*;
 
 /// Where something is, in world units.
 #[derive(Clone, Copy, Debug)]

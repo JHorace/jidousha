@@ -41,6 +41,8 @@ check_claude_md = load_tool("check-claude-md")
 dep_count = load_tool("dep-count")
 verify = load_tool("verify")
 check_assets = load_tool("check-assets")
+gen_api_doc = load_tool("gen-api-doc")
+api_coverage = load_tool("check-api-coverage")
 
 
 class DoctorVerdictTest(unittest.TestCase):
@@ -359,6 +361,233 @@ class CheckAssetsTest(unittest.TestCase):
         for source in check_assets.rust_sources(root):
             problems += check_assets.check_file(root, source)
         self.assertEqual(problems, [])
+
+
+FACADE = """
+// --- App and lifecycle ---------------------------------------------------
+pub use jidousha_core::{App, Draw, headless};
+
+// --- Render ----------------------------------------------------------------
+pub use jidousha_render_core::{Camera, Sprite};
+pub use jidousha_core::math;
+
+pub mod prelude {
+    pub use crate::{App, Camera, Draw, Sprite, headless};
+}
+
+pub mod testing {
+    pub use jidousha_input::{InputScript};
+}
+"""
+
+
+class GenApiDocTest(unittest.TestCase):
+    def test_the_reference_is_grouped_by_the_facades_own_banners(self):
+        # The grouping is the facade's, not a list kept in the generator: move
+        # an item between sections there and the documentation follows.
+        groups = gen_api_doc.facade_exports(FACADE)
+        self.assertEqual([title for title, _ in groups], ["App and lifecycle", "Render"])
+        self.assertEqual(groups[0][1], ["App", "Draw", "headless"])
+
+    def test_a_single_item_re_export_is_found_too(self):
+        # `pub use jidousha_core::math;` has no braces and would otherwise be
+        # silently absent from the documentation.
+        groups = dict(gen_api_doc.facade_exports(FACADE))
+        self.assertIn("math", groups["Render"])
+
+    def test_the_prelude_is_not_counted_as_a_second_surface(self):
+        # It re-exports the same names; listing them twice would say nothing.
+        names = [name for _, group in gen_api_doc.facade_exports(FACADE) for name in group]
+        self.assertEqual(len(names), len(set(names)))
+
+    def test_the_testing_module_is_read_separately(self):
+        self.assertEqual(gen_api_doc.testing_exports(FACADE), ["InputScript"])
+
+    def test_a_summary_is_the_whole_first_sentence(self):
+        # Doc comments wrap at eighty columns, so taking the first *line* gives
+        # a reference full of summaries that stop mid-clause.
+        block = ["What a Draw system is called with: the world to read, and the", "sink to draw into.", "", "More prose."]
+        self.assertEqual(
+            gen_api_doc.first_sentence(block),
+            "What a Draw system is called with: the world to read, and the sink to draw into",
+        )
+
+    def test_a_summary_stops_at_the_end_of_the_first_sentence(self):
+        block = ["A duration, in seconds.", "Not milliseconds, and not ticks."]
+        self.assertEqual(gen_api_doc.first_sentence(block), "A duration, in seconds")
+
+    def test_intra_doc_link_brackets_are_stripped(self):
+        # They mean nothing in a markdown file an agent reads.
+        self.assertEqual(gen_api_doc.first_sentence(["Yields `()`, like [`With`]."]),
+                         "Yields `()`, like `With`")
+
+    def test_a_summary_is_taken_from_the_doc_comment_above_the_definition(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "thing.rs"
+            source.write_text(
+                "/// A duration, in seconds.\n"
+                "#[derive(Clone)]\n"
+                "pub struct Seconds(pub f32);\n"
+            )
+            self.assertEqual(
+                gen_api_doc.doc_summaries([source]), {"Seconds": "A duration, in seconds"}
+            )
+
+    def test_an_undocumented_item_simply_has_no_summary(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "thing.rs"
+            source.write_text("pub struct Bare;\n")
+            self.assertEqual(gen_api_doc.doc_summaries([source]), {})
+
+    def test_implementation_vocabulary_is_refused(self):
+        self.assertIn("jidousha_core", gen_api_doc.forbidden_words("see jidousha_core::math"))
+        self.assertIn("archetype", gen_api_doc.forbidden_words("stored in an Archetype"))
+        self.assertEqual(gen_api_doc.forbidden_words("a plain sentence"), [])
+
+    def test_the_testing_reference_may_name_a_backend_and_nothing_else_may(self):
+        # A golden image has to be drawn by something, and naming that thing is
+        # the point of the entry. Exempting a named block beats exempting the
+        # words globally, which would let them back into the game surface.
+        text = (
+            "## Reference\n\n### Render\n\n- **`Sprite`**\n\n"
+            "### Testing (`jidousha::testing`)\n\n- **`WgpuBackend`** — backed by wgpu\n\n"
+            "## Conventions\n\nplain prose\n"
+        )
+        self.assertEqual(gen_api_doc.forbidden_words(text), [])
+        leaked = text.replace("- **`Sprite`**", "- **`Sprite`** — see wgpu")
+        self.assertIn("wgpu", gen_api_doc.forbidden_words(leaked))
+
+    def test_the_budget_is_counted_and_the_committed_document_is_under_it(self):
+        # The budget is the point: the whole surface has to fit in a
+        # game-writing agent's context beside the game (public-api.md §4).
+        root = Path(__file__).resolve().parents[2]
+        text = (root / "docs/api/jidousha-api.md").read_text(encoding="utf-8")
+        self.assertLess(gen_api_doc.token_estimate(text), gen_api_doc.TOKEN_BUDGET)
+
+    def test_the_committed_document_is_what_the_facade_generates(self):
+        # The same thing CI checks, so a stale document fails here first.
+        self.assertEqual(gen_api_doc.main(["gen-api-doc", "--check"]), 0)
+
+    def test_a_stale_document_fails_the_check(self):
+        # The other half, and the one that matters: without it the staleness
+        # branch could be deleted and every test above would still pass. A
+        # document that silently stops matching the code is worse than none,
+        # because an agent believes it.
+        original = gen_api_doc.OUTPUT
+        with tempfile.TemporaryDirectory() as directory:
+            stale = Path(directory) / "jidousha-api.md"
+            stale.write_text("# not what the facade generates\n")
+            gen_api_doc.OUTPUT = stale
+            try:
+                out, err = io.StringIO(), io.StringIO()
+                with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                    code = gen_api_doc.main(["gen-api-doc", "--check"])
+                self.assertEqual(code, 1)
+                self.assertIn("stale", err.getvalue())
+            finally:
+                gen_api_doc.OUTPUT = original
+
+    def test_a_document_over_budget_fails(self):
+        # The budget is the point (public-api.md §4): growth past it is a
+        # curation conversation, not a bigger doc. A budget nothing enforces is
+        # a number in a comment.
+        original = gen_api_doc.TOKEN_BUDGET
+        gen_api_doc.TOKEN_BUDGET = 1
+        try:
+            out, err = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                code = gen_api_doc.main(["gen-api-doc", "--check"])
+            self.assertEqual(code, 1)
+            self.assertIn("over the 1 budget", err.getvalue())
+        finally:
+            gen_api_doc.TOKEN_BUDGET = original
+
+
+class ApiCoverageTest(unittest.TestCase):
+    def test_the_item_list_comes_from_the_facade(self):
+        self.assertEqual(
+            api_coverage.facade_items(FACADE),
+            ["App", "Camera", "Draw", "headless", "math", "Sprite"],
+        )
+
+    def test_an_item_named_in_an_example_is_covered(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "game.rs"
+            source.write_text("let s = Sprite::new(handle);\n")
+            self.assertEqual(api_coverage.uncovered(["Sprite"], [source]), [])
+
+    def test_an_item_no_example_names_is_reported(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "game.rs"
+            source.write_text("let s = 1;\n")
+            self.assertEqual(api_coverage.uncovered(["Sprite"], [source]), ["Sprite"])
+
+    def test_a_partial_word_does_not_count_as_coverage(self):
+        # `Rect` must not be matched by `Rectangle`, or the check passes on
+        # items nothing demonstrates.
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "game.rs"
+            source.write_text("struct Rectangle;\n")
+            self.assertEqual(api_coverage.uncovered(["Rect"], [source]), ["Rect"])
+
+    def test_an_exempt_item_is_not_required_to_appear(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "game.rs"
+            source.write_text("nothing\n")
+            self.assertEqual(api_coverage.uncovered(["Submit"], [source]), [])
+
+    def test_every_exemption_carries_a_reason(self):
+        # The reason is the whole value of the list: without one, an exemption
+        # is indistinguishable from giving up on an item.
+        for item, reason in api_coverage.EXEMPT.items():
+            self.assertTrue(reason.strip(), f"{item} has no reason")
+
+    def test_an_example_naming_an_internal_crate_is_reported(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "game.rs"
+            source.write_text("use jidousha::prelude::*;\nuse jidousha_core::World;\n")
+            found = api_coverage.facade_breaches([source])
+            self.assertEqual([(line, crate) for _, line, crate in found], [(2, "jidousha_core")])
+
+    def test_the_facade_itself_is_not_mistaken_for_an_internal_crate(self):
+        # `jidousha::prelude` contains no internal crate name, and a check that
+        # thought otherwise would fail on every correct example.
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "game.rs"
+            source.write_text("use jidousha::prelude::*;\nuse jidousha::testing::InputScript;\n")
+            self.assertEqual(api_coverage.facade_breaches([source]), [])
+
+    def test_the_committed_tree_is_covered_and_reaches_past_nothing(self):
+        self.assertEqual(api_coverage.main(["check-api-coverage"]), 0)
+
+    def test_a_breach_makes_the_whole_run_fail(self):
+        # The wiring between finding a problem and saying so with a non-zero
+        # exit. Every check above could pass while the script returned 0 and CI
+        # stayed green — which is exactly the escape the last three milestones
+        # each produced.
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            facade = repo / "crates/jidousha/src"
+            facade.mkdir(parents=True)
+            (facade / "lib.rs").write_text(
+                "// --- ECS ---\npub use jidousha_core::{World};\npub mod prelude {}\n"
+            )
+            examples = repo / "crates/jidousha/examples"
+            examples.mkdir(parents=True)
+            (examples / "game.rs").write_text("use jidousha_core::World;\n")
+            out, err = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                code = api_coverage.main(["check-api-coverage", "--root", str(repo)])
+            self.assertEqual(code, 1)
+            self.assertIn("reaches past the facade", err.getvalue())
+
+    def test_a_run_with_nothing_to_check_is_a_tooling_fault(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out, err = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                code = api_coverage.main(["check-api-coverage", "--root", directory])
+            self.assertEqual(code, 2)
+            self.assertIn("found nothing to check", err.getvalue())
 
 
 class DoctorAssetsTest(unittest.TestCase):
