@@ -468,6 +468,40 @@ class GenApiDocTest(unittest.TestCase):
         # The same thing CI checks, so a stale document fails here first.
         self.assertEqual(gen_api_doc.main(["gen-api-doc", "--check"]), 0)
 
+    def test_a_stale_document_fails_the_check(self):
+        # The other half, and the one that matters: without it the staleness
+        # branch could be deleted and every test above would still pass. A
+        # document that silently stops matching the code is worse than none,
+        # because an agent believes it.
+        original = gen_api_doc.OUTPUT
+        with tempfile.TemporaryDirectory() as directory:
+            stale = Path(directory) / "jidousha-api.md"
+            stale.write_text("# not what the facade generates\n")
+            gen_api_doc.OUTPUT = stale
+            try:
+                out, err = io.StringIO(), io.StringIO()
+                with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                    code = gen_api_doc.main(["gen-api-doc", "--check"])
+                self.assertEqual(code, 1)
+                self.assertIn("stale", err.getvalue())
+            finally:
+                gen_api_doc.OUTPUT = original
+
+    def test_a_document_over_budget_fails(self):
+        # The budget is the point (public-api.md §4): growth past it is a
+        # curation conversation, not a bigger doc. A budget nothing enforces is
+        # a number in a comment.
+        original = gen_api_doc.TOKEN_BUDGET
+        gen_api_doc.TOKEN_BUDGET = 1
+        try:
+            out, err = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                code = gen_api_doc.main(["gen-api-doc", "--check"])
+            self.assertEqual(code, 1)
+            self.assertIn("over the 1 budget", err.getvalue())
+        finally:
+            gen_api_doc.TOKEN_BUDGET = original
+
 
 class ApiCoverageTest(unittest.TestCase):
     def test_the_item_list_comes_from_the_facade(self):
@@ -525,6 +559,35 @@ class ApiCoverageTest(unittest.TestCase):
 
     def test_the_committed_tree_is_covered_and_reaches_past_nothing(self):
         self.assertEqual(api_coverage.main(["check-api-coverage"]), 0)
+
+    def test_a_breach_makes_the_whole_run_fail(self):
+        # The wiring between finding a problem and saying so with a non-zero
+        # exit. Every check above could pass while the script returned 0 and CI
+        # stayed green — which is exactly the escape the last three milestones
+        # each produced.
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            facade = repo / "crates/jidousha/src"
+            facade.mkdir(parents=True)
+            (facade / "lib.rs").write_text(
+                "// --- ECS ---\npub use jidousha_core::{World};\npub mod prelude {}\n"
+            )
+            examples = repo / "crates/jidousha/examples"
+            examples.mkdir(parents=True)
+            (examples / "game.rs").write_text("use jidousha_core::World;\n")
+            out, err = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                code = api_coverage.main(["check-api-coverage", "--root", str(repo)])
+            self.assertEqual(code, 1)
+            self.assertIn("reaches past the facade", err.getvalue())
+
+    def test_a_run_with_nothing_to_check_is_a_tooling_fault(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out, err = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                code = api_coverage.main(["check-api-coverage", "--root", directory])
+            self.assertEqual(code, 2)
+            self.assertIn("found nothing to check", err.getvalue())
 
 
 class DoctorAssetsTest(unittest.TestCase):
