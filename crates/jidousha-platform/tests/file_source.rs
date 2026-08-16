@@ -52,6 +52,17 @@ impl Drop for Root {
     }
 }
 
+/// Whether this filesystem tells `a.txt` from `A.txt`.
+///
+/// Asked rather than assumed. Linux says yes, Windows says no, and macOS says
+/// whichever the volume was formatted for — so a `cfg` on the operating system
+/// would be wrong on macOS and would go on being wrong silently. Writing a file
+/// and trying to open it by another name is the actual question.
+fn case_sensitive(root: &Root) -> bool {
+    root.write("case-probe.txt", b"probe");
+    std::fs::read(root.path().join("CASE-PROBE.TXT")).is_err()
+}
+
 /// A PNG of one flat colour.
 fn png(width: u32, height: u32, rgba: [u8; 4]) -> Vec<u8> {
     let mut out = Vec::new();
@@ -186,7 +197,18 @@ fn a_name_that_differs_only_in_case_is_refused_and_the_real_name_is_named() {
 fn the_exact_name_still_loads_when_a_near_miss_exists() {
     // The case check must not become a case *ban*: a directory holding both
     // `Hero.png` and `hero.png` is legal, and each should load itself.
+    //
+    // Only where the filesystem can hold both. On Windows — and on a
+    // case-insensitive macOS volume — writing the second name overwrites the
+    // first, so the situation under test cannot be built, and a failure there
+    // would say something about `std::fs` rather than about the loader. The
+    // *interesting* case test, the one that refuses a near miss, runs
+    // everywhere and does pass on Windows.
     let root = Root::new("both");
+    if !case_sensitive(&root) {
+        println!("skipped: this filesystem cannot hold Hero.png beside hero.png");
+        return;
+    }
     root.write("art/Hero.png", &png(1, 1, [1, 1, 1, 255]));
     root.write("art/hero.png", &png(2, 2, [2, 2, 2, 255]));
 
