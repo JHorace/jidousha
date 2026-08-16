@@ -676,14 +676,34 @@ mergeable, tested, green CI on all three targets.
   where a backend is "windowed but capturing". The refusal on the windowed path
   names the constructor that can answer, which is the whole cost of the split.
 
-  **What the mutation checks said.** Twenty-two deliberate breakages, all
-  twenty-two caught. The interesting ones were in the comparison rather than in
-  the rendering: dropping alpha from the per-pixel comparison, comparing only the
-  overlap of two differently-sized images, and returning `matched: true` on a
-  size mismatch all die, because each has a test written against the specific
-  wrong answer it produces. Moving the textured quad half a world unit — three
-  pixels — moves 1.97% of the frame, against a 0.5% threshold, so the tolerance
-  has room to absorb driver rounding without absorbing a regression.
+  **What the mutation checks said.** Twenty-five deliberate breakages, twenty-two
+  caught first time. Most of the interesting ones are in the comparison rather
+  than in the rendering — dropping alpha from the per-pixel test, comparing only
+  the overlap of two differently-sized images, returning `matched: true` on a
+  size mismatch — because each has a test written against the specific wrong
+  answer it produces. On the rendering side, taking `COPY_SRC` off the offscreen
+  texture and making it linear instead of sRGB both die, the second one against
+  the clear-colour test rather than against any reference file.
+
+  Calibration, for the record: moving the textured quad half a world unit —
+  three pixels — moves 1.97% of the frame against a 0.5% threshold. The
+  tolerance has room to absorb driver rounding without absorbing a regression.
+
+  Two escapes, both fixed. `Tolerance::EXACT` could be widened to 8 levels and
+  10% of pixels with nothing noticing: the render-twice stability check passes
+  either way, because those two renders *are* identical, so the constant was
+  load-bearing and untested. And the zero-sized capture guard could be deleted,
+  so a 0×0 backend now has a test that it refuses by name.
+
+  **One escape is not a test gap, and is worth naming.** The verify run's
+  cross-backend check — the world must do the same thing on the null backend and
+  on the GPU — can be disabled with nothing noticing, because in a correct engine
+  the two never disagree. Mutation testing cannot kill a guard whose failure
+  condition the codebase is currently incapable of producing. That is a different
+  finding from I2's, where three of four escapes meant the code had no reader:
+  here the code has a reader, and the reader has nothing to complain about yet.
+  Deleting it would remove the only thing that would catch a backend reaching
+  back into simulation, which is precisely the bug §1 exists to prevent.
 
 ## 12. Deferred (tracked, not designed)
 
