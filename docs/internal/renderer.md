@@ -1,7 +1,8 @@
 # Renderer basics — design and contracts
 
-Status: **design draft, pre-implementation.** Becomes the living internal doc for
-`jidousha-render-core` / `jidousha-render-wgpu` once implementation starts.
+Status: **living doc for `jidousha-render-core`; R0 implemented, R1–R4 still
+design.** Sections carry `Implemented (R0)` notes where code exists; everything
+else is design ahead of the code. `jidousha-render-wgpu` is untouched until R1.
 Same conventions as the core doc: **CONTRACT** items are binding and tested.
 
 Inherits: backend seam + WebGL2 envelope (ADR-0003), `DrawCtx` and Draw-phase
@@ -64,6 +65,25 @@ fn draw_game(ctx: &mut DrawCtx) {
 - Exact public signatures are finalized in the API pass; shapes above are the
   design intent.
 
+Implemented (R0):
+
+- `ctx.sprite(&Transform, &Sprite)` is real, and arrives through the `Submit`
+  extension trait rather than as an inherent method. The sketch above quietly
+  assumed `DrawCtx`, `Transform`, and `Sprite` could all see each other; they
+  cannot — `DrawCtx` lives in core (ADR-0008) and a sprite names a texture asset
+  that core is forbidden to depend on. **ADR-0015** resolves it: core owns the
+  sink and an opaque `TextureId`, render-core owns everything that knows what a
+  texture is. Games get `Submit` from the prelude and never meet the seam.
+- Everything drawn is a `Quad` — four world-space corners, four UVs, a tint, a
+  texture, a depth. Sprites expand into one; rectangles, lines, circles, and
+  glyphs will expand into more of the same (R3), so sorting and batching never
+  grow a second case.
+- `draw_sprites` is here and registered explicitly, as designed.
+- `rect`, `line`, `circle`, and `text` are **not** here. R0's bullet in §11
+  listed transcript tests for text glyph expansion, but the expansion itself —
+  and the embedded font it needs — is R3's, and testing an expansion that does
+  not exist is not a thing that can be done. §11 is corrected below.
+
 **Ordering.** Per conventions: stable sort by (`layer: i16`, `z: f32`,
 submission order). CONTRACT: identical submission streams produce identical
 sorted order and identical batches — the submission transcript (§9) is
@@ -72,6 +92,14 @@ deterministic and diffable.
 **Transparency.** v1 renders everything alpha-blended, back-to-front by the sort
 key, no depth buffer — the painter's algorithm, correct for 2D and maximally
 simple. PERF-revisit only with evidence.
+
+Implemented (R0): the sort is by (`layer`, `z`, submission index) with the index
+compared explicitly rather than relying on the sort being stable — the tie-break
+is a CONTRACT, and a contract should not rest on which algorithm the standard
+library happens to use. Batching merges only *neighbouring* quads that share a
+texture: reordering to merge more would be exactly the cleverness the painter's
+algorithm forbids, so a game that interleaves two textures pays a batch each,
+and can see that it does.
 
 ## 3. Data model
 
@@ -96,6 +124,14 @@ pub struct Sprite {               // component, jidousha-render-core
 
 - `Transform` lives in core (shared with physics-ish gameplay), `Sprite` in
   render-core. Both are plain data with `Default`.
+
+Implemented (R0): `Transform` has a `Default` — the origin, unrotated, natural
+size — and `Sprite` does **not**, because there is no meaningful default texture
+(ADR-0012: a `Default` must mean something). `Sprite::new(handle)` is the one
+constructor, and `..Sprite::new(handle)` is how a game states the rest. `region`
+is in normalized 0..1 coordinates rather than texels, since the CONTRACT below
+forbids reading texture dimensions — a texel rectangle would require exactly the
+lookup that is banned.
 - 3D headroom (ADR-0001): `Transform.pos` staying `Vec2`+`z` is a DELIBERATE 2D
   ergonomic choice; the eventual 3D transform is a separate future type + ADR,
   not a hidden third component on this one.
@@ -128,6 +164,22 @@ pub struct Camera {
 - Draw systems read the camera; render-core builds one view-proj matrix per
   frame from it (rotation via engine `sin_cos`, ADR-0009).
 
+Implemented (R0):
+
+- `Camera` carries a fourth field the sketch does not have: `viewport`, the
+  surface size in pixels. Without it `world_to_screen(Vec2) -> Vec2` cannot be
+  written — the aspect ratio has to come from somewhere. The driver maintains it
+  (the platform crate will write it on resize); the default 1280×720 gives a
+  headless run a definite aspect, which is what keeps a transcript identical
+  between a test and a windowed run of the same size.
+- The projection matrix is written out by hand rather than calling glam's
+  `orthographic_*` helpers, which are deprecated as of glam 0.33 and moving.
+  Six divisions we own beat an upstream API whose depth convention could change
+  under us — the same reasoning ADR-0009 applies to trigonometry.
+- A zero-sized viewport (a minimized window) reports an aspect of 1.0 and
+  `screen_to_world` returns the camera center, rather than dividing by zero.
+  A wrong answer nobody can see beats a NaN that spreads into gameplay.
+
 ## 5. Textures and the asset boundary
 
 - `TextureHandle` is issued by `jidousha-assets` (its design doc owns loading,
@@ -141,6 +193,16 @@ pub struct Camera {
   agent-visible, screenshot-visible, transcript-visible signal.
 - CONTRACT: placeholder rendering is bit-identical across backends (it's a
   built-in embedded texture, not backend-generated).
+
+Implemented (R0): the policy is one line of `TextureTable::resolve` — an id
+nobody registered resolves to the placeholder. That covers both cases without
+asking anyone: a texture still loading was never registered, and one that failed
+never will be. Nothing in the draw path needs to know which, and no code path
+exists that could be wrong about it. The single structured error for a *failed*
+asset already comes from `Assets::commit` (A0), which reports each failure
+exactly once. The embedded placeholder texels arrive with R2, where there is a
+GPU to upload them to; R0's `TextureTable` takes the two built-in ids as
+arguments so the policy is testable today.
 
 ## 6. Text (minimal, v1)
 
@@ -196,6 +258,15 @@ Hard limits all rendering must respect until the envelope ADR is revisited:
 
 Two tiers, cheap one first:
 
+**Implemented (R0):** tier 1 in full — `NullBackend` records every `FramePlan`,
+`FrameRecord::covering(world)` answers "what is at this point?" with exact
+rotated-quad containment rather than a bounding box, and `transcript()` renders
+a frame as stable, diffable text. `tests/transcript.rs` covers ordering,
+batching, the placeholder policy, and the camera round trip; `tests/plan_model.rs`
+checks sort and batch against a naive reference under 2000 random streams.
+`examples/what_was_drawn.rs` is the loop end to end. Tier 2 (golden images) needs
+a GPU and lands with R4.
+
 1. **Submission transcripts** (primary, all targets, no GPU): the null backend
    records every `FramePlan` as structured data. Tests and `tools/verify` assert
    on it: what was drawn, where, what order, what batches. Combined with camera
@@ -228,10 +299,27 @@ feedback loop and gets built incrementally from R0 (see also asset/input docs).
 Continue from core M5 (windowed blank via platform crate). Same rules: each is
 mergeable, tested, green CI on all three targets.
 
-- **R0 — render-core, no GPU.** `DrawCtx` submission methods, sort/batch into
-  `FramePlan`, null backend, transcript snapshot tests (ordering, batching,
-  placeholder policy, text glyph expansion). Runs on wasm CI too — no GPU
+- **R0 — render-core, no GPU.** ✅ `DrawCtx` submission sink, sprite expansion,
+  the camera, sort/batch into `FramePlan`, null backend, transcript snapshot
+  tests (ordering, batching, placeholder policy). Runs on wasm CI too — no GPU
   needed. Exit: transcripts green everywhere; `verify` can assert "sprite at P".
+
+  Corrected from the original bullet: **text glyph expansion moved to R3**,
+  which is where the expansion and its embedded font already were. R0 could not
+  test an expansion that does not exist yet.
+
+  What the mutation checks said. Fourteen deliberate breakages, all caught:
+  dropping the layer from the sort, dropping z, reversing the submission-order
+  tie-break, batching regardless of texture, never batching, resolving a
+  not-ready texture to white instead of the placeholder, winding the quad into
+  overlapping triangles, flipping the anchor's sign, ignoring `flip_x`, dropping
+  the transform's rotation, un-flipping the projection's Y, falling back to a
+  bounding box for containment, keeping submissions across frames, and rotating
+  before scaling. The reference-model test caught the sorting and batching ones;
+  the transcript tests caught the geometry; and the two that only the unit tests
+  caught — the winding and the Y flip — are the ones a transcript cannot see,
+  because both produce a frame that is wrong only once a GPU rasterizes it.
+  That is the honest limit of tier 1, and the reason tier 2 exists.
 - **R1 — wgpu clear + present.** Surface init on Linux/Windows/web, clear color,
   resize handling. `examples/window_clear.rs`. Exit: colored window on all
   three targets (web manually verified; native CI headless-runs it).

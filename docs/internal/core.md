@@ -529,6 +529,13 @@ agent works one milestone per session-ish; BLOCKED.md protocol applies throughou
   stubbed, because the renderer owns its vocabulary and a placeholder would
   only have to be unlearned. What M4 delivers is the Draw *signature*, so no
   game's draw systems need rewriting when the sink arrives.
+  The sink landed in **R0**, and the wait paid off: it is `DrawCtx::submit`
+  taking a `Quad`, plus `Color`/`Rect`/`Depth`/`TextureId`/`Transform` as the
+  vocabulary it needs. Those are rendering-shaped types in the ECS crate, which
+  needed a decision of its own — core may depend on no other jidousha crate
+  (§1, CONTRACT) and so cannot name a texture asset. **ADR-0015** records how
+  that was resolved: core carries an opaque id, and every crate that knows what
+  a texture *is* sits above it. No game's draw systems were rewritten.
 - **M5 — platform crate.** winit wrapper, window, event pump → `InputSnapshot`
   scaffold (full input system is its own doc), real-time loop driver feeding the
   accumulator. `examples/window_blank.rs` opens a window natively and on web

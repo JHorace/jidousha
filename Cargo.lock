@@ -40,6 +40,10 @@ version = "0.1.0"
 [[package]]
 name = "jidousha-render-core"
 version = "0.1.0"
+dependencies = [
+ "jidousha-assets",
+ "jidousha-core",
+]
 
 [[package]]
 name = "jidousha-render-wgpu"

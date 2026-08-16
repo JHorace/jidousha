@@ -10,6 +10,8 @@
 use core::fmt;
 use core::num::NonZeroU32;
 
+use jidousha_core::TextureId;
+
 /// The first generation for a slot; generations start at 1 so the niche keeps
 /// an id the size of two `u32`s.
 const FIRST_GENERATION: NonZeroU32 = NonZeroU32::MIN;
@@ -59,6 +61,10 @@ impl AssetId {
     pub(crate) fn generation(self) -> NonZeroU32 {
         self.generation
     }
+
+    pub(crate) fn index_raw(self) -> u32 {
+        self.index
+    }
 }
 
 impl fmt::Debug for AssetId {
@@ -77,6 +83,28 @@ pub struct TextureHandle(pub(crate) AssetId);
 /// A loaded — or loading — blob of bytes, for anything a game invents.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BytesHandle(pub(crate) AssetId);
+
+impl TextureHandle {
+    /// This texture's id in the renderer's vocabulary (`jidousha-core`).
+    ///
+    /// The seam between assets and rendering: `jidousha-core` owns `DrawCtx`
+    /// and so owns the submission vocabulary, but it depends on no other
+    /// jidousha crate and cannot name a `TextureHandle` (core.md §1, CONTRACT).
+    /// It carries an opaque [`TextureId`] instead, and this is where one comes
+    /// from (ADR-0015).
+    ///
+    /// The id is the slot and generation packed together, so it is unique for
+    /// as long as the handle is live and never collides with a recycled slot.
+    /// [`TextureId::WHITE`] is reserved for the renderer's untextured quads and
+    /// is never produced here — generations start at 1, so the packed value is
+    /// never zero.
+    #[must_use]
+    pub fn texture_id(self) -> TextureId {
+        let index = u64::from(self.0.index_raw());
+        let generation = u64::from(self.0.generation().get());
+        TextureId::from_bits((generation << 32) | index)
+    }
+}
 
 impl fmt::Debug for TextureHandle {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {

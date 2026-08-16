@@ -9,6 +9,7 @@
 //! a game that replays correctly headless replays correctly on screen
 //! (core.md §8 CONTRACT).
 
+use crate::draw::Submissions;
 use crate::panic_hook;
 use crate::schedule::{IntoSystem, Phase};
 use crate::simulation::Simulation;
@@ -152,19 +153,21 @@ impl HeadlessSim {
         self.simulation.tick();
     }
 
-    /// Run the Draw phase once, as a rendered frame would.
+    /// Run the Draw phase once, as a rendered frame would, and return what it
+    /// submitted.
     ///
     /// Draw cannot change the world (ADR-0008), so this exists for tests that
     /// want to exercise draw systems and for `tools/verify` — a headless run
-    /// that never draws is still a correct run.
+    /// that never draws is still a correct run. The returned submissions are
+    /// this frame's only; the next `draw` starts empty.
     ///
     /// # Panics
     ///
     /// In debug builds, if the world's shape changed across the phase — the
     /// defense-in-depth check core.md §7 asks for, which catches the interior
     /// mutability no type can see.
-    pub fn draw(&mut self) {
-        self.simulation.draw();
+    pub fn draw(&mut self) -> &Submissions {
+        self.simulation.draw()
     }
 
     /// The world, for asserting on state.

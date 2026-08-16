@@ -84,6 +84,31 @@ TextStyle { size, color, depth }          // + Default
 systems::draw_sprites                     // provided Draw system
 ```
 
+Built in R0, split across `jidousha-core` and `jidousha-render-core` until the
+facade re-exports them. `Transform`, `Color`, `Rect` and `Depth` are in core —
+they are the vocabulary `DrawCtx`'s sink speaks, and core cannot depend on the
+renderer (ADR-0015). `Sprite`, `Camera` (with `world_to_screen`/`screen_to_world`)
+and `draw_sprites` are in render-core.
+
+Two additions to the inventory above. `DrawCtx::submit(Quad)` is the sink itself,
+and `Quad` with it: games do not call it — `ctx.sprite(...)` does — but it is
+public because render-core has to reach it from outside core. And `TextureId`,
+the opaque id that lets core name a texture it cannot see; `TextureHandle::texture_id()`
+mints one.
+
+One shape change: `ctx.sprite(...)` and the rest arrive through the `Submit`
+extension trait rather than as inherent methods on `DrawCtx`, for the same
+reason. **The prelude must carry `Submit`** (F0) or `ctx.sprite(...)` will not
+resolve in game code — that is the one place this seam can leak, and the F0
+checklist should treat it as load-bearing rather than incidental.
+
+`Camera` carries a fourth field the sketch above omits: `viewport`, the surface
+size in pixels, without which `world_to_screen` has no aspect ratio to work
+from. The driver maintains it.
+
+`DrawCtx::{rect, line, circle, text}`, `TextStyle`, and `Depth`'s use by them
+land in R3 with the expansion code and the embedded font.
+
 **Assets (assets doc)**
 ```rust
 Assets::{load_texture, load_bytes, status, all_ready, unload}   // resource

@@ -12,6 +12,7 @@ use crate::component::Component;
 use crate::entity::Entity;
 use crate::query::{QueryIter, ReadOnlyQuery};
 use crate::resource::Resource;
+use crate::visual::Quad;
 use crate::world::World;
 
 /// A read-only view of the world, handed to Draw systems.
@@ -111,19 +112,72 @@ impl<'w> WorldView<'w> {
 /// });
 /// ```
 ///
-/// The submission sink is not here yet: the renderer owns its shape, and
-/// inventing a placeholder vocabulary now would only have to be unlearned
-/// (core.md §11, R0). What M4 delivers is the *signature* and the read-only
-/// world, so no game's Draw systems need rewriting when the sink lands.
+/// The sink is [`submit`](DrawCtx::submit), which takes the one thing the
+/// engine draws: a [`Quad`]. Games do not call it directly — they call
+/// `ctx.sprite(...)`, `ctx.rect(...)` and friends, which `jidousha-render-core`
+/// adds, and which expand into quads. That split is what keeps this crate free
+/// of renderer machinery while `DrawCtx` still lives here (ADR-0008, ADR-0015).
 pub struct DrawCtx<'w> {
     /// The world, read-only.
     pub world: WorldView<'w>,
+    submissions: &'w mut Submissions,
 }
 
 impl<'w> DrawCtx<'w> {
-    pub(crate) fn new(world: &'w World) -> Self {
+    pub(crate) fn new(world: &'w World, submissions: &'w mut Submissions) -> Self {
         Self {
             world: WorldView::new(world),
+            submissions,
         }
+    }
+
+    /// Draw one quad.
+    ///
+    /// The primitive every drawn thing becomes. Order matters: quads submitted
+    /// at the same [`Depth`](crate::Depth) draw in submission order, and that
+    /// tie-break is a CONTRACT, not an accident of sorting (renderer.md §2).
+    pub fn submit(&mut self, quad: Quad) {
+        self.submissions.quads.push(quad);
+    }
+
+    /// How many quads have been submitted this frame.
+    ///
+    /// For engine-side draw systems that batch their own work; games have no
+    /// reason to ask.
+    #[must_use]
+    pub fn submitted(&self) -> usize {
+        self.submissions.quads.len()
+    }
+}
+
+/// One frame's worth of submitted quads, in submission order.
+///
+/// Owned by the driver and reused across frames: a game that draws a thousand
+/// sprites should not allocate a thousand-quad buffer sixty times a second.
+#[derive(Debug)]
+pub struct Submissions {
+    quads: Vec<Quad>,
+}
+
+impl Submissions {
+    /// An empty frame.
+    ///
+    /// DELIBERATE: no `Default` impl, despite `clippy::new_without_default`
+    /// (see ADR-0012) — one way to do everything, and `new` is that way.
+    #[allow(clippy::new_without_default)]
+    #[must_use]
+    pub fn new() -> Self {
+        Self { quads: Vec::new() }
+    }
+
+    /// Everything submitted this frame, in submission order.
+    #[must_use]
+    pub fn quads(&self) -> &[Quad] {
+        &self.quads
+    }
+
+    /// Forget the frame, keeping the space it used.
+    pub fn clear(&mut self) {
+        self.quads.clear();
     }
 }
