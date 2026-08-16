@@ -1,9 +1,10 @@
 # Public API — the `jidousha` facade and `docs/api/`
 
-Status: **design draft, pre-implementation.** Owns: what game agents see.
-**CONTRACT** items binding as elsewhere. The facade crate is built last
-(milestone F0, after subsystems exist), but every subsystem PR must conform to
-this inventory — additions to it go through this doc first.
+Status: **implemented at F0.** The facade crate exists, `docs/api/` is generated
+from it, and `tools/check-api-coverage` enforces both of §1's contracts. Owns:
+what game agents see. **CONTRACT** items binding as elsewhere. Additions to the
+inventory still go through this doc first — the difference is that a change here
+and a change to the crate now fail CI when they disagree.
 
 ## 1. Principles
 

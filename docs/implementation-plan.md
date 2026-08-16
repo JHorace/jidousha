@@ -81,7 +81,7 @@ Tick in the completing commit. (All unticked at handoff.)
 
 - [x] session-zero  - [x] M0  - [x] M1  - [x] M2  - [x] M3  - [x] M4
 - [x] A0  - [x] I0  - [x] R0  - [x] M5  - [x] R1  - [x] A1  - [x] R2
-- [x] R3  - [x] I1  - [x] A2  - [x] I2  - [x] R4  - [x] A3  - [ ] F0
+- [x] R3  - [x] I1  - [x] A2  - [x] I2  - [x] R4  - [x] A3  - [x] F0
 - [ ] E0  - [ ] make-game skill
 
 ## 5. Document map
