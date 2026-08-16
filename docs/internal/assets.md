@@ -522,13 +522,23 @@ Sequenced against renderer milestones (renderer needs textures at R2):
   developer and a typo; this check answers in under a second with no toolchain,
   which is why it is also its own CI job.
 
-  **What the mutation checks said.** Fourteen deliberate breakages, all caught.
-  The ones worth naming are about the check's *scope* rather than its logic:
-  making `builds_file_source` always true, making `defines_the_source` always
-  false, and letting the deliberately-missing marker leak past its comment block
-  all die — because each has a test written against the specific way it would
-  make the check useless. A check that silently stops checking is the failure
-  mode here, not a check that reports the wrong line.
+  **What the mutation checks said.** Eighteen deliberate breakages, seventeen
+  caught first time. The ones worth naming are about the check's *scope* rather
+  than its logic: making `builds_file_source` always true or always false,
+  making `defines_the_source` always false, letting the deliberately-missing
+  marker leak past its comment block, and asking the filesystem about case
+  instead of walking it all die, because each has a test written against the
+  specific way it would make the check useless. A check that silently stops
+  checking is the failure mode here, not one that reports the wrong line.
+
+  The escape was the wiring rather than the logic: `main` could be made to
+  return 0 with problems in hand, and every unit test still passed, because they
+  call `check_file` directly. The script now has three end-to-end tests — a
+  sound tree exits 0, a broken reference exits 1 and names the path, and an
+  empty tree is a tooling fault rather than an all-clear. This is the same shape
+  as R4's `verdict_status` escape and I2's `tools/verify` one: the judgement at
+  the top of a script is the part nothing exercises unless a test runs the
+  script.
 
 ## 9. Deferred (tracked, not designed)
 
