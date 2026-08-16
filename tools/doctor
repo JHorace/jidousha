@@ -296,6 +296,49 @@ def check_graphics() -> Check:
     return Check("graphics", INFO, f"platform {sys.platform} — display capability not probed")
 
 
+# Where a Linux Vulkan loader looks for driver manifests. One file here is the
+# difference between "wgpu finds an adapter" and "wgpu finds nothing", which is
+# in turn the difference between the golden-image tier running and skipping.
+VULKAN_ICD_DIRS = ("/usr/share/vulkan/icd.d", "/etc/vulkan/icd.d")
+
+
+def vulkan_drivers(dirs=VULKAN_ICD_DIRS) -> "list[str]":
+    """Vulkan driver manifests installed on this machine, sorted."""
+    found = []
+    for directory in dirs:
+        try:
+            found += [name for name in os.listdir(directory) if name.endswith(".json")]
+        except OSError:
+            continue
+    return sorted(found)
+
+
+def check_gpu() -> Check:
+    """Report whether the golden-image tier can run here (renderer.md §9).
+
+    Never blocking, and INFO in both directions: a machine with no GPU runs
+    every other test, and the golden tests say so themselves and pass. This
+    exists so that "the golden tier skipped" is a diagnosable fact rather than
+    something inferred from a quiet log — a skipped test that nobody knows is
+    skipped is the thing to avoid.
+
+    Only Linux is probed, because only Linux answers cheaply. Elsewhere the
+    golden tests are the authority, as they are everywhere.
+    """
+    if not sys.platform.startswith("linux"):
+        return Check("gpu", INFO, f"platform {sys.platform} — adapters not probed")
+    drivers = vulkan_drivers()
+    if drivers:
+        return Check("gpu", INFO, f"vulkan drivers: {', '.join(drivers)}")
+    return Check(
+        "gpu",
+        INFO,
+        "no vulkan drivers installed — golden-image tests will skip and say so. "
+        "A software rasterizer (mesa-vulkan-drivers, providing lavapipe) is enough; "
+        "installing system packages is a human decision (CLAUDE.md)",
+    )
+
+
 CHECKS = (
     check_python,
     check_toolchain,
@@ -307,6 +350,7 @@ CHECKS = (
     check_git,
     check_build_dir,
     check_graphics,
+    check_gpu,
 )
 
 

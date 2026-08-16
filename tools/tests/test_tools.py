@@ -124,6 +124,31 @@ test result: FAILED. 1 passed; 1 failed; 1 ignored; 0 measured; 0 filtered out; 
 """
 
 
+class DoctorGpuTest(unittest.TestCase):
+    def test_installed_vulkan_drivers_are_listed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "lvp_icd.json").write_text("{}")
+            (root / "radeon_icd.json").write_text("{}")
+            (root / "notes.txt").write_text("not a driver")
+            self.assertEqual(
+                doctor.vulkan_drivers((str(root),)),
+                ["lvp_icd.json", "radeon_icd.json"],
+            )
+
+    def test_a_directory_that_does_not_exist_is_not_an_error(self):
+        # The common case on a machine with no graphics stack at all, and the
+        # one where doctor must report rather than crash.
+        self.assertEqual(doctor.vulkan_drivers(("/no/such/place",)), [])
+
+    def test_the_gpu_check_never_blocks_a_run(self):
+        # A machine with no GPU runs every other test in the suite. Marking this
+        # FIXABLE or BROKEN would make doctor cry wolf, and then be ignored when
+        # it matters (agent-practices §6.1).
+        self.assertEqual(doctor.check_gpu().status, doctor.INFO)
+        self.assertEqual(doctor.check_gpu().fix, "")
+
+
 class TestOutputParsingTest(unittest.TestCase):
     def test_counts_are_summed_across_every_test_binary(self):
         parsed = test_wrapper.parse_test_output(SAMPLE_OUTPUT)
@@ -376,6 +401,28 @@ class VerifyToolTest(unittest.TestCase):
         self.assertEqual(verify.verdict_status("error", None), "error")
         self.assertEqual(verify.EXIT_CODES["timeout"], 2)
         self.assertEqual(verify.EXIT_CODES["error"], 2)
+
+    def test_a_captured_frame_is_lifted_out_of_the_summary(self):
+        # So an agent looking for the picture does not have to parse English.
+        text = (
+            "verified prototype_kit over 130 ticks\n"
+            "  frames: 130\n"
+            "  capture: 480x270 written to /repo/target/verify/prototype_kit.png\n"
+        )
+        self.assertEqual(
+            verify.parse_artifact(text), "/repo/target/verify/prototype_kit.png"
+        )
+
+    def test_a_run_that_captured_nothing_reports_no_artifact(self):
+        # A machine with no GPU. Not a failure, and not a path either.
+        text = "verified thing over 3 ticks\n  capture: skipped, no GPU on this machine\n"
+        self.assertIsNone(verify.parse_artifact(text))
+
+    def test_a_line_that_merely_mentions_writing_is_not_an_artifact(self):
+        # The marker is anchored to the `capture:` line, so a transcript that
+        # happens to contain the words does not become the report's artifact.
+        text = "verified thing\n  note: nothing was written to disk this run\n"
+        self.assertIsNone(verify.parse_artifact(text))
 
     def test_the_report_does_not_go_where_the_test_wrapper_writes_its_own(self):
         # Two tools writing one ground-truth file is how ground truth stops

@@ -25,17 +25,85 @@ use jidousha_render_core::{PhysicalSize, RenderError};
 pub(crate) struct Gpu {
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
-    pub(crate) surface: wgpu::Surface<'static>,
-    pub(crate) config: wgpu::SurfaceConfiguration,
+    pub(crate) target: Target,
     /// Kept because reconfiguring the surface on resize needs it again.
     pub(crate) adapter: wgpu::Adapter,
 }
 
+/// Where a frame is drawn.
+///
+/// A window and an offscreen texture differ in three places — how the target is
+/// created, how a frame is acquired, and whether it is presented — and in
+/// nothing else. Everything between those points is one code path, which is the
+/// whole reason golden images are worth taking: a capture goes through the same
+/// pipeline, the same shader and the same uploads as the picture on screen
+/// (renderer.md §9).
+pub(crate) enum Target {
+    /// A window's surface, presented every frame.
+    Window {
+        surface: wgpu::Surface<'static>,
+        config: wgpu::SurfaceConfiguration,
+    },
+    /// A texture nobody sees, which can be read back.
+    Offscreen {
+        texture: wgpu::Texture,
+        size: PhysicalSize,
+    },
+}
+
+impl Target {
+    /// The format a pipeline drawing into this must be built for.
+    pub(crate) fn format(&self) -> wgpu::TextureFormat {
+        match self {
+            Target::Window { config, .. } => config.format,
+            Target::Offscreen { texture, .. } => texture.format(),
+        }
+    }
+}
+
+/// The format an offscreen target is drawn into.
+///
+/// sRGB, like the surface formats the window path prefers, so the GPU encodes
+/// on write exactly as it does on screen and the bytes read back are the bytes
+/// a PNG holds. An offscreen target in linear space would produce captures that
+/// are correct and look nothing like the window.
+pub(crate) const OFFSCREEN_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
+
+/// Make the texture an offscreen backend draws into.
+///
+/// `COPY_SRC` is what separates this from any other render target: it is the
+/// usage that makes the pixels readable afterwards, and it is why capture is an
+/// offscreen-only operation rather than something a window could also do.
+pub(crate) fn offscreen_texture(device: &wgpu::Device, size: PhysicalSize) -> wgpu::Texture {
+    device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("jidousha offscreen target"),
+        size: wgpu::Extent3d {
+            width: size.width.max(1),
+            height: size.height.max(1),
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: OFFSCREEN_FORMAT,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    })
+}
+
 /// A GPU that has been asked for and has not arrived.
 pub(crate) struct Pending {
-    surface: Option<wgpu::Surface<'static>>,
+    wants: Wants,
     size: PhysicalSize,
     step: Step,
+}
+
+/// What the pending GPU is being asked for.
+enum Wants {
+    /// A surface, already made, waiting to be configured.
+    Window(Option<wgpu::Surface<'static>>),
+    /// A texture, made once the device exists.
+    Offscreen,
 }
 
 /// Where the handshake has got to.
@@ -68,7 +136,25 @@ impl Pending {
             ..Default::default()
         });
         Self {
-            surface: Some(surface),
+            wants: Wants::Window(Some(surface)),
+            size,
+            step: Step::Adapter(Box::pin(future)),
+        }
+    }
+
+    /// Ask for any adapter at all, to draw into a texture.
+    ///
+    /// No `compatible_surface`, because there is no surface: this is what lets
+    /// a golden-image test and a `tools/verify` capture run on a machine with
+    /// no display — including every CI runner the project has.
+    pub(crate) fn offscreen(instance: &wgpu::Instance, size: PhysicalSize) -> Self {
+        let future = instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::LowPower,
+            compatible_surface: None,
+            ..Default::default()
+        });
+        Self {
+            wants: Wants::Offscreen,
             size,
             step: Step::Adapter(Box::pin(future)),
         }
@@ -123,19 +209,27 @@ impl Pending {
                     let (device, queue) = result.map_err(|error| RenderError::Unsupported {
                         detail: format!("no graphics device: {error}"),
                     })?;
-                    let Some(surface) = self.surface.take() else {
-                        return Err(RenderError::Unsupported {
-                            detail: "the surface was already taken — poll called after it \
-                                     completed"
-                                .to_owned(),
-                        });
+                    let target = match &mut self.wants {
+                        Wants::Offscreen => Target::Offscreen {
+                            texture: offscreen_texture(&device, self.size),
+                            size: self.size,
+                        },
+                        Wants::Window(surface) => {
+                            let Some(surface) = surface.take() else {
+                                return Err(RenderError::Unsupported {
+                                    detail: "the surface was already taken — poll called after \
+                                             it completed"
+                                        .to_owned(),
+                                });
+                            };
+                            let config = configure(&surface, &adapter, &device, self.size)?;
+                            Target::Window { surface, config }
+                        }
                     };
-                    let config = configure(&surface, &adapter, &device, self.size)?;
                     return Ok(Some(Gpu {
                         device,
                         queue,
-                        surface,
-                        config,
+                        target,
                         adapter,
                     }));
                 }

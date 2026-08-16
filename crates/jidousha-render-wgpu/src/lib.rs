@@ -12,8 +12,10 @@
 //!
 //! Built so far (`docs/internal/renderer.md` §11): R1 — surface, clear, present
 //! and resize; R2 — the sprite pipeline, texture upload, and one draw call per
-//! batch. Offscreen capture for golden images is R4's.
+//! batch; R4 — the offscreen target and `capture`, which is what golden images
+//! and `tools/verify`'s frame artifact are taken through.
 
+mod capture;
 mod color;
 mod init;
 mod pipeline;
@@ -22,8 +24,9 @@ use jidousha_render_core::{
     BackendTextureId, FramePlan, PhysicalSize, RawImage, RenderBackend, RenderError, TextureDesc,
 };
 
+use crate::capture::read_back;
 use crate::color::linear;
-use crate::init::{Gpu, Pending, configure};
+use crate::init::{Gpu, Pending, Target, configure, offscreen_texture};
 use crate::pipeline::SpritePipeline;
 
 /// A renderer backed by wgpu.
@@ -138,6 +141,27 @@ impl WgpuBackend {
         })
     }
 
+    /// Ask for a GPU that draws into a texture nobody sees.
+    ///
+    /// No window and no surface, so this works on a machine with no display —
+    /// which is every CI runner the project has, and the reason golden images
+    /// are a tier that can actually run (renderer.md §9). Everything after the
+    /// target is created is the same code the window uses: the same pipeline,
+    /// the same shader, the same uploads.
+    ///
+    /// Unlike [`new`](WgpuBackend::new) this cannot fail up front — there is no
+    /// surface to fail to create. An absent adapter arrives later, through
+    /// [`poll`](WgpuBackend::poll) and `render`, like every other GPU failure.
+    #[must_use]
+    pub fn offscreen(size: PhysicalSize) -> Self {
+        let instance = wgpu::Instance::new(instance_descriptor());
+        Self {
+            state: State::Starting(Box::new(Pending::offscreen(&instance, size))),
+            textures: Vec::new(),
+            scratch: Vec::new(),
+        }
+    }
+
     /// Whether the GPU has arrived.
     ///
     /// A driver can draw before this is true; nothing will appear, which is
@@ -164,7 +188,7 @@ impl WgpuBackend {
                 // the surface and the adapter, neither of which changes, so a
                 // resize cannot invalidate it — and if that ever stopped being
                 // true, wgpu's validation would say so rather than draw wrong.
-                let pipeline = SpritePipeline::new(&gpu.device, gpu.config.format);
+                let pipeline = SpritePipeline::new(&gpu.device, gpu.target.format());
                 let live = Live { gpu, pipeline };
                 self.state = State::Running(Box::new(live));
                 self.upload_waiting();
@@ -263,13 +287,23 @@ impl RenderBackend for WgpuBackend {
 
     fn resize_surface(&mut self, size: PhysicalSize) {
         match &mut self.state {
-            State::Running(live) => {
-                if let Ok(config) =
-                    configure(&live.gpu.surface, &live.gpu.adapter, &live.gpu.device, size)
-                {
-                    live.gpu.config = config;
+            State::Running(live) => match &mut live.gpu.target {
+                Target::Window { surface, config } => {
+                    if let Ok(new_config) =
+                        configure(surface, &live.gpu.adapter, &live.gpu.device, size)
+                    {
+                        *config = new_config;
+                    }
                 }
-            }
+                // A new texture, because a texture cannot be resized. The old
+                // one is dropped with the frame it held, which nothing has read
+                // — a capture reads the frame it just rendered, and a resize
+                // means there is a new frame coming.
+                Target::Offscreen { texture, size: at } => {
+                    *texture = offscreen_texture(&live.gpu.device, size);
+                    *at = size;
+                }
+            },
             // Not ready yet: remember it, so the surface is configured at the
             // size the window has *now* rather than the size it had when the
             // program started. A window resized during startup is common —
@@ -292,36 +326,51 @@ impl RenderBackend for WgpuBackend {
             State::Failed(error) => return Err(error.clone()),
         };
 
-        let frame = match live.gpu.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(frame) => frame,
-            // Suboptimal still draws: the picture is correct, the swap chain is
-            // merely no longer ideal. Reconfiguring next frame is enough, and
-            // throwing this one away would flicker.
-            wgpu::CurrentSurfaceTexture::Suboptimal(frame) => {
-                live.gpu
-                    .surface
-                    .configure(&live.gpu.device, &live.gpu.config);
-                frame
-            }
-            // The window changed under us, or there is nothing to draw into.
-            // Reconfiguring and skipping the frame is the standard recovery,
-            // and one dropped frame is invisible at sixty a second.
-            wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
-                live.gpu
-                    .surface
-                    .configure(&live.gpu.device, &live.gpu.config);
-                return Ok(());
-            }
-            // Occluded means nobody can see it; a timeout means the compositor
-            // is busy. Both are reasons to skip, not to fail.
-            wgpu::CurrentSurfaceTexture::Occluded | wgpu::CurrentSurfaceTexture::Timeout => {
-                return Ok(());
-            }
-            other => {
-                return Err(RenderError::SurfaceLost {
-                    detail: format!("the surface could not be acquired: {other:?}"),
-                });
-            }
+        // What to draw into, and what to hand back to the compositor after.
+        // An offscreen target is always there; a surface has to be asked for,
+        // and can say no in five different ways.
+        let (view, present) = match &live.gpu.target {
+            Target::Offscreen { texture, .. } => (
+                texture.create_view(&wgpu::TextureViewDescriptor::default()),
+                None,
+            ),
+            Target::Window { surface, config } => match surface.get_current_texture() {
+                wgpu::CurrentSurfaceTexture::Success(frame) => (
+                    frame
+                        .texture
+                        .create_view(&wgpu::TextureViewDescriptor::default()),
+                    Some(frame),
+                ),
+                // Suboptimal still draws: the picture is correct, the swap chain
+                // is merely no longer ideal. Reconfiguring next frame is enough,
+                // and throwing this one away would flicker.
+                wgpu::CurrentSurfaceTexture::Suboptimal(frame) => {
+                    surface.configure(&live.gpu.device, config);
+                    (
+                        frame
+                            .texture
+                            .create_view(&wgpu::TextureViewDescriptor::default()),
+                        Some(frame),
+                    )
+                }
+                // The window changed under us, or there is nothing to draw into.
+                // Reconfiguring and skipping the frame is the standard recovery,
+                // and one dropped frame is invisible at sixty a second.
+                wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
+                    surface.configure(&live.gpu.device, config);
+                    return Ok(());
+                }
+                // Occluded means nobody can see it; a timeout means the
+                // compositor is busy. Both are reasons to skip, not to fail.
+                wgpu::CurrentSurfaceTexture::Occluded | wgpu::CurrentSurfaceTexture::Timeout => {
+                    return Ok(());
+                }
+                other => {
+                    return Err(RenderError::SurfaceLost {
+                        detail: format!("the surface could not be acquired: {other:?}"),
+                    });
+                }
+            },
         };
 
         let ranges = live.pipeline.prepare(
@@ -332,9 +381,6 @@ impl RenderBackend for WgpuBackend {
             scratch,
         );
 
-        let view = frame
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
         let mut encoder = live
             .gpu
             .device
@@ -389,16 +435,32 @@ impl RenderBackend for WgpuBackend {
             }
         }
         live.gpu.queue.submit(Some(encoder.finish()));
-        live.gpu.queue.present(frame);
+        if let Some(frame) = present {
+            live.gpu.queue.present(frame);
+        }
         Ok(())
     }
 
     fn capture(&mut self) -> Result<RawImage, RenderError> {
-        // Offscreen readback lands at R4, with the golden-image tests that are
-        // its only caller. Refusing is honest; a blank image would let a golden
-        // test pass against nothing (renderer.md §9).
-        Err(RenderError::Unsupported {
-            detail: "capture lands with the golden-image tests at R4".to_owned(),
-        })
+        let State::Running(live) = &mut self.state else {
+            return Err(RenderError::Unsupported {
+                detail: "there is no GPU yet, so there is no frame to read back".to_owned(),
+            });
+        };
+        let Target::Offscreen { texture, size } = &live.gpu.target else {
+            // DELIBERATE: a windowed backend refuses rather than reading its
+            // surface back. A presented surface texture is gone, and keeping a
+            // readable copy would mean a full-screen blit on every frame of
+            // every game to serve a feature only tests use. `offscreen` is the
+            // constructor that can answer this, and it renders through the same
+            // pipeline — which is what makes the answer worth having
+            // (renderer.md §9).
+            return Err(RenderError::Unsupported {
+                detail: "a windowed backend cannot read its surface back; build the backend \
+                         with WgpuBackend::offscreen to capture frames"
+                    .to_owned(),
+            });
+        };
+        read_back(&live.gpu.device, &live.gpu.queue, texture, *size)
     }
 }

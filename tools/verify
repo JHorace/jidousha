@@ -87,6 +87,26 @@ def verdict_status(run_status: str, verdict: "str | None") -> str:
     return "pass" if verdict is not None else "unverified"
 
 
+# What a run says when it wrote a frame out: "... written to <path>".
+ARTIFACT_MARKER = " written to "
+
+
+def parse_artifact(text: str) -> "str | None":
+    """The path of a frame the run captured, if it captured one.
+
+    Lifted into the report as its own field rather than left inside the summary
+    prose, so an agent looking for the picture does not have to parse English to
+    find it. A run on a machine with no GPU captures nothing and says so, which
+    is not a failure — the transcript assertions are the tier that always runs
+    (renderer.md §9).
+    """
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("capture:") and ARTIFACT_MARKER in stripped:
+            return stripped.split(ARTIFACT_MARKER, 1)[1].strip()
+    return None
+
+
 def parse_examples(metadata: dict) -> "list[tuple[str, str]]":
     """Every example target in the workspace, as (package, example name).
 
@@ -223,6 +243,7 @@ def main(argv: "list[str]") -> int:
     verdict, summary = parse_verdict(result["output"])
     status = verdict_status(result["status"], verdict)
     exit_code = EXIT_CODES[status]
+    artifact = parse_artifact(result["output"])
     report = {
         "tool": "tools/verify",
         "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -235,6 +256,9 @@ def main(argv: "list[str]") -> int:
         "process_exit_code": result["exit_code"],
         "verdict": verdict,
         "summary": summary,
+        # The captured frame, when the run took one. `null` on a machine with no
+        # GPU, which is a fact about the machine and not a failure.
+        "artifact": artifact,
         # The whole transcript: what the frame actually contained, kept where an
         # agent can read it after the fact rather than only in scrollback.
         "output": result["output"],
@@ -245,6 +269,8 @@ def main(argv: "list[str]") -> int:
         print(f"\n[tools/verify] PASS — {verdict}")
         for line in summary:
             print(f"    {line}")
+        if artifact:
+            print(f"[tools/verify] captured frame: {artifact}")
     elif status == "unverified":
         print(
             f"\n[jidousha] {name} has no --verify mode\n"
