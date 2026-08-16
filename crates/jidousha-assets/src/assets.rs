@@ -12,7 +12,7 @@
 
 use std::collections::BTreeMap;
 
-use jidousha_core::{Resource, message};
+use jidousha_core::{Resource, TextureId, message};
 
 use crate::handle::{AssetHandle, AssetId, AssetKind, BytesHandle, IdAllocator, TextureHandle};
 use crate::payload::{AssetError, Payload, TextureData};
@@ -61,6 +61,23 @@ impl AssetFailure {
         self.error
             .message(&self.path, self.kind, &self.requested_at)
     }
+}
+
+/// One texture's texels, on their way to the GPU.
+///
+/// Handed over by [`Assets::take_uploads`] exactly once, and **moved** rather
+/// than lent: the renderer is the only thing allowed to read texels
+/// (renderer.md §3), so once it has them the store has no reader left to serve
+/// and keeps only the status and the path (ADR-0016).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TextureUpload {
+    /// The texture in the renderer's vocabulary, matching what a [`Quad`]
+    /// carries.
+    ///
+    /// [`Quad`]: jidousha_core::Quad
+    pub id: TextureId,
+    /// The texels, size included.
+    pub data: TextureData,
 }
 
 /// One slot's bookkeeping.
@@ -125,6 +142,15 @@ pub struct Assets {
     /// Request → where it landed, so a completion finds its slot.
     routes: BTreeMap<RequestId, (AssetKind, AssetId)>,
     failures: Vec<AssetFailure>,
+    /// Textures that turned `Ready` and have not been handed to a renderer yet,
+    /// in the order they committed.
+    ///
+    /// A queue rather than an immediate hand-off because there may be no
+    /// renderer to hand to: a window arrives a few frames after the program
+    /// starts, and a headless run never has one at all. Waiting here costs
+    /// nothing — the texels were already in the store — and means art that
+    /// finished loading before the GPU did still reaches it (renderer.md §5).
+    pending_uploads: Vec<AssetId>,
     /// Commits so far, purely so `commit` can reject going backwards.
     last_commit: Option<u64>,
 }
@@ -144,6 +170,7 @@ impl Assets {
             source: Box::new(source),
             routes: BTreeMap::new(),
             failures: Vec::new(),
+            pending_uploads: Vec::new(),
             last_commit: None,
         }
     }
@@ -194,12 +221,18 @@ impl Assets {
         }
     }
 
-    /// The decoded image behind `handle`, if it is `Ready`.
+    /// The decoded image behind `handle`, while the store still holds it.
     ///
-    /// For the renderer, which needs the size to make a texture and the texels
-    /// to fill it. CONTRACT: **simulation must not read this** — nothing in a
-    /// game's logic may depend on texture dimensions, or the same game behaves
-    /// differently when the art is re-exported (renderer.md §3).
+    /// CONTRACT: **simulation must not read this** — nothing in a game's logic
+    /// may depend on texture dimensions, or the same game behaves differently
+    /// when the art is re-exported (renderer.md §3).
+    ///
+    /// `None` once [`take_uploads`](Assets::take_uploads) has handed the texels
+    /// to a renderer, which is the normal end state in a windowed game: they
+    /// live on the GPU from then on, and a second copy here would serve nobody
+    /// (ADR-0016). A headless run has no renderer, so nothing takes them and
+    /// this keeps answering — which is what the asset tests and `tools/verify`
+    /// read.
     ///
     /// # Panics
     ///
@@ -210,6 +243,42 @@ impl Assets {
             Some(Payload::Texture(texture)) => Some(texture),
             _ => None,
         }
+    }
+
+    /// Every texture that has become `Ready` since the last call, with texels.
+    ///
+    /// The renderer-facing half of the store: `jidousha-render-core` calls this
+    /// once a frame and uploads what it gets (assets.md §5). Each texture is
+    /// handed over exactly once, in commit order, so two runs that ready the
+    /// same assets at the same ticks upload them in the same order.
+    ///
+    /// A texture unloaded between the commit that readied it and this call is
+    /// dropped rather than handed over: the game said it was finished with it,
+    /// and uploading it would put art on the GPU that nothing can draw.
+    pub fn take_uploads(&mut self) -> Vec<TextureUpload> {
+        let pending = core::mem::take(&mut self.pending_uploads);
+        let mut uploads = Vec::with_capacity(pending.len());
+        for id in pending {
+            // The generation check is what stops a recycled slot answering in
+            // place of the one that was unloaded.
+            if !self.textures.allocator.is_live(id) {
+                continue;
+            }
+            let Some(Some(entry)) = self.textures.entries.get_mut(id.index()) else {
+                continue;
+            };
+            match entry.data.take() {
+                Some(Payload::Texture(data)) => uploads.push(TextureUpload {
+                    id: TextureHandle(id).texture_id(),
+                    data,
+                }),
+                // Not a texture, or already taken. Neither should happen — only
+                // texture completions are queued, and the queue is drained —
+                // but putting it back is the honest response to being wrong.
+                other => entry.data = other,
+            }
+        }
+        uploads
     }
 
     /// The path `handle` was loaded from.
@@ -296,6 +365,14 @@ impl Assets {
             match completion.result {
                 Ok(payload) => {
                     entry.status = AssetStatus::Ready;
+                    // Queued here rather than at `take_uploads` time, because
+                    // this is the moment that is on the timeline: the upload
+                    // order follows the commit order, which is recorded and
+                    // replayable, rather than whatever a table walk happens to
+                    // produce (assets.md §4).
+                    if matches!(payload, Payload::Texture(_)) {
+                        self.pending_uploads.push(id);
+                    }
                     entry.data = Some(payload);
                 }
                 Err(error) => {

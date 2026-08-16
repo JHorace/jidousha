@@ -205,6 +205,30 @@ exactly once. The embedded placeholder texels arrive with R2, where there is a
 GPU to upload them to; R0's `TextureTable` takes the two built-in ids as
 arguments so the policy is testable today.
 
+Implemented (R2):
+
+- `create_builtin_textures(backend)` uploads the white texel and the
+  placeholder and returns the table naming them. The ids come back inside the
+  table rather than being assumed to be 0 and 1 — an assumption that is true
+  only for as long as nothing else is created first, and the driver was making
+  it.
+- The placeholder is 16×16 with 4-texel checks: magenta against black, four
+  checks across. Two large checks can pass for art at a glance and sixteen small
+  ones turn to mush when scaled down; four reads as "this is wrong" at every
+  size. The texels are a constant in render-core, which is what makes the
+  bit-identical CONTRACT above true by construction rather than by discipline —
+  and `NullBackend` now records the texels it was handed, so a test can check it.
+- `upload_ready_textures(assets, backend, table)` is the once-a-frame loop that
+  moves everything newly loaded onto the GPU. The texels are **moved** out of the
+  asset store rather than borrowed (ADR-0016).
+- **Sampling is nearest-neighbour**, with clamped addressing and no mipmaps.
+  Prototype 2D art is pixel art far more often than not, and linear filtering
+  turns it to mush at every scale but 1:1 — "why is my sprite blurry" is the
+  first complaint a 2D engine earns. It also gives R4's golden images far less
+  room for drivers to disagree. Revisit when a game wants smooth scaling, and the
+  shape of that change is a per-texture choice rather than a different global
+  default.
+
 ## 6. Text (minimal, v1)
 
 - One embedded monospace bitmap font (a compiled-in atlas; zero asset
@@ -242,6 +266,28 @@ pub trait RenderBackend {
   and everything in it are engine types. Shader source (WGSL today, SPIR-V under
   ash) is a backend-internal detail — render-core requests the "sprite pipeline"
   by name, never by source.
+
+Implemented (R2): the pipeline is one WGSL shader, one vertex format (position,
+uv, color — eight floats, 32 bytes), one uniform buffer holding the view-proj
+matrix, one growable vertex buffer, and one `draw` call per batch, in plan
+order. Three things worth naming:
+
+- **Vertices are packed by hand**, field by field, rather than cast with
+  `bytemuck`. The layout is then stated once in the same order the
+  `VertexAttribute` list declares it, so the two can be read against each other
+  — and a stride mismatch is the kind of bug that draws *something*, just not
+  what was asked for. It also costs no dependency and no `repr(C)` promise on a
+  type belonging to another crate.
+- **No face culling.** A negative `Transform::scale` mirrors a sprite, which
+  reverses its winding; with culling on, a game that flipped a character by
+  scaling it by −1 would watch it disappear.
+- **Colors are linearized on the CPU**, in one function, used by both the clear
+  color and every vertex. The engine's `Color` is sRGB-encoded (conventions) and
+  the surface is an `-srgb` format, so the conversion has to happen somewhere;
+  doing it in WGSL would put the same curve in two languages, which must agree
+  and cannot be compared. Interpolating linear colors across a triangle is also
+  the more correct of the two. R1's clear skipped the conversion entirely, which
+  is why a grey window looked washed out — that is fixed here.
 
 ## 8. WebGL2 envelope, concretely (ADR-0003 §4)
 
@@ -399,11 +445,86 @@ mergeable, tested, green CI on all three targets.
 
   The web harness did not exist when R1 was written, which is why the WebGL2
   fallback bug it later found could ship unnoticed. §9 records both.
-- **R2 — sprites end to end.** Texture upload, sprite pipeline (WGSL), batching,
-  camera UBO, `jidousha::systems::draw_sprites`, placeholder texture.
-  `examples/sprites.rs` (moving, rotating, tinted, atlas-region sprites).
-  Exit: R0 transcripts unchanged (render-core untouched proves the seam);
-  sprites visible on all targets.
+- **R2 — sprites end to end.** ✅ Texture upload, sprite pipeline (WGSL), batching,
+  camera UBO, `draw_sprites`, placeholder texture. `examples/sprites.rs`
+  (moving, rotating, tinted, atlas-region sprites).
+  Exit: R0 transcripts unchanged; sprites visible on all targets.
+
+  **Both exit criteria met, and the second one was actually checked.** The R0
+  transcript tests pass unmodified — the seam held, and the sprite pipeline
+  needed no change above it. `tools/serve-web sprites --check` drives the
+  example in a headless browser and screenshots it: the four atlas tiles, the
+  rotating sprite, the tinted half-transparent one, and the checkered magenta
+  placeholder are all there, correctly oriented and correctly ordered. That is
+  a stronger claim than R1 could make on the day, and it is the web harness
+  paying for itself a second time.
+
+  Native is unverified from here, as R1 was: this environment has no GPU adapter
+  at all. The same code path is what the browser ran, and a human check is the
+  remaining half.
+
+  **What was wired, beyond the pipeline.** The driver now commits assets and
+  uploads what became ready, *before* the frame's ticks — assets.md §4's
+  commit-point CONTRACT, which had been designed since A0 and unimplemented
+  since M5. The two built-in textures are created through
+  `create_builtin_textures`, which returns the table naming them; the driver
+  previously assumed they were ids 0 and 1, which was true only because nothing
+  had been created yet.
+
+  **Two bugs the writing caught**, both about the gap between asking and
+  arriving — the same seam R1's two bugs were on:
+
+  - `create_texture` before the device existed silently dropped the texels and
+    handed back an id that would never sample anything. R1 could not hit it
+    (nothing was uploaded); at R2 it is the *common* startup path, because a
+    small PNG off a warm disk beats an adapter-and-device negotiation. The
+    backend now holds those texels and uploads them the moment the device lands,
+    so `create_texture` means what it says with no timing rider attached.
+  - The clear color was never linearized, so every window since R1 has been
+    lighter than the color it was given. Nobody could have noticed without a
+    reference; the sprite pipeline supplies one, since a white quad over a white
+    clear must match. Fixed in the one conversion function both now use.
+
+  **What the mutation checks said.** Eighteen deliberate breakages, five of
+  which escaped the first time. Three of those five were real gaps, and the
+  fixes are the interesting part:
+
+  - **The generation check on a queued upload was untested**, because the test
+    that was supposed to cover it tested the wrong thing. `unload` removes the
+    entry, so an unloaded id is skipped by the entry lookup and the generation
+    never comes into it. The case it actually guards is the slot *coming back*:
+    unload, load something else into the same index, and without the check the
+    stale id finds the new entry, takes its texels, and registers them under the
+    dead handle's name. That test exists now.
+  - **The view-projection matrix was checked against the identity**, which is
+    mostly zeroes — and a buffer that is mostly zeroes agrees with one that was
+    never written. Truncating the pack to a single float passed. It is now
+    checked against sixteen distinct values, plus a column-major ordering test,
+    since a row-major pack would compile, run, and put every sprite somewhere
+    else.
+  - **Nothing exercised the driver's backend at all**, because no test had one:
+    `Driver` held a `WgpuBackend`, which needs a window and a GPU. It now holds
+    a `Box<dyn RenderBackend>` — this crate still *picks* wgpu, in `resumed`, and
+    nothing else names it — so the tests install a `NullBackend` they keep a
+    handle to. That closed the last untested third of `frame`, and it is what
+    catches four of the eighteen.
+
+  The two that still escape are **equivalent mutants**, and both are equivalent
+  for a reason worth knowing:
+
+  - *`take_uploads` cloning the queue instead of draining it.* The drain is
+    guarded twice — the queue is emptied, and the texels are taken out of the
+    slot — so removing one guard changes nothing a caller can see. What it does
+    change is that the queue grows forever, which is a leak no assertion here
+    can reach.
+  - *Queueing every payload, bytes included.* Texture and bytes ids share a
+    value space (both are index + generation, one table each), so a bytes
+    completion queues an id that aliases a *texture* slot. It cannot do damage:
+    the lookup is in the texture table and the payload match accepts only
+    `Payload::Texture`, and a texture's data is present only after that texture
+    queued itself. The guard states the intent; the safety comes from the two
+    checks after it. That is closer to a real bug than is comfortable, which is
+    why it is written down here.
 - **R3 — primitives + text.** rect/line/circle expansion, embedded font,
   `examples/prototype_kit.rs` (sprites + shapes + score text — the "can an
   agent make Pong?" substrate is now complete). Exit: transcript tests for all
