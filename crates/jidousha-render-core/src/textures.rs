@@ -12,6 +12,7 @@
 use jidousha_assets::Assets;
 
 use crate::backend::{PhysicalSize, RenderBackend, TextureDesc};
+use crate::font;
 use crate::plan::TextureTable;
 
 /// The placeholder's side, in texels.
@@ -25,12 +26,14 @@ const PLACEHOLDER_SIZE: u32 = 16;
 /// down.
 const PLACEHOLDER_CHECK: u32 = 4;
 
-/// Upload the two textures the renderer always has, and name them.
+/// Upload the three textures the renderer always has, and name them.
 ///
 /// `TextureId::WHITE` gets a single opaque texel, so a shape carrying only a
 /// color goes through the sprite pipeline like everything else — one pipeline,
 /// one vertex format (renderer.md §7). Everything not yet uploaded resolves to
-/// the checkered magenta placeholder.
+/// the checkered magenta placeholder. The font atlas is registered like any
+/// loaded texture, because from the draw path's side that is exactly what it is
+/// — it simply never had to be loaded (renderer.md §6).
 ///
 /// Called once, when a backend is ready. The ids come back inside the table
 /// rather than being assumed: a caller that hard-coded 0 and 1 would be right
@@ -48,7 +51,15 @@ pub fn create_builtin_textures(backend: &mut dyn RenderBackend) -> TextureTable 
         },
         &placeholder_texels(),
     );
-    TextureTable::new(white, placeholder)
+    let atlas = backend.create_texture(
+        &TextureDesc {
+            size: PhysicalSize::new(font::ATLAS_W, font::ATLAS_H),
+        },
+        &font::atlas_texels(),
+    );
+    let mut table = TextureTable::new(white, placeholder);
+    table.register(font::FONT_TEXTURE, atlas);
+    table
 }
 
 /// The checkered magenta, RGBA8, row-major.
@@ -141,7 +152,11 @@ mod tests {
         let table = create_builtin_textures(&mut backend);
         assert_ne!(table.resolve(TextureId::WHITE), stray);
         assert_ne!(table.placeholder(), stray);
-        assert_eq!(backend.texture_count(), 3);
+        assert_eq!(
+            backend.texture_count(),
+            4,
+            "the stray, then the three built-ins"
+        );
     }
 
     #[test]

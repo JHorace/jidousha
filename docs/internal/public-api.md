@@ -114,9 +114,6 @@ checklist should treat it as load-bearing rather than incidental.
 size in pixels, without which `world_to_screen` has no aspect ratio to work
 from. The driver maintains it.
 
-`DrawCtx::{rect, line, circle, text}`, `TextStyle`, and `Depth`'s use by them
-land in R3 with the expansion code and the embedded font.
-
 Built in R1: nothing new for games. `Camera.clear_color` and `Camera.viewport`
 start meaning something — the first is what a window is filled with, the second
 is maintained by the driver on resize — and `jidousha_render_wgpu::WgpuBackend`
@@ -129,6 +126,19 @@ item the §2 inventory lists for sprites was already here, and R2 made them draw
 `examples/sprites.rs` is written entirely out of them. Two additions, both for
 drivers: `create_builtin_textures` and `upload_ready_textures` in render-core,
 which the platform crate calls once a frame. A game never names either.
+
+Built in R3: `DrawCtx::{rect, line, circle, text}` — all four on the `Submit`
+trait beside `sprite` — and `TextStyle { size, color, depth }` with its
+`Default`. `Depth` is now what every immediate primitive takes, as §3 designed.
+
+One addition to the inventory: **`TextStyle::width_of(&str)`**. Without it a
+game cannot centre a score, because the metrics are the engine's and a handle to
+them is the only way to ask. It is exact rather than an estimate — the font is
+monospace with no kerning — and multi-line text reports its widest line.
+
+`TextStyle::size` is the height of one **line** in world units, not a point
+size and not a cap height: text scales with the camera like everything else, and
+world units are the only unit a game ever states (conventions).
 
 **Assets (assets doc)**
 ```rust

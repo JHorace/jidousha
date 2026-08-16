@@ -33,6 +33,13 @@ struct Game {
     backend: NullBackend,
     textures: TextureTable,
     tick: u64,
+    /// How many textures existed before any asset loaded.
+    ///
+    /// Counted rather than written down: the built-in set has grown once
+    /// already, when R3 added the font, and a test asserting "and nothing else"
+    /// should be about the asset that did not load rather than about how many
+    /// textures the renderer happens to ship with.
+    built_in: usize,
 }
 
 impl Game {
@@ -42,11 +49,13 @@ impl Game {
         let sim = headless(GameConfig::default(), |app| {
             app.add_system(Draw, draw_sprites);
         });
+        let built_in = backend.texture_count();
         Self {
             sim,
             backend,
             textures,
             tick: 0,
+            built_in,
         }
     }
 
@@ -148,8 +157,8 @@ fn a_sprite_whose_texture_never_arrives_draws_the_placeholder_forever() {
     }
     assert_eq!(
         game.backend.texture_count(),
-        2,
-        "the two built-ins and nothing else"
+        game.built_in,
+        "the built-ins and nothing else"
     );
 }
 
