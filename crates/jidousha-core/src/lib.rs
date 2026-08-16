@@ -55,7 +55,7 @@ pub use command::{Bundle, CommandKind, Commands};
 pub use component::Component;
 pub use draw::{DrawCtx, WorldView};
 pub use entity::Entity;
-pub use error::EntityDeadError;
+pub use error::{EntityDeadError, message};
 pub use query::{Query, QueryIter, QueryIterMut, ReadOnlyQuery, With, Without};
 pub use resource::Resource;
 pub use rng::Rng;

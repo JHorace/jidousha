@@ -90,6 +90,18 @@ Assets::{load_texture, load_bytes, status, all_ready, unload}   // resource
 TextureHandle, BytesHandle, AssetStatus
 ```
 
+Built in A0, in `jidousha-assets` until the facade re-exports it. Four additions
+to the list above, none of them a change to it: `Assets::new(source)` (the one
+constructor, ADR-0012), `bytes_of` (without it `load_bytes` returns a handle to
+nothing anyone can read), `path_of` (a handle is opaque, so a game that wants to
+log *which* asset failed has no other way to name it), and `commit(tick)` with
+its `AssetFailure` — the driver-facing half of assets.md §4, which the platform
+crate will call and games will not.
+
+The `ByteSource` seam (`ByteSource`, `MemorySource`, `Completion`, `RequestId`)
+is public because the platform crates implement it from outside. `MemorySource`
+is the only part of it a game agent has reason to name, and only in tests.
+
 **Input (input doc)**
 ```rust
 Input::{held, just_pressed, just_released, pointer, pointers, window_focused}  // resource
