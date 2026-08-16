@@ -255,6 +255,12 @@ Hard limits all rendering must respect until the envelope ADR is revisited:
   backend's problem to normalize; CONTRACT: the same FramePlan produces
   visually identical output on both paths (golden-image tolerance, §9).
 
+Implemented (web harness): the web path is **WebGL2 only** for now — see §9's
+note on what forced that. The CONTRACT above is therefore untested rather than
+false: there is currently one web path, not two, so nothing yet compares them.
+It becomes testable when WebGPU is enabled on the web, and R4's golden images
+are what would compare them.
+
 ## 9. Verification (the point of all this)
 
 Two tiers, cheap one first:
@@ -281,15 +287,29 @@ a GPU and lands with R4.
    drivers — exact-match is a flake factory; transcripts are the exact tier).
    Keeps the *backend* honest the way transcripts keep *render-core* honest.
 
-**Gap, recorded rather than resolved (R1):** there is no web harness anywhere in
-the repository — no `index.html`, no `wasm-bindgen` invocation, no serve step.
-`cargo check --target wasm32-unknown-unknown` gates every merge and proves the
-engine *compiles* for the web, which is what ADR-0005 asked for and is not
-nothing; but nothing turns that into something a browser can load. Every
-milestone from here whose exit criterion says "on all three targets" is
-therefore only checkable on two. This is not assigned to a milestone. It is
-small — a `tools/serve-web` and a page — and it should land before R2 makes the
-claim a third time.
+**Closed (web harness):** `tools/serve-web <example>` builds an example for
+wasm, runs `wasm-bindgen`, writes the page from `tools/web/index.html`, and
+serves it. `--check` additionally drives a headless Chromium at it, screenshots
+the result, decodes the PNG, and asserts the canvas is not the page's own
+background — so "it works on the web" means *the engine drew a frame in a
+browser*, not "it compiled". Tooling notes and the version-skew trap are in
+tooling.md.
+
+**The harness found a real bug on its first run**, which is the argument for
+having built it. With `Backends::all()`, wgpu asks the browser for WebGPU first;
+on a browser that has `navigator.gpu` but yields no adapter — Chromium under a
+software rasterizer, and **every browser without WebGPU support** — the request
+fails and nothing falls back to GL. The page loads, the engine runs, the module
+reports itself healthy, and the canvas stays blank. R1 shipped that way and
+nobody could have noticed, because there was no way to load the page. The web
+build now asks for `Backends::GL` explicitly, which costs nothing today (the
+device already requests `downlevel_webgl2_defaults` limits) and is tagged
+`DELIBERATE:` with the condition for revisiting it.
+
+Worth keeping from that: the check's first version only asserted that the module
+*started*, and the buggy page started perfectly. Checking pixels is what turned
+it from a smoke test into a verification — the same lesson M5 learned when a
+vacuous "did the frame draw" assertion let two mutants through.
 
 `tools/verify <example>` composes both with headless simulation (core §8):
 run N ticks with scripted input, then assert on world state + transcript, and

@@ -119,6 +119,33 @@ a row (stop rule printed, `failure-streak.json` count 2).
   snippets lock rustc's wording plus the `IntoSystem<Phase>` mention. The
   `&mut T`-in-a-Draw-query case — the mistake ADR-0008 actually predicts — does
   show the engine's sentence.
+- **`tools/serve-web <example>` is the web target's other half.** `cargo check
+  --target wasm32-unknown-unknown` has gated every merge since M0 and proves the
+  engine compiles for the web; this builds an example, runs `wasm-bindgen`,
+  writes `tools/web/index.html` with the example's name substituted in, and
+  serves it. `--check` drives a headless Chromium at the page, screenshots it,
+  decodes the PNG, and asserts the canvas differs from the page background.
+  Stdlib only, including the PNG decoder — forty lines of `zlib` and
+  un-filtering, for the same reason the input codec is hand-written (ADR-0014).
+- **The `wasm-bindgen` CLI must match the `wasm-bindgen` crate exactly.** They
+  generate two halves of one interface, and a skew produces glue that fails at
+  run time with a message about nothing in particular. `serve-web` reads the
+  version from Cargo.lock, compares it to the installed CLI, and prints the
+  exact `cargo install` line when they differ. This is the single most likely
+  thing to go wrong for someone running the web target for the first time.
+- **Two browser-flag traps, both found the hard way.** `--use-gl=swiftshader`
+  is wrong for current Chromium — it reports "Requested GL implementation not
+  found" and the GPU process exits during initialization, leaving a page that
+  looks like it merely failed to draw. The right flag is
+  `--use-angle=swiftshader` with `--enable-unsafe-swiftshader`. And
+  `--virtual-time-budget` is *page* time: the engine draws every frame, so a
+  large budget never finishes under a software rasterizer. Four seconds is
+  enough to load, negotiate a GPU, and draw.
+- **Serving wasm needs the right MIME type, set in the right place.**
+  `SimpleHTTPRequestHandler` has already sent a `Content-Type` by `end_headers`,
+  so adding a second one there is ignored; override `guess_type` instead. The
+  symptom of getting this wrong is a browser warning about falling back from
+  `instantiateStreaming` — mild, and a lie about what is wrong.
 - **Almost every example is run; windowed ones are built and not run.**
   Resolved in M5, which is when it first mattered. `tools/test` carries a
   `WINDOWED_EXAMPLES` set (`window_blank` from M5, `window_clear` from R1); a

@@ -192,7 +192,7 @@ impl ApplicationHandler for Driver {
             // recreating it would drop the surface the renderer will hold (R1).
             return;
         }
-        let attributes = Window::default_attributes().with_title(self.config.title);
+        let attributes = window_attributes(self.config.title);
         match event_loop.create_window(attributes) {
             Ok(window) => {
                 let window = Arc::new(window);
@@ -240,6 +240,27 @@ impl ApplicationHandler for Driver {
             window.request_redraw();
         }
     }
+}
+
+/// How to ask for a window, per platform.
+///
+/// DELIBERATE: the second `cfg` branch in the engine, and it is here for the
+/// same reason as the first — this is the difference the platform crate exists
+/// to absorb. On the web a "window" is a canvas, and winit will not put it on
+/// the page unless asked; without `with_append` the program runs correctly and
+/// draws to something nobody can see (ADR-0004, ADR-0005).
+#[cfg(not(target_arch = "wasm32"))]
+fn window_attributes(title: &'static str) -> winit::window::WindowAttributes {
+    Window::default_attributes().with_title(title)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn window_attributes(title: &'static str) -> winit::window::WindowAttributes {
+    use winit::platform::web::WindowAttributesExtWebSys;
+
+    Window::default_attributes()
+        .with_title(title)
+        .with_append(true)
 }
 
 /// The window's size in physical pixels, in the engine's vocabulary.

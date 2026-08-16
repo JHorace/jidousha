@@ -45,6 +45,37 @@ enum State {
     Failed(RenderError),
 }
 
+/// Which backends to let wgpu choose from.
+///
+/// DELIBERATE (web): WebGL2 only, not `Backends::all()`. Found by
+/// `tools/serve-web --check`, which is the reason that tool exists: with all
+/// backends enabled, wgpu asks the browser for WebGPU first, and on a browser
+/// that has `navigator.gpu` but yields no adapter — Chromium under a software
+/// rasterizer, and every browser without WebGPU support — the request fails and
+/// **nothing falls back to GL**. The page loads, the engine runs, and the canvas
+/// stays blank. Forcing GL renders correctly on the same machine.
+///
+/// This costs nothing today: the device is already asked for
+/// `downlevel_webgl2_defaults` limits (ADR-0003 §4, renderer.md §8), so WebGPU
+/// would be handed the same envelope WebGL2 gives. Revisit when there is a
+/// reason to want WebGPU on the web — a compute path, or a limit the envelope
+/// raises — and at that point the right shape is to try WebGPU and fall back,
+/// which needs the window kept so a second surface can be made.
+#[cfg(target_arch = "wasm32")]
+fn instance_descriptor() -> wgpu::InstanceDescriptor {
+    wgpu::InstanceDescriptor {
+        backends: wgpu::Backends::GL,
+        ..wgpu::InstanceDescriptor::new_without_display_handle()
+    }
+}
+
+/// Every backend this build has, which is what native wants: Vulkan, DX12, or
+/// GL, whichever the machine offers.
+#[cfg(not(target_arch = "wasm32"))]
+fn instance_descriptor() -> wgpu::InstanceDescriptor {
+    wgpu::InstanceDescriptor::new_without_display_handle()
+}
+
 impl WgpuBackend {
     /// Ask for a GPU that can draw to `window`.
     ///
@@ -61,7 +92,7 @@ impl WgpuBackend {
     where
         W: wgpu::DisplayAndWindowHandle + 'static,
     {
-        let instance = wgpu::Instance::default();
+        let instance = wgpu::Instance::new(instance_descriptor());
         let surface =
             instance
                 .create_surface(window)

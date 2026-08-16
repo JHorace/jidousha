@@ -1,0 +1,89 @@
+<!doctype html>
+<!--
+  The page a Jidousha example runs in.
+
+  Written by hand and served as-is by `tools/serve-web`; there is no bundler and
+  no framework, because a canvas and a module import is the whole requirement
+  and every layer above that is a layer to keep working.
+
+  The engine appends its own canvas to the body (winit's `with_append`), so
+  there is no canvas element here to get out of step with the one winit makes.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>__EXAMPLE__ — jidousha</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #101014;
+        color: #c8c8d0;
+        font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+      }
+      /* The canvas winit appends. Filling the body is what makes a resize a
+         real resize, which is the thing worth checking on this target. */
+      canvas {
+        flex: 1 1 auto;
+        display: block;
+        width: 100%;
+        min-height: 0;
+      }
+      #status {
+        padding: 6px 10px;
+        border-top: 1px solid #2a2a33;
+        white-space: pre-wrap;
+      }
+      #status.failed {
+        color: #ff8080;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="status">starting __EXAMPLE__…</div>
+    <script type="module">
+      // The status line exists so a failure is visible on the page rather than
+      // only in devtools — the same reason the engine's errors say what to do
+      // rather than only what happened.
+      const status = document.getElementById("status");
+      const say = (text, failed = false) => {
+        status.textContent = text;
+        status.classList.toggle("failed", failed);
+      };
+
+      // A wasm panic aborts, and the message goes to the console. Mirroring it
+      // onto the page means a person looking at the window sees it too.
+      const consoleError = console.error.bind(console);
+      console.error = (...args) => {
+        consoleError(...args);
+        say(args.map(String).join(" "), true);
+      };
+      window.addEventListener("error", (event) => say(String(event.message), true));
+      window.addEventListener("unhandledrejection", (event) =>
+        say(String(event.reason), true),
+      );
+
+      try {
+        const module = await import("./__EXAMPLE__.js");
+        await module.default();
+        // Reaching here means the wasm module started. It does not mean a GPU
+        // was found — that is asked for asynchronously and reported by the
+        // engine itself (renderer.md §10).
+        say("__EXAMPLE__ running — resize the window to exercise the surface");
+        // A marker for `tools/serve-web --check`, which drives a headless
+        // browser and needs to know the difference between "still loading" and
+        // "started".
+        document.body.dataset.jidousha = "running";
+      } catch (error) {
+        say(String(error), true);
+        document.body.dataset.jidousha = "failed";
+      }
+    </script>
+  </body>
+</html>

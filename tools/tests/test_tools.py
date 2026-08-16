@@ -34,6 +34,7 @@ def load_tool(script_name):
 
 doctor = load_tool("doctor")
 test_wrapper = load_tool("test")
+serve_web = load_tool("serve-web")
 check_claude_md = load_tool("check-claude-md")
 dep_count = load_tool("dep-count")
 
@@ -305,3 +306,84 @@ class DepCountTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def png_bytes(width, height, rows, filter_kind=0):
+    """A minimal 8-bit RGB PNG, for the decoder tests below.
+
+    Written by hand for the same reason the decoder is: making one is fifteen
+    lines, and the alternative is a dependency in a test for a tool.
+    """
+    import struct
+    import zlib
+
+    raw = bytearray()
+    previous = [0] * (width * 3)
+    for row in rows:
+        flat = [channel for pixel in row for channel in pixel]
+        raw.append(filter_kind)
+        if filter_kind == 0:
+            raw.extend(flat)
+        elif filter_kind == 2:  # Up
+            raw.extend((value - up) & 0xFF for value, up in zip(flat, previous))
+        else:
+            raise ValueError("only None and Up filters are generated here")
+        previous = flat
+
+    def chunk(kind, body):
+        return (
+            struct.pack(">I", len(body))
+            + kind
+            + body
+            + struct.pack(">I", zlib.crc32(kind + body) & 0xFFFFFFFF)
+        )
+
+    header = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", header)
+        + chunk(b"IDAT", zlib.compress(bytes(raw)))
+        + chunk(b"IEND", b"")
+    )
+
+
+class ServeWebTest(unittest.TestCase):
+    """The web harness: the version check, and the screenshot decoder."""
+
+    def test_an_unfiltered_png_decodes_to_its_pixels(self):
+        rows = [[(255, 0, 0), (0, 255, 0)], [(0, 0, 255), (10, 20, 30)]]
+        found = serve_web.decode_png(png_bytes(2, 2, rows))
+        self.assertIsNotNone(found)
+        width, height, pixels = found
+        self.assertEqual((width, height), (2, 2))
+        self.assertEqual(pixels, [pixel for row in rows for pixel in row])
+
+    def test_a_filtered_png_decodes_to_its_pixels(self):
+        # Chromium's screenshots are filtered; a decoder that only handled the
+        # None filter would work on the test above and fail on every real one.
+        rows = [[(9, 9, 9), (40, 50, 60)], [(11, 12, 13), (200, 100, 50)]]
+        found = serve_web.decode_png(png_bytes(2, 2, rows, filter_kind=2))
+        self.assertIsNotNone(found)
+        self.assertEqual(found[2], [pixel for row in rows for pixel in row])
+
+    def test_bytes_that_are_not_a_png_are_refused(self):
+        self.assertIsNone(serve_web.decode_png(b"this is not a png"))
+
+    def test_a_blank_canvas_reads_as_nothing_drawn(self):
+        # The exact failure this check exists for: the page loads, the engine
+        # runs, and the canvas stays the page's own background color.
+        background = [[(0x10, 0x10, 0x14)] * 8 for _ in range(8)]
+        drawn, detail = serve_web.canvas_is_drawn(png_bytes(8, 8, background))
+        self.assertFalse(drawn, detail)
+
+    def test_a_painted_canvas_reads_as_drawn(self):
+        painted = [[(230, 194, 100)] * 8 for _ in range(8)]
+        drawn, detail = serve_web.canvas_is_drawn(png_bytes(8, 8, painted))
+        self.assertTrue(drawn, detail)
+
+    def test_the_wasm_bindgen_version_is_read_from_the_lockfile(self):
+        # The CLI and the crate generate two halves of one interface, so this
+        # is what stops a skew from becoming a runtime mystery.
+        version = serve_web.locked_wasm_bindgen_version()
+        self.assertIsNotNone(version, "Cargo.lock should pin wasm-bindgen")
+        self.assertRegex(version, r"^\d+\.\d+\.\d+$")
