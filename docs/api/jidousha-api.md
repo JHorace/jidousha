@@ -100,7 +100,7 @@ fn collect(world: &mut World) {
     world.resource_mut::<Score>().0 += 1;
 }
 
-/// Draw systems take a `DrawCtx` and cannot change the world (ADR-0008).
+/// Draw systems take a `DrawCtx` and cannot change the world: the type says so.
 fn draw_everything(ctx: &mut DrawCtx) {
     for (_, transform, _) in ctx.world.query::<(&Transform, &Player)>() {
         ctx.rect(
@@ -766,7 +766,7 @@ Position, rotation, and scale in world space.
 pub struct Transform {
     pub pos: Vec2,  // Where, in world units
     pub z: f32,  // Draw order within the layer
-    pub rot: Radians,  // Rotation, clockwise on screen (ADR-0010)
+    pub rot: Radians,  // Rotation, clockwise on screen
     pub scale: Vec2,  // Size multiplier
 }
 // Clone Copy Debug PartialEq
@@ -817,7 +817,7 @@ pub struct AssetFailure {
 // Clone Debug PartialEq Eq
 
 impl AssetFailure {
-    pub fn message(&self) -> String;  // The failure in the engine's message format (core.md §9)
+    pub fn message(&self) -> String;  // The failure in the engine's message format
 }
 ```
 
@@ -913,7 +913,7 @@ impl Input {
     pub fn pointer(&self) -> &PointerState;  // The primary pointer — the mouse, or the first finger down
     pub fn pointers(&self) -> &[PointerState];  // Every pointer this tick
     pub fn window_focused(&self) -> bool;  // Whether the window had focus this tick
-    pub fn snapshot(&self) -> &InputSnapshot;  // The whole snapshot, for the recorder (I2) and for tests
+    pub fn snapshot(&self) -> &InputSnapshot;  // The whole snapshot, for the recorder and for tests
 }
 ```
 
@@ -953,7 +953,7 @@ impl Key {
     pub const ALL: &'static [Key];  // Every key, in declaration order
     pub fn code(self) -> u16;  // This key's wire code, as written into recordings
     pub fn find_by_code(code: u16) -> Option<Key>;  // The key a wire code names, or `None` if this build has never heard…
-    pub fn name(self) -> &'static str;  // The variant's name, for messages and for `input_echo` (I1)
+    pub fn name(self) -> &'static str;  // The variant's name, for messages and for `input_echo`
 }
 ```
 
@@ -1179,7 +1179,7 @@ impl Input {
     pub fn pointer(&self) -> &PointerState;  // The primary pointer — the mouse, or the first finger down
     pub fn pointers(&self) -> &[PointerState];  // Every pointer this tick
     pub fn window_focused(&self) -> bool;  // Whether the window had focus this tick
-    pub fn snapshot(&self) -> &InputSnapshot;  // The whole snapshot, for the recorder (I2) and for tests
+    pub fn snapshot(&self) -> &InputSnapshot;  // The whole snapshot, for the recorder and for tests
 }
 ```
 
@@ -1284,7 +1284,7 @@ pub fn plan_frame(camera: &Camera, quads: &[Quad], textures: &TextureTable) -> F
 
 #### `RawImage`
 
-Pixels read back off the GPU, for golden-image tests (R4).
+Pixels read back off the GPU, for golden-image tests.
 
 ```rust
 pub struct RawImage {
@@ -1450,11 +1450,11 @@ impl WgpuBackend {
 
 - **World space: X right, Y down, right-handed (+Z into screen) — matches
   Vulkan NDC. Positive rotation is clockwise on screen** (right-hand rule about
-  +Z). DELIBERATE: screen-natural over math-canonical — see ADR-0010; do not
-  "fix" this to Y-up. Gravity is `+y`; jumping is `-y`; the 3D story is covered
-  in ADR-0010's consequences.
+  +Z). DELIBERATE: screen-natural over math-canonical; do not "fix" this to
+  Y-up. Gravity is `+y`; jumping is `-y`, and the 3D story follows from the same
+  choice.
 - World units are abstract (not pixels). The camera defines the world↔pixel
-  relationship (`docs/internal/renderer.md` §5).
+  relationship.
 - **Screen space: pixels, origin top-left** — same orientation as world space,
   differing only in units and camera offset. It exists only at the platform
   boundary (raw pointer events, window sizes); the ONLY sanctioned conversion
@@ -1465,8 +1465,7 @@ impl WgpuBackend {
 ### Time
 
 - Simulation time: `tick: u64` (canonical) and `Seconds` newtype (derived,
-  `tick * fixed_dt`). Wall-clock time is banned outside `jidousha-platform`
-  (ADR-0005; CI-checked).
+  `tick * fixed_dt`). Wall-clock time is banned outside `jidousha-platform`.
 - Durations in public APIs are `Seconds(f32)`, never milliseconds, never bare f32.
 
 ### Color
@@ -1488,15 +1487,16 @@ impl WgpuBackend {
 - Sort key: (`layer: i16`, then `z: f32`, then submission order; stable).
   `layer` is the coarse tool (background/world/UI bands); `z` orders within a
   layer. **Higher `z` draws on top** (z-index semantics; `z` is a draw-order
-  key, NOT a coordinate on the spatial +Z axis, which points into the screen —
-  ADR-0010). NaN `z` is a contract violation (debug-checked).
+  key, NOT a coordinate on the spatial +Z axis, which points into the screen).
+  NaN `z` is a contract violation (debug-checked). The two senses of "z" are
+  the same choice seen twice.
 - Within-frame determinism: identical submissions → identical order, always.
 
 ### Math
 
 - glam types (`Vec2`, `Vec3`, `Mat4`) with `scalar-math`; engine newtypes for
   units (`Radians`, `Seconds`). Std float trig is clippy-banned engine-wide —
-  use `jidousha::math::{sin_cos, atan2, ...}` (ADR-0009).
+  use `jidousha::math::{sin_cos, atan2, ...}`.
 
 ## Testing your game
 

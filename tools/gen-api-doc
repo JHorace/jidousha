@@ -84,6 +84,28 @@ FORBIDDEN = (
     "winit",
     "RenderBackend",
     "FramePlan",
+    # Pointers into documents this reader may not open. The E0 prompt forbids
+    # `docs/internal/` and `docs/adr/` outright, so a citation of one is worse
+    # than no citation: it tells a game author the answer exists somewhere they
+    # are not allowed to look. `scrub_internal_references` removes the
+    # parenthetical form; these catch anything written another way.
+    "docs/internal",
+    "docs/adr",
+    "core.md",
+    "renderer.md",
+    "assets.md",
+    "input.md",
+    "tooling.md",
+    "public-api.md",
+    "agent-practices",
+    "ADR-",
+)
+
+# `(ADR-0010)`, `(core.md §9)`, `(assets.md §6)`, `(I2)`, `(R4)` — a citation of
+# a maintainers' document, hanging off the end of a sentence.
+CITATION_RE = re.compile(
+    r"\s*\((?:see\s+)?(?:`?(?:docs/internal/)?[a-z-]+\.md`?(?:\s*§[\d.]+)?"
+    r"|ADR-\d+|[MIRAF]\d+)(?:[;,]\s*[^)]*)?\)"
 )
 
 # `pub use jidousha_core::{App, Draw, ...};` — possibly across several lines.
@@ -322,6 +344,23 @@ def read_signature(lines: "list[str]", index: int) -> "tuple[str, int]":
     return unqualify(text.rstrip(",")), cursor
 
 
+def scrub_internal_references(text: str) -> str:
+    """Drop citations of maintainers' documents from the game-facing text.
+
+    A doc comment serves two readers: rustdoc, where `(ADR-0010)` is the whole
+    point, and this document, whose reader is forbidden to open `docs/adr/` or
+    `docs/internal/` at all (e0-prompt.md). For that reader a citation is worse
+    than silence — it says the answer exists somewhere they may not look. E0 run
+    1 hit exactly this on `message`, whose entry pointed at `core.md §9`
+    (e0-findings.md F-005).
+
+    Stripping on the way out is practices §2.4 — two audiences, strict
+    separation — rather than a campaign to reword every doc comment in the
+    crates, which would take the citation away from the reader it helps.
+    """
+    return CITATION_RE.sub("", text)
+
+
 def unqualify(text: str) -> str:
     """Drop the internal crate from a path: `jidousha_assets::ByteSource`.
 
@@ -407,7 +446,8 @@ def first_sentence(block: "list[str]") -> str:
     sentence = text.split(". ")[0].rstrip(".").strip()
     # rustdoc intra-doc links mean nothing in a markdown file read by an agent;
     # the brackets around an already-code-spanned name are noise.
-    return re.sub(r"\[(`[^`]+`)\]", r"\1", sentence)
+    sentence = re.sub(r"\[(`[^`]+`)\]", r"\1", sentence)
+    return scrub_internal_references(sentence).strip()
 
 
 def scan_sources(sources: "list[Path]") -> "dict[str, Item]":
@@ -775,7 +815,7 @@ def conventions_digest(text: str) -> str:
             continue
         if current in keep:
             out.append(line)
-    return "\n".join(out).strip()
+    return scrub_internal_references("\n".join(out).strip())
 
 
 def render(repo: Path) -> str:

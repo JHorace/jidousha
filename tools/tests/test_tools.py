@@ -458,6 +458,44 @@ class GenApiDocTest(unittest.TestCase):
         leaked = text.replace("- **`Sprite`**", "- **`Sprite`** — see wgpu")
         self.assertIn("wgpu", gen_api_doc.forbidden_words(leaked))
 
+    def test_a_citation_of_a_maintainers_document_is_refused(self):
+        # E0 run 1 read `**message** — The failure in the engine's message
+        # format (core.md §9)` and could not follow the pointer: the prompt
+        # forbids `docs/internal/` outright (F-005). The gate had a list of
+        # crate names and seam types and no notion of a document path, so it
+        # read as covering a class it covered half of.
+        self.assertIn("core.md", gen_api_doc.forbidden_words("the format (core.md §9)"))
+        self.assertIn("ADR-", gen_api_doc.forbidden_words("clockwise on screen, see ADR-0010"))
+        self.assertIn("docs/internal", gen_api_doc.forbidden_words("see docs/internal/renderer.md"))
+
+    def test_a_parenthetical_citation_is_stripped_from_the_game_facing_text(self):
+        # A doc comment serves two readers: rustdoc, where `(ADR-0010)` is the
+        # point, and this document, whose reader may not open `docs/adr/` at
+        # all. Stripping on the way out keeps the citation for the reader it
+        # helps rather than deleting it from the source.
+        self.assertEqual(
+            gen_api_doc.scrub_internal_references("Rotation, clockwise on screen (ADR-0010)"),
+            "Rotation, clockwise on screen",
+        )
+        self.assertEqual(
+            gen_api_doc.scrub_internal_references("The engine's message format (core.md §9)"),
+            "The engine's message format",
+        )
+        self.assertEqual(
+            gen_api_doc.scrub_internal_references("The whole snapshot, for the recorder (I2)"),
+            "The whole snapshot, for the recorder",
+        )
+        # Ordinary parentheses are not citations and must survive.
+        self.assertEqual(
+            gen_api_doc.scrub_internal_references("Width and height (in world units)"),
+            "Width and height (in world units)",
+        )
+
+    def test_the_committed_document_cites_no_document_its_reader_may_not_open(self):
+        root = Path(__file__).resolve().parents[2]
+        text = (root / "docs/api/jidousha-api.md").read_text(encoding="utf-8")
+        self.assertEqual(gen_api_doc.forbidden_words(text), [])
+
     def test_the_budget_is_counted_and_the_committed_document_is_under_it(self):
         # The budget is the point: the whole surface has to fit in a
         # game-writing agent's context beside the game (public-api.md §4).
