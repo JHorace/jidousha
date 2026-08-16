@@ -1,7 +1,9 @@
 # E0 findings — what building a game with this engine actually cost
 
-Status: **one run, not yet passing.** The harness is `docs/internal/e0-prompt.md`; the
-milestone is implementation-plan.md §3.
+Status: **one run, all fourteen findings fixed, awaiting run 2.** The harness is
+`docs/internal/e0-prompt.md`; the milestone is implementation-plan.md §3. The bar
+is two consecutive runs with no new `engine` or `docs` findings, so run 1 being
+fully answered is the start of the measurement, not the end of it.
 
 E0 is the project's definition of working: a fresh Claude Code session, given
 only `docs/api/jidousha-api.md` and `crates/jidousha/examples/`, builds a
@@ -45,7 +47,7 @@ prompt.
 
 | Run | Date | Outcome | New `engine` | New `docs` | New `author` | Notes |
 |---|---|---|---|---|---|---|
-| 1 | 2026-08-16 | Pong shipped; **not** a pass | 5 | 9 | 1 | Game compiled first try, `--verify` green, human playtest good. The document did not survive it. Raw notes: `E0-NOTES.md`. |
+| 1 | 2026-08-16 | Pong shipped; **not** a pass | 5 | 9 | 1 | Game compiled first try, `--verify` green, human playtest good. The document did not survive it. Raw notes: `E0-NOTES.md`. All 14 fixed; §6. |
 
 Run 1 produced a working, fun Pong and a document-shaped hole underneath it. The
 game is not the measurement — `E0-NOTES.md` is — and it says the run could not
@@ -65,7 +67,7 @@ satisfies F-001 but leaves any of them unanswered has not finished.
 
 ### F-001 — "The API document is a table of contents, not an API"
 
-Class: docs · Run: 1 · Fixed in: open
+Class: docs · Run: 1 · Fixed in: `4f9c10f`
 
 **What the run did.** Wrote ~450 lines of Pong against
 `docs/api/jidousha-api.md` and `crates/jidousha/examples/`, as the prompt
@@ -120,7 +122,7 @@ declaration or the generator fails, per CLAUDE.md rule 3.
 
 ### F-002 — "`Key` has no listed variants"
 
-Class: docs · Run: 1 · Fixed in: open
+Class: docs · Run: 1 · Fixed in: `4f9c10f`
 
 **What the run did.** Wanted arrow keys for a second control scheme, and
 `Escape` to quit, and a digit or `P` to pause.
@@ -158,7 +160,7 @@ silently.
 
 ### F-003 — `Rect::contains` and `Rect::overlaps` exist, and are invisible
 
-Class: docs · Run: 1 · Fixed in: open
+Class: docs · Run: 1 · Fixed in: `4f9c10f`
 
 **What the run did.** Went looking for a rectangle overlap test before writing
 its own, and filed the result under "Things I expected to exist and could not
@@ -190,7 +192,7 @@ regression guard.
 
 ### F-004 — `GameConfig`'s fields are unlisted and `fixed_dt`'s value is never stated
 
-Class: docs · Run: 1 · Fixed in: open
+Class: docs · Run: 1 · Fixed in: `4f9c10f, fbd22e9`
 
 **What the run did.** Wanted to set the window's initial size, because the
 game's field is a fixed 34×19 world units. And needed the tick rate to express
@@ -231,7 +233,7 @@ struct literal. The missing field itself is F-013.
 
 ### F-005 — `message`'s signature is unknown, and its entry cites a document the reader may not open
 
-Class: docs · Run: 1 · Fixed in: open
+Class: docs · Run: 1 · Fixed in: `4f9c10f, f5a9910`
 
 **What the run did.** Needed the engine's message format for its own `--verify`
 failures.
@@ -270,7 +272,7 @@ stands alone, and add a test that the check rejects a document containing
 
 ### F-006 — `Camera::viewport` is not in the document at all
 
-Class: docs · Run: 1 · Fixed in: open
+Class: docs · Run: 1 · Fixed in: `4f9c10f`
 
 **What the run did.** Needed `Camera { viewport, ..*world.resource::<Camera>() }`
 per frame in its headless verification path.
@@ -295,7 +297,7 @@ F-012, which is the engine half of the same confusion.
 
 ### F-007 — `Startup` is documented as running before the first tick; it runs inside it
 
-Class: docs · Run: 1 · Fixed in: open
+Class: docs · Run: 1 · Fixed in: `fbd22e9`
 
 **What the run did.** Built a rally harness that reads the ball's position
 *before* each tick, to steer a paddle at it.
@@ -327,7 +329,7 @@ the start of the first tick." Applied at the definition and in `concepts.md`.
 
 ### F-008 — Alpha reads brighter than the number suggests, and the document implies otherwise
 
-Class: docs · Run: 1 · Fixed in: open
+Class: docs · Run: 1 · Fixed in: `fbd22e9`
 
 **What the run did.** Picked 0.16 alpha for field markings.
 
@@ -355,7 +357,7 @@ copy.
 
 ### F-009 — Whether a game needs an `Assets` resource is never stated
 
-Class: docs · Run: 1 · Fixed in: open
+Class: docs · Run: 1 · Fixed in: `fbd22e9`
 
 **What the run did.** Wrote a game of pure shapes and text, touching no assets,
 and could not tell whether that was supported.
@@ -384,7 +386,7 @@ rather than omitting a fact.
 
 ### F-010 — The road to "assert on what was drawn" is far longer than the document implies
 
-Class: engine · Run: 1 · Fixed in: open
+Class: engine · Run: 1 · Fixed in: `e38f60a`
 
 **What the run did.** Wrote `--verify` assertions about what its game drew.
 
@@ -432,7 +434,7 @@ deleted.
 
 ### F-011 — Adapter selection picks the wrong GPU, and the failure message misdiagnoses it
 
-Class: engine · Run: 1 · Fixed in: open · Issue: [#23](https://github.com/JHorace/jidousha/issues/23)
+Class: engine · Run: 1 · Fixed in: `2669cfe` · Issue: [#23](https://github.com/JHorace/jidousha/issues/23)
 
 **What the run did.** Nothing — the run never saw its own game. This came from
 the repository owner running it on a real Linux desktop after the notes were
@@ -513,7 +515,7 @@ code, and are not separate findings only because they have no separate fix:
 
 ### F-012 — `Camera::viewport` is silently never set when a game inserts no `Camera`
 
-Class: engine · Run: 1 · Fixed in: open
+Class: engine · Run: 1 · Fixed in: `b577ec1`
 
 **What the run did.** Nothing. **E0 did not find this** — it surfaced while
 root-causing F-006, because Pong inserts a `Camera` and so never took the broken
@@ -552,7 +554,7 @@ game starts as a copy of.
 
 ### F-013 — A game cannot set its window's initial size
 
-Class: engine · Run: 1 · Fixed in: open
+Class: engine · Run: 1 · Fixed in: `555ab42`
 
 **What the run did.** Wanted a 16:9-ish window for a field that is a fixed 34×19
 world units, and settled for a comment admitting a narrow window will crop it —
@@ -582,7 +584,7 @@ and stays recorded here rather than being quietly dropped.
 
 ### F-014 — `ctx.text` puts depth somewhere different from every other draw verb
 
-Class: engine · Run: 1 · Fixed in: open
+Class: engine · Run: 1 · Fixed in: `19b2dc9` (ADR-0018; the API is unchanged)
 
 **What the run did.** Drew shapes and a score.
 
@@ -678,7 +680,42 @@ The human playtest, when it happened, changed no constant: controls good,
 opponent hard but fair at roughly a one-in-four win rate, first-to-five the right
 match length.
 
-## 6. What this file feeds
+## 6. Where run 2 stands
+
+Every `engine` and `docs` finding from run 1 is fixed. What run 2 measures is
+whether the fixes were the right ones — and the honest summary of what changed
+under it is short:
+
+- **The reference now carries signatures**, which is most of the list. ~4,100
+  tokens became ~13,800 of a 25,000 budget, and the six `docs` findings that
+  were one bug seen from six angles are answered together. Whether that is
+  *enough* is exactly what a fresh run is for: F-001's real claim was that the
+  document could not be written from, and only a run that writes from it can
+  say.
+- **Two things are guarded rather than merely fixed.** `completeness_failures`
+  fails the generator when an exported item yields no declaration, and the
+  forbidden-vocabulary gate now covers internal document paths. Both exist
+  because the original failures were silent, and a silent failure fixed without
+  a gate is a silent failure scheduled to return.
+- **One fix cannot be verified here.** F-011 needs the reporter's hardware; this
+  container has no display and no adapter. Run 2 will not exercise it either.
+
+What run 2 should be watched for, beyond new findings:
+
+- Whether the enriched reference is *navigable*, not just complete. It is now
+  four times its old size, and a document an agent cannot skim is a different
+  failure from one that omits things. If a run reports hunting through it, that
+  is a finding about the format rather than the content.
+- Whether `FrameRecorder` is actually reached for. It is in `testing.md` and in
+  `pong/verify.rs`, but `prototype_kit` still shows the long form for a reason
+  it now states. If a run copies the long form anyway, the reason is not
+  visible enough.
+- Whether anything in this file's fixes reads as an invitation to guess. The
+  `Key` list, the tick rate, and `GameConfig`'s fields were all things the run
+  correctly refused to guess at; the fix is only real if the next run does not
+  have to.
+
+## 7. What this file feeds
 
 The `make-game` skill (agent-practices §3) is written from E0's findings after
 it passes. A friction that recurs across runs and cannot be designed away is
