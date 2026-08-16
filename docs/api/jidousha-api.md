@@ -231,9 +231,10 @@ pub struct GameConfig {
     pub title: &'static str,  // The window's title
     pub seed: u64,  // Fixes every random draw of the run
     pub fixed_dt: Seconds,  // How much simulated time one Update tick covers
+    pub window_size: PhysicalSize,  // How big the window opens, in pixels
 }
 // Clone Copy Debug PartialEq
-// Default = GameConfig { title: "jidousha game", seed: 0, fixed_dt: Seconds(1.0 / 60.0) }
+// Default = GameConfig { title: "jidousha game", seed: 0, fixed_dt: Seconds(1.0 / 60.0), window_size: PhysicalSize::new(1280, 720) }
 ```
 
 #### `headless`

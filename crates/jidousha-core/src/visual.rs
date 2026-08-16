@@ -251,6 +251,44 @@ pub struct Quad {
     pub depth: Depth,
 }
 
+/// The size of a surface or a texture, in physical pixels.
+///
+/// Physical, not logical: DPI scaling is the platform's business, and the
+/// renderer works in the pixels it is actually given.
+///
+/// Here rather than in the renderer because three crates need it and one of
+/// them is this one: `GameConfig::window_size` asks for a window this big, the
+/// renderer's `Camera` records how big the surface turned out, and the platform
+/// crate measures it. That is ADR-0015's rule applied to pixels — vocabulary
+/// that has to cross the seam lives on the near side of it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PhysicalSize {
+    /// Width in pixels.
+    pub width: u32,
+    /// Height in pixels.
+    pub height: u32,
+}
+
+impl PhysicalSize {
+    /// A size in pixels.
+    #[must_use]
+    pub const fn new(width: u32, height: u32) -> Self {
+        Self { width, height }
+    }
+
+    /// Width divided by height, or 1.0 for a degenerate surface.
+    ///
+    /// A minimized window reports zero height, and a camera that divided by it
+    /// would put NaN into every vertex of the frame.
+    #[must_use]
+    pub fn aspect(self) -> f32 {
+        if self.width == 0 || self.height == 0 {
+            return 1.0;
+        }
+        self.width as f32 / self.height as f32
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -294,6 +332,16 @@ mod tests {
     fn the_white_texture_prints_as_itself() {
         assert_eq!(format!("{:?}", TextureId::WHITE), "TextureId(white)");
         assert_eq!(format!("{:?}", TextureId::from_bits(7)), "TextureId(7)");
+    }
+
+    #[test]
+    fn a_degenerate_surface_has_a_usable_aspect() {
+        // A minimized window reports zero height. Dividing by it would put NaN
+        // into every vertex of the frame, which is a far worse outcome than a
+        // frame drawn at the wrong shape and never seen.
+        assert_eq!(PhysicalSize::new(0, 0).aspect(), 1.0);
+        assert_eq!(PhysicalSize::new(800, 0).aspect(), 1.0);
+        assert_eq!(PhysicalSize::new(1600, 900).aspect(), 16.0 / 9.0);
     }
 
     #[test]

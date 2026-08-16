@@ -45,6 +45,24 @@ decisions: `HeadlessSim::tick` takes no argument yet (`TickInput` needs input
 and assets to exist), and `GameConfig` carries `title`, `seed` and `fixed_dt`
 only — the asset, window and camera fields arrive with their subsystems, and
 `..GameConfig::default()` means adding them disturbs nothing already written.
+
+**`window_size` landed at E0** (e0-findings.md F-013), five milestones after the
+subsystem it was waiting for. M5 built the window and did not bring the field
+with it, and nothing noticed, because "arrives with its subsystem" was written
+in two documents and attached to no milestone's checklist. The E0 game wanted a
+16:9 window for a 34×19 field, could not tell whether the field existed, and
+settled for a comment admitting a narrow window crops the playfield — its own
+author calling that "a gameplay decision made by ignorance".
+
+This moved `PhysicalSize` from `jidousha-render-core` to `jidousha-core`, with a
+re-export so no call site changed. `GameConfig` lives in core and core depends
+on no other jidousha crate, so the type had to be on the near side of that
+seam — the same reasoning ADR-0015 applies to the draw vocabulary, applied to
+pixels. On the web the field is ignored: the canvas is sized by the page, and a
+canvas that disagreed with its CSS would be drawn at one size and shown at
+another.
+
+`camera_height` remains unlanded, and is recorded here rather than dropped.
 `run` lands with the platform crate (M5); it is the same loop with a different
 driver (core.md §8).
 

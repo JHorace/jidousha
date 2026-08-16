@@ -56,12 +56,14 @@ mod sprite;
 mod submit;
 mod textures;
 
-pub use backend::{
-    BackendTextureId, PhysicalSize, RawImage, RenderBackend, RenderError, TextureDesc,
-};
+pub use backend::{BackendTextureId, RawImage, RenderBackend, RenderError, TextureDesc};
 pub use camera::Camera;
 pub use font::{FONT_TEXTURE, TextStyle};
 pub use golden::{Comparison, Tolerance, compare, decode_png, diff_image, encode_png};
+// Defined in core, because `GameConfig::window_size` needs it and core depends
+// on no other jidousha crate. Re-exported here so the renderer's vocabulary
+// still reads as one list — the same reasoning as ADR-0015 applied to pixels.
+pub use jidousha_core::PhysicalSize;
 pub use null::{DrawnQuad, FrameRecord, NullBackend};
 pub use plan::{Batch, FramePlan, QuadVertex, TextureTable, plan_frame};
 pub use sprite::Sprite;

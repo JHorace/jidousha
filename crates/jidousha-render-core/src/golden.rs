@@ -21,7 +21,8 @@ use core::fmt;
 
 use jidousha_assets::{AssetError, TextureData};
 
-use crate::backend::{PhysicalSize, RawImage};
+use crate::backend::RawImage;
+use jidousha_core::PhysicalSize;
 
 /// How different two pictures may be and still count as the same picture.
 ///

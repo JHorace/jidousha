@@ -1,7 +1,7 @@
 //! The seam: what a render backend must do, stated in engine types only.
 //!
 //! Key types: `RenderBackend`, `BackendTextureId`, `TextureDesc`, `RawImage`,
-//! `PhysicalSize`, `RenderError`.
+//! `RenderError`.
 //! Depends on: `jidousha-core`, `plan`. Must never depend on: `wgpu`, `ash`, or
 //! any graphics API (ADR-0003, CONTRACT).
 //! INVARIANT: five methods, and none of them takes a graphics type. Backends
@@ -10,6 +10,8 @@
 //! cheap (renderer.md §1, §7).
 
 use core::fmt;
+
+use jidousha_core::PhysicalSize;
 
 use jidousha_core::message;
 
@@ -21,38 +23,6 @@ use crate::plan::FramePlan;
 /// a [`FramePlan`], and only the backend knows what one points at.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BackendTextureId(pub u32);
-
-/// The size of a surface or a texture, in physical pixels.
-///
-/// Physical, not logical: DPI scaling is the platform's business, and the
-/// renderer works in the pixels it is actually given.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct PhysicalSize {
-    /// Width in pixels.
-    pub width: u32,
-    /// Height in pixels.
-    pub height: u32,
-}
-
-impl PhysicalSize {
-    /// A size in pixels.
-    #[must_use]
-    pub const fn new(width: u32, height: u32) -> Self {
-        Self { width, height }
-    }
-
-    /// Width divided by height, or 1.0 for a degenerate surface.
-    ///
-    /// A minimized window reports zero height, and a camera that divided by it
-    /// would put NaN into every vertex of the frame.
-    #[must_use]
-    pub fn aspect(self) -> f32 {
-        if self.width == 0 || self.height == 0 {
-            return 1.0;
-        }
-        self.width as f32 / self.height as f32
-    }
-}
 
 /// What a texture is made of.
 ///
@@ -167,16 +137,6 @@ pub trait RenderBackend {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn a_degenerate_surface_has_a_usable_aspect() {
-        // A minimized window reports zero height. Dividing by it would put NaN
-        // into every vertex of the frame, which is a far worse outcome than a
-        // frame drawn at the wrong shape and never seen.
-        assert_eq!(PhysicalSize::new(0, 0).aspect(), 1.0);
-        assert_eq!(PhysicalSize::new(800, 0).aspect(), 1.0);
-        assert_eq!(PhysicalSize::new(1600, 900).aspect(), 16.0 / 9.0);
-    }
 
     #[test]
     fn a_render_error_reads_like_every_other_engine_error() {

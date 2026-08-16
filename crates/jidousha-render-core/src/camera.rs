@@ -10,7 +10,7 @@
 use jidousha_core::math::{Mat4, Vec2};
 use jidousha_core::{Color, Resource};
 
-use crate::backend::PhysicalSize;
+use jidousha_core::PhysicalSize;
 
 /// What the frame is looking at.
 ///

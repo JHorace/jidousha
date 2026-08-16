@@ -10,11 +10,9 @@
 use core::fmt::Write as _;
 
 use jidousha_core::math::Vec2;
-use jidousha_core::{Color, Rect};
+use jidousha_core::{Color, PhysicalSize, Rect};
 
-use crate::backend::{
-    BackendTextureId, PhysicalSize, RawImage, RenderBackend, RenderError, TextureDesc,
-};
+use crate::backend::{BackendTextureId, RawImage, RenderBackend, RenderError, TextureDesc};
 use crate::plan::{Batch, FramePlan};
 
 /// One quad, read back out of a recorded frame.

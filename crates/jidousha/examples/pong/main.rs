@@ -171,6 +171,11 @@ impl Resource for Tally {}
 fn config() -> GameConfig {
     GameConfig {
         title: "jidousha — pong",
+        // The field is a fixed 34 by 19 world units and the camera is 20 tall,
+        // so anything much narrower than 16:9 crops the ends of the field —
+        // where the paddles are. Asking for a window of the right shape is the
+        // whole reason this field exists.
+        window_size: PhysicalSize::new(1280, 720),
         ..GameConfig::default()
     }
 }

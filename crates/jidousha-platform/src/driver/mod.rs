@@ -151,7 +151,7 @@ impl ApplicationHandler for Driver {
             // recreating it would drop the surface the renderer will hold (R1).
             return;
         }
-        let attributes = window_attributes(self.config.title);
+        let attributes = window_attributes(&self.config);
         match event_loop.create_window(attributes) {
             Ok(window) => {
                 let window = Arc::new(window);
@@ -216,16 +216,27 @@ impl ApplicationHandler for Driver {
 /// the page unless asked; without `with_append` the program runs correctly and
 /// draws to something nobody can see (ADR-0004, ADR-0005).
 #[cfg(not(target_arch = "wasm32"))]
-fn window_attributes(title: &'static str) -> winit::window::WindowAttributes {
-    Window::default_attributes().with_title(title)
+fn window_attributes(config: &GameConfig) -> winit::window::WindowAttributes {
+    Window::default_attributes()
+        .with_title(config.title)
+        .with_inner_size(winit::dpi::PhysicalSize::new(
+            config.window_size.width,
+            config.window_size.height,
+        ))
 }
 
+/// On the web the canvas is sized by the page, not by the program.
+///
+/// `window_size` is ignored here rather than fought over: a canvas that
+/// disagreed with its CSS would be stretched by the browser, and the game would
+/// be drawn at one size and displayed at another. The camera decides how much
+/// world is on screen on both targets, which is why this costs a game nothing.
 #[cfg(target_arch = "wasm32")]
-fn window_attributes(title: &'static str) -> winit::window::WindowAttributes {
+fn window_attributes(config: &GameConfig) -> winit::window::WindowAttributes {
     use winit::platform::web::WindowAttributesExtWebSys;
 
     Window::default_attributes()
-        .with_title(title)
+        .with_title(config.title)
         .with_append(true)
 }
 
