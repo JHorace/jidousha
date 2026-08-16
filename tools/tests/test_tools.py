@@ -37,6 +37,7 @@ test_wrapper = load_tool("test")
 serve_web = load_tool("serve-web")
 check_claude_md = load_tool("check-claude-md")
 dep_count = load_tool("dep-count")
+verify = load_tool("verify")
 
 
 class DoctorVerdictTest(unittest.TestCase):
@@ -283,11 +284,104 @@ class ExampleDiscoveryTest(unittest.TestCase):
         # A stale name here would silently start running a windowed example, or
         # keep skipping one that was deleted.
         root = Path(__file__).resolve().parents[2]
+        # Both example layouts cargo accepts: `examples/name.rs`, and
+        # `examples/name/main.rs` for one big enough to be worth splitting.
         existing = {path.stem for path in root.glob("crates/*/examples/*.rs")}
+        existing |= {path.parent.name for path in root.glob("crates/*/examples/*/main.rs")}
         self.assertTrue(
             test_wrapper.WINDOWED_EXAMPLES <= existing,
             f"unknown windowed examples: {test_wrapper.WINDOWED_EXAMPLES - existing}",
         )
+
+    def test_a_verifiable_example_is_run_headless_rather_than_only_built(self):
+        # The point of I2: an example that needs a person to look at it gets the
+        # looking scripted, instead of being compiled and shrugged at.
+        example = sorted(test_wrapper.VERIFIABLE_EXAMPLES)[0]
+        name, command = test_wrapper.example_phase("jidousha-platform", example)
+        self.assertEqual(name, f"example-verify:{example}")
+        self.assertIn("tools/verify", command)
+        self.assertIn(example, command)
+
+    def test_every_verifiable_example_is_a_windowed_one(self):
+        # A headless example already asserts in its normal mode; giving it a
+        # second mode would be a second way to do one thing, and this phase
+        # would replace the run that was already checking it.
+        self.assertTrue(
+            test_wrapper.VERIFIABLE_EXAMPLES <= test_wrapper.WINDOWED_EXAMPLES,
+            "a verifiable example that is not windowed would stop being run normally",
+        )
+
+
+class VerifyToolTest(unittest.TestCase):
+    OUTPUT = (
+        "verified prototype_kit over 130 ticks\n"
+        "  paddle: 0.00 -> 7.00, clamped\n"
+        "  frames: 130\n"
+        "clear #121721ff\n"
+        "batch 0: texture 0 (21 quads)\n"
+        "  quad (0.0, 0.0) (1.0, 1.0) tint #ffffffff\n"
+    )
+
+    def test_the_verdict_and_its_summary_are_read_out_of_the_output(self):
+        verdict, summary = verify.parse_verdict(self.OUTPUT)
+        self.assertEqual(verdict, "verified prototype_kit over 130 ticks")
+        self.assertEqual(summary, ["paddle: 0.00 -> 7.00, clamped", "frames: 130"])
+
+    def test_the_draw_transcript_is_not_mistaken_for_the_summary(self):
+        # The transcript's own quad lines are indented too. Stopping at the
+        # first unindented line is what keeps them out — without it the summary
+        # would be the whole frame.
+        _, summary = verify.parse_verdict(self.OUTPUT)
+        self.assertNotIn("quad (0.0, 0.0) (1.0, 1.0) tint #ffffffff", summary)
+
+    def test_output_with_no_verdict_line_reads_as_unverified(self):
+        # An example that ignored `--verify` and ran normally exits 0 having
+        # verified nothing. Calling that a pass is the one failure mode this
+        # whole script has to avoid.
+        self.assertEqual(verify.parse_verdict("hello\nworld\n"), (None, []))
+
+    def test_a_verdict_with_nothing_under_it_still_reads_as_a_verdict(self):
+        self.assertEqual(
+            verify.parse_verdict("verified thing over 3 ticks\n"),
+            ("verified thing over 3 ticks", []),
+        )
+
+    def test_an_example_is_looked_up_by_name_across_the_workspace(self):
+        examples = [("jidousha-core", "homing"), ("jidousha-platform", "prototype_kit")]
+        self.assertEqual(verify.find_example(examples, "prototype_kit"), "jidousha-platform")
+
+    def test_an_unknown_example_is_not_resolved_to_some_other_package(self):
+        examples = [("jidousha-core", "homing")]
+        self.assertIsNone(verify.find_example(examples, "nope"))
+
+    def test_a_clean_run_with_a_verdict_is_a_pass(self):
+        self.assertEqual(verify.verdict_status("ok", "verified thing over 3 ticks"), "pass")
+
+    def test_a_clean_run_with_no_verdict_is_not_a_pass(self):
+        # The one failure mode this script exists to avoid: an example that
+        # ignores `--verify` runs normally, exits 0, and asserts nothing.
+        self.assertEqual(verify.verdict_status("ok", None), "unverified")
+        self.assertEqual(verify.EXIT_CODES["unverified"], 2)
+
+    def test_a_nonzero_exit_is_a_failure_whatever_it_printed(self):
+        # An example that failed an assertion after printing its verdict would
+        # otherwise be read as a pass.
+        self.assertEqual(verify.verdict_status("failed", "verified thing"), "fail")
+        self.assertEqual(verify.EXIT_CODES["fail"], 1)
+
+    def test_a_timeout_and_a_launch_failure_keep_their_own_names(self):
+        # Both are tooling faults, and neither should be reported as the
+        # example's assertions failing.
+        self.assertEqual(verify.verdict_status("timeout", None), "timeout")
+        self.assertEqual(verify.verdict_status("error", None), "error")
+        self.assertEqual(verify.EXIT_CODES["timeout"], 2)
+        self.assertEqual(verify.EXIT_CODES["error"], 2)
+
+    def test_the_report_does_not_go_where_the_test_wrapper_writes_its_own(self):
+        # Two tools writing one ground-truth file is how ground truth stops
+        # being true (tooling.md §3).
+        self.assertNotEqual(verify.REPORT_DIR / "prototype_kit.json", test_wrapper.REPORT_PATH)
+        self.assertEqual(verify.REPORT_DIR, test_wrapper.REPORT_PATH.parent)
 
 
 class DepCountTest(unittest.TestCase):

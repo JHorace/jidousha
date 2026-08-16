@@ -50,7 +50,6 @@ pub struct FileSource {
     /// contended — the store is drained from one thread, at one point in the
     /// frame — and A0's `ByteSource` doc predicted exactly this shape.
     done: Mutex<Receiver<Completion>>,
-    outstanding: usize,
     next_request: u64,
 }
 
@@ -104,7 +103,6 @@ impl FileSource {
             root: root.into(),
             jobs,
             done: Mutex::new(done),
-            outstanding: 0,
             next_request: 0,
         }
     }
@@ -184,7 +182,6 @@ impl ByteSource for FileSource {
     fn request(&mut self, path: &str, kind: AssetKind) -> RequestId {
         let request = RequestId::from_bits(self.next_request);
         self.next_request += 1;
-        self.outstanding += 1;
 
         // Forward slashes in, native separators out: one path string works on
         // every platform, which is what makes the same game run everywhere
@@ -219,7 +216,6 @@ impl ByteSource for FileSource {
         while let Ok(completion) = done.try_recv() {
             completed.push(completion);
         }
-        self.outstanding = self.outstanding.saturating_sub(completed.len());
 
         // CONTRACT (assets.md §5): one poll's completions come back in request
         // order. The channel preserves the order the loader finished them in,
@@ -227,9 +223,5 @@ impl ByteSource for FileSource {
         // so rather than relying on it, and costs nothing at these sizes.
         completed.sort_by_key(|completion| completion.request);
         completed
-    }
-
-    fn outstanding(&self) -> usize {
-        self.outstanding
     }
 }

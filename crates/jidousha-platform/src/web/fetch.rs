@@ -49,7 +49,6 @@ pub struct WebSource {
     /// single-threaded, so the lock is never contended and never blocks — but
     /// the bound is the bound.
     arrived: Arc<Mutex<Vec<Fetched>>>,
-    outstanding: usize,
     next_request: u64,
 }
 
@@ -60,7 +59,6 @@ impl WebSource {
         Self {
             root: root.into(),
             arrived: Arc::new(Mutex::new(Vec::new())),
-            outstanding: 0,
             next_request: 0,
         }
     }
@@ -141,7 +139,6 @@ impl ByteSource for WebSource {
     fn request(&mut self, path: &str, kind: AssetKind) -> RequestId {
         let request = RequestId::from_bits(self.next_request);
         self.next_request += 1;
-        self.outstanding += 1;
         let url = super::asset_url(&self.root, path);
         fetch(url, request, kind, Arc::clone(&self.arrived));
         request
@@ -166,16 +163,11 @@ impl ByteSource for WebSource {
                 }),
             })
             .collect();
-        self.outstanding = self.outstanding.saturating_sub(completed.len());
 
         // CONTRACT (assets.md §5): one poll's completions come back in request
         // order. The network returns them in whatever order it likes — which is
         // exactly the environmental timing this sort keeps off the timeline.
         completed.sort_by_key(|completion| completion.request);
         completed
-    }
-
-    fn outstanding(&self) -> usize {
-        self.outstanding
     }
 }

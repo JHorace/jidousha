@@ -1,7 +1,7 @@
 # Asset loading basics — design and contracts
 
-Status: **living doc for `jidousha-assets`; A0, A1 and A2 implemented, A3 still
-design.**
+Status: **living doc for `jidousha-assets`; A0, A1 and A2 implemented, plus the
+I2 replay seam; A3 still design.**
 Sections carry `Implemented (AN)` notes where code exists; everything else is
 design ahead of the code. **CONTRACT** items are binding and tested.
 
@@ -148,6 +148,23 @@ Implemented (A0):
   only at a numbered tick — and `MemorySource`'s scripted ticks stand in for the
   recording meanwhile, which is what makes the exit tests replayable today.
 
+Implemented (I2): the recording exists, and the CONTRACT above is now tested end
+to end.
+
+- `Assets::resolved()` reports what the last `commit` resolved — a
+  `Resolution { request, arrived }` per asset, in request order, cleared at each
+  commit. A recorder reads it after committing and writes it into that tick's
+  record; it is deliberately request *ids* rather than handles, because the
+  recording lives in `jidousha-input`, which cannot name this crate's types.
+- `ReplaySource` (§7) applies the recording on the way back: it wraps whatever
+  source the replay actually has and releases each completion on the tick the
+  recording gives it, so a disk that is fast today cannot change a session that
+  was recorded on a slow one.
+- `jidousha-platform/tests/record_replay.rs` is the proof, and its
+  negative control is the part that matters: the same replay with the readiness
+  records thrown away must *not* match. Without that assertion the whole
+  mechanism could be inert and every other test here would still pass.
+
 ## 5. Internals: the platform seam and threading
 
 ```
@@ -166,11 +183,20 @@ jidousha-platform   provides the ByteSource impls:
 
 Implemented (A0):
 
-- `ByteSource` is three methods: `request`, `drain_completed(tick)`,
-  `outstanding`. CONTRACT: `drain_completed` is called only from `commit`,
-  returns each completion exactly once, and orders one poll's completions by
-  request id. That last clause is not decoration — a source that drains in hash
-  order replays differently on the second run, and the exit tests catch it.
+- `ByteSource` is two methods: `request` and `drain_completed(tick)`.
+  CONTRACT: `drain_completed` is called only from `commit`, returns each
+  completion exactly once, and orders one poll's completions by request id.
+  That last clause is not decoration — a source that drains in hash order
+  replays differently on the second run, and the exit tests catch it.
+
+  It was three until I2: an `outstanding()` count, documented as what
+  `all_ready` consulted. `all_ready` never consulted it — it walks the store's
+  own entries, which already covers everything anyone asked for, because a
+  request cannot exist without an entry. I2's mutation pass is what found it:
+  deleting the term from `ReplaySource`'s implementation changed no test,
+  because nothing read it. Three sources were each maintaining a counter for
+  nobody, and a second way to ask "is anything in flight" could only ever
+  disagree with the first.
 - `MemorySource` stores its content in a `BTreeMap`, not a `HashMap` as this
   section originally said: an ordered map is the cheapest way to keep iteration
   out of the nondeterminism budget entirely (core §7).
@@ -259,6 +285,21 @@ Implemented (A0):
 - `tools/verify` uses `MemorySource` with scripted readiness ticks by default —
   zero filesystem dependence, fully reproducible; a flag switches to real I/O
   for integration smoke tests.
+
+Implemented (I2): `tools/verify` exists, and `examples/prototype_kit/`'s
+`--verify` mode is the first user of it — a `MemorySource` with one scripted
+arrival tick, so the placeholder is on screen for a known number of frames and
+the art for the rest. No flag for real I/O yet: nothing has asked for one, and a
+verify run that reads the disk is a verify run that can fail for reasons that say
+nothing about the game.
+
+Implemented (I2): `ReplaySource` (`replay.rs`) is the other half of §4 — it
+wraps any source and releases its completions on the ticks a recording says,
+holding early ones back — and a held completion leaves its asset `Loading`, so a
+game's `all_ready` gate stays shut exactly as long as it did on the day.
+`unreleased()` says how many are still waiting, which is how a replay that
+stopped short can say so rather than looking like a shorter session. `Assets::resolved()` reports what a commit
+resolved, in request order, which is what a recorder writes down.
 - Golden transcript tests cover: placeholder → real texture swap at the
   scripted tick; Failed → placeholder + single error; unload → debug panic on
   use (a `should_panic` test locking the message).

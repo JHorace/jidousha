@@ -13,16 +13,22 @@
 //!
 //! Run it: `cargo run -p jidousha-platform --example prototype_kit`
 //! On the web: `tools/serve-web prototype_kit`
+//! Check it:  `tools/verify prototype_kit`
 //!
-//! DELIBERATE: built but not run by `tools/test`, like the other windowed
-//! examples — it opens a window and waits for a person (tooling.md).
+//! The last of those is I2's exit criterion and the engine's thesis in one
+//! command: the same systems and the same config as the window, driven by a
+//! script instead of a person, asserting on world state and on the draw
+//! transcript, with no display anywhere. It lives in `verify.rs` beside this
+//! file — the first example to be a directory rather than one file, because the
+//! game and the check on the game are two things to read.
 
 use jidousha_assets::Assets;
 use jidousha_core::{
-    Color, Component, Depth, Draw, DrawCtx, GameConfig, Rect, Startup, Time, Transform, Update,
-    World,
+    App, Color, Component, Depth, Draw, DrawCtx, GameConfig, Rect, Startup, Time, Transform,
+    Update, World,
     math::{Radians, Vec2, sin_cos},
 };
+use jidousha_input::{Input, Key};
 use jidousha_render_core::{Camera, Sprite, Submit, TextStyle, draw_sprites};
 
 /// Where the art lives, relative to the workspace root (assets.md §2).
@@ -30,6 +36,12 @@ const ASSET_ROOT: &str = "assets";
 
 /// The world is twenty units tall; everything below is in those units.
 const VIEW_HEIGHT: f32 = 20.0;
+
+/// How big a paddle is drawn, in world units.
+///
+/// Stated once because the verify run asserts against it: a check that carried
+/// its own copy of the number would keep passing after the paddle changed size.
+const PADDLE_SIZE: Vec2 = Vec2::new(0.5, 4.0);
 
 /// Draw bands, so the ordering is stated once rather than guessed at each site.
 ///
@@ -61,22 +73,52 @@ impl Component for Bounce {}
 struct Spin(f32);
 impl Component for Spin {}
 
+/// A paddle the player moves, and how far it may travel.
+#[derive(Clone, Copy)]
+struct Paddle {
+    /// World units per tick.
+    speed: f32,
+    /// Half the travel allowed either side of the centre.
+    limit: f32,
+}
+impl Component for Paddle {}
+
+/// The game's configuration, shared by the window and the verify run so that
+/// what is verified is what a person sees.
+fn config() -> GameConfig {
+    GameConfig {
+        title: "jidousha — prototype kit",
+        ..GameConfig::default()
+    }
+}
+
+/// Every system this game has, in one place.
+///
+/// Named rather than written inline so `tools/verify` runs the *same* game the
+/// window does. A verify run that registered a different set of systems would
+/// be verifying a different program.
+fn register(app: &mut App) {
+    app.add_system(Startup, set_the_scene);
+    app.add_system(Update, drive_the_paddle);
+    app.add_system(Update, bounce);
+    app.add_system(Update, turn);
+    app.add_system(Draw, draw_sprites);
+    app.add_system(Draw, draw_the_field);
+    app.add_system(Draw, draw_the_hitboxes);
+    app.add_system(Draw, draw_the_readout);
+}
+
+mod verify;
+
 fn main() -> Result<(), jidousha_platform::RunError> {
-    jidousha_platform::run(
-        GameConfig {
-            title: "jidousha — prototype kit",
-            ..GameConfig::default()
-        },
-        |app| {
-            app.add_system(Startup, set_the_scene);
-            app.add_system(Update, bounce);
-            app.add_system(Update, turn);
-            app.add_system(Draw, draw_sprites);
-            app.add_system(Draw, draw_the_field);
-            app.add_system(Draw, draw_the_hitboxes);
-            app.add_system(Draw, draw_the_readout);
-        },
-    )
+    // `tools/verify` runs this same binary with `--verify`: same systems, same
+    // config, no window, scripted input, and assertions instead of a person.
+    if std::env::args().any(|argument| argument == "--verify") {
+        verify::run();
+        return Ok(());
+    }
+    println!("W and S move the left paddle. close the window to quit");
+    jidousha_platform::run(config(), register)
 }
 
 fn set_the_scene(world: &mut World) {
@@ -85,7 +127,12 @@ fn set_the_scene(world: &mut World) {
         height: VIEW_HEIGHT,
         ..Camera::default()
     });
-    world.insert_resource(art());
+    // Only if nothing has installed one already. A verify run puts a scripted
+    // store in before Startup so that *when* the art arrives is part of the
+    // script rather than a question about the disk (assets.md §7).
+    if world.find_resource::<Assets>().is_none() {
+        world.insert_resource(art());
+    }
 
     let hero = world
         .resource_mut::<Assets>()
@@ -110,7 +157,32 @@ fn set_the_scene(world: &mut World) {
         },
     );
 
-    println!("window open — close it to quit");
+    // The player's paddle, on the left.
+    let paddle = world.spawn();
+    world.insert(paddle, Transform::at(Vec2::new(-14.0, 0.0)));
+    world.insert(
+        paddle,
+        Paddle {
+            speed: 0.25,
+            limit: 7.0,
+        },
+    );
+}
+
+/// Move the paddle with W and S, clamped to the field.
+///
+/// The one system that reads input, and therefore the one a script can drive.
+fn drive_the_paddle(world: &mut World) {
+    let step = match world.find_resource::<Input>() {
+        // The first tick of a run can happen before any input is set, and a
+        // game that assumed otherwise would panic on startup.
+        None => return,
+        Some(input) => f32::from(input.held(Key::S)) - f32::from(input.held(Key::W)),
+    };
+    for (_, transform, paddle) in world.query_mut::<(&mut Transform, &Paddle)>() {
+        transform.pos.y =
+            (transform.pos.y + step * paddle.speed).clamp(-paddle.limit, paddle.limit);
+    }
 }
 
 /// Slide the bouncers along X, on simulated time.
@@ -174,11 +246,22 @@ fn draw_the_field(ctx: &mut DrawCtx) {
         depth,
     );
 
-    // A paddle each side, which in a real game would be entities.
-    for x in [field.min.x + 1.2, field.max.x - 1.2] {
+    // The right-hand paddle is scenery; the left one is an entity the player
+    // moves, drawn below from its `Transform`.
+    ctx.rect(
+        Rect::from_center_size(Vec2::new(field.max.x - 1.2, 0.0), PADDLE_SIZE),
+        Color::rgb(0.85, 0.85, 0.9),
+        Depth::layer(layers::PLAY),
+    );
+    let paddles: Vec<Vec2> = ctx
+        .world
+        .query::<(&Transform, &Paddle)>()
+        .map(|(_, transform, _)| transform.pos)
+        .collect();
+    for at in paddles {
         ctx.rect(
-            Rect::from_center_size(Vec2::new(x, 0.0), Vec2::new(0.5, 4.0)),
-            Color::rgb(0.85, 0.85, 0.9),
+            Rect::from_center_size(at, PADDLE_SIZE),
+            Color::rgb(0.4, 1.0, 0.7),
             Depth::layer(layers::PLAY),
         );
     }

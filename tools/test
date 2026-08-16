@@ -40,6 +40,7 @@ STREAK_PATH = REPO_ROOT / "target" / "verify" / "failure-streak.json"
 
 SELFTEST_TIMEOUT_S = 120
 EXAMPLE_TIMEOUT_S = 120
+VERIFY_TIMEOUT_S = 900
 BUILD_TIMEOUT_S = 900
 TEST_TIMEOUT_S = 600
 DOCTEST_TIMEOUT_S = 300
@@ -99,14 +100,29 @@ WINDOWED_EXAMPLES = frozenset(
     {"window_blank", "window_clear", "sprites", "prototype_kit", "input_echo"}
 )
 
+# Windowed examples that carry a `--verify` mode: scripted input, headless
+# ticks, and their own assertions on world state and the draw transcript
+# (input.md §5). These get checked here rather than only compiled — "needs a
+# person to look at it" is a reason to script the looking, not to skip it. Every
+# name here must also be windowed (tested): an example that already runs
+# headless asserts in its normal mode, and a second mode would be a second way
+# to do one thing.
+VERIFIABLE_EXAMPLES = frozenset({"prototype_kit"})
+
 
 def example_phase(package: str, example: str) -> "tuple[str, list[str]]":
     """The phase name and command for one example.
 
     Windowed examples are compiled and no more, under a phase name that says so
     — a skipped check should be visible in the log, not inferred from its
-    absence.
+    absence. A windowed example with a verify mode is the exception: it runs,
+    headless, through `tools/verify`.
     """
+    if example in VERIFIABLE_EXAMPLES:
+        return (
+            f"example-verify:{example}",
+            [sys.executable, "tools/verify", example],
+        )
     if example in WINDOWED_EXAMPLES:
         return (
             f"example-build:{example}",
@@ -322,14 +338,23 @@ def main(argv: "list[str]") -> int:
     # Examples are run, not merely compiled: each one asserts its own behaviour,
     # so a broken example fails here rather than in a game agent's face.
     examples = discover_examples()
-    windowed = [example for _, example in examples if example in WINDOWED_EXAMPLES]
-    print(f"[tools/test] examples to run: {len(examples) - len(windowed)}")
+    verified = [example for _, example in examples if example in VERIFIABLE_EXAMPLES]
+    windowed = [
+        example
+        for _, example in examples
+        if example in WINDOWED_EXAMPLES and example not in VERIFIABLE_EXAMPLES
+    ]
+    print(f"[tools/test] examples to run: {len(examples) - len(windowed) - len(verified)}")
+    if verified:
+        print(f"[tools/test] examples verified headless: {', '.join(verified)}")
     if windowed:
         print(f"[tools/test] examples built but not run (windowed): {', '.join(windowed)}")
     for package, example in examples:
         name, command = example_phase(package, example)
         phases.append(Phase(name, command))
-        timeouts[name] = EXAMPLE_TIMEOUT_S
+        # A verify phase builds the example itself, so it inherits the cold-build
+        # allowance rather than the run-it allowance.
+        timeouts[name] = VERIFY_TIMEOUT_S if example in VERIFIABLE_EXAMPLES else EXAMPLE_TIMEOUT_S
 
     counts = {"passed": 0, "failed": 0, "ignored": 0}
     failed_tests: "list[str]" = []

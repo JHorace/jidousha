@@ -40,10 +40,12 @@ mod assets;
 mod decode;
 mod handle;
 mod payload;
+mod replay;
 mod source;
 
-pub use assets::{AssetFailure, AssetStatus, Assets, TextureUpload};
+pub use assets::{AssetFailure, AssetStatus, Assets, Resolution, TextureUpload};
 pub use decode::decode_png;
 pub use handle::{AssetHandle, AssetKind, BytesHandle, TextureHandle};
 pub use payload::{AssetError, MAX_TEXTURE_SIZE, Payload, TextureData};
+pub use replay::ReplaySource;
 pub use source::{ByteSource, Completion, MemorySource, RequestId};

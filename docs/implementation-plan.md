@@ -81,7 +81,7 @@ Tick in the completing commit. (All unticked at handoff.)
 
 - [x] session-zero  - [x] M0  - [x] M1  - [x] M2  - [x] M3  - [x] M4
 - [x] A0  - [x] I0  - [x] R0  - [x] M5  - [x] R1  - [x] A1  - [x] R2
-- [x] R3  - [x] I1  - [x] A2  - [ ] I2  - [ ] R4  - [ ] A3  - [ ] F0
+- [x] R3  - [x] I1  - [x] A2  - [x] I2  - [ ] R4  - [ ] A3  - [ ] F0
 - [ ] E0  - [ ] make-game skill
 
 ## 5. Document map
@@ -91,7 +91,7 @@ CLAUDE.md                        router — always read first
 docs/agent-practices.md          why every rule exists; enforcement map
 docs/conventions.md              coordinates, units, color, naming
 docs/implementation-plan.md      this file
-docs/adr/0001..0016              decisions; DELIBERATE tags point here
+docs/adr/0001..0017              decisions; DELIBERATE tags point here
 docs/internal/core.md            ECS, schedule, time, app (M-milestones)
 docs/internal/renderer.md        submissions, backend seam (R-milestones)
 docs/internal/assets.md          handles, readiness determinism (A-milestones)

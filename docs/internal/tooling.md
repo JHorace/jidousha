@@ -12,9 +12,9 @@ subsystems (`docs/internal/<subsystem>.md`) or the decisions behind the rules
 
 ## 1. What it does
 
-Four scripts, each answering one question. All are Python 3.8+, standard library
-only — no third-party import, so they keep working when the package ecosystem is
-exactly what broke.
+Six scripts, each answering one question (plus `tools/serve-web`, which drives a
+browser — §3). All are Python 3.8+, standard library only — no third-party
+import, so they keep working when the package ecosystem is exactly what broke.
 
 | Script | Question | Exit codes |
 |---|---|---|
@@ -23,9 +23,9 @@ exactly what broke.
 | `tools/check-claude-md` | Is the always-in-context router still small? | 0 ok · 1 over cap · 2 missing |
 | `tools/dep-count` | How big is the dependency graph? | always 0 (reports only) |
 | `tools/check-compile-fail` | Do the errors that must be compile errors still say the right thing? | 0 ok · 1 drifted · 2 harness broke |
+| `tools/verify` | What did the game actually do, with nobody watching? | 0 verified · 1 the example's assertions failed · 2 tooling/env fault |
 
-Not built yet (later milestones): `tools/verify` (headless deterministic run,
-lands with M4/E0), `tools/gen-api-doc` (F0), `tools/check-tags`,
+Not built yet (later milestones): `tools/gen-api-doc` (F0), `tools/check-tags`,
 `tools/check-headers`.
 
 ## 2. Core data flow
@@ -43,6 +43,12 @@ agent ──> tools/test ──> phase: tool-selftest  (python -m unittest, tool
                                   target/verify/failure-streak.json (circuit breaker)
 
 agent ──> tools/doctor ──> ten checks ──> verdict line + target/verify/doctor.json
+
+agent ──> tools/verify <example> ──> cargo run --example <name> -- --verify
+                              │
+                              ├─> terminal: the verdict line and its summary
+                              └─> target/verify/<example>.json  (verdict, summary,
+                                  and the whole draw transcript)
 ```
 
 Phase order is load-bearing. The wrapper's own tests run first: a broken wrapper
@@ -59,12 +65,33 @@ rather than in a game agent's face. One phase per example keeps the report
 specific about which one broke, and the discovered list is printed and recorded
 so a vanished example cannot pass as silence.
 
+Both of cargo's example layouts count: `examples/<name>.rs`, and
+`examples/<name>/main.rs` for one big enough that the game and the check on the
+game are two reads. `prototype_kit` is the first of the second kind.
+
+A windowed example named in `VERIFIABLE_EXAMPLES` is the exception to the
+exception: instead of `example-build:<name>` it gets `example-verify:<name>`,
+which runs `tools/verify <name>`. "Needs a person to look at it" is a reason to
+script the looking, not to skip it. Every name in that set must also be windowed
+(tested) — a headless example already asserts in its normal mode, and giving it a
+second mode would be a second way to do one thing.
+
 ## 3. Invariants
 
 - **The report file is ground truth; terminal scrollback is advisory.** If they
   disagree, the tooling broke, not the tests (agent-practices §6.2). `tools/test`
   writes `target/verify/report.json` on every exit path; an absent report means
   the wrapper itself died.
+- **One tool, one report file.** `tools/verify` writes
+  `target/verify/<example>.json`, never `report.json`. Two tools writing one
+  ground-truth file is how ground truth stops being true, and the second writer
+  would be the one whose result you were not looking at.
+- **A verify run that verified nothing is not a pass.** An example opts into
+  verification by handling `--verify`; one that ignores the flag runs normally
+  and exits 0 having asserted nothing. `tools/verify` therefore requires a line
+  beginning `verified ` in the output and reports `unverified` (exit 2) without
+  it — the single failure mode this script exists to avoid is reporting silence
+  as success.
 - **Doctor never hangs.** Every subprocess and network call is bounded by a
   timeout — doctor is what you run when something else hangs.
 - **`fix` is non-empty exactly when a check is `FIXABLE`** (tested), and
@@ -119,6 +146,14 @@ a row (stop rule printed, `failure-streak.json` count 2).
   snippets lock rustc's wording plus the `IntoSystem<Phase>` mention. The
   `&mut T`-in-a-Draw-query case — the mistake ADR-0008 actually predicts — does
   show the engine's sentence.
+- **`tools/verify <example>` is the headless half of "did it work?".**
+  `serve-web --check` asks whether a picture appeared in a browser;
+  `tools/verify` asks what the game *did*, with no display anywhere — scripted
+  input, a fixed number of ticks, and the example's own assertions on world
+  state and on the draw transcript (input.md §5). The report keeps the whole
+  transcript, so the evidence for a failure is still there after the scrollback
+  is gone. Adding a verify mode to an example is two things: a `--verify` branch
+  in `main`, and the example's name in `tools/test`'s `VERIFIABLE_EXAMPLES`.
 - **`tools/serve-web <example>` is the web target's other half.** `cargo check
   --target wasm32-unknown-unknown` has gated every merge since M0 and proves the
   engine compiles for the web; this builds an example, runs `wasm-bindgen`,

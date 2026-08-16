@@ -1,0 +1,267 @@
+#!/usr/bin/env python3
+"""tools/verify — run one example's headless verification and report on it.
+
+The other side of `tools/serve-web`: that one drives a browser and asks whether
+a picture appeared, this one drives no display at all and asks what the game
+*did*. An example opts in by handling `--verify` — scripting its own input,
+running a fixed number of ticks headless, and asserting on world state and the
+draw transcript (input.md §5). This wrapper runs that mode under a timeout and
+writes down what happened.
+
+Usage:  tools/verify <example> [-- extra args for the example]
+        tools/verify --list
+
+Exit codes: 0 verified · 1 the example's own assertions failed · 2 tooling or
+environment fault (unknown example, timeout, no `--verify` mode).
+
+Key functions: `parse_verdict`, `find_example`, `run_example`, `main`.
+Depends on: the Python 3.8+ standard library only.
+INVARIANT: the report is written on every path out of `main` that ran anything,
+including timeouts — an absent report after a run means this script died.
+INVARIANT: the report goes to `target/verify/<example>.json`, never to
+`report.json`, which belongs to `tools/test` (tooling.md §3). Two tools writing
+one ground-truth file is how ground truth stops being true.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+REPORT_DIR = REPO_ROOT / "target" / "verify"
+
+# Generous: the run itself is milliseconds, but a cold `cargo build` of the
+# workspace is not, and a first-run timeout would say nothing about the game.
+RUN_TIMEOUT_S = 900
+
+# What a verified run says on its first line. The example prints it; this script
+# looks for it, so an example that ignored `--verify` and opened a window is a
+# tooling fault rather than a pass.
+VERDICT_PREFIX = "verified "
+
+
+def parse_verdict(text: str) -> "tuple[str | None, list[str]]":
+    """The verdict line and the summary lines under it, from an example's output.
+
+    The verdict is the first line beginning with `verified `; the summary is the
+    indented lines that immediately follow it. Everything after that is the draw
+    transcript, which is kept in the report rather than reprinted — it is
+    evidence to read when something fails, not something to scroll past when
+    nothing did.
+    """
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        if not line.startswith(VERDICT_PREFIX):
+            continue
+        summary = []
+        for following in lines[index + 1 :]:
+            if not following.startswith(" ") or not following.strip():
+                break
+            summary.append(following.strip())
+        return line.strip(), summary
+    return None, []
+
+
+EXIT_CODES = {"pass": 0, "fail": 1, "unverified": 2, "timeout": 2, "error": 2}
+
+
+def verdict_status(run_status: str, verdict: "str | None") -> str:
+    """What the run means, from how the process ended and what it printed.
+
+    Separate from `main` because this is the whole judgement, and a judgement
+    only exercised by running cargo is a judgement nothing tests.
+
+    Exiting 0 with no verdict line is `unverified`, not `pass`: an example that
+    ignores `--verify` runs normally, exits 0, and has asserted nothing.
+    Reporting that as success is the one failure mode this script exists to
+    avoid, so it is the case spelled out first.
+    """
+    if run_status != "ok":
+        return {"failed": "fail"}.get(run_status, run_status)
+    return "pass" if verdict is not None else "unverified"
+
+
+def parse_examples(metadata: dict) -> "list[tuple[str, str]]":
+    """Every example target in the workspace, as (package, example name).
+
+    Only workspace members: a dependency's examples are not ours to verify.
+    """
+    members = set(metadata.get("workspace_members", []))
+    examples = [
+        (package["name"], target["name"])
+        for package in metadata.get("packages", [])
+        if package["id"] in members
+        for target in package.get("targets", [])
+        if "example" in target.get("kind", [])
+    ]
+    return sorted(examples)
+
+
+def find_example(examples: "list[tuple[str, str]]", name: str) -> "str | None":
+    """The package `name` lives in, or None if no example is called that."""
+    for package, example in examples:
+        if example == name:
+            return package
+    return None
+
+
+def discover_examples() -> "list[tuple[str, str]]":
+    """Ask cargo what examples exist."""
+    try:
+        proc = subprocess.run(
+            ["cargo", "metadata", "--format-version", "1", "--no-deps"],
+            cwd=REPO_ROOT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=120,
+            text=True,
+        )
+    except (OSError, subprocess.TimeoutExpired) as err:
+        fault(f"could not list the workspace's examples: {err}")
+    if proc.returncode != 0:
+        fault(f"could not list the workspace's examples: {proc.stderr.strip()}")
+    return parse_examples(json.loads(proc.stdout))
+
+
+def fault(detail: str) -> "None":
+    """Report a tooling or environment problem in the engine's message shape."""
+    print(
+        f"[jidousha] tools/verify could not run\n"
+        f"  {detail}\n"
+        f"  likely cause: the example was renamed, or the environment is wrong\n"
+        f"  fix: tools/verify --list, then run tools/doctor if the name is right",
+        file=sys.stderr,
+    )
+    sys.exit(2)
+
+
+def run_example(package: str, example: str, extra: "list[str]") -> dict:
+    """Run one example in `--verify` mode, capturing everything it printed."""
+    command = [
+        "cargo",
+        "run",
+        "--quiet",
+        "-p",
+        package,
+        "--example",
+        example,
+        "--",
+        "--verify",
+        *extra,
+    ]
+    print(f"[tools/verify] {' '.join(command)}", flush=True)
+    started = time.monotonic()
+    try:
+        proc = subprocess.run(
+            command,
+            cwd=REPO_ROOT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=RUN_TIMEOUT_S,
+            text=True,
+            env=dict(os.environ, CARGO_TERM_COLOR="never"),
+        )
+    except subprocess.TimeoutExpired as expired:
+        output = expired.output or ""
+        return {
+            "status": "timeout",
+            "exit_code": None,
+            "duration_s": round(time.monotonic() - started, 2),
+            "output": output if isinstance(output, str) else output.decode("utf-8", "replace"),
+        }
+    except OSError as err:
+        return {
+            "status": "error",
+            "exit_code": 127,
+            "duration_s": round(time.monotonic() - started, 2),
+            "output": str(err),
+        }
+    return {
+        "status": "ok" if proc.returncode == 0 else "failed",
+        "exit_code": proc.returncode,
+        "duration_s": round(time.monotonic() - started, 2),
+        "output": proc.stdout,
+    }
+
+
+def write_report(example: str, report: dict) -> Path:
+    path = REPORT_DIR / f"{example}.json"
+    try:
+        REPORT_DIR.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    except OSError as err:
+        print(f"[tools/verify] could not write {path}: {err}", file=sys.stderr)
+    return path
+
+
+def main(argv: "list[str]") -> int:
+    args = argv[1:]
+    if not args or args[0] in ("-h", "--help"):
+        print(__doc__)
+        return 0 if args else 2
+
+    examples = discover_examples()
+    if args[0] == "--list":
+        for package, example in examples:
+            print(f"{example}  ({package})")
+        return 0
+
+    name = args[0]
+    extra = args[2:] if len(args) > 1 and args[1] == "--" else args[1:]
+    package = find_example(examples, name)
+    if package is None:
+        known = ", ".join(example for _, example in examples)
+        fault(f"there is no example called {name!r}. known examples: {known}")
+
+    result = run_example(package, name, extra)
+    verdict, summary = parse_verdict(result["output"])
+    status = verdict_status(result["status"], verdict)
+    exit_code = EXIT_CODES[status]
+    report = {
+        "tool": "tools/verify",
+        "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "example": name,
+        "package": package,
+        "argv": args,
+        "status": status,
+        "exit_code": exit_code,
+        "duration_s": result["duration_s"],
+        "process_exit_code": result["exit_code"],
+        "verdict": verdict,
+        "summary": summary,
+        # The whole transcript: what the frame actually contained, kept where an
+        # agent can read it after the fact rather than only in scrollback.
+        "output": result["output"],
+    }
+    path = write_report(name, report)
+
+    if status == "pass":
+        print(f"\n[tools/verify] PASS — {verdict}")
+        for line in summary:
+            print(f"    {line}")
+    elif status == "unverified":
+        print(
+            f"\n[jidousha] {name} has no --verify mode\n"
+            f"  it exited 0 without printing a line beginning {VERDICT_PREFIX!r}\n"
+            f"  likely cause: the example ignores the flag and ran normally\n"
+            f"  fix: give it a `--verify` branch that scripts input, ticks headless, "
+            f"and asserts (input.md §5)",
+            file=sys.stderr,
+        )
+    else:
+        # The example's own failure message is already in the output, in the
+        # engine's shape; repeating it here in a different shape would give two
+        # accounts of one problem.
+        print(f"\n[tools/verify] {status.upper()} — {name}", file=sys.stderr)
+    print(f"[tools/verify] report (ground truth): {path.relative_to(REPO_ROOT)}")
+    return exit_code
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
