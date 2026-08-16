@@ -1,7 +1,7 @@
 # Renderer basics — design and contracts
 
 Status: **living doc for `jidousha-render-core` and `jidousha-render-wgpu`;
-R0–R3 implemented, R4 still design.** Sections carry `Implemented (RN)` notes
+R0–R4 implemented — the v1 renderer is complete.** Sections carry `Implemented (RN)` notes
 where code exists; everything else is design ahead of the code.
 Same conventions as the core doc: **CONTRACT** items are binding and tested.
 
@@ -362,6 +362,61 @@ a GPU and lands with R4.
    drivers — exact-match is a flake factory; transcripts are the exact tier).
    Keeps the *backend* honest the way transcripts keep *render-core* honest.
 
+**Implemented (R4):**
+
+- **`WgpuBackend::offscreen(size)`** is a second constructor, not a mode: it
+  makes a backend with a texture instead of a surface. Everything after the
+  target is created is the same code the window runs — same pipeline, same
+  shader, same uploads — which is what makes a capture evidence about the
+  backend rather than about a second rendering path.
+- **A windowed backend refuses to capture**, naming `offscreen` in the refusal.
+  A presented surface texture is gone, and keeping a readable copy would mean a
+  full-screen blit on every frame of every game to serve a feature only tests
+  use. `DELIBERATE:` at the site.
+- **`capture()` blocks**, on a buffer map, and is native-only by construction —
+  the web has no equivalent wait. It is the only place in the engine that
+  blocks, and a game never calls it. On the web the check that a frame reached
+  the screen is `tools/serve-web --check`, which asks from outside.
+- **The row padding is stripped in one place.** wgpu wants every row of a
+  texture-to-buffer copy 256-byte aligned; forgetting to unpad produces an image
+  of exactly the right length, skewed diagonally. `padded_row_bytes` is a named
+  function with tests that run on every target, including wasm where nothing
+  calls it.
+- **`compare` / `Tolerance` / `diff_image`** live in render-core, not in the
+  wgpu crate: they compare two `RawImage`s and do not care which backend made
+  either, so the ash port reuses every reference unchanged. `Tolerance` makes
+  every way of passing a number stated at the callsite — `CLOSE_ENOUGH` is 2
+  levels per channel and 0.5% of pixels, `EXACT` is nothing at all.
+- **Failures leave evidence.** A mismatch writes `<name>-actual.png` and
+  `<name>-diff.png` into `target/verify/golden/`, the diff painting differing
+  pixels magenta, and CI uploads them. A golden failure that leaves nothing to
+  look at makes the reader re-run it by hand to find out what happened.
+- **References are blessed explicitly** (`JIDOUSHA_BLESS=1`), never written on
+  first run. A reference that appears when the file is missing turns every
+  unexplained change into a new reference, which is the one way this tier can
+  assert nothing at all.
+- **The reference comparison is Linux-only, deliberately.** A reference is a
+  picture *some rasterizer* produced; CI blesses and compares on lavapipe, Mesa's
+  CPU rasterizer, which is deterministic and identical across runners. A D3D or
+  Metal device fills edge pixels differently enough that a tolerance loose
+  enough to accept it would be loose enough to accept a real regression.
+  Everything else in the file — the offscreen target, capture, unpadding, the
+  clear colour, render-twice stability — runs everywhere.
+- **No adapter is not a failure.** Every runner is headless and some have no
+  graphics stack at all; the tests say so and pass, and `tools/doctor` reports
+  whether the tier can run, so a skipped tier is a diagnosable fact rather than
+  a silence. CI installs `mesa-vulkan-drivers` on Linux, which is what turns the
+  skip into a run.
+
+**Implemented (R4), `tools/verify` integration:** `examples/prototype_kit`'s
+verify run now asserts text on screen (a glyph covers the middle of the score,
+which is positioned by `TextStyle::width_of` — so the layout ran), the ball's
+world position after a fixed number of ticks against a checked-in number, and
+that a sprite-sized quad is drawn where the world puts it. It then replays the
+*same* session through an offscreen `WgpuBackend`, asserts the world did the
+same thing on both backends (§1's contract, checked rather than asserted), and
+writes the last frame to `target/verify/prototype_kit.png`.
+
 **Closed (web harness):** `tools/serve-web <example>` builds an example for
 wasm, runs `wasm-bindgen`, writes the page from `tools/web/index.html`, and
 serves it. `--check` additionally drives a headless Chromium at it, screenshots
@@ -596,11 +651,59 @@ mergeable, tested, green CI on all three targets.
   which a swap does not move. Both it and the glyph-quad test now pin all four,
   because that invariant is what R4's golden images and any future culling will
   rest on.
-- **R4 — capture + golden images + verify integration.** Offscreen `capture()`
-  in the wgpu backend, tolerance-based golden tests in native CI, `tools/verify`
-  wired: headless sim ticks + transcript assertions + optional frame capture.
+- **R4 — capture + golden images + verify integration.** ✅ Offscreen
+  `capture()` in the wgpu backend, tolerance-based golden tests in native CI,
+  `tools/verify` wired: headless sim ticks + transcript assertions + optional
+  frame capture.
   Exit: a `verify` run on `prototype_kit` asserts text on screen, sprite
-  positions after N ticks, and produces a captured PNG artifact.
+  positions after N ticks, and produces a captured PNG artifact. ✅
+
+  Delivered: `WgpuBackend::offscreen` and `capture.rs`, render-core's `golden.rs`,
+  `jidousha-assets::encode_png`, `tests/golden.rs` with `tests/golden/sprite_scene.png`,
+  and the example's `capture.rs`. §9 records the design decisions.
+
+  **The environment was the hard part, and it is worth writing down.** A GPU-less
+  machine cannot bless a reference, and the first probe here found zero adapters:
+  no Vulkan ICD, no libEGL, nothing for wgpu to pick. `mesa-vulkan-drivers`
+  provides lavapipe, a CPU rasterizer, and with it wgpu reports one adapter and
+  the whole tier runs — deterministically, which is better for a reference than a
+  real GPU would be. CI installs the same package. Everything below is a
+  consequence of that: the Linux-only comparison, the loud skip, doctor's `gpu`
+  check.
+
+  **Two constructors, not a flag.** `new(window, size)` and `offscreen(size)`
+  make different things rather than configuring one thing, so there is no state
+  where a backend is "windowed but capturing". The refusal on the windowed path
+  names the constructor that can answer, which is the whole cost of the split.
+
+  **What the mutation checks said.** Twenty-five deliberate breakages, twenty-two
+  caught first time. Most of the interesting ones are in the comparison rather
+  than in the rendering — dropping alpha from the per-pixel test, comparing only
+  the overlap of two differently-sized images, returning `matched: true` on a
+  size mismatch — because each has a test written against the specific wrong
+  answer it produces. On the rendering side, taking `COPY_SRC` off the offscreen
+  texture and making it linear instead of sRGB both die, the second one against
+  the clear-colour test rather than against any reference file.
+
+  Calibration, for the record: moving the textured quad half a world unit —
+  three pixels — moves 1.97% of the frame against a 0.5% threshold. The
+  tolerance has room to absorb driver rounding without absorbing a regression.
+
+  Two escapes, both fixed. `Tolerance::EXACT` could be widened to 8 levels and
+  10% of pixels with nothing noticing: the render-twice stability check passes
+  either way, because those two renders *are* identical, so the constant was
+  load-bearing and untested. And the zero-sized capture guard could be deleted,
+  so a 0×0 backend now has a test that it refuses by name.
+
+  **One escape is not a test gap, and is worth naming.** The verify run's
+  cross-backend check — the world must do the same thing on the null backend and
+  on the GPU — can be disabled with nothing noticing, because in a correct engine
+  the two never disagree. Mutation testing cannot kill a guard whose failure
+  condition the codebase is currently incapable of producing. That is a different
+  finding from I2's, where three of four escapes meant the code had no reader:
+  here the code has a reader, and the reader has nothing to complain about yet.
+  Deleting it would remove the only thing that would catch a backend reaching
+  back into simulation, which is precisely the bug §1 exists to prevent.
 
 ## 12. Deferred (tracked, not designed)
 

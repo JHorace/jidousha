@@ -230,6 +230,17 @@ The list a game touches is still the four lines above, and I2 did not change
 them — `PointerState` in particular still has no `world` field, which ADR-0017
 now settles rather than defers.
 
+Built in R4 (verification vocabulary, not game vocabulary): `WgpuBackend::offscreen`
+— which a game never calls, because a game has a window — plus render-core's
+`Tolerance`, `Comparison`, `compare`, `diff_image`, `encode_png`, `decode_png`,
+and `FONT_TEXTURE`. The last is the only one worth a second look: it is public so
+a verification can ask *"is there text on screen?"* by resolving it through the
+frame's `TextureTable` and finding the quads that sample it. It is not a second
+way to draw text — `ctx.text` remains the only one — it names what that
+produced. `jidousha_assets::encode_png` joins `decode_png` for the same reason:
+writing a captured frame out is what a golden reference and a `tools/verify`
+artifact are.
+
 Rough count: ~45 types/functions. CONTRACT: the v1 prototype substrate
 ("agent Pong/asteroids/breakout") must be expressible with this list alone —
 that's exactly what acceptance milestone E0 tests (implementation plan).

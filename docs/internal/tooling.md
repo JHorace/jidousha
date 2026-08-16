@@ -42,7 +42,7 @@ agent ──> tools/test ──> phase: tool-selftest  (python -m unittest, tool
                               └─> target/verify/report.json     (GROUND TRUTH)
                                   target/verify/failure-streak.json (circuit breaker)
 
-agent ──> tools/doctor ──> ten checks ──> verdict line + target/verify/doctor.json
+agent ──> tools/doctor ──> eleven checks ──> verdict line + target/verify/doctor.json
 
 agent ──> tools/verify <example> ──> cargo run --example <name> -- --verify
                               │
@@ -146,6 +146,20 @@ a row (stop rule printed, `failure-streak.json` count 2).
   snippets lock rustc's wording plus the `IntoSystem<Phase>` mention. The
   `&mut T`-in-a-Draw-query case — the mistake ADR-0008 actually predicts — does
   show the engine's sentence.
+- **The golden tier needs a rasterizer, and CI installs one.** A runner has no
+  GPU, so `mesa-vulkan-drivers` (lavapipe, Mesa's CPU rasterizer) is installed on
+  the Linux test job. Without it the golden tests skip and say so and the job
+  still passes — this turns a skipped tier into a running one rather than
+  routing around a failure. `tools/doctor`'s `gpu` check reports which Vulkan
+  drivers are present, so "the golden tier skipped" is a diagnosable fact rather
+  than a silence; it is INFO in both directions, because a machine with no GPU
+  runs every other test and a doctor that cried wolf here would be ignored when
+  it mattered.
+- **Rendered frames are CI artifacts.** `target/verify/*.png` and
+  `target/verify/golden/*.png` are uploaded on every run, pass or fail: the
+  captured frame from `tools/verify prototype_kit`, and the actual/diff pair a
+  failing golden test leaves behind. "What did it actually draw?" is then
+  answerable from a CI run rather than only on a machine with a GPU.
 - **`tools/verify <example>` is the headless half of "did it work?".**
   `serve-web --check` asks whether a picture appeared in a browser;
   `tools/verify` asks what the game *did*, with no display anywhere — scripted
@@ -154,6 +168,9 @@ a row (stop rule printed, `failure-streak.json` count 2).
   transcript, so the evidence for a failure is still there after the scrollback
   is gone. Adding a verify mode to an example is two things: a `--verify` branch
   in `main`, and the example's name in `tools/test`'s `VERIFIABLE_EXAMPLES`.
+  When a run captures a frame, the report carries its path in `artifact` — lifted
+  out of the summary prose so an agent looking for the picture does not have to
+  parse English to find it, and `null` on a machine that captured nothing.
 - **`tools/serve-web <example>` is the web target's other half.** `cargo check
   --target wasm32-unknown-unknown` has gated every merge since M0 and proves the
   engine compiles for the web; this builds an example, runs `wasm-bindgen`,

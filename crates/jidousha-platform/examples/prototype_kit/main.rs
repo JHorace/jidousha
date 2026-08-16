@@ -108,6 +108,7 @@ fn register(app: &mut App) {
     app.add_system(Draw, draw_the_readout);
 }
 
+mod capture;
 mod verify;
 
 fn main() -> Result<(), jidousha_platform::RunError> {

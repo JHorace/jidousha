@@ -27,7 +27,12 @@ pub(crate) const ATLAS_H: u32 = ROWS * CELL_H;
 /// generation of at least one into the high half, so every id below `1 << 32`
 /// is free for the renderer's own textures and can never collide with an asset.
 /// [`TextureId::WHITE`] is zero; this is one.
-pub(crate) const FONT_TEXTURE: TextureId = TextureId::from_bits(1);
+///
+/// Public so a verification can ask **"is there text on screen?"** — resolve it
+/// through the frame's `TextureTable` and the quads sampling that texture are
+/// the glyphs (renderer.md §9). It is not a second way to draw text: `ctx.text`
+/// remains the only one, and this names what that produced.
+pub const FONT_TEXTURE: TextureId = TextureId::from_bits(1);
 
 /// How a line of text is drawn.
 ///

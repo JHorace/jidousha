@@ -304,6 +304,15 @@ resolved, in request order, which is what a recorder writes down.
   scripted tick; Failed → placeholder + single error; unload → debug panic on
   use (a `should_panic` test locking the message).
 
+Implemented (R4): `encode_png`, beside the decoder and in the same library, so
+anything written reads back bit for bit. Nothing *loads* an encoded image — the
+callers are golden references and `tools/verify` artifacts, both above this
+layer — but PNG lives here (§3 CONTRACT: one decoder everywhere), and splitting
+a file format across two crates to satisfy a crate's name is how the two halves
+drift apart. It refuses a zero-sized image and a texel buffer that disagrees
+with its dimensions, both by panic: the caller built the image, so both are
+contract violations rather than environmental failures.
+
 Implemented (A1): `tests/file_source.rs` covers the §6 error set against real
 files in a temporary asset root — missing, case mismatch, not-a-PNG, oversized,
 a directory asked for as a file — and each assertion is on the *sentence*, so a

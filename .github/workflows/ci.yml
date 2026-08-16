@@ -49,6 +49,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      # The golden-image tier (renderer.md §9) needs an adapter, and a runner
+      # has no GPU. lavapipe is Mesa's software rasterizer: it renders on the
+      # CPU, deterministically, which is what makes a checked-in reference
+      # reproducible here at all. Without it the golden tests say so and pass,
+      # so this is what turns a skipped tier into a running one — not a
+      # workaround for a failure.
+      - name: install a software rasterizer (linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers
       - name: tools/test
         run: python tools/test
       - name: Upload test report
@@ -58,6 +67,18 @@ jobs:
           name: test-report-${{ matrix.os }}
           path: target/verify/report.json
           if-no-files-found: warn
+      # The captured frame from `tools/verify prototype_kit`, and anything a
+      # failing golden test left behind. Downloadable, so "what did it actually
+      # draw?" is answerable from a CI run rather than only on a machine.
+      - name: Upload rendered frames
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frames-${{ matrix.os }}
+          path: |
+            target/verify/*.png
+            target/verify/golden/*.png
+          if-no-files-found: ignore
 
   wasm:
     name: check wasm32

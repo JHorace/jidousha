@@ -15,7 +15,8 @@ use jidousha_core::math::Vec2;
 use jidousha_core::{Transform, headless};
 use jidousha_input::{Input, InputScript, Key};
 use jidousha_render_core::{
-    Camera, NullBackend, RenderBackend, create_builtin_textures, plan_frame,
+    BackendTextureId, Camera, FONT_TEXTURE, FramePlan, NullBackend, PhysicalSize, RenderBackend,
+    Sprite, create_builtin_textures, plan_frame,
 };
 use std::cmp::Ordering;
 
@@ -35,8 +36,26 @@ const ART_ARRIVES: u64 = 30;
 /// How far the paddle may travel from the centre, matching its component.
 const LIMIT: f32 = 7.0;
 
+/// The camera the headless run uses, so the transcript is the same everywhere.
+const HEADLESS_VIEWPORT: PhysicalSize = PhysicalSize::new(1280, 720);
+
+/// The world height the game's camera is set to (`main.rs`'s `VIEW_HEIGHT`).
+const HEADLESS_VIEW_HEIGHT: f32 = crate::VIEW_HEIGHT;
+
+/// The score's text size, from `draw_the_readout`.
+const SCORE_SIZE: f32 = 1.6;
+
+/// Where the ball is after `TICKS` ticks, in world units.
+///
+/// A number, checked in. The ball's X is a sine of simulated time and its Y
+/// never moves, so after a fixed number of fixed-length ticks it is in exactly
+/// one place — and that is the whole determinism claim (core.md §7, ADR-0009)
+/// reduced to something a verification can compare against.
+const BALL_X_AT_END: f32 = -2.3294;
+const BALL_Y: f32 = -4.0;
+
 /// Fail with the engine's message shape, and a non-zero exit.
-fn fail(what: &str, specifics: &str) -> ! {
+pub(super) fn fail(what: &str, specifics: &str) -> ! {
     eprintln!(
         "{}",
         jidousha_core::message(
@@ -104,17 +123,42 @@ fn script() -> InputScript {
     InputScript::new().hold(Key::S, 5..45).hold(Key::W, 50..130)
 }
 
-pub fn run() {
+/// What one scripted run of the game did.
+///
+/// Returned rather than asserted on inside the loop, so the *same* loop can be
+/// played through two different backends and the results compared — which is
+/// how this file checks renderer.md §1's contract that everything above the
+/// seam is backend-agnostic.
+pub(super) struct Run {
+    /// The paddle's Y after each tick.
+    pub(super) paddle_track: Vec<f32>,
+    /// Where the paddle ended up.
+    pub(super) paddle_pos: Vec2,
+    /// Where the ball ended up.
+    pub(super) ball_pos: Vec2,
+    /// How many frames drew the checkered placeholder.
+    pub(super) placeholder_frames: u32,
+    /// How many frames were submitted.
+    pub(super) frames: usize,
+}
+
+/// Play the scripted session through `backend`, drawing every tick.
+///
+/// `viewport` is the camera's, which decides the frame's aspect ratio and
+/// nothing else — the world is the same whatever it is set to, which is the
+/// point of the comparison the caller makes.
+pub(super) fn play(backend: &mut dyn RenderBackend, viewport: PhysicalSize) -> Run {
     let mut sim = headless(config(), register);
     // Before Startup, which is what `set_the_scene` checks for.
     sim.world_mut().insert_resource(store());
 
     let script = script();
-    let mut backend = NullBackend::new();
-    let mut textures = create_builtin_textures(&mut backend);
+    let mut textures = create_builtin_textures(backend);
     let mut paddle_track = Vec::new();
     let mut paddle_pos = Vec2::ZERO;
+    let mut ball_pos = Vec2::ZERO;
     let mut placeholder_frames = 0;
+    let mut frames = 0;
 
     for tick in 1..=TICKS {
         let Some(assets) = sim.world_mut().find_resource_mut::<Assets>() else {
@@ -124,7 +168,7 @@ pub fn run() {
             );
         };
         assets.commit(tick);
-        jidousha_render_core::upload_ready_textures(assets, &mut backend, &mut textures);
+        jidousha_render_core::upload_ready_textures(assets, backend, &mut textures);
 
         sim.world_mut()
             .insert_resource(Input::new(script.snapshot_at(tick)));
@@ -142,10 +186,22 @@ pub fn run() {
             }
             None => fail("the paddle is gone", "Startup spawns exactly one"),
         }
+        match sim
+            .world()
+            .query::<(&Transform, &Sprite)>()
+            .map(|(_, transform, _)| transform.pos)
+            .next()
+        {
+            Some(pos) => ball_pos = pos,
+            None => fail("the ball is gone", "Startup spawns exactly one sprite"),
+        }
 
         // Draw every tick, so the transcript covers the frames before the
         // art arrives as well as the ones after.
-        let camera = *sim.world().resource::<Camera>();
+        let camera = Camera {
+            viewport,
+            ..*sim.world().resource::<Camera>()
+        };
         let quads = sim.draw().quads().to_vec();
         let plan = plan_frame(&camera, &quads, &textures);
         if plan
@@ -155,13 +211,33 @@ pub fn run() {
         {
             placeholder_frames += 1;
         }
-        let Ok(()) = backend.render(&plan) else {
-            fail(
-                "the null backend refused a frame",
-                "it cannot fail to record",
-            );
-        };
+        if let Err(error) = backend.render(&plan) {
+            fail("a backend refused a frame", &error.to_string());
+        }
+        frames += 1;
     }
+
+    Run {
+        paddle_track,
+        paddle_pos,
+        ball_pos,
+        placeholder_frames,
+        frames,
+    }
+}
+
+pub fn run() {
+    let mut backend = NullBackend::new();
+    let transcript_run = play(&mut backend, HEADLESS_VIEWPORT);
+    let Run {
+        paddle_track,
+        paddle_pos,
+        ball_pos,
+        placeholder_frames,
+        frames,
+    } = &transcript_run;
+    let (paddle_track, paddle_pos, ball_pos) = (paddle_track.clone(), *paddle_pos, *ball_pos);
+    let (placeholder_frames, frames) = (*placeholder_frames, *frames);
 
     // --- what the world did ------------------------------------------
     // Y is down (ADR-0010), so the bottom of the screen is the larger number.
@@ -200,7 +276,6 @@ pub fn run() {
     }
 
     // --- what was drawn ----------------------------------------------
-    let frames = backend.frames().len();
     if frames != TICKS as usize {
         fail(
             "one frame per tick was expected",
@@ -259,6 +334,72 @@ pub fn run() {
         );
     }
 
+    // Text is on screen, and where the game puts it. The font atlas is a
+    // texture like any other (renderer.md §6), so "was text drawn" is "did a
+    // quad sample the font", and the score's own position is what says the
+    // layout ran rather than something merely having been submitted.
+    let font = textures_font_id(&last.plan);
+    let Some(font) = font else {
+        fail(
+            "nothing on screen sampled the font atlas",
+            "the score, the readout and the character sample are all text, so a frame \
+             without a font batch has lost all three (renderer.md §6)",
+        );
+    };
+    let glyphs: usize = last
+        .plan
+        .batches
+        .iter()
+        .filter(|batch| batch.texture == font)
+        .map(|batch| batch.quad_count())
+        .sum();
+    // The score is drawn centred at the top; its middle character is a dash,
+    // whose cell straddles this point. A layout that stopped centring, or a
+    // camera that stopped agreeing with it, moves the text off this spot.
+    let score_middle = Vec2::new(0.0, -HEADLESS_VIEW_HEIGHT / 2.0 + 1.0 + SCORE_SIZE / 2.0);
+    let score_drawn = last
+        .covering(score_middle)
+        .into_iter()
+        .any(|quad| quad.texture == font);
+    if !score_drawn {
+        fail(
+            "the score is not where the game draws it",
+            &format!(
+                "no glyph covers ({:.2}, {:.2}), which is the middle of a score centred by \
+                 TextStyle::width_of",
+                score_middle.x, score_middle.y
+            ),
+        );
+    }
+
+    // The ball is a sprite, and after a fixed number of ticks it is in a fixed
+    // place — the whole determinism claim in one number (core.md §7). The
+    // engine's own sin/cos is what puts it there (ADR-0009), so this is the
+    // assertion that fails if the timestep, the seed of the clock, or the
+    // trigonometry ever changes.
+    if !near(ball_pos.x, BALL_X_AT_END) || !near(ball_pos.y, BALL_Y) {
+        fail(
+            "the ball is not where this many ticks should have put it",
+            &format!(
+                "after {TICKS} ticks it is at ({:.4}, {:.4}); it was ({BALL_X_AT_END:.4}, \
+                 {BALL_Y:.4}) when this was written",
+                ball_pos.x, ball_pos.y
+            ),
+        );
+    }
+    let ball_drawn = last
+        .covering(ball_pos)
+        .into_iter()
+        .any(|quad| quad.texture != font && quad.bounds().size().x > 2.0);
+    if !ball_drawn {
+        fail(
+            "the ball sprite is not drawn where the world puts it",
+            &format!("the world has it at ({:.2}, {:.2})", ball_pos.x, ball_pos.y),
+        );
+    }
+
+    let captured = crate::capture::capture_a_frame(&paddle_track);
+
     println!("verified prototype_kit over {TICKS} ticks");
     println!(
         "  paddle: {start:.2} -> {bottom:.2} (tick {}) -> {top:.2} (tick {}), clamped to \
@@ -267,6 +408,33 @@ pub fn run() {
         top_at + 1,
     );
     println!("  frames: {frames}, {placeholder_frames} of them with the placeholder");
-    println!("  last frame: {} batches", last.plan.batches.len());
+    println!(
+        "  ball: ({:.3}, {:.3}) after {TICKS} ticks",
+        ball_pos.x, ball_pos.y
+    );
+    println!(
+        "  last frame: {} batches, {glyphs} glyphs",
+        last.plan.batches.len()
+    );
+    println!("  capture: {captured}");
     print!("{}", last.transcript());
+}
+
+/// Which backend texture the font atlas landed on, read off the frame.
+///
+/// The table is gone by the time the assertions run, and the atlas is not at a
+/// fixed id — it is whatever `create_builtin_textures` assigned. The glyph
+/// quads are the ones whose UVs sit inside the atlas *and* whose batch is
+/// neither the placeholder nor the flat white texel, which is more indirection
+/// than it is worth; asking the plan for the batch with the most quads is not
+/// robust either. So: rebuild a table against a throwaway backend, in the same
+/// order, and ask it.
+fn textures_font_id(plan: &FramePlan) -> Option<BackendTextureId> {
+    let mut scratch = NullBackend::new();
+    let table = create_builtin_textures(&mut scratch);
+    let font = table.resolve(FONT_TEXTURE);
+    plan.batches
+        .iter()
+        .any(|batch| batch.texture == font)
+        .then_some(font)
 }
