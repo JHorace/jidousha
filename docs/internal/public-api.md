@@ -287,6 +287,14 @@ that's exactly what acceptance milestone E0 tests (implementation plan).
   sprites carry `layer` in `Sprite` and `z` in `Transform` because they're
   entity data. This asymmetry is DELIBERATE: components are the entity-driven
   path, `Depth` is the immediate path; merging them made both worse.
+
+  Text is the third case and the same rule: `TextStyle` carries `depth`, so
+  `ctx.text` takes no trailing `Depth` while the other four verbs do. E0 run 1
+  read that as a wobble against "one way to do everything" (e0-findings.md
+  F-014) — fairly, since nothing had written it down. ADR-0018 does now, and
+  states the rule the three cases share: **depth travels with whatever else
+  describes the thing's appearance**, which is a sprite's components, text's
+  style, or — when there is nothing else — an argument.
 - `jidousha::testing` (InputScript, transcript assertion helpers) is public but
   documented in its own short section of `docs/api/` — game agents use it in
   their games' tests, which agents should be writing too.
