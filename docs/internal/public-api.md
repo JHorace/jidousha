@@ -241,6 +241,22 @@ produced. `jidousha_assets::encode_png` joins `decode_png` for the same reason:
 writing a captured frame out is what a golden reference and a `tools/verify`
 artifact are.
 
+Built in F0: the facade exists, and the count above is now a measured 50 rather
+than an estimate — `tools/check-api-coverage` reads it off the crate. Five items
+joined the inventory during the build, each because something could not be
+written without it: `PhysicalSize` (`Camera.viewport` is a public field of a
+game-facing type, so its type is game-facing), `message` (a game writing its own
+§9 errors needs the helper), `EntityDeadError` in the prelude rather than only at
+the root, `MemorySource` (a test names it to script a load), and `asset_source`.
+
+The **`Submit` warning above was correct and load-bearing**: the prelude carries
+it, with a doc comment saying why, because `ctx.sprite(...)` does not resolve
+without it.
+
+`jidousha::testing` is the second module, and the one place a backend is named —
+`WgpuBackend`, because a golden image has to be drawn by something. That is not a
+breach of ADR-0003, which forbids `wgpu` *types* escaping; none do.
+
 Rough count: ~45 types/functions. CONTRACT: the v1 prototype substrate
 ("agent Pong/asteroids/breakout") must be expressible with this list alone —
 that's exactly what acceptance milestone E0 tests (implementation plan).
@@ -288,11 +304,21 @@ that's exactly what acceptance milestone E0 tests (implementation plan).
 `spawn_and_reap`, plus `quickstart` (the docs/api embed). CONTRACT: every §2 item appears in at least
 one example; `tools/check-api-coverage` (grep-level) enforces in CI.
 
-**Before F0**, the facade does not exist, so an example has no `jidousha` crate
-to depend on. Examples written in the meantime live beside the crate they
-exercise (`crates/<crate>/examples/`) and name that internal crate — `homing`,
-added with ADR-0013's refinements, is the first. This is a knowing, temporary
-breach of the "games depend on `jidousha` only" contract above: at F0 these
-examples move to the root `examples/` directory, are rewritten against the
-facade, and the CI grep that enforces the contract lands with them. `tools/test`
-already runs every workspace example, wherever it lives.
+**Before F0**, the facade did not exist, so an example had no `jidousha` crate
+to depend on. Examples written in the meantime lived beside the crate they
+exercised and named that internal crate — a knowing, temporary breach of the
+"games depend on `jidousha` only" contract above.
+
+Implemented (F0): they moved, they were rewritten against the facade, and
+`tools/check-api-coverage` enforces the contract. **They live in
+`crates/jidousha/examples/` rather than at the repository root**, which is the
+one correction to the plan above: cargo lets an example depend on the package it
+sits in, so the facade's own examples get `jidousha` and nothing else for free,
+where a root `examples/` directory would need the workspace root turned into a
+package to host them. The intent — an example depends on the facade only — is
+what the check tests, and it is met.
+
+Two examples stayed behind, and neither is a game: `window_blank` is the driver
+smoke test M5 added, and `what_was_drawn` is render-core's own transcript
+fixture. The coverage check reads only the facade's examples, so an engine
+fixture cannot accidentally satisfy it.
