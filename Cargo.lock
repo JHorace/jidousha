@@ -15,6 +15,9 @@ version = "0.1.0"
 [[package]]
 name = "jidousha-assets"
 version = "0.1.0"
+dependencies = [
+ "jidousha-core",
+]
 
 [[package]]
 name = "jidousha-core"

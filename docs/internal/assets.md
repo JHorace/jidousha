@@ -1,7 +1,8 @@
 # Asset loading basics — design and contracts
 
-Status: **design draft, pre-implementation.** Becomes the living internal doc for
-`jidousha-assets`. **CONTRACT** items are binding and tested.
+Status: **living doc for `jidousha-assets`; A0 implemented, A1–A3 still design.**
+Sections carry `Implemented (A0)` notes where code exists; everything else is
+design ahead of the code. **CONTRACT** items are binding and tested.
 
 Inherits: async-by-design + no-wall-clock (ADR-0005), poll-based API / no async
 runtime (ADR-0011), placeholder policy and TextureHandle consumption
@@ -47,6 +48,21 @@ pub enum AssetStatus { Loading, Ready, Failed }
 
 The `Assets` API is a resource on the world (accessed like any other:
 `world.resource_mut::<Assets>()`), so systems load assets without new plumbing.
+
+Implemented (A0):
+
+- `Assets::new(source)` is the one constructor (ADR-0012); the source is the §5
+  seam, so a test store and a shipped store differ in one argument.
+- Handles are generational exactly as `Entity` is, and print as
+  `TextureHandle(3 v2)`. `unload` bumps the slot's generation, so a handle used
+  afterwards is *detected*, never silently pointing at whatever took its place.
+  Slots are reused LIFO, which makes handle allocation a pure function of the
+  operation history — the same script hands out the same handles every run.
+- `AssetHandle` is sealed: `TextureHandle` and `BytesHandle` are the whole set,
+  and the slot-lookup half of it lives in a private supertrait, so game code can
+  ask a handle its kind and cannot reach a slot index at all.
+- The two kinds have separate tables. Mixing them up is a compile error rather
+  than a lookup that quietly finds the wrong thing.
 
 ## 2. Paths
 
@@ -108,11 +124,31 @@ Design:
   `status()`/`all_ready()` freely — it's deterministic under replay. The common
   pattern needs neither: draw immediately, placeholders resolve themselves.
 
+Implemented (A0):
+
+- `assets.commit(tick) -> Vec<AssetFailure>` is the commit point. It is the only
+  code path that writes a status: every reader — `status`, `bytes_of`,
+  `all_ready` — is a pure lookup, so "statuses are frozen between commits" is
+  structural rather than a rule someone has to remember.
+- `commit` panics if `tick` is earlier than the last one. Readiness is part of
+  the timeline, and a timeline that runs backwards is a bug in the driver, not a
+  state to tolerate (§9's no-silent-failure rule). Committing the same tick
+  twice is legal and changes nothing.
+- **Not yet wired**: nothing calls `commit` automatically, because the frame
+  loop does not exist yet — the driver arrives with the platform crate (M5), and
+  wires this in at "before the first Update tick of the frame". Until then a
+  test or an example calls it directly, once per simulated frame.
+- **Deferred to the replay recording**: the per-tick record of *which* assets
+  committed is a change to core's input stream, and lands when that recording
+  format does. A0 delivers the half that makes it possible — readiness moves
+  only at a numbered tick — and `MemorySource`'s scripted ticks stand in for the
+  recording meanwhile, which is what makes the exit tests replayable today.
+
 ## 5. Internals: the platform seam and threading
 
 ```
 jidousha-assets
-  AssetStore        handles, states, CPU-side data, completion queue, commit()
+  Assets            handles, states, CPU-side data, completion queue, commit()
   ByteSource trait  fn request(&mut self, path) -> RequestId  +  completion drain
 jidousha-platform   provides the ByteSource impls:
   native            one loader thread, std::sync::mpsc; fs read + png decode off-thread
@@ -121,8 +157,26 @@ jidousha-platform   provides the ByteSource impls:
 
 - The trait seam mirrors ADR-0003's discipline: `jidousha-assets` never touches
   fs, fetch, or wasm-bindgen; platform crates own I/O. A third impl —
-  `MemorySource` (preloaded `HashMap<path, bytes>` with scripted completion
-  ticks) — is the test/verify workhorse and ships in `jidousha-assets` itself.
+  `MemorySource` (preloaded path → bytes map with scripted completion ticks) —
+  is the test/verify workhorse and ships in `jidousha-assets` itself.
+
+Implemented (A0):
+
+- `ByteSource` is three methods: `request`, `drain_completed(tick)`,
+  `outstanding`. CONTRACT: `drain_completed` is called only from `commit`,
+  returns each completion exactly once, and orders one poll's completions by
+  request id. That last clause is not decoration — a source that drains in hash
+  order replays differently on the second run, and the exit tests catch it.
+- `MemorySource` stores its content in a `BTreeMap`, not a `HashMap` as this
+  section originally said: an ordered map is the cheapest way to keep iteration
+  out of the nondeterminism budget entirely (core §7).
+- `ByteSource: Send + Sync` is inherited, not chosen — `Assets` is a world
+  resource and resources are `Send + Sync`. A1's loader holds an
+  `mpsc::Receiver`, which is `Send` but not `Sync`, so it wraps it in a `Mutex`
+  that is never contended: the store is touched from one thread only.
+- Unloading an asset whose bytes are still in flight drops its route. The bytes
+  arrive at a later commit and are discarded, rather than landing in a slot
+  something else now owns — the failure mode that made this worth a test.
 - Native decode happens on the loader thread (PNG decode is the slow part);
   web decodes at the commit point (main thread — acceptable at prototype scale;
   PERF-revisit with evidence, options exist: workers, `createImageBitmap` — the
@@ -149,6 +203,21 @@ jidousha-platform   provides the ByteSource impls:
 - `load_*` records the callsite (`#[track_caller]`) so errors point at the
   requesting line, not the loader internals.
 
+Implemented (A0):
+
+- `AssetFailure { path, kind, requested_at, reason }`, returned from `commit` and
+  formatted by `.message()` in core's §9 shape. `requested_at` is the
+  `#[track_caller]` location, so the message names the game's line.
+- A0 has **one** failure class: whatever the source reported. The distinct
+  classes above — not found, case mismatch, decode error, over-limit — are
+  things only a real loader can tell apart, and land with A1 and its snapshot
+  tests. The shape they will be reported in is fixed now.
+- "Reported once" is enforced by construction: `commit` drains the failure list
+  it returns, so a second commit returns nothing to report.
+- `message()` is public, and so is core's `message()` helper it delegates to —
+  the other engine crates format identically or the §9 promise is only true
+  inside core.
+
 ## 7. Verification and CI hooks
 
 - **Asset-reference check** (`tools/check-assets`, in CI): extract string
@@ -165,14 +234,41 @@ jidousha-platform   provides the ByteSource impls:
   scripted tick; Failed → placeholder + single error; unload → debug panic on
   use (a `should_panic` test locking the message).
 
+Implemented (A0): the transcript tests exist in `tests/asset_replay.rs`, minus
+the placeholder half, which needs a renderer (R2). The `should_panic` tests
+locking the unload message are in `tests/asset_ops.rs`.
+
+Wrinkle for A3: `examples/loading_gate.rs` loads from a `MemorySource`, so its
+paths deliberately do not exist on disk. `tools/check-assets` must skip loads
+whose store is a `MemorySource` rather than report them as broken references —
+otherwise the check's first act is to fail on a correct example.
+
 ## 8. Milestones
 
 Sequenced against renderer milestones (renderer needs textures at R2):
 
-- **A0 — store + states + MemorySource.** Handles, statuses, commit point,
+- **A0 — store + states + MemorySource.** ✅ Handles, statuses, commit point,
   scripted-readiness testing, `all_ready`, unload semantics + panics. No I/O,
   no GPU; runs everywhere incl. wasm CI. Exit: state-machine property tests
   green; readiness-replay test (same script → same per-tick statuses) green.
+
+  Delivered: `tests/asset_ops.rs` (the behavioural contracts), `asset_model.rs`
+  (2000 random load/commit/unload sequences against a naive reference store),
+  `asset_replay.rs` (every script replayed, plus the golden transcript §7 asks
+  for). The §7 items that are *not* here are the ones needing a real loader:
+  `tools/check-assets`, doctor's asset-root checks, and `verify` integration are
+  A3, and the placeholder half of the transcripts needs a renderer (R2).
+
+  What the mutation checks said. Eight deliberate breakages, all caught: keeping
+  a route across `unload`, `all_ready` waiting on failures, reporting failures
+  every commit, resolving at load instead of at commit, not bumping the
+  generation, draining in path order, ignoring the tick, and draining in hash
+  order. The reference-model test caught all eight on its own — it is the test
+  worth keeping expensive. The replay test caught only the last one, and that is
+  the point rather than a weakness: seven of the eight breakages are perfectly
+  deterministic, and replay is blind to a bug it reproduces faithfully. This is
+  the same lesson core §6 recorded about reordered command buffers. Replay
+  proves repeatability and nothing else; correctness needs the model.
 - **A1 — native loader.** Loader thread + mpsc, fs ByteSource, `png` decode
   (dep delta recorded), case-strict check, limits, §6 error set.
   Exit: `examples/sprites.rs` loads real files; error-message snapshot tests.

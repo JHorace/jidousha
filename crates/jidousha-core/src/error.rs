@@ -15,6 +15,9 @@ use crate::entity::Entity;
 
 /// Format one engine failure in the house style.
 ///
+/// Public so the other engine crates format identically: one message shape for
+/// the whole engine, not one per subsystem (core.md §9).
+///
 /// ```text
 /// [jidousha] <what happened>
 ///   <specifics: entity/component/system names and values>
@@ -26,7 +29,7 @@ use crate::entity::Entity;
 /// after the specifics — §9's full shape. Outside a system (setup, a test
 /// driving the world directly) there is nothing to name and the line is
 /// omitted rather than filled with a placeholder.
-pub(crate) fn message(what: &str, specifics: &str, likely_cause: &str, fix: &str) -> String {
+pub fn message(what: &str, specifics: &str, likely_cause: &str, fix: &str) -> String {
     // The running system, when there is one — §9 asks for it in every message,
     // and the schedule is the only thing that knows it.
     let in_system = crate::panic_hook::in_system_line();
