@@ -25,7 +25,6 @@ use jidousha_core::{
 use jidousha_render_core::{Camera, Sprite, draw_sprites};
 
 /// Where the art lives, relative to the workspace root (assets.md §2).
-#[cfg(not(target_arch = "wasm32"))]
 const ASSET_ROOT: &str = "assets";
 
 /// How fast something turns, in radians per second.
@@ -173,48 +172,12 @@ fn walk_the_circle(world: &mut World) {
 }
 
 /// The asset store, reading from wherever this platform keeps files.
-#[cfg(not(target_arch = "wasm32"))]
-fn art() -> Assets {
-    Assets::new(jidousha_platform::FileSource::new(ASSET_ROOT))
-}
-
-/// The web has no filesystem and no fetch source until A2, so the same three
-/// PNGs are compiled in and decoded at startup.
 ///
-/// DELIBERATE and temporary. It exists so this example can be checked in a real
-/// browser today — `tools/serve-web sprites --check` is how "sprites are
-/// visible on all targets" gets verified — rather than waiting for the loader
-/// that will replace it. A2 deletes this function and the `cfg` above it; the
-/// rest of the example does not change, which is the point of the `ByteSource`
-/// seam (assets.md §5).
-#[cfg(target_arch = "wasm32")]
+/// One line, no `cfg`: `asset_source` is the platform crate's job and this is
+/// what it exists to absorb. Until A2 this function had a second body that
+/// compiled the PNGs in, because the web had no loader; the loader landed and
+/// the second body went away without the rest of the example changing, which is
+/// the `ByteSource` seam doing exactly what it was for (assets.md §5).
 fn art() -> Assets {
-    use jidousha_assets::{AssetKind, MemorySource, decode_png};
-
-    let mut source = MemorySource::new();
-    for (path, bytes) in [
-        (
-            "sprites/hero.png",
-            include_bytes!("../../../assets/sprites/hero.png").as_slice(),
-        ),
-        (
-            "sprites/glow.png",
-            include_bytes!("../../../assets/sprites/glow.png").as_slice(),
-        ),
-        (
-            "sprites/atlas.png",
-            include_bytes!("../../../assets/sprites/atlas.png").as_slice(),
-        ),
-    ] {
-        match decode_png(bytes) {
-            Ok(texture) => source.insert_texture(path, texture),
-            Err(error) => panic!(
-                "{}",
-                error.message(path, AssetKind::Texture, "examples/sprites.rs")
-            ),
-        }
-    }
-    // `sprites/not_here.png` is absent from this source too, so the placeholder
-    // appears on the web for the same reason it does natively.
-    Assets::new(source)
+    Assets::new(jidousha_platform::asset_source(ASSET_ROOT))
 }

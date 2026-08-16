@@ -59,10 +59,19 @@
 
       // A wasm panic aborts, and the message goes to the console. Mirroring it
       // onto the page means a person looking at the window sees it too.
+      //
+      // The engine's own §9 reports arrive the same way — a missing asset, a
+      // frame it had to skip — and those are *handled* problems: the game is
+      // still running, with a placeholder where the art should be. They are
+      // worth showing and are not worth calling a failure, so the `[jidousha] `
+      // prefix tells them apart. A real panic still marks the page failed,
+      // because it also reaches the `error` and `unhandledrejection` listeners
+      // below.
       const consoleError = console.error.bind(console);
       console.error = (...args) => {
         consoleError(...args);
-        say(args.map(String).join(" "), true);
+        const text = args.map(String).join(" ");
+        say(text, !text.startsWith("[jidousha] "));
       };
       window.addEventListener("error", (event) => say(String(event.message), true));
       window.addEventListener("unhandledrejection", (event) =>

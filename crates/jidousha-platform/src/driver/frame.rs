@@ -87,7 +87,7 @@ impl Driver {
             // A frame that cannot be drawn is not a reason to stop: the surface
             // usually comes back. Saying so once per occurrence beats silence
             // and beats quitting.
-            eprintln!("{error}");
+            crate::report::problem(&error.to_string());
         }
     }
 
@@ -126,8 +126,10 @@ impl Driver {
         };
         for failure in assets.commit(tick) {
             // Once per asset, not once per frame: the placeholder does the
-            // per-frame signalling from here on (assets.md §6).
-            eprintln!("{}", failure.message());
+            // per-frame signalling from here on (assets.md §6). Through
+            // `report` rather than `eprintln!`, because on the web there is no
+            // stderr and this is the commonest thing a web build gets wrong.
+            crate::report::problem(&failure.message());
         }
         let (Some(backend), Some(textures)) = (backend, textures.as_mut()) else {
             // No GPU yet. The store keeps the texels until there is one, which

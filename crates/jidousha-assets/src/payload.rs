@@ -93,9 +93,50 @@ pub enum AssetError {
         /// Its height in texels.
         height: u32,
     },
+    /// A web server answered, and its answer was not the file.
+    ///
+    /// Web only. A 404 is reported as [`AssetError::NotFound`] instead, because
+    /// that is what it means and its message is the useful one; this carries
+    /// everything else — a 403 from a misconfigured host, a 500, a redirect
+    /// that went nowhere.
+    Http {
+        /// The status the server sent.
+        status: u16,
+    },
+    /// The request never reached a server at all.
+    ///
+    /// Web only: the network is down, the page is offline, or the browser
+    /// refused the request before making it.
+    Unreachable {
+        /// What the browser said.
+        detail: String,
+    },
 }
 
 impl AssetError {
+    /// What an HTTP status means for an asset, or `None` if it means success.
+    ///
+    /// Lives here rather than in the platform crate because this is the failure
+    /// taxonomy and because the web source that calls it compiles for exactly
+    /// one target — a mapping table behind a `cfg` is a mapping table no test
+    /// on this machine can reach (assets.md §6).
+    ///
+    /// **404 becomes [`NotFound`](AssetError::NotFound)**, not an `Http`. A
+    /// missing file is a missing file whether a filesystem or a web server says
+    /// so, and `NotFound`'s message — check the spelling, check the asset root —
+    /// is the one that helps. Everything else keeps its status, because "the
+    /// server said 403" needs a different fix from "you typed the name wrong".
+    #[must_use]
+    pub fn from_http_status(status: u16) -> Option<AssetError> {
+        match status {
+            // 2xx is the file. 3xx never arrives here: the browser follows
+            // redirects itself and reports the status it landed on.
+            200..=299 => None,
+            404 => Some(AssetError::NotFound),
+            other => Some(AssetError::Http { status: other }),
+        }
+    }
+
     /// The failure as a §9 message, given what was being loaded and from where.
     ///
     /// `requested_at` is the game's own line, recorded at the load callsite, so
@@ -138,6 +179,20 @@ impl AssetError {
                      texture that works on your machine also works on the web (renderer.md §8)"
                 ),
             ),
+            AssetError::Http { status } => (
+                format!("the server answered {status} for it"),
+                "check that the file is actually deployed and that the server is willing to serve \
+                 it. Note that a web server is case-sensitive even when your machine is not, so a \
+                 name that differs only in case is a 404 here and a working file at home — which \
+                 is why loads are case-strict on every platform (assets.md §2)"
+                    .to_owned(),
+            ),
+            AssetError::Unreachable { detail } => (
+                format!("the request never reached a server: {detail}"),
+                "check the network, and check the page is being served rather than opened from \
+                 disk — a `file://` page cannot fetch its own assets in most browsers"
+                    .to_owned(),
+            ),
         };
         message(&what, &specifics, &cause, &fix)
     }
@@ -156,6 +211,8 @@ impl fmt::Display for AssetError {
             AssetError::TooLarge { width, height } => {
                 write!(formatter, "too large: {width}x{height}")
             }
+            AssetError::Http { status } => write!(formatter, "http {status}"),
+            AssetError::Unreachable { detail } => write!(formatter, "unreachable: {detail}"),
         }
     }
 }
@@ -197,6 +254,10 @@ mod tests {
                 width: 4096,
                 height: 4096,
             },
+            AssetError::Http { status: 403 },
+            AssetError::Unreachable {
+                detail: "network error".to_owned(),
+            },
         ] {
             let text = error.message("art/player.png", AssetKind::Texture, "src/game.rs:12");
             assert!(text.starts_with("[jidousha] asset failed:"), "{text}");
@@ -217,6 +278,53 @@ mod tests {
         let text = error.message("player.png", AssetKind::Texture, "src/game.rs:12");
         assert!(text.contains("\"Player.png\""), "{text}");
         assert!(text.contains("case-strict"), "{text}");
+    }
+
+    #[test]
+    fn a_missing_file_reads_the_same_whether_a_disk_or_a_server_said_so() {
+        // 404 is not an "http error" to a game — it is a missing file, and the
+        // message that helps is the one about spelling and the asset root.
+        assert_eq!(
+            AssetError::from_http_status(404),
+            Some(AssetError::NotFound)
+        );
+    }
+
+    #[test]
+    fn a_successful_status_is_not_a_failure() {
+        for status in [200, 201, 206, 299] {
+            assert_eq!(AssetError::from_http_status(status), None, "{status}");
+        }
+    }
+
+    #[test]
+    fn every_other_status_keeps_its_number() {
+        // "The server said 403" needs a different fix from "you typed the name
+        // wrong", so the number survives to the message.
+        for status in [400, 403, 500, 503] {
+            assert_eq!(
+                AssetError::from_http_status(status),
+                Some(AssetError::Http { status }),
+                "{status}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_http_message_warns_about_the_case_trap() {
+        // The single most valuable thing this message can say: a web server is
+        // case-sensitive even when the machine you built on was not.
+        let text = AssetError::Http { status: 403 }.message(
+            "sprites/Hero.png",
+            AssetKind::Texture,
+            "src/game.rs:1",
+        );
+        // Both halves, separately: the status is what distinguishes this from
+        // every other failure, and the case warning is the reason this message
+        // is worth more than "it did not work". An `||` between them, which is
+        // what this test said first, passes with either one missing.
+        assert!(text.contains("403"), "the status is named: {text}");
+        assert!(text.contains("case"), "the case trap is named: {text}");
     }
 
     #[test]

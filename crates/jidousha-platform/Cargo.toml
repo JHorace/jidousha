@@ -44,6 +44,17 @@ winit = { version = "0.30", default-features = false, features = [
     "rwh_06",
 ] }
 
+# The web asset source (A2). Every one of these is already in the wasm tree by
+# way of winit, so naming them explicitly adds features rather than crates —
+# measured at zero change to the dependency count (practices §5.8). None of them
+# exists on native, where `FileSource` does the same job with `std::fs`.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+# Feature-gated per Web API, so this is the whole of what the loader touches.
+web-sys = { version = "0.3", features = ["Window", "Response", "console"] }
+
 [dev-dependencies]
 # The file-source tests write real PNGs to a temporary directory, so they need
 # an encoder. Dev-only: it is already in the tree through jidousha-assets, and

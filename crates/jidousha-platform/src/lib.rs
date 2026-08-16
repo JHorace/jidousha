@@ -33,16 +33,51 @@ mod driver;
 mod error;
 #[cfg(not(target_arch = "wasm32"))]
 mod files;
+mod report;
 mod translate;
+mod web;
 
 pub use clock::FrameClock;
 pub use error::RunError;
 #[cfg(not(target_arch = "wasm32"))]
 pub use files::FileSource;
+#[cfg(target_arch = "wasm32")]
+pub use web::WebSource;
 
 use jidousha_core::{App, GameConfig};
 
 use crate::driver::Driver;
+
+/// The asset source this platform reads with.
+///
+/// **This is what a game calls.** `FileSource` and `WebSource` are both public
+/// and both real, but which one a game wants is never a question it should have
+/// to answer — a game that wrote the `cfg` itself would be doing the platform
+/// crate's job, and would get it wrong the first time it was ported.
+///
+/// `root` is a directory on native and a URL prefix relative to the page on the
+/// web. The same string works for both, which is the point: paths are relative
+/// to the asset root with forward slashes everywhere (assets.md §2 CONTRACT).
+///
+/// ```no_run
+/// use jidousha_assets::Assets;
+///
+/// let mut assets = Assets::new(jidousha_platform::asset_source("assets"));
+/// let hero = assets.load_texture("sprites/hero.png");
+/// # let _ = hero;
+/// ```
+#[cfg(not(target_arch = "wasm32"))]
+#[must_use]
+pub fn asset_source(root: &str) -> impl jidousha_assets::ByteSource {
+    FileSource::new(root)
+}
+
+/// The asset source this platform reads with — `fetch`, on the web.
+#[cfg(target_arch = "wasm32")]
+#[must_use]
+pub fn asset_source(root: &str) -> impl jidousha_assets::ByteSource {
+    WebSource::new(root)
+}
 
 /// Run a game in a window, forever.
 ///
