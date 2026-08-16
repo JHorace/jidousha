@@ -555,7 +555,7 @@ mergeable, tested, green CI on all three targets.
     checks after it. That is closer to a real bug than is comfortable, which is
     why it is written down here.
 - **R3 — primitives + text.** ✅ rect/line/circle expansion, embedded font,
-  `examples/prototype_kit.rs` (sprites + shapes + score text — the "can an
+  `examples/prototype_kit/` (sprites + shapes + score text — the "can an
   agent make Pong?" substrate is now complete). Exit: transcript tests for all
   primitive expansion; example runs everywhere.
 

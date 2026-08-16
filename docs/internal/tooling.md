@@ -65,6 +65,10 @@ rather than in a game agent's face. One phase per example keeps the report
 specific about which one broke, and the discovered list is printed and recorded
 so a vanished example cannot pass as silence.
 
+Both of cargo's example layouts count: `examples/<name>.rs`, and
+`examples/<name>/main.rs` for one big enough that the game and the check on the
+game are two reads. `prototype_kit` is the first of the second kind.
+
 A windowed example named in `VERIFIABLE_EXAMPLES` is the exception to the
 exception: instead of `example-build:<name>` it gets `example-verify:<name>`,
 which runs `tools/verify <name>`. "Needs a person to look at it" is a reason to

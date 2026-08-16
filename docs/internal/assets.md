@@ -286,7 +286,7 @@ Implemented (A0):
   zero filesystem dependence, fully reproducible; a flag switches to real I/O
   for integration smoke tests.
 
-Implemented (I2): `tools/verify` exists, and `examples/prototype_kit.rs`'s
+Implemented (I2): `tools/verify` exists, and `examples/prototype_kit/`'s
 `--verify` mode is the first user of it — a `MemorySource` with one scripted
 arrival tick, so the placeholder is on screen for a known number of frames and
 the art for the rest. No flag for real I/O yet: nothing has asked for one, and a

@@ -1,6 +1,7 @@
 //! The recorded timeline: what arrived on every tick, in bytes.
 //!
-//! Key types: `Recording`, `TickRecord`, `AssetReady`.
+//! Key types: `Recording`. `TickRecord` and `AssetReady` are in `record`;
+//! `RecordingError` is in `error`.
 //! Depends on: `codec`, `snapshot`, `jidousha-core`. Must never depend on:
 //! `jidousha-assets` — see [`AssetReady`] for how readiness gets in here
 //! without it.
@@ -13,12 +14,15 @@
 //! the end of the file, because a session that crashed is exactly the session
 //! worth replaying.
 
-use core::fmt;
-
 use jidousha_core::{Seconds, message};
 
-use crate::codec::DecodeError;
-use crate::snapshot::InputSnapshot;
+mod error;
+mod record;
+
+pub use error::RecordingError;
+pub use record::{AssetReady, TickRecord};
+
+use record::{decode_record, take};
 
 /// Marks a recording, so a file that is not one says so rather than decoding
 /// into nonsense.
@@ -27,61 +31,6 @@ const MAGIC: [u8; 4] = *b"JDRC";
 /// The format version. Bump when the layout changes; old files are refused with
 /// a message rather than misread.
 const VERSION: u16 = 1;
-
-/// An asset that resolved on some tick.
-///
-/// **The request id, not the handle.** `jidousha-input` cannot name a
-/// `TextureHandle` — it does not depend on the assets crate, and should not —
-/// so what is recorded is the number the store already uses to route a
-/// completion. That number is deterministic: requests are numbered in load
-/// order, and a replay runs the same game code and therefore asks for the same
-/// things in the same order (assets.md §5). The same trick ADR-0015 uses for
-/// textures, applied to a different seam.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct AssetReady {
-    /// Which request resolved, as [`RequestId`](crate::RequestIdBits) numbers
-    /// them.
-    pub request: u64,
-    /// Whether it arrived. `false` is a load that failed — recorded because a
-    /// game can observe the difference (assets.md §4).
-    pub arrived: bool,
-}
-
-/// One tick of the timeline.
-#[derive(Clone, Debug, PartialEq)]
-pub struct TickRecord {
-    /// Which tick this is. Records are in order and ticks never go backwards.
-    pub tick: u64,
-    /// What input the tick saw.
-    pub input: InputSnapshot,
-    /// Which assets committed on it, in the order the store applied them.
-    pub readiness: Vec<AssetReady>,
-}
-
-impl TickRecord {
-    /// This record's bytes, self-delimiting.
-    ///
-    /// Self-delimiting is what makes the append-only CONTRACT work: a writer
-    /// flushes one of these per tick and never rewrites what it has already
-    /// written, so a process that dies mid-session leaves a file that is valid
-    /// up to the last whole tick.
-    #[must_use]
-    pub fn encode(&self) -> Vec<u8> {
-        let snapshot = self.input.encode();
-        let mut out = Vec::with_capacity(snapshot.len() + 16 + self.readiness.len() * 9);
-        out.extend_from_slice(&self.tick.to_le_bytes());
-        // A length prefix rather than a terminator: the snapshot codec owns its
-        // own bytes and this format does not get to know what is in them.
-        out.extend_from_slice(&(snapshot.len() as u32).to_le_bytes());
-        out.extend_from_slice(&snapshot);
-        out.extend_from_slice(&(self.readiness.len() as u16).to_le_bytes());
-        for entry in &self.readiness {
-            out.extend_from_slice(&entry.request.to_le_bytes());
-            out.push(u8::from(entry.arrived));
-        }
-        out
-    }
-}
 
 /// A whole session: what it was seeded with, and what happened on every tick.
 ///
@@ -254,124 +203,10 @@ impl Recording {
     }
 }
 
-/// One record, or `None` if the bytes run out before it is complete.
-fn decode_record(bytes: &[u8], at: &mut usize) -> Result<Option<TickRecord>, RecordingError> {
-    let start = *at;
-    let Some(tick) = take(bytes, at, 8).and_then(|slice| slice.try_into().ok()) else {
-        *at = start;
-        return Ok(None);
-    };
-    let Some(length) = take(bytes, at, 4).and_then(|slice| slice.try_into().ok()) else {
-        *at = start;
-        return Ok(None);
-    };
-    let length = u32::from_le_bytes(length) as usize;
-    let Some(snapshot) = take(bytes, at, length) else {
-        *at = start;
-        return Ok(None);
-    };
-    // Present and complete, so a decode failure here is corruption rather than
-    // truncation — and the snapshot codec is the strict one (ADR-0014).
-    let input = InputSnapshot::try_decode(snapshot).map_err(RecordingError::Snapshot)?;
-
-    let Some(count) = take(bytes, at, 2).and_then(|slice| slice.try_into().ok()) else {
-        *at = start;
-        return Ok(None);
-    };
-    let count = u16::from_le_bytes(count) as usize;
-    let mut readiness = Vec::with_capacity(count);
-    for _ in 0..count {
-        let Some(request) = take(bytes, at, 8).and_then(|slice| slice.try_into().ok()) else {
-            *at = start;
-            return Ok(None);
-        };
-        let Some(arrived) = take(bytes, at, 1) else {
-            *at = start;
-            return Ok(None);
-        };
-        readiness.push(AssetReady {
-            request: u64::from_le_bytes(request),
-            arrived: arrived[0] != 0,
-        });
-    }
-    Ok(Some(TickRecord {
-        tick: u64::from_le_bytes(tick),
-        input,
-        readiness,
-    }))
-}
-
-/// `count` bytes from `at`, advancing it, or `None` if there are not that many.
-fn take<'a>(bytes: &'a [u8], at: &mut usize, count: usize) -> Option<&'a [u8]> {
-    let end = at.checked_add(count)?;
-    let slice = bytes.get(*at..end)?;
-    *at = end;
-    Some(slice)
-}
-
-/// Why a recording could not be read.
-///
-/// Environmental, not a contract violation: the file came from outside, and a
-/// `try_`-class `Result` is what the taxonomy asks for (input.md §7).
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum RecordingError {
-    /// The bytes do not begin with a recording header.
-    NotARecording,
-    /// A recording, from a version this build does not read.
-    Version {
-        /// The version the file claims.
-        found: u16,
-    },
-    /// A complete record inside it did not decode.
-    Snapshot(DecodeError),
-    /// The timeline runs backwards.
-    OutOfOrder {
-        /// The tick that came second.
-        found: u64,
-        /// The tick it came after.
-        after: u64,
-    },
-}
-
-impl fmt::Display for RecordingError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let (what, specifics, cause, fix) = match self {
-            RecordingError::NotARecording => (
-                "this is not a jidousha recording".to_owned(),
-                "the file does not start with the recording header".to_owned(),
-                "the wrong file was passed, or it is empty",
-                "check the path; a recording is written by the engine and starts with `JDRC`",
-            ),
-            RecordingError::Version { found } => (
-                format!("this recording is version {found}"),
-                format!("this build reads version {VERSION}"),
-                "the file was made by a different version of the engine",
-                "re-record the session with this build; recordings are not converted between \
-                 versions (input.md §5)",
-            ),
-            RecordingError::Snapshot(error) => (
-                "a tick inside the recording did not decode".to_owned(),
-                error.to_string(),
-                "the file is corrupt in the middle rather than cut short at the end",
-                "re-record the session — a recording that is merely incomplete replays up to \
-                 where it stops, but one that is wrong in the middle cannot",
-            ),
-            RecordingError::OutOfOrder { found, after } => (
-                format!("the recording's timeline runs backwards: tick {found} after {after}"),
-                "records are in tick order and each tick appears once".to_owned(),
-                "the file was assembled from two sessions, or edited",
-                "re-record the session",
-            ),
-        };
-        formatter.write_str(&message(&what, &specifics, cause, fix))
-    }
-}
-
-impl core::error::Error for RecordingError {}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::snapshot::InputSnapshot;
     use crate::{InputEvent, Key, SnapshotBuilder};
 
     /// A recording of `ticks` ticks, with a key held for the middle third.

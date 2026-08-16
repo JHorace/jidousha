@@ -30,7 +30,7 @@ fn player_control(world: &mut World) {
     let input = world.resource::<Input>();
     if input.just_pressed(Key::Space) { /* jump */ }
     if input.held(Key::A)            { /* move left */ }
-    let aim: Vec2 = input.pointer().world;   // world space, Y-down
+    let aim: Vec2 = camera.screen_to_world(input.pointer().screen);   // §3
     if input.pointer().just_pressed(PointerButton::Primary) { /* fire */ }
 }
 ```
@@ -239,7 +239,7 @@ written in. A hold that *ends* where another begins is not a contradiction —
 that is a real thing a player does.
 
 Implemented (I2): the loop, end to end, including the draw transcript.
-`examples/prototype_kit.rs` grows a `--verify` mode that runs the *same* systems
+`examples/prototype_kit/` grows a `verify.rs` module that runs the *same* systems
 and the same `GameConfig` the window does, differing only in what a person would
 otherwise supply — input comes from an `InputScript`, and the art from a store
 with a scripted arrival tick. It then asserts on both halves: where the paddle
@@ -364,10 +364,55 @@ overlap contradictorily (hold 5..10 + release at 7) are a debug panic with the
   **What the mutation checks said.** Seventeen deliberate breakages, sixteen
   caught first time. The escape was the keyboard arm above, and the fix was to
   move the untestable boundary rather than to write a weaker test.
-- **I2 — recording + verify.** Stream format (with asset-readiness interleave),
-  record/replay round-trip test (record scripted session → replay → identical
-  world hash per tick), `tools/verify` wiring.
+- **I2 — recording + verify.** ✅ Stream format (with asset-readiness
+  interleave), record/replay round-trip test (record scripted session → replay
+  → identical world hash per tick), `tools/verify` wiring.
   Exit: the §5 full loop demonstrated on `prototype_kit`.
+
+  Delivered: `recording.rs` (§5), `jidousha-assets`'s `ReplaySource` (assets.md
+  §7), `jidousha-platform/tests/record_replay.rs`, `tools/verify`, and
+  `examples/prototype_kit/verify.rs`. The round-trip test hashes the whole
+  world after every tick — components, entity identity, iteration order and the
+  clock — and the scripted game branches on *both* a load that arrives and one
+  that fails, so a recording that dropped readiness would produce a different
+  game rather than the same one.
+
+  **The negative control is the test that matters.** A round-trip test proves
+  nothing on its own: if readiness never affected the world, replaying it would
+  be trivially correct. So the suite also replays the same recording with the
+  readiness records thrown away and asserts the traces *differ*. That assertion
+  is the reason to believe the other five.
+
+  **The recording holds two crates apart.** `jidousha-input` cannot depend on
+  `jidousha-assets`, so `AssetReady` is a request id and a bool — the opaque-id
+  shape ADR-0015 uses for textures. `ReplaySource` turns those numbers back into
+  a schedule on the assets side. Neither crate learns about the other, and the
+  timeline still crosses between them.
+
+  **What the mutation checks said.** Twenty-one deliberate breakages across the
+  recording, the replay source, the game, and `tools/verify`; seventeen died
+  first time. The four escapes were all the same shape — a thing that looked
+  tested and was not:
+
+  - `ByteSource::outstanding` could be deleted with no test noticing, because
+    nothing called it. `all_ready` walks the store's entries and always did.
+    Removed, along with the counter three sources were maintaining for nobody
+    (assets.md §5).
+  - The ordering sort in `ReplaySource` could be deleted, because the test fed
+    it a holding pen that already happened to be in request order. Rewritten so
+    arrival order and request order disagree.
+  - Deleting the system that draws the paddle left `tools/verify` green: the
+    check asked whether *anything* was drawn at the paddle's position, and the
+    debug readout's text wanders across the field. It now asks for a
+    paddle-shaped quad, against a `PADDLE_SIZE` stated once.
+  - `tools/verify`'s "exited 0 but printed no verdict" branch could be replaced
+    with `if False` — turning the one failure mode the script exists to avoid
+    into a silent pass — because nothing exercised `main`. The judgement moved
+    into `verdict_status`, which is tested.
+
+  The generalizable half: three of the four were dead or unreachable code paths
+  rather than weak assertions. A mutation that cannot be observed is usually
+  telling you the code has no reader, not that the test is lazy.
 
 ## 9. Deferred (tracked, not designed)
 

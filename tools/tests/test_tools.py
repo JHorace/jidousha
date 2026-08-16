@@ -284,7 +284,10 @@ class ExampleDiscoveryTest(unittest.TestCase):
         # A stale name here would silently start running a windowed example, or
         # keep skipping one that was deleted.
         root = Path(__file__).resolve().parents[2]
+        # Both example layouts cargo accepts: `examples/name.rs`, and
+        # `examples/name/main.rs` for one big enough to be worth splitting.
         existing = {path.stem for path in root.glob("crates/*/examples/*.rs")}
+        existing |= {path.parent.name for path in root.glob("crates/*/examples/*/main.rs")}
         self.assertTrue(
             test_wrapper.WINDOWED_EXAMPLES <= existing,
             f"unknown windowed examples: {test_wrapper.WINDOWED_EXAMPLES - existing}",
