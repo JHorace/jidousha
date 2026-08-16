@@ -95,7 +95,7 @@ def parse_test_output(text: str) -> dict:
 # a headless runner has no display, so running one would fail for a reason that
 # says nothing about the code. Every other example is run, and asserts its own
 # behaviour (agent-practices §5.1). M5 owns this decision; tooling.md records it.
-WINDOWED_EXAMPLES = frozenset({"window_blank"})
+WINDOWED_EXAMPLES = frozenset({"window_blank", "window_clear"})
 
 
 def example_phase(package: str, example: str) -> "tuple[str, list[str]]":

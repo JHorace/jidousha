@@ -1,8 +1,9 @@
 # Renderer basics — design and contracts
 
-Status: **living doc for `jidousha-render-core`; R0 implemented, R1–R4 still
-design.** Sections carry `Implemented (R0)` notes where code exists; everything
-else is design ahead of the code. `jidousha-render-wgpu` is untouched until R1.
+Status: **living doc for `jidousha-render-core` and `jidousha-render-wgpu`; R0
+and R1 implemented, R2–R4 still design.** Sections carry `Implemented (R0)` and
+`Implemented (R1)` notes where code exists; everything else is design ahead of
+the code.
 Same conventions as the core doc: **CONTRACT** items are binding and tested.
 
 Inherits: backend seam + WebGL2 envelope (ADR-0003), `DrawCtx` and Draw-phase
@@ -280,6 +281,16 @@ a GPU and lands with R4.
    drivers — exact-match is a flake factory; transcripts are the exact tier).
    Keeps the *backend* honest the way transcripts keep *render-core* honest.
 
+**Gap, recorded rather than resolved (R1):** there is no web harness anywhere in
+the repository — no `index.html`, no `wasm-bindgen` invocation, no serve step.
+`cargo check --target wasm32-unknown-unknown` gates every merge and proves the
+engine *compiles* for the web, which is what ADR-0005 asked for and is not
+nothing; but nothing turns that into something a browser can load. Every
+milestone from here whose exit criterion says "on all three targets" is
+therefore only checkable on two. This is not assigned to a milestone. It is
+small — a `tools/serve-web` and a page — and it should land before R2 makes the
+claim a third time.
+
 `tools/verify <example>` composes both with headless simulation (core §8):
 run N ticks with scripted input, then assert on world state + transcript, and
 optionally capture a frame for human/agent eyeballs. This tool is the game-agent
@@ -290,6 +301,15 @@ feedback loop and gets built incrementally from R0 (see also asset/input docs).
 - No adapter/device at startup → `Result` from `jidousha::run` with a §9 message
   (likely cause: missing drivers/headless env; fix: doctor hints, try
   `JIDOUSHA_BACKEND=gl` fallback).
+
+Implemented (R1): the adapter and device are asked for asynchronously, so their
+failures cannot come back from `run` — it has already returned to the event
+loop by then. They surface from `render` instead, as `RenderError::Unsupported`
+naming what wgpu said. A frame that cannot be drawn is reported and skipped
+rather than fatal: a lost surface usually comes back, and quitting a game
+because one frame failed is worse than missing one frame. `JIDOUSHA_BACKEND=gl`
+does not exist yet; wgpu picks a backend itself, and an override is worth adding
+when someone needs it rather than before.
 - Device lost mid-run → v1: fatal with §9 message (recreation is deferred).
 - Oversized texture, NaN transform, unknown handle → contract violations: debug
   panic naming the entity/system per core §9.
@@ -320,9 +340,44 @@ mergeable, tested, green CI on all three targets.
   caught — the winding and the Y flip — are the ones a transcript cannot see,
   because both produce a frame that is wrong only once a GPU rasterizes it.
   That is the honest limit of tier 1, and the reason tier 2 exists.
-- **R1 — wgpu clear + present.** Surface init on Linux/Windows/web, clear color,
+- **R1 — wgpu clear + present.** ✅ Surface init on Linux/Windows/web, clear color,
   resize handling. `examples/window_clear.rs`. Exit: colored window on all
   three targets (web manually verified; native CI headless-runs it).
+
+  `WgpuBackend` implements render-core's `RenderBackend` and is opaque: no wgpu
+  type appears in its public API, so ADR-0003's isolation rule holds by
+  construction rather than by discipline. The platform crate is the composition
+  root that picks it — the one place naming a concrete backend — and wires the
+  frame path end to end: submissions → `plan_frame` → `backend.render`. R2 adds
+  a pipeline and nothing else changes shape.
+
+  **Getting a GPU without an async runtime.** wgpu's adapter and device requests
+  are futures, and the engine has no executor. Rather than `pollster` on native
+  and `wasm-bindgen-futures` on the web — two implementations of one thing, only
+  one of which could ever be tested here — the backend polls those futures from
+  the frame loop with a no-op waker, and reports "not ready yet" until they
+  land. This is ADR-0011's answer applied to the GPU: a game loop expresses
+  "ask again next frame" by being a loop. It is ten lines and no dependency, and
+  a test polls a *real* wgpu adapter request to prove the mechanism reaches an
+  answer rather than staying `Pending` forever — the failure that would hang
+  every game's first frames.
+
+  Two bugs the writing caught, both about the gap between asking and arriving: a
+  window resized while the GPU is still coming had its resize dropped, so the
+  surface configured at the startup size (a tiling compositor resizes every new
+  window, so this was not hypothetical); and the adapter was consumed by the
+  handshake and never kept, so `resize_surface` could never reconfigure at all.
+
+  **Verified, and not.** The isolation rule, the poll mechanism, and both target
+  builds are checked, and `tools/test` builds `window_clear` without running it.
+  **The colored window itself is unverified** — this environment has no display
+  *and no GPU adapter at all* (the probe reports "no suitable graphics adapter
+  found"), so nothing here can see a pixel. Native and web both need a human
+  with a screen. The web additionally has **no harness at all**: the wasm build
+  compiles, but there is no `index.html`, no `wasm-bindgen` step, and nothing to
+  serve — so "colored window on the web" is not merely unverified, it is
+  currently unreachable. That gap is called out in §9 below and belongs to
+  whoever picks it up; it was never assigned to a milestone.
 - **R2 — sprites end to end.** Texture upload, sprite pipeline (WGSL), batching,
   camera UBO, `jidousha::systems::draw_sprites`, placeholder texture.
   `examples/sprites.rs` (moving, rotating, tinted, atlas-region sprites).

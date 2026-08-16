@@ -9,6 +9,11 @@ publish.workspace = true
 [dependencies]
 jidousha-core = { path = "../jidousha-core" }
 jidousha-input = { path = "../jidousha-input" }
+jidousha-render-core = { path = "../jidousha-render-core" }
+# The composition root picks a backend, so this is the one place that names a
+# concrete one. No `wgpu` type crosses this edge — `WgpuBackend` is opaque and
+# speaks only engine types (ADR-0003).
+jidousha-render-wgpu = { path = "../jidousha-render-wgpu" }
 
 # The engine's only wall clock (ADR-0005). `std::time::Instant` compiles on wasm
 # and then panics at run time, which would pass CI and fail in a browser;
