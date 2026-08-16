@@ -137,6 +137,18 @@ a row (stop rule printed, `failure-streak.json` count 2).
   page background, uniformly. Both directions are tested, including the one that
   matters most: a page that merely cleared to something near the background and
   drew nothing must still fail.
+- **`serve-web` stages the asset root next to the page.** A2's web loader
+  fetches `assets/...` *relative to the page*, so the served directory has to
+  contain them — which is exactly what deploying a web build involves. Copying
+  them into `target/web/` rather than teaching the server to reach back into the
+  repository keeps the served tree honest about what a deployment needs.
+- **A page can start and then fail, and the check now notices.** The page styles
+  its status line `failed` for a real failure and leaves it alone for the
+  engine's own §9 reports, which are handled problems — a missing asset draws a
+  placeholder and the game carries on. `--check` reads that class, so a page
+  that loaded and then threw is no longer a silent pass. The two are told apart
+  by the `[jidousha] ` prefix, which is the first time the §9 format has been
+  load-bearing for something other than reading.
 - **The `wasm-bindgen` CLI must match the `wasm-bindgen` crate exactly.** They
   generate two halves of one interface, and a skew produces glue that fails at
   run time with a message about nothing in particular. `serve-web` reads the

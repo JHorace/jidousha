@@ -99,7 +99,7 @@ impl Driver {
     /// returned long ago and the value has nowhere to go. On native it is also
     /// kept, so `run` can hand it back.
     fn fail(&mut self, error: RunError, event_loop: &ActiveEventLoop) {
-        eprintln!("{error}");
+        crate::report::problem(&error.to_string());
         #[cfg(not(target_arch = "wasm32"))]
         {
             self.failure = Some(error);

@@ -193,6 +193,30 @@ def build(package: str, example: str) -> int:
     page = PAGE.read_text(encoding="utf-8").replace("__EXAMPLE__", example)
     (OUT_DIR / "index.html").write_text(page, encoding="utf-8")
     print(f"[serve-web] wrote {(OUT_DIR / 'index.html').relative_to(REPO_ROOT)}")
+    return stage_assets()
+
+
+def stage_assets() -> int:
+    """Copy the asset root next to the page, the way a deploy would.
+
+    The web loader (A2) fetches `assets/...` *relative to the page*, so a game
+    served from a subdirectory works without knowing where it lives. That means
+    the served directory has to contain the assets, which is exactly what
+    shipping a web build involves — copying them here rather than teaching the
+    server to reach back into the repository keeps the served tree honest about
+    what a deployment needs.
+    """
+    source = REPO_ROOT / "assets"
+    if not source.is_dir():
+        # A repository with no asset root is fine; examples that load nothing
+        # still run.
+        return 0
+    destination = OUT_DIR / "assets"
+    if destination.exists():
+        shutil.rmtree(destination)
+    shutil.copytree(source, destination)
+    count = sum(1 for path in destination.rglob("*") if path.is_file())
+    print(f"[serve-web] staged {count} asset file(s) into target/web/assets")
     return 0
 
 
@@ -436,12 +460,26 @@ def check(port: int, example: str) -> int:
         state = "running"
     elif 'data-jidousha="failed"' in dom:
         state = "failed"
-    status = re.search(r'<div id="status"[^>]*>(.*?)</div>', dom, re.S)
-    message = (status.group(1).strip() if status else "").replace("\n", " ")
+    status = re.search(r'<div id="status"([^>]*)>(.*?)</div>', dom, re.S)
+    message = (status.group(2).strip() if status else "").replace("\n", " ")
+    # The page styles its status line `failed` for a real failure and leaves it
+    # alone for the engine's own §9 reports, which are handled problems — a
+    # missing asset draws a placeholder and the game carries on. A page that
+    # started and *then* said it failed used to pass this check silently.
+    page_failed = "failed" in (status.group(1) if status else "")
 
     print(f"[serve-web] page state: {state}")
     if message:
         print(f"[serve-web] page said: {message}")
+
+    if state == "running" and page_failed:
+        return fail(
+            f"{example} started and then reported a failure",
+            message or "(the page gave no message)",
+            "the module loaded and something threw afterwards — a panic, or a "
+            "failed import inside the page",
+            f"read {log.relative_to(REPO_ROOT)} and the message above",
+        )
 
     if state == "running":
         # Starting is not drawing. Checking the pixels is what makes this a

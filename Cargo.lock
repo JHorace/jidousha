@@ -643,7 +643,11 @@ dependencies = [
  "jidousha-input",
  "jidousha-render-core",
  "jidousha-render-wgpu",
+ "js-sys",
  "png",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
  "web-time",
  "winit",
 ]

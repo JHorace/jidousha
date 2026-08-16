@@ -26,7 +26,6 @@ use jidousha_core::{
 use jidousha_render_core::{Camera, Sprite, Submit, TextStyle, draw_sprites};
 
 /// Where the art lives, relative to the workspace root (assets.md §2).
-#[cfg(not(target_arch = "wasm32"))]
 const ASSET_ROOT: &str = "assets";
 
 /// The world is twenty units tall; everything below is in those units.
@@ -284,32 +283,9 @@ fn draw_the_readout(ctx: &mut DrawCtx) {
 }
 
 /// The asset store, reading from wherever this platform keeps files.
-#[cfg(not(target_arch = "wasm32"))]
-fn art() -> Assets {
-    Assets::new(jidousha_platform::FileSource::new(ASSET_ROOT))
-}
-
-/// The web has no filesystem and no fetch source until A2, so the one PNG this
-/// example uses is compiled in and decoded at startup.
 ///
-/// DELIBERATE and temporary, exactly as in `examples/sprites.rs`: it exists so
-/// this can be checked in a real browser today. A2 deletes it (assets.md §8).
-#[cfg(target_arch = "wasm32")]
+/// One line, no `cfg` — see `examples/sprites.rs` for why that is worth
+/// remarking on.
 fn art() -> Assets {
-    use jidousha_assets::{AssetKind, MemorySource, decode_png};
-
-    let mut source = MemorySource::new();
-    let bytes = include_bytes!("../../../assets/sprites/hero.png").as_slice();
-    match decode_png(bytes) {
-        Ok(texture) => source.insert_texture("sprites/hero.png", texture),
-        Err(error) => panic!(
-            "{}",
-            error.message(
-                "sprites/hero.png",
-                AssetKind::Texture,
-                "examples/prototype_kit.rs"
-            )
-        ),
-    }
-    Assets::new(source)
+    Assets::new(jidousha_platform::asset_source(ASSET_ROOT))
 }

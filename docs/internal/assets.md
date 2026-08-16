@@ -1,9 +1,9 @@
 # Asset loading basics — design and contracts
 
-Status: **living doc for `jidousha-assets`; A0 and A1 implemented, A2–A3 still
+Status: **living doc for `jidousha-assets`; A0, A1 and A2 implemented, A3 still
 design.**
-Sections carry `Implemented (A0)` and `Implemented (A1)` notes where code
-exists; everything else is design ahead of the code. **CONTRACT** items are binding and tested.
+Sections carry `Implemented (AN)` notes where code exists; everything else is
+design ahead of the code. **CONTRACT** items are binding and tested.
 
 Inherits: async-by-design + no-wall-clock (ADR-0005), poll-based API / no async
 runtime (ADR-0011), placeholder policy and TextureHandle consumption
@@ -185,6 +185,13 @@ Implemented (A0):
   web decodes at the commit point (main thread — acceptable at prototype scale;
   PERF-revisit with evidence, options exist: workers, `createImageBitmap` — the
   latter forbidden by the identical-texels CONTRACT unless proven bit-exact).
+
+Implemented (A2): exactly that. `WebSource`'s fetch callback pushes raw bytes
+onto a queue and `drain_completed` decodes them, so decoding happens at the
+commit rather than at whatever moment the network chose — which is the same
+reason the completions are sorted by request id before they are returned. The
+one thing the network controls is *which* commit an asset lands on, and that is
+already on the timeline.
 - GPU upload: at commit, newly-Ready textures are handed to render-core, which
   calls `backend.create_texture` at the next frame start. CPU-side pixels are
   then dropped (assets keep only metadata; `capture()`/goldens read from GPU).
@@ -348,16 +355,59 @@ Sequenced against renderer milestones (renderer needs textures at R2):
   Dependency delta (practices §5.8): `png` 0.18, plus `simd-adler32`. 251 → 258
   external crates workspace-wide, 10 in the assets crate's own tree — "a handful
   of crates", as §3 predicted. No `image` mega-crate.
-- **A2 — web loader.** fetch ByteSource, decode-at-commit, HTTP error mapping.
+- **A2 — web loader.** ✅ fetch ByteSource, decode-at-commit, HTTP error mapping.
   Exit: sprites example loads over HTTP in the browser; wasm CI covers the
   non-fetch logic, manual check covers the rest (ADR-0005 proxy note).
 
-  Waiting for A2: `examples/sprites.rs` compiles its three PNGs in and decodes
-  them into a `MemorySource` on wasm, because `FileSource` is native-only and
-  there is nothing else yet. It exists so R2 could be *checked* in a real
-  browser rather than asserted to work there. A2 deletes that function and its
-  `cfg`; the rest of the example does not change, which is the `ByteSource`
-  seam doing its job.
+  **The prediction held exactly.** A1 wrote that A2 would delete the compiled-in
+  PNGs from `examples/sprites.rs` and that "the rest of the example does not
+  change". Both examples that had a `cfg`'d `art()` now have a one-line one, and
+  nothing else in either moved. `tools/serve-web sprites --check` shows the
+  atlas, the hero and the glow on the canvas, fetched over HTTP.
+
+  **Games do not write the `cfg`.** `jidousha_platform::asset_source(root)` is
+  the one call: `FileSource` on native, `WebSource` on the web. Both remain
+  public — `tests/file_source.rs` and `examples/load_from_disk.rs` name
+  `FileSource` deliberately, because they are about the *file* loader — but a
+  game asking "which source should I use" is a game doing the platform crate's
+  job, and getting it wrong the first time it is ported.
+
+  **`spawn_local`, not hand-polled futures.** R1 polls wgpu's futures with a
+  no-op waker specifically because that code is shared between native and web,
+  and a blocks-here/spawns-there design would be two implementations of one
+  thing. This file compiles for one target, so there is no second implementation
+  to keep honest. ADR-0011 governs the engine's *API*, which is unchanged:
+  nothing a fetch does is observable until `commit`.
+
+  **What the browser can and cannot tell you.** Case mismatches are undetectable
+  here — a web server just returns 404 — which is the whole reason the *native*
+  loader is case-strict (§2): the bug is caught at home instead of after
+  deploying. The `Http` message says so explicitly, since a 404 on a name that
+  works locally is exactly that bug arriving late.
+
+  **Dependency delta (practices §5.8): none.** `wasm-bindgen`,
+  `wasm-bindgen-futures`, `js-sys` and `web-sys` are all already in the wasm
+  tree by way of winit, so naming them adds features rather than crates —
+  measured, 258 before and after.
+
+  **A gap this closed that was not on the list.** `eprintln!` does nothing on
+  `wasm32-unknown-unknown`: Rust's standard streams have nowhere to go in a
+  browser. Every §9 message the driver printed — a missing asset, a skipped
+  frame — was written into a void on the one target where a person is most
+  likely to be debugging by reading. A2 is what made that reachable, because
+  mistyping an asset path is the ordinary way a web build fails. Run-time
+  reports now go through `report::problem`, which is `eprintln!` on native and
+  `console.error` in a browser.
+
+  What the mutation checks said. Nine deliberate breakages, seven caught by
+  `cargo test`. Two of the seven were only caught after a fix: the URL join's
+  tests had been written *inside* the wasm-only module, where they never
+  compiled and never ran — so the join moved out from behind the `cfg`, which is
+  where anything testable belongs. The two that `cargo test` cannot see are in
+  the page's JavaScript; one of them is caught by `tools/serve-web --check`
+  (verified by hand, with the mutation applied), and the other — treating a
+  non-engine `console.error` as harmless — is caught by nothing, because no
+  example can produce one.
 - **A3 — CI + verify integration.** `tools/check-assets`, doctor checks,
   `verify` wired to MemorySource scripting. Exit: a deliberately broken path in
   an example fails CI with the §6 message.

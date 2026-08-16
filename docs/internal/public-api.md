@@ -168,6 +168,14 @@ nothing in a game's logic may depend on texture dimensions (renderer.md §3).
 which is what lets each failure class say something specific; `message()` is
 unchanged.
 
+Built in A2: `jidousha_platform::asset_source(root)` — **the one thing a game
+calls to get a source**, `FileSource` on native and `WebSource` on the web. It
+is an addition to the inventory, and it earns its place by removing a `cfg` from
+every game that loads anything: choosing a source per target is the platform
+crate's job, and a game that did it itself would get it wrong the first time it
+was ported. `AssetError` gained `Http` and `Unreachable`, which are web-only
+failure classes §6 already anticipated.
+
 Built in R2: `Assets::take_uploads` and `TextureUpload`, the renderer's side of
 the store. Driver-facing, like `commit` — a game never calls either. The change
 a game could notice is that `texture_of` returns `None` once the renderer has
