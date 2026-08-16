@@ -7,8 +7,10 @@ The scripts are extensionless executables, so they are loaded by path rather
 than imported by name.
 """
 
+import contextlib
 import importlib.machinery
 import importlib.util
+import io
 import json
 import sys
 import tempfile
@@ -302,6 +304,52 @@ class CheckAssetsTest(unittest.TestCase):
             problems = check_assets.check_file(repo, source)
             self.assertEqual(len(problems), 1)
             self.assertIn(shared, problems[0], "the check's copy changed")
+
+    def _run_main(self, repo):
+        """Run the script end to end against `repo`, returning (code, stderr)."""
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = check_assets.main(["tools/check-assets", "--root", str(repo)])
+        return code, err.getvalue()
+
+    def _repo_with(self, load: str):
+        directory = tempfile.TemporaryDirectory()
+        repo = Path(directory.name)
+        (repo / "art").mkdir()
+        (repo / "art" / "hero.png").write_bytes(b"x")
+        crate = repo / "crates" / "game" / "examples"
+        crate.mkdir(parents=True)
+        (crate / "game.rs").write_text(
+            'const ASSET_ROOT: &str = "art";\n'
+            "fn main() { Assets::new(FileSource::new(ASSET_ROOT)); }\n"
+            f"fn go() {{ {load} }}\n"
+        )
+        return directory, repo
+
+    def test_a_run_over_a_sound_tree_exits_zero(self):
+        holder, repo = self._repo_with('assets.load_texture("hero.png");')
+        with holder:
+            code, _ = self._run_main(repo)
+            self.assertEqual(code, 0)
+
+    def test_a_broken_reference_makes_the_whole_run_fail(self):
+        # The wiring between finding a problem and saying so with a non-zero
+        # exit. Without this, every check above could pass while the script
+        # cheerfully returned 0 and CI stayed green.
+        holder, repo = self._repo_with('assets.load_texture("gone.png");')
+        with holder:
+            code, err = self._run_main(repo)
+            self.assertEqual(code, 1)
+            self.assertIn("asset failed: 'gone.png'", err)
+            self.assertIn("1 broken asset reference(s)", err)
+
+    def test_a_run_with_nothing_to_check_is_a_tooling_fault(self):
+        # An empty tree means the check was pointed somewhere wrong, and
+        # reporting "all clear" would be the most misleading answer available.
+        with tempfile.TemporaryDirectory() as directory:
+            code, err = self._run_main(Path(directory))
+            self.assertEqual(code, 2)
+            self.assertIn("found no Rust sources", err)
 
     def test_the_committed_tree_has_no_broken_asset_references(self):
         # The check checking itself, on the real repository — so a rename that
