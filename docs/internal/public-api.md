@@ -109,6 +109,19 @@ Key, PointerButton, PointerState, InputSnapshot
 InputScript                               // testing/verify; in jidousha::testing
 ```
 
+Built in I0, in `jidousha-input` until the facade re-exports it. The list above
+is exactly what a game touches, and it is unchanged. Around it sit the pieces the
+*driver* needs, which games do not: `Input::new` and `InputSnapshot::new`,
+`InputSnapshot`'s accessors (`held_keys`, `pressed_keys`, `released_keys`,
+`pointers`, `window_focused`) and its `encode`/`try_decode` with `DecodeError`,
+`PointerId`, and the `InputEvent`/`SnapshotBuilder` pair the platform crate will
+feed. `InputScript` also carries `last_tick`, so a test can drive a script
+without restating its length.
+
+Note for F0: `InputScript` belongs behind `jidousha::testing` per the list above,
+and the facade does not exist yet. Until it does it lives beside the types it
+builds, and moving it is a re-export, not a rewrite.
+
 Rough count: ~45 types/functions. CONTRACT: the v1 prototype substrate
 ("agent Pong/asteroids/breakout") must be expressible with this list alone —
 that's exactly what acceptance milestone E0 tests (implementation plan).
