@@ -17,7 +17,8 @@ tools/doctor                # environment self-diagnosis
 cargo clippy -- -D warnings # lint; warnings are errors
 cargo fmt                   # format (also runs via hook)
 cargo run --example <name>  # run a canonical example
-tools/verify <example>      # headless deterministic run + assertions   [TODO: build]
+tools/verify <example>      # headless deterministic run + assertions + a captured PNG
+tools/check-assets          # every asset path in the code names a file that exists
 tools/serve-web <example>   # build for web, serve it; --check drives a browser
 tools/gen-api-doc           # regenerate docs/api/ (CI fails if stale)  [TODO: build]
 ```

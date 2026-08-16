@@ -104,6 +104,20 @@ jobs:
       # be ignored when it matters (agent-practices §6.1).
       - run: python tools/doctor
 
+  assets:
+    name: asset references
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # A mistyped asset path is a CI failure, not a placeholder hunt at
+      # runtime (assets.md §2, §7). Its own job as well as a tools/test phase:
+      # it needs no toolchain, so it answers in seconds on a runner that is
+      # still compiling.
+      - run: python tools/check-assets
+
   claude-md:
     name: CLAUDE.md size
     runs-on: ubuntu-latest

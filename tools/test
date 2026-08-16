@@ -326,6 +326,10 @@ def main(argv: "list[str]") -> int:
         # Guarantees that are compile errors need a test too, or their wording
         # rots (ADR-0008).
         Phase("compile-fail", [sys.executable, "tools/check-compile-fail"]),
+        # Every asset path in the code names a file that is actually there
+        # (assets.md §2, §7). Cheap, and it turns a mistyped path from a
+        # runtime placeholder hunt into a named line.
+        Phase("check-assets", [sys.executable, "tools/check-assets"]),
     ]
     timeouts = {
         "tool-selftest": SELFTEST_TIMEOUT_S,
@@ -333,6 +337,7 @@ def main(argv: "list[str]") -> int:
         "test": TEST_TIMEOUT_S,
         "doc-test": DOCTEST_TIMEOUT_S,
         "compile-fail": COMPILE_FAIL_TIMEOUT_S,
+        "check-assets": SELFTEST_TIMEOUT_S,
     }
 
     # Examples are run, not merely compiled: each one asserts its own behaviour,

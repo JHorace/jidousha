@@ -1,7 +1,7 @@
 # Asset loading basics — design and contracts
 
-Status: **living doc for `jidousha-assets`; A0, A1 and A2 implemented, plus the
-I2 replay seam; A3 still design.**
+Status: **living doc for `jidousha-assets`; A0–A3 implemented — the crate's v1
+scope is complete.**
 Sections carry `Implemented (AN)` notes where code exists; everything else is
 design ahead of the code. **CONTRACT** items are binding and tested.
 
@@ -282,6 +282,44 @@ Implemented (A0):
   literal-paths convention, §2.)
 - `tools/doctor` checks: asset root exists and is readable; for web runs, that
   the dev server serves it.
+
+Implemented (A3):
+
+- **Which files are checked is one predicate.** `builds_file_source` — does this
+  file construct a `FileSource` or call `asset_source`? A file that only builds
+  a `MemorySource` is scripting its own content, and its paths are not
+  repository files. That is what resolves the wrinkle this section used to end
+  with: no skip-list of examples, no naming of `loading_gate.rs`, just the
+  question of whether the store reads a disk. A second predicate,
+  `defines_the_source`, excludes the two files that mention the seam because
+  they *are* it.
+- **Case is walked, not asked.** Each path component is matched against a
+  directory listing rather than handed to the filesystem, because asking is what
+  gets this wrong: on a case-insensitive filesystem `exists()` answers yes for
+  the wrong spelling, which is the exact bug being hunted. A wrong-cased
+  *directory* is caught the same way, and the message names the on-disk
+  spelling — the thing that turns a mystery into a rename.
+- **Two paths are deliberately absent**, in `examples/load_from_disk.rs` and
+  `examples/sprites.rs`, because those examples are partly *about* what failure
+  looks like. They carry `check-assets: deliberately missing` in the comment
+  that already explains why, and the marker is honoured only within the
+  contiguous comment block above a load — a marker that leaked downwards would
+  silence every load after it and the check would quietly stop checking.
+- **Computed paths are reported, not ignored.** §2 asks for literals precisely
+  so this check is possible; a path built with `format!` is unverifiable, so it
+  fails unless it carries `check-assets: computed path` and a reason. The
+  convention erodes silently otherwise.
+- **`tools/doctor` gains an `assets` check.** BROKEN when the root is missing or
+  unreadable, because nothing an agent can run creates a directory of art;
+  INFO when it is empty, because a repository may legitimately have none yet and
+  the engine draws the placeholder rather than failing.
+- **The dev-server half is `tools/serve-web`'s**, and it landed at A2: the
+  harness stages the asset root beside the page and `--check` fails if the page
+  reports a §9 error. Doctor does not probe a server it would have to start.
+- **`verify` wired to `MemorySource` scripting** landed with I2 and R4:
+  `examples/prototype_kit`'s verify run builds a `MemorySource` with a scripted
+  arrival tick, which is what makes "the placeholder is on screen for 29 frames"
+  an assertion rather than a race.
 - `tools/verify` uses `MemorySource` with scripted readiness ticks by default —
   zero filesystem dependence, fully reproducible; a flag switches to real I/O
   for integration smoke tests.
@@ -332,10 +370,12 @@ forever; and two sprites that share the placeholder's batch while waiting and
 stop sharing when their art lands. It lives with the renderer rather than here
 because the placeholder is the renderer's policy; the scripting is this crate's.
 
-Wrinkle for A3: `examples/loading_gate.rs` loads from a `MemorySource`, so its
-paths deliberately do not exist on disk. `tools/check-assets` must skip loads
-whose store is a `MemorySource` rather than report them as broken references —
-otherwise the check's first act is to fail on a correct example.
+Wrinkle for A3, now resolved: `examples/loading_gate.rs` loads from a
+`MemorySource`, so its paths deliberately do not exist on disk. The check asks
+whether a file builds a *filesystem-backed* store rather than whether it
+mentions a `MemorySource`, so `loading_gate.rs` is never considered — and so is
+every future example that scripts its own content, without anyone having to
+remember to add it to a list.
 
 ## 8. Milestones
 
@@ -458,9 +498,47 @@ Sequenced against renderer milestones (renderer needs textures at R2):
   (verified by hand, with the mutation applied), and the other — treating a
   non-engine `console.error` as harmless — is caught by nothing, because no
   example can produce one.
-- **A3 — CI + verify integration.** `tools/check-assets`, doctor checks,
+- **A3 — CI + verify integration.** ✅ `tools/check-assets`, doctor checks,
   `verify` wired to MemorySource scripting. Exit: a deliberately broken path in
-  an example fails CI with the §6 message.
+  an example fails CI with the §6 message. ✅
+
+  The exit criterion, demonstrated by changing one character in
+  `examples/prototype_kit/main.rs` and running the check:
+
+  ```
+  [jidousha] asset failed: 'sprites/Hero.png'
+    requested by: load_texture at crates/.../prototype_kit/main.rs:140
+    likely cause: the file on disk is named 'sprites/hero.png' — the case differs
+    fix: rename the file or the path so they match exactly. Loads are case-strict
+         on every platform, including Windows, so that art which works locally
+         also works on a web server (assets.md §2)
+  ```
+
+  **The message is §6's, written twice, and that is a real cost.** The check is
+  Python and the loader is Rust, so the case-mismatch wording exists in both —
+  and a selftest asserts the Rust source still carries the sentence the Python
+  copy claims to mirror, so a reword fails loudly instead of drifting. The
+  alternative was a Rust checker, which would have put a compile between a
+  developer and a typo; this check answers in under a second with no toolchain,
+  which is why it is also its own CI job.
+
+  **What the mutation checks said.** Eighteen deliberate breakages, seventeen
+  caught first time. The ones worth naming are about the check's *scope* rather
+  than its logic: making `builds_file_source` always true or always false,
+  making `defines_the_source` always false, letting the deliberately-missing
+  marker leak past its comment block, and asking the filesystem about case
+  instead of walking it all die, because each has a test written against the
+  specific way it would make the check useless. A check that silently stops
+  checking is the failure mode here, not one that reports the wrong line.
+
+  The escape was the wiring rather than the logic: `main` could be made to
+  return 0 with problems in hand, and every unit test still passed, because they
+  call `check_file` directly. The script now has three end-to-end tests — a
+  sound tree exits 0, a broken reference exits 1 and names the path, and an
+  empty tree is a tooling fault rather than an all-clear. This is the same shape
+  as R4's `verdict_status` escape and I2's `tools/verify` one: the judgement at
+  the top of a script is the part nothing exercises unless a test runs the
+  script.
 
 ## 9. Deferred (tracked, not designed)
 

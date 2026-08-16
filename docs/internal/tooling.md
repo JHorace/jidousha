@@ -12,7 +12,7 @@ subsystems (`docs/internal/<subsystem>.md`) or the decisions behind the rules
 
 ## 1. What it does
 
-Six scripts, each answering one question (plus `tools/serve-web`, which drives a
+Seven scripts, each answering one question (plus `tools/serve-web`, which drives a
 browser — §3). All are Python 3.8+, standard library only — no third-party
 import, so they keep working when the package ecosystem is exactly what broke.
 
@@ -24,6 +24,7 @@ import, so they keep working when the package ecosystem is exactly what broke.
 | `tools/dep-count` | How big is the dependency graph? | always 0 (reports only) |
 | `tools/check-compile-fail` | Do the errors that must be compile errors still say the right thing? | 0 ok · 1 drifted · 2 harness broke |
 | `tools/verify` | What did the game actually do, with nobody watching? | 0 verified · 1 the example's assertions failed · 2 tooling/env fault |
+| `tools/check-assets` | Does every asset path in the code name a file that exists? | 0 all resolve · 1 a reference is broken · 2 the check could not run |
 
 Not built yet (later milestones): `tools/gen-api-doc` (F0), `tools/check-tags`,
 `tools/check-headers`.
@@ -36,13 +37,14 @@ agent ──> tools/test ──> phase: tool-selftest  (python -m unittest, tool
                          phase: test           (cargo test --all-targets)
                          phase: doc-test       (cargo test --doc)
                          phase: compile-fail   (tools/check-compile-fail)
+                         phase: check-assets   (tools/check-assets)
                          phase: example:<name> (cargo run --example, one per example)
                               │
                               ├─> terminal (advisory)
                               └─> target/verify/report.json     (GROUND TRUTH)
                                   target/verify/failure-streak.json (circuit breaker)
 
-agent ──> tools/doctor ──> eleven checks ──> verdict line + target/verify/doctor.json
+agent ──> tools/doctor ──> twelve checks ──> verdict line + target/verify/doctor.json
 
 agent ──> tools/verify <example> ──> cargo run --example <name> -- --verify
                               │
@@ -146,6 +148,17 @@ a row (stop rule printed, `failure-streak.json` count 2).
   snippets lock rustc's wording plus the `IntoSystem<Phase>` mention. The
   `&mut T`-in-a-Draw-query case — the mistake ADR-0008 actually predicts — does
   show the engine's sentence.
+- **A mistyped asset path fails before anything runs.** `tools/check-assets`
+  extracts the string literals from `load_texture`/`load_bytes` call sites and
+  checks each against the asset root, case-strictly, walking each path component
+  against a directory listing rather than asking the filesystem — because on a
+  case-insensitive filesystem asking answers yes for the wrong spelling, which
+  is the exact bug being hunted (assets.md §2). It runs as a `tools/test` phase
+  *and* as its own CI job: it needs no toolchain, so it answers in seconds on a
+  runner that is still compiling. Two escape hatches, both marker comments and
+  both requiring a reason: `check-assets: deliberately missing` for the examples
+  that demonstrate failure, and `check-assets: computed path` for §2's
+  sanctioned interpolated directory.
 - **The golden tier needs a rasterizer, and CI installs one.** A runner has no
   GPU, so `mesa-vulkan-drivers` (lavapipe, Mesa's CPU rasterizer) is installed on
   the Linux test job. Without it the golden tests skip and say so and the job

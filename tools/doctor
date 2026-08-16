@@ -296,6 +296,36 @@ def check_graphics() -> Check:
     return Check("graphics", INFO, f"platform {sys.platform} — display capability not probed")
 
 
+# The asset root every example loads from (assets.md §2). One directory, beside
+# the workspace manifest, and every path in the code is relative to it.
+ASSET_ROOT = "assets"
+
+
+def check_assets(repo=None) -> Check:
+    """Report on the asset root: is it there, and can it be read?
+
+    BROKEN rather than FIXABLE when it is missing or unreadable: nothing an
+    agent can run creates a directory of art, and a windowed example that opens
+    to a screen of magenta checkerboards is a mystery worth pre-empting.
+    Empty is only INFO — a repository may legitimately have no art yet, and the
+    engine draws the placeholder rather than failing.
+    """
+    root = (repo or REPO_ROOT) / ASSET_ROOT
+    if not root.is_dir():
+        return Check(
+            "assets",
+            BROKEN,
+            f"{ASSET_ROOT}/ is missing — every example loads from it (assets.md §2)",
+        )
+    try:
+        entries = os.listdir(root)
+    except OSError as error:
+        return Check("assets", BROKEN, f"{ASSET_ROOT}/ cannot be read: {error}")
+    if not entries:
+        return Check("assets", INFO, f"{ASSET_ROOT}/ is empty — nothing loads art yet")
+    return Check("assets", OK, f"{ASSET_ROOT}/ readable, {len(entries)} entr(ies)")
+
+
 # Where a Linux Vulkan loader looks for driver manifests. One file here is the
 # difference between "wgpu finds an adapter" and "wgpu finds nothing", which is
 # in turn the difference between the golden-image tier running and skipping.
@@ -351,6 +381,7 @@ CHECKS = (
     check_build_dir,
     check_graphics,
     check_gpu,
+    check_assets,
 )
 
 

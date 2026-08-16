@@ -7,8 +7,10 @@ The scripts are extensionless executables, so they are loaded by path rather
 than imported by name.
 """
 
+import contextlib
 import importlib.machinery
 import importlib.util
+import io
 import json
 import sys
 import tempfile
@@ -38,6 +40,7 @@ serve_web = load_tool("serve-web")
 check_claude_md = load_tool("check-claude-md")
 dep_count = load_tool("dep-count")
 verify = load_tool("verify")
+check_assets = load_tool("check-assets")
 
 
 class DoctorVerdictTest(unittest.TestCase):
@@ -147,6 +150,240 @@ class DoctorGpuTest(unittest.TestCase):
         # it matters (agent-practices §6.1).
         self.assertEqual(doctor.check_gpu().status, doctor.INFO)
         self.assertEqual(doctor.check_gpu().fix, "")
+
+
+class CheckAssetsTest(unittest.TestCase):
+    FILE_BACKED = 'const ASSET_ROOT: &str = "art";\nAssets::new(FileSource::new(ASSET_ROOT));\n'
+    MEMORY_BACKED = 'let mut source = MemorySource::new();\nassets.load_texture("nowhere.png");\n'
+
+    def test_a_file_that_loads_from_disk_is_checked(self):
+        self.assertTrue(check_assets.builds_file_source(self.FILE_BACKED))
+
+    def test_a_file_that_only_scripts_its_own_content_is_not_checked(self):
+        # `examples/loading_gate.rs` names paths that deliberately do not exist.
+        # Reporting them would make this check's first act a false alarm.
+        self.assertFalse(check_assets.builds_file_source(self.MEMORY_BACKED))
+
+    def test_the_crate_that_defines_the_seam_is_not_checked(self):
+        # `files.rs` and `lib.rs` mention `FileSource::new` and `asset_source`
+        # because they *are* those things; their doc examples name paths that
+        # were never meant to exist.
+        text = "pub struct FileSource {}\nAssets::new(FileSource::new(root));\n"
+        self.assertTrue(check_assets.builds_file_source(text))
+        self.assertTrue(check_assets.defines_the_source(text))
+
+    def test_the_asset_root_is_read_from_the_constant_the_store_was_given(self):
+        self.assertEqual(check_assets.asset_root_of(self.FILE_BACKED), "art")
+
+    def test_an_asset_root_passed_as_a_literal_is_read_too(self):
+        self.assertEqual(
+            check_assets.asset_root_of('jidousha_platform::asset_source("stuff")'), "stuff"
+        )
+
+    def test_a_root_that_cannot_be_resolved_is_reported_rather_than_guessed(self):
+        # Guessing "assets" here would check the wrong directory and pass.
+        self.assertIsNone(check_assets.asset_root_of("Assets::new(FileSource::new(computed))"))
+
+    def test_literal_loads_are_found_with_their_line_and_kind(self):
+        text = 'x\nlet a = assets.load_texture("sprites/hero.png");\nlet b = assets.load_bytes("level.dat");\n'
+        self.assertEqual(
+            check_assets.literal_loads(text),
+            [(2, "texture", "sprites/hero.png"), (3, "bytes", "level.dat")],
+        )
+
+    def test_a_load_marked_deliberately_missing_is_not_a_broken_reference(self):
+        text = (
+            "// check-assets: deliberately missing\n"
+            'let missing = assets.load_texture("nothing_here.png");\n'
+        )
+        self.assertEqual(check_assets.literal_loads(text), [])
+
+    def test_a_marker_does_not_leak_past_the_comment_block_it_is_in(self):
+        # Otherwise one marker near the top of a file would silence every load
+        # below it, and the check would quietly stop checking.
+        text = (
+            "// check-assets: deliberately missing\n"
+            'let a = assets.load_texture("gone.png");\n'
+            "let unrelated = 1;\n"
+            'let b = assets.load_texture("real.png");\n'
+        )
+        self.assertEqual(check_assets.literal_loads(text), [(4, "texture", "real.png")])
+
+    def test_a_computed_path_is_reported_because_it_cannot_be_checked(self):
+        text = 'let a = assets.load_texture(&format!("levels/{n}/bg.png"));\n'
+        self.assertEqual(len(check_assets.computed_loads(text)), 1)
+
+    def test_a_computed_path_the_convention_sanctions_is_accepted(self):
+        text = (
+            "// check-assets: computed path — one directory per numbered level\n"
+            'let a = assets.load_texture(&format!("levels/{n}/bg.png"));\n'
+        )
+        self.assertEqual(check_assets.computed_loads(text), [])
+
+    def test_a_path_that_exists_resolves(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "sprites").mkdir()
+            (root / "sprites" / "hero.png").write_bytes(b"x")
+            self.assertEqual(
+                check_assets.resolve_case_strict(root, "sprites/hero.png"), (True, None)
+            )
+
+    def test_a_path_that_differs_only_in_case_names_the_file_on_disk(self):
+        # The single most valuable thing this check says: it turns "works on my
+        # machine, 404s on the server" into a rename.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "sprites").mkdir()
+            (root / "sprites" / "hero.png").write_bytes(b"x")
+            found, near = check_assets.resolve_case_strict(root, "sprites/Hero.png")
+            self.assertFalse(found)
+            self.assertEqual(near, "sprites/hero.png")
+
+    def test_a_wrongly_cased_directory_is_caught_too(self):
+        # Walked component by component precisely so this case is not missed.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "sprites").mkdir()
+            (root / "sprites" / "hero.png").write_bytes(b"x")
+            found, near = check_assets.resolve_case_strict(root, "Sprites/hero.png")
+            self.assertFalse(found)
+            self.assertEqual(near, "sprites")
+
+    def test_a_path_that_is_simply_absent_has_no_near_miss(self):
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertEqual(
+                check_assets.resolve_case_strict(Path(directory), "nowhere.png"), (False, None)
+            )
+
+    def test_a_directory_is_not_a_file(self):
+        # `load_texture("sprites")` names something that exists and cannot be
+        # loaded; the engine reports it as unreadable at runtime.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "sprites").mkdir()
+            self.assertEqual(check_assets.resolve_case_strict(root, "sprites"), (False, None))
+
+    def test_a_broken_reference_is_reported_in_the_engines_message_shape(self):
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            (repo / "art").mkdir()
+            source = repo / "game.rs"
+            source.write_text(
+                'const ASSET_ROOT: &str = "art";\n'
+                "fn main() { Assets::new(FileSource::new(ASSET_ROOT)); }\n"
+                'fn go() { assets.load_texture("gone.png"); }\n'
+            )
+            problems = check_assets.check_file(repo, source)
+            self.assertEqual(len(problems), 1)
+            text = problems[0]
+            self.assertTrue(text.startswith("[jidousha] asset failed: 'gone.png'"), text)
+            self.assertIn("requested by: load_texture at game.rs:3", text)
+            self.assertIn("likely cause:", text)
+            self.assertIn("fix:", text)
+
+    def test_the_case_mismatch_wording_still_matches_the_engines_own(self):
+        # The cost of a Python check reporting a Rust taxonomy: the case-mismatch
+        # sentence exists in both. This is the drift alarm — reword the Rust
+        # message and this fails, pointing at the copy in tools/check-assets
+        # rather than letting the two quietly diverge (assets.md §6).
+        root = Path(__file__).resolve().parents[2]
+        rust = (root / "crates/jidousha-assets/src/payload.rs").read_text(encoding="utf-8")
+        shared = "rename the file or the path so they match exactly"
+        self.assertIn(shared, rust, "the engine's message changed")
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            (repo / "art").mkdir()
+            (repo / "art" / "hero.png").write_bytes(b"x")
+            source = repo / "game.rs"
+            source.write_text(
+                'const ASSET_ROOT: &str = "art";\n'
+                "fn main() { Assets::new(FileSource::new(ASSET_ROOT)); }\n"
+                'fn go() { assets.load_texture("Hero.png"); }\n'
+            )
+            problems = check_assets.check_file(repo, source)
+            self.assertEqual(len(problems), 1)
+            self.assertIn(shared, problems[0], "the check's copy changed")
+
+    def _run_main(self, repo):
+        """Run the script end to end against `repo`, returning (code, stderr)."""
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = check_assets.main(["tools/check-assets", "--root", str(repo)])
+        return code, err.getvalue()
+
+    def _repo_with(self, load: str):
+        directory = tempfile.TemporaryDirectory()
+        repo = Path(directory.name)
+        (repo / "art").mkdir()
+        (repo / "art" / "hero.png").write_bytes(b"x")
+        crate = repo / "crates" / "game" / "examples"
+        crate.mkdir(parents=True)
+        (crate / "game.rs").write_text(
+            'const ASSET_ROOT: &str = "art";\n'
+            "fn main() { Assets::new(FileSource::new(ASSET_ROOT)); }\n"
+            f"fn go() {{ {load} }}\n"
+        )
+        return directory, repo
+
+    def test_a_run_over_a_sound_tree_exits_zero(self):
+        holder, repo = self._repo_with('assets.load_texture("hero.png");')
+        with holder:
+            code, _ = self._run_main(repo)
+            self.assertEqual(code, 0)
+
+    def test_a_broken_reference_makes_the_whole_run_fail(self):
+        # The wiring between finding a problem and saying so with a non-zero
+        # exit. Without this, every check above could pass while the script
+        # cheerfully returned 0 and CI stayed green.
+        holder, repo = self._repo_with('assets.load_texture("gone.png");')
+        with holder:
+            code, err = self._run_main(repo)
+            self.assertEqual(code, 1)
+            self.assertIn("asset failed: 'gone.png'", err)
+            self.assertIn("1 broken asset reference(s)", err)
+
+    def test_a_run_with_nothing_to_check_is_a_tooling_fault(self):
+        # An empty tree means the check was pointed somewhere wrong, and
+        # reporting "all clear" would be the most misleading answer available.
+        with tempfile.TemporaryDirectory() as directory:
+            code, err = self._run_main(Path(directory))
+            self.assertEqual(code, 2)
+            self.assertIn("found no Rust sources", err)
+
+    def test_the_committed_tree_has_no_broken_asset_references(self):
+        # The check checking itself, on the real repository — so a rename that
+        # breaks a path fails here as well as in CI.
+        root = Path(__file__).resolve().parents[2]
+        problems = []
+        for source in check_assets.rust_sources(root):
+            problems += check_assets.check_file(root, source)
+        self.assertEqual(problems, [])
+
+
+class DoctorAssetsTest(unittest.TestCase):
+    def test_a_readable_asset_root_passes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            (repo / "assets").mkdir()
+            (repo / "assets" / "hero.png").write_bytes(b"x")
+            self.assertEqual(doctor.check_assets(repo).status, doctor.OK)
+
+    def test_a_missing_asset_root_is_broken_rather_than_fixable(self):
+        # Nothing an agent can run creates a directory of art, and a windowed
+        # example opening to a screen of magenta is worth pre-empting.
+        with tempfile.TemporaryDirectory() as directory:
+            check = doctor.check_assets(Path(directory))
+            self.assertEqual(check.status, doctor.BROKEN)
+            self.assertEqual(check.fix, "", "BROKEN checks carry no fix command")
+
+    def test_an_empty_asset_root_is_only_noted(self):
+        # A repository may legitimately have no art yet; the engine draws the
+        # placeholder rather than failing.
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            (repo / "assets").mkdir()
+            self.assertEqual(doctor.check_assets(repo).status, doctor.INFO)
 
 
 class TestOutputParsingTest(unittest.TestCase):
