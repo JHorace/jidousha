@@ -214,9 +214,9 @@ impl Schedule {
     ///
     /// Nothing here can mutate the world — `DrawCtx` has no method that does —
     /// so unlike `run` there are no commands to apply (ADR-0008).
-    pub(crate) fn run_draw(&self, world: &World) {
+    pub(crate) fn run_draw(&self, world: &World, submissions: &mut crate::draw::Submissions) {
         for registered in Draw::systems(self) {
-            let mut context = DrawCtx::new(world);
+            let mut context = DrawCtx::new(world, submissions);
             crate::panic_hook::with_running_system(Draw::NAME, registered.name(), || {
                 (registered.stored())(&mut context);
             });

@@ -10,6 +10,7 @@
 //! Update identically — one loop implementation, two drivers (core.md §8
 //! CONTRACT).
 
+use crate::draw::Submissions;
 use crate::rng::Rng;
 use crate::schedule::{IntoSystem, Phase, Schedule, Startup, Update};
 use crate::time::Time;
@@ -60,6 +61,8 @@ pub struct Simulation {
     /// Real time carried over from previous frames, not yet spent on a tick.
     accumulator: Seconds,
     started: bool,
+    /// The current frame's draw submissions, reused across frames.
+    submissions: Submissions,
 }
 
 impl Simulation {
@@ -79,6 +82,7 @@ impl Simulation {
             schedule: Schedule::new(),
             accumulator: Seconds::ZERO,
             started: false,
+            submissions: Submissions::new(),
         }
     }
 
@@ -162,10 +166,13 @@ impl Simulation {
     /// # Panics
     ///
     /// In debug builds, if the world's shape changed across the phase.
-    pub fn draw(&mut self) {
+    pub fn draw(&mut self) -> &Submissions {
         self.start();
         let before = self.world.shape();
-        self.schedule.run_draw(&self.world);
+        // Each frame starts empty: submissions are immediate-mode, and nothing
+        // is retained across frames at the API level (renderer.md §2).
+        self.submissions.clear();
+        self.schedule.run_draw(&self.world, &mut self.submissions);
         let after = self.world.shape();
         debug_assert_eq!(
             before, after,
@@ -176,6 +183,13 @@ impl Simulation {
              interior mutability, written from a Draw system\n  \
              fix: move the change to an Update system (ADR-0008)"
         );
+        &self.submissions
+    }
+
+    /// What the last [`draw`](Simulation::draw) submitted.
+    #[must_use]
+    pub fn submissions(&self) -> &Submissions {
+        &self.submissions
     }
 
     /// The world, for reading state.

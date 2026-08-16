@@ -8,7 +8,7 @@
 //! same angle gives the same sine on glibc, MSVC, and wasm, which
 //! `f32::sin` does not promise (ADR-0009).
 
-pub use glam::{Vec2, Vec3, Vec4};
+pub use glam::{Mat4, Vec2, Vec3, Vec4};
 
 use crate::resource::Resource;
 
