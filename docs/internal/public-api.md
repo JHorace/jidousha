@@ -182,6 +182,12 @@ a game could notice is that `texture_of` returns `None` once the renderer has
 taken the texels (ADR-0016), which matters only to code that reads texels, and
 simulation is forbidden from doing that anyway.
 
+Removed in I2: `ByteSource::outstanding`. Nothing called it — `all_ready` walks
+the store's entries — so it was three implementations maintaining a counter for
+nobody, and a second way to ask a question that already had one. A game could not
+have been calling it; the seam is implemented from outside by the platform
+crates, and they lose a field each.
+
 Built in I2: `ReplaySource`, `Resolution`, `Assets::resolved()` and
 `RequestId::bits()` — the recording seam. All four are for whoever is writing or
 replaying a recording, which today is the driver and a test; a game touches none

@@ -63,11 +63,13 @@ impl<S: ByteSource> ReplaySource<S> {
         }
     }
 
-    /// Requests the recording expects that have not been released yet.
+    /// Completions that have arrived but are not due yet.
     ///
-    /// A replay that ends with these outstanding replayed a shorter session
-    /// than it recorded — worth being able to ask about, since the alternative
-    /// is a test that quietly asserts nothing.
+    /// A replay that ends with any of these replayed a shorter session than it
+    /// recorded — worth being able to ask about, since the alternative is a
+    /// test that quietly asserts nothing. It is not what keeps a loading gate
+    /// shut: an undelivered completion leaves its asset `Loading`, and
+    /// `all_ready` reads the assets.
     #[must_use]
     pub fn unreleased(&self) -> usize {
         self.early.len()
@@ -106,13 +108,6 @@ impl<S: ByteSource> ByteSource for ReplaySource<S> {
         // doing real work here rather than restating what already held.
         due.sort_by_key(|completion| completion.request);
         due
-    }
-
-    fn outstanding(&self) -> usize {
-        // What the inner source is still fetching, plus what has arrived and is
-        // waiting for its tick. `all_ready` has to stay false for both, or a
-        // game's loading gate would open early on replay.
-        self.inner.outstanding() + self.early.len()
     }
 }
 
@@ -156,9 +151,9 @@ mod tests {
 
     #[test]
     fn a_held_completion_keeps_the_loading_gate_shut() {
-        // `all_ready` is the one-line gate a game writes (assets.md §1). If a
-        // waiting completion did not count as outstanding, the gate would open
-        // on replay several ticks before it did on the day.
+        // `all_ready` is the one-line gate a game writes (assets.md §1), and a
+        // replay that opened it several ticks before the recorded session did
+        // would change what every loading screen in the game does.
         let mut assets = Assets::new(ReplaySource::new(source_with(&["a"]), [(0, 5)]));
         assets.load_bytes("a");
         assets.commit(0);
@@ -169,24 +164,33 @@ mod tests {
 
     #[test]
     fn completions_released_together_come_back_in_request_order() {
-        // Holding some back and releasing others makes arrival order arbitrary,
-        // which is exactly when the ordering CONTRACT starts doing work.
+        // The CONTRACT every source keeps (assets.md §5), and the one place it
+        // is not free: the holding pen fills in *arrival* order, so releasing
+        // from it hands back whatever order the inner source happened to
+        // finish in. Here `b` arrives before `a` and both come due at once, so
+        // an unsorted release would return them as (1, 0) — which two runs on
+        // two machines have no reason to agree on.
         let mut source = MemorySource::new();
-        for path in ["a", "b", "c"] {
+        for path in ["a", "b"] {
             source.insert(path, vec![0]);
         }
-        // Asked for in one order, recorded as resolving in another.
-        let mut replay = ReplaySource::new(source, [(0, 9), (1, 3), (2, 9)]);
-        for path in ["a", "b", "c"] {
+        source.complete_at("b", 1);
+        source.complete_at("a", 2);
+        let mut replay = ReplaySource::new(source, [(0, 9), (1, 9)]);
+        for path in ["a", "b"] {
             replay.request(path, AssetKind::Bytes);
         }
-        assert_eq!(replay.drain_completed(3).len(), 1, "only b is due");
+        // b lands first, a second; neither is due, so both wait in that order.
+        assert!(replay.drain_completed(1).is_empty());
+        assert!(replay.drain_completed(2).is_empty());
+        assert_eq!(replay.unreleased(), 2, "both are waiting, b ahead of a");
+
         let released: Vec<u64> = replay
             .drain_completed(9)
             .iter()
             .map(|completion| completion.request.bits())
             .collect();
-        assert_eq!(released, vec![0, 2], "request order, not arrival order");
+        assert_eq!(released, vec![0, 1], "request order, not arrival order");
     }
 
     #[test]

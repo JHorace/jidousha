@@ -35,6 +35,12 @@ const ASSET_ROOT: &str = "assets";
 /// The world is twenty units tall; everything below is in those units.
 const VIEW_HEIGHT: f32 = 20.0;
 
+/// How big a paddle is drawn, in world units.
+///
+/// Stated once because the verify run asserts against it: a check that carried
+/// its own copy of the number would keep passing after the paddle changed size.
+const PADDLE_SIZE: Vec2 = Vec2::new(0.5, 4.0);
+
 /// Draw bands, so the ordering is stated once rather than guessed at each site.
 ///
 /// This is the layering convention a real game would put in its own module —
@@ -239,7 +245,7 @@ fn draw_the_field(ctx: &mut DrawCtx) {
     // The right-hand paddle is scenery; the left one is an entity the player
     // moves, drawn below from its `Transform`.
     ctx.rect(
-        Rect::from_center_size(Vec2::new(field.max.x - 1.2, 0.0), Vec2::new(0.5, 4.0)),
+        Rect::from_center_size(Vec2::new(field.max.x - 1.2, 0.0), PADDLE_SIZE),
         Color::rgb(0.85, 0.85, 0.9),
         Depth::layer(layers::PLAY),
     );
@@ -250,7 +256,7 @@ fn draw_the_field(ctx: &mut DrawCtx) {
         .collect();
     for at in paddles {
         ctx.rect(
-            Rect::from_center_size(at, Vec2::new(0.5, 4.0)),
+            Rect::from_center_size(at, PADDLE_SIZE),
             Color::rgb(0.4, 1.0, 0.7),
             Depth::layer(layers::PLAY),
         );
@@ -602,12 +608,24 @@ mod verify {
         // And the paddle really is on screen where the world says it is — the
         // position is read back out of the world rather than written down here,
         // so this asks whether drawing agrees with simulation.
-        if last.covering(paddle_pos).is_empty() {
+        //
+        // "Something is drawn there" is not enough: the readout text wanders
+        // across most of the field, so that question passes with the paddle
+        // deleted. The quad has to be the *size* of a paddle.
+        let paddle_shaped = last.covering(paddle_pos).into_iter().any(|quad| {
+            let bounds = quad.bounds();
+            near(bounds.max.x - bounds.min.x, super::PADDLE_SIZE.x)
+                && near(bounds.max.y - bounds.min.y, super::PADDLE_SIZE.y)
+        });
+        if !paddle_shaped {
             fail(
-                "nothing was drawn where the paddle is",
+                "no paddle-shaped quad was drawn where the paddle is",
                 &format!(
-                    "the world puts it at ({:.2}, {:.2})",
-                    paddle_pos.x, paddle_pos.y
+                    "the world puts it at ({:.2}, {:.2}), {} by {}",
+                    paddle_pos.x,
+                    paddle_pos.y,
+                    super::PADDLE_SIZE.x,
+                    super::PADDLE_SIZE.y
                 ),
             );
         }

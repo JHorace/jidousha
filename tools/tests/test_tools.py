@@ -351,6 +351,29 @@ class VerifyToolTest(unittest.TestCase):
         examples = [("jidousha-core", "homing")]
         self.assertIsNone(verify.find_example(examples, "nope"))
 
+    def test_a_clean_run_with_a_verdict_is_a_pass(self):
+        self.assertEqual(verify.verdict_status("ok", "verified thing over 3 ticks"), "pass")
+
+    def test_a_clean_run_with_no_verdict_is_not_a_pass(self):
+        # The one failure mode this script exists to avoid: an example that
+        # ignores `--verify` runs normally, exits 0, and asserts nothing.
+        self.assertEqual(verify.verdict_status("ok", None), "unverified")
+        self.assertEqual(verify.EXIT_CODES["unverified"], 2)
+
+    def test_a_nonzero_exit_is_a_failure_whatever_it_printed(self):
+        # An example that failed an assertion after printing its verdict would
+        # otherwise be read as a pass.
+        self.assertEqual(verify.verdict_status("failed", "verified thing"), "fail")
+        self.assertEqual(verify.EXIT_CODES["fail"], 1)
+
+    def test_a_timeout_and_a_launch_failure_keep_their_own_names(self):
+        # Both are tooling faults, and neither should be reported as the
+        # example's assertions failing.
+        self.assertEqual(verify.verdict_status("timeout", None), "timeout")
+        self.assertEqual(verify.verdict_status("error", None), "error")
+        self.assertEqual(verify.EXIT_CODES["timeout"], 2)
+        self.assertEqual(verify.EXIT_CODES["error"], 2)
+
     def test_the_report_does_not_go_where_the_test_wrapper_writes_its_own(self):
         # Two tools writing one ground-truth file is how ground truth stops
         # being true (tooling.md §3).

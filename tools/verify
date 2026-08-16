@@ -68,6 +68,25 @@ def parse_verdict(text: str) -> "tuple[str | None, list[str]]":
     return None, []
 
 
+EXIT_CODES = {"pass": 0, "fail": 1, "unverified": 2, "timeout": 2, "error": 2}
+
+
+def verdict_status(run_status: str, verdict: "str | None") -> str:
+    """What the run means, from how the process ended and what it printed.
+
+    Separate from `main` because this is the whole judgement, and a judgement
+    only exercised by running cargo is a judgement nothing tests.
+
+    Exiting 0 with no verdict line is `unverified`, not `pass`: an example that
+    ignores `--verify` runs normally, exits 0, and has asserted nothing.
+    Reporting that as success is the one failure mode this script exists to
+    avoid, so it is the case spelled out first.
+    """
+    if run_status != "ok":
+        return {"failed": "fail"}.get(run_status, run_status)
+    return "pass" if verdict is not None else "unverified"
+
+
 def parse_examples(metadata: dict) -> "list[tuple[str, str]]":
     """Every example target in the workspace, as (package, example name).
 
@@ -202,26 +221,8 @@ def main(argv: "list[str]") -> int:
 
     result = run_example(package, name, extra)
     verdict, summary = parse_verdict(result["output"])
-
-    if result["status"] == "ok" and verdict is None:
-        # Exit 0 with nothing to show for it. An example that ignores `--verify`
-        # would open a window on a developer's machine and hang on a runner;
-        # either way it verified nothing, and saying "pass" would be a lie.
-        status = "unverified"
-    elif result["status"] == "ok":
-        status = "pass"
-    elif result["status"] == "failed":
-        status = "fail"
-    else:
-        status = result["status"]
-
-    exit_code = {
-        "pass": 0,
-        "fail": 1,
-        "unverified": 2,
-        "timeout": 2,
-        "error": 2,
-    }[status]
+    status = verdict_status(result["status"], verdict)
+    exit_code = EXIT_CODES[status]
     report = {
         "tool": "tools/verify",
         "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),

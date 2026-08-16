@@ -84,12 +84,6 @@ pub trait ByteSource: Send + Sync + 'static {
     /// request id — two runs that complete the same requests at the same tick
     /// must see them in the same order, or replay diverges.
     fn drain_completed(&mut self, tick: u64) -> Vec<Completion>;
-
-    /// Requests asked for but not yet returned by `drain_completed`.
-    ///
-    /// Used by `all_ready` to answer "is anything still in flight" without
-    /// waiting on anything.
-    fn outstanding(&self) -> usize;
 }
 
 /// A source whose bytes are already in memory and whose *timing* is scripted.
@@ -218,10 +212,6 @@ impl ByteSource for MemorySource {
         self.pending = still_pending;
         completed
     }
-
-    fn outstanding(&self) -> usize {
-        self.pending.len()
-    }
 }
 
 #[cfg(test)]
@@ -298,16 +288,5 @@ mod tests {
         let completed = source.drain_completed(0);
         let order: Vec<RequestId> = completed.iter().map(|entry| entry.request).collect();
         assert_eq!(order, requests, "request order, not path order");
-    }
-
-    #[test]
-    fn outstanding_counts_what_has_not_arrived() {
-        let mut source = MemorySource::new();
-        source.insert("a", vec![0]);
-        source.complete_at("a", 9);
-        source.request("a", AssetKind::Bytes);
-        assert_eq!(source.outstanding(), 1);
-        source.drain_completed(9);
-        assert_eq!(source.outstanding(), 0);
     }
 }
