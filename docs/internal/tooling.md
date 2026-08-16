@@ -149,7 +149,7 @@ a row (stop rule printed, `failure-streak.json` count 2).
 - **Almost every example is run; windowed ones are built and not run.**
   Resolved in M5, which is when it first mattered. `tools/test` carries a
   `WINDOWED_EXAMPLES` set (`window_blank` from M5, `window_clear` from R1,
-  `sprites` from R2); a
+  `sprites` from R2, `prototype_kit` from R3); a
   name in it gets `cargo build --example` under a
   phase called `example-build:<name>` instead of `cargo run`, and the runner
   prints which examples it built rather than ran. Three reasons for a list over

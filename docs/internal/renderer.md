@@ -1,9 +1,8 @@
 # Renderer basics — design and contracts
 
-Status: **living doc for `jidousha-render-core` and `jidousha-render-wgpu`; R0
-and R1 implemented, R2–R4 still design.** Sections carry `Implemented (R0)` and
-`Implemented (R1)` notes where code exists; everything else is design ahead of
-the code.
+Status: **living doc for `jidousha-render-core` and `jidousha-render-wgpu`;
+R0–R3 implemented, R4 still design.** Sections carry `Implemented (RN)` notes
+where code exists; everything else is design ahead of the code.
 Same conventions as the core doc: **CONTRACT** items are binding and tested.
 
 Inherits: backend seam + WebGL2 envelope (ADR-0003), `DrawCtx` and Draw-phase
@@ -233,11 +232,41 @@ Implemented (R2):
 
 - One embedded monospace bitmap font (a compiled-in atlas; zero asset
   dependencies, works before any asset loads, works headless).
-- `ctx.text(pos, &str, TextStyle { size_world_units, color, layer, z })` expands
-  to glyph quads through the standard sprite path — no separate pipeline.
+- `ctx.text(pos, &str, TextStyle { size, color, depth })` expands to glyph
+  quads through the standard sprite path — no separate pipeline. (This sketch
+  previously said `{ size_world_units, color, layer, z }`, which predates
+  public-api.md §3 making `Depth` the one depth argument every immediate
+  primitive takes. Corrected at R3, in favour of the higher-precedence doc.)
 - Explicit non-goals for v1: TTF rendering, shaping, wrapping, non-ASCII beyond
   Latin-1. Real typography is a future subsystem; this is for scores, debug
   readouts, and prototype UI.
+
+Implemented (R3):
+
+- **The font is 5×7, and the source is the picture.** `font.rs` holds one line
+  per character — the character itself, then seven rows of five — and nothing
+  generates it from anything else. To change a glyph you change its shape. The
+  character is written out at the start of each line and checked against its
+  ASCII code, so a deleted line is a loud failure rather than a font silently
+  shifted by one.
+- Printable ASCII, 32 through 126, plus a **fallback box** for everything else.
+  A character the font does not have draws the box rather than nothing, for the
+  same reason a missing texture draws the placeholder: "half my text is
+  missing" should be a picture, not a mystery.
+- Cells are 7×9 — the glyph plus a one-texel transparent border on every side.
+  The border does two jobs: it is the letter spacing, and it is what makes
+  nearest sampling safe at any scale, because a fragment landing a hair outside
+  a glyph finds its neighbour's border instead of its neighbour's ink.
+- `TextStyle::size` is the height of one **line**, in world units, so text
+  scales with the camera like everything else. `TextStyle::width_of` measures a
+  string exactly (monospace, no kerning) — without it a game cannot centre a
+  score, and guessing is what makes prototype UI look wrong.
+- `\n` starts a new line. Wrapping remains the non-goal; an explicit line break
+  is three lines of code and is what a multi-line debug readout needs.
+- The atlas is registered in the `TextureTable` like any loaded texture, under
+  an id reserved below `1 << 32`. Asset ids pack a generation of at least one
+  into their high half, so the whole low range belongs to the renderer's own
+  textures and can never collide.
 
 ## 7. Backend interface (the seam)
 
@@ -525,10 +554,48 @@ mergeable, tested, green CI on all three targets.
     queued itself. The guard states the intent; the safety comes from the two
     checks after it. That is closer to a real bug than is comfortable, which is
     why it is written down here.
-- **R3 — primitives + text.** rect/line/circle expansion, embedded font,
+- **R3 — primitives + text.** ✅ rect/line/circle expansion, embedded font,
   `examples/prototype_kit.rs` (sprites + shapes + score text — the "can an
   agent make Pong?" substrate is now complete). Exit: transcript tests for all
   primitive expansion; example runs everywhere.
+
+  **Both criteria met.** `tests/primitives.rs` asserts on recorded frames for
+  every primitive; `tools/serve-web prototype_kit --check` screenshots the
+  example in a headless browser, and the field markings, the paddles, the
+  hitbox outline, the score, the debug readout and the whole printable ASCII
+  range are all there and legible. Native remains the human half, as at R1 and
+  R2 — this environment has no GPU adapter.
+
+  **A circle is a fan of quads, not a triangle fan.** Each quad is the centre
+  and three points on the rim, so it covers two segments as two triangles —
+  half the quads a fan would need, and every one convex, which is what keeps
+  `FrameRecord::covering` able to answer "is the cursor on the ball?" exactly
+  rather than by bounding box. The segment count is fixed at 32 rather than
+  scaled by radius: a radius-dependent count would change the transcript, and
+  every golden image, when a circle grows by a pixel.
+
+  **Shapes and text are not a debug layer.** They expand into the same `Quad`
+  and go through the same sort and batch, so a hitbox outline can be drawn
+  *behind* a sprite by choosing a lower layer. Engines with a separate debug
+  pass cannot do that, and every outline they draw sits on top whether that
+  helps or not. `shapes_and_sprites_interleave_by_depth` is the test that says
+  so.
+
+  **A thing worth knowing about alpha.** Blending happens in linear light,
+  because the surface is sRGB and that is where blending is physically right.
+  The practical consequence is that a small alpha over a dark background reads
+  much brighter than the number suggests — 6% white looked like a solid grey
+  disc in `prototype_kit` before it was turned down to 1.5%. This is correct
+  and is not going to change; it is recorded because it surprises everyone once.
+
+  **What the mutation checks said.** Twenty-one deliberate breakages, twenty
+  caught first time. The escape was **swapping a rectangle's other two corners**
+  — which renders identically, because culling is off and the two triangles
+  still cover the same rectangle, and which silently breaks the winding every
+  other quad in the engine keeps. The test had checked only the opposite pair,
+  which a swap does not move. Both it and the glyph-quad test now pin all four,
+  because that invariant is what R4's golden images and any future culling will
+  rest on.
 - **R4 — capture + golden images + verify integration.** Offscreen `capture()`
   in the wgpu backend, tolerance-based golden tests in native CI, `tools/verify`
   wired: headless sim ticks + transcript assertions + optional frame capture.
