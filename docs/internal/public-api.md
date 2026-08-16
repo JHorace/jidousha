@@ -117,6 +117,12 @@ from. The driver maintains it.
 `DrawCtx::{rect, line, circle, text}`, `TextStyle`, and `Depth`'s use by them
 land in R3 with the expansion code and the embedded font.
 
+Built in R1: nothing new for games. `Camera.clear_color` and `Camera.viewport`
+start meaning something — the first is what a window is filled with, the second
+is maintained by the driver on resize — and `jidousha_render_wgpu::WgpuBackend`
+exists but is named only by the composition root. A game never mentions a
+backend, which is the point of ADR-0003.
+
 **Assets (assets doc)**
 ```rust
 Assets::{load_texture, load_bytes, status, all_ready, unload}   // resource

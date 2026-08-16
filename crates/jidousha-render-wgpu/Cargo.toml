@@ -7,6 +7,23 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+jidousha-core = { path = "../jidousha-core" }
+jidousha-render-core = { path = "../jidousha-render-core" }
+# DELIBERATE: features listed rather than inherited, as the platform crate does
+# with winit. Two departures from wgpu's defaults, both from ADR-0005's target
+# list: `metal` is dropped because macOS is not a target, and `webgl` is added
+# because it is not a default and ADR-0003 §4 requires the WebGL2 fallback to
+# stay viable for hardware without WebGPU.
+wgpu = { version = "30", default-features = false, features = [
+    "std",
+    "parking_lot",
+    "wgsl",
+    "dx12",
+    "vulkan",
+    "gles",
+    "webgpu",
+    "webgl",
+] }
 
 [lints]
 workspace = true

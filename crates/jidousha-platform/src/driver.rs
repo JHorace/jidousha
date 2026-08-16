@@ -9,12 +9,24 @@
 //! decides *when* a frame happens and hands over how long it was; the loop that
 //! turns that into ticks is the same one `headless` runs (core.md §8 CONTRACT).
 
+use std::sync::Arc;
+
 use jidousha_core::{GameConfig, Seconds, Simulation, World};
 use jidousha_input::{Input, InputEvent, SnapshotBuilder};
+use jidousha_render_core::{
+    BackendTextureId, Camera, PhysicalSize, RenderBackend, TextureTable, plan_frame,
+};
+use jidousha_render_wgpu::WgpuBackend;
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
 use winit::window::{Window, WindowId};
+
+/// The two built-in textures every backend has, by convention: a white texel
+/// for untextured shapes, and the checkered placeholder for anything not ready
+/// (renderer.md §5). Uploading them is R2's, when there is art to be not-ready.
+const WHITE: BackendTextureId = BackendTextureId(0);
+const PLACEHOLDER: BackendTextureId = BackendTextureId(1);
 
 use crate::clock::FrameClock;
 use crate::error::RunError;
@@ -29,7 +41,16 @@ pub(crate) struct Driver {
     simulation: Simulation,
     /// `None` until `resumed` — on Android the window comes and goes, and the
     /// same shape is what winit asks for everywhere (ADR-0005's headroom).
-    window: Option<Window>,
+    ///
+    /// An `Arc` because the render surface borrows the window for as long as it
+    /// lives, and wgpu wants that ownership shared rather than promised.
+    window: Option<Arc<Window>>,
+    /// `None` until there is a window to draw into.
+    backend: Option<WgpuBackend>,
+    /// Which engine texture id maps to which uploaded one. Empty until R2:
+    /// every id resolves to the placeholder, which is the correct answer while
+    /// nothing has been uploaded.
+    textures: TextureTable,
     clock: FrameClock,
     input: SnapshotBuilder,
     /// Set when something went wrong badly enough to stop; `run` returns it.
@@ -46,6 +67,8 @@ impl Driver {
             config,
             simulation,
             window: None,
+            backend: None,
+            textures: TextureTable::new(WHITE, PLACEHOLDER),
             clock: FrameClock::new(),
             input: SnapshotBuilder::new(),
             #[cfg(not(target_arch = "wasm32"))]
@@ -103,7 +126,11 @@ impl Driver {
         // snapshot depends on anything beyond the drained edges, this is the
         // line that was already right (input.md §2).
         let Self {
-            simulation, input, ..
+            simulation,
+            input,
+            backend,
+            textures,
+            ..
         } = self;
         simulation.advance(elapsed, |world: &mut World, index| {
             let snapshot = if index == 0 {
@@ -114,9 +141,47 @@ impl Driver {
             world.insert_resource(Input::new(snapshot));
         });
 
+        // Read before drawing, which is both what the borrow checker wants and
+        // what the phase means: Draw cannot change the world (ADR-0008), so the
+        // camera it draws with is the one the last Update tick left.
+        //
+        // The camera is the game's to set; a game that never inserts one gets
+        // the default rather than a panic, because "I have not thought about
+        // the camera yet" is a real state for a prototype to be in.
+        let camera = simulation
+            .world()
+            .find_resource::<Camera>()
+            .copied()
+            .unwrap_or_default();
+
         // Draw once per frame, however many ticks ran — including none
         // (core.md §7).
-        let _ = simulation.draw();
+        let submissions = simulation.draw();
+
+        let Some(backend) = backend else {
+            return;
+        };
+        let plan = plan_frame(&camera, submissions.quads(), textures);
+        if let Err(error) = backend.render(&plan) {
+            // A frame that cannot be drawn is not a reason to stop: the surface
+            // usually comes back. Saying so once per occurrence beats silence
+            // and beats quitting.
+            eprintln!("{error}");
+        }
+    }
+
+    /// Tell the world how big the window is now.
+    ///
+    /// The camera's viewport is driver-maintained (renderer.md §4): it
+    /// describes the window, and a game that set it would be lying to itself
+    /// about how big the window is.
+    fn resize(&mut self, size: PhysicalSize) {
+        if let Some(backend) = &mut self.backend {
+            backend.resize_surface(size);
+        }
+        if let Some(camera) = self.simulation.world_mut().find_resource_mut::<Camera>() {
+            camera.viewport = size;
+        }
     }
 }
 
@@ -130,8 +195,25 @@ impl ApplicationHandler for Driver {
         let attributes = Window::default_attributes().with_title(self.config.title);
         match event_loop.create_window(attributes) {
             Ok(window) => {
+                let window = Arc::new(window);
+                let size = window_size(&window);
+                match WgpuBackend::new(Arc::clone(&window), size) {
+                    Ok(backend) => self.backend = Some(backend),
+                    // No surface means nothing will ever be drawn, so there is
+                    // no point continuing with a window that stays blank.
+                    Err(error) => {
+                        self.fail(
+                            RunError::WindowCreation {
+                                detail: error.to_string(),
+                            },
+                            event_loop,
+                        );
+                        return;
+                    }
+                }
                 window.request_redraw();
                 self.window = Some(window);
+                self.resize(size);
                 // The gap between program start and the first window is real
                 // time that was not gameplay.
                 self.clock.skip();
@@ -158,6 +240,12 @@ impl ApplicationHandler for Driver {
             window.request_redraw();
         }
     }
+}
+
+/// The window's size in physical pixels, in the engine's vocabulary.
+fn window_size(window: &Window) -> PhysicalSize {
+    let size = window.inner_size();
+    PhysicalSize::new(size.width, size.height)
 }
 
 /// Whether an event asked the loop to stop.
@@ -193,10 +281,14 @@ impl Driver {
                 self.frame(elapsed);
             }
 
-            // Resize and scale changes are lifecycle, not input (input.md §4).
-            // The renderer will want them at R1, when there is a surface to
-            // resize; until then there is nothing to tell.
-            WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. } => {}
+            // Resize is lifecycle, not input (input.md §4): it goes to the
+            // surface and to the camera, never through `Input`.
+            WindowEvent::Resized(size) => {
+                self.resize(PhysicalSize::new(size.width, size.height));
+            }
+            // A scale change comes with its own resize event, so there is
+            // nothing to do here that the arm above will not do.
+            WindowEvent::ScaleFactorChanged { .. } => {}
 
             // Keyboard and pointer events translate to `InputEvent` at I1,
             // which owns the winit tables (input.md §8). The seam they will

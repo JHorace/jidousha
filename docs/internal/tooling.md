@@ -121,7 +121,8 @@ a row (stop rule printed, `failure-streak.json` count 2).
   show the engine's sentence.
 - **Almost every example is run; windowed ones are built and not run.**
   Resolved in M5, which is when it first mattered. `tools/test` carries a
-  `WINDOWED_EXAMPLES` set; a name in it gets `cargo build --example` under a
+  `WINDOWED_EXAMPLES` set (`window_blank` from M5, `window_clear` from R1); a
+  name in it gets `cargo build --example` under a
   phase called `example-build:<name>` instead of `cargo run`, and the runner
   prints which examples it built rather than ran. Three reasons for a list over
   the alternatives: a headless flag would put test-runner concerns into engine
