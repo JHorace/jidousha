@@ -15,6 +15,7 @@ use std::collections::BTreeMap;
 use jidousha_core::{Resource, message};
 
 use crate::handle::{AssetHandle, AssetId, AssetKind, BytesHandle, IdAllocator, TextureHandle};
+use crate::payload::{AssetError, Payload, TextureData};
 use crate::source::{ByteSource, RequestId};
 
 /// Where an asset is in its life.
@@ -45,20 +46,20 @@ pub struct AssetFailure {
     /// than the loader's.
     pub requested_at: String,
     /// What went wrong, from the source.
-    pub reason: String,
+    pub error: AssetError,
 }
 
 impl AssetFailure {
     /// The failure in the engine's message format (core.md §9).
+    ///
+    /// Each failure class says something specific — a case mismatch names the
+    /// file that is actually there, an oversized image names its size and the
+    /// limit (assets.md §6). The formatting lives on [`AssetError`] so a source
+    /// can produce the same sentences without a store to put them in.
     #[must_use]
     pub fn message(&self) -> String {
-        message(
-            &format!("asset failed: {:?}", self.path),
-            &format!("requested by: load_{} at {}", self.kind, self.requested_at),
-            &self.reason,
-            "check the path against the file on disk, or handle the Failed status if this asset \
-             is genuinely optional",
-        )
+        self.error
+            .message(&self.path, self.kind, &self.requested_at)
     }
 }
 
@@ -69,9 +70,8 @@ struct Entry {
     status: AssetStatus,
     request: RequestId,
     requested_at: String,
-    /// The bytes, once they arrive. Textures keep theirs until the decoder
-    /// lands (A1); after that, only metadata stays CPU-side.
-    data: Option<Vec<u8>>,
+    /// What arrived, once it did.
+    data: Option<Payload>,
 }
 
 /// One table per asset kind.
@@ -178,14 +178,38 @@ impl Assets {
         self.entry(handle).status
     }
 
-    /// The bytes behind `handle`, if it is `Ready`.
+    /// The bytes behind `handle`, if it is `Ready` and holds bytes.
+    ///
+    /// `None` for a texture: what a texture holds is texels and a size, not a
+    /// file — see [`texture_of`](Assets::texture_of).
     ///
     /// # Panics
     ///
     /// If `handle` was unloaded.
     #[must_use]
     pub fn bytes_of<H: AssetHandle>(&self, handle: H) -> Option<&[u8]> {
-        self.entry(handle).data.as_deref()
+        match self.entry(handle).data.as_ref() {
+            Some(Payload::Bytes(bytes)) => Some(bytes),
+            _ => None,
+        }
+    }
+
+    /// The decoded image behind `handle`, if it is `Ready`.
+    ///
+    /// For the renderer, which needs the size to make a texture and the texels
+    /// to fill it. CONTRACT: **simulation must not read this** — nothing in a
+    /// game's logic may depend on texture dimensions, or the same game behaves
+    /// differently when the art is re-exported (renderer.md §3).
+    ///
+    /// # Panics
+    ///
+    /// If `handle` was unloaded.
+    #[must_use]
+    pub fn texture_of(&self, handle: TextureHandle) -> Option<&TextureData> {
+        match self.entry(handle).data.as_ref() {
+            Some(Payload::Texture(texture)) => Some(texture),
+            _ => None,
+        }
     }
 
     /// The path `handle` was loaded from.
@@ -270,17 +294,17 @@ impl Assets {
                 continue;
             };
             match completion.result {
-                Ok(bytes) => {
+                Ok(payload) => {
                     entry.status = AssetStatus::Ready;
-                    entry.data = Some(bytes);
+                    entry.data = Some(payload);
                 }
-                Err(reason) => {
+                Err(error) => {
                     entry.status = AssetStatus::Failed;
                     self.failures.push(AssetFailure {
                         path: entry.path.clone(),
                         kind,
                         requested_at: entry.requested_at.clone(),
-                        reason,
+                        error,
                     });
                 }
             }
@@ -290,7 +314,7 @@ impl Assets {
 
     #[track_caller]
     fn load(&mut self, kind: AssetKind, path: &str) -> AssetId {
-        let request = self.source.request(path);
+        let request = self.source.request(path, kind);
         let entry = Entry {
             path: path.to_owned(),
             status: AssetStatus::Loading,

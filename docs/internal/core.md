@@ -563,16 +563,16 @@ agent works one milestone per session-ish; BLOCKED.md protocol applies throughou
     an `InputSnapshot` (§1, CONTRACT), so the driver reaches in rather than core
     reaching out. The accumulator stays in one place, which was the point.
 
-  **Verified, and not.** The engine side is tested: the driver's frame logic
-  runs headless in unit tests (edges to the first tick only, edges surviving a
-  frame that ran no ticks, focus loss releasing held keys, one draw per frame,
-  no spiral of death), and both targets compile in CI. **The window itself is
-  unverified.** This environment has no display — `run` correctly reports
-  `no display to open a window on` and names `headless` as the thing to do
-  instead — so "a blank window appears on Linux, Windows and the web" is still
-  waiting on a human with a screen. That was always specified as a manual check
-  (ADR-0005's headless CI proxy); it is called out here so nobody reads the tick
-  above as more than it is.
+  **Verified.** The engine side is tested: the driver's frame logic runs
+  headless in unit tests (edges to the first tick only, edges surviving a frame
+  that ran no ticks, focus loss releasing held keys, one draw per frame, no
+  spiral of death), and both targets compile in CI. The window itself could not
+  be checked from the environment this was built in — no display, so `run`
+  correctly reported `no display to open a window on` and named `headless` as
+  the thing to do instead — and **a human has since confirmed the window opens
+  natively**. That was always specified as a manual check (ADR-0005's headless
+  CI proxy). The web target is confirmed separately and automatically by
+  `tools/serve-web --check`.
 
   What the mutation checks said. Seven deliberate breakages, six caught. Three
   of the six were caught only after the tests were strengthened — the first pass

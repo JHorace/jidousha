@@ -388,16 +388,17 @@ mergeable, tested, green CI on all three targets.
   window, so this was not hypothetical); and the adapter was consumed by the
   handshake and never kept, so `resize_surface` could never reconfigure at all.
 
-  **Verified, and not.** The isolation rule, the poll mechanism, and both target
-  builds are checked, and `tools/test` builds `window_clear` without running it.
-  **The colored window itself is unverified** — this environment has no display
-  *and no GPU adapter at all* (the probe reports "no suitable graphics adapter
-  found"), so nothing here can see a pixel. Native and web both need a human
-  with a screen. The web additionally has **no harness at all**: the wasm build
-  compiles, but there is no `index.html`, no `wasm-bindgen` step, and nothing to
-  serve — so "colored window on the web" is not merely unverified, it is
-  currently unreachable. That gap is called out in §9 below and belongs to
-  whoever picks it up; it was never assigned to a milestone.
+  **Verified, both targets, by different means.** The isolation rule, the poll
+  mechanism, and both target builds are checked in CI, and `tools/test` builds
+  `window_clear` without running it. The environment this was built in has no
+  display *and no GPU adapter at all* — the probe reports "no suitable graphics
+  adapter found" — so neither could be seen from here. **A human has since
+  confirmed the colored window natively**, and the web is confirmed
+  automatically by `tools/serve-web --check`, which loads the page in a headless
+  browser and checks that the canvas was actually painted.
+
+  The web harness did not exist when R1 was written, which is why the WebGL2
+  fallback bug it later found could ship unnoticed. §9 records both.
 - **R2 — sprites end to end.** Texture upload, sprite pipeline (WGSL), batching,
   camera UBO, `jidousha::systems::draw_sprites`, placeholder texture.
   `examples/sprites.rs` (moving, rotating, tinted, atlas-region sprites).
