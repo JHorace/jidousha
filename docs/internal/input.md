@@ -410,6 +410,9 @@ overlap contradictorily (hold 5..10 + release at 7) are a debug panic with the
     into a silent pass — because nothing exercised `main`. The judgement moved
     into `verdict_status`, which is tested.
 
+  After the fixes, every mutation that still has a site dies — twenty of them,
+  the twenty-first being the `outstanding()` counter, which no longer exists.
+
   The generalizable half: three of the four were dead or unreachable code paths
   rather than weak assertions. A mutation that cannot be observed is usually
   telling you the code has no reader, not that the test is lazy.
