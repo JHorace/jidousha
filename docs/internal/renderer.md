@@ -460,6 +460,44 @@ rather than fatal: a lost surface usually comes back, and quitting a game
 because one frame failed is worse than missing one frame. `JIDOUSHA_BACKEND=gl`
 does not exist yet; wgpu picks a backend itself, and an override is worth adding
 when someone needs it rather than before.
+**Adapter selection (E0, e0-findings.md F-011).** The windowed path asks for
+`PowerPreference::HighPerformance`; the offscreen path stays on `LowPower`. It
+asked for `LowPower` everywhere until a machine with an NVIDIA GPU driving the
+compositor and an AMD integrated GPU failed *every* windowed example at surface
+setup with "importing the supplied dmabufs failed".
+
+The reasoning behind `LowPower` was about the right thing — a 2D prototype does
+not need a discrete GPU, and asking costs battery — and bought it with the wrong
+currency. Presenting means handing the compositor a buffer it can import, and a
+buffer exported by one vendor's driver and imported by another's may be refused
+outright. `LowPower` sorts the integrated adapter to the front, which is worse
+here than wgpu's default `None`, which sorts nothing. `compatible_surface` is
+not the missing filter: under Wayland, presentation goes through buffer sharing
+rather than direct scanout, so essentially every renderable GPU reports it can
+present.
+
+Nothing in this repository can verify the fix — every machine the project builds
+on is headless with no adapter at all. It was confirmed by hand on the affected
+hardware, which is also the only place the bug reproduces.
+
+`WGPU_POWER_PREF` still does nothing, because an explicit preference overrides
+`PowerPreference::from_env()`. Reading the environment is deferred on the same
+grounds as `JIDOUSHA_BACKEND` above — worth adding when the heuristic is wrong
+for someone, rather than before.
+
+**A failure below the game must not be reported as one.** The Wayland protocol
+error kills the connection, `run_app` returns `Err`, and the only mapping that
+catches it is `RunError::EventLoop` — whose text named a display-server fault
+and advised restarting. Neither was true: the display server was fine and
+restarting failed identically every time. The real diagnosis is printed by the
+window-system client library one line earlier and never reaches `detail`. The
+variant now says what it knows, names the multi-GPU case, and sends the reader
+to the lines above it, rather than asserting a cause it cannot see. A distinct
+variant for surface/adapter failure remains the fuller answer and is deferred:
+the failure arrives as a dead event loop, so telling it apart from a genuine one
+means reading the window system's stderr, which is not the platform crate's to
+read.
+
 - Device lost mid-run → v1: fatal with §9 message (recreation is deferred).
 - Oversized texture, NaN transform, unknown handle → contract violations: debug
   panic naming the entity/system per core §9.

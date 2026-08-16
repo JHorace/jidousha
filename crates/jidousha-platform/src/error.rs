@@ -56,11 +56,28 @@ impl fmt::Display for RunError {
                 "check that other graphical programs start; tools/doctor reports what it can \
                  see of the display",
             ),
+            // The cause and fix here used to name a display-server fault and
+            // advise restarting. Both were wrong for the failure people
+            // actually hit: on a machine whose compositor runs on one GPU and
+            // whose renderer picked another, the compositor refuses the buffer,
+            // the connection dies, and the loop exits — identically, every
+            // time, with restarting no help at all. The real cause is printed
+            // by the window system one line above and never reaches `detail`,
+            // which carries only what the event loop itself reported. So this
+            // says what it knows and points at the line it does not have,
+            // rather than asserting a cause it cannot see (e0-findings.md
+            // F-011).
             RunError::EventLoop { detail } => (
                 "the event loop stopped with an error",
                 detail,
-                "the display server went away mid-run, or the window system reported a fault",
-                "restart the program; if it repeats, report it with the message above",
+                "the window system ended the connection — most often a graphics driver \
+                 refusing a frame, and on a multi-GPU machine most often because the \
+                 renderer and the compositor are on different GPUs; less often the \
+                 display server really did go away",
+                "read the lines printed above this one, which are the window system's own \
+                 and say more than it told us; on a multi-GPU Linux machine, forcing the \
+                 compositor's driver (VK_DRIVER_FILES, or the equivalent for your driver) \
+                 is the usual fix. If the message above is the whole story, report it",
             ),
         };
         formatter.write_str(&message(what, detail, cause, fix))
@@ -89,6 +106,32 @@ mod tests {
         assert!(
             text.contains("jidousha::headless"),
             "the fix names the thing to do instead: {text}"
+        );
+    }
+
+    #[test]
+    fn a_dead_event_loop_sends_the_reader_to_the_lines_above_it() {
+        // This is the first message a new user meets, because it fires before
+        // their game runs at all — and for the failure people actually hit it
+        // named the wrong cause and gave a fix that never worked. The window
+        // system's own diagnosis is printed one line above and never reaches
+        // `detail`, so the one useful instruction is to go and read it.
+        let error = RunError::EventLoop {
+            detail: "the event loop exited: Os(..)".to_owned(),
+        };
+        let text = error.to_string();
+        assert!(
+            !text.contains("restart the program"),
+            "restarting never fixed the multi-GPU case, and it fails identically \
+             every time: {text}"
+        );
+        assert!(
+            text.contains("lines printed above"),
+            "the fix points at the diagnosis we do not have: {text}"
+        );
+        assert!(
+            text.contains("different GPUs"),
+            "the likely cause names the failure this variant actually reports: {text}"
         );
     }
 
