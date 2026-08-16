@@ -485,6 +485,29 @@ hardware, which is also the only place the bug reproduces.
 grounds as `JIDOUSHA_BACKEND` above — worth adding when the heuristic is wrong
 for someone, rather than before.
 
+**`FrameRecorder` is how a game asks what it drew** (e0-findings.md F-010).
+Checking a frame meant writing the driver's five steps out by hand —
+`create_builtin_textures`, take the quads, `plan_frame`, `render`, `last_frame`
+— and then, because the table went out of scope with them, building a *second*
+throwaway `NullBackend` and a second table in the same order to learn which
+`BackendTextureId` the font atlas had landed on. E0 run 1 copied that shape
+verbatim out of `prototype_kit`, apology comment included, and said it did not
+understand why the frame could not carry the mapping.
+
+It cannot: `TextureTable` resolves at plan time, a plan is per-frame, and the
+table is the driver's for the life of the run — so `FramePlan` has lost the
+`TextureId` by construction, and adding a reverse index to every frame would be
+paying per frame for a question asked once. The fix is not to move the mapping
+but to keep the thing that owns both: the recorder holds the backend and the
+table, so `draw(&mut sim)` is one call and `font_texture()` is a question it can
+simply answer.
+
+The tell that this was a design problem and not a documentation one: a *game
+example* had to name `RenderBackend` and `FramePlan` — both on the API
+document's forbidden-vocabulary list — to assert that it had drawn anything.
+`pong/verify.rs` now names neither. `prototype_kit` keeps the long form on
+purpose, because it also captures a PNG through a real backend, and says so.
+
 **The driver stamps `Camera.viewport` every frame** (e0-findings.md F-012), not
 only when a resize arrives. §4 has always said the viewport is driver-
 maintained; writing it on resize alone did not deliver that, by two ordinary

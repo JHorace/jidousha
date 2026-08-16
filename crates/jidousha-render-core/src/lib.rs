@@ -51,6 +51,7 @@ mod font;
 mod golden;
 mod null;
 mod plan;
+mod record;
 mod shapes;
 mod sprite;
 mod submit;
@@ -66,6 +67,7 @@ pub use golden::{Comparison, Tolerance, compare, decode_png, diff_image, encode_
 pub use jidousha_core::PhysicalSize;
 pub use null::{DrawnQuad, FrameRecord, NullBackend};
 pub use plan::{Batch, FramePlan, QuadVertex, TextureTable, plan_frame};
+pub use record::FrameRecorder;
 pub use sprite::Sprite;
 pub use submit::{Submit, draw_sprites};
 pub use textures::{create_builtin_textures, upload_ready_textures};

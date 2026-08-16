@@ -421,12 +421,16 @@ pub fn run() {
 /// Which backend texture the font atlas landed on, read off the frame.
 ///
 /// The table is gone by the time the assertions run, and the atlas is not at a
-/// fixed id — it is whatever `create_builtin_textures` assigned. The glyph
-/// quads are the ones whose UVs sit inside the atlas *and* whose batch is
-/// neither the placeholder nor the flat white texel, which is more indirection
-/// than it is worth; asking the plan for the batch with the most quads is not
-/// robust either. So: rebuild a table against a throwaway backend, in the same
-/// order, and ask it.
+/// fixed id — it is whatever `create_builtin_textures` assigned. So: rebuild a
+/// table against a throwaway backend, in the same order, and ask it.
+///
+/// **A game does not do this.** `FrameRecorder::font_texture()` answers the
+/// question directly, because the recorder still owns the table that knows —
+/// see `pong/verify.rs`, and `testing.md` for the shape. This example keeps the
+/// long way round because `play` below runs against a *real* backend too, to
+/// capture a PNG, and the recorder records into a null backend only. That is
+/// the whole reason the ceremony survives here: a golden image needs a GPU, and
+/// asserting on what was drawn does not.
 fn textures_font_id(plan: &FramePlan) -> Option<BackendTextureId> {
     let mut scratch = NullBackend::new();
     let table = create_builtin_textures(&mut scratch);

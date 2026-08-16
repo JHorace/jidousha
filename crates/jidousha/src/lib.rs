@@ -133,10 +133,17 @@ pub mod testing {
     // golden image or a `tools/verify` artifact is written from. Its inverse
     // for that type lives in render-core and has no caller outside the golden
     // tests, so it is not part of this surface until something needs it.
+    // `FrameRecorder` is the way to ask what a game drew: it owns the backend,
+    // the texture table and the plan, so a `--verify` mode says `draw(&mut sim)`
+    // once instead of writing the driver's five steps out and then rebuilding
+    // the texture table against a throwaway backend to learn which id the font
+    // got (e0-findings.md F-010). The pieces below it stay public because the
+    // golden-image path composes them differently — a game uses the recorder.
     pub use jidousha_render_core::{
-        BackendTextureId, Comparison, DrawnQuad, FONT_TEXTURE, FramePlan, FrameRecord, NullBackend,
-        PhysicalSize, RawImage, RenderBackend, TextureTable, Tolerance, compare,
-        create_builtin_textures, diff_image, encode_png, plan_frame, upload_ready_textures,
+        BackendTextureId, Comparison, DrawnQuad, FONT_TEXTURE, FramePlan, FrameRecord,
+        FrameRecorder, NullBackend, PhysicalSize, RawImage, RenderBackend, TextureTable, Tolerance,
+        compare, create_builtin_textures, diff_image, encode_png, plan_frame,
+        upload_ready_textures,
     };
 
     /// The renderer a golden image comes from.
