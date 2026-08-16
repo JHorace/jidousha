@@ -74,6 +74,7 @@ fn set_the_scene(world: &mut World) {
     let atlas = assets.load_texture("sprites/atlas.png");
     // Deliberately absent. It draws the placeholder and reports one §9 error at
     // the commit that resolves it (renderer.md §5, assets.md §6).
+    // check-assets: deliberately missing
     let missing = assets.load_texture("sprites/not_here.png");
 
     // The atlas is four tiles in a 2×2 grid; regions are normalized 0..1, so a

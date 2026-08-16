@@ -1,0 +1,334 @@
+#!/usr/bin/env python3
+"""tools/check-assets — every asset path in the code names a file that exists.
+
+The payoff for assets.md §2's convention that asset paths are string literals at
+the load site: a mistyped path becomes a CI failure instead of a placeholder
+hunt at runtime. A magenta checkerboard tells you *something* did not load; this
+tells you which line asked for what, before the program runs.
+
+Case-strict, on every platform, and the case check is the valuable half. The
+classic breakage is art that loads on a case-insensitive filesystem and 404s on
+a web server, which is a bug you cannot see at home (assets.md §2 CONTRACT).
+Checking it here means it is caught on the machine that has the file, not on the
+one that does not.
+
+Only files that build a **filesystem-backed** store are checked: a file loading
+from a `MemorySource` names paths that deliberately do not exist on disk —
+`examples/loading_gate.rs` is the whole point of that seam — and reporting them
+would make this check's first act a false alarm.
+
+Usage:  tools/check-assets [--root <repo>]
+
+Exit codes: 0 every reference resolves · 1 a reference is broken · 2 the check
+itself could not run.
+
+Key functions: `asset_root_of`, `literal_loads`, `computed_loads`,
+`resolve_case_strict`, `check_file`, `main`.
+Depends on: the Python 3.8+ standard library only.
+INVARIANT: a file is checked only if it builds a filesystem-backed store, and
+that decision is one greppable predicate — `builds_file_source`. Widening it
+without widening the tests is how this check starts failing on paths that were
+never meant to be on disk.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+# `Assets::new(FileSource::new(ROOT))` and `Assets::new(asset_source(ROOT))` are
+# the two ways to get a store that reads the filesystem. Both name their root.
+FILE_SOURCE_RE = re.compile(r"(?:FileSource::new|asset_source)\s*\(\s*([A-Za-z0-9_\"./]+)\s*\)")
+
+# `const ASSET_ROOT: &str = "assets";`
+ROOT_CONST_RE = re.compile(r"const\s+(\w+)\s*:\s*&\s*(?:'static\s+)?str\s*=\s*\"([^\"]*)\"")
+
+# `load_texture("sprites/hero.png")` — the literal form the convention asks for.
+LITERAL_LOAD_RE = re.compile(r"\.load_(texture|bytes)\s*\(\s*\"([^\"]*)\"\s*\)")
+
+# Any load at all, so a *computed* path can be told from a literal one.
+ANY_LOAD_RE = re.compile(r"\.load_(texture|bytes)\s*\(")
+
+# The sanctioned exception (assets.md §2): an interpolated directory of numbered
+# levels, flagged with a comment. Spelled in full so it cannot be typed by
+# accident, and so grepping for it finds every use.
+EXEMPTION = "check-assets: computed path"
+
+# A path that is *supposed* to be absent. `examples/load_from_disk.rs` and
+# `examples/sprites.rs` both load a file that is not there on purpose, to show
+# what the failure looks like — the placeholder on screen and one §6 message.
+# Without a way to say so, this check's first act would be to fail on two
+# examples that are working exactly as written.
+DELIBERATE = "check-assets: deliberately missing"
+
+# What defines the filesystem seam rather than using it. These files mention
+# `FileSource::new` and `asset_source` because they *are* those things; their
+# doc examples name paths that were never meant to exist.
+DEFINES_SOURCE_RE = re.compile(r"pub struct FileSource|pub fn asset_source")
+
+
+def defines_the_source(text: str) -> bool:
+    """Whether this file defines the filesystem seam instead of using it."""
+    return DEFINES_SOURCE_RE.search(text) is not None
+
+
+def marked(lines: "list[str]", line_number: int, marker: str) -> bool:
+    """Whether `marker` is on this line or in the comment block above it.
+
+    A marker on the load line itself would push past the line width on the very
+    lines that need the most explanation, so the comment that explains *why* a
+    path is deliberately absent is also where the marker goes. Only a
+    contiguous run of `//` lines counts, so a marker cannot leak downwards past
+    unrelated code.
+    """
+    index = line_number - 1
+    if marker in lines[index]:
+        return True
+    index -= 1
+    while index >= 0 and lines[index].lstrip().startswith("//"):
+        if marker in lines[index]:
+            return True
+        index -= 1
+    return False
+
+
+def builds_file_source(text: str) -> bool:
+    """Whether this file builds a store that reads the filesystem.
+
+    The one predicate that decides whether a file's paths must exist. A file
+    that only builds a `MemorySource` is scripting its own content and its paths
+    are not repository files.
+    """
+    return FILE_SOURCE_RE.search(text) is not None
+
+
+def asset_root_of(text: str) -> "str | None":
+    """The asset root this file loads from, or None if it does not name one.
+
+    Accepts either a literal — `asset_source("assets")` — or the name of a
+    `&str` constant, which is what every example in the tree uses.
+    """
+    match = FILE_SOURCE_RE.search(text)
+    if not match:
+        return None
+    argument = match.group(1)
+    if argument.startswith('"') and argument.endswith('"'):
+        return argument[1:-1]
+    for name, value in ROOT_CONST_RE.findall(text):
+        if name == argument:
+            return value
+    return None
+
+
+def literal_loads(text: str) -> "list[tuple[int, str, str]]":
+    """Every literal load in `text` that claims to name a real file.
+
+    Loads marked [`DELIBERATE`] are left out: they are demonstrations of what a
+    missing file looks like, and a check that failed on them would be reporting
+    the examples working as written.
+    """
+    lines = text.splitlines()
+    found = []
+    for line_number, line in enumerate(lines, start=1):
+        for kind, path in LITERAL_LOAD_RE.findall(line):
+            if marked(lines, line_number, DELIBERATE):
+                continue
+            found.append((line_number, kind, path))
+    return found
+
+
+def computed_loads(text: str) -> "list[tuple[int, str]]":
+    """Loads whose path is not a literal, as (line number, line).
+
+    Unverifiable by construction, which is why §2 asks for literals. The
+    sanctioned exception is marked with a comment on the same line; anything
+    else is reported so the convention does not erode quietly.
+    """
+    lines = text.splitlines()
+    found = []
+    for line_number, line in enumerate(lines, start=1):
+        if not ANY_LOAD_RE.search(line):
+            continue
+        if LITERAL_LOAD_RE.search(line) or marked(lines, line_number, EXEMPTION):
+            continue
+        found.append((line_number, line.strip()))
+    return found
+
+
+def resolve_case_strict(root: Path, path: str) -> "tuple[bool, str | None]":
+    """Whether `path` exists under `root` with exactly that spelling.
+
+    Returns `(found, near_miss)`. `near_miss` is the name as it actually appears
+    on disk when only the case differs — the single most useful thing this check
+    can say, because it turns a mystery into a rename.
+
+    Walked component by component rather than asked of the filesystem, because
+    asking is what gets this wrong: on a case-insensitive filesystem
+    `Path.exists()` answers yes for the wrong spelling, which is precisely the
+    bug being hunted. A wrong-cased *directory* is caught the same way.
+    """
+    current = root
+    seen: "list[str]" = []
+    for part in path.split("/"):
+        if not part or part == ".":
+            continue
+        try:
+            entries = os.listdir(current)
+        except OSError:
+            return False, None
+        if part in entries:
+            seen.append(part)
+            current = current / part
+            continue
+        lowered = part.lower()
+        for entry in sorted(entries):
+            if entry.lower() == lowered:
+                return False, "/".join(seen + [entry])
+        return False, None
+    return current.is_file(), None
+
+
+def problem(what: str, specifics: str, cause: str, fix: str) -> str:
+    """A failure in the engine's message shape (core.md §9)."""
+    return f"[jidousha] {what}\n  {specifics}\n  likely cause: {cause}\n  fix: {fix}"
+
+
+def check_file(repo: Path, source: Path) -> "list[str]":
+    """Every problem with one file's asset references, as printable messages."""
+    try:
+        text = source.read_text(encoding="utf-8")
+    except OSError as error:
+        return [
+            problem(
+                f"could not read {source}",
+                str(error),
+                "the file was removed while the check was running",
+                "re-run the check",
+            )
+        ]
+    if not builds_file_source(text) or defines_the_source(text):
+        return []
+
+    where = source.relative_to(repo)
+    root_name = asset_root_of(text)
+    if root_name is None:
+        return [
+            problem(
+                f"cannot tell which asset root {where} loads from",
+                "it builds a filesystem-backed store from something that is not a literal "
+                "or a `&str` constant in the same file",
+                "the root is computed, or comes from another module",
+                "name the root with a `const ROOT: &str = \"...\";` beside the store, so the "
+                "paths in this file can be checked (assets.md §2)",
+            )
+        ]
+
+    root = repo / root_name
+    problems = []
+    if not root.is_dir():
+        problems.append(
+            problem(
+                f"the asset root {root_name!r} does not exist",
+                f"referenced by {where}",
+                "the directory was renamed or never created",
+                f"create {root_name}/ beside the workspace manifest, or point the store at "
+                "the directory that holds the art (assets.md §2)",
+            )
+        )
+        return problems
+
+    for line_number, kind, path in literal_loads(text):
+        found, near_miss = resolve_case_strict(root, path)
+        if found:
+            continue
+        site = f"{where}:{line_number}"
+        if near_miss is not None:
+            problems.append(
+                problem(
+                    f"asset failed: {path!r}",
+                    f"requested by: load_{kind} at {site}",
+                    f"the file on disk is named {near_miss!r} — the case differs",
+                    "rename the file or the path so they match exactly. Loads are case-strict "
+                    "on every platform, including Windows, so that art which works locally "
+                    "also works on a web server (assets.md §2)",
+                )
+            )
+        else:
+            problems.append(
+                problem(
+                    f"asset failed: {path!r}",
+                    f"requested by: load_{kind} at {site}",
+                    f"no file at that path under {root_name!r}",
+                    "check the spelling, and check the file is inside the asset root — paths "
+                    "are relative to it and use forward slashes on every platform",
+                )
+            )
+
+    for line_number, line in computed_loads(text):
+        problems.append(
+            problem(
+                f"an asset path that cannot be checked: {where}:{line_number}",
+                line,
+                "the path is computed rather than a literal at the load site",
+                "write the path as a string literal, or — for the sanctioned case of an "
+                f"interpolated directory — mark the line `// {EXEMPTION}` and say why "
+                "(assets.md §2)",
+            )
+        )
+    return problems
+
+
+def rust_sources(repo: Path) -> "list[Path]":
+    """Every Rust file in the workspace's crates, sorted."""
+    return sorted(repo.glob("crates/*/src/**/*.rs")) + sorted(
+        repo.glob("crates/*/examples/**/*.rs")
+    )
+
+
+def main(argv: "list[str]") -> int:
+    repo = REPO_ROOT
+    if len(argv) > 2 and argv[1] == "--root":
+        repo = Path(argv[2]).resolve()
+
+    sources = rust_sources(repo)
+    if not sources:
+        print(
+            problem(
+                "found no Rust sources to check",
+                f"looked under {repo}/crates",
+                "the check was run from outside the repository",
+                "run it from the repository, or pass --root <repo>",
+            ),
+            file=sys.stderr,
+        )
+        return 2
+
+    checked = [
+        source
+        for source in sources
+        if builds_file_source(text := source.read_text("utf-8")) and not defines_the_source(text)
+    ]
+    problems = []
+    for source in sources:
+        problems += check_file(repo, source)
+
+    references = sum(len(literal_loads(source.read_text("utf-8"))) for source in checked)
+    print(
+        f"[check-assets] {len(checked)} file(s) load from disk, {references} reference(s) checked"
+    )
+    for source in checked:
+        print(f"    {source.relative_to(repo)}")
+    if not problems:
+        return 0
+    for text in problems:
+        print(f"\n{text}", file=sys.stderr)
+    print(f"\n[check-assets] {len(problems)} broken asset reference(s)", file=sys.stderr)
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

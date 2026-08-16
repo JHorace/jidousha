@@ -40,11 +40,14 @@ fn main() {
     // immediately; none of them has been read yet.
     let hero = assets.load_texture("sprites/hero.png");
     let glow = assets.load_texture("sprites/glow.png");
+    // check-assets: deliberately missing — this example is about what failure
+    // looks like, so one of its four loads has to fail.
     let missing = assets.load_texture("sprites/nothing_here.png");
     // The file on disk is `hero.png`; this asks for `Hero.png`. On Linux that
     // is simply absent, and on Windows or macOS the filesystem would hand it
     // over — the engine refuses on all three, so the bug is found on the first
     // run rather than after deploying to a web server (assets.md §2).
+    // check-assets: deliberately missing
     let wrong_case = assets.load_texture("sprites/Hero.png");
 
     // The loading loop a game writes: commit once per frame, and keep going
