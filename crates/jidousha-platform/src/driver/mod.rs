@@ -18,7 +18,9 @@ use std::sync::Arc;
 
 use jidousha_core::{GameConfig, Simulation};
 use jidousha_input::{InputEvent, PointerId, SnapshotBuilder};
-use jidousha_render_core::{PhysicalSize, RenderBackend, TextureTable, create_builtin_textures};
+use jidousha_render_core::{
+    Camera, PhysicalSize, RenderBackend, TextureTable, create_builtin_textures,
+};
 use jidousha_render_wgpu::WgpuBackend;
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
@@ -62,6 +64,15 @@ pub(crate) struct Driver {
     /// the table is the thing that names them and inventing ids before they are
     /// created is how a driver ends up drawing whatever was uploaded first.
     textures: Option<TextureTable>,
+    /// How big the window is, in pixels — the driver's answer, not the game's.
+    ///
+    /// Kept here rather than only written onto the camera when a resize event
+    /// arrives, because the camera is not there to write to yet: `resumed`
+    /// learns the size before the first frame, and a game's `Camera` is
+    /// inserted by its Startup system *during* that frame. Writing on resize
+    /// alone meant every game drew at `Camera::default()`'s 1280x720 aspect
+    /// until the player happened to resize the window (e0-findings.md F-012).
+    viewport: PhysicalSize,
     clock: FrameClock,
     input: SnapshotBuilder,
     /// Set when something went wrong badly enough to stop; `run` returns it.
@@ -80,6 +91,10 @@ impl Driver {
             window: None,
             backend: None,
             textures: None,
+            // Until `resumed` measures a real window. Sharing the camera's own
+            // default keeps a headless run and a windowed one describing the
+            // same screen until the window says otherwise.
+            viewport: Camera::default().viewport,
             clock: FrameClock::new(),
             input: SnapshotBuilder::new(),
             #[cfg(not(target_arch = "wasm32"))]

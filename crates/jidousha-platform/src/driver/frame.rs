@@ -51,6 +51,7 @@ impl Driver {
             input,
             backend,
             textures,
+            viewport,
             ..
         } = self;
         simulation.advance(elapsed, |world: &mut World, index| {
@@ -69,11 +70,25 @@ impl Driver {
         // The camera is the game's to set; a game that never inserts one gets
         // the default rather than a panic, because "I have not thought about
         // the camera yet" is a real state for a prototype to be in.
-        let camera = simulation
-            .world()
-            .find_resource::<Camera>()
-            .copied()
-            .unwrap_or_default();
+        //
+        // The *viewport* is not the game's, though, and is stamped on here
+        // every frame rather than only when a resize arrives. It describes the
+        // window, so the driver is the only thing that knows it — and every
+        // route by which a game ends up holding a stale one is ordinary:
+        // `resumed` measures the window before Startup has inserted a camera to
+        // write it to, and a game that builds its camera with
+        // `..Camera::default()` overwrites whatever was written with 1280x720.
+        // Both left games drawing at the wrong aspect ratio until the player
+        // resized the window, and neither said anything (e0-findings.md F-012).
+        let world = simulation.world_mut();
+        if world.find_resource::<Camera>().is_none() {
+            world.insert_resource(Camera::default());
+        }
+        let camera = {
+            let camera = world.resource_mut::<Camera>();
+            camera.viewport = *viewport;
+            *camera
+        };
 
         // Draw once per frame, however many ticks ran — including none
         // (core.md §7).
@@ -139,17 +154,20 @@ impl Driver {
         upload_ready_textures(assets, backend.as_mut(), textures);
     }
 
-    /// Tell the world how big the window is now.
+    /// Tell the driver how big the window is now.
     ///
     /// The camera's viewport is driver-maintained (renderer.md §4): it
     /// describes the window, and a game that set it would be lying to itself
     /// about how big the window is.
+    ///
+    /// This records the size and reconfigures the surface; the camera is
+    /// stamped in `frame`, because that is the only moment a camera is
+    /// guaranteed to exist to stamp. Writing it here as well would be a second
+    /// way to do one thing, and the one that has already been observed to miss.
     pub(super) fn resize(&mut self, size: PhysicalSize) {
+        self.viewport = size;
         if let Some(backend) = &mut self.backend {
             backend.resize_surface(size);
-        }
-        if let Some(camera) = self.simulation.world_mut().find_resource_mut::<Camera>() {
-            camera.viewport = size;
         }
     }
 }
@@ -413,8 +431,9 @@ mod tests {
     #[test]
     fn a_resize_reaches_both_the_surface_and_the_camera() {
         // Two things have to hear about it and one of them is the game's view of
-        // the world (renderer.md §4). Before a backend existed this could only
-        // check the camera half.
+        // the world (renderer.md §4). The surface hears immediately; the camera
+        // hears on the next frame, which is the only moment one is sure to
+        // exist to be told.
         let (mut driver, backend) = driver_with_a_backend();
         driver
             .simulation
@@ -426,9 +445,54 @@ mod tests {
             backend.read(NullBackend::surface),
             PhysicalSize::new(640, 480)
         );
+
+        driver.frame(frames_worth(1));
         assert_eq!(
             driver.simulation.world().resource::<Camera>().viewport,
             PhysicalSize::new(640, 480)
+        );
+    }
+
+    #[test]
+    fn a_camera_built_in_startup_still_gets_the_windows_real_size() {
+        // The bug this replaced a resize-time write to fix. `resumed` measures
+        // the window before Startup has run, so there is no camera to write to
+        // yet; then the game inserts one with `..Camera::default()`, which
+        // carries 1280x720. Nothing failed, nothing warned, and the game drew
+        // at the wrong aspect ratio until the player resized the window
+        // (e0-findings.md F-012).
+        let (mut driver, _backend) = driver_with_a_backend();
+        driver.resize(PhysicalSize::new(800, 600));
+
+        // What a game's Startup does, arriving after the size was measured.
+        driver
+            .simulation
+            .world_mut()
+            .insert_resource(Camera::default());
+
+        driver.frame(frames_worth(1));
+        assert_eq!(
+            driver.simulation.world().resource::<Camera>().viewport,
+            PhysicalSize::new(800, 600),
+            "the driver owns the viewport and says so every frame"
+        );
+    }
+
+    #[test]
+    fn a_game_that_inserts_no_camera_still_draws_at_the_windows_size() {
+        // `quickstart.rs` is such a game, and it is the one every author starts
+        // as a copy of. The camera was defaulted per frame and thrown away, so
+        // the resize had nowhere to land at all.
+        let (mut driver, _backend) = driver_with_a_backend();
+        driver.resize(PhysicalSize::new(1024, 768));
+        driver.frame(frames_worth(1));
+
+        let camera = driver.simulation.world().resource::<Camera>();
+        assert_eq!(camera.viewport, PhysicalSize::new(1024, 768));
+        assert_eq!(
+            camera.height,
+            Camera::default().height,
+            "everything the game did not ask about is still the default"
         );
     }
 

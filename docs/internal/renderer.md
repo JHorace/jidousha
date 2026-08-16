@@ -485,6 +485,20 @@ hardware, which is also the only place the bug reproduces.
 grounds as `JIDOUSHA_BACKEND` above — worth adding when the heuristic is wrong
 for someone, rather than before.
 
+**The driver stamps `Camera.viewport` every frame** (e0-findings.md F-012), not
+only when a resize arrives. §4 has always said the viewport is driver-
+maintained; writing it on resize alone did not deliver that, by two ordinary
+routes. `resumed` measures the window before the first frame, and a game's
+`Camera` is inserted by its Startup system *during* that frame, so there was
+nothing to write to; and a game that then builds its camera with
+`..Camera::default()` overwrites whatever was written with 1280×720. Either way
+the game drew at an aspect ratio unrelated to its window until the player
+happened to resize it, and nothing failed or warned — the wrongness looked like
+the game's own camera height. `frame` now inserts a default camera if the game
+has none and writes the driver's measured size onto it before drawing. `resize`
+records the size and reconfigures the surface and no longer touches the camera:
+two ways to do one thing, and the one that had already been observed to miss.
+
 **A failure below the game must not be reported as one.** The Wayland protocol
 error kills the connection, `run_app` returns `Err`, and the only mapping that
 catches it is `RunError::EventLoop` — whose text named a display-server fault
