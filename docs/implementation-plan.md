@@ -72,6 +72,20 @@ treated as engine/docs bugs first, not prompt bugs: each E0 failure gets a
 root-cause note in `docs/internal/e0-findings.md` and a fix. E0 repeats until
 it passes clean twice in a row. This is the project's definition of working.
 
+**Harness ready** (see `docs/internal/e0-prompt.md` for the prompt and the
+before/after procedure, and `e0-findings.md` for the classification rule and the
+bar). Two things about running it are worth stating here, because they are what
+the milestone's honesty depends on:
+
+- **The session that runs E0 must not be the session that built the engine.**
+  Discipline about not *opening* `src/` is not the same as not knowing what is
+  in it. An author who already knows the answers measures nothing, and would
+  produce a pass — which is worse than a failure, because E0's whole output is
+  the findings a failure generates.
+- **The run's `E0-NOTES.md` is the raw observation; `e0-findings.md` is the root
+  cause.** Keeping them separate keeps the maintainer's explanation from
+  overwriting what the game author actually hit.
+
 After E0: write the `make-game` skill (practices §3) from what E0 taught, then
 v1 is done and the deferred lists become the roadmap conversation.
 
@@ -98,5 +112,7 @@ docs/internal/assets.md          handles, readiness determinism (A-milestones)
 docs/internal/input.md           snapshots, replay (I-milestones)
 docs/internal/public-api.md      facade inventory, docs/api spec (F0/E0)
 docs/internal/tooling.md         tools/ scripts, CI jobs, enforcement (M0)
+docs/internal/e0-prompt.md       the acceptance prompt, verbatim (E0 harness)
+docs/internal/e0-findings.md     what building a game actually cost (E0)
 docs/templates/BLOCKED.md        escalation template
 ```
