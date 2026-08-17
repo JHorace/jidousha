@@ -442,9 +442,9 @@ pub fn run() {
 /// image needs a GPU, and asserting on what was drawn does not.
 ///
 /// DELIBERATE: the shape above is written out rather than cited. It used to
-/// point at a file in a game that the E0 exercise produces — a path any rewrite
-/// of that exercise is free to delete, in a directory this example must not
-/// depend on (e0-findings.md F-019).
+/// point at another example's file, which is a dependency an example has no
+/// business having — that file is free to be rewritten or deleted, and this
+/// comment would quietly start naming something that is not there.
 fn textures_font_id(plan: &FramePlan) -> Option<BackendTextureId> {
     let mut scratch = NullBackend::new();
     let table = create_builtin_textures(&mut scratch);

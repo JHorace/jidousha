@@ -828,7 +828,7 @@ from what the type offers. `TOURS` in `tools/gen-api-doc` is the mapping.
 
 ### F-019 — An engine example documents itself by reference to a game file
 
-Class: docs · Run: 2 · Fixed in: this commit
+Class: docs · Run: 2 · Fixed in: `c4582fc`, corrected in this commit
 
 **What happened.** `prototype_kit/verify.rs` carried:
 
@@ -846,6 +846,30 @@ E0 run is free to delete and rewrite it.
 
 **Fix.** The six-line shape is written out in the comment, with a `DELIBERATE:`
 tag saying why it is inlined rather than cited.
+
+**The first version of that fix was worse than the bug**, and is corrected here.
+It replaced the pointer at `pong/verify.rs` with a pointer at *this file* —
+"(e0-findings.md F-019)", in an example, which is on the run's **allowed** list.
+That is F-005's mistake one directory over: a citation of a document the reader
+may not open is worse than silence, and this one named the root-caused ledger of
+everything previous authors could not find. It also described "the E0 exercise"
+to the person inside it. Both are gone; the `DELIBERATE:` tag now explains
+itself without naming anything the reader cannot reach. Two `(ADR-0019)`
+citations added to `examples/scripted_player.rs` at the same time went with it.
+Caught by grep before run 3, not by a run.
+
+**The wider class is recorded rather than fixed.** `crates/jidousha/examples/`
+still carries fifteen citations of `ADR-00NN` and `core.md §N` — in `homing.rs`,
+`sprites.rs`, `input_echo.rs`, `window_clear.rs`, `headless_sim.rs` and
+`prototype_kit/` — every one of them naming a document the run may not open.
+`docs/api/` has had a gate for this since F-005 (`scrub_internal_references`
+plus the `FORBIDDEN` list, checked on the generated text); `examples/`, the
+*other* allowed source, has never had one. The severity is lower — those point
+at design rationale, not at an answer key — and stripping them costs a human
+reader real context, so it is a judgement call rather than a defect: either
+scrub them and lose the rationale, or keep them and accept that an E0 author
+reads "see ADR-0009" and cannot. A `check-api-coverage`-style gate would at
+least stop the set growing. Not blocking run 3.
 
 ### F-020 — The harness leaves the previous run's work where the next run will read it
 
