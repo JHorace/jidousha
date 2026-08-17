@@ -14,8 +14,7 @@
 //! - **`SnapshotBuilder`** is a controller deciding as it goes: look at the
 //!   world, then record a press or a release. Reach for it when the input has to
 //!   *respond* — a blind script never returns a ball, so it can prove the
-//!   controls work and still say nothing about whether the game is playable
-//!   (ADR-0019).
+//!   controls work and still say nothing about whether the game is playable.
 //!
 //! Run it: `cargo run -p jidousha --example scripted_player`
 
@@ -213,8 +212,8 @@ fn main() {
 ///
 /// `SnapshotBuilder` is the driver's own accumulator, so this exercises the real
 /// edge rules: a key held across many ticks presses once, and letting go
-/// releases once (ADR-0019). Building a one-tick `InputScript` per tick would
-/// press on every one of them.
+/// releases once. Building a one-tick `InputScript` per tick would press on
+/// every one of them.
 fn chase_a_target() {
     /// Where the player is told to stop, in world units.
     const TARGET: f32 = 5.0;
