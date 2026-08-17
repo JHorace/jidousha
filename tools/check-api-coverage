@@ -67,6 +67,8 @@ EXEMPT = {
     "PointerId": "reached as `input.pointer().id`",
     "PointerState": "returned by `input.pointer()`, used by field and method",
     "TextureId": "an opaque id minted by `TextureHandle::texture_id()` for the renderer",
+    "RunError": "matched out of `run`, never written: `Err(error) => eprintln!(\"{error}\")`",
+    "Submissions": "reached as `sim.draw().quads()` — see examples/prototype_kit/verify.rs",
 }
 
 

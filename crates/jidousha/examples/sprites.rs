@@ -17,6 +17,8 @@
 //! DELIBERATE: built but not run by `tools/test`, like the other windowed
 //! examples — it opens a window and waits for a person (tooling.md).
 
+use std::process::ExitCode;
+
 use jidousha::prelude::*;
 
 /// Where the art lives, relative to the workspace root (assets.md §2).
@@ -36,8 +38,8 @@ struct Orbit {
 }
 impl Component for Orbit {}
 
-fn main() -> Result<(), RunError> {
-    run(
+fn main() -> ExitCode {
+    match run(
         GameConfig {
             title: "jidousha — sprites",
             ..GameConfig::default()
@@ -50,7 +52,13 @@ fn main() -> Result<(), RunError> {
             // Sprite, submitted in query order (renderer.md §2).
             app.add_system(jidousha::Draw, draw_sprites);
         },
-    )
+    ) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("{error}");
+            ExitCode::FAILURE
+        }
+    }
 }
 
 fn set_the_scene(world: &mut World) {

@@ -68,6 +68,13 @@ impl InputSnapshot {
     // so replay plays back the catch-up ticks it recorded rather than deriving
     // them again. A second spelling would be a second way to do one thing
     // (conventions §1), and the two could drift.
+    //
+    // DELIBERATE: there is no `with_keys(&[Key])` either, building a populated
+    // snapshot in one call (see ADR-0019). A closed-loop check — one that has
+    // to see the game before deciding what to press — records `InputEvent`s
+    // into a `SnapshotBuilder`, which is the same path a real keyboard takes
+    // and the only place the edge rules live. A constructor here would have to
+    // answer the edge question a second time.
 
     /// Keys down this tick, sorted.
     #[must_use]
@@ -100,7 +107,13 @@ impl InputSnapshot {
     }
 }
 
-/// The input resource: what a system reads to find out what the player did.
+/// What the player did this tick, held as a world resource.
+///
+/// The driver replaces it before every Update tick, so a windowed game always
+/// has one — but a headless run has none until a test inserts one, and no
+/// resource exists before the first tick in either. Reach for it with
+/// `world.find_resource::<Input>()` and return early when it is absent; that is
+/// what the Quickstart does and why.
 ///
 /// ```
 /// # use jidousha_input::{Input, InputSnapshot, Key};

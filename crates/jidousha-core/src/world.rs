@@ -243,7 +243,7 @@ impl World {
         self.archetypes.entity_count()
     }
 
-    /// The `T` on `entity`.
+    /// The `T` on `entity`, panicking if it has none.
     ///
     /// # Panics
     ///
@@ -257,7 +257,7 @@ impl World {
         }
     }
 
-    /// The `T` on `entity`, for modification.
+    /// The `T` on `entity` for modification, panicking if it has none.
     ///
     /// # Panics
     ///

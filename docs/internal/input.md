@@ -238,6 +238,17 @@ source lines; the check runs on add, so it fires whichever order they are
 written in. A hold that *ends* where another begins is not a contradiction —
 that is a real thing a player does.
 
+Extended (E0 run 2): a script is a plan fixed before the run starts, and a check
+that asks whether a game is *playable* has no such plan — a blind script never
+returns a ball. `jidousha::testing` therefore exports `SnapshotBuilder` and
+`InputEvent` as well, so a closed-loop controller records press and release
+events and takes a snapshot per tick through the driver's own accumulator.
+**No second constructor on `InputSnapshot`** (ADR-0019): `with_keys(&[Key])`
+would have had to answer the edge question a second time, and the one-tick-script
+idiom it was meant to replace is not merely absurd but wrong — `hold(k, t..t+1)`
+presses on every tick, because every tick is the start of its own range.
+`examples/scripted_player.rs` runs both shapes.
+
 Implemented (I2): the loop, end to end, including the draw transcript.
 `examples/prototype_kit/` grows a `verify.rs` module that runs the *same* systems
 and the same `GameConfig` the window does, differing only in what a person would

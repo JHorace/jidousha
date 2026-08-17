@@ -76,13 +76,18 @@ impl Default for TextStyle {
 }
 
 impl TextStyle {
-    /// How wide `text` will be, in world units.
+    /// How wide `text` will be in world units — its widest line, if several.
     ///
     /// Monospace with no kerning, so this is exact rather than an estimate.
     /// A game centers a score with it, or draws a panel behind a readout;
     /// without it the only way to know is to guess.
     ///
-    /// Multi-line text reports its widest line.
+    /// `\n` starts a new line, so a multi-line string laid out at one position
+    /// is a block, and this is the width of that block. Centering by it is the
+    /// documented idiom and it is completely silent: nothing warns that the
+    /// result is wider than the camera can see, so a banner overruns the screen
+    /// with every assertion still passing. `Camera::visible_bounds` is what
+    /// tells you, and *Testing your game* has the check.
     #[must_use]
     pub fn width_of(&self, text: &str) -> f32 {
         let longest = text

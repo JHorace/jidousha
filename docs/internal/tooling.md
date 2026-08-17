@@ -159,6 +159,25 @@ a row (stop rule printed, `failure-streak.json` count 2).
   Not rustdoc JSON, which needs nightly while `rust-toolchain.toml` pins stable;
   summaries are lifted from the `///` line above each definition, which is a
   bounded text problem with tests rather than a second toolchain.
+- **The sources are scanned twice: declarations, then `impl` blocks.** A type's
+  blocks are not obliged to live in the file that declares it, and a single pass
+  in path order attached members only to types it had already seen. That deleted
+  `World`'s whole resource API from the reference — `resource.rs` sorts before
+  `world.rs` — and `InputSnapshot::encode`/`try_decode` with it, silently, for
+  as long as the generator has existed (e0-findings.md F-016). Two passes make
+  path order irrelevant; members are then ordered so the declaring file's block
+  comes first, so a rename cannot reshuffle the page either. **The census line
+  the generator prints on every run** (`N groups · N signatures · N fields · N
+  variant lines`) is the guard a human has against the next silent shrink: a
+  parser regression is obvious in those numbers and invisible in the diff of a
+  1,700-line file.
+- **Foreign re-exports are documented by an embedded example, not a copied
+  list.** `Vec2` and `Vec3` come from glam and there is nothing here to generate
+  an entry from, but "documented there" points at a crate whose docs may not be
+  in the reader's container (F-018). `TOURS` maps the module to an example file
+  that is embedded verbatim, exactly as the Quickstart is, so cargo compiles the
+  list and `tools/test` runs it. A hand-written list would be the one thing in
+  this document that could go stale without CI noticing.
 - **The API document has a token budget, and it is enforced.** 25k
   (public-api.md §4), counted at roughly four characters a token because there is
   no tokenizer in the standard library and the budget is an order-of-magnitude

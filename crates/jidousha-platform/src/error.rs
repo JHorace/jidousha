@@ -46,7 +46,7 @@ impl fmt::Display for RunError {
                 "the program is running headless — over SSH without X forwarding, in a \
                  container, or on a CI runner",
                 "run it on a machine with a desktop session, or use jidousha::headless for a \
-                 run that needs no window (core.md §8)",
+                 run that needs no window",
             ),
             RunError::WindowCreation { detail } => (
                 "the window could not be created",

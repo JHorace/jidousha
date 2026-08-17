@@ -23,6 +23,8 @@
 //! game and the check on the game are two things to read.
 
 use jidousha::math::sin_cos;
+use std::process::ExitCode;
+
 use jidousha::prelude::*;
 
 /// Where the art lives, relative to the workspace root (assets.md §2).
@@ -105,15 +107,21 @@ fn register(app: &mut App) {
 mod capture;
 mod verify;
 
-fn main() -> Result<(), RunError> {
+fn main() -> ExitCode {
     // `tools/verify` runs this same binary with `--verify`: same systems, same
     // config, no window, scripted input, and assertions instead of a person.
     if std::env::args().any(|argument| argument == "--verify") {
         verify::run();
-        return Ok(());
+        return ExitCode::SUCCESS;
     }
     println!("W and S move the left paddle. close the window to quit");
-    run(config(), register)
+    match run(config(), register) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("{error}");
+            ExitCode::FAILURE
+        }
+    }
 }
 
 fn set_the_scene(world: &mut World) {

@@ -18,6 +18,37 @@ let script = InputScript::new().hold(Key::D, 10..120).press(Key::Space, 30);
 sim.world_mut().insert_resource(Input::new(script.snapshot_at(tick)));
 ```
 
+A script says what the *player* does, fixed before the run starts. When the
+input has to respond to the game — and it does the moment you want to know
+whether the game is **playable**, because a blind script never returns a ball —
+use `jidousha::testing::SnapshotBuilder` instead. It is the driver's own
+accumulator, so a controller written with it goes through the same edge rules a
+real keyboard does:
+
+```rust
+let mut keyboard = SnapshotBuilder::new();
+let mut holding = false;
+for _tick in 1..=TICKS {
+    let want = /* look at the world, then decide */ true;
+    if want != holding {
+        keyboard.record(if want {
+            InputEvent::KeyPressed(Key::S)
+        } else {
+            InputEvent::KeyReleased(Key::S)
+        });
+        holding = want;
+    }
+    sim.world_mut().insert_resource(Input::new(keyboard.first_tick_snapshot()));
+    sim.tick();
+}
+```
+
+Send events, not states — that is why the controller tracks `holding`, and it is
+what makes a key held for a hundred ticks press exactly once. Building a
+one-tick script per tick instead (`hold(key, tick..tick + 1)`) puts a press edge
+on *every* tick, because every tick is the start of its own range.
+`examples/scripted_player.rs` runs both shapes side by side.
+
 Assets are scripted the same way: `MemorySource` lets a test say "this texture
 becomes ready at tick 30", so loading behaviour — placeholders, gates, the frame
 a sprite appears — is something to assert on rather than a race.
@@ -36,6 +67,13 @@ for tick in 1..=600 {
 let frame = recorder.frames().last().expect("600 frames were drawn");
 ```
 
+The recorder's viewport **overrides** the `Camera` resource's; everything else —
+centre, height, clear color — is the game's own. Nothing writes the recorder's
+viewport back into the world, so a check that reads bounds from
+`world.resource::<Camera>()` and quads from the recorder is comparing against
+the wrong rectangle unless the two viewports agree. Give the recorder the size
+the game's camera already has, and the question stops existing.
+
 `frame.covering(point)` answers "what is at this world position?" with exact
 rotated-quad containment, `frame.quads()` hands you every quad with its
 `bounds()` and `tint`, and `recorder.transcript()` renders the last frame as
@@ -50,6 +88,36 @@ sampling it came from `ctx.text` and nothing else could have produced it.
 A game with art also calls `recorder.settle_assets(&mut sim, tick)` before each
 `draw`, which is what makes a texture that became ready on this tick appear in
 this frame. A game of shapes and text never needs it.
+
+**Assert that nothing is drawn outside `Camera::visible_bounds()`.** It is the
+highest-value check a game of shapes and text can write, and it is six lines:
+
+```rust
+let (top_left, bottom_right) = camera.visible_bounds();
+for quad in frame.quads() {
+    let bounds = quad.bounds();
+    assert!(
+        bounds.min.x >= top_left.x && bounds.min.y >= top_left.y
+            && bounds.max.x <= bottom_right.x && bounds.max.y <= bottom_right.y,
+        "drawn off screen: {bounds:?} against a camera showing {top_left:?}..{bottom_right:?} \
+         — text centred by width_of is the usual culprit",
+    );
+}
+```
+
+`TextStyle::width_of` is exact and completely silent: centring by it is the
+documented idiom, and a banner one character too long runs off both edges
+without a word from anything. A game that shipped exactly that had eight other
+assertions passing — glyphs existed, the score was placed, the world was
+correct — and only this one would have caught it.
+
+**A failing assertion has to report the numbers it judged.** Nobody writing a
+game this way can look at it; the assertion is the only instrument there is, so
+a message that says only *this is wrong* costs a whole cycle to turn into a
+diagnosis. "No one won after a hundred seconds" says nothing. "No one won: score
+0–0, longest rally 14 touches, top ball speed 25.6 units/s" says the ball is too
+slow for the field, and says it immediately. Print the quantities the condition
+looked at, not the conclusion it reached.
 
 `tools/verify <example>` is the whole loop as one command: scripted input, a
 fixed number of headless ticks, the example's own assertions, and a captured PNG

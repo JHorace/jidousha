@@ -19,9 +19,9 @@ use crate::archetype::Archetype;
 use crate::component::Component;
 use crate::entity::Entity;
 
-/// Match only entities that carry `T`, without reading it.
+/// Match only entities that carry `T`, yielding `()` in its tuple position.
 ///
-/// A filter yields `()`, so it still occupies a position in the item tuple:
+/// A filter reads nothing, but it still occupies a position in the item tuple:
 ///
 /// ```
 /// # use jidousha_core::{Component, With, World};
@@ -36,14 +36,28 @@ use crate::entity::Entity;
 /// ```
 pub struct With<T: Component>(PhantomData<fn() -> T>);
 
-/// Match only entities that do **not** carry `T`. Yields `()`, like [`With`].
+/// Match only entities that do **not** carry `T`, yielding `()` like [`With`].
+///
+/// ```
+/// # use jidousha_core::{Component, Without, World};
+/// # #[derive(Debug)] struct Position(i32);
+/// # impl Component for Position {}
+/// # struct Frozen;
+/// # impl Component for Frozen {}
+/// # let mut world = World::new();
+/// for (entity, position, _) in world.query::<(&Position, Without<Frozen>)>() {
+///     println!("{entity:?} can still move, from {position:?}");
+/// }
+/// ```
 pub struct Without<T: Component>(PhantomData<fn() -> T>);
 
-/// What a query asks of each entity: a component access, a filter, or a tuple
-/// of them.
+/// A query part: `&T`, `&mut T`, [`With`], [`Without`], or a tuple of up to six.
 ///
-/// Implemented for `&T`, `&mut T`, [`With`], [`Without`], and tuples of up to
-/// six of those. Not implemented by game code.
+/// One part is written bare — `world.query::<&Position>()` — and the one-tuple
+/// `(&Position,)` works too. The iterator always yields the entity first, then
+/// one item per part: `&Position` yields `(Entity, &Position)`, and
+/// `(&Position, &Velocity, With<Player>)` yields `(Entity, &Position,
+/// &Velocity, ())`. Not implemented by game code.
 pub trait Query<'w>: Sized {
     /// What this part of the query yields for one entity.
     type Item;
@@ -67,11 +81,12 @@ pub trait Query<'w>: Sized {
     fn yield_item(entity: Entity, item: Self::Item) -> Self::Yield;
 }
 
-/// A query that reads and never writes, so it can run against a shared world.
+/// A [`Query`] with no `&mut T` part, so it can run against a shared world.
 ///
-/// This is what makes [`World::query`](crate::World::query) safe to call while
-/// other parts of the world are being read, and is the bound the read-only
-/// Draw-phase world view will use (ADR-0008).
+/// Every shape [`Query`] accepts except `&mut T`, and tuples of those. This is
+/// what makes [`World::query`](crate::World::query) safe to call while other
+/// parts of the world are being read, and is the bound the read-only Draw-phase
+/// world view will use (ADR-0008).
 #[diagnostic::on_unimplemented(
     message = "[jidousha] `{Self}` writes components, so it cannot be used in a read-only query",
     label = "this query needs exclusive access",

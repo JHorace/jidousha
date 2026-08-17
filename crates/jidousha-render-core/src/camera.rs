@@ -12,7 +12,17 @@ use jidousha_core::{Color, Resource};
 
 use jidousha_core::PhysicalSize;
 
-/// What the frame is looking at.
+/// What the frame is looking at, held as a world resource.
+///
+/// A game sets its own in a `Startup` system —
+/// `world.insert_resource(Camera { height: 20.0, ..Camera::default() })` — and
+/// reads it back with `world.resource::<Camera>()`. A windowed run that never
+/// inserts one still has one: `run` installs [`Camera::default`] before the
+/// first frame rather than refusing to draw, because "I have not thought about
+/// the camera yet" is a real state for a prototype to be in. **A headless run
+/// does not**, so a game leaning on that default has no `Camera` resource in a
+/// test — `FrameRecorder` draws with the default without inserting it, and
+/// `world.resource::<Camera>()` panics.
 ///
 /// One camera in v1; multiple cameras and render-to-texture are deferred
 /// together (renderer.md §4).

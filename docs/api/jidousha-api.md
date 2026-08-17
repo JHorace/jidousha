@@ -24,6 +24,8 @@ A whole game. Copy it, run it, start changing things.
 //!
 //! Run it: `cargo run -p jidousha --example quickstart`
 
+use std::process::ExitCode;
+
 use jidousha::prelude::*;
 
 /// How far the player moves in one tick, in world units.
@@ -46,13 +48,24 @@ impl Component for Coin {}
 struct Score(u32);
 impl Resource for Score {}
 
-fn main() -> Result<(), RunError> {
-    run(GameConfig::default(), |app| {
+fn main() -> ExitCode {
+    match run(GameConfig::default(), |app| {
         app.add_system(Startup, spawn_the_world);
         app.add_system(Update, walk);
         app.add_system(Update, collect);
         app.add_system(Draw, draw_everything);
-    })
+    }) {
+        Ok(()) => ExitCode::SUCCESS,
+        // Print the error, do not return it. `run` fails only for reasons about
+        // the machine, and `RunError`'s `Display` is the engine's four-part
+        // message: what happened, the specifics, the likely cause, the fix. A
+        // `fn main() -> Result<(), RunError>` prints the `Debug` form instead —
+        // a struct dump with a path into a vendored dependency inside it.
+        Err(error) => {
+            eprintln!("{error}");
+            ExitCode::FAILURE
+        }
+    }
 }
 
 fn spawn_the_world(world: &mut World) {
@@ -140,6 +153,32 @@ scheduler deciding for you. Startup running *inside* that first tick is worth
 knowing if you drive the sim by hand: `headless(..)` hands back a world that is
 still empty, and it is populated once the first `tick()` returns.
 
+**A resource is a thing there is exactly one of** — the score, the round state,
+the camera. `world.insert_resource(Score::default())` puts one in,
+`world.resource::<Score>()` and `world.resource_mut::<Score>()` read it back and
+panic if it is absent, `world.find_resource::<Score>()` returns `Option` where
+absence is expected, and `world.remove_resource::<Score>()` takes it away. A
+`Draw` system reaches the same values through `ctx.world`, read-only. Most of a
+game is resource access, so it is worth knowing which resources are already
+there:
+
+| Resource | Who inserts it | Can it be absent? |
+|---|---|---|
+| `Time` | `run` and `headless` both, before the first tick | no |
+| `Rng` | the same, seeded from `GameConfig::seed` | no |
+| `Input` | `run`, before every Update tick | **yes** — not before the first tick, and never under `headless` unless a test inserts it |
+| `Camera` | the game, in `Startup` | **yes** under `headless`; under `run`, a game that inserts none is given `Camera::default()` before the first frame |
+| `Assets` | the game, if it has art | **yes** — a game of shapes and text never inserts one |
+
+The three that can be absent are the three to reach for with `find_resource`.
+That is why the Quickstart's `walk` system opens with
+`let Some(input) = world.find_resource::<Input>() else { return };` rather than
+`world.resource::<Input>()`. `Camera` is the one to watch: a game that sets one
+in `Startup` may read it back with `world.resource::<Camera>()` anywhere,
+because `Startup` has run by then — but a game that relies on the driver's
+default has no camera at all in a headless run, and a check reading one will
+panic where the window would not.
+
 The engine runs on a **fixed timestep**. `Time::fixed_dt` is the same number
 every tick, `Time::tick` counts them, and a slow frame runs several ticks rather
 than one long one. That number is **1/60 of a second** unless you say otherwise:
@@ -181,6 +220,30 @@ world units, not pixels. The camera is `height` world units tall and as wide as
 the window's aspect makes it. `Camera::world_to_screen` and `screen_to_world`
 convert when you need pixels — pointer positions arrive in pixels and become
 world coordinates through the camera you choose.
+
+**A query is a shape, and these are all the shapes there are.** A part is `&T`,
+`&mut T`, `With<T>` or `Without<T>`; a query is one part, or a tuple of up to six
+of them, and the one-tuple `(&Transform,)` works as well as the bare form.
+`world.query::<Q>()` takes read-only parts; `world.query_mut::<Q>()` is the one
+that accepts `&mut T`. **The iterator yields the entity first**, then one item
+per part, and the two filters yield `()` — they still occupy their position:
+
+```rust
+for (entity, transform) in world.query::<&Transform>() { }
+for (entity, transform, velocity) in world.query_mut::<(&mut Transform, &Velocity)>() { }
+for (entity, transform, _) in world.query::<(&Transform, With<Player>)>() { }
+for (entity, transform, _) in world.query::<(&Transform, Without<Frozen>)>() { }
+```
+
+A filter is worth it when the marker carries no data and you would otherwise
+bind a component you do not read. A component holding an enum — `Paddle {
+control: Control }` — is the other way to say the same thing, and it keeps the
+tuple shorter.
+
+**A game does not close itself.** There is no `App::quit` and nothing on `World`
+or `Commands`: `run` is the whole program until the player closes the window.
+That is a v1 boundary rather than an omission you have missed — `Key::Escape` is
+listed because games use it to back out of menus, not because it exits.
 
 **Reading while writing: the two-pass pattern.** A query that borrows the world
 mutably holds it for as long as you iterate, so a system that needs to look at
@@ -291,6 +354,21 @@ pub struct Startup;
 // Clone Copy Debug Phase
 ```
 
+#### `Submissions`
+
+One frame's worth of submitted quads, in submission order.
+
+```rust
+pub struct Submissions;
+// Debug
+
+impl Submissions {
+    pub fn new() -> Self;  // An empty frame
+    pub fn quads(&self) -> &[Quad];  // Everything submitted this frame, in submission order
+    pub fn clear(&mut self);  // Forget the frame, keeping the space it used
+}
+```
+
 #### `Update`
 
 The simulation, run on the fixed timestep — zero or more times per frame.
@@ -372,7 +450,7 @@ pub trait Resource: 'static + Send + Sync {}
 
 #### `With`
 
-Match only entities that carry `T`, without reading it.
+Match only entities that carry `T`, yielding `()` in its tuple position.
 
 ```rust
 pub struct With<T: Component>(PhantomData<fn() -> T>);
@@ -381,7 +459,7 @@ pub struct With<T: Component>(PhantomData<fn() -> T>);
 
 #### `Without`
 
-Match only entities that do **not** carry `T`.
+Match only entities that do **not** carry `T`, yielding `()` like `With`.
 
 ```rust
 pub struct Without<T: Component>(PhantomData<fn() -> T>);
@@ -408,11 +486,17 @@ impl World {
     pub fn query_mut<'w, Q: Query<'w>>(&'w mut self) -> QueryIterMut<'w, Q>;  // Iterate every entity matching a query, with `&mut T` access where…
     pub fn is_alive(&self, entity: Entity) -> bool;  // Whether `entity` is still live in this world
     pub fn entity_count(&self) -> usize;  // How many entities are alive
-    pub fn component<T: Component>(&self, entity: Entity) -> &T;  // The `T` on `entity`
-    pub fn component_mut<T: Component>(&mut self, entity: Entity) -> &mut T;  // The `T` on `entity`, for modification
+    pub fn component<T: Component>(&self, entity: Entity) -> &T;  // The `T` on `entity`, panicking if it has none
+    pub fn component_mut<T: Component>(&mut self, entity: Entity) -> &mut T;  // The `T` on `entity` for modification, panicking if it has none
     pub fn find_component<T: Component>(&self, entity: Entity) -> Option<&T>;  // The `T` on `entity`, or `None` if it has none — or is not alive
     pub fn find_component_mut<T: Component>(&mut self, entity: Entity) -> Option<&mut T>;  // The `T` on `entity` for modification, or `None` if it has none — or…
     pub fn commands(&self) -> Commands<'_>;  // Record structural changes to apply at the end of the running system
+    pub fn insert_resource<T: Resource>(&mut self, value: T);  // Store a resource, replacing any of the same type
+    pub fn remove_resource<T: Resource>(&mut self);  // Drop the `T` resource
+    pub fn resource<T: Resource>(&self) -> &T;  // The `T` resource, panicking if the world has none
+    pub fn resource_mut<T: Resource>(&mut self) -> &mut T;  // The `T` resource for modification, panicking if the world has none
+    pub fn find_resource<T: Resource>(&self) -> Option<&T>;  // The `T` resource, or `None` if the world has none
+    pub fn find_resource_mut<T: Resource>(&mut self) -> Option<&mut T>;  // The `T` resource for modification, or `None` if the world has none
 }
 ```
 
@@ -425,9 +509,9 @@ pub struct WorldView<'w>;
 
 impl WorldView {
     pub fn query<Q: ReadOnlyQuery<'w>>(&self) -> QueryIter<'w, Q>;  // Iterate every entity matching a read-only query
-    pub fn component<T: Component>(&self, entity: Entity) -> &'w T;  // The `T` on `entity`
+    pub fn component<T: Component>(&self, entity: Entity) -> &'w T;  // The `T` on `entity`, panicking if it has none
     pub fn find_component<T: Component>(&self, entity: Entity) -> Option<&'w T>;  // The `T` on `entity`, or `None` if it has none — or is not alive
-    pub fn resource<T: Resource>(&self) -> &'w T;  // The `T` resource
+    pub fn resource<T: Resource>(&self) -> &'w T;  // The `T` resource, panicking if the world has none
     pub fn find_resource<T: Resource>(&self) -> Option<&'w T>;  // The `T` resource, or `None` if the world has none
     pub fn is_alive(&self, entity: Entity) -> bool;  // Whether `entity` is still live
     pub fn entity_count(&self) -> usize;  // How many entities are alive
@@ -544,7 +628,89 @@ The sine and cosine of `angle`, both at once.
 pub fn sin_cos(angle: Radians) -> (f32, f32);
 ```
 
-Also in `math`, re-exported from `glam` and documented there: `Vec2`, `Vec3`.
+Also in `math`, re-exported from `glam`: `Vec2`, `Vec3`. This repository does not own their documentation, so what follows is a worked file rather than a generated entry — it compiles and runs on every test run.
+
+```rust
+//! Every `Vec2` operation a game reaches for, in one file.
+//!
+//! `Vec2` comes from `glam` and this repository does not own its documentation,
+//! so the reference cannot generate an entry for it — but it is in almost every
+//! line of a game, and "documented there" points at a crate whose docs are not
+//! necessarily to hand. This file is the entry instead: it is embedded in the
+//! API document verbatim, and cargo compiles it, so the list cannot drift away
+//! from what the type actually offers.
+//!
+//! Nothing here is a special jidousha operation. It is the vocabulary a
+//! position, a velocity and a size are written in.
+//!
+//! Run it: `cargo run -p jidousha --example vec2_tour`
+
+use jidousha::prelude::*;
+
+/// A position that can be worked out at compile time — `new` is a `const fn`.
+const CORNER: Vec2 = Vec2::new(-16.0, -9.0);
+
+fn main() {
+    // Making one. `ZERO`, `ONE`, `X` and `Y` are constants; `splat` repeats a
+    // scalar; `new` takes the two components, X first.
+    let position = Vec2::new(3.0, 4.0);
+    let size = Vec2::splat(2.0);
+    assert_eq!(Vec2::ZERO, Vec2::new(0.0, 0.0));
+    assert_eq!(Vec2::ONE, Vec2::splat(1.0));
+    assert_eq!(Vec2::X, Vec2::new(1.0, 0.0));
+    assert_eq!(Vec2::Y, Vec2::new(0.0, 1.0));
+
+    // Components are plain public fields, readable and writable.
+    let mut moving = position;
+    moving.x += 1.0;
+    moving.y = 0.0;
+    assert_eq!(moving, Vec2::new(4.0, 0.0));
+
+    // Arithmetic: vector with vector, and vector with scalar. `+= -= *= /=` all
+    // work too, which is what a velocity integration step is written with.
+    assert_eq!(position + size, Vec2::new(5.0, 6.0));
+    assert_eq!(position - size, Vec2::new(1.0, 2.0));
+    assert_eq!(position * 2.0, Vec2::new(6.0, 8.0));
+    assert_eq!(position / 2.0, Vec2::new(1.5, 2.0));
+    assert_eq!(position * size, Vec2::new(6.0, 8.0), "component-wise");
+    assert_eq!(-position, Vec2::new(-3.0, -4.0));
+
+    // Length. `length_squared` compares distances without the square root,
+    // which is what a "within range?" test should use.
+    assert_eq!(position.length(), 5.0);
+    assert_eq!(position.length_squared(), 25.0);
+    assert_eq!(position.distance(Vec2::ZERO), 5.0);
+    assert!((position.normalize().length() - 1.0).abs() < 1e-6);
+
+    // Component-wise shaping: the operations a clamp to a playfield is made of.
+    assert_eq!(Vec2::new(-3.0, 4.0).abs(), Vec2::new(3.0, 4.0));
+    assert_eq!(position.min(size), Vec2::new(2.0, 2.0));
+    assert_eq!(position.max(size), Vec2::new(3.0, 4.0));
+    assert_eq!(position.clamp(Vec2::ZERO, size), Vec2::new(2.0, 2.0));
+
+    // Dot tells you whether two directions agree — positive means "the same
+    // way", which is how a game asks whether a ball is heading at a paddle.
+    assert_eq!(Vec2::X.dot(Vec2::X), 1.0);
+    assert_eq!(Vec2::X.dot(Vec2::Y), 0.0);
+    assert_eq!(Vec2::X.dot(-Vec2::X), -1.0);
+
+    // Angles go through `jidousha::math`, never through `f32::sin`: those are
+    // the deterministic ones, and determinism is what makes a replay replay.
+    let (sin, cos) = sin_cos(Radians::from_degrees(90.0));
+    assert!(sin > 0.999 && cos.abs() < 1e-6);
+    let turned = rotate(Vec2::X, Radians::from_degrees(90.0));
+    assert!((turned - Vec2::Y).length() < 1e-6);
+    assert!(atan2(1.0, 0.0).as_f32() > 0.0);
+
+    // Two Vec2s make a Rect, which is what collision and layout are written in.
+    let bounds = Rect::from_center_size(position, size);
+    assert!(bounds.contains(position));
+    assert_eq!(bounds.size(), size);
+    assert_eq!(Rect::from_min_size(CORNER, size).min, CORNER);
+
+    println!("verified: every Vec2 operation above holds");
+}
+```
 
 #### `message`
 
@@ -587,7 +753,7 @@ impl Rect {
     pub fn size(self) -> Vec2;  // Width and height
     pub fn center(self) -> Vec2;  // The point in the middle
     pub fn contains(self, point: Vec2) -> bool;  // Whether `point` is inside, counting the top-left edges and not the…
-    pub fn overlaps(self, other: Rect) -> bool;  // Whether any part of `other` is inside this rectangle
+    pub fn overlaps(self, other: Rect) -> bool;  // Whether any part of `other` is inside; touching edges do not count
 }
 ```
 
@@ -638,7 +804,7 @@ impl TextureId {
 
 #### `Time`
 
-How far the simulation has got, in ticks.
+How far the simulation has got, in ticks — held as a world resource.
 
 ```rust
 pub struct Time {
@@ -658,7 +824,7 @@ impl Time {
 
 #### `Camera`
 
-What the frame is looking at.
+What the frame is looking at, held as a world resource.
 
 ```rust
 pub struct Camera {
@@ -755,7 +921,7 @@ pub struct TextStyle {
 // Default = TextStyle { size: 1.0, color: Color::WHITE, depth: Depth::default() }
 
 impl TextStyle {
-    pub fn width_of(&self, text: &str) -> f32;  // How wide `text` will be, in world units
+    pub fn width_of(&self, text: &str) -> f32;  // How wide `text` will be in world units — its widest line, if several
 }
 ```
 
@@ -824,7 +990,7 @@ impl AssetFailure {
 
 #### `Assets`
 
-Every asset the game has asked for.
+Every asset the game has asked for, held as a world resource.
 
 ```rust
 pub struct Assets;
@@ -901,7 +1067,7 @@ impl TextureHandle {
 
 #### `Input`
 
-The input resource: what a system reads to find out what the player did.
+What the player did this tick, held as a world resource.
 
 ```rust
 pub struct Input;
@@ -1087,6 +1253,25 @@ Decode a PNG into RGBA8 texels.
 pub fn decode_png(bytes: &[u8]) -> Result<TextureData, AssetError>;
 ```
 
+#### `DecodeError`
+
+Why a snapshot could not be read.
+
+```rust
+pub enum DecodeError {
+    NotASnapshot,  // The bytes do not begin with the format's magic number
+    UnsupportedVersion { found: u16 },  // A version this build does not know how to read
+    Truncated { needed: usize, available: usize },  // The bytes ran out before the value did
+    TrailingBytes { count: usize },  // Bytes remained after a complete snapshot
+    UnknownKey { code: u16 },  // A key code this build has never heard of
+    UnknownButton { code: u8 },  // A button code this build has never heard of
+    NotCanonical { list: &'static str },  // A list that was not sorted, or held a duplicate
+    NotFinite { field: &'static str },  // A float that is NaN or infinite
+    MalformedPointers,  // A snapshot with no primary pointer, or with its pointers out of…
+}
+// Clone Debug PartialEq Eq Display
+```
+
 #### `diff_image`
 
 A picture of where two captures disagree, for a human or an agent to look at.
@@ -1173,7 +1358,7 @@ Draws a headless game and keeps every frame, for a test to assert on.
 pub struct FrameRecorder;
 
 impl FrameRecorder {
-    pub fn new(viewport: PhysicalSize) -> Self;  // A recorder drawing to a surface `viewport` pixels across
+    pub fn new(viewport: PhysicalSize) -> Self;  // A recorder drawing to a surface `viewport` pixels across,…
     pub fn settle_assets(&mut self, sim: &mut HeadlessSim, tick: u64);  // Apply what has finished loading and put it on the GPU, as the…
     pub fn draw(&mut self, sim: &mut HeadlessSim) -> &FrameRecord;  // Run the game's Draw phase once and record the frame it produced
     pub fn font_texture(&self) -> BackendTextureId;  // Which backend texture the engine's font atlas is on
@@ -1184,7 +1369,7 @@ impl FrameRecorder {
 
 #### `Input`
 
-The input resource: what a system reads to find out what the player did.
+What the player did this tick, held as a world resource.
 
 ```rust
 pub struct Input;
@@ -1199,6 +1384,24 @@ impl Input {
     pub fn window_focused(&self) -> bool;  // Whether the window had focus this tick
     pub fn snapshot(&self) -> &InputSnapshot;  // The whole snapshot, for the recorder and for tests
 }
+```
+
+#### `InputEvent`
+
+One thing that happened, in the engine's vocabulary.
+
+```rust
+pub enum InputEvent {
+    KeyPressed(Key),  // A key went down
+    KeyReleased(Key),  // A key came up
+    PointerMoved { id: PointerId, screen: Vec2 },  // A pointer moved to a position, in pixels from the window's top-left
+    ButtonPressed { id: PointerId, button: PointerButton },  // A pointer button went down
+    ButtonReleased { id: PointerId, button: PointerButton },  // A pointer button came up
+    Scrolled { id: PointerId, lines: f32 },  // The wheel turned, in lines — normalized by the platform layer
+    FocusLost,  // The window lost focus
+    FocusGained,  // The window got focus back
+}
+// Clone Copy Debug PartialEq
 ```
 
 #### `InputScript`
@@ -1234,6 +1437,8 @@ impl InputSnapshot {
     pub fn released_keys(&self) -> &[Key];  // Keys that came up this tick, sorted
     pub fn pointers(&self) -> &[PointerState];  // Every pointer this tick
     pub fn window_focused(&self) -> bool;  // Whether the window had focus this tick
+    pub fn encode(&self) -> Vec<u8>;  // The snapshot as bytes
+    pub fn try_decode(bytes: &[u8]) -> Result<InputSnapshot, DecodeError>;  // Read a snapshot back
 }
 ```
 
@@ -1371,6 +1576,21 @@ pub struct ReplaySource<S>;
 impl ReplaySource {
     pub fn new(inner: S, schedule: impl IntoIterator<Item = (u64, u64)>) -> Self;  // A source that plays `inner` back on `schedule`'s ticks
     pub fn unreleased(&self) -> usize;  // Completions that have arrived but are not due yet
+}
+```
+
+#### `SnapshotBuilder`
+
+Accumulates events between frames and hands out one snapshot per tick.
+
+```rust
+pub struct SnapshotBuilder;
+
+impl SnapshotBuilder {
+    pub fn new() -> Self;  // A builder with nothing pressed and the window focused
+    pub fn record(&mut self, event: InputEvent);  // Take note of one event
+    pub fn first_tick_snapshot(&mut self) -> InputSnapshot;  // The snapshot for the first Update tick of this frame, consuming the…
+    pub fn catch_up_snapshot(&self) -> InputSnapshot;  // The snapshot for a second or later Update tick of the same frame
 }
 ```
 
@@ -1538,6 +1758,37 @@ let script = InputScript::new().hold(Key::D, 10..120).press(Key::Space, 30);
 sim.world_mut().insert_resource(Input::new(script.snapshot_at(tick)));
 ```
 
+A script says what the *player* does, fixed before the run starts. When the
+input has to respond to the game — and it does the moment you want to know
+whether the game is **playable**, because a blind script never returns a ball —
+use `jidousha::testing::SnapshotBuilder` instead. It is the driver's own
+accumulator, so a controller written with it goes through the same edge rules a
+real keyboard does:
+
+```rust
+let mut keyboard = SnapshotBuilder::new();
+let mut holding = false;
+for _tick in 1..=TICKS {
+    let want = /* look at the world, then decide */ true;
+    if want != holding {
+        keyboard.record(if want {
+            InputEvent::KeyPressed(Key::S)
+        } else {
+            InputEvent::KeyReleased(Key::S)
+        });
+        holding = want;
+    }
+    sim.world_mut().insert_resource(Input::new(keyboard.first_tick_snapshot()));
+    sim.tick();
+}
+```
+
+Send events, not states — that is why the controller tracks `holding`, and it is
+what makes a key held for a hundred ticks press exactly once. Building a
+one-tick script per tick instead (`hold(key, tick..tick + 1)`) puts a press edge
+on *every* tick, because every tick is the start of its own range.
+`examples/scripted_player.rs` runs both shapes side by side.
+
 Assets are scripted the same way: `MemorySource` lets a test say "this texture
 becomes ready at tick 30", so loading behaviour — placeholders, gates, the frame
 a sprite appears — is something to assert on rather than a race.
@@ -1556,6 +1807,13 @@ for tick in 1..=600 {
 let frame = recorder.frames().last().expect("600 frames were drawn");
 ```
 
+The recorder's viewport **overrides** the `Camera` resource's; everything else —
+centre, height, clear color — is the game's own. Nothing writes the recorder's
+viewport back into the world, so a check that reads bounds from
+`world.resource::<Camera>()` and quads from the recorder is comparing against
+the wrong rectangle unless the two viewports agree. Give the recorder the size
+the game's camera already has, and the question stops existing.
+
 `frame.covering(point)` answers "what is at this world position?" with exact
 rotated-quad containment, `frame.quads()` hands you every quad with its
 `bounds()` and `tint`, and `recorder.transcript()` renders the last frame as
@@ -1570,6 +1828,36 @@ sampling it came from `ctx.text` and nothing else could have produced it.
 A game with art also calls `recorder.settle_assets(&mut sim, tick)` before each
 `draw`, which is what makes a texture that became ready on this tick appear in
 this frame. A game of shapes and text never needs it.
+
+**Assert that nothing is drawn outside `Camera::visible_bounds()`.** It is the
+highest-value check a game of shapes and text can write, and it is six lines:
+
+```rust
+let (top_left, bottom_right) = camera.visible_bounds();
+for quad in frame.quads() {
+    let bounds = quad.bounds();
+    assert!(
+        bounds.min.x >= top_left.x && bounds.min.y >= top_left.y
+            && bounds.max.x <= bottom_right.x && bounds.max.y <= bottom_right.y,
+        "drawn off screen: {bounds:?} against a camera showing {top_left:?}..{bottom_right:?} \
+         — text centred by width_of is the usual culprit",
+    );
+}
+```
+
+`TextStyle::width_of` is exact and completely silent: centring by it is the
+documented idiom, and a banner one character too long runs off both edges
+without a word from anything. A game that shipped exactly that had eight other
+assertions passing — glyphs existed, the score was placed, the world was
+correct — and only this one would have caught it.
+
+**A failing assertion has to report the numbers it judged.** Nobody writing a
+game this way can look at it; the assertion is the only instrument there is, so
+a message that says only *this is wrong* costs a whole cycle to turn into a
+diagnosis. "No one won after a hundred seconds" says nothing. "No one won: score
+0–0, longest rally 14 touches, top ball speed 25.6 units/s" says the ball is too
+slow for the field, and says it immediately. Print the quantities the condition
+looked at, not the conclusion it reached.
 
 `tools/verify <example>` is the whole loop as one command: scripted input, a
 fixed number of headless ticks, the example's own assertions, and a captured PNG

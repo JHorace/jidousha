@@ -425,12 +425,26 @@ pub fn run() {
 /// table against a throwaway backend, in the same order, and ask it.
 ///
 /// **A game does not do this.** `FrameRecorder::font_texture()` answers the
-/// question directly, because the recorder still owns the table that knows —
-/// see `pong/verify.rs`, and `testing.md` for the shape. This example keeps the
-/// long way round because `play` below runs against a *real* backend too, to
-/// capture a PNG, and the recorder records into a null backend only. That is
-/// the whole reason the ceremony survives here: a golden image needs a GPU, and
-/// asserting on what was drawn does not.
+/// question directly, because the recorder still owns the table that knows:
+///
+/// ```ignore
+/// let mut recorder = FrameRecorder::new(PhysicalSize::new(1280, 720));
+/// // Read before the loop: `draw` borrows the recorder for as long as the
+/// // frame it hands back is alive.
+/// let font = recorder.font_texture();
+/// let frame = recorder.draw(&mut sim);
+/// let text_was_drawn = frame.quads().iter().any(|quad| quad.texture == font);
+/// ```
+///
+/// This example keeps the long way round because `play` below runs against a
+/// *real* backend too, to capture a PNG, and the recorder records into a null
+/// backend only. That is the whole reason the ceremony survives here: a golden
+/// image needs a GPU, and asserting on what was drawn does not.
+///
+/// DELIBERATE: the shape above is written out rather than cited. It used to
+/// point at a file in a game that the E0 exercise produces — a path any rewrite
+/// of that exercise is free to delete, in a directory this example must not
+/// depend on (e0-findings.md F-019).
 fn textures_font_id(plan: &FramePlan) -> Option<BackendTextureId> {
     let mut scratch = NullBackend::new();
     let table = create_builtin_textures(&mut scratch);

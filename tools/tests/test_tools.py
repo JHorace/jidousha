@@ -542,10 +542,20 @@ class GenApiDocTest(unittest.TestCase):
             gen_api_doc.TOKEN_BUDGET = original
 
 
-def scan_snippet(text):
-    """Scan a fragment of Rust the way the generator scans a crate source."""
+def scan_snippet(*texts):
+    """Scan fragments of Rust the way the generator scans crate sources.
+
+    Several fragments stand for several files, named in the order given — which
+    is how a test says "this `impl` block is in a file that sorts before the one
+    declaring its type".
+    """
+    files = [(text.splitlines(), f"snippet{number}.rs") for number, text in enumerate(texts)]
     items = {}
-    gen_api_doc.scan_file(text.splitlines(), "snippet.rs", items)
+    for phase in (gen_api_doc.DECLARATIONS, gen_api_doc.ATTACHMENTS):
+        for lines, source in files:
+            gen_api_doc.scan_file(lines, source, items, phase)
+    for item in items.values():
+        gen_api_doc.order_members(item)
     return items
 
 
@@ -829,6 +839,66 @@ class ApiExtractionTest(unittest.TestCase):
             ["// Letters.", "A, B,", "", "ArrowUp, Escape,"],
         )
 
+    def test_an_impl_block_in_a_file_that_sorts_first_still_contributes(self):
+        # E0 run 2's largest gap, and it was not a missing doc comment: the
+        # scanner read `crates/jidousha-core/src/resource.rs` before
+        # `world.rs`, looked `World` up, found nothing, and dropped the whole
+        # block. Five resource methods went missing from a reference whose own
+        # Quickstart calls three of them (e0-findings.md F-016).
+        items = scan_snippet(
+            "impl World {\n"
+            "    /// Store a resource, replacing any of the same type.\n"
+            "    pub fn insert_resource<T: Resource>(&mut self, value: T) {\n"
+            "        self.resources.insert(value);\n"
+            "    }\n"
+            "}\n",
+            "/// Everything the simulation can see.\n"
+            "pub struct World {\n    slots: Vec<u32>,\n}\n"
+            "\n"
+            "impl World {\n"
+            "    /// Create an empty world.\n"
+            "    pub fn new() -> Self {\n"
+            "        Self { slots: Vec::new() }\n"
+            "    }\n"
+            "}\n",
+        )
+        self.assertEqual(
+            items["World"].members,
+            [
+                ("pub fn new() -> Self;", "Create an empty world"),
+                (
+                    "pub fn insert_resource<T: Resource>(&mut self, value: T);",
+                    "Store a resource, replacing any of the same type",
+                ),
+            ],
+            "the type's own block first, then the block extending it elsewhere",
+        )
+
+    def test_a_trait_impl_in_a_file_that_sorts_first_still_badges_its_type(self):
+        # Same bug, the other half: `impl Default for X` read before `X` was
+        # declared lost both the badge and the default value, which is how a
+        # reader learns the tick rate is 1/60.
+        items = scan_snippet(
+            "impl Default for GameConfig {\n"
+            "    fn default() -> Self {\n"
+            "        Self { fixed_dt: Seconds(1.0 / 60.0) }\n"
+            "    }\n"
+            "}\n",
+            "/// How a run is configured.\npub struct GameConfig {\n    pub seed: u64,\n}\n",
+        )
+        self.assertEqual(items["GameConfig"].traits, ["Default"])
+        self.assertEqual(items["GameConfig"].default_value, "Self { fixed_dt: Seconds(1.0 / 60.0) }")
+
+    def test_a_field_is_not_recorded_twice_by_the_second_pass(self):
+        # The declaration pass walks every file and so does the attachment
+        # pass. Both open the same blocks; only one may write.
+        items = scan_snippet(
+            "/// What the frame is looking at.\n"
+            "pub struct Camera {\n    pub center: Vec2,\n    pub height: f32,\n}\n"
+        )
+        self.assertEqual(len(items["Camera"].fields), 2)
+        self.assertEqual(items["Camera"].body_lines, 2)
+
 
 class ApiCompletenessTest(unittest.TestCase):
     """The gate that makes a thin reference loud.
@@ -982,6 +1052,52 @@ class ApiReferenceContentTest(unittest.TestCase):
         # signatures, and never as entries of their own.
         self.assertIn("pub fn sin_cos(angle: Radians) -> (f32, f32);", self.reference)
         self.assertIn("#### `Radians`", self.reference)
+
+    def test_the_reference_documents_how_a_game_reaches_a_resource(self):
+        # E0 run 2's largest gap. `World` documented seventeen methods and not
+        # one of them was about resources, while the Quickstart on the same
+        # page called three of the five that were missing (F-016). The cause
+        # was the generator, not the doc comments, so this reads the artifact.
+        for method in (
+            "pub fn insert_resource<T: Resource>(&mut self, value: T);",
+            "pub fn remove_resource<T: Resource>(&mut self);",
+            "pub fn resource<T: Resource>(&self) -> &T;",
+            "pub fn resource_mut<T: Resource>(&mut self) -> &mut T;",
+            "pub fn find_resource<T: Resource>(&self) -> Option<&T>;",
+            "pub fn find_resource_mut<T: Resource>(&mut self) -> Option<&mut T>;",
+        ):
+            self.assertIn(method, self.reference, method)
+
+    def test_the_reference_says_which_types_are_resources_and_who_installs_them(self):
+        # E0 run 2's parent finding: `Camera` and `Time` were documented as
+        # ordinary structs, so nothing said how a game gets one or whether one
+        # exists if it never asks (F-021). `Camera` is the trap — a headless run
+        # installs none, so a check reading it panics where the window would not.
+        for phrase in (
+            "held as a world resource",
+            "| `Time` |",
+            "| `Rng` |",
+            "| `Input` |",
+            "| `Camera` |",
+            "| `Assets` |",
+        ):
+            self.assertIn(phrase, self.reference, phrase)
+
+    def test_the_reference_states_the_query_shapes_rather_than_only_showing_them(self):
+        # The run restructured its whole game around 2-tuples to avoid finding
+        # out what would compile (F-023). Arity, the one-tuple and the
+        # entity-first yield are the three facts it could not get.
+        self.assertIn("tuple of up to six", self.reference)
+        self.assertIn("With<T>", self.reference)
+        self.assertIn("Without<T>", self.reference)
+
+    def test_the_reference_documents_vec2_rather_than_pointing_at_another_crate(self):
+        # "Also in `math`, re-exported from `glam` and documented there" sat
+        # under a document opening "if something you want is not here, it is not
+        # part of v1" (F-018). The entry is now a compiled example.
+        self.assertIn("length_squared", self.reference)
+        self.assertIn("Vec2::splat", self.reference)
+        self.assertIn("Vec2::ZERO", self.reference)
 
     def test_the_reference_does_not_shrink(self):
         # A floor, not an exact count: ordinary API growth must not churn this,

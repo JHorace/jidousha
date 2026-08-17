@@ -146,7 +146,12 @@ impl Rect {
             && point.y < self.max.y
     }
 
-    /// Whether any part of `other` is inside this rectangle.
+    /// Whether any part of `other` is inside; touching edges do not count.
+    ///
+    /// Strict on all four sides, so two rectangles that share exactly one edge
+    /// do not overlap. That is what makes it safe to park a moving body flush
+    /// against the face it just hit: the same test cannot fire again on the
+    /// next tick without the body actually moving into the other rectangle.
     #[must_use]
     pub fn overlaps(self, other: Rect) -> bool {
         self.min.x < other.max.x
