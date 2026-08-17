@@ -324,6 +324,15 @@ that's exactly what acceptance milestone E0 tests (implementation plan).
   because a thin entry is indistinguishable from a complete one to the agent
   reading it, so `completeness_failures` now fails the run when an exported item
   yields no declaration. A generator that can under-report silently will.
+
+  **Still unimplemented: the "tiny example" third of the bullet above.** Entries
+  carry a signature and a one-liner and no example. Deferred until E0 run 2 says
+  whether signatures alone are enough (e0-findings.md F-001, "Still open") — the
+  document is at ~13.8k tokens of 25,000 and the ~39 doctests already in the
+  crates would cost about 5k more, so budget is not the constraint. Recorded
+  here rather than left implicit: §4 and `gen-api-doc` disagreeing without
+  either saying so is precisely what F-001 was, and a second silent disagreement
+  in the same paragraph would be the same bug wearing the same hat.
 - Fixed structure: **Quickstart** (one complete ~60-line game, compiling,
   CI-tested — it IS an example file, included verbatim) → **Concepts** (seven
   short paragraphs: world/systems/phases, determinism & the tick, drawing,

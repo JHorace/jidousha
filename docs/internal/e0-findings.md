@@ -120,6 +120,32 @@ being wrong, it is being thin — and a thin entry is indistinguishable from a
 complete one to the agent reading it. Every exported item must yield at least a
 declaration or the generator fails, per CLAUDE.md rule 3.
 
+**Still open: the third of §4 that is not signatures.** §4 asks for "signature,
+one-liner, **tiny example**". The commit above landed the first two. Per-item
+examples do not exist, and the finding is marked fixed anyway because what the
+run reported — that it could not make a call from this document — is answered by
+an argument list.
+
+Deferred rather than dropped, and the reasoning is the milestone's own: run 2 is
+the instrument that says whether signatures alone were enough, and spending the
+budget before it reports is guessing at the answer it exists to give. The
+document sits at ~13.8k tokens of 25,000; the ~39 doctests already in the crates
+would cost roughly 5k more, so the budget is not what is deciding this.
+
+If it is taken up, the mechanism is to harvest those doctests rather than write
+anything: the example a game copies is then the example CI compiles, which is
+the same argument that embeds `quickstart.rs` verbatim. One obstacle to plan
+for — most of them open with `use jidousha_core::{...}`, which is forbidden
+vocabulary, so the harvest has to drop `use` lines. That is not a loss: the
+document's first sentence is already "everything here is reachable from one
+import", and a doctest's import line is never a line a game would write.
+
+**This note is the point.** A spec and its implementation disagreeing quietly is
+what produced F-001 in the first place — `gen-api-doc` rationalised the gap in
+its own docstring and nothing else recorded it, for the whole life of the
+project. A gap that is written down is a decision; the same gap unwritten is the
+bug again, one third the size.
+
 ### F-002 — "`Key` has no listed variants"
 
 Class: docs · Run: 1 · Fixed in: `4f9c10f`
@@ -714,6 +740,11 @@ What run 2 should be watched for, beyond new findings:
   `Key` list, the tick rate, and `GameConfig`'s fields were all things the run
   correctly refused to guess at; the fix is only real if the next run does not
   have to.
+- **Whether signatures without examples are enough** — the open third of §4, and
+  the one question run 2 is best placed to answer. A run that reads
+  `pub fn overlaps(self, other: Rect) -> bool` and calls it correctly says the
+  deferral was right. A run that has the signature and still goes to `examples/`
+  to see the call being made says it was not, and F-001 is not finished.
 
 ## 7. What this file feeds
 
