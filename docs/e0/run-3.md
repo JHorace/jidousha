@@ -304,8 +304,12 @@ Recording these because a log of only complaints would misrepresent the run.
 
 ## 8. Where this run stopped short
 
-- No captured picture (§2.2). The game has never been rendered by a GPU or seen
-  by anyone.
+- No captured picture (§2.2). Nothing in this run rendered the game or looked at
+  it. **Resolved after the fact, outside the run:** a human ran it on native
+  Linux, confirmed it plays, and reported nothing wrong. So the colours, the
+  dashed halfway line and the border alpha are fine — but that is a person
+  checking afterwards, not something the run could establish, and the gap in
+  §2.2 stands as written for any agent working the way this one did.
 - The font question (§1.1) is unresolved, not solved. I worked around it.
 - `tools/test` was not run, per the brief — this example opens a window.
 - The AI is one difficulty. There is no menu and no second-player option; the
