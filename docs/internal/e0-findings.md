@@ -847,9 +847,9 @@ E0 run is free to delete and rewrite it.
 **Fix.** The six-line shape is written out in the comment, with a `DELIBERATE:`
 tag saying why it is inlined rather than cited.
 
-### F-020 — Two runs wrote into one notes file, and the second read the first
+### F-020 — The harness leaves the previous run's work where the next run will read it
 
-Class: author · Run: 2 · Fixed in: this commit
+Class: author · Run: 2 · Fixed in: `c4582fc` (notes), this commit (game)
 
 **What happened.** The run reported it itself, unprompted, under "Contamination,
 stated plainly":
@@ -867,11 +867,32 @@ document, and the run says where the document told it each one. But "run 2
 guessed at nothing" is weaker evidence when the run was handed three of the
 answers, and the difference is not recoverable after the fact.
 
-**Fix.** `E0-NOTES.md` is split into `docs/e0/run-1.md` and `docs/e0/run-2.md`.
-The prompt now says to write `docs/e0/run-N.md`, to create it, and not to read
-the other runs' files; `e0-prompt.md` step 3 and `implementation-plan.md` say
-one file per run and why. Classified `author` because nothing about the engine
-or its document caused it — the harness did.
+**The same root cause has a second, larger instance, and the run reported that
+one too**, in the same breath and without being asked:
+
+> A fresh Pong, written from nothing: the previous run's `pong/` was deleted
+> without being opened.
+
+That was the author's own judgement. **The prompt never told them to**, and it
+could not have: `crates/jidousha/examples/` is on the *allowed* list, and run
+1's finished, working, verified Pong was sitting in it. A complete worked
+solution to the exact task, inside the one directory the author is pointed at,
+which a run reaching for a worked example would find first. Run 2 chose not to
+open it. Nothing but that choice was protecting the measurement.
+
+**Fix, both halves.** `E0-NOTES.md` is split into `docs/e0/run-1.md` and
+`docs/e0/run-2.md`; the prompt says to write `docs/e0/run-N.md`, to choose the
+lowest unused N, and lists `docs/e0/` among the directories it may not read.
+And *Before starting a run* now deletes the previous run's `pong/` on the
+attempt branch, together with its two `tools/test` registrations, so the next
+author cannot read what is not there. The game stays in the default branch's
+history for diffing, and step 6 puts the registrations back when the new game
+lands.
+
+Classified `author` because nothing about the engine or its document caused
+it — the harness did. **It is the only class of finding that invalidates
+evidence rather than costing time**, which is why both halves are closed before
+run 3 rather than after it.
 
 ### F-021 — The document never says which types are resources
 
@@ -1134,9 +1155,18 @@ Two things about run 1 that are not findings but would confuse a later reader.
 
 **The game was registered with `tools/test` before the run passed.** Commit
 `6626b9c` added `pong` to `VERIFIABLE_EXAMPLES` (`tools/test:118`).
-`e0-prompt.md` step 6 makes that the maintainer's step "on the run that
+`e0-prompt.md` step 6 made that the maintainer's step "on the run that
 passes". Harmless — the game verifies green — but the registration is not
 evidence of a pass, and the milestone is not ticked.
+
+**Settled before run 3: register after every run, not only the passing one.**
+Run 1 was right to register immediately — a game nobody verifies is a game that
+rots between runs — and the old wording was simply written before anyone had run
+E0. The registration now comes out with the game at the start of each attempt
+and goes back in when the game lands, both maintainer steps, neither touching
+the author. It has to come out with it: a registered example that does not exist
+fails `test_the_windowed_list_names_examples_that_exist`, which exists to catch
+exactly the stale name this would otherwise leave behind.
 
 **The run could not see its own game.** No display and no GPU adapter in the
 container, so "it runs in a window and is playable" was inferred, not observed,

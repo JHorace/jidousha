@@ -88,6 +88,12 @@ the milestone's honesty depends on:
   author writes only their own: run 2 was pointed at run 1's file and read it
   before writing a line of Pong, which handed it three facts it should have had
   to find.
+- **The previous run's game is deleted before the next run starts.**
+  `crates/jidousha/examples/` is on the run's allowed list, so a finished Pong
+  left in it is a worked solution the next author may read entirely within the
+  rules — and would find first. Run 2 deleted run 1's unprompted and said so;
+  the harness must not depend on an author choosing to (e0-findings.md F-020).
+  It is step 2 of `e0-prompt.md`'s before-the-run checklist.
 
 After E0: write the `make-game` skill (practices §3) from what E0 taught, then
 v1 is done and the deferred lists become the roadmap conversation.

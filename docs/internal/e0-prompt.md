@@ -8,16 +8,52 @@ prompt: if the wording changes between runs, the runs are not comparable and
 This file lives in `docs/internal/` deliberately — it is maintainers' harness,
 and the E0 session must never read it. Paste the block, do not point at the file.
 
+## Prompt revisions
+
+The paragraph above says the prompt is checked in so that repeats are
+comparable. It has changed twice, so the claim needs a ledger rather than
+assertion — "passed clean twice in a row" only means something if the two runs
+were asked the same question.
+
+| From run | What changed | Why |
+|---|---|---|
+| 1 | — | Original. |
+| 3 | Friction log moves from `E0-NOTES.md` at the root to `docs/e0/run-N.md`, chosen by the author; `docs/e0/` added to the may-not-read list. | Run 2 was pointed at run 1's file and read it, so it knew the timestep and three key names before opening the API document (F-020). |
+| 3 | *Before starting a run* deletes the previous run's `pong/` and its `tools/test` registrations; step 6 puts the registrations back. | The previous run's finished game sat inside `crates/jidousha/examples/`, which is on the **allowed** list — a complete worked solution the next author could read without breaking a rule (F-020). |
+
+Neither change alters what the run is asked to *build* or what it may read of
+the engine, so runs 1–2 and 3+ remain comparable on the thing being measured:
+whether `docs/api/jidousha-api.md` is enough on its own. Both changes remove
+information the earlier runs had and should not have had, which makes later runs
+strictly harder — the safe direction for a bar to move. **Any future change that
+makes a run *easier* invalidates the streak and restarts the count.**
+
 ---
 
 ## Before starting a run
 
 1. `git checkout -b e0/attempt-<n>` from the current default branch.
-2. Confirm the working tree is clean and `tools/test` passes, so anything the
+2. **Delete the previous run's game and de-register it**, in one commit:
+   `git rm -r crates/jidousha/examples/pong/`, then remove `pong` from
+   `WINDOWED_EXAMPLES` and `VERIFIABLE_EXAMPLES` in `tools/test`.
+
+   The deletion is not tidying, it is the measurement.
+   `crates/jidousha/examples/` is on the run's *allowed* list, so a previous
+   run's finished Pong sitting in it is a complete worked solution the next
+   author may read without breaking a single rule — and the one they would reach
+   for first. It stays in the default branch's history for diffing.
+
+   Both halves, because `test_the_windowed_list_names_examples_that_exist`
+   fails on a registered example that is not there, and it is right to: a stale
+   name would otherwise silently start running a windowed example headlessly.
+   Checked — the game alone leaves `tools/test` red, the game and the two
+   entries together leave it green.
+3. Confirm the working tree is clean and `tools/test` passes, so anything the
    run breaks is the run's.
-3. Start a **new session**. Not a continuation, not a compaction — a session
+4. Start a **new session**. Not a continuation, not a compaction — a session
    with no memory of the engine's internals. That is the entire instrument.
-4. Paste the prompt below verbatim.
+5. Paste the prompt below verbatim, filling in nothing: it is self-contained on
+   purpose, so that two runs cannot differ by what a maintainer typed around it.
 
 ## After the run
 
@@ -40,11 +76,19 @@ and the E0 session must never read it. Paste the block, do not point at the file
 4. Fix what the findings say to fix. Then run E0 again, fresh.
 5. E0 passes when two consecutive runs produce no new findings of the
    engine-bug or docs-gap kind.
-6. On the run that passes, adopt the game: add `pong` to `WINDOWED_EXAMPLES` and
+6. Adopt the game: put `pong` back into `WINDOWED_EXAMPLES` and
    `VERIFIABLE_EXAMPLES` in `tools/test`, so it is built and verified on every
    push like every other example. This is deliberately the maintainer's step —
    asking a game author to register their game with the engine's test harness
    would be asking them out of the role the run is measuring.
+
+   **Every run, not only the one that passes.** This step used to say "on the
+   run that passes", written before anyone had run E0; run 1 registered its game
+   immediately and that was both harmless and useful, since a game nobody
+   verifies is a game that rots between runs. Registration is **not** evidence
+   of a pass — §5 of `e0-findings.md` records where that confusion came from,
+   and the checklist in §4 of `implementation-plan.md` is the only thing that
+   says whether the milestone is met.
 
 ---
 
@@ -68,6 +112,9 @@ and the E0 session must never read it. Paste the block, do not point at the file
 > - `docs/internal/` and `docs/adr/` — the engine's design notes.
 > - `docs/agent-practices.md`, `docs/conventions.md` — maintainer docs. The part
 >   of `conventions.md` a game needs is already inside the API document.
+> - `docs/e0/` — earlier authors' friction logs. They are the record of what
+>   this exercise cost people before you, and reading one hands you answers you
+>   are here to have to find.
 >
 > If you catch yourself about to open one of those, stop. Not knowing is the
 > point: this run is measuring whether the API document is enough on its own, and
@@ -95,10 +142,10 @@ and the E0 session must never read it. Paste the block, do not point at the file
 > --verify` is your check. Leave the repository's own tooling alone — it is not
 > yours to edit, and editing it is not part of writing a game.
 >
-> **Write down every friction, as it happens, in `docs/e0/run-N.md`, where N is
-> the run number you were given.** Create the file; do not read the other runs'
-> files, and do not read anything else under `docs/` except `docs/api/`. This
-> file is as much the deliverable as the game is. Record:
+> **Write down every friction, as it happens, in `docs/e0/run-N.md`.** Create
+> the file, choosing the lowest N that does not already exist — you can see the
+> names in that directory without opening anything in it, and you must not open
+> anything in it. This file is as much the deliverable as the game is. Record:
 > - anything the API document did not tell you, that you had to guess at;
 > - anything you expected to exist and could not find;
 > - anything that behaved differently from what the document implied;
