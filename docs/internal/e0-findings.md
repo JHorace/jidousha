@@ -1,10 +1,13 @@
 # E0 findings — what building a game with this engine actually cost
 
-Status: **two runs, twenty-nine findings, all fixed, awaiting run 3.** The
+Status: **three runs, thirty-eight findings fixed and one with nothing to fix, awaiting run 4.** The
 harness is `docs/internal/e0-prompt.md`; the milestone is implementation-plan.md
 §3. The bar is two consecutive runs with no new `engine` or `docs` findings.
-Run 2 answered run 1 and then found fourteen more of its own, so the count of
-consecutive clean runs is still zero.
+Run 3 answered run 2 and then found nine more of its own, so the count of
+consecutive clean runs is still zero. Run 1 found five `engine` findings and
+run 2 three; **run 3 found none.** Eight of its nine are sentences the document
+does not carry, the ninth is an `author` finding with nothing to fix, and the
+engine's behaviour was right every time the run went looking.
 
 E0 is the project's definition of working: a fresh Claude Code session, given
 only `docs/api/jidousha-api.md` and `crates/jidousha/examples/`, builds a
@@ -50,6 +53,7 @@ prompt.
 |---|---|---|---|---|---|---|
 | 1 | 2026-08-16 | Pong shipped; **not** a pass | 5 | 9 | 1 | Game compiled first try, `--verify` green, human playtest good. The document did not survive it. Raw notes: `docs/e0/run-1.md`. All 14 fixed; §6. |
 | 2 | 2026-08-17 | Pong shipped; **not** a pass | 3 | 10 | 1 | Every run-1 finding held up. The reference is now callable; the gap moved to "which of these is a resource". Raw notes: `docs/e0/run-2.md`. §6. |
+| 3 | 2026-08-17 | Pong shipped; **not** a pass | 0 | 8 | 1 | Zero compile errors on the first `cargo check`; "the API document was enough". No `engine` finding. What is left is what the document does not *say* about behaviour that is already right. Raw notes: `docs/e0/run-3.md`. §6. |
 
 Run 1 produced a working, fun Pong and a document-shaped hole underneath it. The
 game is not the measurement — `docs/e0/run-1.md` is — and it says the run could
@@ -79,10 +83,34 @@ were known to it in advance. Its own notes say so, and say where the document
 told it each of them independently, so the conclusions stand; the measurement is
 weaker than it looks and run 3's will not be.
 
+Run 3 is the first clean measurement: its own file, created by it, no other
+run's notes opened. It wrote ~1,300 lines of Pong with **zero compile errors on
+the first `cargo check`** and reported no point at which it felt blocked. Its
+headline is "the API document was enough", and the fourteen run-2 findings stay
+closed.
+
+**It is not a pass**, because it produced nine findings of its own — but they
+are a third kind again, and the shift is the interesting result. Run 1's were
+"the document does not say how to call this". Run 2's were "the document does
+not say that this is a resource". Run 3's are **"the document does not say what
+this does"**: not a missing signature or a missing noun, but a missing sentence
+about behaviour the engine already gets right. The font draws a loud fallback
+box for an unknown character and always has; nothing told the author, and no
+assertion available to a game could tell the difference (F-030). Collision is
+tested at tick boundaries; true, unstated, and the first thing that bites a ball
+(F-034). The advance is exactly 7/9 of `size`; exact, derivable, never written
+down (F-031).
+
+**Run 3 was valid.** Its transcript shows no read under `crates/*/src/`,
+`docs/internal/`, `docs/adr/` or `docs/e0/`, and §5 of its notes lists the three
+things it wanted to grep for and did not — the font's coverage among them, which
+is F-030 and which it shipped a documented workaround for rather than an answer.
+
 ## 4. Findings
 
-Fifteen findings from run 1 (F-001–F-015) and fourteen from run 2
-(F-016–F-029). F-001 is the parent of most of run 1's `docs` set: six of them
+Fifteen findings from run 1 (F-001–F-015), fourteen from run 2 (F-016–F-029)
+and nine from run 3 (F-030–F-038). F-001 is the parent of most of run 1's
+`docs` set: six of them
 are one bug — the Reference has no signatures — observed from six different
 angles. They are kept separate anyway, because each one names a distinct thing a
 game author went looking for and did not find, and a fix that satisfies F-001
@@ -1173,6 +1201,307 @@ the message that names the offending quad, the camera's extent, and centred text
 as the usual culprit. Run 2 negative-tested that assertion by lengthening the
 banner again, which is the evidence it is worth six lines.
 
+### F-030 — What the font carries, and what an unknown character draws, is unstated
+
+Class: docs · Run: 3 · Fixed in: this commit
+
+**What the run did.** Wrote `"w / s to move · first to 5"` before it occurred to
+it to check whether the font had a `·`, then found it could not check.
+
+> **A non-ASCII character still submits a quad.** The `·` in my hint produced a
+> glyph quad in the transcript, at the same advance width as every other
+> character. So every check I have — glyph counts, "was text drawn", the
+> off-screen bounds check, `width_of` centring — passes identically whether that
+> quad draws a middle dot, a blank, or garbage.
+
+It retreated to ASCII everywhere and left a comment saying why. Its own summary:
+"the one piece of the game I cannot verify at all".
+
+**The answer, since the run could not go and get it.** The atlas holds the
+ninety-five printable ASCII characters, space (`0x20`) through `~` (`0x7e`), one
+five-by-seven glyph each in a seven-by-nine cell. `cell_index` maps everything
+else — every code point below space and every one above tilde alike — to a
+ninety-sixth cell holding a **fallback box**, which is drawn at the same advance
+as any other glyph. So the `·` drew a visible box. Not a blank, not garbage, and
+not silence.
+
+**The engine is right and stays as it is.** The fallback is deliberate, is
+tested by name (`a_character_the_font_does_not_have_draws_the_fallback_box`),
+and follows the same reasoning as the missing-texture placeholder: a character
+that drew nothing would make "my score is half there" a mystery instead of a
+picture. **No ADR**, because there is no oddity to explain — the loud fallback
+is the obvious behaviour and the codebase already carries the argument for it
+beside the art. What was missing was only that a game author could not find out.
+
+**Root cause.** `renderer.md` §6 states the range and the fallback in one line.
+That file is one a game author may not open, and nothing restated it on the
+public side; `prototype_kit` draws `0x20`–`0x7e` and calls it "the whole
+printable range", which is evidence in an example rather than a statement in the
+reference. The run's own diagnosis is the right one: the observable effect is
+identical either way, so no assertion could have closed the gap that a sentence
+closes.
+
+**Fix.** `TextStyle`'s summary — the sentence the reference carries — now names
+the range and says an out-of-range character draws a visible box rather than
+being skipped.
+
+### F-031 — The character advance is exact, derivable, and never written down
+
+Class: docs · Run: 3 · Fixed in: this commit
+
+**What the run did.** Laid out the score, the banner and the hint by guessing,
+running, and reading the numbers back out of the transcript.
+
+> I could not tell whether a 38-character banner at size 1.4 would fit in a
+> 35.5-unit-wide camera without building it and looking at the transcript. […]
+> From the transcript the answer turns out to be `7/9 × size`. That is a fact I
+> extracted from output rather than one I was told.
+
+**The run's number is correct**, checked against the source rather than copied:
+a cell is `CELL_W = 7` by `CELL_H = 9` texels and `TextStyle::advance` is
+`size * CELL_W / CELL_H`, so every character advances exactly `size * 7 / 9`.
+`text_advances_by_one_cell_per_character` pins it at size 9 → 7.
+
+**Root cause.** `width_of` is documented as exact, which is what makes centring
+work, and exactness after the fact is a different service from arithmetic
+beforehand. A monospace font's whole advantage is that layout is multiplication,
+and the multiplier was the one number not stated.
+
+**Fix.** The ratio is in `TextStyle`'s summary, so it rides into the reference
+beside `width_of`'s signature; `width_of`'s own doc comment carries the
+`N * 7 / 9 * size` form for a reader of the source. Deliberately *not* in
+`width_of`'s member summary, which the generator truncates at 68 characters.
+
+### F-032 — The screens a run never reaches are the screens nothing checks
+
+Class: docs · Run: 3 · Fixed in: this commit
+
+**The sharpest finding of the run, and it is a sharper version of F-029.** The
+off-screen assertion F-029 added was written early, ran 5,400 times, and passed
+the whole run.
+
+> Then I noticed that my longest string — `"the machine wins — space to play
+> again"` — is **only drawn when the machine wins**, and my verify controller is
+> a perfect tracker that wins 5–0 every time. […] At an estimated 41 world units
+> against a 35.5-unit camera, it would have run off both edges on the first
+> match a real person lost.
+>
+> the danger is not "text is silently too wide", it is "**the screen that is too
+> wide is the one your test never reaches**".
+
+**Root cause.** F-029 put the right assertion in the document and said nothing
+about its domain. An assertion over drawn frames judges only the frames a run
+draws, and a controller good enough to finish a game is a controller that never
+loses it — so the strings on the losing, timeout and paused screens are exactly
+the ones no frame ever carried. This is not specific to text or to Pong; it is
+what "assert on what was drawn" means when the run picks what gets drawn.
+
+**Fix.** `testing.md`, immediately after the `width_of` paragraph: build the
+unreached screens by hand — one tick so `Startup` has run, set the resource that
+selects the screen, draw one frame, run the same check — with the three lines
+written out. The run's own fix is the idiom, generalised; it is written out
+rather than cited, because the file it lives in is deleted before the next run
+starts (F-019).
+
+### F-033 — The closed-loop snippet reads a world that is not there yet
+
+Class: docs · Run: 3 · Fixed in: this commit
+
+**What happened.** The run panicked on tick 1 of its first verify run, reading
+`world.resource::<Scoreboard>()` at the top of its controller loop.
+
+> the document told me, and I still did it. The reason is that the document
+> frames the fact around *arranging a test's starting state* […] and the case
+> that actually bites is different — it is the **closed-loop controller**, the
+> exact shape the document recommends two pages later.
+
+**Root cause, and why this is a `docs` finding and not an `author` one.** The
+fact is stated in Concepts (F-007's fix) and it is stated in the register the
+reader is in when *setting up* a sim. The `SnapshotBuilder` snippet in *Testing
+your game* is the one worked example of the shape that trips on it, its very
+first line is `let want = /* look at the world, then decide */`, and it does not
+repeat the warning. Run 1 hit the same empty-world-on-tick-1 in a rally harness
+before F-007 existed; run 3 hit it after, having read the sentence. Two runs
+into the same hole through two different doors is the document's problem.
+
+**Fix.** A paragraph under the snippet: `Startup` runs inside the first
+`tick()`, so the controller's read happens once against an empty world —
+`find_resource` rather than `resource`, and a query that yields nothing rather
+than a `[0]` into an empty `Vec`.
+
+**The panic message is not at fault and is worth recording as a thing that
+worked.** The run: "excellent — it named the resource, said resources are
+inserted explicitly, gave the likely cause and gave two fixes, one of which
+(`find_resource`) was the correct one. Cost: about two minutes."
+
+### F-034 — Nothing says collision is only tested at tick boundaries
+
+Class: docs · Run: 3 · Fixed in: this commit
+
+**What the run did.** Worried its way to the answer rather than reading it.
+
+> nothing in the API sweeps, so a ball that moves further in one tick than a
+> paddle is thick passes straight through it. […] A line under `Rect::overlaps`
+> saying "collision is tested at tick boundaries; a mover faster than its target
+> is thick will step through" would have saved me working it out.
+
+Corroborated by run 1, which went looking for an overlap test, found none, and
+noted: "I ended up needing a *swept* test anyway, which no engine helper would
+have given me."
+
+**Root cause.** `Rect::overlaps` answers a question about two rectangles, and
+tunnelling is a question about a fixed timestep — the reference documents the
+first and Concepts documented the timestep without ever drawing the consequence.
+Both runs reached it, and both reached it by reasoning rather than by reading.
+
+**Fix.** Concepts, in the fixed-timestep paragraph rather than on `Rect`,
+because that is where the cause is: collisions are tested at tick boundaries,
+nothing in v1 sweeps, and the fix is the game's — keep `speed * Time::fixed_dt`
+under the thinnest thing it must not miss. The paragraph names `Rect::overlaps`
+so the reader who searches for it lands here. **`Rect::overlaps`'s own summary
+is unchanged**: it is already 66 of the 68 characters the generator gives a
+member line, and a truncated warning is worse than none.
+
+**Run 3's handling was better than the line it asked for**, and the fix says so:
+it asserted the margin against the `Time::fixed_dt` the engine handed the game,
+which catches a raised `GameConfig::fixed_dt` that a comment would not.
+
+### F-035 — Two worked examples disagree on per-tick versus per-second, and one is the Quickstart
+
+Class: docs · Run: 3 · Fixed in: this commit
+
+**What the run did.** Made an engine convention up, correctly, and said so.
+
+> `prototype_kit` writes its paddle speed as "world units per tick"
+> (`speed: 0.25`) and does not touch `fixed_dt`. `scripted_player.rs` writes
+> per-second constants and multiplies by `fixed_dt`. Both are in the examples
+> directory, and they are opposite conventions. I went with per-second-and-
+> multiply, because it survives a change to `GameConfig::fixed_dt`, but the
+> document has no opinion and the two worked examples disagree.
+
+**Wider than the run could see.** The Quickstart is the third example and it was
+on the per-tick side — `const SPEED: f32 = 0.35;`, "how far the player moves in
+one tick" — which makes the disagreement the *first* thing a copy-and-change
+author inherits. Run 3 could read that, of course, but it had already reached
+the right answer from the other two and did not go back.
+
+**Root cause.** `conventions.md` rules on units in types, on angles and on
+durations, and had nothing to say about rates. With no ruling, three examples
+and no reason to agree, they did not, and "one way to do everything" was
+enforced everywhere except in the thing every game has.
+
+**Fix.** The ruling is in `conventions.md` under Time — speeds and rates are per
+second and multiplied by `Time::fixed_dt` where they are applied; counting ticks
+stays ticks, because the tick is the canonical timeline — and it reaches the API
+document through the conventions digest. `quickstart.rs` and
+`prototype_kit/main.rs` are converted; `prototype_kit`'s paddle is 15.0 units a
+second where it was 0.25 a tick, which is the same speed at 1/60 and now stays
+that speed if the timestep moves. The Quickstart gains one line and a
+`Time::fixed_dt` read, which is the first place a game author sees the shape.
+
+### F-036 — `Batch` is a type a worked example reads and the document does not define
+
+Class: docs · Run: 3 · Fixed in: this commit · **Second instance of F-017's class**
+
+**What the run did.** Read `prototype_kit/verify.rs`, saw `plan.batches`,
+`batch.texture` and `batch.quad_count()`, and went looking.
+
+> `Batch` has no entry in the API document at all — `FramePlan` names the field
+> as `Vec<Batch>` and the type is never described. I did not need it (I used
+> `FrameRecorder`, which is the shape the document recommends for a game), but
+> if I had followed the worked example instead of the prose I would have been
+> writing against an undocumented type.
+
+**Root cause.** Exactly what F-017 predicted and left unbuilt: a type named by a
+signature — here a public field — with no entry of its own, because the facade
+is a curation and `Batch` was curated out while `FramePlan::batches` stayed in.
+F-017 wrote down that a generator gate for this class was "the obvious next
+piece of work" and that each remaining candidate needed a decision. This is the
+decision for one of them, arrived at the way F-017 said the next one would be:
+by a run reporting it.
+
+**Fix.** `Batch` and `QuadVertex` are exported in `jidousha::testing` — the
+second because exporting the first names it, and a fix that moves the hole one
+type along is not a fix. `FrameRecorder` remains the road a game should take and
+the comment beside the export says so.
+
+**The gate is still not built**, and it is now overdue rather than obvious: two
+runs have found this class by hand. The remaining candidates are the ones F-017
+listed — `ByteSource`, `AssetHandle`, `AssetKind`, `Phase`, `IntoSystem`, the
+query traits, `CommandKind` — and the work is a decision each, not a mechanism.
+
+### F-037 — There is no worked controller that plays to *win*, and a tracker makes a game unwinnable
+
+Class: docs · Run: 3 · Fixed in: this commit · **Found independently by all three runs**
+
+**The most-corroborated finding in this file.** Every run has walked into it,
+each without knowing the others had:
+
+> **Run 1.** "a player that tracks the ball exactly meets it with the middle of
+> the paddle every time, and a centre hit returns the ball dead flat, so two
+> exact trackers rally forever at a fixed height. The degenerate equilibrium is
+> an artifact of the perfect tracker, and it hid the real question."
+>
+> **Run 2.** "**First run: 0–0 after a hundred simulated seconds.** Not a crash
+> — an *unloseable* rally. […] The bounce model has a fixed point at 'hit it in
+> the middle' and two perfect trackers sit down in it."
+>
+> **Run 3.** "**0–0 after 90 seconds, one rally of 78 touches.** […] a closed-
+> loop test controller that plays *safe* is not a playability test. A tracker
+> that centres every return proves the controls work and simultaneously proves
+> the game cannot be won, because it has made the game degenerate."
+
+Run 3 spent two full tuning attempts on it and named the cost:
+"`scripted_player.rs`'s closed-loop example chases a target, which is tracking;
+there is no worked example of a controller that plays to *win*."
+
+**Root cause.** ADR-0019 and `testing.md` distinguish a *script* from a
+*controller* — "a blind script never returns a ball" — and stop there. The
+second step, that a controller can be closed-loop and still measure nothing, has
+never been written anywhere. Three runs found it by losing hours to it.
+
+**Fix, and what was deliberately not done.** The lesson is in `testing.md` under
+the `SnapshotBuilder` snippet, stated as the shape rather than as Pong: a
+controller that plays safe measures its own caution; play to win, aim the return
+away from the opponent, take the shot a person would take — with the driver that
+brakes for every corner and the fighter that blocks everything as the same trap
+in other clothes.
+
+**The worked example is declined, and the reason is F-020.** A worked
+closed-loop controller that plays a game to win is a worked *game* — the trap
+only exists where a symmetric return angle has a fixed point, which is to say in
+Pong or something isomorphic to it. `crates/jidousha/examples/` is on E0's
+allowed list, so shipping one there would hand run 4 the answer to the exercise,
+which is the precise failure F-020 exists to prevent and the reason each run's
+game is deleted before the next starts. Prose that every run reads is the lever
+available; if run 4 walks into this a fourth time, the next move is a worked
+example of the *shape* in a game deliberately unlike Pong, not a Pong.
+
+### F-038 — `Rng::below` is documented, and clippy pushes the other way
+
+Class: author · Run: 3 · Fixed in: nothing to fix
+
+**What the run did.** Wrote `next_u32() % 2 == 0` for a coin flip, had clippy
+reject it as `manual_is_multiple_of`, and took the lint's suggested
+`is_multiple_of(2)` before recognising the engine's own answer.
+
+> The right answer was `Rng::below(2)`, which is documented and which I had read
+> past. The lint pushed me toward `is_multiple_of(2)` — the engine's own "one
+> way to do everything" answer was the better one and the lint does not know
+> about it.
+
+**Where the answer already was**, per §1's rule for an `author` finding —
+`docs/api/jidousha-api.md`, `Rng`:
+
+> `pub fn below(&mut self, limit: u32) -> u32;  // A value in `0..limit`, with
+> every value equally likely`
+
+**Nothing to fix.** The run diagnosed it correctly and unprompted, cost itself a
+lint cycle, and reached the documented answer. A lint that does not know a
+project's vocabulary is not a docs gap; the entry is one line above the method
+the run reached for instead. Recorded because §1 says three `author` findings on
+one topic is a `docs` finding wearing a hat, and this is the first on this one.
+
 ## 5. Notes on the run's procedure
 
 Two things about run 1 that are not findings but would confuse a later reader.
@@ -1234,28 +1563,62 @@ match length.
   reach for an example it was for a *shape* rather than a signature: how a game
   sets a camera (F-021), which is a Concepts question, not a per-item one.
 
-### What run 3 should be watched for
+### What run 3 answered about run 2's fixes
 
-- **Whether "which of these is a resource" is actually closed.** F-021's fix is
-  a Concepts table plus five summary lines. If run 3 still has to find
-  `insert_resource(Camera { .. })` by reading `window_clear.rs`, the fix was in
-  the wrong place.
-- **Whether F-016's class is really gone.** The generator now reads sources
-  twice, so path order cannot decide what reaches the page. What it does *not*
-  yet have is a gate for F-017's class — a type named in a signature with no
-  entry of its own. If run 3 reports another one, that gate is overdue.
-- **Whether the closed-loop route gets found.** ADR-0019 puts `SnapshotBuilder`
-  in `jidousha::testing` and `testing.md` says when to reach for it instead of
-  `InputScript`. A run that writes a controller and does *not* find it — or
-  that builds one-tick scripts again — means the two are not distinguished
-  clearly enough.
-- **Whether the off-screen assertion gets written.** F-029 put it in
-  `testing.md` in full. It cost run 2 a bug that eight passing assertions
-  missed, so a run 3 that ships clipped text anyway is evidence that a section
-  of prose is not where that belongs.
-- **The measurement itself.** Run 3 writes `docs/e0/run-3.md`, creates it, and
-  reads no other run's notes (F-020). This is the first run whose "I guessed at
-  nothing" can be taken at face value.
+Run 3 is the first run whose answers are uncontaminated (F-020), so this is the
+first clean report card on anything.
+
+- **"Which of these is a resource" is closed.** F-021's fix is named in run 3's
+  short list of what the document does unusually well: "**The resource-
+  availability table.** Which resources exist, who inserts them, and which three
+  can be absent […] I used `find_resource` in exactly the right two places on
+  the first try because of that table." The fix was in the right place.
+- **The closed-loop route is found.** ADR-0019's `SnapshotBuilder` was reached
+  for and worked first time; `InputScript` was read, understood, and
+  deliberately not used. No one-tick scripts. Closed.
+- **The off-screen assertion gets written.** F-029's check was written early and
+  ran the whole session — and F-032 is the thing it could not catch, which is a
+  new finding rather than a failed fix. The other half of F-029 landed harder
+  than expected: "every failure in my verify run prints its numbers, and during
+  the tuning fight those numbers were the *entire* diagnosis."
+- **F-016's class is gone; F-017's is not.** No generator dropout was reported.
+  `Batch` is a second instance of a type named by a signature with no entry
+  (F-036), which is the second run to find that class by hand — the gate F-017
+  deferred is now overdue rather than optional.
+- **The engine's messages keep earning their length.** Both failures the run
+  caused — the missing-resource panic and `RunError::NoDisplay` — were acted on
+  without investigation. "I acted on both without investigating anything."
+- **F-011 is still unverified by a run.** No display and no adapter in run 3's
+  container either, for the third time. What is new is that the game was played
+  by a person afterwards and reported fine, so the *game* is confirmed and the
+  *finding* is not.
+
+### What run 4 should be watched for
+
+- **Whether the third kind of gap is closed, or just this instance of it.** Run
+  3's findings are all "the document does not say what this does". F-030,
+  F-031 and F-034 each add one sentence about behaviour that was already
+  correct. If run 4 produces a fourth batch of the same shape about three
+  different behaviours, the problem is not the sentences — it is that nothing in
+  the pipeline asks "does the reference state what this *does*, not just what it
+  *is*".
+- **Whether F-037 needs a worked example after all.** Three runs have made a
+  game unwinnable with a perfect tracker. The fix is prose, and the reason it is
+  only prose is written down in F-037. A fourth run that walks into it is the
+  evidence that prose is not enough, and the answer then is a worked controller
+  in a game deliberately unlike Pong.
+- **Whether the font sentence is enough.** F-030's fix is one clause in
+  `TextStyle`'s summary. The test is whether run 4 uses a non-ASCII character
+  *on purpose*, or avoids the question the way run 3 did — and if it uses one
+  and is wrong about what it drew, the clause is in the wrong place.
+- **Whether the unreached-screens check gets written.** F-032 is the sharpest
+  thing run 3 found and the fix is three lines of prose in `testing.md`. A run 4
+  whose banner overruns on a screen its controller never reaches is the same bug
+  twice, and the third time this class has cost a run.
+- **Whether the rates ruling holds.** F-035 converted the Quickstart and
+  `prototype_kit`. Every example now says per-second; if run 4 writes per-tick
+  constants anyway, the ruling is in `conventions.md` and not where a game
+  author reads.
 - **Whether anything in these fixes reads as an invitation to guess.** Same
   standard as before: a fix is only real if the next run does not have to infer
   the thing it fixed.
@@ -1273,6 +1636,15 @@ through F-009 are all "the document did not say", and a skill that teaches an
 agent to work around a thin reference is a skill that removes the pressure to
 thicken it. Run 2 says the same about F-016 and F-021 — a skill listing the
 engine's resources would be a skill papering over a document that does not.
+
+**Run 3 adds two more of the same kind, and they are the strongest candidates in
+the file.** F-032 — the screens a run never reaches are the screens nothing
+checks — and F-037 — a controller that plays safe measures its own caution, not
+the game — are both about writing a test for something you cannot look at, and
+neither mentions this engine. F-037 in particular is the only finding here that
+three independent runs reached on their own, which is the definition of a
+friction that cannot be designed away. Both are in `testing.md` because run 4
+needs them; both belong in the skill for the same reason F-029's pair does.
 
 **Two of run 2's findings are skill material, and they are the two that are not
 about this engine at all.** F-029's pair — that a failing assertion has to

@@ -45,6 +45,15 @@ is the number to count in when a game wants to say "about three quarters of a
 second" as a number of ticks — a serve pause, a coyote-time window, an
 invulnerability period.
 
+A fixed timestep also means **collisions are only ever tested at tick
+boundaries**. Nothing in v1 sweeps, so a body that moves further in one tick
+than its target is thick steps clean through it and `Rect::overlaps` never sees
+the frame where they touched. That is the first thing that bites a game with a
+fast small ball, and the fix is the game's: keep `speed * Time::fixed_dt`
+smaller than the thinnest thing it must not miss, and assert that against the
+`fixed_dt` the engine actually hands you rather than against the 1/60 you
+assumed.
+
 Together with the seeded `Rng` in `GameConfig`, that means the same inputs make
 the same game — which is what lets a test replay a session and get the same
 answer.

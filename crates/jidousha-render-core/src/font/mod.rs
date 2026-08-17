@@ -34,7 +34,9 @@ pub(crate) const ATLAS_H: u32 = ROWS * CELL_H;
 /// remains the only one, and this names what that produced.
 pub const FONT_TEXTURE: TextureId = TextureId::from_bits(1);
 
-/// How a line of text is drawn.
+/// How a line of text is drawn — monospace over the ninety-five printable ASCII
+/// characters, space through `~`, every one of them advancing 7/9 of `size`,
+/// with anything outside that range drawn as a visible box rather than skipped.
 ///
 /// ```
 /// # use jidousha_render_core::TextStyle;
@@ -81,6 +83,11 @@ impl TextStyle {
     /// Monospace with no kerning, so this is exact rather than an estimate.
     /// A game centers a score with it, or draws a panel behind a readout;
     /// without it the only way to know is to guess.
+    ///
+    /// Every character advances the same `size * 7 / 9`, so a layout can be
+    /// reasoned about before it is run: an N-character line is `N * 7 / 9 *
+    /// size` wide, and whether it fits is arithmetic rather than a thing to
+    /// discover from a transcript.
     ///
     /// `\n` starts a new line, so a multi-line string laid out at one position
     /// is a block, and this is the width of that block. Centering by it is the

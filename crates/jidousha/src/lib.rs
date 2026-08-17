@@ -156,11 +156,18 @@ pub mod testing {
     // the texture table against a throwaway backend to learn which id the font
     // got (e0-findings.md F-010). The pieces below it stay public because the
     // golden-image path composes them differently — a game uses the recorder.
+    // `Batch` and `QuadVertex` are here for the same reason `Submissions` is
+    // (e0-findings.md F-017): `FramePlan::batches` is a `Vec<Batch>` and
+    // `Batch::vertices` a `Vec<QuadVertex>`, so both were named by a field a
+    // check reads and defined nowhere. A check that counts glyphs off a plan —
+    // `plan.batches.iter().filter(|batch| batch.texture == font)` — needs to
+    // know a batch has a texture and a `quad_count`; `FrameRecorder` is still
+    // the shorter road and the one a game should take.
     pub use jidousha_render_core::{
-        BackendTextureId, Comparison, DrawnQuad, FONT_TEXTURE, FramePlan, FrameRecord,
-        FrameRecorder, NullBackend, PhysicalSize, RawImage, RenderBackend, TextureTable, Tolerance,
-        compare, create_builtin_textures, diff_image, encode_png, plan_frame,
-        upload_ready_textures,
+        BackendTextureId, Batch, Comparison, DrawnQuad, FONT_TEXTURE, FramePlan, FrameRecord,
+        FrameRecorder, NullBackend, PhysicalSize, QuadVertex, RawImage, RenderBackend,
+        TextureTable, Tolerance, compare, create_builtin_textures, diff_image, encode_png,
+        plan_frame, upload_ready_textures,
     };
 
     /// The renderer a golden image comes from.

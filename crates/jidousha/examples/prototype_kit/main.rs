@@ -72,7 +72,7 @@ impl Component for Spin {}
 /// A paddle the player moves, and how far it may travel.
 #[derive(Clone, Copy)]
 struct Paddle {
-    /// World units per tick.
+    /// World units per second.
     speed: f32,
     /// Half the travel allowed either side of the centre.
     limit: f32,
@@ -166,7 +166,7 @@ fn set_the_scene(world: &mut World) {
     world.insert(
         paddle,
         Paddle {
-            speed: 0.25,
+            speed: 15.0,
             limit: 7.0,
         },
     );
@@ -176,12 +176,16 @@ fn set_the_scene(world: &mut World) {
 ///
 /// The one system that reads input, and therefore the one a script can drive.
 fn drive_the_paddle(world: &mut World) {
-    let step = match world.find_resource::<Input>() {
+    let direction = match world.find_resource::<Input>() {
         // The first tick of a run can happen before any input is set, and a
         // game that assumed otherwise would panic on startup.
         None => return,
         Some(input) => f32::from(input.held(Key::S)) - f32::from(input.held(Key::W)),
     };
+    // Per second, times the timestep — the same shape every other example uses,
+    // so the paddle keeps its speed if `GameConfig::fixed_dt` ever changes
+    // (conventions).
+    let step = direction * world.resource::<Time>().fixed_dt.as_f32();
     for (_, transform, paddle) in world.query_mut::<(&mut Transform, &Paddle)>() {
         transform.pos.y =
             (transform.pos.y + step * paddle.speed).clamp(-paddle.limit, paddle.limit);
