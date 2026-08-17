@@ -5,6 +5,8 @@
 //!
 //! Run it: `cargo run -p jidousha --example quickstart`
 
+use std::process::ExitCode;
+
 use jidousha::prelude::*;
 
 /// How far the player moves in one tick, in world units.
@@ -27,13 +29,24 @@ impl Component for Coin {}
 struct Score(u32);
 impl Resource for Score {}
 
-fn main() -> Result<(), RunError> {
-    run(GameConfig::default(), |app| {
+fn main() -> ExitCode {
+    match run(GameConfig::default(), |app| {
         app.add_system(Startup, spawn_the_world);
         app.add_system(Update, walk);
         app.add_system(Update, collect);
         app.add_system(Draw, draw_everything);
-    })
+    }) {
+        Ok(()) => ExitCode::SUCCESS,
+        // Print the error, do not return it. `run` fails only for reasons about
+        // the machine, and `RunError`'s `Display` is the engine's four-part
+        // message: what happened, the specifics, the likely cause, the fix. A
+        // `fn main() -> Result<(), RunError>` prints the `Debug` form instead —
+        // a struct dump with a path into a vendored dependency inside it.
+        Err(error) => {
+            eprintln!("{error}");
+            ExitCode::FAILURE
+        }
+    }
 }
 
 fn spawn_the_world(world: &mut World) {

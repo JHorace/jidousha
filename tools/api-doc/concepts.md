@@ -10,6 +10,32 @@ scheduler deciding for you. Startup running *inside* that first tick is worth
 knowing if you drive the sim by hand: `headless(..)` hands back a world that is
 still empty, and it is populated once the first `tick()` returns.
 
+**A resource is a thing there is exactly one of** — the score, the round state,
+the camera. `world.insert_resource(Score::default())` puts one in,
+`world.resource::<Score>()` and `world.resource_mut::<Score>()` read it back and
+panic if it is absent, `world.find_resource::<Score>()` returns `Option` where
+absence is expected, and `world.remove_resource::<Score>()` takes it away. A
+`Draw` system reaches the same values through `ctx.world`, read-only. Most of a
+game is resource access, so it is worth knowing which resources are already
+there:
+
+| Resource | Who inserts it | Can it be absent? |
+|---|---|---|
+| `Time` | `run` and `headless` both, before the first tick | no |
+| `Rng` | the same, seeded from `GameConfig::seed` | no |
+| `Input` | `run`, before every Update tick | **yes** — not before the first tick, and never under `headless` unless a test inserts it |
+| `Camera` | the game, in `Startup` | **yes** under `headless`; under `run`, a game that inserts none is given `Camera::default()` before the first frame |
+| `Assets` | the game, if it has art | **yes** — a game of shapes and text never inserts one |
+
+The three that can be absent are the three to reach for with `find_resource`.
+That is why the Quickstart's `walk` system opens with
+`let Some(input) = world.find_resource::<Input>() else { return };` rather than
+`world.resource::<Input>()`. `Camera` is the one to watch: a game that sets one
+in `Startup` may read it back with `world.resource::<Camera>()` anywhere,
+because `Startup` has run by then — but a game that relies on the driver's
+default has no camera at all in a headless run, and a check reading one will
+panic where the window would not.
+
 The engine runs on a **fixed timestep**. `Time::fixed_dt` is the same number
 every tick, `Time::tick` counts them, and a slow frame runs several ticks rather
 than one long one. That number is **1/60 of a second** unless you say otherwise:
@@ -51,6 +77,30 @@ world units, not pixels. The camera is `height` world units tall and as wide as
 the window's aspect makes it. `Camera::world_to_screen` and `screen_to_world`
 convert when you need pixels — pointer positions arrive in pixels and become
 world coordinates through the camera you choose.
+
+**A query is a shape, and these are all the shapes there are.** A part is `&T`,
+`&mut T`, `With<T>` or `Without<T>`; a query is one part, or a tuple of up to six
+of them, and the one-tuple `(&Transform,)` works as well as the bare form.
+`world.query::<Q>()` takes read-only parts; `world.query_mut::<Q>()` is the one
+that accepts `&mut T`. **The iterator yields the entity first**, then one item
+per part, and the two filters yield `()` — they still occupy their position:
+
+```rust
+for (entity, transform) in world.query::<&Transform>() { }
+for (entity, transform, velocity) in world.query_mut::<(&mut Transform, &Velocity)>() { }
+for (entity, transform, _) in world.query::<(&Transform, With<Player>)>() { }
+for (entity, transform, _) in world.query::<(&Transform, Without<Frozen>)>() { }
+```
+
+A filter is worth it when the marker carries no data and you would otherwise
+bind a component you do not read. A component holding an enum — `Paddle {
+control: Control }` — is the other way to say the same thing, and it keeps the
+tuple shorter.
+
+**A game does not close itself.** There is no `App::quit` and nothing on `World`
+or `Commands`: `run` is the whole program until the player closes the window.
+That is a v1 boundary rather than an omission you have missed — `Key::Escape` is
+listed because games use it to back out of menus, not because it exits.
 
 **Reading while writing: the two-pass pattern.** A query that borrows the world
 mutably holds it for as long as you iterate, so a system that needs to look at

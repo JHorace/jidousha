@@ -22,6 +22,8 @@
 //! DELIBERATE: built but not run by `tools/test`, like the other windowed
 //! examples — it opens a window and waits for a person (tooling.md).
 
+use std::process::ExitCode;
+
 use jidousha::prelude::*;
 
 /// How many world units the window spans vertically.
@@ -56,8 +58,8 @@ struct Echo {
 }
 impl Resource for Echo {}
 
-fn main() -> Result<(), RunError> {
-    run(
+fn main() -> ExitCode {
+    match run(
         GameConfig {
             title: "jidousha — input echo",
             ..GameConfig::default()
@@ -68,7 +70,13 @@ fn main() -> Result<(), RunError> {
             app.add_system(Draw, draw_the_readout);
             app.add_system(Draw, draw_the_pointer);
         },
-    )
+    ) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("{error}");
+            ExitCode::FAILURE
+        }
+    }
 }
 
 fn set_the_scene(world: &mut World) {

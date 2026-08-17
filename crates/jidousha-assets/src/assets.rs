@@ -129,9 +129,11 @@ impl Table {
     }
 }
 
-/// Every asset the game has asked for.
+/// Every asset the game has asked for, held as a world resource.
 ///
-/// Held as a world resource, so any system can load without new plumbing:
+/// Nothing installs it: a game with art inserts one in `Startup`, and a game of
+/// shapes and text never names it at all. Any system can then load without new
+/// plumbing:
 ///
 /// ```
 /// # use jidousha_assets::{Assets, MemorySource};

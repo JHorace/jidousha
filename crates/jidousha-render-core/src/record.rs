@@ -59,13 +59,23 @@ pub struct FrameRecorder {
 }
 
 impl FrameRecorder {
-    /// A recorder drawing to a surface `viewport` pixels across.
+    /// A recorder drawing to a surface `viewport` pixels across, overriding
+    /// the `Camera` resource's own.
     ///
     /// The viewport is the recorder's rather than the game's for the same
     /// reason it is the driver's in a windowed run: it describes the surface,
     /// and here the surface is whatever the test says it is. A game's `Camera`
     /// supplies everything else — centre, height, clear color — so what is
     /// recorded is the game's own view at a size the test controls.
+    ///
+    /// **This is worth an assertion's attention.** The `Camera` in the world
+    /// keeps whatever viewport it was given, and nothing in a headless run
+    /// stamps this one onto it. A check that reads a rectangle from
+    /// `world.resource::<Camera>().visible_bounds()` and quads from the
+    /// recorder is comparing against the wrong rectangle whenever the two
+    /// viewports differ — and it goes on passing while it does. Either pass the
+    /// recorder the viewport the camera already has, or read the bounds from
+    /// `Camera { viewport, ..the game's camera }`.
     #[must_use]
     pub fn new(viewport: PhysicalSize) -> Self {
         let mut backend = NullBackend::new();

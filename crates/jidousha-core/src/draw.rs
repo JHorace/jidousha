@@ -47,7 +47,7 @@ impl<'w> WorldView<'w> {
         self.world.query::<Q>()
     }
 
-    /// The `T` on `entity`.
+    /// The `T` on `entity`, panicking if it has none.
     ///
     /// # Panics
     ///
@@ -64,7 +64,7 @@ impl<'w> WorldView<'w> {
         self.world.find_component::<T>(entity)
     }
 
-    /// The `T` resource.
+    /// The `T` resource, panicking if the world has none.
     ///
     /// # Panics
     ///

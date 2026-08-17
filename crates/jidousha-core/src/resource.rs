@@ -93,12 +93,13 @@ impl World {
         self.resources.remove::<T>();
     }
 
-    /// The `T` resource.
+    /// The `T` resource, panicking if the world has none.
     ///
     /// # Panics
     ///
-    /// If the world has no `T` — a contract violation. Use
-    /// [`World::find_resource`] where absence is expected.
+    /// If the world has no `T` — a contract violation. The message names the
+    /// type and says to insert it during setup. Use [`World::find_resource`]
+    /// where absence is expected.
     #[must_use]
     pub fn resource<T: Resource>(&self) -> &T {
         match self.resources.find::<T>() {
@@ -107,7 +108,7 @@ impl World {
         }
     }
 
-    /// The `T` resource, for modification.
+    /// The `T` resource for modification, panicking if the world has none.
     ///
     /// # Panics
     ///

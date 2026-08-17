@@ -1,9 +1,10 @@
 # E0 findings — what building a game with this engine actually cost
 
-Status: **one run, all fourteen findings fixed, awaiting run 2.** The harness is
-`docs/internal/e0-prompt.md`; the milestone is implementation-plan.md §3. The bar
-is two consecutive runs with no new `engine` or `docs` findings, so run 1 being
-fully answered is the start of the measurement, not the end of it.
+Status: **two runs, twenty-nine findings, all fixed, awaiting run 3.** The
+harness is `docs/internal/e0-prompt.md`; the milestone is implementation-plan.md
+§3. The bar is two consecutive runs with no new `engine` or `docs` findings.
+Run 2 answered run 1 and then found fourteen more of its own, so the count of
+consecutive clean runs is still zero.
 
 E0 is the project's definition of working: a fresh Claude Code session, given
 only `docs/api/jidousha-api.md` and `crates/jidousha/examples/`, builds a
@@ -47,23 +48,49 @@ prompt.
 
 | Run | Date | Outcome | New `engine` | New `docs` | New `author` | Notes |
 |---|---|---|---|---|---|---|
-| 1 | 2026-08-16 | Pong shipped; **not** a pass | 5 | 9 | 1 | Game compiled first try, `--verify` green, human playtest good. The document did not survive it. Raw notes: `E0-NOTES.md`. All 14 fixed; §6. |
+| 1 | 2026-08-16 | Pong shipped; **not** a pass | 5 | 9 | 1 | Game compiled first try, `--verify` green, human playtest good. The document did not survive it. Raw notes: `docs/e0/run-1.md`. All 14 fixed; §6. |
+| 2 | 2026-08-17 | Pong shipped; **not** a pass | 3 | 10 | 1 | Every run-1 finding held up. The reference is now callable; the gap moved to "which of these is a resource". Raw notes: `docs/e0/run-2.md`. §6. |
 
 Run 1 produced a working, fun Pong and a document-shaped hole underneath it. The
-game is not the measurement — `E0-NOTES.md` is — and it says the run could not
-have written a single call from `docs/api/jidousha-api.md` alone.
+game is not the measurement — `docs/e0/run-1.md` is — and it says the run could
+not have written a single call from `docs/api/jidousha-api.md` alone.
 
 **The run was valid.** Its transcript shows no read under `crates/*/src/`,
 `docs/internal/` or `docs/adr/`; the restriction held, including at the points
 where honoring it cost the run a feature (see F-002).
 
+Run 2 wrote a second Pong from nothing against the fixed document and **closed
+every run-1 finding by using it**: argument orders, `Key`'s variant list,
+`GameConfig`'s fields, the stated 1/60 timestep, `Rect::overlaps` and
+`FrameRecorder::font_texture()` were each read from the reference and each used.
+The game compiled on the first attempt with two warnings, both the author's own.
+So F-001's real claim — that the document could not be written from — is
+answered, and the fourteen findings under it stay closed.
+
+**It is not a pass**, because it produced fourteen new findings of its own. They
+are a different kind: not "the document does not say how to call this" but "the
+document does not say that this is a *resource*", plus one generator bug that
+had been silently deleting a whole `impl` block from the reference. See F-016.
+
+**Run 2 was valid with one caveat, which is F-020**: the prompt told it to write
+into run 1's notes file, so it read run 1's findings before writing a line of
+Pong. Three facts — the timestep, `Key::ArrowUp`, `ctx.rect`'s argument order —
+were known to it in advance. Its own notes say so, and say where the document
+told it each of them independently, so the conclusions stand; the measurement is
+weaker than it looks and run 3's will not be.
+
 ## 4. Findings
 
-Fifteen findings from run 1. F-001 is the parent of most of the `docs` set: six
-of them are one bug — the Reference has no signatures — observed from six
-different angles. They are kept separate anyway, because each one names a
-distinct thing a game author went looking for and did not find, and a fix that
-satisfies F-001 but leaves any of them unanswered has not finished.
+Fifteen findings from run 1 (F-001–F-015) and fourteen from run 2
+(F-016–F-029). F-001 is the parent of most of run 1's `docs` set: six of them
+are one bug — the Reference has no signatures — observed from six different
+angles. They are kept separate anyway, because each one names a distinct thing a
+game author went looking for and did not find, and a fix that satisfies F-001
+but leaves any of them unanswered has not finished.
+
+Run 2's set has the same shape around a different parent. F-021 — the document
+never says which types are resources — is most of it, and F-016 is the one that
+would have blocked a new author outright.
 
 ### F-001 — "The API document is a table of contents, not an API"
 
@@ -73,7 +100,7 @@ Class: docs · Run: 1 · Fixed in: `4f9c10f`
 `docs/api/jidousha-api.md` and `crates/jidousha/examples/`, as the prompt
 requires.
 
-**What happened.** From `E0-NOTES.md`:
+**What happened.** From `docs/e0/run-1.md`:
 
 > Its "Reference" section is ~90 bullet points of the form `**Rect** — An
 > axis-aligned rectangle, in whatever space its user is working in`. There are
@@ -474,7 +501,7 @@ and an integrated AMD one, *every* windowed example dies at surface setup with
 **Root cause.** wgpu selects the integrated GPU; the compositor is on the
 discrete one; cross-vendor dmabuf import fails.
 
-**Correction to the report.** Issue #23 and `E0-NOTES.md` both conclude that the
+**Correction to the report.** Issue #23 and `docs/e0/run-1.md` both conclude that the
 platform crate "is passing wgpu's default — `PowerPreference::None`, which
 performs no adapter sorting whatsoever". That is not what the code does.
 `crates/jidousha-render-wgpu/src/init.rs:129` passes
@@ -683,6 +710,424 @@ That is the acceptance milestone working: the run found a bug nothing else
 caught, wrote the assertion that catches it, confirmed the assertion fails on
 the old code, and restored the fix.
 
+### F-016 — `World`'s entire resource API is missing from the reference
+
+Class: engine · Run: 2 · Fixed in: this commit
+
+**What the run did.** Read `World`'s entry to find out how a game reaches the
+score, the round state and the camera.
+
+**What happened.** From `docs/e0/run-2.md`:
+
+> `World`'s impl block lists seventeen methods: `spawn`, `despawn`, `insert`,
+> `remove`, `query`, `component_mut`, `commands`, and so on. Not one of them is
+> about resources. But the Quickstart — in the same document, above the
+> reference — calls `world.insert_resource(Score::default())`,
+> `world.find_resource::<Input>()` and `world.resource_mut::<Rng>()`.
+
+The run recovered the set by grepping `examples/` for `resource`, and guarded
+with `find_resource` everywhere a miss seemed possible because nothing said
+whether `resource::<T>()` panics.
+
+**Root cause.** Not a missing doc comment — all five methods are documented, at
+length, with `# Panics` sections. `tools/gen-api-doc` was dropping the whole
+block. It scanned sources in path order and attached an `impl` block's members
+to a type it had already seen, so `crates/jidousha-core/src/resource.rs`, which
+sorts before `world.rs`, looked `World` up, found nothing, and discarded six
+signatures without a word. `crates/jidousha-input/src/codec.rs` lost
+`InputSnapshot::encode`/`try_decode` the same way.
+
+**The asymmetry was the clue and the run spotted it**: `WorldView` documents its
+`resource`/`find_resource` pair correctly, because `WorldView` is declared and
+implemented in one file.
+
+**Fix.** The generator reads every source **twice** — declarations first, then
+`impl` blocks — so path order cannot decide what reaches the page, and members
+are ordered so the declaring file's block comes first whatever the path order
+was. A unit test scans two fragments in the wrong order and asserts the members
+survive; a content test asserts the six resource methods are in the committed
+document. The census line `tools/gen-api-doc` prints went from 251 signatures to
+259, which is the number that would have made this visible in review.
+
+**An audit went with it**, because a bug that deletes an `impl` block silently
+could have deleted others: exactly two exported types were affected, `World` and
+`InputSnapshot`, and both are now in the document. F-017 is the separate class
+the audit turned up.
+
+**Also answered, in the doc comments rather than by the fix**: `remove_resource`
+exists; `resource::<T>()` and `resource_mut::<T>()` panic with a `message(…)`
+naming the type and telling you to insert it during setup. Both summaries now
+say so on the signature line, as do `component`/`component_mut`, which had the
+same shape.
+
+### F-017 — A type named in a signature and defined nowhere in the document
+
+Class: docs · Run: 2 · Fixed in: this commit
+
+**What the run did.** Read `HeadlessSim::draw()`, documented as returning
+`&Submissions`, and went looking for `Submissions`.
+
+**What happened.**
+
+> `Submissions` appears nowhere else: not in the reference, not in the testing
+> section, not in Concepts. `prototype_kit` calls `.quads()` on it and that is
+> the only evidence it has methods. […] a return type named in a signature and
+> then never defined is the one kind of gap that has no workaround if you happen
+> to need it.
+
+**Root cause.** The facade is a curation, and `Submissions` was curated out
+while the method returning it stayed in. The reference is generated from the
+facade's `pub use` lists, so a type can be *named* by a signature it does not
+export.
+
+**Fix.** `Submissions` is exported (App and lifecycle) with a
+`check-api-coverage` `EXEMPT` entry saying how a game reaches it —
+`sim.draw().quads()`, never by name. `DecodeError` gets the same treatment in
+`jidousha::testing`: it was already named twice, by `InputSnapshot::try_decode`
+and inside `RecordingError::Snapshot`, with no entry of its own.
+
+**The class is wider than the two, and the rest is recorded rather than fixed.**
+Scanning the rendered signatures for type positions with no `####` entry also
+turns up `ByteSource` (what `asset_source` returns, deliberately opaque),
+`AssetHandle` and `AssetKind`, `Phase` and `IntoSystem` (the `add_system`
+bounds), `Query`/`ReadOnlyQuery`/`QueryIter`/`QueryIterMut`, `CommandKind`, and
+four testing-only types. The query traits are answered by prose instead
+(F-023); the bounds and the opaque source are arguably right to stay unnamed.
+**A generator gate for this class is not built**, because each remaining entry
+needs a decision — export it, or exempt it with a reason — and a gate landed
+without those decisions would just be a wall of exemptions. It is the obvious
+next piece of work on the generator and it is written down here so it is not
+rediscovered.
+
+### F-018 — `Vec2` is out of scope of a document that says nothing is out of scope
+
+Class: docs · Run: 2 · Fixed in: this commit
+
+**What happened.** The math module's entry ended:
+
+> Also in `math`, re-exported from `glam` and documented there.
+
+against a document that opens "If something you want is not here, it is not part
+of v1".
+
+> `Vec2` is in almost every line of this game — `length`, `abs`, `splat`, `min`,
+> arithmetic operators, `const fn new` in a `const` item — and it is part of v1,
+> and it is not here. […] This cost me nothing, because I happen to know glam.
+> That is luck, not the document working.
+
+**Root cause.** The generator has nothing to generate from for a foreign type,
+and its own comment argued against a hand-copied list on the grounds that it is
+"the one thing that could go stale here without CI noticing". That reasoning was
+right about the list and wrong about the conclusion.
+
+**Fix.** The entry is an **example** instead of a list:
+`crates/jidousha/examples/vec2_tour.rs` is every `Vec2` operation a game reaches
+for, written as assertions, embedded verbatim in the document the way the
+Quickstart is. Cargo compiles it and `tools/test` runs it, so it cannot drift
+from what the type offers. `TOURS` in `tools/gen-api-doc` is the mapping.
+
+### F-019 — An engine example documents itself by reference to a game file
+
+Class: docs · Run: 2 · Fixed in: this commit
+
+**What happened.** `prototype_kit/verify.rs` carried:
+
+> **A game does not do this.** `FrameRecorder::font_texture()` answers the
+> question directly — see `pong/verify.rs`
+
+> So an engine example documents itself by reference to a file in a *game* that
+> an exercise like this one is expected to produce. It happened to stay true —
+> I did use `font_texture()` — but it was true by luck, and I had deleted the
+> file it names before I read the comment.
+
+**Root cause.** A citation across a boundary that exists precisely so the two
+sides can change independently. `pong/` is the artefact under measurement; every
+E0 run is free to delete and rewrite it.
+
+**Fix.** The six-line shape is written out in the comment, with a `DELIBERATE:`
+tag saying why it is inlined rather than cited.
+
+### F-020 — Two runs wrote into one notes file, and the second read the first
+
+Class: author · Run: 2 · Fixed in: this commit
+
+**What happened.** The run reported it itself, unprompted, under "Contamination,
+stated plainly":
+
+> Run 1's notes are in this file, and this file is the one I was told to write
+> into, so I read them before writing a line of Pong. That means I knew — before
+> opening the API document — that the timestep is 1/60, that `Key::ArrowUp`
+> exists, and that `ctx.rect` takes `(rect, color, depth)`.
+
+**Root cause.** `e0-prompt.md` named a single file at the repository root,
+`E0-NOTES.md`, and run 2 was pointed at the file run 1 had already filled.
+
+**Why the conclusions still stand.** All three facts are now genuinely in the
+document, and the run says where the document told it each one. But "run 2
+guessed at nothing" is weaker evidence when the run was handed three of the
+answers, and the difference is not recoverable after the fact.
+
+**Fix.** `E0-NOTES.md` is split into `docs/e0/run-1.md` and `docs/e0/run-2.md`.
+The prompt now says to write `docs/e0/run-N.md`, to create it, and not to read
+the other runs' files; `e0-prompt.md` step 3 and `implementation-plan.md` say
+one file per run and why. Classified `author` because nothing about the engine
+or its document caused it — the harness did.
+
+### F-021 — The document never says which types are resources
+
+Class: docs · Run: 2 · Fixed in: this commit
+
+**What the run did.** Wanted to set the camera, and had `Camera` documented as a
+struct with four fields and six methods.
+
+**What happened.**
+
+> Nothing anywhere says how a game *sets* one. The answer is
+> `world.insert_resource(Camera { .. })` in a `Startup` system, which I got from
+> `window_clear.rs`. Nothing says whether a default camera exists if you never
+> insert one, either — the `Default` line implies one could, but "the engine
+> installs it for you" and "you must install it" are very different, and only
+> one of them is true.
+
+`Time` had the same problem. `Rng` said "held as a world resource" in its
+summary and so was the only one of the three that did not.
+
+**Root cause.** "Is a resource" is a fact about a type that lives in
+`impl Resource for Camera {}` — a line the generator does not read and would not
+know what to do with — and no doc comment carried it. The three types
+disagreeing was chance: whoever wrote `Rng`'s summary happened to mention it.
+
+**Fix.** Two halves. Every engine-provided resource's summary line now says it
+is one and who installs it — `Time`, `Rng`, `Input`, `Camera`, `Assets` — so the
+fact reaches the reference entry. And Concepts gains a **resources** section
+with a table of the five: who inserts each, and whether it can be absent. The
+two that can be absent, `Input` and `Assets`, are the two `find_resource` exists
+for, which is the question the run guarded against without being able to check.
+
+### F-022 — The documented `main` throws away the good error message
+
+Class: docs · Run: 2 · Fixed in: this commit
+
+**What happened.** With no display, the game printed:
+
+```
+Error: NoDisplay { detail: "os error at /root/.cargo/registry/src/index.crates.io-…/winit-0.30.13/src/platform_impl/linux/mod.rs:765: neither WAYLAND_DISPLAY nor WAYLAND_SOCKET nor DISPLAY is set." }
+```
+
+> The *content* is excellent, and worth saying plainly against run 1's
+> postscript, which found the equivalent message pointing squarely the wrong
+> way: this one is accurate, it names the real cause, and it is the right
+> variant. […] But that is the `Debug` form.
+
+**Root cause.** `fn main() -> Result<(), RunError>` is what the Quickstart shows
+and every example copies, and Rust prints `Debug` for a `Result`-returning
+`main`. `RunError` implements `Display` and its `Display` is the engine's
+`message(what, specifics, likely_cause, fix)` house style — the whole of which
+the documented shape discards, in favour of a struct dump carrying a vendored
+dependency path and a line number from inside it.
+
+**Fix.** The Quickstart returns `ExitCode` and matches, printing `Display` on
+the error path, with a comment saying why; `input_echo`, `sprites` and
+`prototype_kit` follow. `RunError` moves to `EXEMPT` in `check-api-coverage`,
+since a game now matches it out of `run` without writing the type. The
+`NoDisplay` fix text also loses its `(core.md §8)` citation, which the Quickstart
+change would otherwise have started printing at a reader forbidden to open it —
+the F-005 mistake, one layer down.
+
+**`pong/` is deliberately left on the old shape.** It is the artefact under
+measurement and changing it invalidates the comparison with run 1.
+
+### F-023 — Query shapes are shown, never stated
+
+Class: docs · Run: 2 · Fixed in: this commit
+
+**What happened.**
+
+> `World::query<'w, Q: ReadOnlyQuery<'w>>` tells me there is a trait called
+> `ReadOnlyQuery`. It does not tell me what may implement it. […] I do not know
+> the maximum arity, or whether a 1-tuple works.
+
+> I structured the whole game around 2-component queries […] so that I would
+> never find out. It happens to be the better design, and I would defend it on
+> the merits now. But I did not choose it on the merits; I chose it because I
+> could not tell what would compile.
+
+**Root cause.** `Query`'s doc comment *did* state the answer — "Implemented for
+`&T`, `&mut T`, `With`, `Without`, and tuples of up to six of those" — in its
+**second** sentence, and the reference carries first sentences only. `With`'s
+doc comment carried a worked example showing tuple placement, and the reference
+carries declarations, not examples. Both facts existed and neither reached the
+page.
+
+**Fix, and it is mostly in Concepts rather than in the reference**, because
+`Query` and `ReadOnlyQuery` are named by `World::query`'s bound and are *not*
+facade exports — so no amount of doc-comment rewriting puts them on the page
+(they are on F-017's list for that reason). Concepts now states the parts, the
+arity, that the one-tuple works, and that the iterator prepends `Entity`, and
+shows all four shapes as loops, which is the form the answer is needed in. What
+does reach the reference is `With` and `Without` saying they yield `()` in their
+tuple position; their doc comments and the two traits' are corrected for a
+rustdoc reader either way, and `Without` gains the worked example `With` already
+had.
+
+### F-024 — `Rect::overlaps` does not say whether a shared edge counts
+
+Class: docs · Run: 2 · Fixed in: this commit
+
+**What the run did.** Parked the ball flush against a paddle face after a
+bounce, and could not tell whether the next tick would re-trigger the bounce.
+
+> I made the question moot by *also* requiring the ball to be travelling toward
+> the paddle — but I wrote that guard because I did not know the answer, not
+> because I had reasoned it was needed. The `contains` entry says it counts the
+> top-left edges and not the others; `overlaps` says nothing.
+
+**Root cause.** `contains` documents its half-open convention and `overlaps`,
+written beside it, did not — even though the implementation is strict on all
+four sides and a test named `edge to edge is not overlap` already pinned it.
+
+**Fix.** The summary says "touching edges do not count", and the body says what
+that buys: the same test cannot fire twice on a body parked against the face it
+just hit, which is exactly the case the run was guarding.
+
+### F-025 — `TextStyle::width_of` on multi-line text is unstated, and silent when it overruns
+
+Class: docs · Run: 2 · Fixed in: this commit
+
+**What happened.** Two halves of one entry. The run avoided multi-line text
+because nothing said what `width_of` returns for it:
+
+> `prototype_kit` passes multi-line strings to `ctx.text`, so the first half
+> evidently works; the second half decides whether centring a two-line banner is
+> possible. I avoided it entirely and drew two separately-centred `ctx.text`
+> calls instead.
+
+And then shipped a single-line banner 43.5 world units wide onto a 35.6-unit
+screen, clipped at both ends, with eight assertions passing.
+
+**Root cause.** "Multi-line text reports its widest line" was the *fourth*
+paragraph of the doc comment and the reference carries first sentences. The
+silence is worse: `width_of` is exact, centring by it is the documented idiom,
+and nothing anywhere warns that the result can be wider than the camera.
+
+**Fix.** The summary states the widest-line rule; the body says `\n` starts a
+line, that centring by it is silent, and points at `Camera::visible_bounds`.
+F-029 is the assertion.
+
+### F-026 — Nobody says who owns the camera's viewport in a headless run
+
+Class: docs · Run: 2 · Fixed in: this commit
+
+**What happened.**
+
+> `FrameRecorder::new(viewport)` takes a `PhysicalSize`. The `Camera` resource
+> *also* has a `viewport` field, defaulting to 1280×720. Does the recorder
+> override the camera's, or are the two independent […]?
+
+The run made the question moot by passing 1280×720 to both, and said why it
+mattered: its most valuable assertion reads the rectangle from the `Camera`
+resource and the quads from the recorder, so a disagreement would leave it
+"quietly comparing against the wrong rectangle" and passing.
+
+**Root cause.** The recorder does override — `FrameRecorder::draw` builds
+`Camera { viewport: self.viewport, ..the game's camera }` — and nothing writes
+that viewport back into the world, so the two really can disagree. Neither the
+method's doc comment nor `testing.md` said so. This is F-012's shape one layer
+out: the windowed driver stamps the viewport every frame precisely because a
+stale one is silent, and the headless path has the same trap with no stamp.
+
+**Fix.** `FrameRecorder::new`'s summary says it overrides, and its body spells
+out the failing assertion and the two ways to avoid it. `testing.md` says the
+same where a test will read it.
+
+### F-027 — Nothing says how a game exits
+
+Class: docs · Run: 2 · Fixed in: this commit
+
+**What happened.**
+
+> There is no `App::quit`, nothing on `World` or `Commands`, and `run` is
+> documented as "Run a game in a window, **forever**". I read the whole
+> reference looking for it rather than guessing […] but the document does not
+> say that either, and `Key::Escape` being listed invites you to look.
+
+**Root cause.** A genuine v1 boundary that had never been written down anywhere
+— not in `public-api.md`'s inventory, not in an ADR, not in the document. The
+run was right, and spent a full read of the reference confirming it.
+
+**Fix.** Concepts says it plainly, including why `Key::Escape` is listed, and
+`public-api.md` §3 records it as a stated v1 exclusion so the next reader of the
+inventory finds a decision rather than an absence.
+
+### F-028 — There is no way to build one tick of input
+
+Class: engine · Run: 2 · Fixed in: this commit
+
+**What the run did.** Wrote a closed-loop player — one that watches the ball and
+decides what to press — because the scripted session proves the controls and the
+drawing and says nothing about whether the game is *playable*.
+
+**What happened.** With `InputSnapshot::new()` meaning "the player did nothing"
+and every other method a reader, the only route to a populated snapshot was a
+script built in advance, so the check built a throwaway one-tick script every
+tick:
+
+```rust
+InputScript::new().hold(Key::S, tick..tick + 1).snapshot_at(tick)
+```
+
+> It works, it is deterministic, and it is faintly absurd. An
+> `InputSnapshot::with_keys(&[Key])` is the missing word.
+
+**Root cause.** The gap is real. It is also worse than the run knew: that idiom
+puts a **press edge on every tick**, because every tick is the start of its own
+range. A game keyed on `just_pressed` would see the key tapped sixty times a
+second; run 2's Pong happened not to read `just_pressed` on the key it drove.
+
+**Fix, and it is not the one suggested.** `SnapshotBuilder` and `InputEvent`
+already exist, are already the engine's single home for the edge rules, and are
+what the windowed driver itself uses — they were simply not exported to
+`jidousha::testing`. They are now. `with_keys` would have been a second way to
+make a snapshot and would have had to answer the edge question a second time;
+ADR-0019 records the decision and `snapshot.rs` carries the `DELIBERATE:` tag
+beside the one already refusing `without_edges` for the same reason.
+`examples/scripted_player.rs` now runs both shapes side by side, and asserts
+that a controller which never presses a key produces no edge for it — the check
+the one-tick-script idiom fails.
+
+### F-029 — "Testing your game" omits the two assertions that pay for themselves
+
+Class: docs · Run: 2 · Fixed in: this commit
+
+**What the run did.** Spent its most expensive hours on a game that was not fun,
+and found its worst bug by reading a frame transcript rather than by any
+assertion.
+
+**What happened.** Two lessons, both stated by the run as generalising past its
+game:
+
+> An assertion that says only "this is wrong" is nearly useless to an author who
+> cannot look at the thing. It has to report the numbers it judged. That took me
+> one wasted cycle to learn.
+
+Its first failure message printed only the score; rewritten to include the
+longest rally and the top ball speed — 14 touches, 25.6 units/s — the diagnosis
+was immediate.
+
+> **"Nothing is drawn outside `Camera::visible_bounds()`" is the single highest
+> value assertion a shapes-and-text game can write**, and it is mentioned
+> nowhere. It is six lines.
+
+**Root cause.** `testing.md` covered the vocabulary — the recorder, `covering`,
+the transcript — and nothing about what to assert with it. The transcript is
+described as "good enough to check a layout by eye", which is true and is a
+manual step; the assertion is the automatic one and was not there.
+
+**Fix.** Both are in `testing.md`, the off-screen check written out in full with
+the message that names the offending quad, the camera's extent, and centred text
+as the usual culprit. Run 2 negative-tested that assertion by lengthening the
+banner again, which is the evidence it is worth six lines.
+
 ## 5. Notes on the run's procedure
 
 Two things about run 1 that are not findings but would confuse a later reader.
@@ -706,45 +1151,60 @@ The human playtest, when it happened, changed no constant: controls good,
 opponent hard but fair at roughly a one-in-four win rate, first-to-five the right
 match length.
 
-## 6. Where run 2 stands
+## 6. Where the runs stand
 
-Every `engine` and `docs` finding from run 1 is fixed. What run 2 measures is
-whether the fixes were the right ones — and the honest summary of what changed
-under it is short:
+### What run 2 answered about run 1's fixes
 
-- **The reference now carries signatures**, which is most of the list. ~4,100
-  tokens became ~13,800 of a 25,000 budget, and the six `docs` findings that
-  were one bug seen from six angles are answered together. Whether that is
-  *enough* is exactly what a fresh run is for: F-001's real claim was that the
-  document could not be written from, and only a run that writes from it can
-  say.
-- **Two things are guarded rather than merely fixed.** `completeness_failures`
-  fails the generator when an exported item yields no declaration, and the
-  forbidden-vocabulary gate now covers internal document paths. Both exist
-  because the original failures were silent, and a silent failure fixed without
-  a gate is a silent failure scheduled to return.
-- **One fix cannot be verified here.** F-011 needs the reporter's hardware; this
-  container has no display and no adapter. Run 2 will not exercise it either.
+- **The reference is callable.** F-001's open question was whether signatures
+  were enough, and run 2 says yes for anything that is a function call: "I
+  checked argument orders against it, not against examples, for the entire
+  drawing vocabulary." The game compiled first time. The document went from
+  ~4,100 tokens to ~13,800 doing it, and the run reported no trouble navigating
+  the result, so the size worry in the old version of this section did not
+  materialise.
+- **Every specific fix got used.** `Key`'s variant list, `GameConfig`'s fields
+  and default, the 1/60 timestep stated in ticks-per-second terms,
+  `Rect::overlaps`, `TextStyle`'s own `depth` (ADR-0018) and
+  `FrameRecorder::font_texture()` are each named in run 2's notes as having
+  closed a specific run-1 finding. **These are the things not to regress.**
+- **`FrameRecorder` was reached for**, which was the open question about F-010.
+  The run used it throughout and called it "the right shape"; `covering(point)`
+  is what made every drawing assertion a two-liner. The long form in
+  `prototype_kit` was not copied — but the comment steering away from it pointed
+  at a game file, which is F-019.
+- **F-011 is still unverified.** No display and no adapter in run 2's container
+  either. It needs the reporter's hardware.
+- **The open third of `public-api.md` §4 — signatures without per-item
+  examples — is answered for now.** Run 2 read declarations and called them
+  correctly, and did not go to `examples/` to see calls being made. Where it did
+  reach for an example it was for a *shape* rather than a signature: how a game
+  sets a camera (F-021), which is a Concepts question, not a per-item one.
 
-What run 2 should be watched for, beyond new findings:
+### What run 3 should be watched for
 
-- Whether the enriched reference is *navigable*, not just complete. It is now
-  four times its old size, and a document an agent cannot skim is a different
-  failure from one that omits things. If a run reports hunting through it, that
-  is a finding about the format rather than the content.
-- Whether `FrameRecorder` is actually reached for. It is in `testing.md` and in
-  `pong/verify.rs`, but `prototype_kit` still shows the long form for a reason
-  it now states. If a run copies the long form anyway, the reason is not
-  visible enough.
-- Whether anything in this file's fixes reads as an invitation to guess. The
-  `Key` list, the tick rate, and `GameConfig`'s fields were all things the run
-  correctly refused to guess at; the fix is only real if the next run does not
-  have to.
-- **Whether signatures without examples are enough** — the open third of §4, and
-  the one question run 2 is best placed to answer. A run that reads
-  `pub fn overlaps(self, other: Rect) -> bool` and calls it correctly says the
-  deferral was right. A run that has the signature and still goes to `examples/`
-  to see the call being made says it was not, and F-001 is not finished.
+- **Whether "which of these is a resource" is actually closed.** F-021's fix is
+  a Concepts table plus five summary lines. If run 3 still has to find
+  `insert_resource(Camera { .. })` by reading `window_clear.rs`, the fix was in
+  the wrong place.
+- **Whether F-016's class is really gone.** The generator now reads sources
+  twice, so path order cannot decide what reaches the page. What it does *not*
+  yet have is a gate for F-017's class — a type named in a signature with no
+  entry of its own. If run 3 reports another one, that gate is overdue.
+- **Whether the closed-loop route gets found.** ADR-0019 puts `SnapshotBuilder`
+  in `jidousha::testing` and `testing.md` says when to reach for it instead of
+  `InputScript`. A run that writes a controller and does *not* find it — or
+  that builds one-tick scripts again — means the two are not distinguished
+  clearly enough.
+- **Whether the off-screen assertion gets written.** F-029 put it in
+  `testing.md` in full. It cost run 2 a bug that eight passing assertions
+  missed, so a run 3 that ships clipped text anyway is evidence that a section
+  of prose is not where that belongs.
+- **The measurement itself.** Run 3 writes `docs/e0/run-3.md`, creates it, and
+  reads no other run's notes (F-020). This is the first run whose "I guessed at
+  nothing" can be taken at face value.
+- **Whether anything in these fixes reads as an invitation to guess.** Same
+  standard as before: a fix is only real if the next run does not have to infer
+  the thing it fixed.
 
 ## 7. What this file feeds
 
@@ -757,4 +1217,13 @@ fix gets undone later.
 On the evidence of run 1, most of this file must **not** reach the skill: F-001
 through F-009 are all "the document did not say", and a skill that teaches an
 agent to work around a thin reference is a skill that removes the pressure to
-thicken it.
+thicken it. Run 2 says the same about F-016 and F-021 — a skill listing the
+engine's resources would be a skill papering over a document that does not.
+
+**Two of run 2's findings are skill material, and they are the two that are not
+about this engine at all.** F-029's pair — that a failing assertion has to
+report the numbers it judged, and that "nothing is drawn outside the camera" is
+the first assertion a shapes-and-text game should write — generalise to any
+game an agent writes without being able to look at it. They are in `testing.md`
+because run 3 needs them; they belong in the skill because every run after that
+does too.

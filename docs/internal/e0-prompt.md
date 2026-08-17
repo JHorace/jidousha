@@ -28,9 +28,15 @@ and the E0 session must never read it. Paste the block, do not point at the file
    `tools/serve-web pong` in a browser. "Playable" is not something a script can
    assert, which is why the milestone asks a person: a Pong whose ball passes
    through the paddle satisfies every assertion an agent would think to write.
-3. Take the run's `E0-NOTES.md` and root-cause each entry into
+3. Take the run's `docs/e0/run-N.md` and root-cause each entry into
    `docs/internal/e0-findings.md`. **Every friction is an engine or docs bug
    until proven otherwise** — that is the rule the milestone turns on.
+   **One file per run, and the author writes only their own.** Run 2 was told to
+   write into run 1's file, so it read run 1's findings first and knew the
+   timestep and three key names before it opened the API document. Its
+   conclusions survived, because all three facts had genuinely landed in the
+   document — but "the run guessed at nothing" is weaker evidence when the run
+   was handed the answers (e0-findings.md F-020).
 4. Fix what the findings say to fix. Then run E0 again, fresh.
 5. E0 passes when two consecutive runs produce no new findings of the
    engine-bug or docs-gap kind.
@@ -89,8 +95,10 @@ and the E0 session must never read it. Paste the block, do not point at the file
 > --verify` is your check. Leave the repository's own tooling alone — it is not
 > yours to edit, and editing it is not part of writing a game.
 >
-> **Write down every friction, as it happens, in `E0-NOTES.md` at the repository
-> root.** This file is as much the deliverable as the game is. Record:
+> **Write down every friction, as it happens, in `docs/e0/run-N.md`, where N is
+> the run number you were given.** Create the file; do not read the other runs'
+> files, and do not read anything else under `docs/` except `docs/api/`. This
+> file is as much the deliverable as the game is. Record:
 > - anything the API document did not tell you, that you had to guess at;
 > - anything you expected to exist and could not find;
 > - anything that behaved differently from what the document implied;

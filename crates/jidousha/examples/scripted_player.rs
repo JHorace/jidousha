@@ -6,11 +6,22 @@
 //! machine — which is what makes "did my change break the jump?" a question a
 //! test can answer.
 //!
+//! Both ways of driving one are here, because they answer different questions:
+//!
+//! - **`InputScript`** is the session written down in advance. It is a pure
+//!   function of the tick, so a test can seek, replay and bisect it. Reach for
+//!   it whenever the input does not depend on what the game does back.
+//! - **`SnapshotBuilder`** is a controller deciding as it goes: look at the
+//!   world, then record a press or a release. Reach for it when the input has to
+//!   *respond* — a blind script never returns a ball, so it can prove the
+//!   controls work and still say nothing about whether the game is playable
+//!   (ADR-0019).
+//!
 //! Run it: `cargo run -p jidousha --example scripted_player`
 
 use jidousha::prelude::*;
-// Scripting input is a testing facility, not something a shipped game does.
-use jidousha::testing::{InputScript, InputSnapshot};
+// Driving input is a testing facility, not something a shipped game does.
+use jidousha::testing::{InputEvent, InputScript, InputSnapshot, SnapshotBuilder};
 
 /// Where the player is, in world units.
 #[derive(Clone, Copy, Debug)]
@@ -190,4 +201,107 @@ fn main() {
     let original = [position.x.to_bits(), position.y.to_bits()];
     assert_eq!(replayed, original, "same script, same run, bit for bit");
     println!("replayed the script: identical to the bit");
+
+    chase_a_target();
+}
+
+/// The other half: input decided from what the game is doing, tick by tick.
+///
+/// The player runs towards a target that is not where the script-writer could
+/// have known it would be, and stops when it arrives. No script can express
+/// that, because the answer on tick 40 depends on the world at tick 39.
+///
+/// `SnapshotBuilder` is the driver's own accumulator, so this exercises the real
+/// edge rules: a key held across many ticks presses once, and letting go
+/// releases once (ADR-0019). Building a one-tick `InputScript` per tick would
+/// press on every one of them.
+fn chase_a_target() {
+    /// Where the player is told to stop, in world units.
+    const TARGET: f32 = 5.0;
+    /// How close counts as arrived.
+    const REACH: f32 = 0.1;
+
+    let mut sim = headless(
+        GameConfig {
+            title: "closed-loop player",
+            ..GameConfig::default()
+        },
+        |app| {
+            app.add_system(Startup, spawn_the_player);
+            app.add_system(Update, control_the_player);
+            app.add_system(Update, move_the_player);
+        },
+    );
+    sim.world_mut()
+        .insert_resource(Input::new(InputSnapshot::new()));
+
+    // A controller sends events, so it has to remember what it is already
+    // holding. That is what a keyboard is, and it is why the edges come out
+    // right.
+    let mut keyboard = SnapshotBuilder::new();
+    let mut holding_right = false;
+    let mut arrived_at = None;
+
+    for tick in 1..=TICKS {
+        let here = sim
+            .world()
+            .query::<&Position>()
+            .map(|(_, position)| position.0.x)
+            .next()
+            .unwrap_or(0.0);
+
+        // The decision. This is the line a script cannot hold, because `here`
+        // is not known until the tick before.
+        let want_right = here < TARGET - REACH;
+        if want_right != holding_right {
+            keyboard.record(if want_right {
+                InputEvent::KeyPressed(Key::D)
+            } else {
+                InputEvent::KeyReleased(Key::D)
+            });
+            holding_right = want_right;
+        }
+        if !want_right && arrived_at.is_none() {
+            arrived_at = Some(tick);
+        }
+
+        sim.world_mut()
+            .insert_resource(Input::new(keyboard.first_tick_snapshot()));
+        sim.tick();
+    }
+
+    let finished = sim
+        .world()
+        .query::<&Position>()
+        .map(|(_, position)| position.0.x)
+        .next()
+        .unwrap_or(0.0);
+    let tally = sim
+        .world()
+        .query::<&Tally>()
+        .map(|(_, tally)| *tally)
+        .next()
+        .unwrap_or(Tally { jumps: 0, shots: 0 });
+
+    // Report the numbers the assertion judged, not just its verdict: nobody
+    // writing a game this way can look at it, so the message is the instrument.
+    println!(
+        "closed loop: stopped at x={finished:.2} (target {TARGET}), arrived on tick {:?}, \
+         {} jumps",
+        arrived_at, tally.jumps
+    );
+    assert!(
+        (finished - TARGET).abs() < 0.5,
+        "expected to stop near {TARGET}, stopped at {finished:.3} after {TICKS} ticks"
+    );
+    assert!(
+        arrived_at.is_some_and(|tick| tick < TICKS),
+        "expected to arrive before the run ended; arrived_at={arrived_at:?}"
+    );
+    // Space was never recorded, so no edge can have been invented for it — the
+    // check that a one-tick script per tick would have failed.
+    assert_eq!(
+        tally.jumps, 0,
+        "a controller that never presses Space must produce no press edge for it"
+    );
 }

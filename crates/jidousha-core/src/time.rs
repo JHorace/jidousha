@@ -12,7 +12,11 @@
 use crate::resource::Resource;
 use crate::units::Seconds;
 
-/// How far the simulation has got, in ticks.
+/// How far the simulation has got, in ticks — held as a world resource.
+///
+/// The engine installs it before the first tick and keeps it current, so
+/// `world.resource::<Time>()` always answers. A game never inserts one;
+/// [`Time::new`] is how the engine builds it from `GameConfig::fixed_dt`.
 ///
 /// `tick` is the canonical timeline: it counts Update phases, not frames, and
 /// it advances by exactly one per Update however fast or slow the machine is.

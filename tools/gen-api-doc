@@ -29,6 +29,14 @@ closing brace at exactly the indentation of the line that opened it, and that
 rule survives braces inside string literals (`write!(f, "TextureId({bits})")`),
 which a depth counter does not.
 
+The sources are read **twice**: every declaration first, then every `impl`
+block. A type's `impl` blocks need not live in the file that declares it, and
+sources are scanned in path order, so a single pass silently dropped any block
+that came first — `impl World` in `resource.rs` before `pub struct World` in
+`world.rs`. That cost the reference `World`'s entire resource API, five methods
+the same document's Quickstart calls, and nothing said a word (e0-findings.md
+F-016). See `scan_sources`.
+
 Usage:  tools/gen-api-doc [--check]
 
 `--check` regenerates into memory and fails if the committed file differs, which
@@ -203,6 +211,21 @@ MACRO_ENUMS = {
     "keys": ("Key", re.compile(r"^\s*(\w+)\s*=\s*\d+\s*,?")),
 }
 
+# What one scanning pass records. `DECLARATIONS` is what a name *is* — the
+# struct, its fields, the enum and its variants, the trait and its methods.
+# `ATTACHMENTS` is everything that hangs off a name declared somewhere else:
+# `impl` members, the traits a type implements, its `Default` value, and the
+# variants a registered macro writes. Two passes rather than one because
+# nothing orders a crate's files so that a type is declared before every block
+# that extends it, and file order is not something a doc generator may depend
+# on being lucky about.
+DECLARATIONS = "declarations"
+ATTACHMENTS = "attachments"
+
+# A facade module whose foreign re-exports the generator cannot document, and
+# the example that documents them instead. See `render_module`.
+TOURS = {"math": "crates/jidousha/examples/vec2_tour.rs"}
+
 # How much of a member's summary rides along on its signature line. The whole
 # sentence stays on the item itself; this is the reminder, not the definition.
 MEMBER_SUMMARY_CHARS = 68
@@ -224,6 +247,12 @@ class Item:
     fields: "list[tuple[str, str]]" = dataclasses.field(default_factory=list)
     variants: "list[tuple[str, str]]" = dataclasses.field(default_factory=list)
     members: "list[tuple[str, str]]" = dataclasses.field(default_factory=list)
+    # Which file each member's `impl` block was in, parallel to `members`. Kept
+    # so the type's own block can be listed before blocks that extend it from
+    # elsewhere: without it, `World` leads with `insert_resource` because
+    # `resource.rs` sorts before `world.rs`, which is a fact about the file
+    # system rather than about the type.
+    member_sources: "list[str]" = dataclasses.field(default_factory=list)
     default_value: str = ""
     # Did the source open a `{ ... }` body at all, and did it contain nothing?
     # A unit struct, a marker trait and a misparsed block all look identical
@@ -455,23 +484,62 @@ def scan_sources(sources: "list[Path]") -> "dict[str, Item]":
 
     First definition wins, as before — the facade re-exports one of each and
     there are no duplicate public type names across the crates.
+
+    Every file is read for declarations before any file is read for `impl`
+    blocks. Attaching a member needs its type to exist already, and a type's
+    blocks are not obliged to live in the file that declares it: `World`'s
+    resource API is in `resource.rs`, `InputSnapshot::encode` is in `codec.rs`,
+    and both sort ahead of the file that declares the type. One ordered pass
+    looked those types up, found nothing, and threw the members away without a
+    word — `World` reached the reference with seventeen methods and none of the
+    five a game calls to reach a resource (e0-findings.md F-016). Two passes
+    make path order stop mattering, which is the only fix that also covers the
+    next file somebody adds.
     """
-    items: "dict[str, Item]" = {}
+    files: "list[tuple[list[str], str]]" = []
     for source in sources:
         try:
-            lines = source.read_text(encoding="utf-8").splitlines()
+            files.append((source.read_text(encoding="utf-8").splitlines(), str(source)))
         except OSError:
             continue
-        scan_file(lines, str(source), items)
+    items: "dict[str, Item]" = {}
+    for phase in (DECLARATIONS, ATTACHMENTS):
+        for lines, source in files:
+            scan_file(lines, source, items, phase)
+    for item in items.values():
+        order_members(item)
     return items
 
 
-def scan_file(lines: "list[str]", source: str, items: "dict[str, Item]") -> None:
-    """Read one file into `items`.
+def order_members(item: Item) -> None:
+    """List the type's own `impl` block before blocks that extend it elsewhere.
+
+    A stable partition, so within each file the source order is untouched. The
+    two passes above made the *presence* of a member independent of path order;
+    this makes its position independent too, which is what stops a file rename
+    from reshuffling the reference.
+    """
+    if len(set(item.member_sources)) < 2:
+        return
+    order = sorted(
+        range(len(item.members)),
+        key=lambda position: item.member_sources[position] != item.source,
+    )
+    item.members = [item.members[position] for position in order]
+    item.member_sources = [item.member_sources[position] for position in order]
+
+
+def scan_file(lines: "list[str]", source: str, items: "dict[str, Item]", phase: str) -> None:
+    """Read one file into `items`, recording what `phase` asks for.
 
     A small state machine over a stack of open blocks. Each frame is
     `(what, indent, target)`, and a frame is popped when a `}` shows up at its
     own indentation — see `closes_block` for why that beats counting braces.
+
+    Both phases walk the whole file and open the same frames; they differ only
+    in what they write down. Frames have to be opened either way, because it is
+    the frame stack that tells a `pub fn` inside an `impl` block apart from a
+    free function at the top of the file.
     """
     # (what, indent, target): "impl" | "trait" | "body" | "default" | "skip"
     stack: "list[tuple[str, int, str]]" = []
@@ -506,7 +574,7 @@ def scan_file(lines: "list[str]", source: str, items: "dict[str, Item]") -> None
         top = stack[-1] if stack else ("", -4, "")
 
         if stripped.startswith("impl") and re.match(r"^\s*impl[\s<]", line):
-            index = enter_impl(lines, index, line, stack, items)
+            index = enter_impl(lines, index, line, stack, items, phase)
             continue
 
         match = DEFINITION_RE.match(line)
@@ -515,18 +583,23 @@ def scan_file(lines: "list[str]", source: str, items: "dict[str, Item]") -> None
         # lose the one enum the document most needs (F-002).
         if match and not stack:
             index = enter_definition(
-                lines, index, match, summary, held_derives, source, stack, items
+                lines, index, match, summary, held_derives, source, stack, items, phase
             )
             continue
 
-        if top[0] == "default" and re.match(r"^\s*fn default\(", line):
+        # A trait's own methods are part of its declaration; an `impl` block's
+        # are attached to a type declared elsewhere. Same frame handling, two
+        # different phases.
+        member_phase = DECLARATIONS if top[0] == "trait" else ATTACHMENTS
+
+        if phase == ATTACHMENTS and top[0] == "default" and re.match(r"^\s*fn default\(", line):
             item = items.get(top[2])
             if item is not None:
                 item.default_value = flatten_default(lines, index)
             index += 1
             continue
 
-        if top[0] in ("impl", "trait") and indent_of(line) == top[1] + 4:
+        if phase == member_phase and top[0] in ("impl", "trait") and indent_of(line) == top[1] + 4:
             item = items.get(top[2])
             member = MEMBER_RE.match(line) or (
                 TRAIT_MEMBER_RE.match(line) if top[0] == "trait" else None
@@ -534,10 +607,11 @@ def scan_file(lines: "list[str]", source: str, items: "dict[str, Item]") -> None
             if item is not None and member:
                 signature, index = read_signature(lines, index)
                 item.members.append((clean_member(signature), summary))
+                item.member_sources.append(source)
                 index += 1
                 continue
 
-        if top[0] == "body" and indent_of(line) == top[1] + 4:
+        if phase == DECLARATIONS and top[0] == "body" and indent_of(line) == top[1] + 4:
             item = items.get(top[2])
             if item is not None:
                 item.body_lines += 1
@@ -552,7 +626,9 @@ def scan_file(lines: "list[str]", source: str, items: "dict[str, Item]") -> None
                     text, index = read_variant(lines, index)
                     item.variants.append((text, summary))
 
-        if not stack and (macro := MACRO_CALL_RE.match(line)):
+        # In the attachment phase, so the invocation may sit in any file — the
+        # enum it fills in has certainly been declared by now.
+        if phase == ATTACHMENTS and not stack and (macro := MACRO_CALL_RE.match(line)):
             index = enter_macro_enum(lines, index, macro.group(1), items)
             continue
 
@@ -565,8 +641,14 @@ def enter_impl(
     line: str,
     stack: "list[tuple[str, int, str]]",
     items: "dict[str, Item]",
+    phase: str,
 ) -> int:
-    """Push a frame for an `impl` block and record what it says about its type."""
+    """Push a frame for an `impl` block and record what it says about its type.
+
+    The frame is pushed in both phases and the recording happens in one: a
+    declaration pass that did not open this frame would read the block's `pub
+    fn`s as free functions.
+    """
     indent = indent_of(line)
     _, rest = strip_generics(line.strip()[4:].lstrip())
     trait, target = split_trait_impl(rest)
@@ -574,7 +656,7 @@ def enter_impl(
     item = items.get(name)
     if trait:
         trait_name = bare_name(trait)
-        if item is not None and trait_name not in item.traits:
+        if phase == ATTACHMENTS and item is not None and trait_name not in item.traits:
             item.traits.append(trait_name)
         # A trait's methods belong to the trait's own declaration. Attributing
         # them to the type too would put `rect` on `DrawCtx`'s inherent list and
@@ -596,25 +678,39 @@ def enter_definition(
     source: str,
     stack: "list[tuple[str, int, str]]",
     items: "dict[str, Item]",
+    phase: str,
 ) -> int:
-    """Create the `Item` for a top-level `pub` definition."""
+    """Create the `Item` for a top-level `pub` definition.
+
+    The frame is pushed on every pass and the item is filled in on the first
+    one that sees it — a later pass walks the same block and writes nothing,
+    which is what keeps fields and variants from being recorded twice.
+    """
     indent, kind, name = len(match.group(1)), match.group(2), match.group(3)
     line = lines[index]
     item = items.setdefault(name, Item(name=name))
-    if item.kind:  # First definition wins, as the summaries always have.
-        return index + 1
-    item.kind, item.summary, item.derives, item.source = kind, summary, derives, source
+    # First definition wins, as the summaries always have.
+    first = not item.kind
+    if first:
+        item.kind, item.summary, item.derives, item.source = kind, summary, derives, source
     if kind in ("fn", "const", "type"):
-        item.decl, index = read_signature(lines, index)
+        decl, index = read_signature(lines, index)
+        if first:
+            item.decl = decl
         return index + 1
-    item.decl, _ = read_signature(lines, index)
+    decl, _ = read_signature(lines, index)
+    if first:
+        item.decl = decl
     if line.rstrip().endswith("{"):
         stack.append(("trait" if kind == "trait" else "body", indent, name))
-        item.has_body = True
-        item.empty_body = closes_block(lines[index + 1], indent) if index + 1 < len(lines) else False
-        if kind == "enum":
-            item.variants_from = "unresolved" if templated(lines, index, indent) else "literal"
-    elif line.rstrip().endswith("{}"):
+        if first:
+            item.has_body = True
+            item.empty_body = (
+                closes_block(lines[index + 1], indent) if index + 1 < len(lines) else False
+            )
+            if kind == "enum":
+                item.variants_from = "unresolved" if templated(lines, index, indent) else "literal"
+    elif first and line.rstrip().endswith("{}"):
         item.empty_body = True
     return index + 1
 
@@ -759,16 +855,22 @@ def declaration(item: Item) -> "list[str]":
     return out
 
 
-def render_module(item: Item, facade: str, items: "dict[str, Item]") -> "list[str]":
+def render_module(
+    item: Item, facade: str, items: "dict[str, Item]", repo: Path
+) -> "list[str]":
     """The items a facade module contributes to the prelude, each as an entry.
 
     Names with no local definition are re-exports of a dependency's types
-    (`Vec2`, `Vec3`, `Mat4` come from glam). They are named rather than
-    documented: this repository does not own them and so has nothing to
-    generate from, and naming the library is worth more to the reader than a
-    hand-copied method list would be — it is a well-known crate, and a copied
-    list is the one thing that could go stale here without CI noticing. The
-    Conventions digest already names it for the same reason.
+    (`Vec2`, `Vec3`, `Mat4` come from glam). There is nothing here to generate
+    an entry from, and a hand-copied method list would be the one thing in this
+    document that could go stale without CI noticing.
+
+    So the entry is an **example** instead. E0 run 2 pointed out that "documented
+    there" sits under a document opening "if something you want is not here, it
+    is not part of v1", while `Vec2` is in nearly every line of a game and its
+    docs are not in the container (e0-findings.md F-018). `TOURS` names the file
+    that stands in, and cargo compiles it and `tools/test` runs it — the same
+    trick the Quickstart uses, for the same reason.
     """
     out: "list[str]" = []
     foreign: "list[str]" = []
@@ -778,12 +880,18 @@ def render_module(item: Item, facade: str, items: "dict[str, Item]") -> "list[st
             foreign.append(name)
             continue
         out += render_item(member)
-    if foreign:
-        out += [
-            f"Also in `{item.name}`, re-exported from `glam` and documented there: "
-            f"{', '.join(f'`{name}`' for name in foreign)}.",
-            "",
-        ]
+    if not foreign:
+        return out
+    out += [
+        f"Also in `{item.name}`, re-exported from `glam`: "
+        f"{', '.join(f'`{name}`' for name in foreign)}. This repository does not "
+        "own their documentation, so what follows is a worked file rather than a "
+        "generated entry — it compiles and runs on every test run.",
+        "",
+    ]
+    tour = repo / TOURS[item.name] if item.name in TOURS else None
+    if tour is not None:
+        out += ["```rust", tour.read_text(encoding="utf-8").rstrip(), "```", ""]
     return out
 
 
@@ -866,7 +974,7 @@ def render(repo: Path) -> str:
             item = items.get(name, Item(name=name))
             out += render_item(item)
             if item.kind == "mod":
-                out += render_module(item, facade, items)
+                out += render_module(item, facade, items, repo)
 
     testing_names = testing_exports(facade)
     if testing_names:
@@ -1024,7 +1132,8 @@ def main(argv: "list[str]") -> int:
                 "could not generate the API document",
                 str(error),
                 "a source the generator reads was moved or removed",
-                "check that the facade crate, examples/quickstart.rs and tools/api-doc/ exist",
+                "check that the facade crate, tools/api-doc/, and the examples this "
+                "document embeds — quickstart.rs and everything in TOURS — exist",
             ),
             file=sys.stderr,
         )

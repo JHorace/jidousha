@@ -82,9 +82,12 @@ the milestone's honesty depends on:
   in it. An author who already knows the answers measures nothing, and would
   produce a pass — which is worse than a failure, because E0's whole output is
   the findings a failure generates.
-- **The run's `E0-NOTES.md` is the raw observation; `e0-findings.md` is the root
-  cause.** Keeping them separate keeps the maintainer's explanation from
-  overwriting what the game author actually hit.
+- **The run's `docs/e0/run-N.md` is the raw observation; `e0-findings.md` is the
+  root cause.** Keeping them separate keeps the maintainer's explanation from
+  overwriting what the game author actually hit. **One file per run**, and the
+  author writes only their own: run 2 was pointed at run 1's file and read it
+  before writing a line of Pong, which handed it three facts it should have had
+  to find.
 
 After E0: write the `make-game` skill (practices §3) from what E0 taught, then
 v1 is done and the deferred lists become the roadmap conversation.

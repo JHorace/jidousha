@@ -41,7 +41,13 @@
 //! ```
 
 // --- App and lifecycle ------------------------------------------------------
-pub use jidousha_core::{App, Draw, GameConfig, HeadlessSim, Startup, Update, headless};
+// `Submissions` is here because `HeadlessSim::draw` returns one, and a return
+// type named in a signature and defined nowhere is the one kind of gap a reader
+// cannot work around (e0-findings.md F-017). A game reaches it as
+// `sim.draw().quads()` and never writes the name.
+pub use jidousha_core::{
+    App, Draw, GameConfig, HeadlessSim, Startup, Submissions, Update, headless,
+};
 pub use jidousha_platform::{RunError, asset_source, run};
 
 // --- ECS --------------------------------------------------------------------
@@ -83,8 +89,8 @@ pub mod prelude {
         App, AssetError, AssetFailure, AssetStatus, Assets, Bundle, BytesHandle, Camera, Color,
         Commands, Component, Depth, Draw, DrawCtx, Entity, EntityDeadError, GameConfig,
         HeadlessSim, Input, Key, MemorySource, PhysicalSize, PointerButton, PointerId,
-        PointerState, Quad, Rect, Resource, Rng, RunError, Seconds, Sprite, Startup, Submit,
-        TextStyle, TextureHandle, TextureId, Time, Transform, Update, With, Without, World,
+        PointerState, Quad, Rect, Resource, Rng, RunError, Seconds, Sprite, Startup, Submissions,
+        Submit, TextStyle, TextureHandle, TextureId, Time, Transform, Update, With, Without, World,
         WorldView, asset_source, draw_sprites, headless, message, run,
     };
 }
@@ -126,8 +132,19 @@ pub mod testing {
     // into the `TextureData` a `MemorySource` hands back, so a test can bake a
     // picture into its binary and script the tick it arrives on.
     pub use jidousha_assets::{MemorySource, ReplaySource, TextureData, decode_png};
+    // `DecodeError` is named by `InputSnapshot::try_decode` and carried inside
+    // `RecordingError::Snapshot`, so it was already in the reference twice
+    // without an entry of its own (e0-findings.md F-017).
+    //
+    // `SnapshotBuilder` and `InputEvent` are the closed-loop half of scripted
+    // input: `InputScript` answers "what happens on tick N of a plan fixed in
+    // advance", and a check that has to *see the game* before deciding what to
+    // press has no such plan. They are the driver's own edge rules, so a
+    // controller written this way is exercising the path a real keyboard takes
+    // rather than a second one (ADR-0019).
     pub use jidousha_input::{
-        AssetReady, Input, InputScript, InputSnapshot, Recording, RecordingError, TickRecord,
+        AssetReady, DecodeError, Input, InputEvent, InputScript, InputSnapshot, Recording,
+        RecordingError, SnapshotBuilder, TickRecord,
     };
     // `encode_png` here takes a captured frame (`RawImage`), which is what a
     // golden image or a `tools/verify` artifact is written from. Its inverse
