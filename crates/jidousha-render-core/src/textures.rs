@@ -11,9 +11,10 @@
 
 use jidousha_assets::Assets;
 
-use crate::backend::{PhysicalSize, RenderBackend, TextureDesc};
+use crate::backend::{RenderBackend, TextureDesc};
 use crate::font;
 use crate::plan::TextureTable;
+use jidousha_core::PhysicalSize;
 
 /// The placeholder's side, in texels.
 const PLACEHOLDER_SIZE: u32 = 16;

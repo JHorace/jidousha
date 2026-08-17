@@ -45,6 +45,24 @@ decisions: `HeadlessSim::tick` takes no argument yet (`TickInput` needs input
 and assets to exist), and `GameConfig` carries `title`, `seed` and `fixed_dt`
 only — the asset, window and camera fields arrive with their subsystems, and
 `..GameConfig::default()` means adding them disturbs nothing already written.
+
+**`window_size` landed at E0** (e0-findings.md F-013), five milestones after the
+subsystem it was waiting for. M5 built the window and did not bring the field
+with it, and nothing noticed, because "arrives with its subsystem" was written
+in two documents and attached to no milestone's checklist. The E0 game wanted a
+16:9 window for a 34×19 field, could not tell whether the field existed, and
+settled for a comment admitting a narrow window crops the playfield — its own
+author calling that "a gameplay decision made by ignorance".
+
+This moved `PhysicalSize` from `jidousha-render-core` to `jidousha-core`, with a
+re-export so no call site changed. `GameConfig` lives in core and core depends
+on no other jidousha crate, so the type had to be on the near side of that
+seam — the same reasoning ADR-0015 applies to the draw vocabulary, applied to
+pixels. On the web the field is ignored: the canvas is sized by the page, and a
+canvas that disagreed with its CSS would be drawn at one size and shown at
+another.
+
+`camera_height` remains unlanded, and is recorded here rather than dropped.
 `run` lands with the platform crate (M5); it is the same loop with a different
 driver (core.md §8).
 
@@ -269,6 +287,14 @@ that's exactly what acceptance milestone E0 tests (implementation plan).
   sprites carry `layer` in `Sprite` and `z` in `Transform` because they're
   entity data. This asymmetry is DELIBERATE: components are the entity-driven
   path, `Depth` is the immediate path; merging them made both worse.
+
+  Text is the third case and the same rule: `TextStyle` carries `depth`, so
+  `ctx.text` takes no trailing `Depth` while the other four verbs do. E0 run 1
+  read that as a wobble against "one way to do everything" (e0-findings.md
+  F-014) — fairly, since nothing had written it down. ADR-0018 does now, and
+  states the rule the three cases share: **depth travels with whatever else
+  describes the thing's appearance**, which is a sprite's components, text's
+  style, or — when there is nothing else — an argument.
 - `jidousha::testing` (InputScript, transcript assertion helpers) is public but
   documented in its own short section of `docs/api/` — game agents use it in
   their games' tests, which agents should be writing too.
@@ -283,6 +309,30 @@ that's exactly what acceptance milestone E0 tests (implementation plan).
   CI fails when stale (practices §2.3) or when over **25k tokens** (counted in
   CI; the budget is the point — it must fit comfortably in a game-writing
   agent's context alongside the game itself).
+
+  Implemented (impl): not rustdoc JSON — that needs a nightly toolchain and
+  `rust-toolchain.toml` pins stable (ADR-0005) — but a text extractor over the
+  crate sources, with tests. Blocks close on indentation rather than brace
+  depth, which `cargo fmt` guarantees and string literals defeat.
+
+  **The signature half of the bullet below went unimplemented until E0 run 1
+  measured what it cost** (e0-findings.md F-001): the Reference shipped as ~90
+  name-and-one-liner bullets, and the run reported it could not make a single
+  call from the document. Fixed by extracting declarations — fields with types,
+  enum variants, trait and inherent method signatures, associated consts,
+  `Default` values — at ~12.9k tokens of the 25k budget. The gap survived
+  because a thin entry is indistinguishable from a complete one to the agent
+  reading it, so `completeness_failures` now fails the run when an exported item
+  yields no declaration. A generator that can under-report silently will.
+
+  **Still unimplemented: the "tiny example" third of the bullet above.** Entries
+  carry a signature and a one-liner and no example. Deferred until E0 run 2 says
+  whether signatures alone are enough (e0-findings.md F-001, "Still open") — the
+  document is at ~13.8k tokens of 25,000 and the ~39 doctests already in the
+  crates would cost about 5k more, so budget is not the constraint. Recorded
+  here rather than left implicit: §4 and `gen-api-doc` disagreeing without
+  either saying so is precisely what F-001 was, and a second silent disagreement
+  in the same paragraph would be the same bug wearing the same hat.
 - Fixed structure: **Quickstart** (one complete ~60-line game, compiling,
   CI-tested — it IS an example file, included verbatim) → **Concepts** (seven
   short paragraphs: world/systems/phases, determinism & the tick, drawing,

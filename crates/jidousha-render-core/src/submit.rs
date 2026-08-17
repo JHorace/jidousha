@@ -62,6 +62,15 @@ pub trait Submit {
     /// the first frame of a program before anything has loaded. `\n` starts a
     /// new line; nothing wraps (renderer.md §6). Use
     /// [`TextStyle::width_of`] to center it.
+    ///
+    /// The depth goes in the [`TextStyle`], not after it.
+    ///
+    /// DELIBERATE: the one verb here that takes no trailing `Depth`, and it
+    /// looks like a wobble in a five-verb API whose first rule is one way to do
+    /// everything. Text needs a style object regardless — size and color have
+    /// nowhere else to live — so the choice is one struct or a struct plus an
+    /// argument, and depth travels with whatever else describes how the thing
+    /// looks. See ADR-0018, which also says what this does *not* license.
     fn text(&mut self, at: Vec2, text: &str, style: TextStyle);
 }
 

@@ -17,10 +17,7 @@ use crate::{
     Side, TARGET, Tally, config, register, score_style,
 };
 use jidousha::prelude::*;
-use jidousha::testing::{
-    BackendTextureId, FONT_TEXTURE, FramePlan, InputScript, NullBackend, PhysicalSize,
-    RenderBackend, create_builtin_textures, plan_frame,
-};
+use jidousha::testing::{FrameRecorder, InputScript, PhysicalSize};
 use std::cmp::Ordering;
 
 /// How long the scripted session runs.
@@ -120,11 +117,10 @@ pub(super) struct Run {
     frames: usize,
 }
 
-/// Play the scripted session through `backend`, drawing every tick.
-fn play(backend: &mut dyn RenderBackend, viewport: PhysicalSize) -> Run {
+/// Play the scripted session through `recorder`, drawing every tick.
+fn play(recorder: &mut FrameRecorder) -> Run {
     let mut sim = headless(config(), register);
     let script = script();
-    let textures = create_builtin_textures(backend);
     let mut run = Run {
         player_track: Vec::new(),
         opponent_track: Vec::new(),
@@ -176,15 +172,7 @@ fn play(backend: &mut dyn RenderBackend, viewport: PhysicalSize) -> Run {
 
         // Draw every tick, so the frame that gets asserted on is a frame of
         // the game in motion rather than of its first moment.
-        let camera = Camera {
-            viewport,
-            ..*sim.world().resource::<Camera>()
-        };
-        let quads = sim.draw().quads().to_vec();
-        let plan = plan_frame(&camera, &quads, &textures);
-        if let Err(error) = backend.render(&plan) {
-            fail("a backend refused a frame", &error.to_string());
-        }
+        recorder.draw(&mut sim);
         run.frames += 1;
     }
 
@@ -192,8 +180,8 @@ fn play(backend: &mut dyn RenderBackend, viewport: PhysicalSize) -> Run {
 }
 
 pub fn run() {
-    let mut backend = NullBackend::new();
-    let session = play(&mut backend, HEADLESS_VIEWPORT);
+    let mut recorder = FrameRecorder::new(HEADLESS_VIEWPORT);
+    let session = play(&mut recorder);
     let Run {
         player_track,
         opponent_track,
@@ -467,7 +455,7 @@ pub fn run() {
             &format!("{frames} frames for {TICKS} ticks"),
         );
     }
-    let Some(last) = backend.last_frame() else {
+    let Some(last) = recorder.frames().last() else {
         fail("no frame was recorded", "the loop above draws every tick");
     };
     // The field markings, the paddles and the ball, and the text: the shapes
@@ -533,13 +521,14 @@ pub fn run() {
     // texture like any other, so "was text drawn" is "did a quad sample the
     // font", and the score's own position is what says the layout ran rather
     // than something merely having been submitted.
-    let Some(font) = font_texture(&last.plan) else {
+    let font = recorder.font_texture();
+    if !last.plan.batches.iter().any(|batch| batch.texture == font) {
         fail(
             "nothing on screen sampled the font atlas",
             "the score and the footer are both text, so a frame without a font batch has \
              lost both",
         );
-    };
+    }
     let glyphs: usize = last
         .plan
         .batches
@@ -575,8 +564,8 @@ pub fn run() {
     // --- and the same run, twice --------------------------------------
     // The whole point of a fixed timestep and a seeded generator: replay the
     // session and land on the same numbers, bit for bit.
-    let mut again = NullBackend::new();
-    let replay = play(&mut again, HEADLESS_VIEWPORT);
+    let mut again = FrameRecorder::new(HEADLESS_VIEWPORT);
+    let replay = play(&mut again);
     let bits = |track: &[Vec2]| -> Vec<[u32; 2]> {
         track
             .iter()
@@ -812,19 +801,4 @@ fn play_a_rally() -> Rally {
     }
 
     rally
-}
-
-/// Which backend texture the font atlas landed on, read off the frame.
-///
-/// The table is gone by the time the assertions run, and the atlas is not at a
-/// fixed id — it is whatever `create_builtin_textures` assigned. So: build a
-/// table against a throwaway backend, in the same order, and ask it.
-fn font_texture(plan: &FramePlan) -> Option<BackendTextureId> {
-    let mut scratch = NullBackend::new();
-    let table = create_builtin_textures(&mut scratch);
-    let font = table.resolve(FONT_TEXTURE);
-    plan.batches
-        .iter()
-        .any(|batch| batch.texture == font)
-        .then_some(font)
 }

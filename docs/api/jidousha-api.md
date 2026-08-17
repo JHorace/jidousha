@@ -100,7 +100,7 @@ fn collect(world: &mut World) {
     world.resource_mut::<Score>().0 += 1;
 }
 
-/// Draw systems take a `DrawCtx` and cannot change the world (ADR-0008).
+/// Draw systems take a `DrawCtx` and cannot change the world: the type says so.
 fn draw_everything(ctx: &mut DrawCtx) {
     for (_, transform, _) in ctx.world.query::<(&Transform, &Player)>() {
         ctx.rect(
@@ -134,21 +134,36 @@ A system is a function: `fn(&mut World)` for logic, `fn(&mut DrawCtx)` for
 drawing. Nothing inherits from anything, and there is no base class to fill in.
 
 Systems run in **phases**, in this order, every tick: `Startup` once at the
-beginning, then `Update` for logic, then `Draw`. Within a phase they run in the
-order you added them, always, on every machine. There is no scheduler deciding
-for you.
+start of the first tick, then `Update` for logic, then `Draw`. Within a phase
+they run in the order you added them, always, on every machine. There is no
+scheduler deciding for you. Startup running *inside* that first tick is worth
+knowing if you drive the sim by hand: `headless(..)` hands back a world that is
+still empty, and it is populated once the first `tick()` returns.
 
 The engine runs on a **fixed timestep**. `Time::fixed_dt` is the same number
 every tick, `Time::tick` counts them, and a slow frame runs several ticks rather
-than one long one. Together with the seeded `Rng` in `GameConfig`, that means
-the same inputs make the same game — which is what lets a test replay a session
-and get the same answer.
+than one long one. That number is **1/60 of a second** unless you say otherwise:
+`fixed_dt` is a `GameConfig` field, so a game that wants 120 ticks a second sets
+`GameConfig { fixed_dt: Seconds(1.0 / 120.0), ..GameConfig::default() }`. Sixty
+is the number to count in when a game wants to say "about three quarters of a
+second" as a number of ticks — a serve pause, a coyote-time window, an
+invulnerability period.
+
+Together with the seeded `Rng` in `GameConfig`, that means the same inputs make
+the same game — which is what lets a test replay a session and get the same
+answer.
 
 **Drawing is submission, not painting.** A `Draw` system hands the renderer
 quads — `ctx.sprite`, `ctx.rect`, `ctx.line`, `ctx.circle`, `ctx.text` — and
 cannot change the world; the type system enforces that. Order comes from
 `Depth { layer, z }`, not from the order you drew in, so a debug outline goes in
 front by saying so rather than by being drawn last.
+
+**A game of pure shapes needs no asset story at all.** `ctx.rect`, `ctx.circle`,
+`ctx.line` and `ctx.text` draw without a single file, and nothing requires an
+`Assets` resource to exist — neither `run` nor `headless` inserts one or asks
+for one. A whole game can ship without ever naming an asset, and the paragraph
+below is what you read only once you want a picture.
 
 **Assets load in the background and are never waited for.** `load_texture`
 returns a handle immediately and the file arrives later. A sprite whose texture
@@ -178,107 +193,1274 @@ engines where everything is a global.
 
 ### App and lifecycle
 
-- **`App`** — What a game's setup closure is handed: the place to register systems
-- **`asset_source`** — The asset source this platform reads with
-- **`Draw`** — Once per rendered frame, after Update has caught up
-- **`GameConfig`** — How a game is configured at startup
-- **`headless`** — Build a game and drive it by hand, with no window and no clock
-- **`HeadlessSim`** — A game running without a window, advanced one tick at a time
-- **`run`** — Run a game in a window, forever
-- **`RunError`** — Why a windowed run could not start, or could not continue
-- **`Startup`** — Runs once, before the first tick
-- **`Update`** — The simulation, run on the fixed timestep — zero or more times per frame
+#### `App`
+
+What a game's setup closure is handed: the place to register systems.
+
+```rust
+pub struct App;
+
+impl App {
+    pub fn add_system<P, F>(&mut self, phase: P, system: F) where P: Phase, F: IntoSystem<P>;  // Append a system to a phase
+}
+```
+
+#### `asset_source`
+
+The asset source this platform reads with.
+
+```rust
+pub fn asset_source(root: &str) -> impl ByteSource;
+```
+
+#### `Draw`
+
+Once per rendered frame, after Update has caught up.
+
+```rust
+pub struct Draw;
+// Clone Copy Debug Phase
+```
+
+#### `GameConfig`
+
+How a game is configured at startup.
+
+```rust
+pub struct GameConfig {
+    pub title: &'static str,  // The window's title
+    pub seed: u64,  // Fixes every random draw of the run
+    pub fixed_dt: Seconds,  // How much simulated time one Update tick covers
+    pub window_size: PhysicalSize,  // How big the window opens, in pixels
+}
+// Clone Copy Debug PartialEq
+// Default = GameConfig { title: "jidousha game", seed: 0, fixed_dt: Seconds(1.0 / 60.0), window_size: PhysicalSize::new(1280, 720) }
+```
+
+#### `headless`
+
+Build a game and drive it by hand, with no window and no clock.
+
+```rust
+pub fn headless(config: GameConfig, setup: impl FnOnce(&mut App)) -> HeadlessSim;
+```
+
+#### `HeadlessSim`
+
+A game running without a window, advanced one tick at a time.
+
+```rust
+pub struct HeadlessSim;
+
+impl HeadlessSim {
+    pub fn tick(&mut self);  // Run one Update tick, running Startup first if it has not run yet
+    pub fn draw(&mut self) -> &Submissions;  // Run the Draw phase once, as a rendered frame would, and return what…
+    pub fn world(&self) -> &World;  // The world, for asserting on state
+    pub fn world_mut(&mut self) -> &mut World;  // The world, for arranging a test's starting state
+    pub fn schedule_debug(&self) -> String;  // Every phase and its systems, in run order
+}
+```
+
+#### `run`
+
+Run a game in a window, forever.
+
+```rust
+pub fn run(config: GameConfig, setup: impl FnOnce(&mut App)) -> Result<(), RunError>;
+```
+
+#### `RunError`
+
+Why a windowed run could not start, or could not continue.
+
+```rust
+pub enum RunError {
+    NoDisplay { detail: String },  // There is no display to open a window on
+    WindowCreation { detail: String },  // The display exists, but the window could not be created
+    EventLoop { detail: String },  // The event loop stopped with an error
+}
+// Clone Debug PartialEq Eq Display
+```
+
+#### `Startup`
+
+Runs once, at the start of the first tick.
+
+```rust
+pub struct Startup;
+// Clone Copy Debug Phase
+```
+
+#### `Update`
+
+The simulation, run on the fixed timestep — zero or more times per frame.
+
+```rust
+pub struct Update;
+// Clone Copy Debug Phase
+```
 
 ### ECS
 
-- **`Bundle`** — A set of components to give a new entity in one go
-- **`Commands`** — Records structural changes to apply at the end of the current system
-- **`Component`** — Marks a plain-data type as storable on an entity
-- **`DrawCtx`** — What a Draw system is called with: the world to read, and the sink to draw into
-- **`Entity`** — A handle to a thing in the world — the only way game code refers to one
-- **`Resource`** — Marks a type as storable as a world resource
-- **`With`** — Match only entities that carry `T`, without reading it
-- **`Without`** — Match only entities that do **not** carry `T`
-- **`World`** — Everything the simulation can see: the entities that exist and the components they carry
-- **`WorldView`** — A read-only view of the world, handed to Draw systems
+#### `Bundle`
+
+A set of components to give a new entity in one go.
+
+```rust
+pub trait Bundle: 'static + Send + Sync {
+    fn insert_into(self, world: &mut World, entity: Entity);  // Give every component in this bundle to `entity`
+}
+```
+
+#### `Commands`
+
+Records structural changes to apply at the end of the current system.
+
+```rust
+pub struct Commands<'w>;
+// Debug
+
+impl Commands {
+    pub fn spawn<B: Bundle>(&mut self, bundle: B);  // Create an entity carrying `bundle`
+    pub fn despawn(&mut self, entity: Entity);  // Destroy `entity`
+    pub fn insert<T: Component>(&mut self, entity: Entity, value: T);  // Give `entity` a component
+    pub fn remove<T: Component>(&mut self, entity: Entity);  // Take a component away from `entity`
+    pub fn pending(&self) -> Vec<(CommandKind, Option<Entity>)>;  // What is queued, in recording order — for debugging a system that is…
+}
+```
+
+#### `Component`
+
+Marks a plain-data type as storable on an entity.
+
+```rust
+pub trait Component: 'static + Send + Sync {}
+```
+
+#### `DrawCtx`
+
+What a Draw system is called with: the world to read, and the sink to draw into.
+
+```rust
+pub struct DrawCtx<'w> {
+    pub world: WorldView<'w>,  // The world, read-only
+}
+// Submit
+
+impl DrawCtx {
+    pub fn submit(&mut self, quad: Quad);  // Draw one quad
+    pub fn submitted(&self) -> usize;  // How many quads have been submitted this frame
+}
+```
+
+#### `Entity`
+
+A handle to a thing in the world — the only way game code refers to one.
+
+```rust
+pub struct Entity;
+// Clone Copy PartialEq Eq PartialOrd Ord Hash Debug
+```
+
+#### `Resource`
+
+Marks a type as storable as a world resource.
+
+```rust
+pub trait Resource: 'static + Send + Sync {}
+```
+
+#### `With`
+
+Match only entities that carry `T`, without reading it.
+
+```rust
+pub struct With<T: Component>(PhantomData<fn() -> T>);
+// Query ReadOnlyQuery
+```
+
+#### `Without`
+
+Match only entities that do **not** carry `T`.
+
+```rust
+pub struct Without<T: Component>(PhantomData<fn() -> T>);
+// Query ReadOnlyQuery
+```
+
+#### `World`
+
+Everything the simulation can see: the entities that exist and the components they carry.
+
+```rust
+pub struct World;
+
+impl World {
+    pub fn new() -> Self;  // Create an empty world
+    pub fn spawn(&mut self) -> Entity;  // Create an entity with no components
+    pub fn despawn(&mut self, entity: Entity);  // Destroy `entity` and everything it carries
+    pub fn try_despawn(&mut self, entity: Entity) -> Result<(), EntityDeadError>;  // `World::despawn`, reporting a dead entity instead of panicking
+    pub fn insert<T: Component>(&mut self, entity: Entity, value: T);  // Give `entity` a `T`, replacing any `T` it already had
+    pub fn try_insert<T: Component>(&mut self, entity: Entity, value: T) -> Result<(), EntityDeadError>;  // `World::insert`, reporting a dead entity instead of panicking
+    pub fn remove<T: Component>(&mut self, entity: Entity);  // Take `T` away from `entity`
+    pub fn try_remove<T: Component>(&mut self, entity: Entity) -> Result<(), EntityDeadError>;  // `World::remove`, reporting a dead entity instead of panicking
+    pub fn query<'w, Q: ReadOnlyQuery<'w>>(&'w self) -> QueryIter<'w, Q>;  // Iterate every entity matching a read-only query
+    pub fn query_mut<'w, Q: Query<'w>>(&'w mut self) -> QueryIterMut<'w, Q>;  // Iterate every entity matching a query, with `&mut T` access where…
+    pub fn is_alive(&self, entity: Entity) -> bool;  // Whether `entity` is still live in this world
+    pub fn entity_count(&self) -> usize;  // How many entities are alive
+    pub fn component<T: Component>(&self, entity: Entity) -> &T;  // The `T` on `entity`
+    pub fn component_mut<T: Component>(&mut self, entity: Entity) -> &mut T;  // The `T` on `entity`, for modification
+    pub fn find_component<T: Component>(&self, entity: Entity) -> Option<&T>;  // The `T` on `entity`, or `None` if it has none — or is not alive
+    pub fn find_component_mut<T: Component>(&mut self, entity: Entity) -> Option<&mut T>;  // The `T` on `entity` for modification, or `None` if it has none — or…
+    pub fn commands(&self) -> Commands<'_>;  // Record structural changes to apply at the end of the running system
+}
+```
+
+#### `WorldView`
+
+A read-only view of the world, handed to Draw systems.
+
+```rust
+pub struct WorldView<'w>;
+
+impl WorldView {
+    pub fn query<Q: ReadOnlyQuery<'w>>(&self) -> QueryIter<'w, Q>;  // Iterate every entity matching a read-only query
+    pub fn component<T: Component>(&self, entity: Entity) -> &'w T;  // The `T` on `entity`
+    pub fn find_component<T: Component>(&self, entity: Entity) -> Option<&'w T>;  // The `T` on `entity`, or `None` if it has none — or is not alive
+    pub fn resource<T: Resource>(&self) -> &'w T;  // The `T` resource
+    pub fn find_resource<T: Resource>(&self) -> Option<&'w T>;  // The `T` resource, or `None` if the world has none
+    pub fn is_alive(&self, entity: Entity) -> bool;  // Whether `entity` is still live
+    pub fn entity_count(&self) -> usize;  // How many entities are alive
+}
+```
 
 ### Math and primitives
 
-- **`Color`** — A color: linear-looking sRGB components, 0.0 to 1.0, straight alpha
-- **`Depth`** — Where something sits in the draw order
-- **`EntityDeadError`** — A structural operation was asked to act on an entity that is not alive
-- **`math`** — Deterministic maths: the trigonometry and vector types a game may use
-- **`message`** — The failure in the engine's message format (core.md §9)
-- **`Quad`** — One textured, tinted quadrilateral in world space: everything the engine draws, after expansion
-- **`Rect`** — An axis-aligned rectangle, in whatever space its user is working in
-- **`Rng`** — The simulation's random number generator, held as a world resource
-- **`Seconds`** — A duration, in seconds
-- **`TextureId`** — Which texture a quad samples
-- **`Time`** — How far the simulation has got, in ticks
+#### `Color`
+
+A color: linear-looking sRGB components, 0.0 to 1.0, straight alpha.
+
+```rust
+pub struct Color {
+    pub r: f32,  // Red, 0.0 to 1.0
+    pub g: f32,  // Green, 0.0 to 1.0
+    pub b: f32,  // Blue, 0.0 to 1.0
+    pub a: f32,  // Alpha, 0.0 transparent to 1.0 opaque
+}
+// Clone Copy Debug PartialEq
+// Default = Color::WHITE
+
+impl Color {
+    pub const fn rgb(r: f32, g: f32, b: f32) -> Self;  // An opaque color
+    pub const fn rgba(r: f32, g: f32, b: f32, a: f32) -> Self;  // A color with alpha
+    pub const WHITE: Color = Color::rgb(1.0, 1.0, 1.0);  // Opaque white — the tint that changes nothing
+    pub const BLACK: Color = Color::rgb(0.0, 0.0, 0.0);  // Opaque black
+    pub const RED: Color = Color::rgb(1.0, 0.0, 0.0);  // Opaque red
+    pub const GREEN: Color = Color::rgb(0.0, 1.0, 0.0);  // Opaque green
+    pub const BLUE: Color = Color::rgb(0.0, 0.0, 1.0);  // Opaque blue
+    pub const MAGENTA: Color = Color::rgb(1.0, 0.0, 1.0);  // Opaque magenta — the placeholder's color, and the engine's "look…
+    pub const TRANSPARENT: Color = Color::rgba(0.0, 0.0, 0.0, 0.0);  // Fully transparent
+    pub fn modulate(self, other: Color) -> Color;  // This color multiplied by another, component-wise — how tinting works
+}
+```
+
+#### `Depth`
+
+Where something sits in the draw order.
+
+```rust
+pub struct Depth {
+    pub layer: i16,  // The coarse band
+    pub z: f32,  // The fine order within a layer
+}
+// Clone Copy Debug PartialEq
+// Default = Depth { layer: 0, z: 0.0 }
+
+impl Depth {
+    pub const fn layer(layer: i16) -> Self;  // The front of `layer`'s band
+}
+```
+
+#### `EntityDeadError`
+
+A structural operation was asked to act on an entity that is not alive.
+
+```rust
+pub struct EntityDeadError;
+// Clone Debug PartialEq Eq Display
+
+impl EntityDeadError {
+    pub fn entity(&self) -> Entity;  // The entity the failed operation named
+    pub fn operation(&self) -> &'static str;  // The operation that failed, as it is spelled in the API —…
+}
+```
+
+#### `math`
+
+Deterministic maths: the trigonometry and vector types a game may use.
+
+```rust
+pub mod math
+```
+
+#### `Radians`
+
+An angle, in radians.
+
+```rust
+pub struct Radians(pub f32);
+// Clone Copy Debug PartialEq PartialOrd
+
+impl Radians {
+    pub const ZERO: Radians = Radians(0.0);  // No rotation
+    pub const TAU: Radians = Radians(core::f32::consts::TAU);  // A full turn
+    pub fn from_degrees(degrees: f32) -> Self;  // Convert from degrees, for humans
+    pub fn to_degrees(self) -> f32;  // The angle in degrees, for humans and for debug output
+    pub fn as_f32(self) -> f32;  // The underlying value
+}
+```
+
+#### `atan2`
+
+The angle of the vector `(x, y)`, measured from the +X axis.
+
+```rust
+pub fn atan2(y: f32, x: f32) -> Radians;
+```
+
+#### `rotate`
+
+Turn `vector` by `angle`.
+
+```rust
+pub fn rotate(vector: Vec2, angle: Radians) -> Vec2;
+```
+
+#### `sin_cos`
+
+The sine and cosine of `angle`, both at once.
+
+```rust
+pub fn sin_cos(angle: Radians) -> (f32, f32);
+```
+
+Also in `math`, re-exported from `glam` and documented there: `Vec2`, `Vec3`.
+
+#### `message`
+
+Format one engine failure in the house style.
+
+```rust
+pub fn message(what: &str, specifics: &str, likely_cause: &str, fix: &str) -> String;
+```
+
+#### `Quad`
+
+One textured, tinted quadrilateral in world space: everything the engine draws, after expansion.
+
+```rust
+pub struct Quad {
+    pub corners: [Vec2; 4],  // The four corners, in world space, already rotated and scaled
+    pub uvs: [Vec2; 4],  // Where each corner samples the texture, normalized 0..1
+    pub tint: Color,  // Multiplied into whatever the texture gives
+    pub texture: TextureId,  // What to sample
+    pub depth: Depth,  // Where in the draw order
+}
+// Clone Copy Debug PartialEq
+```
+
+#### `Rect`
+
+An axis-aligned rectangle, in whatever space its user is working in.
+
+```rust
+pub struct Rect {
+    pub min: Vec2,  // Top-left
+    pub max: Vec2,  // Bottom-right
+}
+// Clone Copy Debug PartialEq
+
+impl Rect {
+    pub fn from_min_size(min: Vec2, size: Vec2) -> Self;  // The rectangle covering `size` from its top-left corner
+    pub fn from_center_size(center: Vec2, size: Vec2) -> Self;  // The rectangle of `size` centered on `center`
+    pub const UNIT: Rect = Rect { min: Vec2::ZERO, max: Vec2::ONE };  // The whole of something, in normalized coordinates: (0,0) to (1,1)
+    pub fn size(self) -> Vec2;  // Width and height
+    pub fn center(self) -> Vec2;  // The point in the middle
+    pub fn contains(self, point: Vec2) -> bool;  // Whether `point` is inside, counting the top-left edges and not the…
+    pub fn overlaps(self, other: Rect) -> bool;  // Whether any part of `other` is inside this rectangle
+}
+```
+
+#### `Rng`
+
+The simulation's random number generator, held as a world resource.
+
+```rust
+pub struct Rng;
+// Clone Debug
+
+impl Rng {
+    pub fn from_seed(seed: u64) -> Self;  // Create a generator from a seed
+    pub fn next_u32(&mut self) -> u32;  // The next value in the sequence
+    pub fn below(&mut self, limit: u32) -> u32;  // A value in `0..limit`, with every value equally likely
+    pub fn next_f32(&mut self) -> f32;  // A value in `0.0..1.0`
+}
+```
+
+#### `Seconds`
+
+A duration, in seconds.
+
+```rust
+pub struct Seconds(pub f32);
+// Clone Copy Debug PartialEq PartialOrd Display Add AddAssign Sub SubAssign
+
+impl Seconds {
+    pub const ZERO: Seconds = Seconds(0.0);  // No time at all
+    pub fn as_f32(self) -> f32;  // The underlying value, for arithmetic the newtype does not cover
+}
+```
+
+#### `TextureId`
+
+Which texture a quad samples.
+
+```rust
+pub struct TextureId(u64);
+// Clone Copy PartialEq Eq PartialOrd Ord Hash Debug
+
+impl TextureId {
+    pub const WHITE: TextureId = TextureId(0);  // The untextured id: a flat white 1×1, for shapes that carry only a…
+    pub const fn from_bits(bits: u64) -> Self;  // The id for a raw value
+    pub const fn bits(self) -> u64;  // The raw value
+}
+```
+
+#### `Time`
+
+How far the simulation has got, in ticks.
+
+```rust
+pub struct Time {
+    pub tick: u64,  // Update ticks since startup — the canonical timeline
+    pub fixed_dt: Seconds,  // The length of one tick
+    pub elapsed: Seconds,  // `tick * fixed_dt`
+    pub alpha: f32,  // How far into the next tick the last rendered frame fell, in…
+}
+// Clone Copy Debug PartialEq
+
+impl Time {
+    pub fn new(fixed_dt: Seconds) -> Self;  // The clock at the start of a run, before the first tick
+}
+```
 
 ### Render
 
-- **`Camera`** — What the frame is looking at
-- **`draw_sprites`** — The Draw system almost every game wants: draw every sprite there is
-- **`PhysicalSize`** — The size of a surface or a texture, in physical pixels
-- **`Sprite`** — A picture attached to an entity
-- **`Submit`** — The drawing verbs, added to `DrawCtx`
-- **`TextStyle`** — How a line of text is drawn
-- **`Transform`** — Position, rotation, and scale in world space
+#### `Camera`
+
+What the frame is looking at.
+
+```rust
+pub struct Camera {
+    pub center: Vec2,  // The world position at the center of the screen
+    pub height: f32,  // How many world units the screen spans vertically
+    pub clear_color: Color,  // What to fill the screen with before drawing
+    pub viewport: PhysicalSize,  // The surface this camera is drawing to, in pixels
+}
+// Clone Copy Debug PartialEq
+// Default = Camera { center: Vec2::ZERO, height: 20.0, clear_color: Color::BLACK, viewport: PhysicalSize::new(1280, 720) }
+
+impl Camera {
+    pub fn width(&self) -> f32;  // How many world units the screen spans horizontally
+    pub fn visible_bounds(&self) -> (Vec2, Vec2);  // The world rectangle currently on screen, as (top-left, bottom-right)
+    pub fn world_to_screen(&self, world: Vec2) -> Vec2;  // Where a world point lands on screen, in pixels from the top-left
+    pub fn screen_to_world(&self, screen: Vec2) -> Vec2;  // What world point a screen pixel is over
+    pub fn view_projection(&self) -> Mat4;  // The matrix that takes world space to clip space
+}
+```
+
+#### `draw_sprites`
+
+The Draw system almost every game wants: draw every sprite there is.
+
+```rust
+pub fn draw_sprites(ctx: &mut DrawCtx);
+```
+
+#### `PhysicalSize`
+
+The size of a surface or a texture, in physical pixels.
+
+```rust
+pub struct PhysicalSize {
+    pub width: u32,  // Width in pixels
+    pub height: u32,  // Height in pixels
+}
+// Clone Copy Debug PartialEq Eq
+
+impl PhysicalSize {
+    pub const fn new(width: u32, height: u32) -> Self;  // A size in pixels
+    pub fn aspect(self) -> f32;  // Width divided by height, or 1.0 for a degenerate surface
+}
+```
+
+#### `Sprite`
+
+A picture attached to an entity.
+
+```rust
+pub struct Sprite {
+    pub texture: TextureHandle,  // What to draw
+    pub region: Option<Rect>,  // Which part of the texture, in normalized 0..1 coordinates
+    pub size: Vec2,  // How big the quad is, in world units
+    pub anchor: Vec2,  // Where the transform's position sits on the quad: `(0, 0)` is the…
+    pub tint: Color,  // Multiplied into the texture's color
+    pub flip_x: bool,  // Mirror horizontally
+    pub flip_y: bool,  // Mirror vertically
+    pub layer: i16,  // The coarse draw band
+}
+// Clone Copy Debug PartialEq
+
+impl Sprite {
+    pub fn new(texture: TextureHandle) -> Self;  // A one-unit sprite, centered, untinted, on layer zero
+    pub fn quad(&self, transform: &Transform) -> Quad;  // The quad this sprite draws at `transform`
+}
+```
+
+#### `Submit`
+
+The drawing verbs, added to `DrawCtx`.
+
+```rust
+pub trait Submit {
+    fn sprite(&mut self, transform: &Transform, sprite: &Sprite);  // Draw `sprite` at `transform`
+    fn rect(&mut self, rect: Rect, color: Color, depth: Depth);  // Fill an axis-aligned rectangle
+    fn line(&mut self, from: Vec2, to: Vec2, thickness: f32, color: Color, depth: Depth);  // Draw a line from `from` to `to`, `thickness` world units wide
+    fn circle(&mut self, center: Vec2, radius: f32, color: Color, depth: Depth);  // Fill a circle
+    fn text(&mut self, at: Vec2, text: &str, style: TextStyle);  // Draw `text` with its first character's top-left corner at `at`
+}
+```
+
+#### `TextStyle`
+
+How a line of text is drawn.
+
+```rust
+pub struct TextStyle {
+    pub size: f32,  // The height of one line, in world units — including the gap below it
+    pub color: Color,  // Multiplied into the glyphs, which are white
+    pub depth: Depth,  // Where in the draw order, same as every other immediate primitive
+}
+// Clone Copy Debug PartialEq
+// Default = TextStyle { size: 1.0, color: Color::WHITE, depth: Depth::default() }
+
+impl TextStyle {
+    pub fn width_of(&self, text: &str) -> f32;  // How wide `text` will be, in world units
+}
+```
+
+#### `Transform`
+
+Position, rotation, and scale in world space.
+
+```rust
+pub struct Transform {
+    pub pos: Vec2,  // Where, in world units
+    pub z: f32,  // Draw order within the layer
+    pub rot: Radians,  // Rotation, clockwise on screen
+    pub scale: Vec2,  // Size multiplier
+}
+// Clone Copy Debug PartialEq
+// Default = Transform { pos: Vec2::ZERO, z: 0.0, rot: Radians::ZERO, scale: Vec2::ONE }
+
+impl Transform {
+    pub fn at(pos: Vec2) -> Self;  // A transform at `pos`, unrotated and at natural size
+    pub fn apply(&self, local: Vec2) -> Vec2;  // Take a point in this transform's local frame into world space
+    pub fn depth(&self, layer: i16) -> Depth;  // This transform's draw depth in `layer`
+}
+```
 
 ### Assets
 
-- **`AssetError`** — Why an asset did not arrive
-- **`AssetFailure`** — One asset that will not arrive, reported once at the commit that resolved it
-- **`Assets`** — Every asset the game has asked for
-- **`AssetStatus`** — Where an asset is in its life
-- **`BytesHandle`** — A loaded — or loading — blob of bytes, for anything a game invents
-- **`MemorySource`** — A source whose bytes are already in memory and whose *timing* is scripted
-- **`TextureHandle`** — A loaded — or loading — image
+#### `AssetError`
+
+Why an asset did not arrive.
+
+```rust
+pub enum AssetError {
+    NotFound,  // Nothing at that path
+    CaseMismatch { on_disk: String },  // A file exists whose name differs only in case
+    Unreadable { detail: String },  // The path exists but could not be read
+    Decode { detail: String },  // The bytes are not a picture this engine can read
+    TooLarge { width: u32, height: u32 },  // The image is larger than the envelope allows
+    Http { status: u16 },  // A web server answered, and its answer was not the file
+    Unreachable { detail: String },  // The request never reached a server at all
+}
+// Clone Debug PartialEq Eq Display
+
+impl AssetError {
+    pub fn from_http_status(status: u16) -> Option<AssetError>;  // What an HTTP status means for an asset, or `None` if it means…
+    pub fn message(&self, path: &str, kind: AssetKind, requested_at: &str) -> String;  // The failure as a §9 message, given what was being loaded and from…
+}
+```
+
+#### `AssetFailure`
+
+One asset that will not arrive, reported once at the commit that resolved it.
+
+```rust
+pub struct AssetFailure {
+    pub path: String,  // The path as the game asked for it
+    pub kind: AssetKind,  // Which kind of load this was
+    pub requested_at: String,  // Where the game asked, so the message points at the game's line…
+    pub error: AssetError,  // What went wrong, from the source
+}
+// Clone Debug PartialEq Eq
+
+impl AssetFailure {
+    pub fn message(&self) -> String;  // The failure in the engine's message format
+}
+```
+
+#### `Assets`
+
+Every asset the game has asked for.
+
+```rust
+pub struct Assets;
+
+impl Assets {
+    pub fn new(source: impl ByteSource) -> Self;  // A store that pulls bytes from `source`
+    pub fn load_texture(&mut self, path: &str) -> TextureHandle;  // Ask for an image
+    pub fn load_bytes(&mut self, path: &str) -> BytesHandle;  // Ask for raw bytes — anything the engine does not decode itself
+    pub fn status<H: AssetHandle>(&self, handle: H) -> AssetStatus;  // Where `handle` is in its life
+    pub fn bytes_of<H: AssetHandle>(&self, handle: H) -> Option<&[u8]>;  // The bytes behind `handle`, if it is `Ready` and holds bytes
+    pub fn texture_of(&self, handle: TextureHandle) -> Option<&TextureData>;  // The decoded image behind `handle`, while the store still holds it
+    pub fn take_uploads(&mut self) -> Vec<TextureUpload>;  // Every texture that has become `Ready` since the last call, with…
+    pub fn path_of<H: AssetHandle>(&self, handle: H) -> &str;  // The path `handle` was loaded from
+    pub fn all_ready(&self) -> bool;  // Whether every load asked for so far has resolved
+    pub fn unload<H: AssetHandle>(&mut self, handle: H);  // Throw `handle` away, freeing what it held
+    pub fn commit(&mut self, tick: u64) -> Vec<AssetFailure>;  // Apply everything that finished, and nothing else
+    pub fn resolved(&self) -> &[Resolution];  // What the most recent `commit`(Assets::commit) resolved, in order
+}
+```
+
+#### `AssetStatus`
+
+Where an asset is in its life.
+
+```rust
+pub enum AssetStatus {
+    Loading,  // Asked for; not here yet
+    Ready,  // Here, and usable
+    Failed,  // It will not arrive
+}
+// Clone Copy Debug PartialEq Eq
+```
+
+#### `BytesHandle`
+
+A loaded — or loading — blob of bytes, for anything a game invents.
+
+```rust
+pub struct BytesHandle(pub(crate) AssetId);
+// Clone Copy PartialEq Eq PartialOrd Ord Hash Debug Lookup AssetHandle
+```
+
+#### `MemorySource`
+
+A source whose bytes are already in memory and whose *timing* is scripted.
+
+```rust
+pub struct MemorySource;
+// ByteSource
+
+impl MemorySource {
+    pub fn new() -> Self;  // A source with nothing in it
+    pub fn insert(&mut self, path: &str, bytes: Vec<u8>);  // Put bytes at `path`
+    pub fn insert_texture(&mut self, path: &str, texture: TextureData);  // Put a decoded image at `path`
+    pub fn fail(&mut self, path: &str, error: AssetError);  // Make `path` fail, as a missing or unreadable file would
+    pub fn complete_at(&mut self, path: &str, tick: u64);  // Hold `path`'s completion until `tick`
+}
+```
+
+#### `TextureHandle`
+
+A loaded — or loading — image.
+
+```rust
+pub struct TextureHandle(pub(crate) AssetId);
+// Clone Copy PartialEq Eq PartialOrd Ord Hash Debug Lookup AssetHandle
+
+impl TextureHandle {
+    pub fn texture_id(self) -> TextureId;  // This texture's id in the renderer's vocabulary (`jidousha-core`)
+}
+```
 
 ### Input
 
-- **`Input`** — The input resource: what a system reads to find out what the player did
-- **`Key`** — A physical key, by position on the keyboard rather than by the letter printed on it
-- **`PointerButton`** — A pointer button
-- **`PointerId`** — Which pointer: the mouse, or one finger of several
-- **`PointerState`** — One pointer, for one tick
+#### `Input`
+
+The input resource: what a system reads to find out what the player did.
+
+```rust
+pub struct Input;
+
+impl Input {
+    pub fn new(snapshot: InputSnapshot) -> Self;  // The input resource for one tick
+    pub fn held(&self, key: Key) -> bool;  // Whether `key` is down this tick
+    pub fn just_pressed(&self, key: Key) -> bool;  // Whether `key` went down this tick
+    pub fn just_released(&self, key: Key) -> bool;  // Whether `key` came up this tick
+    pub fn pointer(&self) -> &PointerState;  // The primary pointer — the mouse, or the first finger down
+    pub fn pointers(&self) -> &[PointerState];  // Every pointer this tick
+    pub fn window_focused(&self) -> bool;  // Whether the window had focus this tick
+    pub fn snapshot(&self) -> &InputSnapshot;  // The whole snapshot, for the recorder and for tests
+}
+```
+
+#### `Key`
+
+A physical key, by position on the keyboard rather than by the letter printed on it.
+
+```rust
+pub enum Key {
+    // Letters, 1..=26, in alphabetical order.
+    A, B, C, D, E, F, G, H, I,
+    J, K, L, M, N, O, P, Q, R,
+    S, T, U, V, W, X, Y, Z,
+
+    // The digit row. Not the numpad, which v1 does not carry.
+    Digit0, Digit1, Digit2, Digit3, Digit4,
+    Digit5, Digit6, Digit7, Digit8, Digit9,
+
+    ArrowUp, ArrowDown, ArrowLeft, ArrowRight,
+
+    Space, Enter, Escape, Tab, Backspace,
+    Delete, Insert, Home, End, PageUp, PageDown,
+
+    ShiftLeft, ShiftRight, ControlLeft, ControlRight,
+    AltLeft, AltRight, SuperLeft, SuperRight, CapsLock,
+
+    F1, F2, F3, F4, F5, F6,
+    F7, F8, F9, F10, F11, F12,
+
+    Minus, Equal, BracketLeft, BracketRight,
+    Backslash, Semicolon, Quote, Backquote,
+    Comma, Period, Slash,
+}
+// Clone Copy Debug PartialEq Eq PartialOrd Ord Hash Display
+
+impl Key {
+    pub const ALL: &'static [Key];  // Every key, in declaration order
+    pub fn code(self) -> u16;  // This key's wire code, as written into recordings
+    pub fn find_by_code(code: u16) -> Option<Key>;  // The key a wire code names, or `None` if this build has never heard…
+    pub fn name(self) -> &'static str;  // The variant's name, for messages and for `input_echo`
+}
+```
+
+#### `PointerButton`
+
+A pointer button.
+
+```rust
+pub enum PointerButton {
+    Primary,  // Click, tap, fire
+    Secondary,  // The context-menu button
+    Middle,  // The scroll wheel, pressed
+}
+// Clone Copy Debug PartialEq Eq PartialOrd Ord Hash Display
+
+impl PointerButton {
+    pub const ALL: &'static [PointerButton] = &[ PointerButton::Primary, PointerButton::Secondary, PointerButton::Middle, ];  // Every button, in declaration order
+    pub fn code(self) -> u8;  // This button's wire code, as written into recordings
+    pub fn find_by_code(code: u8) -> Option<PointerButton>;  // The button a wire code names, or `None` if this build has never…
+    pub fn name(self) -> &'static str;  // The variant's name, for messages
+}
+```
+
+#### `PointerId`
+
+Which pointer: the mouse, or one finger of several.
+
+```rust
+pub struct PointerId(pub(crate) u32);
+// Clone Copy Debug PartialEq Eq PartialOrd Ord Hash Display
+
+impl PointerId {
+    pub const PRIMARY: PointerId = PointerId(0);  // The mouse, or the first finger down
+    pub fn touch(index: u16) -> PointerId;  // The nth touch point
+    pub fn code(self) -> u32;  // The id as written into recordings
+    pub fn from_code(code: u32) -> PointerId;  // The pointer a wire code names
+}
+```
+
+#### `PointerState`
+
+One pointer, for one tick.
+
+```rust
+pub struct PointerState {
+    pub id: PointerId,  // Which pointer this is
+    pub screen: Vec2,  // Where it is, in pixels from the window's top-left — the same…
+    pub scroll: f32,  // Scroll for this tick, in lines
+}
+// Clone Debug PartialEq
+
+impl PointerState {
+    pub fn new(id: PointerId) -> Self;  // A pointer at the origin, touching nothing
+    pub fn held(&self, button: PointerButton) -> bool;  // Whether `button` is down this tick
+    pub fn just_pressed(&self, button: PointerButton) -> bool;  // Whether `button` went down this tick
+    pub fn just_released(&self, button: PointerButton) -> bool;  // Whether `button` came up this tick
+    pub fn held_buttons(&self) -> &[PointerButton];  // Every button down this tick, sorted
+    pub fn pressed_buttons(&self) -> &[PointerButton];  // Every button that went down this tick, sorted
+    pub fn released_buttons(&self) -> &[PointerButton];  // Every button that came up this tick, sorted
+}
+```
 
 ### Testing (`jidousha::testing`)
 
 Not part of a shipped game — this is the vocabulary a test or a
 `--verify` mode uses. See *Testing your game* below.
 
-- **`AssetReady`** — An asset that resolved on some tick
-- **`BackendTextureId`** — A texture as the backend knows it
-- **`compare`** — Compare a capture against a reference
-- **`Comparison`** — What comparing two pictures found
-- **`create_builtin_textures`** — Upload the three textures the renderer always has, and name them
-- **`decode_png`** — Decode a PNG into RGBA8 texels
-- **`diff_image`** — A picture of where two captures disagree, for a human or an agent to look at
-- **`DrawnQuad`** — One quad, read back out of a recorded frame
-- **`encode_png`** — Encode RGBA8 texels as a PNG
-- **`FONT_TEXTURE`** — The id every glyph quad samples
-- **`FramePlan`** — Everything the backend needs to draw one frame
-- **`FrameRecord`** — One frame, as it was submitted to the backend
-- **`Input`** — The input resource: what a system reads to find out what the player did
-- **`InputScript`** — A scripted input session, built once and read per tick
-- **`InputSnapshot`** — Everything the player did during one Update tick
-- **`MemorySource`** — A source whose bytes are already in memory and whose *timing* is scripted
-- **`NullBackend`** — A backend that records frames instead of drawing them
-- **`PhysicalSize`** — The size of a surface or a texture, in physical pixels
-- **`plan_frame`** — Turn a frame's submissions into a plan
-- **`RawImage`** — Pixels read back off the GPU, for golden-image tests (R4)
-- **`Recording`** — A whole session: what it was seeded with, and what happened on every tick
-- **`RecordingError`** — Why a recording could not be read
-- **`RenderBackend`** — What every render backend implements
-- **`ReplaySource`** — A source that releases another source's completions on recorded ticks
-- **`TextureData`** — Decoded image texels, ready for the GPU
-- **`TextureTable`** — Which backend texture each `TextureId` currently maps to
-- **`TickRecord`** — One tick of the timeline
-- **`Tolerance`** — How different two pictures may be and still count as the same picture
-- **`upload_ready_textures`** — Hand every newly loaded texture to the backend, and record where it landed
-- **`WgpuBackend`** — A renderer backed by wgpu
+#### `AssetReady`
+
+An asset that resolved on some tick.
+
+```rust
+pub struct AssetReady {
+    pub request: u64,  // Which request resolved, as `RequestId`(crate::RequestIdBits)…
+    pub arrived: bool,  // Whether it arrived
+}
+// Clone Copy Debug PartialEq Eq
+```
+
+#### `BackendTextureId`
+
+A texture as the backend knows it.
+
+```rust
+pub struct BackendTextureId(pub u32);
+// Clone Copy Debug PartialEq Eq PartialOrd Ord Hash
+```
+
+#### `compare`
+
+Compare a capture against a reference.
+
+```rust
+pub fn compare(expected: &RawImage, actual: &RawImage, tolerance: Tolerance) -> Comparison;
+```
+
+#### `Comparison`
+
+What comparing two pictures found.
+
+```rust
+pub struct Comparison {
+    pub matched: bool,  // Whether the two count as the same picture under the tolerance used
+    pub differing: usize,  // Pixels differing by more than the tolerance allows per channel
+    pub total: usize,  // Pixels compared
+    pub worst: u8,  // The largest single-channel difference anywhere
+    pub worst_at: Option<(u32, u32)>,  // Where `worst` was found, in pixels from the top-left
+    pub size_mismatch: Option<(PhysicalSize, PhysicalSize)>,  // Set when the two are not even the same shape, which no tolerance…
+}
+// Clone Debug PartialEq Display
+
+impl Comparison {
+    pub fn differing_fraction(&self) -> f32;  // The fraction of compared pixels that differed, 0.0 when nothing was…
+}
+```
+
+#### `create_builtin_textures`
+
+Upload the three textures the renderer always has, and name them.
+
+```rust
+pub fn create_builtin_textures(backend: &mut dyn RenderBackend) -> TextureTable;
+```
+
+#### `decode_png`
+
+Decode a PNG into RGBA8 texels.
+
+```rust
+pub fn decode_png(bytes: &[u8]) -> Result<TextureData, AssetError>;
+```
+
+#### `diff_image`
+
+A picture of where two captures disagree, for a human or an agent to look at.
+
+```rust
+pub fn diff_image(expected: &RawImage, actual: &RawImage, tolerance: Tolerance) -> Option<RawImage>;
+```
+
+#### `DrawnQuad`
+
+One quad, read back out of a recorded frame.
+
+```rust
+pub struct DrawnQuad {
+    pub batch: usize,  // Which batch it came from, so batching is observable
+    pub texture: BackendTextureId,  // What it sampled
+    pub corners: [Vec2; 4],  // The four corners, in world space, in draw order
+    pub tint: Color,  // The tint
+}
+// Clone Copy Debug PartialEq
+
+impl DrawnQuad {
+    pub fn bounds(&self) -> Rect;  // The axis-aligned box around the quad
+    pub fn contains(&self, world: Vec2) -> bool;  // Whether `world` is inside the quad itself, rotation included
+}
+```
+
+#### `encode_png`
+
+Encode RGBA8 texels as a PNG.
+
+```rust
+pub fn encode_png(image: &TextureData) -> Vec<u8>;
+```
+
+#### `FONT_TEXTURE`
+
+The id every glyph quad samples.
+
+```rust
+pub const FONT_TEXTURE: TextureId = TextureId::from_bits(1);
+```
+
+#### `FramePlan`
+
+Everything the backend needs to draw one frame.
+
+```rust
+pub struct FramePlan {
+    pub clear_color: Color,  // What to fill the screen with first
+    pub view_projection: Mat4,  // World space to clip space
+    pub batches: Vec<Batch>,  // What to draw, in the order to draw it
+}
+// Clone Debug PartialEq
+
+impl FramePlan {
+    pub fn quad_count(&self) -> usize;  // How many quads the whole frame draws
+}
+```
+
+#### `FrameRecord`
+
+One frame, as it was submitted to the backend.
+
+```rust
+pub struct FrameRecord {
+    pub plan: FramePlan,  // The plan exactly as the backend received it
+}
+// Clone Debug PartialEq
+
+impl FrameRecord {
+    pub fn quads(&self) -> Vec<DrawnQuad>;  // Every quad drawn this frame, in draw order
+    pub fn covering(&self, world: Vec2) -> Vec<DrawnQuad>;  // Every quad covering `world`, front to back — the last one drawn…
+    pub fn quad_count(&self) -> usize;  // How many quads were drawn
+    pub fn transcript(&self) -> String;  // The frame as text: deterministic, diffable, and readable in a…
+}
+```
+
+#### `FrameRecorder`
+
+Draws a headless game and keeps every frame, for a test to assert on.
+
+```rust
+pub struct FrameRecorder;
+
+impl FrameRecorder {
+    pub fn new(viewport: PhysicalSize) -> Self;  // A recorder drawing to a surface `viewport` pixels across
+    pub fn settle_assets(&mut self, sim: &mut HeadlessSim, tick: u64);  // Apply what has finished loading and put it on the GPU, as the…
+    pub fn draw(&mut self, sim: &mut HeadlessSim) -> &FrameRecord;  // Run the game's Draw phase once and record the frame it produced
+    pub fn font_texture(&self) -> BackendTextureId;  // Which backend texture the engine's font atlas is on
+    pub fn frames(&self) -> &[FrameRecord];  // Every frame recorded so far, oldest first
+    pub fn transcript(&self) -> String;  // The last frame as stable, diffable text
+}
+```
+
+#### `Input`
+
+The input resource: what a system reads to find out what the player did.
+
+```rust
+pub struct Input;
+
+impl Input {
+    pub fn new(snapshot: InputSnapshot) -> Self;  // The input resource for one tick
+    pub fn held(&self, key: Key) -> bool;  // Whether `key` is down this tick
+    pub fn just_pressed(&self, key: Key) -> bool;  // Whether `key` went down this tick
+    pub fn just_released(&self, key: Key) -> bool;  // Whether `key` came up this tick
+    pub fn pointer(&self) -> &PointerState;  // The primary pointer — the mouse, or the first finger down
+    pub fn pointers(&self) -> &[PointerState];  // Every pointer this tick
+    pub fn window_focused(&self) -> bool;  // Whether the window had focus this tick
+    pub fn snapshot(&self) -> &InputSnapshot;  // The whole snapshot, for the recorder and for tests
+}
+```
+
+#### `InputScript`
+
+A scripted input session, built once and read per tick.
+
+```rust
+pub struct InputScript;
+
+impl InputScript {
+    pub fn new() -> Self;  // An empty script: every tick reports the player doing nothing
+    pub fn hold(mut self, key: Key, ticks: Range<u64>) -> Self;  // Hold `key` down for `ticks`
+    pub fn press(mut self, key: Key, tick: u64) -> Self;  // Tap `key` on `tick`: pressed, held, and released, all on that one…
+    pub fn pointer_at(mut self, tick: u64, screen: Vec2) -> Self;  // Put the pointer at `screen` from `tick` onwards
+    pub fn click(mut self, button: PointerButton, tick: u64) -> Self;  // Tap `button` on `tick`
+    pub fn snapshot_at(&self, tick: u64) -> InputSnapshot;  // What the player is doing on `tick`
+    pub fn last_tick(&self) -> u64;  // The last tick any directive mentions, so a test can drive the whole…
+}
+```
+
+#### `InputSnapshot`
+
+Everything the player did during one Update tick.
+
+```rust
+pub struct InputSnapshot;
+// Clone Debug PartialEq
+
+impl InputSnapshot {
+    pub fn new() -> Self;  // A tick in which the player did nothing
+    pub fn held_keys(&self) -> &[Key];  // Keys down this tick, sorted
+    pub fn pressed_keys(&self) -> &[Key];  // Keys that went down this tick, sorted
+    pub fn released_keys(&self) -> &[Key];  // Keys that came up this tick, sorted
+    pub fn pointers(&self) -> &[PointerState];  // Every pointer this tick
+    pub fn window_focused(&self) -> bool;  // Whether the window had focus this tick
+}
+```
+
+#### `MemorySource`
+
+A source whose bytes are already in memory and whose *timing* is scripted.
+
+```rust
+pub struct MemorySource;
+// ByteSource
+
+impl MemorySource {
+    pub fn new() -> Self;  // A source with nothing in it
+    pub fn insert(&mut self, path: &str, bytes: Vec<u8>);  // Put bytes at `path`
+    pub fn insert_texture(&mut self, path: &str, texture: TextureData);  // Put a decoded image at `path`
+    pub fn fail(&mut self, path: &str, error: AssetError);  // Make `path` fail, as a missing or unreadable file would
+    pub fn complete_at(&mut self, path: &str, tick: u64);  // Hold `path`'s completion until `tick`
+}
+```
+
+#### `NullBackend`
+
+A backend that records frames instead of drawing them.
+
+```rust
+pub struct NullBackend;
+// RenderBackend
+
+impl NullBackend {
+    pub fn new() -> Self;  // A backend with nothing recorded and a 1280×720 surface
+    pub fn frames(&self) -> &[FrameRecord];  // Every frame recorded so far, oldest first
+    pub fn last_frame(&self) -> Option<&FrameRecord>;  // The most recent frame, if anything has been drawn
+    pub fn clear(&mut self);  // Forget every recorded frame, for a test that wants a fresh window
+    pub fn transcript(&self) -> String;  // Every recorded frame as one transcript
+    pub fn surface(&self) -> PhysicalSize;  // The surface size the backend was last told about
+    pub fn texture_count(&self) -> usize;  // How many textures have been created, including destroyed ones
+    pub fn uploaded(&self, id: BackendTextureId) -> Option<(TextureDesc, &[u8])>;  // What `id` was uploaded with: its description and its texels
+    pub fn destroyed(&self) -> &[BackendTextureId];  // Textures that were destroyed, in the order they were
+}
+```
+
+#### `PhysicalSize`
+
+The size of a surface or a texture, in physical pixels.
+
+```rust
+pub struct PhysicalSize {
+    pub width: u32,  // Width in pixels
+    pub height: u32,  // Height in pixels
+}
+// Clone Copy Debug PartialEq Eq
+
+impl PhysicalSize {
+    pub const fn new(width: u32, height: u32) -> Self;  // A size in pixels
+    pub fn aspect(self) -> f32;  // Width divided by height, or 1.0 for a degenerate surface
+}
+```
+
+#### `plan_frame`
+
+Turn a frame's submissions into a plan.
+
+```rust
+pub fn plan_frame(camera: &Camera, quads: &[Quad], textures: &TextureTable) -> FramePlan;
+```
+
+#### `RawImage`
+
+Pixels read back off the GPU, for golden-image tests.
+
+```rust
+pub struct RawImage {
+    pub size: PhysicalSize,  // Size in pixels
+    pub rgba: Vec<u8>,  // RGBA8, row-major, top row first
+}
+// Clone Debug PartialEq Eq
+```
+
+#### `Recording`
+
+A whole session: what it was seeded with, and what happened on every tick.
+
+```rust
+pub struct Recording;
+// Clone Debug PartialEq
+
+impl Recording {
+    pub fn new(seed: u64, fixed_dt: Seconds) -> Self;  // An empty recording of a run with this seed and timestep
+    pub fn seed(&self) -> u64;  // What the run was seeded with
+    pub fn fixed_dt(&self) -> Seconds;  // How long one tick was
+    pub fn ticks(&self) -> &[TickRecord];  // Every tick recorded, in order
+    pub fn push(&mut self, record: TickRecord);  // Add a tick to the end
+    pub fn header(&self) -> Vec<u8>;  // The header, without any records
+    pub fn encode(&self) -> Vec<u8>;  // The whole recording as bytes
+    pub fn try_decode(bytes: &[u8]) -> Result<Recording, RecordingError>;  // Read a recording back
+}
+```
+
+#### `RecordingError`
+
+Why a recording could not be read.
+
+```rust
+pub enum RecordingError {
+    NotARecording,  // The bytes do not begin with a recording header
+    Version { found: u16 },  // A recording, from a version this build does not read
+    Snapshot(DecodeError),  // A complete record inside it did not decode
+    OutOfOrder { found: u64, after: u64 },  // The timeline runs backwards
+}
+// Clone Debug PartialEq Eq Display
+```
+
+#### `RenderBackend`
+
+What every render backend implements.
+
+```rust
+pub trait RenderBackend {
+    fn create_texture(&mut self, desc: &TextureDesc, texels: &[u8]) -> BackendTextureId;  // Upload a texture and name it
+    fn destroy_texture(&mut self, id: BackendTextureId);  // Release a texture
+    fn resize_surface(&mut self, size: PhysicalSize);  // The surface changed size
+    fn render(&mut self, plan: &FramePlan) -> Result<(), RenderError>;  // Draw one frame
+    fn capture(&mut self) -> Result<RawImage, RenderError>;  // Read the last rendered frame back as pixels, for golden-image tests
+}
+```
+
+#### `ReplaySource`
+
+A source that releases another source's completions on recorded ticks.
+
+```rust
+pub struct ReplaySource<S>;
+// ByteSource
+
+impl ReplaySource {
+    pub fn new(inner: S, schedule: impl IntoIterator<Item = (u64, u64)>) -> Self;  // A source that plays `inner` back on `schedule`'s ticks
+    pub fn unreleased(&self) -> usize;  // Completions that have arrived but are not due yet
+}
+```
+
+#### `TextureData`
+
+Decoded image texels, ready for the GPU.
+
+```rust
+pub struct TextureData {
+    pub width: u32,  // Width in texels
+    pub height: u32,  // Height in texels
+    pub rgba: Vec<u8>,  // `width * height * 4` bytes
+}
+// Clone Debug PartialEq Eq
+```
+
+#### `TextureTable`
+
+Which backend texture each `TextureId` currently maps to.
+
+```rust
+pub struct TextureTable;
+
+impl TextureTable {
+    pub fn new(white: BackendTextureId, placeholder: BackendTextureId) -> Self;  // A table with the two built-in textures the renderer always has
+    pub fn register(&mut self, id: TextureId, backend: BackendTextureId);  // Record that `id`'s texels are on the GPU as `backend`
+    pub fn forget(&mut self, id: TextureId);  // Forget `id`, so it draws the placeholder again
+    pub fn is_ready(&self, id: TextureId) -> bool;  // Whether `id` has real texels behind it
+    pub fn resolve(&self, id: TextureId) -> BackendTextureId;  // What to actually sample for `id`
+    pub fn placeholder(&self) -> BackendTextureId;  // The placeholder's backend id
+}
+```
+
+#### `TickRecord`
+
+One tick of the timeline.
+
+```rust
+pub struct TickRecord {
+    pub tick: u64,  // Which tick this is
+    pub input: InputSnapshot,  // What input the tick saw
+    pub readiness: Vec<AssetReady>,  // Which assets committed on it, in the order the store applied them
+}
+// Clone Debug PartialEq
+
+impl TickRecord {
+    pub fn encode(&self) -> Vec<u8>;  // This record's bytes, self-delimiting
+}
+```
+
+#### `Tolerance`
+
+How different two pictures may be and still count as the same picture.
+
+```rust
+pub struct Tolerance {
+    pub per_channel: u8,  // How far one channel of one pixel may be from the reference, 0–255
+    pub differing_fraction: f32,  // What fraction of pixels may differ by more than `per_channel`,…
+}
+// Clone Copy Debug PartialEq
+
+impl Tolerance {
+    pub const CLOSE_ENOUGH: Self = Self { per_channel: 2, differing_fraction: 0.005 };  // What a golden test should want unless it has a reason otherwise
+    pub const EXACT: Self = Self { per_channel: 0, differing_fraction: 0.0 };  // Nothing may differ at all
+}
+```
+
+#### `upload_ready_textures`
+
+Hand every newly loaded texture to the backend, and record where it landed.
+
+```rust
+pub fn upload_ready_textures(assets: &mut Assets, backend: &mut dyn RenderBackend, textures: &mut TextureTable);
+```
+
+#### `WgpuBackend`
+
+A renderer backed by wgpu.
+
+```rust
+pub struct WgpuBackend;
+// RenderBackend
+
+impl WgpuBackend {
+    pub fn new<W>(window: W, size: PhysicalSize) -> Result<Self, RenderError> where W: wgpu::DisplayAndWindowHandle + 'static;  // Ask for a GPU that can draw to `window`
+    pub fn offscreen(size: PhysicalSize) -> Self;  // Ask for a GPU that draws into a texture nobody sees
+    pub fn is_ready(&self) -> bool;  // Whether the GPU has arrived
+    pub fn poll(&mut self) -> Result<(), RenderError>;  // Move the GPU handshake along, if it is still going
+}
+```
 
 ## Conventions
 
@@ -286,11 +1468,11 @@ Not part of a shipped game — this is the vocabulary a test or a
 
 - **World space: X right, Y down, right-handed (+Z into screen) — matches
   Vulkan NDC. Positive rotation is clockwise on screen** (right-hand rule about
-  +Z). DELIBERATE: screen-natural over math-canonical — see ADR-0010; do not
-  "fix" this to Y-up. Gravity is `+y`; jumping is `-y`; the 3D story is covered
-  in ADR-0010's consequences.
+  +Z). DELIBERATE: screen-natural over math-canonical; do not "fix" this to
+  Y-up. Gravity is `+y`; jumping is `-y`, and the 3D story follows from the same
+  choice.
 - World units are abstract (not pixels). The camera defines the world↔pixel
-  relationship (`docs/internal/renderer.md` §5).
+  relationship.
 - **Screen space: pixels, origin top-left** — same orientation as world space,
   differing only in units and camera offset. It exists only at the platform
   boundary (raw pointer events, window sizes); the ONLY sanctioned conversion
@@ -301,8 +1483,7 @@ Not part of a shipped game — this is the vocabulary a test or a
 ### Time
 
 - Simulation time: `tick: u64` (canonical) and `Seconds` newtype (derived,
-  `tick * fixed_dt`). Wall-clock time is banned outside `jidousha-platform`
-  (ADR-0005; CI-checked).
+  `tick * fixed_dt`). Wall-clock time is banned outside `jidousha-platform`.
 - Durations in public APIs are `Seconds(f32)`, never milliseconds, never bare f32.
 
 ### Color
@@ -310,6 +1491,12 @@ Not part of a shipped game — this is the vocabulary a test or a
 - `Color` = f32 RGBA, **sRGB-encoded, 0.0–1.0**, straight (non-premultiplied)
   alpha. What agents and humans mean by "0.5 gray" — linearization happens inside
   the render backend, invisibly.
+- **Alpha is the exception to "invisibly": it reads brighter than the number
+  looks.** Blending happens in *linear* light, where it is physically right, so
+  a low alpha over a dark background lands much higher than the figure suggests
+  — 0.06 white on near-black reads as solid grey, not as a hint. Pick faint
+  overlays (grid lines, field markings, dimmers) by eye from a capture rather
+  than by arithmetic, and start lower than feels right.
 - Constructors: `Color::rgb(r, g, b)`, `Color::rgba(...)`, plus a small named set
   (`Color::WHITE`, `Color::MAGENTA`, …). No 0–255 constructors in v1 (one way).
 
@@ -318,15 +1505,16 @@ Not part of a shipped game — this is the vocabulary a test or a
 - Sort key: (`layer: i16`, then `z: f32`, then submission order; stable).
   `layer` is the coarse tool (background/world/UI bands); `z` orders within a
   layer. **Higher `z` draws on top** (z-index semantics; `z` is a draw-order
-  key, NOT a coordinate on the spatial +Z axis, which points into the screen —
-  ADR-0010). NaN `z` is a contract violation (debug-checked).
+  key, NOT a coordinate on the spatial +Z axis, which points into the screen).
+  NaN `z` is a contract violation (debug-checked). The two senses of "z" are
+  the same choice seen twice.
 - Within-frame determinism: identical submissions → identical order, always.
 
 ### Math
 
 - glam types (`Vec2`, `Vec3`, `Mat4`) with `scalar-math`; engine newtypes for
   units (`Radians`, `Seconds`). Std float trig is clippy-banned engine-wide —
-  use `jidousha::math::{sin_cos, atan2, ...}` (ADR-0009).
+  use `jidousha::math::{sin_cos, atan2, ...}`.
 
 ## Testing your game
 
@@ -354,11 +1542,34 @@ Assets are scripted the same way: `MemorySource` lets a test say "this texture
 becomes ready at tick 30", so loading behaviour — placeholders, gates, the frame
 a sprite appears — is something to assert on rather than a race.
 
-To check what was *drawn*, render into `jidousha::testing::NullBackend`, which
-records every frame as structured data. `FrameRecord::covering(point)` answers
-"what is at this world position?" with exact rotated-quad containment, and
-`transcript()` renders a frame as stable, diffable text. No GPU is involved, so
-this runs anywhere.
+To check what was *drawn*, draw the game into a `jidousha::testing::FrameRecorder`,
+which records every frame as structured data. No GPU and no window is involved,
+so this runs anywhere:
+
+```rust
+let mut recorder = FrameRecorder::new(PhysicalSize::new(1280, 720));
+for tick in 1..=600 {
+    sim.world_mut().insert_resource(Input::new(script.snapshot_at(tick)));
+    sim.tick();
+    recorder.draw(&mut sim);          // one frame, recorded
+}
+let frame = recorder.frames().last().expect("600 frames were drawn");
+```
+
+`frame.covering(point)` answers "what is at this world position?" with exact
+rotated-quad containment, `frame.quads()` hands you every quad with its
+`bounds()` and `tint`, and `recorder.transcript()` renders the last frame as
+stable, diffable text — every quad's world-space extent, one per line. That
+transcript is the closest thing to a screenshot available on a machine with no
+display, and it is good enough to check a layout by eye.
+
+To ask whether any of it was *text*, compare a quad's texture against
+`recorder.font_texture()`: the font atlas is a texture like any other, so a quad
+sampling it came from `ctx.text` and nothing else could have produced it.
+
+A game with art also calls `recorder.settle_assets(&mut sim, tick)` before each
+`draw`, which is what makes a texture that became ready on this tick appear in
+this frame. A game of shapes and text never needs it.
 
 `tools/verify <example>` is the whole loop as one command: scripted input, a
 fixed number of headless ticks, the example's own assertions, and a captured PNG

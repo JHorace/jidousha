@@ -127,11 +127,32 @@ impl Pending {
         size: PhysicalSize,
     ) -> Self {
         let future = instance.request_adapter(&wgpu::RequestAdapterOptions {
-            // Low power by default: a 2D prototype does not need the discrete
-            // GPU, and asking for it costs battery and switching latency.
-            power_preference: wgpu::PowerPreference::LowPower,
+            // High performance, which on a multi-GPU machine means "the
+            // discrete one" — and the discrete one is where the compositor
+            // usually is. Presenting means handing the compositor a buffer it
+            // can import, and a buffer exported by one vendor's driver and
+            // imported by another's may simply be refused: on a laptop with an
+            // NVIDIA GPU driving the display and an AMD integrated GPU, every
+            // windowed example died with "importing the supplied dmabufs
+            // failed" before this line said so.
+            //
+            // This asked for `LowPower` on the reasoning that a 2D prototype
+            // does not need the discrete GPU and asking costs battery. True
+            // about power, wrong about which GPU can show the result: it sorts
+            // the integrated adapter to the front, which is worse than the
+            // default `None` (no sorting at all). Battery is the right thing to
+            // want and the wrong thing to buy with a window that never opens.
+            //
+            // See e0-findings.md F-011. The offscreen path below stays on
+            // LowPower — it presents to nothing, so none of this applies.
+            power_preference: wgpu::PowerPreference::HighPerformance,
             // Required when targeting WebGL2 — an adapter is only useful if it
             // can present to the surface we already made (ADR-0003 §4).
+            //
+            // Not the fix for the mismatch above: under Wayland this filter
+            // excludes almost nothing, because presentation goes through buffer
+            // sharing rather than direct scanout, so every renderable GPU
+            // reports that it can present.
             compatible_surface: Some(&surface),
             ..Default::default()
         });
@@ -149,6 +170,12 @@ impl Pending {
     /// no display — including every CI runner the project has.
     pub(crate) fn offscreen(instance: &wgpu::Instance, size: PhysicalSize) -> Self {
         let future = instance.request_adapter(&wgpu::RequestAdapterOptions {
+            // Deliberately different from the windowed path above, which asks
+            // for HighPerformance. Nothing here is presented to a compositor, so
+            // the cross-vendor import that forces that choice cannot arise, and
+            // the cheapest adapter that can draw a test frame is the right one.
+            // An unexplained difference between these two calls would read as an
+            // oversight, which is the only reason this comment exists.
             power_preference: wgpu::PowerPreference::LowPower,
             compatible_surface: None,
             ..Default::default()

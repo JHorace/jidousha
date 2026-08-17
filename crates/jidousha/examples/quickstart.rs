@@ -81,7 +81,7 @@ fn collect(world: &mut World) {
     world.resource_mut::<Score>().0 += 1;
 }
 
-/// Draw systems take a `DrawCtx` and cannot change the world (ADR-0008).
+/// Draw systems take a `DrawCtx` and cannot change the world: the type says so.
 fn draw_everything(ctx: &mut DrawCtx) {
     for (_, transform, _) in ctx.world.query::<(&Transform, &Player)>() {
         ctx.rect(

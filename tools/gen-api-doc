@@ -12,18 +12,31 @@ example file, embedded verbatim, so the thing an agent copies is the thing CI
 compiles.
 
 Not rustdoc JSON: that needs a nightly toolchain, and `rust-toolchain.toml` pins
-a stable one (ADR-0005, tooling.md). Summaries are lifted from the `///` line
-above each item's definition instead — a bounded text problem with tests, rather
-than a second toolchain.
+a stable one (ADR-0005, tooling.md). Declarations and summaries are lifted from
+the sources instead — a bounded text problem with tests, rather than a second
+toolchain.
+
+**The reference carries signatures, not just names** (public-api.md §4: "one
+entry per item: signature, one-liner, tiny example"). It did not until E0 run 1,
+whose game author reported being unable to make a single call from this document
+— no argument orders, no fields, no variants — and hand-wrote rectangle overlap
+arithmetic against a `Rect` that already had `overlaps`. See e0-findings.md
+F-001. A reference that names a type without showing how to call it is a table
+of contents, and the reader it is written for cannot open the source to find out.
+
+Blocks close on **indentation**, not brace counting: `cargo fmt` puts a block's
+closing brace at exactly the indentation of the line that opened it, and that
+rule survives braces inside string literals (`write!(f, "TextureId({bits})")`),
+which a depth counter does not.
 
 Usage:  tools/gen-api-doc [--check]
 
 `--check` regenerates into memory and fails if the committed file differs, which
-is what CI runs. Exit codes: 0 written/current · 1 stale or over budget · 2 the
-generator could not run.
+is what CI runs. Exit codes: 0 written/current · 1 stale, over budget, leaking
+internal vocabulary, or incomplete · 2 the generator could not run.
 
-Key functions: `facade_exports`, `doc_summaries`, `render`, `token_estimate`,
-`main`.
+Key functions: `facade_exports`, `scan_sources`, `render`, `token_estimate`,
+`completeness_failures`, `main`.
 Depends on: the Python 3.8+ standard library only.
 INVARIANT (public-api.md §4): the generated file must never name an internal
 crate, the backend seam, or any implementation vocabulary. `forbidden_words`
@@ -33,6 +46,7 @@ it came from.
 
 from __future__ import annotations
 
+import dataclasses
 import re
 import sys
 from pathlib import Path
@@ -70,6 +84,28 @@ FORBIDDEN = (
     "winit",
     "RenderBackend",
     "FramePlan",
+    # Pointers into documents this reader may not open. The E0 prompt forbids
+    # `docs/internal/` and `docs/adr/` outright, so a citation of one is worse
+    # than no citation: it tells a game author the answer exists somewhere they
+    # are not allowed to look. `scrub_internal_references` removes the
+    # parenthetical form; these catch anything written another way.
+    "docs/internal",
+    "docs/adr",
+    "core.md",
+    "renderer.md",
+    "assets.md",
+    "input.md",
+    "tooling.md",
+    "public-api.md",
+    "agent-practices",
+    "ADR-",
+)
+
+# `(ADR-0010)`, `(core.md §9)`, `(assets.md §6)`, `(I2)`, `(R4)` — a citation of
+# a maintainers' document, hanging off the end of a sentence.
+CITATION_RE = re.compile(
+    r"\s*\((?:see\s+)?(?:`?(?:docs/internal/)?[a-z-]+\.md`?(?:\s*§[\d.]+)?"
+    r"|ADR-\d+|[MIRAF]\d+)(?:[;,]\s*[^)]*)?\)"
 )
 
 # `pub use jidousha_core::{App, Draw, ...};` — possibly across several lines.
@@ -106,6 +142,20 @@ def facade_exports(text: str) -> "list[tuple[str, list[str]]]":
     return groups
 
 
+def module_exports(text: str, module: str) -> "list[str]":
+    """What the prelude re-exports out of one of the facade's modules.
+
+    `pub use jidousha_core::math;` puts a module in the reference, and a module
+    documented as a name says nothing: `Radians` and `sin_cos` are prelude items
+    a game writes unqualified, and before this they appeared in the document
+    only incidentally, inside other items' signatures.
+    """
+    match = re.search(rf"pub use crate::{module}::\{{([^}}]*)\}}\s*;", text, re.S)
+    if not match:
+        return []
+    return [name.strip() for name in match.group(1).split(",") if name.strip()]
+
+
 def testing_exports(text: str) -> "list[str]":
     """Everything `jidousha::testing` re-exports, sorted."""
     if "pub mod testing" not in text:
@@ -121,46 +171,262 @@ def testing_exports(text: str) -> "list[str]":
 
 # `pub struct Sprite {`, `pub fn headless(`, `pub enum AssetStatus {`, ...
 DEFINITION_RE = re.compile(
-    r"^\s*pub (?:struct|enum|trait|fn|const|type|mod)\s+(\w+)", re.M
+    r"^(\s*)pub (struct|enum|trait|fn|const|type|mod)\s+(\w+)"
 )
+# A member of an `impl` or `trait` body: `pub fn width_of(`, `pub const UNIT:`,
+# and the trait-body form, which carries no `pub` because a trait item is
+# already as public as its trait.
+MEMBER_RE = re.compile(r"^(\s*)pub (?:(?:const|unsafe|async)\s+)*(fn|const)\s+(\w+)")
+TRAIT_MEMBER_RE = re.compile(r"^(\s*)fn\s+(\w+)")
+# `pub center: Vec2,` — a public field, with its type.
+FIELD_RE = re.compile(r"^(\s*)pub (\w+): (.+?),\s*$")
+# `Loading,` / `NoDisplay {` / `Rgb(u8, u8, u8)` — an enum variant.
+VARIANT_RE = re.compile(r"^(\s*)([A-Z]\w*)\s*(\{|\(|,|$)")
+# `#[derive(Clone, Copy, Debug)]`
+DERIVE_RE = re.compile(r"^\s*#\[derive\(([^)]*)\)\]")
+# `keys! {` — a macro invocation at the top level of a file.
+MACRO_CALL_RE = re.compile(r"^(\w+)!\s*\{")
+
+# Enums whose variants are written as a macro invocation rather than as an enum
+# body. `Key`'s macro is the single source of truth for the variant list, the
+# wire codes and the name table at once, so the invocation is where the list
+# lives; scanning the `pub enum Key {` inside the macro body finds `$( $name, )*`
+# and would report an empty keyboard as a fact. E0 run 1 gave up on `Escape`,
+# the arrows and the digits for want of this list (e0-findings.md F-002), so the
+# absence is not hypothetical.
+#
+# One entry is a special case; a general "resolve macro-generated enums" pass is
+# not something a text extractor can do honestly. `completeness_failures` is what
+# makes the next one a failed run rather than a short list.
+MACRO_ENUMS = {
+    # macro name -> (enum it declares, pattern matching one variant)
+    "keys": ("Key", re.compile(r"^\s*(\w+)\s*=\s*\d+\s*,?")),
+}
+
+# How much of a member's summary rides along on its signature line. The whole
+# sentence stays on the item itself; this is the reminder, not the definition.
+MEMBER_SUMMARY_CHARS = 68
+# A `Default` body longer than this is a paragraph, not a value — the impls line
+# says `Default` and the reader goes and looks.
+DEFAULT_VALUE_CHARS = 200
 
 
-def doc_summaries(sources: "list[Path]") -> "dict[str, str]":
-    """The first line of each public item's doc comment, by item name.
+@dataclasses.dataclass
+class Item:
+    """One public item, as much of it as the sources state."""
 
-    The summary a game-writing agent reads is the one the code carries, so a
-    doc comment and its documentation cannot disagree. Only the first sentence
-    is taken: the reference is an index, not a manual.
+    name: str
+    kind: str = ""  # struct | enum | trait | fn | const | type | mod
+    decl: str = ""  # `pub struct Camera` / the whole signature of a free fn
+    summary: str = ""
+    derives: "tuple[str, ...]" = ()
+    traits: "list[str]" = dataclasses.field(default_factory=list)
+    fields: "list[tuple[str, str]]" = dataclasses.field(default_factory=list)
+    variants: "list[tuple[str, str]]" = dataclasses.field(default_factory=list)
+    members: "list[tuple[str, str]]" = dataclasses.field(default_factory=list)
+    default_value: str = ""
+    # Did the source open a `{ ... }` body at all, and did it contain nothing?
+    # A unit struct, a marker trait and a misparsed block all look identical
+    # from the outside, and only the last is a bug.
+    has_body: bool = False
+    empty_body: bool = False
+    # Lines seen inside the body, public or not. A type whose every member is
+    # private (`Entity`) reads exactly like one whose block was misparsed,
+    # until you ask whether the block was read at all.
+    body_lines: int = 0
+    # "literal" | "macro:<name>" | "unresolved" — how the variants were found.
+    variants_from: str = ""
+    source: str = ""
+
+
+def strip_generics(text: str) -> "tuple[str, str]":
+    """Split a leading `<...>` off `text`, respecting nesting.
+
+    `impl<'w, Q: Query<'w>> QueryIterMut<'w, Q>` is why this counts rather than
+    matching `<[^>]*>`: the first `>` in that line closes an inner parameter,
+    not the list.
     """
-    summaries: "dict[str, str]" = {}
-    for source in sources:
-        try:
-            lines = source.read_text(encoding="utf-8").splitlines()
-        except OSError:
+    if not text.startswith("<"):
+        return "", text
+    depth = 0
+    for index, char in enumerate(text):
+        if char == "<":
+            depth += 1
+        elif char == ">":
+            depth -= 1
+            if depth == 0:
+                return text[: index + 1], text[index + 1 :].lstrip()
+    return "", text
+
+
+def split_trait_impl(rest: str) -> "tuple[str, str]":
+    """`Trait for Type` -> (trait, type); `Type` -> ("", type).
+
+    The split has to be at depth zero: `impl<F: for<'w> Fn(..)> IntoSystem<Draw>
+    for F` has a `for` inside its parameter list, and that list is stripped
+    before this sees the line — but a `for` can also appear inside the trait's
+    own arguments, so depth is checked anyway.
+    """
+    depth = 0
+    index = 0
+    while index < len(rest):
+        char = rest[index]
+        if char in "<(":
+            depth += 1
+        elif char in ">)":
+            depth -= 1
+        elif depth == 0 and rest.startswith(" for ", index):
+            return rest[:index].strip(), rest[index + 5 :].strip()
+        index += 1
+    return "", rest.strip()
+
+
+def bare_name(text: str) -> str:
+    """`DrawCtx<'w>` -> `DrawCtx`; `fmt::Debug` -> `Debug`."""
+    text = text.strip().rstrip("{").strip().split("<")[0].strip()
+    return text.split("::")[-1]
+
+
+def indent_of(line: str) -> int:
+    return len(line) - len(line.lstrip())
+
+
+def closes_block(line: str, indent: int) -> bool:
+    """Whether `line` is the `}` that closes a block opened at `indent`.
+
+    Indentation, not brace depth: `cargo fmt` guarantees the closer lines up
+    with its opener, and a depth counter is defeated by a brace inside a string
+    literal — `write!(formatter, "TextureId({bits})")` closes two blocks early.
+
+    The trailing punctuation varies with what was opened: a block ends `}`, a
+    struct-bodied enum variant ends `},`, a const's literal ends `};`.
+    """
+    return line.rstrip().rstrip(",;") == " " * indent + "}"
+
+
+def read_signature(lines: "list[str]", index: int) -> "tuple[str, int]":
+    """The whole signature at `index`, joined onto one line.
+
+    rustfmt puts the terminator — `) -> T {`, `;`, or the bare `{` after a
+    `where` clause — back at the item's own indentation. That is the terminator.
+    No paren counting, and no attempt to balance `<` against `>`, which `->`
+    makes ambiguous anyway.
+    """
+    indent = indent_of(lines[index])
+    # A `const`'s initialiser may itself open a braced literal — `pub const
+    # UNIT: Rect = Rect {` — so only the semicolon ends one. Everything else
+    # ends at the `{` that opens its body.
+    # `pub const fn layer(..)` is a const *function*, whose body opens with `{`
+    # like any other. Only an associated const runs to a semicolon.
+    is_const = re.match(r"^\s*(?:pub )?const\s+(?!fn\b)", lines[index]) is not None
+    parts: "list[str]" = []
+    cursor = index
+    while cursor < len(lines):
+        raw = lines[cursor]
+        parts.append(raw.strip())
+        stripped = raw.rstrip()
+        if stripped.endswith(";"):
+            break
+        # `pub trait Resource: 'static + Send + Sync {}` — an empty body ends
+        # the declaration as surely as a `{` does, and reading past it swallows
+        # whatever is defined next.
+        if not is_const and stripped.endswith("{}"):
+            break
+        if not is_const and indent_of(raw) <= indent and stripped.endswith("{"):
+            break
+        cursor += 1
+    text = re.sub(r"\s+", " ", " ".join(parts)).strip()
+    text = re.sub(r"\s*\{$", "", text).strip().rstrip(";").strip()
+    # rustfmt's wrapping leaves the seams behind once the lines are joined.
+    text = text.replace("( ", "(").replace(" )", ")")
+    text = re.sub(r",\s*\)", ")", text)
+    text = re.sub(r",\s*\}", " }", text)
+    return unqualify(text.rstrip(",")), cursor
+
+
+def scrub_internal_references(text: str) -> str:
+    """Drop citations of maintainers' documents from the game-facing text.
+
+    A doc comment serves two readers: rustdoc, where `(ADR-0010)` is the whole
+    point, and this document, whose reader is forbidden to open `docs/adr/` or
+    `docs/internal/` at all (e0-prompt.md). For that reader a citation is worse
+    than silence — it says the answer exists somewhere they may not look. E0 run
+    1 hit exactly this on `message`, whose entry pointed at `core.md §9`
+    (e0-findings.md F-005).
+
+    Stripping on the way out is practices §2.4 — two audiences, strict
+    separation — rather than a campaign to reword every doc comment in the
+    crates, which would take the citation away from the reader it helps.
+    """
+    return CITATION_RE.sub("", text)
+
+
+def unqualify(text: str) -> str:
+    """Drop the internal crate from a path: `jidousha_assets::ByteSource`.
+
+    The type is the same type; the path is the routing a facade exists to hide,
+    and naming it in this document would both breach the §4 CONTRACT and send a
+    game author looking for a crate they must not depend on.
+    """
+    return re.sub(r"\bjidousha_\w+::", "", text)
+
+
+def flatten_default(lines: "list[str]", index: int) -> str:
+    """The value a `fn default()` produces, as one line.
+
+    Read from the body rather than described, because the body is the answer:
+    `GameConfig::default()` is where a game learns the tick rate is 1/60, and
+    that number appears nowhere else a game is allowed to look (F-004).
+    """
+    indent = indent_of(lines[index])
+    parts: "list[str]" = []
+    cursor = index + 1
+    while cursor < len(lines) and not closes_block(lines[cursor], indent):
+        stripped = lines[cursor].strip()
+        if stripped and not stripped.startswith("//"):
+            parts.append(stripped)
+        cursor += 1
+    text = re.sub(r"\s+", " ", " ".join(parts)).strip()
+    text = re.sub(r",\s*\}", " }", text)
+    return unqualify(text) if len(text) <= DEFAULT_VALUE_CHARS else ""
+
+
+def macro_enum_variants(
+    lines: "list[str]", index: int, pattern: "re.Pattern[str]"
+) -> "tuple[list[str], list[str]]":
+    """Every variant a `name! { A = 1, B = 2, ... }` invocation declares.
+
+    Returns the variant names and the body to render, which is the invocation's
+    own layout with the wire codes removed: the codes are a recording-format
+    detail a game never writes, but the grouping and its comments are real
+    information (letters, digit row, arrows, editing keys), and regrouping the
+    list here would be a second opinion about the keyboard.
+
+    No run compression — no `A–Z`, no `F1–F12`. Compression is precisely how a
+    variant goes missing without anybody noticing, and 96 bare names cost about
+    900 characters against tens of thousands spare.
+    """
+    names: "list[str]" = []
+    body: "list[str]" = []
+    cursor = index + 1
+    while cursor < len(lines) and not closes_block(lines[cursor], indent_of(lines[index])):
+        stripped = lines[cursor].strip()
+        cursor += 1
+        if not stripped or stripped.startswith("//"):
+            body.append(stripped)
             continue
-        for index, line in enumerate(lines):
-            match = DEFINITION_RE.match(line)
-            if not match:
-                continue
-            name = match.group(1)
-            if name in summaries:
-                continue
-            # Walk back over attributes to the doc comment above.
-            cursor = index - 1
-            while cursor >= 0 and lines[cursor].lstrip().startswith("#["):
-                cursor -= 1
-            if cursor < 0 or not lines[cursor].lstrip().startswith("///"):
-                continue
-            # And back to the start of that comment block, then take its first
-            # sentence — the summary, by the convention every file here follows.
-            start = cursor
-            while start > 0 and lines[start - 1].lstrip().startswith("///"):
-                start -= 1
-            block = [line.lstrip()[3:].strip() for line in lines[start : cursor + 1]]
-            summary = first_sentence(block)
-            if summary:
-                summaries[name] = summary
-    return summaries
+        found = [
+            match.group(1)
+            for match in (pattern.match(part.strip()) for part in stripped.split(","))
+            if match
+        ]
+        if not found:
+            continue
+        names += found
+        body.append(", ".join(found) + ",")
+    while body and not body[-1]:
+        body.pop()
+    return names, body
 
 
 def first_sentence(block: "list[str]") -> str:
@@ -180,12 +446,356 @@ def first_sentence(block: "list[str]") -> str:
     sentence = text.split(". ")[0].rstrip(".").strip()
     # rustdoc intra-doc links mean nothing in a markdown file read by an agent;
     # the brackets around an already-code-spanned name are noise.
-    return re.sub(r"\[(`[^`]+`)\]", r"\1", sentence)
+    sentence = re.sub(r"\[(`[^`]+`)\]", r"\1", sentence)
+    return scrub_internal_references(sentence).strip()
+
+
+def scan_sources(sources: "list[Path]") -> "dict[str, Item]":
+    """Every public item the sources declare, by name.
+
+    First definition wins, as before — the facade re-exports one of each and
+    there are no duplicate public type names across the crates.
+    """
+    items: "dict[str, Item]" = {}
+    for source in sources:
+        try:
+            lines = source.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+        scan_file(lines, str(source), items)
+    return items
+
+
+def scan_file(lines: "list[str]", source: str, items: "dict[str, Item]") -> None:
+    """Read one file into `items`.
+
+    A small state machine over a stack of open blocks. Each frame is
+    `(what, indent, target)`, and a frame is popped when a `}` shows up at its
+    own indentation — see `closes_block` for why that beats counting braces.
+    """
+    # (what, indent, target): "impl" | "trait" | "body" | "default" | "skip"
+    stack: "list[tuple[str, int, str]]" = []
+    doc: "list[str]" = []
+    derives: "tuple[str, ...]" = ()
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        while stack and closes_block(line, stack[-1][1]):
+            stack.pop()
+        stripped = line.strip()
+
+        # Doc comments and attributes accumulate onto whatever comes next.
+        if stripped.startswith("///"):
+            doc.append(stripped[3:].strip())
+            index += 1
+            continue
+        if stripped.startswith("#["):
+            match = DERIVE_RE.match(line)
+            if match:
+                derives = tuple(part.strip() for part in match.group(1).split(","))
+            index += 1
+            continue
+        if not stripped or stripped.startswith("//"):
+            doc, derives = [], ()
+            index += 1
+            continue
+
+        summary = first_sentence(doc)
+        doc, held_derives = [], derives
+        derives = ()
+        top = stack[-1] if stack else ("", -4, "")
+
+        if stripped.startswith("impl") and re.match(r"^\s*impl[\s<]", line):
+            index = enter_impl(lines, index, line, stack, items)
+            continue
+
+        match = DEFINITION_RE.match(line)
+        # `not stack` rather than `indent == 0`: `pub enum Key` is written inside
+        # `macro_rules! keys`, which opens no frame here, and skipping it would
+        # lose the one enum the document most needs (F-002).
+        if match and not stack:
+            index = enter_definition(
+                lines, index, match, summary, held_derives, source, stack, items
+            )
+            continue
+
+        if top[0] == "default" and re.match(r"^\s*fn default\(", line):
+            item = items.get(top[2])
+            if item is not None:
+                item.default_value = flatten_default(lines, index)
+            index += 1
+            continue
+
+        if top[0] in ("impl", "trait") and indent_of(line) == top[1] + 4:
+            item = items.get(top[2])
+            member = MEMBER_RE.match(line) or (
+                TRAIT_MEMBER_RE.match(line) if top[0] == "trait" else None
+            )
+            if item is not None and member:
+                signature, index = read_signature(lines, index)
+                item.members.append((clean_member(signature), summary))
+                index += 1
+                continue
+
+        if top[0] == "body" and indent_of(line) == top[1] + 4:
+            item = items.get(top[2])
+            if item is not None:
+                item.body_lines += 1
+            if item is not None and item.kind == "struct":
+                field = FIELD_RE.match(line)
+                if field:
+                    text = unqualify(f"pub {field.group(2)}: {field.group(3)}")
+                    item.fields.append((text, summary))
+            elif item is not None and item.kind == "enum":
+                variant = VARIANT_RE.match(line)
+                if variant:
+                    text, index = read_variant(lines, index)
+                    item.variants.append((text, summary))
+
+        if not stack and (macro := MACRO_CALL_RE.match(line)):
+            index = enter_macro_enum(lines, index, macro.group(1), items)
+            continue
+
+        index += 1
+
+
+def enter_impl(
+    lines: "list[str]",
+    index: int,
+    line: str,
+    stack: "list[tuple[str, int, str]]",
+    items: "dict[str, Item]",
+) -> int:
+    """Push a frame for an `impl` block and record what it says about its type."""
+    indent = indent_of(line)
+    _, rest = strip_generics(line.strip()[4:].lstrip())
+    trait, target = split_trait_impl(rest)
+    name = bare_name(target)
+    item = items.get(name)
+    if trait:
+        trait_name = bare_name(trait)
+        if item is not None and trait_name not in item.traits:
+            item.traits.append(trait_name)
+        # A trait's methods belong to the trait's own declaration. Attributing
+        # them to the type too would put `rect` on `DrawCtx`'s inherent list and
+        # say, wrongly, that it resolves without the trait in scope.
+        stack.append(("default" if trait_name == "Default" else "skip", indent, name))
+    else:
+        stack.append(("impl", indent, name))
+    if line.rstrip().endswith("{}"):
+        stack.pop()
+    return index + 1
+
+
+def enter_definition(
+    lines: "list[str]",
+    index: int,
+    match: "re.Match[str]",
+    summary: str,
+    derives: "tuple[str, ...]",
+    source: str,
+    stack: "list[tuple[str, int, str]]",
+    items: "dict[str, Item]",
+) -> int:
+    """Create the `Item` for a top-level `pub` definition."""
+    indent, kind, name = len(match.group(1)), match.group(2), match.group(3)
+    line = lines[index]
+    item = items.setdefault(name, Item(name=name))
+    if item.kind:  # First definition wins, as the summaries always have.
+        return index + 1
+    item.kind, item.summary, item.derives, item.source = kind, summary, derives, source
+    if kind in ("fn", "const", "type"):
+        item.decl, index = read_signature(lines, index)
+        return index + 1
+    item.decl, _ = read_signature(lines, index)
+    if line.rstrip().endswith("{"):
+        stack.append(("trait" if kind == "trait" else "body", indent, name))
+        item.has_body = True
+        item.empty_body = closes_block(lines[index + 1], indent) if index + 1 < len(lines) else False
+        if kind == "enum":
+            item.variants_from = "unresolved" if templated(lines, index, indent) else "literal"
+    elif line.rstrip().endswith("{}"):
+        item.empty_body = True
+    return index + 1
+
+
+def templated(lines: "list[str]", index: int, indent: int) -> bool:
+    """Whether a block's body is macro substitution rather than literal items.
+
+    `pub enum Key {` inside `macro_rules! keys` has a body of `$( $name, )*`.
+    Saying so is the difference between a bug and a report: an empty variant
+    list rendered as fact is what E0 read as "this keyboard has no keys".
+    """
+    cursor = index + 1
+    while cursor < len(lines) and not closes_block(lines[cursor], indent):
+        if "$" in lines[cursor]:
+            return True
+        cursor += 1
+    return False
+
+
+def read_variant(lines: "list[str]", index: int) -> "tuple[str, int]":
+    """One enum variant, flattened — `NoDisplay { detail: String }`."""
+    line = lines[index]
+    stripped = line.rstrip()
+    if not stripped.endswith("{"):
+        return stripped.strip().rstrip(","), index
+    indent = indent_of(line)
+    parts = [stripped.strip()]
+    cursor = index + 1
+    while cursor < len(lines) and not closes_block(lines[cursor], indent):
+        inner = lines[cursor].strip()
+        if inner and not inner.startswith(("///", "//", "#[")):
+            parts.append(inner)
+        cursor += 1
+    text = re.sub(r"\s+", " ", " ".join(parts)).strip().rstrip(",")
+    return re.sub(r",\s*$", "", text) + " }", cursor
+
+
+def enter_macro_enum(
+    lines: "list[str]", index: int, macro: str, items: "dict[str, Item]"
+) -> int:
+    """Resolve a registered macro invocation into its enum's variant list."""
+    entry = MACRO_ENUMS.get(macro)
+    if entry is None:
+        return index + 1
+    name, pattern = entry
+    item = items.get(name)
+    if item is None:
+        return index + 1
+    names, body = macro_enum_variants(lines, index, pattern)
+    if names:
+        item.variants = [(text, "") for text in body]
+        item.variants_from = f"macro:{macro}"
+        item.decl = item.decl or f"pub enum {name}"
+    return index + 1
+
+
+def clean_member(signature: str) -> str:
+    """A member signature as the reference shows it: declaration, no body.
+
+    A `const`'s initialiser is the value and stays; one written in macro
+    substitution (`&[$(Key::$name),*]`) is not something a game can read, so it
+    goes and the declaration remains.
+    """
+    signature = signature.strip().rstrip(";").strip()
+    if "$" in signature:
+        signature = signature.split("=")[0].strip()
+    return signature + ";"
+
+
+def doc_summaries(sources: "list[Path]") -> "dict[str, str]":
+    """The first sentence of each public item's doc comment, by item name.
+
+    Kept as the narrow view over `scan_sources`: the summary a game-writing
+    agent reads is the one the code carries, so a doc comment and its
+    documentation cannot disagree.
+    """
+    return {name: item.summary for name, item in scan_sources(sources).items() if item.summary}
 
 
 def crate_sources(repo: Path) -> "list[Path]":
     """Every Rust source the facade could be re-exporting from."""
     return sorted(repo.glob("crates/jidousha-*/src/**/*.rs"))
+
+
+def trailing(summary: str) -> str:
+    """A member's summary, shortened to ride along on its signature line.
+
+    The whole sentence stays on the item it belongs to; this is the reminder.
+    """
+    if not summary:
+        return ""
+    if len(summary) > MEMBER_SUMMARY_CHARS:
+        summary = summary[:MEMBER_SUMMARY_CHARS].rsplit(" ", 1)[0] + "…"
+    return f"  // {summary}"
+
+
+def declaration(item: Item) -> "list[str]":
+    """The Rust block for one item: what it is, and how to call it.
+
+    A header-file shape rather than a bullet list. It is the densest encoding of
+    an API there is, and it is the form the reader's own output has to be in.
+    """
+    out: "list[str]" = []
+    if item.kind in ("fn", "const", "type", "mod"):
+        return [item.decl + ";" if item.kind != "mod" else item.decl]
+
+    if item.kind == "struct" and item.fields:
+        out.append(item.decl + " {")
+        out += [f"    {text},{trailing(summary)}" for text, summary in item.fields]
+        out.append("}")
+    elif item.kind == "enum" and item.variants:
+        out.append(item.decl + " {")
+        for text, summary in item.variants:
+            if not text:
+                out.append("")
+            elif text.startswith("//"):
+                out.append(f"    {text}")
+            else:
+                out.append(f"    {text}{'' if text.endswith(',') else ','}{trailing(summary)}")
+        out.append("}")
+    elif item.kind == "trait" and item.members:
+        out.append(item.decl + " {")
+        out += [f"    {text}{trailing(summary)}" for text, summary in item.members]
+        out.append("}")
+    else:
+        out.append(item.decl if item.decl.endswith("{}") else item.decl + ";")
+
+    badges = list(item.derives) + [name for name in item.traits if name != "Default"]
+    if badges:
+        out.append(f"// {' '.join(badges)}")
+    if item.default_value:
+        value = re.sub(r"^Self\b", item.name, item.default_value)
+        out.append(f"// Default = {value}")
+    elif "Default" in item.traits:
+        out.append("// Default")
+
+    if item.members and item.kind != "trait":
+        out.append("")
+        out.append(f"impl {item.name} {{")
+        out += [f"    {text}{trailing(summary)}" for text, summary in item.members]
+        out.append("}")
+    return out
+
+
+def render_module(item: Item, facade: str, items: "dict[str, Item]") -> "list[str]":
+    """The items a facade module contributes to the prelude, each as an entry.
+
+    Names with no local definition are re-exports of a dependency's types
+    (`Vec2`, `Vec3`, `Mat4` come from glam). They are named rather than
+    documented: this repository does not own them and so has nothing to
+    generate from, and naming the library is worth more to the reader than a
+    hand-copied method list would be — it is a well-known crate, and a copied
+    list is the one thing that could go stale here without CI noticing. The
+    Conventions digest already names it for the same reason.
+    """
+    out: "list[str]" = []
+    foreign: "list[str]" = []
+    for name in module_exports(facade, item.name):
+        member = items.get(name)
+        if member is None or not member.kind:
+            foreign.append(name)
+            continue
+        out += render_item(member)
+    if foreign:
+        out += [
+            f"Also in `{item.name}`, re-exported from `glam` and documented there: "
+            f"{', '.join(f'`{name}`' for name in foreign)}.",
+            "",
+        ]
+    return out
+
+
+def render_item(item: Item) -> "list[str]":
+    """One reference entry: heading, one-liner, and the declaration."""
+    out = [f"#### `{item.name}`", ""]
+    if item.summary:
+        out += [f"{item.summary}.", ""]
+    block = declaration(item)
+    if block:
+        out += ["```rust"] + block + ["```", ""]
+    return out
 
 
 def conventions_digest(text: str) -> str:
@@ -205,7 +815,7 @@ def conventions_digest(text: str) -> str:
             continue
         if current in keep:
             out.append(line)
-    return "\n".join(out).strip()
+    return scrub_internal_references("\n".join(out).strip())
 
 
 def render(repo: Path) -> str:
@@ -217,7 +827,7 @@ def render(repo: Path) -> str:
     concepts = (repo / "tools/api-doc/concepts.md").read_text(encoding="utf-8").strip()
     testing = (repo / "tools/api-doc/testing.md").read_text(encoding="utf-8").strip()
     conventions = (repo / "docs/conventions.md").read_text(encoding="utf-8")
-    summaries = doc_summaries(crate_sources(repo))
+    items = scan_sources(crate_sources(repo))
 
     out = [
         "# Jidousha — the API a game is written against",
@@ -253,9 +863,10 @@ def render(repo: Path) -> str:
         out.append(f"### {title}")
         out.append("")
         for name in names:
-            summary = summaries.get(name, "")
-            out.append(f"- **`{name}`** — {summary}" if summary else f"- **`{name}`**")
-        out.append("")
+            item = items.get(name, Item(name=name))
+            out += render_item(item)
+            if item.kind == "mod":
+                out += render_module(item, facade, items)
 
     testing_names = testing_exports(facade)
     if testing_names:
@@ -267,9 +878,7 @@ def render(repo: Path) -> str:
             "",
         ]
         for name in testing_names:
-            summary = summaries.get(name, "")
-            out.append(f"- **`{name}`** — {summary}" if summary else f"- **`{name}`**")
-        out.append("")
+            out += render_item(items.get(name, Item(name=name)))
 
     out += [
         "## Conventions",
@@ -310,6 +919,86 @@ def game_facing(text: str) -> str:
     return before + ("\n## " + after[1] if len(after) > 1 else "")
 
 
+def completeness_failures(
+    groups: "list[tuple[str, list[str]]]",
+    testing_names: "list[str]",
+    items: "dict[str, Item]",
+) -> "list[str]":
+    """Every exported item yielded something, or the run fails.
+
+    This reference's failure mode is not being wrong — it is being **thin**, and
+    a thin entry looks exactly like a complete one to the agent reading it. E0
+    run 1 read `**Key** — A physical key, by position on the keyboard` and had
+    no way to tell that eighty-three variant names had gone missing between the
+    source and the page (e0-findings.md F-002). Each rule below turns one of
+    those into an exit code, so the next construct this extractor does not
+    understand is a failed run rather than a short list.
+    """
+    exported = [name for _, names in groups for name in names] + testing_names
+    failures: "list[str]" = []
+    for name in exported:
+        item = items.get(name)
+        if item is None or not item.kind:
+            failures.append(
+                problem(
+                    f"the API document has nothing to say about `{name}`",
+                    "the facade exports it and no definition was found in the crates",
+                    "the item was renamed, moved, or is produced by a macro the "
+                    "generator does not read",
+                    f"check how `{name}` is defined; if a macro declares it, register "
+                    "the macro in MACRO_ENUMS or extend the scanner",
+                )
+            )
+            continue
+        where = f"defined in {item.source}"
+        if item.kind == "enum" and not item.variants:
+            failures.append(
+                problem(
+                    f"the enum `{name}` reached the document with no variants",
+                    where,
+                    "its variants are written by a macro, or in a shape the scanner "
+                    "does not recognise",
+                    "register the macro in MACRO_ENUMS; an enum documented without "
+                    "its variants tells a game author it has none",
+                )
+            )
+        if item.kind == "struct" and item.has_body and not item.empty_body and not item.body_lines:
+            failures.append(
+                problem(
+                    f"the struct `{name}` has a body the generator never read",
+                    where,
+                    "the block opened and no line inside it was seen, so it was "
+                    "misparsed — a type whose every member is private is fine, a "
+                    "block that was never entered is not",
+                    "check the block's formatting; the scanner closes blocks on "
+                    "indentation, which assumes cargo fmt has run",
+                )
+            )
+        if item.kind == "trait" and not item.members and not item.empty_body:
+            failures.append(
+                problem(
+                    f"the trait `{name}` reached the document with no methods",
+                    where,
+                    "its body is not empty, so the block was misparsed",
+                    "check the block's formatting; a marker trait is recognised by "
+                    "having a literally empty body",
+                )
+            )
+    for macro, (name, _) in MACRO_ENUMS.items():
+        item = items.get(name)
+        if item is not None and item.variants_from != f"macro:{macro}":
+            failures.append(
+                problem(
+                    f"the `{macro}!` invocation that declares `{name}` was not found",
+                    f"MACRO_ENUMS expects it to declare `{name}`",
+                    "the macro was renamed, moved to another file, or changed shape",
+                    "update MACRO_ENUMS, or remove the entry if the enum is now "
+                    "written out literally",
+                )
+            )
+    return failures
+
+
 def forbidden_words(text: str) -> "list[str]":
     """Implementation vocabulary that reached the game-facing document.
 
@@ -341,11 +1030,24 @@ def main(argv: "list[str]") -> int:
         )
         return 2
 
+    facade = FACADE.read_text(encoding="utf-8") if FACADE.exists() else ""
+    items = scan_sources(crate_sources(REPO_ROOT))
+    groups, testing_names = facade_exports(facade), testing_exports(facade)
+
     tokens = token_estimate(text)
     leaked = forbidden_words(text)
     print(f"[gen-api-doc] {len(text)} chars, ~{tokens} tokens of {TOKEN_BUDGET}")
+    # The census is here so a human reviewing a regenerated diff sees the shape
+    # move. A parser regression that halves the surface is obvious in these
+    # numbers and invisible in the diff of a 1,700-line file.
+    print(
+        f"[gen-api-doc] {len(groups)} groups · "
+        f"{sum(len(item.members) for item in items.values())} signatures · "
+        f"{sum(len(item.fields) for item in items.values())} fields · "
+        f"{sum(len(item.variants) for item in items.values())} variant lines"
+    )
 
-    failures = []
+    failures = completeness_failures(groups, testing_names, items)
     if tokens > TOKEN_BUDGET:
         failures.append(
             problem(

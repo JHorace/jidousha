@@ -12,6 +12,7 @@ import importlib.machinery
 import importlib.util
 import io
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -457,6 +458,44 @@ class GenApiDocTest(unittest.TestCase):
         leaked = text.replace("- **`Sprite`**", "- **`Sprite`** — see wgpu")
         self.assertIn("wgpu", gen_api_doc.forbidden_words(leaked))
 
+    def test_a_citation_of_a_maintainers_document_is_refused(self):
+        # E0 run 1 read `**message** — The failure in the engine's message
+        # format (core.md §9)` and could not follow the pointer: the prompt
+        # forbids `docs/internal/` outright (F-005). The gate had a list of
+        # crate names and seam types and no notion of a document path, so it
+        # read as covering a class it covered half of.
+        self.assertIn("core.md", gen_api_doc.forbidden_words("the format (core.md §9)"))
+        self.assertIn("ADR-", gen_api_doc.forbidden_words("clockwise on screen, see ADR-0010"))
+        self.assertIn("docs/internal", gen_api_doc.forbidden_words("see docs/internal/renderer.md"))
+
+    def test_a_parenthetical_citation_is_stripped_from_the_game_facing_text(self):
+        # A doc comment serves two readers: rustdoc, where `(ADR-0010)` is the
+        # point, and this document, whose reader may not open `docs/adr/` at
+        # all. Stripping on the way out keeps the citation for the reader it
+        # helps rather than deleting it from the source.
+        self.assertEqual(
+            gen_api_doc.scrub_internal_references("Rotation, clockwise on screen (ADR-0010)"),
+            "Rotation, clockwise on screen",
+        )
+        self.assertEqual(
+            gen_api_doc.scrub_internal_references("The engine's message format (core.md §9)"),
+            "The engine's message format",
+        )
+        self.assertEqual(
+            gen_api_doc.scrub_internal_references("The whole snapshot, for the recorder (I2)"),
+            "The whole snapshot, for the recorder",
+        )
+        # Ordinary parentheses are not citations and must survive.
+        self.assertEqual(
+            gen_api_doc.scrub_internal_references("Width and height (in world units)"),
+            "Width and height (in world units)",
+        )
+
+    def test_the_committed_document_cites_no_document_its_reader_may_not_open(self):
+        root = Path(__file__).resolve().parents[2]
+        text = (root / "docs/api/jidousha-api.md").read_text(encoding="utf-8")
+        self.assertEqual(gen_api_doc.forbidden_words(text), [])
+
     def test_the_budget_is_counted_and_the_committed_document_is_under_it(self):
         # The budget is the point: the whole surface has to fit in a
         # game-writing agent's context beside the game (public-api.md §4).
@@ -501,6 +540,455 @@ class GenApiDocTest(unittest.TestCase):
             self.assertIn("over the 1 budget", err.getvalue())
         finally:
             gen_api_doc.TOKEN_BUDGET = original
+
+
+def scan_snippet(text):
+    """Scan a fragment of Rust the way the generator scans a crate source."""
+    items = {}
+    gen_api_doc.scan_file(text.splitlines(), "snippet.rs", items)
+    return items
+
+
+class ApiExtractionTest(unittest.TestCase):
+    """The declaration extractor, on synthetic sources.
+
+    E0 run 1 could not make a single call from the API document, because the
+    reference carried names and no signatures (e0-findings.md F-001). These
+    cover the shapes that got it wrong on the way to fixing that.
+    """
+
+    def test_a_structs_public_fields_are_listed_with_their_types(self):
+        items = scan_snippet(
+            "/// What the frame is looking at.\n"
+            "pub struct Camera {\n"
+            "    /// The world position at the center of the screen.\n"
+            "    pub center: Vec2,\n"
+            "    /// How many world units the screen spans vertically.\n"
+            "    pub height: f32,\n"
+            "}\n"
+        )
+        self.assertEqual(
+            items["Camera"].fields,
+            [
+                ("pub center: Vec2", "The world position at the center of the screen"),
+                ("pub height: f32", "How many world units the screen spans vertically"),
+            ],
+        )
+
+    def test_a_private_field_is_not_listed(self):
+        # `Entity` has exactly two fields and both are private. A document that
+        # showed them would teach a game to reach for what it cannot have.
+        items = scan_snippet(
+            "pub struct Entity {\n    index: u32,\n    generation: NonZeroU32,\n}\n"
+        )
+        self.assertEqual(items["Entity"].fields, [])
+        # ...but the block was still read, which is what tells a fully private
+        # type apart from one the scanner failed to enter.
+        self.assertEqual(items["Entity"].body_lines, 2)
+
+    def test_a_multi_line_signature_is_joined_onto_one_line(self):
+        # rustfmt wraps long argument lists and closes at the item's own
+        # indentation, which is the terminator `read_signature` relies on.
+        items = scan_snippet(
+            "pub struct World {\n    slots: Vec<u32>,\n}\n"
+            "\n"
+            "impl World {\n"
+            "    /// Give `entity` a `T`.\n"
+            "    pub fn try_insert<T: Component>(\n"
+            "        &mut self,\n"
+            "        entity: Entity,\n"
+            "        value: T,\n"
+            "    ) -> Result<(), EntityDeadError> {\n"
+            "        todo!()\n"
+            "    }\n"
+            "}\n"
+        )
+        self.assertEqual(
+            items["World"].members,
+            [
+                (
+                    "pub fn try_insert<T: Component>(&mut self, entity: Entity, "
+                    "value: T) -> Result<(), EntityDeadError>;",
+                    "Give `entity` a `T`",
+                )
+            ],
+        )
+
+    def test_a_where_clause_is_carried_onto_the_signature_line(self):
+        # `App::add_system`'s bound is the useful half of that signature.
+        items = scan_snippet(
+            "pub struct App {\n    simulation: Simulation,\n}\n"
+            "\n"
+            "impl App {\n"
+            "    /// Append a system to a phase.\n"
+            "    pub fn add_system<P, F>(&mut self, phase: P, system: F)\n"
+            "    where\n"
+            "        P: Phase,\n"
+            "        F: IntoSystem<P>,\n"
+            "    {\n"
+            "        todo!()\n"
+            "    }\n"
+            "}\n"
+        )
+        self.assertIn("where P: Phase, F: IntoSystem<P>", items["App"].members[0][0])
+
+    def test_a_generic_impl_block_is_attributed_to_its_type(self):
+        # `impl<'w, Q: Query<'w>> QueryIterMut<'w, Q>` is why the generic list
+        # is skipped by counting angle brackets: the first `>` closes an inner
+        # parameter, not the list.
+        items = scan_snippet(
+            "pub struct DrawCtx<'w> {\n    /// The world.\n    pub world: WorldView<'w>,\n}\n"
+            "\n"
+            "impl<'w> DrawCtx<'w> {\n"
+            "    /// Draw one quad.\n"
+            "    pub fn submit(&mut self, quad: Quad) {\n        todo!()\n    }\n"
+            "}\n"
+        )
+        self.assertEqual(
+            items["DrawCtx"].members, [("pub fn submit(&mut self, quad: Quad);", "Draw one quad")]
+        )
+
+    def test_a_trait_impl_does_not_add_its_methods_to_the_type(self):
+        # `ctx.rect(..)` resolves through `Submit`, and the trait's own
+        # declaration is where that signature belongs. Listing it as inherent
+        # would say, wrongly, that it resolves without the trait in scope.
+        items = scan_snippet(
+            "pub struct DrawCtx<'w> {\n    /// The world.\n    pub world: WorldView<'w>,\n}\n"
+            "\n"
+            "impl Submit for DrawCtx<'_> {\n"
+            "    fn rect(&mut self, rect: Rect, color: Color, depth: Depth) {\n"
+            "        todo!()\n"
+            "    }\n"
+            "}\n"
+        )
+        self.assertEqual(items["DrawCtx"].members, [])
+        self.assertEqual(items["DrawCtx"].traits, ["Submit"])
+
+    def test_a_brace_inside_a_string_literal_does_not_close_the_block(self):
+        # `write!(formatter, "TextureId({bits})")` is the case a depth counter
+        # gets wrong, closing two blocks early and losing whatever is defined
+        # next. Blocks close on indentation for exactly this reason.
+        items = scan_snippet(
+            "pub struct TextureId(u64);\n"
+            "\n"
+            "impl fmt::Debug for TextureId {\n"
+            "    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {\n"
+            '        write!(formatter, "TextureId({bits})")\n'
+            "    }\n"
+            "}\n"
+            "\n"
+            "/// A duration, in seconds.\n"
+            "pub struct Seconds(pub f32);\n"
+        )
+        self.assertEqual(items["Seconds"].summary, "A duration, in seconds")
+
+    def test_a_const_fn_is_not_read_as_an_associated_const(self):
+        # `pub const fn layer(..)` opens a body like any other function; only a
+        # real associated const runs to its semicolon. Reading one as the other
+        # swallowed twenty-five lines and lost the next type entirely.
+        items = scan_snippet(
+            "pub struct Depth {\n    /// The band.\n    pub layer: i16,\n}\n"
+            "\n"
+            "impl Depth {\n"
+            "    /// The front of `layer`'s band.\n"
+            "    pub const fn layer(layer: i16) -> Self {\n"
+            "        Self { layer, z: 0.0 }\n"
+            "    }\n"
+            "}\n"
+            "\n"
+            "/// Which texture a quad samples.\n"
+            "pub struct TextureId(u64);\n"
+        )
+        self.assertEqual(items["TextureId"].summary, "Which texture a quad samples")
+
+    def test_an_associated_const_keeps_its_value(self):
+        items = scan_snippet(
+            "pub struct Rect {\n    /// Top-left.\n    pub min: Vec2,\n}\n"
+            "\n"
+            "impl Rect {\n"
+            "    /// The whole of something.\n"
+            "    pub const UNIT: Rect = Rect {\n"
+            "        min: Vec2::ZERO,\n"
+            "        max: Vec2::ONE,\n"
+            "    };\n"
+            "}\n"
+        )
+        self.assertEqual(
+            items["Rect"].members[0][0],
+            "pub const UNIT: Rect = Rect { min: Vec2::ZERO, max: Vec2::ONE };",
+        )
+
+    def test_a_macro_templated_const_initialiser_is_dropped(self):
+        # `&[$(Key::$name),*]` is not something a game can read or write.
+        items = scan_snippet(
+            "pub struct Key;\n"
+            "\n"
+            "impl Key {\n"
+            "    /// Every key, in declaration order.\n"
+            "    pub const ALL: &'static [Key] = &[$(Key::$name),*];\n"
+            "}\n"
+        )
+        self.assertEqual(items["Key"].members[0][0], "pub const ALL: &'static [Key];")
+
+    def test_an_enum_variant_with_a_struct_body_keeps_its_fields(self):
+        # `RunError::NoDisplay { detail: String }`, and the `},` that closes it
+        # — a closer whose trailing comma an exact-match test misses.
+        items = scan_snippet(
+            "pub enum RunError {\n"
+            "    /// There is no display to open a window on.\n"
+            "    NoDisplay {\n"
+            "        /// What the platform said.\n"
+            "        detail: String,\n"
+            "    },\n"
+            "    /// The event loop stopped with an error.\n"
+            "    EventLoop {\n"
+            "        /// What the platform said.\n"
+            "        detail: String,\n"
+            "    },\n"
+            "}\n"
+        )
+        self.assertEqual(
+            [text for text, _ in items["RunError"].variants],
+            ["NoDisplay { detail: String }", "EventLoop { detail: String }"],
+        )
+
+    def test_the_default_value_is_read_from_the_default_impl(self):
+        # `GameConfig::default()` is where a game learns the tick rate is 1/60,
+        # and that number appears nowhere else a game may look (F-004).
+        items = scan_snippet(
+            "pub struct GameConfig {\n    /// The seed.\n    pub seed: u64,\n}\n"
+            "\n"
+            "impl Default for GameConfig {\n"
+            "    fn default() -> Self {\n"
+            "        Self {\n"
+            "            seed: 0,\n"
+            "            fixed_dt: Seconds(1.0 / 60.0),\n"
+            "        }\n"
+            "    }\n"
+            "}\n"
+        )
+        self.assertEqual(
+            items["GameConfig"].default_value, "Self { seed: 0, fixed_dt: Seconds(1.0 / 60.0) }"
+        )
+
+    def test_an_empty_trait_body_is_recognised_rather_than_read_past(self):
+        # `pub trait Resource: 'static + Send + Sync {}` ends the declaration as
+        # surely as a `{` does; reading past it swallowed the next definition.
+        items = scan_snippet(
+            "/// Marks a type as storable as a world resource.\n"
+            "pub trait Resource: 'static + Send + Sync {}\n"
+            "\n"
+            "/// Every resource in the world.\n"
+            "pub struct Resources {\n    slots: Vec<u32>,\n}\n"
+        )
+        self.assertEqual(items["Resource"].decl, "pub trait Resource: 'static + Send + Sync {}")
+        self.assertTrue(items["Resource"].empty_body)
+        self.assertEqual(items["Resources"].summary, "Every resource in the world")
+
+    def test_an_internal_crate_path_is_dropped_from_a_signature(self):
+        # `asset_source` returns `impl jidousha_assets::ByteSource`. The type is
+        # the same type; the path is the routing a facade exists to hide, and
+        # naming it would send a game author looking for a crate it must not
+        # depend on.
+        items = scan_snippet(
+            "/// The asset source this platform reads with.\n"
+            "pub fn asset_source(root: &str) -> impl jidousha_assets::ByteSource {\n"
+            "    todo!()\n"
+            "}\n"
+        )
+        self.assertEqual(
+            items["asset_source"].decl, "pub fn asset_source(root: &str) -> impl ByteSource"
+        )
+
+    def test_a_macro_declared_enum_is_resolved_from_its_invocation(self):
+        # `pub enum Key {` inside `macro_rules! keys` has a body of `$( $name, )*`.
+        # Scanning it finds no variants, and reporting that as fact is what E0
+        # read as "this keyboard has no keys" (F-002).
+        items = scan_snippet(
+            "macro_rules! keys {\n"
+            "    ($($name:ident = $code:expr),* $(,)?) => {\n"
+            "        /// A physical key.\n"
+            "        pub enum Key {\n"
+            "            $(\n"
+            "                $name,\n"
+            "            )*\n"
+            "        }\n"
+            "    };\n"
+            "}\n"
+            "\n"
+            "keys! {\n"
+            "    // Letters.\n"
+            "    A = 1, B = 2,\n"
+            "\n"
+            "    ArrowUp = 40, Escape = 52,\n"
+            "}\n"
+        )
+        self.assertEqual(items["Key"].variants_from, "macro:keys")
+        self.assertEqual(
+            [text for text, _ in items["Key"].variants],
+            ["// Letters.", "A, B,", "", "ArrowUp, Escape,"],
+        )
+
+
+class ApiCompletenessTest(unittest.TestCase):
+    """The gate that makes a thin reference loud.
+
+    This document's failure mode is not being wrong, it is being thin — and a
+    thin entry looks exactly like a complete one to the agent reading it. Every
+    test here is the negative half of a rule, which is the half that keeps the
+    rule alive.
+    """
+
+    def groups(self, *names):
+        return [("Group", list(names))]
+
+    def test_an_exported_item_with_no_definition_anywhere_fails(self):
+        failures = gen_api_doc.completeness_failures(self.groups("Ghost"), [], {})
+        self.assertEqual(len(failures), 1)
+        self.assertIn("`Ghost`", failures[0])
+
+    def test_an_enum_that_yields_no_variants_fails(self):
+        items = scan_snippet(
+            "macro_rules! keys {\n"
+            "    ($($name:ident = $code:expr),*) => {\n"
+            "        /// A physical key.\n"
+            "        pub enum Key {\n"
+            "            $($name,)*\n"
+            "        }\n"
+            "    };\n"
+            "}\n"
+        )
+        failures = gen_api_doc.completeness_failures(self.groups("Key"), [], items)
+        self.assertTrue(any("no variants" in failure for failure in failures))
+
+    def test_a_registered_macro_whose_invocation_is_missing_fails(self):
+        # The macro was renamed or moved and the generator silently stopped
+        # understanding it. Ninety-six variants would go missing quietly.
+        items = scan_snippet("/// A physical key.\npub enum Key {\n    Space,\n}\n")
+        failures = gen_api_doc.completeness_failures(self.groups("Key"), [], items)
+        self.assertTrue(any("keys!" in failure for failure in failures))
+
+    def test_a_type_whose_members_are_all_private_is_not_a_failure(self):
+        # `Entity` is a legitimately opaque handle: private fields, `pub(crate)`
+        # methods, and nothing for this document to show. The rule has to tell
+        # that apart from a block that was never entered.
+        items = scan_snippet(
+            "/// A handle to a thing in the world.\n"
+            "pub struct Entity {\n    index: u32,\n    generation: NonZeroU32,\n}\n"
+        )
+        self.assertEqual(gen_api_doc.completeness_failures(self.groups("Entity"), [], items), [])
+
+    def test_a_marker_trait_is_not_a_failure(self):
+        items = scan_snippet(
+            "/// Marks a plain-data type as storable on an entity.\n"
+            "pub trait Component: 'static + Send + Sync {}\n"
+        )
+        self.assertEqual(gen_api_doc.completeness_failures(self.groups("Component"), [], items), [])
+
+    def test_the_real_surface_is_complete(self):
+        # The same gate CI runs, against the real crates: every item the facade
+        # exports yields at least a declaration.
+        root = Path(__file__).resolve().parents[2]
+        facade = (root / "crates/jidousha/src/lib.rs").read_text(encoding="utf-8")
+        items = gen_api_doc.scan_sources(gen_api_doc.crate_sources(root))
+        failures = gen_api_doc.completeness_failures(
+            gen_api_doc.facade_exports(facade), gen_api_doc.testing_exports(facade), items
+        )
+        self.assertEqual(failures, [])
+
+
+class ApiReferenceContentTest(unittest.TestCase):
+    """The E0 gaps, asserted against the committed document.
+
+    These are the tests that would have caught the original failure. They read
+    `docs/api/jidousha-api.md` because that is the artifact a game author gets:
+    a generator that extracts correctly and renders nothing is still a document
+    that cannot be written from.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        root = Path(__file__).resolve().parents[2]
+        cls.reference = (root / "docs/api/jidousha-api.md").read_text(encoding="utf-8")
+        cls.root = root
+
+    def test_the_reference_names_the_rectangle_overlap_helpers(self):
+        # E0 hand-wrote overlap arithmetic against a `Rect` that already had
+        # `overlaps`, and filed it under "expected to exist and could not find"
+        # (F-003). The method existed; the signature did not.
+        self.assertIn("pub fn contains(self, point: Vec2) -> bool;", self.reference)
+        self.assertIn("pub fn overlaps(self, other: Rect) -> bool;", self.reference)
+
+    def test_the_reference_lists_the_keys_a_game_reaches_for_first(self):
+        # E0 gave up on Escape, the digits and `P` rather than play
+        # compile-error roulette, and guessed the arrows (F-002).
+        for key in ("Escape", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
+                    "Digit1", "Space", "ShiftLeft", "F1", "Backquote"):
+            self.assertIn(key, self.reference, key)
+
+    def test_every_key_the_source_declares_reaches_the_document(self):
+        # The sync guard, parsed by a different route from the generator's, so
+        # a change to the macro's shape that the generator stops understanding
+        # fails here rather than shipping a short keyboard.
+        source = (self.root / "crates/jidousha-input/src/key.rs").read_text(encoding="utf-8")
+        body = source.split("keys! {", 1)[1].split("\n}", 1)[0]
+        declared = set(re.findall(r"(\w+)\s*=\s*\d+", body))
+        self.assertGreater(len(declared), 80, "the invocation itself did not parse")
+        block = self.reference.split("pub enum Key {", 1)[1].split("\n}", 1)[0]
+        listed = set(re.findall(r"\b([A-Z]\w*)\b", block))
+        self.assertEqual(declared - listed, set(), "keys missing from the reference")
+
+    def test_the_reference_gives_every_draw_verb_its_argument_order(self):
+        # "I could not have made the first ctx.rect call, because nothing
+        # states its argument order" (F-001). `text` included, whose depth
+        # lives inside TextStyle rather than trailing — the asymmetry E0 found
+        # by trying, and ADR-0018 now records.
+        self.assertIn("fn rect(&mut self, rect: Rect, color: Color, depth: Depth);", self.reference)
+        self.assertIn(
+            "fn circle(&mut self, center: Vec2, radius: f32, color: Color, depth: Depth);",
+            self.reference,
+        )
+        self.assertIn(
+            "fn line(&mut self, from: Vec2, to: Vec2, thickness: f32, color: Color, depth: Depth);",
+            self.reference,
+        )
+        self.assertIn("fn text(&mut self, at: Vec2, text: &str, style: TextStyle);", self.reference)
+
+    def test_the_reference_states_the_game_configs_fields_and_the_tick_rate(self):
+        # E0 made a gameplay decision out of ignorance about the window size,
+        # and recovered 60 Hz from arithmetic in another example's assertion
+        # rather than from this document (F-004).
+        for field in ("pub title:", "pub seed:", "pub fixed_dt:"):
+            self.assertIn(field, self.reference, field)
+        self.assertIn("Seconds(1.0 / 60.0)", self.reference)
+
+    def test_the_reference_states_the_cameras_viewport_and_its_default(self):
+        # Four separate E0 questions, all answered by one block: viewport
+        # exists, Camera is Copy, the default is 1280x720 (F-006).
+        self.assertIn("pub viewport: PhysicalSize", self.reference)
+        self.assertIn("PhysicalSize::new(1280, 720)", self.reference)
+
+    def test_the_reference_gives_message_its_full_signature(self):
+        # E0 copied the four-argument shape out of an example and still did not
+        # know whether there was a fifth (F-005).
+        self.assertIn(
+            "pub fn message(what: &str, specifics: &str, likely_cause: &str, fix: &str) -> String;",
+            self.reference,
+        )
+
+    def test_the_reference_documents_the_maths_a_game_writes_unqualified(self):
+        # `Radians` and `sin_cos` are prelude items. Before the module's members
+        # were rendered they appeared only incidentally, inside other
+        # signatures, and never as entries of their own.
+        self.assertIn("pub fn sin_cos(angle: Radians) -> (f32, f32);", self.reference)
+        self.assertIn("#### `Radians`", self.reference)
+
+    def test_the_reference_does_not_shrink(self):
+        # A floor, not an exact count: ordinary API growth must not churn this,
+        # but a parser regression that halves the output has to fail loudly —
+        # and it would be invisible in the diff of a document this size.
+        self.assertGreater(self.reference.count("pub fn "), 150)
+        self.assertGreater(self.reference.count("#### `"), 80)
 
 
 class ApiCoverageTest(unittest.TestCase):

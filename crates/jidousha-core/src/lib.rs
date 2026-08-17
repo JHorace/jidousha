@@ -67,5 +67,5 @@ pub use simulation::Simulation;
 pub use time::Time;
 pub use transform::Transform;
 pub use units::Seconds;
-pub use visual::{Color, Depth, Quad, Rect, TextureId};
+pub use visual::{Color, Depth, PhysicalSize, Quad, Rect, TextureId};
 pub use world::World;

@@ -14,34 +14,47 @@ use crate::panic_hook;
 use crate::schedule::{IntoSystem, Phase};
 use crate::simulation::Simulation;
 use crate::units::Seconds;
+use crate::visual::PhysicalSize;
 use crate::world::World;
 
 /// How a game is configured at startup.
 ///
 /// ```
-/// use jidousha_core::{GameConfig, Seconds};
+/// use jidousha_core::{GameConfig, PhysicalSize, Seconds};
 ///
 /// let config = GameConfig {
 ///     title: "asteroids",
 ///     seed: 42,
+///     window_size: PhysicalSize::new(1600, 900),
 ///     ..GameConfig::default()
 /// };
 /// assert_eq!(config.fixed_dt, Seconds(1.0 / 60.0));
 /// ```
 ///
-/// Fields for subsystems that do not exist yet — asset root, window size,
-/// camera height — arrive with those subsystems (public-api.md §2). Because
-/// games write `..GameConfig::default()`, adding them later does not disturb
-/// anything already written.
+/// Fields for subsystems that do not exist yet — asset root, camera height —
+/// arrive with those subsystems (public-api.md §2). Because games write
+/// `..GameConfig::default()`, adding them later does not disturb anything
+/// already written.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GameConfig {
-    /// The window's title. Unused until a window exists (M5), but games set it
-    /// once and never think about it again.
+    /// The window's title. Games set it once and never think about it again.
     pub title: &'static str,
     /// Fixes every random draw of the run. Same seed, same game.
     pub seed: u64,
     /// How much simulated time one Update tick covers.
+    ///
+    /// One sixtieth of a second by default. A game counting in ticks — a serve
+    /// pause, a coyote-time window, an invulnerability period — is counting in
+    /// these.
     pub fixed_dt: Seconds,
+    /// How big the window opens, in pixels. Ignored by a headless run.
+    ///
+    /// A suggestion, not a demand: a tiling window manager or a full-screen
+    /// session will give you what it gives you, and the camera is what decides
+    /// how much *world* is on screen either way. It is worth setting when a
+    /// game's playing field has a shape — a 16:9 field cropped by a tall narrow
+    /// window is the case this exists for.
+    pub window_size: PhysicalSize,
 }
 
 impl Default for GameConfig {
@@ -54,6 +67,11 @@ impl Default for GameConfig {
             title: "jidousha game",
             seed: 0,
             fixed_dt: Seconds(1.0 / 60.0),
+            // 16:9, which is the shape most games are drawn for and most
+            // screens are. It matches `Camera::default()`'s viewport, so a
+            // headless transcript and a windowed run describe the same screen
+            // until a game says otherwise.
+            window_size: PhysicalSize::new(1280, 720),
         }
     }
 }
