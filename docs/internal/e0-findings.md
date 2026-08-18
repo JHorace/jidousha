@@ -1547,7 +1547,7 @@ purpose and could not say so.
 | F-051 | `Seconds` has no multiplication | author | first | `as_f32`'s own entry | one sentence; the absence is correct |
 | F-052 | no sound | engine, out of scope | first | ADR-0001 | nothing to fix; post-v1 list |
 | F-053 | on screen is not in the right place | docs | all four, as a habit | — | doc fix landed |
-| F-054 | four runs, no display, no pixel ever rendered | environment | **runs 1, 2, 3** | CLAUDE.md's escalation rule | **escalated, unresolved** |
+| F-054 | four runs, no display, no pixel ever rendered | environment | **runs 1, 2, 3** | CLAUDE.md's escalation rule | **escalated, unresolved** — but CI already installs the rasterizer, so the fix is one apt line copied to the E0 image |
 
 **The three proposals were accepted and are applied.** ADR-0020 through 0023 are
 all `accepted`; the surface changes landed with the examples that prove them.
@@ -2380,12 +2380,33 @@ fixable.** The engine has the pieces — `WgpuBackend::offscreen` renders headle
 and `tools/verify` already captures a PNG "if the machine has a GPU". The missing
 thing is a machine where that condition is ever true. Per CLAUDE.md, missing
 system deps and GPU/driver issues escalate rather than getting worked around, so
-the fix is **a software Vulkan ICD in the E0 container image** (lavapipe or
-equivalent), which would make `offscreen` work on every machine E0 has ever run on
-and turn `tools/verify`'s capture from a conditional into a guarantee. That is a
-one-package change to the harness environment and it is the highest-leverage
-un-taken item in this file: it converts "everything about how this game looks is
-inferred from a transcript", written by four consecutive runs, into a picture.
+the fix is **a software Vulkan ICD in the E0 container image**.
+
+**Correction, and it makes this cheaper and more embarrassing than first written.**
+The repository already does exactly this, one directory away: `.github/workflows/ci.yml`
+installs `mesa-vulkan-drivers` on the Linux runner, with a comment saying it is
+"what turns a skipped tier into a running one — not a workaround for a failure",
+and uploads `target/verify/*.png` as an artifact. **So CI renders pixels and has
+for some time.** The gap is not that nobody knows how; it is that the E0 authoring
+container was never given the package the CI container was. The escalation is
+therefore one apt line, already written down in this repo, copied from the runner
+image to the E0 image — not a design question at all.
+
+**Two consequences that follow from the correction.**
+
+- **`pong` still produces no picture even on CI.** It is in `VERIFIABLE_EXAMPLES`
+  as of this commit, so `tools/verify pong` now runs on every push, on a runner
+  that *has* the rasterizer — and captures nothing, because run 4 deliberately
+  shipped no capture path (correctly: on its own machine that path could only ever
+  print "skipped"). `prototype_kit` is the only example whose frame reaches the
+  artifact. **Not added here**, deliberately: the author who ships a capture path
+  should be an author who can execute it, so this belongs with the container fix
+  rather than ahead of it. It is the first thing to do after that lands.
+- **The finding's headline needs qualifying.** "Nothing in E0 has ever rendered a
+  pixel" is true of every E0 *run* and false of the project — CI has been drawing
+  and uploading frames the whole time. What four runs lacked was not a renderer
+  that works; it was the ability to look at their own work while doing it, which is
+  a harness property, not an engine one.
 
 **What is deliberately *not* proposed.** A CPU rasteriser behind the backend seam,
 so that `NullBackend` could produce an image. It would be a second renderer to
@@ -2570,7 +2591,10 @@ Run 4 is the second uncontaminated measurement, and it read no other run's log.
 - **Whether run 5 can see its game.** F-054 is an environment escalation, not a code
   change, and it is the only finding in this file whose fix would change what every
   future run can *observe* rather than what it knows. If run 5 runs on the same
-  image, its log will say "I never saw the game" for the fifth time.
+  image, its log will say "I never saw the game" for the fifth time — and the fix is
+  now known to be one `apt-get install mesa-vulkan-drivers`, because the CI runner
+  has had exactly that line the whole time. This is the cheapest un-taken item in
+  the file by a wide margin.
 - **Whether `ctx.circle` gets used at all.** Run 3 used it and recorded a false
   fact; run 4 used it and lost a cycle. If run 5 draws a square ball, the
   documentation worked and nobody found out — so the thing to check is not whether
