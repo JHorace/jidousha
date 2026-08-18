@@ -1,16 +1,16 @@
-//! Pong. Two paddles, a ball, a score, and a winner.
+//! Pong, written against the engine's public API and nothing else.
 //!
-//! W and S move the left paddle. The right paddle plays itself. First to five
-//! wins; Enter starts the next match.
+//! W and S move the left paddle. The right one plays itself. First to five
+//! wins; after that, Space starts a fresh match.
 //!
-//! Everything here is drawn by the engine — a paddle is a rectangle, the ball
-//! is a circle, the score is text — so there is no art to load and no asset
-//! story to tell.
+//! Every shape here is drawn by the engine — two rectangles, a disc, some lines
+//! and some text — so there is no `Assets` resource anywhere in this game and
+//! nothing to wait for before the first frame.
 //!
 //! Run it:   `cargo run -p jidousha --example pong`
 //! Check it: `cargo run -p jidousha --example pong -- --verify`
 //!
-//! The check lives in `verify.rs` beside this file: the same systems and the
+//! `verify.rs` beside this file is the second half: the same systems and the
 //! same config, driven by a controller instead of a person, asserting on what
 //! the world did and on what was drawn, with no window anywhere.
 
@@ -18,203 +18,125 @@ use std::process::ExitCode;
 
 use jidousha::prelude::*;
 
+mod checks;
+mod controller;
+mod draw;
+mod field;
 mod verify;
 
-// --- the field ------------------------------------------------------------
+pub(crate) use field::*;
 
-/// How many world units the camera spans vertically.
-const VIEW_HEIGHT: f32 = 20.0;
-
-/// The top wall the ball bounces off. Y is down, so this is the smaller number.
-const FIELD_TOP: f32 = -9.0;
-
-/// The bottom wall the ball bounces off.
-const FIELD_BOTTOM: f32 = 9.0;
-
-/// How far past the centre a ball has to get before it counts as a point.
-///
-/// Inside the camera's horizontal half-width (17.7 at 16:9 and this view
-/// height), so the ball is never drawn off the edge of the screen on its way
-/// out.
-const FIELD_EDGE: f32 = 17.0;
-
-// --- the pieces -----------------------------------------------------------
-
-/// How big a paddle is, in world units.
-const PADDLE_SIZE: Vec2 = Vec2::new(0.8, 3.6);
-
-/// How far from the centre line each paddle stands.
-const PADDLE_X: f32 = 15.0;
-
-/// How far from the centre a paddle may travel before the wall stops it.
-const PADDLE_LIMIT: f32 = FIELD_BOTTOM - PADDLE_SIZE.y * 0.5;
-
-/// The ball's radius, in world units.
-const BALL_RADIUS: f32 = 0.45;
-
-// --- how it plays ---------------------------------------------------------
-
-/// The player's paddle speed, in world units per second.
-const PLAYER_SPEED: f32 = 24.0;
-
-/// The opponent's paddle speed, in world units per second.
-///
-/// Slower than the player's on purpose: it is the whole of the difficulty
-/// setting, and the number the game was tuned on.
-const AI_SPEED: f32 = 11.0;
-
-/// How fast the opponent drifts back to the middle when the ball is elsewhere.
-const AI_RECOVER_SPEED: f32 = 6.0;
-
-/// The opponent does not commit to a ball until it is this far across.
-///
-/// Y is the same either way, so a machine that starts tracking at the moment of
-/// the return is a machine that cannot be beaten. Making it wait is what leaves
-/// room for a shot to the far corner.
-const AI_REACT_X: f32 = 2.0;
-
-/// How fast a serve leaves the centre, in world units per second.
-const SERVE_SPEED: f32 = 19.0;
-
-/// How fast the ball is ever allowed to travel, in world units per second.
-///
-/// Collisions are tested at tick boundaries and nothing sweeps the ball's own
-/// shape against the walls, so this is also the tunnelling budget: at 60 ticks
-/// a second this is half a world unit per tick, comfortably inside a paddle's
-/// 0.8-unit thickness. `assert_the_ball_cannot_tunnel` checks it against the
-/// timestep the engine actually hands us rather than against the 1/60 assumed
-/// here.
-const MAX_BALL_SPEED: f32 = 34.0;
-
-/// How much faster the ball gets with every paddle it touches.
-const SPEED_GAIN: f32 = 1.08;
-
-/// How far off straight a paddle can send the ball, hit right at its tip.
-const MAX_BOUNCE: Radians = Radians(0.95);
-
-/// How far off straight a serve can leave the centre.
-const SERVE_SPREAD: Radians = Radians(0.45);
-
-/// How long the ball waits at the centre between points, in ticks.
-///
-/// Ticks, not seconds: the tick is the canonical timeline, and three quarters
-/// of a second is what forty-five of them are.
-const SERVE_TICKS: u32 = 45;
-
-/// How many points win a match.
-const WIN_SCORE: u32 = 5;
-
-/// Draw bands, named once so no number is guessed at a call site.
-mod layers {
-    /// The field and its markings, behind everything.
-    pub const FIELD: i16 = -1;
-    /// The paddles and the ball.
-    pub const PLAY: i16 = 0;
-    /// Score, hints and banners, over everything.
-    pub const UI: i16 = 2;
-}
-
-// --- what the world is made of --------------------------------------------
-
-/// Which end of the field something belongs to.
+/// Which end of the table something belongs to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Side {
-    /// The player's end.
     Left,
-    /// The opponent's end.
     Right,
 }
 
 impl Side {
-    /// Which way along X this side's paddle sends the ball.
-    fn facing(self) -> f32 {
+    /// Where this side's paddle sits.
+    pub(crate) fn paddle_x(self) -> f32 {
+        match self {
+            Side::Left => -PADDLE_X,
+            Side::Right => PADDLE_X,
+        }
+    }
+
+    /// `+1.0` for the left side, `-1.0` for the right: the direction a ball
+    /// travels when it leaves this side's paddle.
+    pub(crate) fn outward(self) -> f32 {
         match self {
             Side::Left => 1.0,
             Side::Right => -1.0,
         }
     }
 
-    /// The side's name, for banners and for assertion messages.
+    pub(crate) fn other(self) -> Side {
+        match self {
+            Side::Left => Side::Right,
+            Side::Right => Side::Left,
+        }
+    }
+
     pub(crate) fn name(self) -> &'static str {
         match self {
-            Side::Left => "LEFT",
-            Side::Right => "RIGHT",
+            Side::Left => "left",
+            Side::Right => "right",
         }
     }
 }
 
-/// A paddle: which end it defends, and how fast it can move.
-#[derive(Clone, Copy)]
+/// Who drives a paddle.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Control {
+    Keys,
+    Machine,
+}
+
+/// A paddle. The enum inside the component is why no `With<Player>` filter
+/// appears anywhere below: one query over `&Paddle` reaches both of them, and
+/// the tuple stays short.
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct Paddle {
-    /// Which end of the field it stands at.
     pub(crate) side: Side,
+    pub(crate) control: Control,
     /// World units per second.
-    speed: f32,
+    pub(crate) speed: f32,
+    /// Where a machine paddle last saw the ball, refreshed every
+    /// `MACHINE_REACTION` ticks. A keyboard paddle ignores it.
+    pub(crate) aim: f32,
 }
 impl Component for Paddle {}
 
-/// The ball, and where it is going.
-#[derive(Clone, Copy)]
+/// The ball. Its speed lives in the length of its velocity.
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct Ball {
-    /// World units per second, as a vector.
     pub(crate) velocity: Vec2,
 }
 impl Component for Ball {}
 
-/// Which screen the game is on.
+/// What the match is doing right now.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Stage {
-    /// The ball is waiting at the centre for this many more ticks.
-    Serving {
-        /// Ticks still to wait.
-        ticks_left: u32,
-        /// Who the serve will head towards.
-        toward: Side,
-    },
-    /// The ball is in play.
+pub(crate) enum Play {
+    /// The ball is parked at the middle, about to be sent at `to`.
+    Serving { to: Side, ticks_left: u32 },
+    /// The ball is live.
     Rally,
-    /// Somebody reached `WIN_SCORE`.
-    Over {
-        /// Who won.
-        winner: Side,
-    },
+    /// Somebody reached `WINNING_SCORE`.
+    Over { winner: Side },
 }
 
-/// The match: the score, the screen, and the numbers a check wants to read.
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct MatchState {
-    /// Which screen the game is on.
-    pub(crate) stage: Stage,
-    /// The player's points.
+/// The score, and everything the match has been up to.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct Scoreboard {
     pub(crate) left: u32,
-    /// The opponent's points.
     pub(crate) right: u32,
-    /// Paddle touches in the rally currently being played.
+    pub(crate) play: Play,
+    /// Paddle touches since the last serve.
     pub(crate) rally: u32,
-    /// The most touches any one rally has had.
+    /// The longest rally of the match, in touches.
     pub(crate) longest_rally: u32,
-    /// The fastest the ball has ever gone, in world units per second.
+    /// The fastest the ball has gone this match, in world units per second.
     pub(crate) top_speed: f32,
 }
-impl Resource for MatchState {}
+impl Resource for Scoreboard {}
 
-impl MatchState {
-    /// A match nobody has scored in yet, about to serve towards `toward`.
-    fn fresh(toward: Side) -> Self {
-        MatchState {
-            stage: Stage::Serving {
-                ticks_left: SERVE_TICKS,
-                toward,
-            },
+impl Scoreboard {
+    /// Nil-nil, with the first serve going at the right-hand paddle.
+    pub(crate) fn new() -> Self {
+        Scoreboard {
             left: 0,
             right: 0,
+            play: Play::Serving {
+                to: Side::Right,
+                ticks_left: SERVE_PAUSE,
+            },
             rally: 0,
             longest_rally: 0,
             top_speed: 0.0,
         }
     }
 
-    /// This side's points.
     pub(crate) fn points(&self, side: Side) -> u32 {
         match side {
             Side::Left => self.left,
@@ -223,51 +145,74 @@ impl MatchState {
     }
 }
 
-// --- setup ----------------------------------------------------------------
-
-/// The game's configuration, shared by the window and the check, so that what
-/// is verified is what a person plays.
+/// The configuration the window and the verification share, so what is checked
+/// is what a person plays.
 pub(crate) fn config() -> GameConfig {
     GameConfig {
-        title: "jidousha — pong",
+        title: "jidousha - pong",
         ..GameConfig::default()
     }
 }
 
-/// Every system this game has, in one place.
+/// Every system this game has, in one place, in run order.
+///
+/// Named rather than written inline at each call site so the verification runs
+/// the *same* game the window does.
 pub(crate) fn register(app: &mut App) {
-    app.add_system(Startup, set_the_scene);
-    app.add_system(Update, steer_the_paddles);
+    app.add_system(Startup, set_the_table);
+    app.add_system(Update, drive_the_paddles);
+    app.add_system(Update, start_a_fresh_match);
+    app.add_system(Update, serve);
     app.add_system(Update, move_the_ball);
-    app.add_system(Update, keep_score);
-    app.add_system(Draw, draw_the_field);
-    app.add_system(Draw, draw_the_play);
-    app.add_system(Draw, draw_the_readout);
+    app.add_system(Update, bounce_off_the_walls);
+    app.add_system(Update, bounce_off_the_paddles);
+    app.add_system(Update, score_a_point);
+    app.add_system(Draw, draw::the_table);
+    app.add_system(Draw, draw::the_play);
+    app.add_system(Draw, draw::the_readout);
 }
 
-fn set_the_scene(world: &mut World) {
+fn main() -> ExitCode {
+    // `--verify` is the headless half: no window, a controller instead of a
+    // person, and assertions instead of somebody watching.
+    if std::env::args().any(|argument| argument == "--verify") {
+        return verify::run();
+    }
+    println!("{HINT}");
+    match run(config(), register) {
+        Ok(()) => ExitCode::SUCCESS,
+        // Display, not Debug. `RunError`'s `Display` is the engine's four-part
+        // message; returning it from `main` would print a struct dump instead.
+        Err(error) => {
+            eprintln!("{error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+// --- setup ---------------------------------------------------------------
+
+fn set_the_table(world: &mut World) {
     world.insert_resource(Camera {
-        clear_color: Color::rgb(0.04, 0.05, 0.08),
+        clear_color: Color::rgb(0.04, 0.06, 0.09),
         height: VIEW_HEIGHT,
         ..Camera::default()
     });
-    world.insert_resource(MatchState::fresh(Side::Right));
+    world.insert_resource(Scoreboard::new());
 
-    for side in [Side::Left, Side::Right] {
+    for (side, control, speed) in [
+        (Side::Left, Control::Keys, PLAYER_SPEED),
+        (Side::Right, Control::Machine, MACHINE_SPEED),
+    ] {
         let paddle = world.spawn();
-        let x = match side {
-            Side::Left => -PADDLE_X,
-            Side::Right => PADDLE_X,
-        };
-        world.insert(paddle, Transform::at(Vec2::new(x, 0.0)));
+        world.insert(paddle, Transform::at(Vec2::new(side.paddle_x(), 0.0)));
         world.insert(
             paddle,
             Paddle {
                 side,
-                speed: match side {
-                    Side::Left => PLAYER_SPEED,
-                    Side::Right => AI_SPEED,
-                },
+                control,
+                speed,
+                aim: 0.0,
             },
         );
     }
@@ -280,414 +225,323 @@ fn set_the_scene(world: &mut World) {
             velocity: Vec2::ZERO,
         },
     );
-
-    assert_the_ball_cannot_tunnel(world.resource::<Time>().fixed_dt);
 }
 
-/// The one thing about this game that a change to `fixed_dt` could break.
-///
-/// Nothing in v1 sweeps, so a ball that moves further in one tick than a paddle
-/// is thick steps clean through it. The margin is checked against the timestep
-/// the engine handed us, not against the 1/60 the constants were picked for.
-fn assert_the_ball_cannot_tunnel(fixed_dt: Seconds) {
-    let step = MAX_BALL_SPEED * fixed_dt.as_f32();
-    assert!(
-        step < PADDLE_SIZE.x,
-        "{}",
-        message(
-            "the ball can move further in one tick than a paddle is thick",
-            &format!(
-                "{MAX_BALL_SPEED} units/s at a {} s timestep is {step:.3} units per tick, \
-                 against a paddle {} units thick",
-                fixed_dt.as_f32(),
-                PADDLE_SIZE.x
-            ),
-            "GameConfig::fixed_dt got longer, or MAX_BALL_SPEED got bigger",
-            "lower MAX_BALL_SPEED, or make PADDLE_SIZE.x wider than one tick of travel",
-        )
-    );
-}
+// --- simulation ----------------------------------------------------------
 
-// --- simulation -----------------------------------------------------------
-
-/// Move both paddles: the left one from the keyboard, the right one by itself.
-fn steer_the_paddles(world: &mut World) {
-    // Read everything first, write second: a query that borrows the world
-    // mutably holds it for as long as it is iterated.
-    let player = match world.find_resource::<Input>() {
-        // The first tick of a run happens before any input exists.
+/// Move both paddles: the left one from the keyboard, the right one from the
+/// ball.
+fn drive_the_paddles(world: &mut World) {
+    // `Input` is absent on the first tick of a windowed run, and absent for the
+    // whole of a headless one unless a driver puts it there. Hence
+    // `find_resource`: without input the paddles simply do not move.
+    let keys = match world.find_resource::<Input>() {
         None => 0.0,
         Some(input) => f32::from(input.held(Key::S)) - f32::from(input.held(Key::W)),
     };
-    let ball = find_ball(world).map(|(_, pos, velocity)| (pos, velocity));
-    let dt = world.resource::<Time>().fixed_dt.as_f32();
+    let step = world.resource::<Time>().fixed_dt.as_f32();
 
-    for (_, transform, paddle) in world.query_mut::<(&mut Transform, &Paddle)>() {
-        let reach = paddle.speed * dt;
-        let step = match paddle.side {
-            Side::Left => player * reach,
-            Side::Right => match ball {
-                // Chase the ball once it is on its way over; otherwise ease
-                // back towards the middle, slowly.
-                Some((pos, velocity)) if velocity.x > 0.0 && pos.x > AI_REACT_X => {
-                    (pos.y - transform.pos.y).clamp(-reach, reach)
+    // Pass one, read-only. The machine paddle has to look at another entity
+    // while moving itself, which is the one shape that cannot be a single
+    // `query_mut` — the world is exclusively borrowed for as long as it runs.
+    let ball = ball_state(world);
+    let live = matches!(world.resource::<Scoreboard>().play, Play::Rally);
+    // The machine's eyes open on these ticks and no others. Off the tick count
+    // rather than off a wall clock, so the opponent plays the same game on a
+    // slow machine as on a fast one.
+    let looking = world
+        .resource::<Time>()
+        .tick
+        .is_multiple_of(MACHINE_REACTION);
+
+    // Pass two, write.
+    for (_, transform, paddle) in world.query_mut::<(&mut Transform, &mut Paddle)>() {
+        let direction = match paddle.control {
+            Control::Keys => keys,
+            Control::Machine => {
+                if looking {
+                    paddle.aim = machine_target(paddle.side, live, ball);
                 }
-                _ => {
-                    let recover = AI_RECOVER_SPEED * dt;
-                    (-transform.pos.y).clamp(-recover, recover)
+                let gap = paddle.aim - transform.pos.y;
+                if gap.abs() < MACHINE_DEAD_BAND {
+                    0.0
+                } else {
+                    gap.signum()
                 }
-            },
+            }
         };
-        transform.pos.y = (transform.pos.y + step).clamp(-PADDLE_LIMIT, PADDLE_LIMIT);
+        transform.pos.y = (transform.pos.y + direction * paddle.speed * step)
+            .clamp(-PADDLE_TRAVEL, PADDLE_TRAVEL);
     }
 }
 
-/// Advance the ball by one tick, bouncing it off the walls and the paddles.
-fn move_the_ball(world: &mut World) {
-    if world.resource::<MatchState>().stage != Stage::Rally {
-        return;
-    }
-    let dt = world.resource::<Time>().fixed_dt.as_f32();
-    let paddles: Vec<(Side, Vec2)> = world
-        .query::<(&Transform, &Paddle)>()
-        .map(|(_, transform, paddle)| (paddle.side, transform.pos))
-        .collect();
-
-    let mut touched = None;
-    for (_, transform, ball) in world.query_mut::<(&mut Transform, &mut Ball)>() {
-        let step = advance(transform.pos, ball.velocity, dt, &paddles);
-        transform.pos = step.pos;
-        ball.velocity = step.velocity;
-        touched = step.touched;
-    }
-
-    let state = world.resource_mut::<MatchState>();
-    if touched.is_some() {
-        state.rally += 1;
-        state.longest_rally = state.longest_rally.max(state.rally);
-    }
-}
-
-/// Where one tick of travel puts the ball, and how fast it is going afterwards.
-struct Step {
-    /// The new position.
-    pos: Vec2,
-    /// The new velocity.
-    velocity: Vec2,
-    /// Which paddle it bounced off, if any.
-    touched: Option<Side>,
-}
-
-/// One tick of ball travel: a swept test against each paddle, then the walls.
-///
-/// Swept rather than an overlap test between two rectangles, because an overlap
-/// test only sees the ball on ticks where it happens to be *inside* the paddle,
-/// and a ball moving half a unit a tick against a paddle 0.8 units thick spends
-/// at most one tick there. The crossing test asks the question that actually
-/// matters — did the ball pass through the plane the paddle's face lies on, and
-/// was the paddle there when it did.
-fn advance(from: Vec2, velocity: Vec2, dt: f32, paddles: &[(Side, Vec2)]) -> Step {
-    let mut velocity = velocity;
-    let mut to = from + velocity * dt;
-    let mut touched = None;
-
-    for &(side, centre) in paddles {
-        let facing = side.facing();
-        // The plane the ball's edge touches, on the side it arrives from.
-        let plane = centre.x + facing * (PADDLE_SIZE.x * 0.5 + BALL_RADIUS);
-        let approaching = velocity.x * facing < 0.0;
-        let crossed = (from.x - plane) * facing >= 0.0 && (to.x - plane) * facing < 0.0;
-        if !approaching || !crossed {
-            continue;
-        }
-        let travelled = from.x - to.x;
-        let when = if travelled.abs() > f32::EPSILON {
-            ((from.x - plane) / travelled).clamp(0.0, 1.0)
-        } else {
-            0.0
-        };
-        let where_y = from.y + (to.y - from.y) * when;
-        let reach = PADDLE_SIZE.y * 0.5 + BALL_RADIUS;
-        let offset = (where_y - centre.y) / reach;
-        if offset.abs() > 1.0 {
-            continue;
-        }
-
-        // Off the tip of the paddle is a steep return; off the middle is flat.
-        // That is the whole of Pong's aiming, and the reason a rally can go
-        // anywhere.
-        let speed = (velocity.length() * SPEED_GAIN).min(MAX_BALL_SPEED);
-        let (sine, cosine) = sin_cos(Radians(offset * MAX_BOUNCE.0));
-        velocity = Vec2::new(facing * speed * cosine, speed * sine);
-        to = Vec2::new(plane, where_y) + velocity * dt * (1.0 - when);
-        touched = Some(side);
-        break;
-    }
-
-    // Walls last, so a ball that hit a paddle in the corner still ends the tick
-    // on the field.
-    let top = FIELD_TOP + BALL_RADIUS;
-    let bottom = FIELD_BOTTOM - BALL_RADIUS;
-    if to.y < top {
-        to.y = top + (top - to.y);
-        velocity.y = -velocity.y;
-    } else if to.y > bottom {
-        to.y = bottom - (to.y - bottom);
-        velocity.y = -velocity.y;
-    }
-    to.y = to.y.clamp(top, bottom);
-
-    Step {
-        pos: to,
-        velocity,
-        touched,
-    }
-}
-
-/// Count the points, run the serve clock, and start the next match on Enter.
-fn keep_score(world: &mut World) {
-    match world.resource::<MatchState>().stage {
-        Stage::Serving { ticks_left, toward } => {
-            if ticks_left > 1 {
-                world.resource_mut::<MatchState>().stage = Stage::Serving {
-                    ticks_left: ticks_left - 1,
-                    toward,
-                };
-                return;
-            }
-            // The engine's RNG is seeded from `GameConfig`, so the same run
-            // serves the same way every time and a check can replay it.
-            let spread = {
-                let rng = world.resource_mut::<Rng>();
-                (rng.next_f32() - 0.5) * 2.0 * SERVE_SPREAD.0
-            };
-            let (sine, cosine) = sin_cos(Radians(spread));
-            let facing = match toward {
-                Side::Left => -1.0,
-                Side::Right => 1.0,
-            };
-            put_the_ball(
-                world,
-                Vec2::ZERO,
-                Vec2::new(facing * SERVE_SPEED * cosine, SERVE_SPEED * sine),
-            );
-            let state = world.resource_mut::<MatchState>();
-            state.stage = Stage::Rally;
-            state.rally = 0;
-        }
-        Stage::Rally => {
-            let Some((_, pos, velocity)) = find_ball(world) else {
-                return;
-            };
-            let speed = velocity.length();
-            {
-                let state = world.resource_mut::<MatchState>();
-                state.top_speed = state.top_speed.max(speed);
-            }
-            let scorer = if pos.x > FIELD_EDGE {
-                Side::Left
-            } else if pos.x < -FIELD_EDGE {
-                Side::Right
-            } else {
-                return;
-            };
-            put_the_ball(world, Vec2::ZERO, Vec2::ZERO);
-            let state = world.resource_mut::<MatchState>();
-            match scorer {
-                Side::Left => state.left += 1,
-                Side::Right => state.right += 1,
-            }
-            state.stage = if state.points(scorer) >= WIN_SCORE {
-                Stage::Over { winner: scorer }
-            } else {
-                // Serve towards whoever just conceded.
-                Stage::Serving {
-                    ticks_left: SERVE_TICKS,
-                    toward: match scorer {
-                        Side::Left => Side::Right,
-                        Side::Right => Side::Left,
-                    },
-                }
-            };
-        }
-        Stage::Over { winner } => {
-            let again = world
-                .find_resource::<Input>()
-                .is_some_and(|input| input.just_pressed(Key::Enter));
-            if again {
-                put_the_ball(world, Vec2::ZERO, Vec2::ZERO);
-                let top_speed = world.resource::<MatchState>().top_speed;
-                let mut fresh = MatchState::fresh(winner);
-                // Carry the fastest ball across matches: it is a fact about the
-                // session, not about one match.
-                fresh.top_speed = top_speed;
-                world.insert_resource(fresh);
-            }
-        }
-    }
-}
-
-/// The ball's entity, position and velocity, if there is one.
-fn find_ball(world: &World) -> Option<(Entity, Vec2, Vec2)> {
+/// Where the ball is and how fast, or `None` before `Startup` has spawned it.
+pub(crate) fn ball_state(world: &World) -> Option<(Vec2, Vec2)> {
     world
         .query::<(&Transform, &Ball)>()
-        .map(|(entity, transform, ball)| (entity, transform.pos, ball.velocity))
+        .map(|(_, transform, ball)| (transform.pos, ball.velocity))
         .next()
 }
 
-/// Put the ball somewhere, going somewhere.
-fn put_the_ball(world: &mut World, pos: Vec2, velocity: Vec2) {
-    let Some((ball, _, _)) = find_ball(world) else {
+/// Where the machine paddle wants to be, sampled the moment it looks.
+///
+/// It chases the ball's y *as it is now*, not where it will end up: a paddle
+/// that solved for the crossing, walls and all, would never be beaten by
+/// anything. Between looks it drives at the last thing it saw, which is what
+/// makes a fast steep ball beat it — the ball's vertical speed can exceed the
+/// paddle's, so twelve ticks of lag is more than a paddle's length of error.
+pub(crate) fn machine_target(side: Side, live: bool, ball: Option<(Vec2, Vec2)>) -> f32 {
+    let Some((pos, velocity)) = ball else {
+        return 0.0;
+    };
+    // Coming this way? If not, wait in the middle for the next one.
+    if !live || velocity.x * side.outward() >= 0.0 {
+        return 0.0;
+    }
+    pos.y
+}
+
+/// Space clears a finished match back to nil-nil.
+///
+/// A game does not close itself — there is no `App::quit` in v1 — so the end of
+/// a match is a state to leave rather than a program to exit.
+fn start_a_fresh_match(world: &mut World) {
+    if !matches!(world.resource::<Scoreboard>().play, Play::Over { .. }) {
+        return;
+    }
+    let restart = world
+        .find_resource::<Input>()
+        .is_some_and(|input| input.just_pressed(Key::Space));
+    if !restart {
+        return;
+    }
+    let carried = *world.resource::<Scoreboard>();
+    let mut fresh = Scoreboard::new();
+    // The match resets; the run's records do not, so a verification that plays
+    // through more than one match still sees the fastest ball it ever hit.
+    fresh.longest_rally = carried.longest_rally;
+    fresh.top_speed = carried.top_speed;
+    world.insert_resource(fresh);
+}
+
+/// Count the pause between points down, then put the ball in play.
+fn serve(world: &mut World) {
+    let (to, ticks_left) = match world.resource::<Scoreboard>().play {
+        Play::Serving { to, ticks_left } => (to, ticks_left),
+        _ => return,
+    };
+    if ticks_left > 0 {
+        world.resource_mut::<Scoreboard>().play = Play::Serving {
+            to,
+            ticks_left: ticks_left - 1,
+        };
+        return;
+    }
+
+    // The engine's seeded `Rng`, so the same run serves the same ball every
+    // time — which is what lets a verification be believed at all.
+    let spread = {
+        let rng = world.resource_mut::<Rng>();
+        rng.next_f32() * 2.0 - 1.0
+    };
+    let (sin, cos) = sin_cos(Radians(spread * SERVE_SPREAD.as_f32()));
+    // `to` is the side being served *at*, so the ball travels against that
+    // side's outward direction.
+    let velocity = Vec2::new(cos * -to.outward(), sin) * SERVE_SPEED;
+
+    let Some(ball) = world.query::<&Ball>().map(|(entity, _)| entity).next() else {
         return;
     };
-    world.component_mut::<Transform>(ball).pos = pos;
+    world.component_mut::<Transform>(ball).pos = Vec2::ZERO;
     world.component_mut::<Ball>(ball).velocity = velocity;
+    let board = world.resource_mut::<Scoreboard>();
+    board.play = Play::Rally;
+    board.rally = 0;
+    board.top_speed = board.top_speed.max(SERVE_SPEED);
 }
 
-// --- drawing --------------------------------------------------------------
-
-/// The walls, the sidelines and the net.
-fn draw_the_field(ctx: &mut DrawCtx) {
-    let depth = Depth::layer(layers::FIELD);
-    let chalk = Color::rgba(1.0, 1.0, 1.0, 0.12);
-
-    for y in [FIELD_TOP, FIELD_BOTTOM] {
-        ctx.line(
-            Vec2::new(-FIELD_EDGE, y),
-            Vec2::new(FIELD_EDGE, y),
-            0.2,
-            chalk,
-            depth,
-        );
+fn move_the_ball(world: &mut World) {
+    if !matches!(world.resource::<Scoreboard>().play, Play::Rally) {
+        return;
     }
-
-    // The net, as a column of dashes — the thing that makes it read as Pong.
-    let dash = 0.7;
-    let mut y = FIELD_TOP + dash * 0.5;
-    while y < FIELD_BOTTOM {
-        ctx.rect(
-            Rect::from_center_size(Vec2::new(0.0, y), Vec2::new(0.16, dash)),
-            chalk,
-            depth,
-        );
-        y += dash * 2.0;
+    let step = world.resource::<Time>().fixed_dt.as_f32();
+    for (_, transform, ball) in world.query_mut::<(&mut Transform, &Ball)>() {
+        transform.pos += ball.velocity * step;
     }
 }
 
-/// The paddles and the ball, read straight out of the world.
-fn draw_the_play(ctx: &mut DrawCtx) {
-    let depth = Depth::layer(layers::PLAY);
-    let paddles: Vec<(Side, Vec2)> = ctx
-        .world
-        .query::<(&Transform, &Paddle)>()
-        .map(|(_, transform, paddle)| (paddle.side, transform.pos))
-        .collect();
-    for (side, at) in paddles {
-        let color = match side {
-            Side::Left => Color::rgb(0.45, 0.95, 0.75),
-            Side::Right => Color::rgb(0.95, 0.6, 0.45),
-        };
-        ctx.rect(Rect::from_center_size(at, PADDLE_SIZE), color, depth);
-    }
-
-    let balls: Vec<Vec2> = ctx
-        .world
-        .query::<(&Transform, &Ball)>()
-        .map(|(_, transform, _)| transform.pos)
-        .collect();
-    for at in balls {
-        ctx.circle(at, BALL_RADIUS, Color::WHITE, depth);
-    }
-}
-
-/// The score, the hint line, and whatever banner the current screen wants.
-fn draw_the_readout(ctx: &mut DrawCtx) {
-    let state = *ctx.world.resource::<MatchState>();
-
-    let score = TextStyle {
-        size: 2.2,
-        color: Color::rgba(1.0, 1.0, 1.0, 0.75),
-        depth: Depth::layer(layers::UI),
-    };
-    // Centred by measuring: `width_of` is exact, so this lines up rather than
-    // nearly lining up.
-    centred(
-        ctx,
-        &format!("{}   {}", state.left, state.right),
-        score,
-        FIELD_TOP + 0.5,
-    );
-
-    let hint = TextStyle {
-        size: 0.7,
-        color: Color::rgba(0.7, 0.85, 1.0, 0.55),
-        depth: Depth::layer(layers::UI),
-    };
-    // Inside the bottom wall rather than under it: `bottom_right.y - 1.3` puts
-    // the line where the camera ends, which is on top of the wall the field is
-    // drawn with. The field's own edge is the thing to hang UI off.
-    ctx.text(
-        Vec2::new(-FIELD_EDGE + 0.3, FIELD_BOTTOM - 1.05),
-        &format!("W / S - move       first to {WIN_SCORE}"),
-        hint,
-    );
-
-    match state.stage {
-        Stage::Serving { ticks_left, toward } => {
-            let ready = TextStyle {
-                size: 0.9,
-                color: Color::rgba(1.0, 1.0, 1.0, 0.5),
-                depth: Depth::layer(layers::UI),
-            };
-            centred(
-                ctx,
-                &format!("serving {} in {}", toward.name(), ticks_left / 15 + 1),
-                ready,
-                -3.0,
-            );
-        }
-        Stage::Rally => {}
-        Stage::Over { winner } => {
-            let banner = TextStyle {
-                size: 2.0,
-                color: Color::WHITE,
-                depth: Depth::layer(layers::UI),
-            };
-            centred(ctx, &format!("{} WINS", winner.name()), banner, -3.2);
-            let again = TextStyle {
-                size: 0.9,
-                color: Color::rgba(1.0, 1.0, 1.0, 0.6),
-                depth: Depth::layer(layers::UI),
-            };
-            centred(ctx, "press ENTER to play again", again, 1.6);
-        }
-    }
-}
-
-/// Draw one line of text centred on the middle of the field, with its top at
-/// `top`.
+/// Reflect the ball off the top and bottom walls.
 ///
-/// `ctx.text` places the first character's *top-left* corner, so centring is
-/// half the measured width to the left and nothing at all vertically.
-fn centred(ctx: &mut DrawCtx, text: &str, style: TextStyle, top: f32) {
-    ctx.text(Vec2::new(-style.width_of(text) * 0.5, top), text, style);
-}
-
-// --- entry point ----------------------------------------------------------
-
-fn main() -> ExitCode {
-    if std::env::args().any(|argument| argument == "--verify") {
-        verify::run();
-        return ExitCode::SUCCESS;
-    }
-    println!("W and S move the left paddle. first to {WIN_SCORE}. close the window to quit");
-    match run(config(), register) {
-        Ok(()) => ExitCode::SUCCESS,
-        // Print the error rather than returning it: `RunError`'s `Display` is
-        // the engine's four-part message, and `Debug` is a struct dump.
-        Err(error) => {
-            eprintln!("{error}");
-            ExitCode::FAILURE
+/// Position-based rather than swept, and safe that way because a wall is
+/// infinitely thick from the ball's side: the worst a fast tick can do is
+/// overshoot into it, and mirroring the overshoot back out leaves the ball
+/// exactly where a swept test would have put it.
+fn bounce_off_the_walls(world: &mut World) {
+    let limit = WALL_Y - BALL_RADIUS;
+    for (_, transform, ball) in world.query_mut::<(&mut Transform, &mut Ball)>() {
+        if transform.pos.y < -limit {
+            transform.pos.y = -limit - (transform.pos.y + limit);
+            ball.velocity.y = ball.velocity.y.abs();
+        } else if transform.pos.y > limit {
+            transform.pos.y = limit - (transform.pos.y - limit);
+            ball.velocity.y = -ball.velocity.y.abs();
         }
     }
+}
+
+/// Reflect the ball off a paddle, with the contact point deciding the angle.
+fn bounce_off_the_paddles(world: &mut World) {
+    if !matches!(world.resource::<Scoreboard>().play, Play::Rally) {
+        return;
+    }
+    let step = world.resource::<Time>().fixed_dt.as_f32();
+    let Some((pos, velocity)) = ball_state(world) else {
+        return;
+    };
+    // `move_the_ball` ran earlier this tick, so this is where the ball was when
+    // the tick started — reconstructed rather than remembered, because a
+    // component holding last tick's position is a second copy of the truth.
+    //
+    // One approximation lives here: `bounce_off_the_walls` runs between the two,
+    // so on a tick where the ball also bounced off a wall this back-projection
+    // follows the *outgoing* heading and misplaces `previous.y` by twice the
+    // overshoot — at most half a unit at the speed ceiling. A ball that clips a
+    // wall and a paddle tip in the same 1/60th of a second can therefore be
+    // judged wrongly. Prototype-grade, and stated rather than hidden: fixing it
+    // means the wall bounce recording where it happened, which is a second
+    // component and a rule about ordering for a case worth about one frame a
+    // match.
+    let previous = pos - velocity * step;
+
+    let paddles: Vec<(Side, f32)> = world
+        .query::<(&Transform, &Paddle)>()
+        .map(|(_, transform, paddle)| (paddle.side, transform.pos.y))
+        .collect();
+
+    for (side, paddle_y) in paddles {
+        let Some(hit) = contact(previous, pos, side, paddle_y, step) else {
+            continue;
+        };
+        let Some(ball) = world.query::<&Ball>().map(|(entity, _)| entity).next() else {
+            return;
+        };
+        world.component_mut::<Transform>(ball).pos = hit.position;
+        world.component_mut::<Ball>(ball).velocity = hit.velocity;
+        let board = world.resource_mut::<Scoreboard>();
+        board.rally += 1;
+        board.longest_rally = board.longest_rally.max(board.rally);
+        board.top_speed = board.top_speed.max(hit.velocity.length());
+        // One paddle per tick. The two are thirty units apart and the ball
+        // travels at most 0.55 in a tick, so there is no second one to find.
+        return;
+    }
+}
+
+/// Where a bounce leaves the ball, and where it is going afterwards.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Contact {
+    pub(crate) position: Vec2,
+    pub(crate) velocity: Vec2,
+}
+
+/// The swept paddle test.
+///
+/// The API document is explicit that there is no `Rect::sweep` in v1 and that
+/// this is the game's own eight lines rather than something to go looking for:
+/// the plane the ball's leading edge must cross, whether it was approaching it,
+/// whether *this tick's travel* crossed it, and the fraction of the tick at
+/// which it did. A position-only test would let a fast ball step clean through
+/// a thin paddle between two ticks.
+///
+/// `previous` and `now` bracket one tick of travel. The verification's shot
+/// planner calls this too, so what it predicts is what the game does.
+pub(crate) fn contact(
+    previous: Vec2,
+    now: Vec2,
+    side: Side,
+    paddle_y: f32,
+    step: f32,
+) -> Option<Contact> {
+    let travel = now - previous;
+    // Heading towards this paddle at all?
+    if travel.x * side.outward() >= 0.0 {
+        return None;
+    }
+    // The plane the ball's near edge meets: the paddle's inner face, pushed out
+    // by the ball's radius, so the test is a point against a plane.
+    let face = side.paddle_x() + side.outward() * (PADDLE_SIZE.x * 0.5 + BALL_RADIUS);
+    // Distance outward from that plane: positive is in front of the paddle.
+    let before = (previous.x - face) * side.outward();
+    let after = (now.x - face) * side.outward();
+    // In front before, behind now. `>=` on the first so a ball that finished
+    // last tick exactly on the face still registers this tick.
+    if !(before >= 0.0 && after < 0.0) {
+        return None;
+    }
+    // Positive, because `before >= 0.0 > after`.
+    let fraction = before / (before - after);
+    let at = previous + travel * fraction;
+
+    let reach = PADDLE_SIZE.y * 0.5 + BALL_RADIUS;
+    let offset = at.y - paddle_y;
+    if offset.abs() > reach {
+        return None;
+    }
+
+    // Where along the paddle it landed — `-1.0` at the top edge, `+1.0` at the
+    // bottom — sets the outgoing angle. Dead centre sends the ball straight
+    // back; the tips send it away at `MAX_BOUNCE`.
+    let along = (offset / reach).clamp(-1.0, 1.0);
+    let (sin, cos) = sin_cos(Radians(along * MAX_BOUNCE.as_f32()));
+    let speed = (travel.length() / step + SPEED_GAIN).min(MAX_BALL_SPEED);
+    let velocity = Vec2::new(cos * side.outward(), sin) * speed;
+
+    // Spend the rest of the tick on the new heading, so the ball does not stall
+    // against the paddle for a frame.
+    Some(Contact {
+        position: at + velocity * (1.0 - fraction) * step,
+        velocity,
+    })
+}
+
+/// A ball past a goal line is a point, and `WINNING_SCORE` points is a match.
+fn score_a_point(world: &mut World) {
+    if !matches!(world.resource::<Scoreboard>().play, Play::Rally) {
+        return;
+    }
+    let Some((pos, _)) = ball_state(world) else {
+        return;
+    };
+    let conceded = if pos.x < -GOAL_X {
+        Some(Side::Left)
+    } else if pos.x > GOAL_X {
+        Some(Side::Right)
+    } else {
+        None
+    };
+    let Some(conceded) = conceded else { return };
+
+    let scorer = conceded.other();
+    let board = world.resource_mut::<Scoreboard>();
+    match scorer {
+        Side::Left => board.left += 1,
+        Side::Right => board.right += 1,
+    }
+    board.play = if board.points(scorer) >= WINNING_SCORE {
+        Play::Over { winner: scorer }
+    } else {
+        // The side that conceded receives the next serve.
+        Play::Serving {
+            to: conceded,
+            ticks_left: SERVE_PAUSE,
+        }
+    };
+
+    // Park the ball in the middle rather than leave it drifting off into
+    // nowhere during the pause.
+    let Some(ball) = world.query::<&Ball>().map(|(entity, _)| entity).next() else {
+        return;
+    };
+    world.component_mut::<Transform>(ball).pos = Vec2::ZERO;
+    world.component_mut::<Ball>(ball).velocity = Vec2::ZERO;
 }
