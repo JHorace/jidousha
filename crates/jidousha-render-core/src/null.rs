@@ -48,11 +48,18 @@ impl DrawnQuad {
         Rect { min, max }
     }
 
-    /// Whether `world` is inside the quad itself, rotation included.
+    /// Whether `world` is in the quad, rotation and edges included.
     ///
     /// Exact rather than approximate: a rotated sprite's bounding box claims
     /// corners the sprite does not cover, and "is the cursor on the ship" is
     /// precisely the question that would get the wrong answer.
+    ///
+    /// A point exactly on an edge or a corner is **inside**, so a fan of
+    /// wedges sharing a centre all answer for that centre — which is what
+    /// makes `ctx.circle`'s expansion checkable by asking about the middle of
+    /// the disc. Closed on all four sides, unlike `Rect::contains`, which is
+    /// half-open so that adjacent rectangles never both claim a point: that
+    /// one is a partition of space, this one is a hit test.
     #[must_use]
     pub fn contains(&self, world: Vec2) -> bool {
         // A convex quad contains a point when the point is on the same side of

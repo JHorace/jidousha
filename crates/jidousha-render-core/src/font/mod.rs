@@ -37,6 +37,15 @@ pub const FONT_TEXTURE: TextureId = TextureId::from_bits(1);
 /// How a line of text is drawn — monospace over the ninety-five printable ASCII
 /// characters, space through `~`, every one of them advancing 7/9 of `size`,
 /// with anything outside that range drawn as a visible box rather than skipped.
+/// Every glyph's quad is exactly `size` tall and `size * 7 / 9` wide and is laid
+/// out from its **top-left** corner, so a line placed at `at` occupies
+/// `at.y ..= at.y + size` vertically and `width_of(text)` horizontally, and an
+/// N-line block is `N * size` tall. There is no `height_of`, because that is the
+/// whole of it: the vertical extent of text is `size` times the number of lines.
+///
+/// Inside that box the ink is the middle seven ninths, with one ninth of clear
+/// border above and below — which is what `size` "including the gap" means, and
+/// why consecutive lines a full `size` apart do not touch.
 ///
 /// ```
 /// # use jidousha_render_core::TextStyle;
@@ -50,7 +59,7 @@ pub const FONT_TEXTURE: TextureId = TextureId::from_bits(1);
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TextStyle {
-    /// The height of one line, in world units — including the gap below it.
+    /// One line's height in world units — a glyph quad, top to bottom.
     ///
     /// World units rather than points or texels, so text scales with the camera
     /// like everything else and a game never thinks about pixels

@@ -38,7 +38,9 @@ mod component;
 mod draw;
 mod entity;
 mod error;
-/// Deterministic maths: the trigonometry and vector types a game may use.
+/// Deterministic maths: the trigonometry and vector types a game may use, every
+/// one of them re-exported by `jidousha::prelude`, so a game imports the prelude
+/// and never writes this module's path.
 pub mod math;
 mod panic_hook;
 mod query;

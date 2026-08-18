@@ -47,12 +47,22 @@ pub struct Time {
     /// ~2.8s if the steps were summed). Logic that must be exact keys off
     /// `tick`, which is why that is the canonical timeline.
     pub elapsed: Seconds,
-    /// How far into the next tick the last rendered frame fell, in `0.0..1.0`.
+    /// A Draw-only interpolation fraction that nothing in v1 consumes.
     ///
-    /// Draw-phase only, for interpolating between the last two simulation
-    /// states. Update systems must ignore it: reading it there would make the
-    /// simulation depend on frame timing, which is exactly what the fixed
-    /// timestep exists to prevent.
+    /// How far into the next tick the last rendered frame fell, in `0.0..1.0`.
+    /// Update systems must ignore it: reading it there would make the simulation
+    /// depend on frame timing, which is exactly what the fixed timestep exists to
+    /// prevent.
+    ///
+    /// **The engine draws no interpolation of its own.** There is no lerp helper
+    /// and no "previous transform" the renderer knows about — `Draw` reads the
+    /// world's committed state, so a game that submits `transform.pos` unchanged
+    /// judders at the tick rate however fast the frames come. The field is here
+    /// for a game that minds: keep last tick's value in a component of your own
+    /// and submit `previous.lerp(current, alpha)` from the Draw system. E0 run 4
+    /// read the definition, found nothing that consumed it, and ignored it
+    /// (e0-findings.md F-048) — which is the correct move for a prototype and
+    /// the reason the field's own line now says so.
     pub alpha: f32,
 }
 

@@ -356,6 +356,29 @@ that's exactly what acceptance milestone E0 tests (implementation plan).
   here rather than left implicit: §4 and `gen-api-doc` disagreeing without
   either saying so is precisely what F-001 was, and a second silent disagreement
   in the same paragraph would be the same bug wearing the same hat.
+
+  **Overdue, and now the top of the generator's queue: nothing checks whether the
+  sentence the generator keeps is the sentence that mattered.** `first_sentence`
+  takes the first sentence of a doc comment and `trailing` truncates a member's at
+  68 characters — both correct, both what they were built to do, and between them
+  they are the mechanism behind **four of E0 run 4's sixteen findings**
+  (e0-findings.md F-039, F-043, F-048, and the wording half of F-050). In every
+  case the doc comment was already right and the reference printed something that
+  was not wrong, merely empty: `Submit::circle` explained its fixed segment count in
+  its body and the reference printed "Fill a circle."; `Time::alpha` explained
+  itself in four lines and the reference printed a clause cut mid-sentence.
+
+  This is the fourth consecutive run whose findings are mostly "the document does
+  not say what this *does*", which `e0-findings.md` §6 predicted would mean the
+  sentences are not the problem. The shape of the check: for each rendered item,
+  compare the summary against the rest of its doc comment and fail when the body
+  states a fact the summary drops — a truncated member line, or a second sentence
+  carrying a number, a count, or a "nothing consumes this". It cannot be exact and
+  does not need to be; a warning listing the items whose bodies are much longer
+  than their summaries would have caught all four, because all four were the
+  longest bodies with the shortest summaries in their groups. **This now outranks
+  the F-017/F-036 export gate**, which has cost three runs a lookup each; this one
+  cost a run a debug cycle and cost this file a recorded falsehood (F-039).
 - Fixed structure: **Quickstart** (one complete ~60-line game, compiling,
   CI-tested — it IS an example file, included verbatim) → **Concepts** (seven
   short paragraphs: world/systems/phases, determinism & the tick, drawing,

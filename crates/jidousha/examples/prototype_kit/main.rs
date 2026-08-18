@@ -22,7 +22,6 @@
 //! file — the first example to be a directory rather than one file, because the
 //! game and the check on the game are two things to read.
 
-use jidousha::math::sin_cos;
 use std::process::ExitCode;
 
 use jidousha::prelude::*;
