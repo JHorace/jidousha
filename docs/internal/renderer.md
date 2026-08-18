@@ -458,6 +458,34 @@ run N ticks with scripted input, then assert on world state + transcript, and
 optionally capture a frame for human/agent eyeballs. This tool is the game-agent
 feedback loop and gets built incrementally from R0 (see also asset/input docs).
 
+**Draw order is part of tier 1 and depth is not (ADR-0024).** `FrameRecord::quads`
+hands back the plan's sorted sequence, so a quad's index in it is its place in
+the painter's order and `covering`'s front-to-back is that same order reversed —
+which is how a check asks "is the score behind the ball?". `DrawnQuad` carries no
+`Depth`, deliberately: the sort has already consumed it by the time a plan
+exists, a `layer` read back would only restate what the game submitted, and a
+per-quad depth on `Batch` would be verification payload crossing the seam. E0
+run 5 concluded from the silence that ordering was uncheckable and filed the
+field as its one engine request; the capability was there and unstated.
+
+**Two `transcript` methods, two sizes (e0-findings.md F-055).** `FrameRecord`'s
+is one frame — the screenshot substitute a `--verify` run prints as evidence.
+`FrameRecorder`'s is the whole history, one heading and a quad block per frame,
+which is a line per quad per tick. Both were summarised as "the last frame" until
+run 5 printed 1,263 frames as 121,465 lines without noticing, because the
+`--verify` convention keeps the transcript rather than showing it.
+`the_recorders_transcript_carries_every_frame_and_a_records_carries_one` pins
+them apart.
+
+**A verification is only as good as the mutations it survives.** Run 5 broke its
+own game seventeen ways and caught all seventeen — but two only after tightening
+checks it had written carefully. One of those holes was in `prototype_kit`'s own
+paddle check: "a paddle-sized quad covers this point" passes for a paddle drawn
+45% of its height out of position, because a paddle covers its own centre
+wherever it is. The check now compares the quad's *bounds*, and the general rule
+is in *Testing your game*: covering a point says a quad is nearby, only its
+bounds say where it is.
+
 ## 10. Errors (core §9 taxonomy applied)
 
 - No adapter/device at startup → `Result` from `jidousha::run` with a §9 message

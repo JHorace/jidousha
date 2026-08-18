@@ -87,7 +87,7 @@ impl Default for TextStyle {
 }
 
 impl TextStyle {
-    /// How wide `text` will be in world units — its widest line, if several.
+    /// In world units — its widest line only, so a block centres crooked.
     ///
     /// Monospace with no kerning, so this is exact rather than an estimate.
     /// A game centers a score with it, or draws a panel behind a readout;
@@ -104,6 +104,15 @@ impl TextStyle {
     /// result is wider than the camera can see, so a banner overruns the screen
     /// with every assertion still passing. `Camera::visible_bounds` is what
     /// tells you, and *Testing your game* has the check.
+    ///
+    /// **Centering a multi-line block by this centers only its longest line.**
+    /// The block is laid out from one top-left corner, so subtracting half of
+    /// the widest line puts that line in the middle and hangs every shorter one
+    /// off to the left of centre — a two-line banner of uneven lengths draws
+    /// visibly crooked, on screen, at the right size, with the bounds check and
+    /// the glyph count both passing. This is a different failure from the
+    /// overrun above and nothing catches it. Centre each line by its own width,
+    /// with one `Submit::text` call per line (e0-findings.md F-060).
     #[must_use]
     pub fn width_of(&self, text: &str) -> f32 {
         let longest = text
@@ -353,6 +362,34 @@ mod tests {
         assert_eq!(quad.uvs[2], region.max, "bottom-right");
         assert_eq!(quad.uvs[3], Vec2::new(region.min.x, region.max.y));
         assert_eq!(quad.texture, FONT_TEXTURE);
+    }
+
+    #[test]
+    fn centering_a_block_by_its_width_leaves_the_short_line_left_of_centre() {
+        // e0-findings.md F-060. `width_of` is the widest line and `layout` runs
+        // from one top-left corner, so the documented centring idiom centres
+        // the longest line and hangs the rest off to its left. The geometry is
+        // correct, every existing assertion passes, and the picture is crooked
+        // — so the trap is pinned here and named in `width_of`'s own entry.
+        let style = TextStyle::default();
+        let block = "LONGEST LINE\nshort";
+        let left = -style.width_of(block) / 2.0;
+        let glyphs = layout(Vec2::new(left, 0.0), block, &style);
+
+        let advance = style.advance();
+        let long_end = left + 12.0 * advance;
+        let short_end = left + 5.0 * advance;
+        assert!(
+            (left + long_end).abs() < 1e-5,
+            "the longest line is the one that ends up centred"
+        );
+        assert!(
+            short_end < -1e-3,
+            "the short line ends left of centre: it runs to {short_end}"
+        );
+        // And both lines really do start at the same x, which is why.
+        assert_eq!(glyphs[0].at.x, glyphs[12].at.x);
+        assert!(glyphs[12].at.y > glyphs[0].at.y, "and one line lower");
     }
 
     #[test]

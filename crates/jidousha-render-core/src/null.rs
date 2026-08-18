@@ -90,7 +90,15 @@ pub struct FrameRecord {
 }
 
 impl FrameRecord {
-    /// Every quad drawn this frame, in draw order.
+    /// Every quad drawn this frame, in draw order — the depth sort, not
+    /// submission order.
+    ///
+    /// The sequence is `Depth::layer`, then `Depth::z`, then the order the
+    /// game submitted in as the tie-break. So a quad's index here is its place
+    /// in the painter's sequence, and **two quads' relative order is a
+    /// comparison of their indices**: the later one is drawn over the earlier
+    /// one. That is how a check asks whether the score is behind the ball
+    /// without either of them needing to overlap (ADR-0024).
     #[must_use]
     pub fn quads(&self) -> Vec<DrawnQuad> {
         let mut quads = Vec::new();
@@ -104,6 +112,12 @@ impl FrameRecord {
     ///
     /// This is "what is at this point?", which with the camera's
     /// `screen_to_world` is also "what did the player just click on?".
+    ///
+    /// Front to back is [`FrameRecord::quads`]' depth sort read backwards, so
+    /// the **first** element is what a player looking at `world` actually sees.
+    /// That makes this the direct test of a layering mistake: at a point where
+    /// two things overlap, which one comes back first is which one is painting
+    /// over the other (ADR-0024).
     #[must_use]
     pub fn covering(&self, world: Vec2) -> Vec<DrawnQuad> {
         let mut hits: Vec<DrawnQuad> = self
@@ -121,8 +135,11 @@ impl FrameRecord {
         self.plan.quad_count()
     }
 
-    /// The frame as text: deterministic, diffable, and readable in a failure
-    /// message.
+    /// This one frame as stable, diffable text — every quad, one per line.
+    ///
+    /// The screenshot substitute, and the thing to print as a `--verify` run's
+    /// evidence. [`FrameRecorder::transcript`] is the *other* one: every frame
+    /// the recorder holds, which is a line per quad per tick.
     ///
     /// This is the snapshot format the transcript tests assert on. Floats are
     /// printed to three decimals — enough to see a sprite move by a pixel, few

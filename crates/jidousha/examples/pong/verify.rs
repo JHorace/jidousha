@@ -154,8 +154,8 @@ fn check_an_idle_player_loses(checks: &mut Checks) -> (u32, u32) {
 pub(crate) fn run() -> ExitCode {
     let mut checks = Checks::default();
     let mut recorder = FrameRecorder::new(VIEWPORT);
-    // Read before the loop: `draw` borrows the recorder for as long as the
-    // frame it hands back is alive.
+    // Read out once, so every assertion below can ask "was this text?" without
+    // repeating it. The id is a plain value and borrows nothing.
     let font = recorder.font_texture();
 
     check_every_literal(&mut checks);
@@ -455,11 +455,10 @@ pub(crate) fn run() -> ExitCode {
         frame.quad_count(),
         recorder.frames().len()
     );
-    // `FrameRecord::transcript`, not `FrameRecorder::transcript`. The reference
-    // gives both the same one-line summary — "the last frame as stable,
-    // diffable text" — but the recorder's renders *every* frame it holds, which
-    // for this run is 1263 of them and 121,465 lines. The record's is the one
-    // frame, which is what the evidence after a verdict is supposed to be.
+    // `FrameRecord::transcript`, not `FrameRecorder::transcript`. The recorder's
+    // renders *every* frame it holds, which for this run is 1263 of them and
+    // 121,465 lines. The record's is the one frame, which is what the evidence
+    // after a verdict is supposed to be.
     print!("{}", frame.transcript());
     verdict
 }

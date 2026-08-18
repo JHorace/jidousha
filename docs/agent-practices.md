@@ -210,6 +210,27 @@ the only intent-description that cannot drift. Test names are sentences
 (`sprite_draw_order_follows_z_then_submission`), because test names are what greps well.
 Prefer many small tests over few large ones. Property tests where invariants allow.
 
+**Break the thing on purpose and check the tests notice.** A suite is only worth
+what it catches, and which checks are vacuous is not reliably guessable by reading
+them — E0 run 5 mutated its game seventeen ways, caught all seventeen, and says two
+of those only after tightening checks it had written carefully and believed were
+thorough (e0-findings.md F-058). The same technique applied to this repository's own
+worked example found that "a paddle-sized quad covers this point" passes for a
+paddle drawn 45% of its height out of position, because a paddle covers its own
+centre wherever it is drawn. That check had survived every review since R3. Two
+recurring shapes are worth mutating for specifically: a check that asks whether
+*something* is there rather than where its bounds are, and a safety margin that
+correct behaviour never exercises — the second is invisible to any amount of
+running, so its contract has to be asked directly.
+
+**A sentence in a doc comment is load-bearing and can be asserted.** F-055 is the
+first E0 finding caused by a description being *false* rather than absent:
+`FrameRecorder::transcript` said "the last frame" and rendered all of them, which
+the generator then carried faithfully into `docs/api/` and a human paraphrased into
+the prose. No gate over generated summaries catches a true-shaped lie. A test that
+pins the claim does, and it is worth writing for any sentence a reader would act on
+without checking.
+
 ### 5.3 One way to do everything
 
 No convenience overloads, no aliases, no second path "for ergonomics." Every alternative

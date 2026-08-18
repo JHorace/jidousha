@@ -22,6 +22,13 @@ use crate::units::Seconds;
 /// it advances by exactly one per Update however fast or slow the machine is.
 /// Simulation code that wants "how long since X" stores a tick and subtracts.
 ///
+/// **The first Update sees `tick == 1`, not `0`.** A tick advances the clock
+/// and *then* runs Update, so the counter is one-based everywhere a game can
+/// read it; `Time::new`'s zero is the value before the first tick, which only
+/// a driver holding a world between ticks ever sees. A game timing something
+/// absolute — "spawn the boss on tick 600" — is counting from 1
+/// (e0-findings.md F-062).
+///
 /// ```
 /// use jidousha_core::{Seconds, Simulation, Time};
 ///
@@ -35,7 +42,7 @@ use crate::units::Seconds;
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Time {
-    /// Update ticks since startup — the canonical timeline.
+    /// Update ticks since startup, counting from 1 on the first Update.
     pub tick: u64,
     /// The length of one tick. Constant for the whole run.
     pub fixed_dt: Seconds,
