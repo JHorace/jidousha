@@ -345,7 +345,7 @@ The `Time` resource is the ONLY clock simulation code may observe:
 
 ```rust
 pub struct Time {
-    pub tick: u64,          // Update ticks since startup — THE canonical timeline
+    pub tick: u64,          // Update ticks since startup, from 1 — THE canonical timeline
     pub fixed_dt: Seconds,  // constant per run; default 1/60
     pub elapsed: Seconds,   // tick * fixed_dt
     pub alpha: f32,         // Draw-phase only: interpolation fraction [0,1)
@@ -364,6 +364,15 @@ frame:
   alpha = accumulator / fixed_dt
   run Draw phase once
 ```
+
+- **`tick` is one-based where a game can read it.** `Simulation::tick` runs
+  `Startup`, advances the clock, then runs `Update`, so the first `Update` system
+  observes `tick == 1`; `Time::new`'s zero is only ever visible to a driver
+  inspecting a world between ticks. E0 run 5 could not tell which it was from
+  `docs/api/` and did not need to know, having used a modulo — but "spawn the
+  boss on tick 600" needs it and the two candidate answers are one apart
+  (e0-findings.md F-062). Stated now on the field, in Concepts, and guarded by
+  `the_first_update_system_sees_tick_one`.
 
 - **Nothing in the engine reads `alpha`.** It is written every step and consumed
   only by a game that keeps last tick's value in a component of its own and

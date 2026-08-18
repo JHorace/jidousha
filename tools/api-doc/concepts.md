@@ -41,7 +41,9 @@ panic where the window would not.
 
 The engine runs on a **fixed timestep**. `Time::fixed_dt` is the same number
 every tick, `Time::tick` counts them, and a slow frame runs several ticks rather
-than one long one. That number is **1/60 of a second** unless you say otherwise:
+than one long one. **The first `Update` sees `tick == 1`**, because a tick
+advances the clock and then runs Update — so a game timing something absolute,
+"spawn the boss on tick 600", is counting from one. That number is **1/60 of a second** unless you say otherwise:
 `fixed_dt` is a `GameConfig` field, so a game that wants 120 ticks a second sets
 `GameConfig { fixed_dt: Seconds(1.0 / 120.0), ..GameConfig::default() }`. Sixty
 is the number to count in when a game wants to say "about three quarters of a
@@ -154,3 +156,10 @@ mutably holds it for as long as you iterate, so a system that needs to look at
 you need into a `Vec`, drop the query, then apply. `examples/homing.rs` is the
 worked version, and this is the one shape that surprises people coming from
 engines where everything is a global.
+
+**It is a `query_mut` rule, and a `Draw` system is not subject to it.** `ctx.rect`
+takes the context mutably, which looks like the same situation and is not:
+`ctx.world.query(..)` hands back an iterator borrowed from the *world* rather
+than from the context, so a Draw system draws straight out of its query and
+never needs the `Vec`. Both worked examples do it that way. Collecting first in a
+Draw system costs an allocation a frame and buys nothing.

@@ -104,14 +104,14 @@ fn register(app: &mut App) {
 }
 
 mod capture;
+mod checks;
 mod verify;
 
 fn main() -> ExitCode {
     // `tools/verify` runs this same binary with `--verify`: same systems, same
     // config, no window, scripted input, and assertions instead of a person.
     if std::env::args().any(|argument| argument == "--verify") {
-        verify::run();
-        return ExitCode::SUCCESS;
+        return verify::run();
     }
     println!("W and S move the left paddle. close the window to quit");
     match run(config(), register) {
@@ -259,14 +259,14 @@ fn draw_the_field(ctx: &mut DrawCtx) {
         Color::rgb(0.85, 0.85, 0.9),
         Depth::layer(layers::PLAY),
     );
-    let paddles: Vec<Vec2> = ctx
-        .world
-        .query::<(&Transform, &Paddle)>()
-        .map(|(_, transform, _)| transform.pos)
-        .collect();
-    for at in paddles {
+    // Straight out of the query, with no `Vec` in between. A Draw system never
+    // needs the two-pass collect: `query` hands back an iterator borrowed from
+    // the *world*, not from `ctx`, so drawing inside the loop is fine. The
+    // two-pass pattern belongs to `&mut World` systems, where the query really
+    // does hold the thing being written to (`homing.rs` is that one).
+    for (_, transform, _) in ctx.world.query::<(&Transform, &Paddle)>() {
         ctx.rect(
-            Rect::from_center_size(at, PADDLE_SIZE),
+            Rect::from_center_size(transform.pos, PADDLE_SIZE),
             Color::rgb(0.4, 1.0, 0.7),
             Depth::layer(layers::PLAY),
         );
@@ -284,13 +284,9 @@ fn draw_the_field(ctx: &mut DrawCtx) {
 /// On the DEBUG layer, which here is above the play layer — move the constant
 /// below PLAY and the outlines go behind instead.
 fn draw_the_hitboxes(ctx: &mut DrawCtx) {
-    let boxes: Vec<Rect> = ctx
-        .world
-        .query::<(&Transform, &Sprite)>()
-        .map(|(_, transform, sprite)| Rect::from_center_size(transform.pos, sprite.size))
-        .collect();
     let depth = Depth::layer(layers::DEBUG);
-    for bounds in boxes {
+    for (_, transform, sprite) in ctx.world.query::<(&Transform, &Sprite)>() {
+        let bounds = Rect::from_center_size(transform.pos, sprite.size);
         let corners = [
             bounds.min,
             Vec2::new(bounds.max.x, bounds.min.y),

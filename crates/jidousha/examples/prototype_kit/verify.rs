@@ -9,6 +9,7 @@
 //! and the art from a store with scripted arrival ticks, so the run is the same
 //! on every machine and on every day.
 
+use crate::checks::{Checks, fail, greater, near, sizes_covering};
 use crate::{Paddle, config, register};
 use jidousha::prelude::*;
 use jidousha::testing::{
@@ -16,7 +17,7 @@ use jidousha::testing::{
     PhysicalSize, RenderBackend, create_builtin_textures, decode_png, plan_frame,
     upload_ready_textures,
 };
-use std::cmp::Ordering;
+use std::process::ExitCode;
 
 /// How long the scripted session runs.
 ///
@@ -51,36 +52,6 @@ const SCORE_SIZE: f32 = 1.6;
 /// reduced to something a verification can compare against.
 const BALL_X_AT_END: f32 = -2.3294;
 const BALL_Y: f32 = -4.0;
-
-/// Fail with the engine's message shape, and a non-zero exit.
-pub(super) fn fail(what: &str, specifics: &str) -> ! {
-    eprintln!(
-        "{}",
-        message(
-            what,
-            specifics,
-            "the game changed, or the engine did",
-            "run `cargo run -p jidousha --example prototype_kit` and watch it, then \
-             compare with the assertion above",
-        )
-    );
-    std::process::exit(1);
-}
-
-/// `a > b`, and false when either is NaN.
-///
-/// Spelled out rather than written `!(a > b)` because the negation of a
-/// float comparison silently means something else — a NaN that crept into a
-/// position would satisfy every plain `<=` check and pass this verification
-/// (the same reason `circle_quads` spells its radius test out).
-fn greater(a: f32, b: f32) -> bool {
-    matches!(a.partial_cmp(&b), Some(Ordering::Greater))
-}
-
-/// Within a thousandth, and false when either is NaN.
-fn near(a: f32, b: f32) -> bool {
-    greater(0.001, (a - b).abs())
-}
 
 /// Where in `track` the largest value first appears.
 fn peak_at(track: &[f32], pick: fn(f32, f32) -> bool) -> usize {
@@ -224,7 +195,8 @@ pub(super) fn play(backend: &mut dyn RenderBackend, viewport: PhysicalSize) -> R
     }
 }
 
-pub fn run() {
+pub fn run() -> ExitCode {
+    let mut checks = Checks::default();
     let mut backend = NullBackend::new();
     let transcript_run = play(&mut backend, HEADLESS_VIEWPORT);
     let Run {
@@ -244,69 +216,68 @@ pub fn run() {
     let top_at = peak_at(&paddle_track, |a, b| greater(b, a));
     let (bottom, top) = (paddle_track[bottom_at], paddle_track[top_at]);
 
-    if !near(bottom, LIMIT) || !near(top, -LIMIT) {
-        fail(
-            "the paddle did not come to rest against both ends of its field",
-            &format!(
-                "it reached {bottom:.3} and {top:.3}; the clamp is +/-{LIMIT:.1}, and the \
-                 script holds each key long enough to run past it"
-            ),
-        );
-    }
+    checks.require(
+        near(bottom, LIMIT) && near(top, -LIMIT),
+        "the paddle did not come to rest against both ends of its field",
+        format!(
+            "it reached {bottom:.3} and {top:.3}; the clamp is +/-{LIMIT:.1}, and the \
+             script holds each key long enough to run past it"
+        ),
+    );
     // Down first, then up: S and W the right way round. Both extremes are
     // reached either way, so only the order tells a swap apart.
-    if bottom_at >= top_at {
-        fail(
-            "S and W move the paddle the wrong way round",
-            &format!(
-                "the script holds S first, but the paddle was at the top on tick \
-                 {top} before it was at the bottom on tick {bottom}",
-                top = top_at + 1,
-                bottom = bottom_at + 1,
-            ),
-        );
-    }
-    if !greater(bottom, start) {
-        fail(
-            "the paddle did not start between the two ends it reached",
-            &format!("it started at {start:.3}, which is not above {bottom:.3}"),
-        );
-    }
+    checks.require(
+        bottom_at < top_at,
+        "S and W move the paddle the wrong way round",
+        format!(
+            "the script holds S first, but the paddle was at the top on tick \
+             {top} before it was at the bottom on tick {bottom}",
+            top = top_at + 1,
+            bottom = bottom_at + 1,
+        ),
+    );
+    checks.require(
+        greater(bottom, start),
+        "the paddle did not start between the two ends it reached",
+        format!("it started at {start:.3}, which is not above {bottom:.3}"),
+    );
 
     // --- what was drawn ----------------------------------------------
-    if frames != TICKS as usize {
-        fail(
-            "one frame per tick was expected",
-            &format!("{frames} frames for {TICKS} ticks"),
-        );
-    }
+    checks.require(
+        frames == TICKS as usize,
+        "one frame per tick was expected",
+        format!("{frames} frames for {TICKS} ticks"),
+    );
     let Some(last) = backend.last_frame() else {
         fail("no frame was recorded", "the loop above draws every tick");
     };
     // The field markings, the paddles, the ball and the text: several
     // batches, because they do not all sample the same texture.
-    if last.plan.batches.len() < 3 {
-        fail(
-            "the last frame is too simple to be this game",
-            &format!(
-                "{} batches; expected shapes, art and text",
-                last.plan.batches.len()
-            ),
-        );
-    }
-    if placeholder_frames == 0 {
-        fail(
-            "the placeholder never appeared",
-            "the art is scripted to arrive partway through, so the frames before it must \
-             show the checkered placeholder (renderer.md §5)",
-        );
-    }
-    if placeholder_frames as u64 >= TICKS {
-        fail(
-            "the placeholder never went away",
-            "the art is scripted to arrive, so the later frames must draw it",
-        );
-    }
+    checks.require(
+        last.plan.batches.len() >= 3,
+        "the last frame is too simple to be this game",
+        format!(
+            "{} batches; expected shapes, art and text",
+            last.plan.batches.len()
+        ),
+    );
+    checks.require(
+        placeholder_frames > 0,
+        "the placeholder never appeared",
+        format!(
+            "{placeholder_frames} of {frames} frames drew it; the art is scripted to arrive \
+             on tick {ART_ARRIVES}, so the frames before it must show the checkered \
+             placeholder (renderer.md §5)"
+        ),
+    );
+    checks.require(
+        (placeholder_frames as u64) < TICKS,
+        "the placeholder never went away",
+        format!(
+            "all {placeholder_frames} frames drew it; the art is scripted to arrive on tick \
+             {ART_ARRIVES}, so the later frames must draw the art itself"
+        ),
+    );
     // And the paddle really is on screen where the world says it is — the
     // position is read back out of the world rather than written down here,
     // so this asks whether drawing agrees with simulation.
@@ -314,89 +285,104 @@ pub fn run() {
     // "Something is drawn there" is not enough: the readout text wanders
     // across most of the field, so that question passes with the paddle
     // deleted. The quad has to be the *size* of a paddle.
+    //
+    // And its **centre** has to be the paddle's, which is the half of this
+    // check that was missing. A paddle-sized quad covers its own centre even
+    // when it is drawn a long way out of position — displacing this one by 45%
+    // of its own height passed the size test and the whole verification, and
+    // was found by breaking the game on purpose rather than by reading the code
+    // (e0-findings.md F-058). Covering a point says a quad is nearby; only its
+    // bounds say where it is.
     let paddle_shaped = last.covering(paddle_pos).into_iter().any(|quad| {
         let bounds = quad.bounds();
         near(bounds.max.x - bounds.min.x, crate::PADDLE_SIZE.x)
             && near(bounds.max.y - bounds.min.y, crate::PADDLE_SIZE.y)
+            && near(bounds.center().x, paddle_pos.x)
+            && near(bounds.center().y, paddle_pos.y)
     });
-    if !paddle_shaped {
-        fail(
-            "no paddle-shaped quad was drawn where the paddle is",
-            &format!(
-                "the world puts it at ({:.2}, {:.2}), {} by {}",
-                paddle_pos.x,
-                paddle_pos.y,
-                crate::PADDLE_SIZE.x,
-                crate::PADDLE_SIZE.y
-            ),
-        );
-    }
+    checks.require(
+        paddle_shaped,
+        "no paddle-shaped quad was drawn where the paddle is",
+        format!(
+            "the world puts it at ({:.2}, {:.2}), {} by {}; what covers that point is {}",
+            paddle_pos.x,
+            paddle_pos.y,
+            crate::PADDLE_SIZE.x,
+            crate::PADDLE_SIZE.y,
+            sizes_covering(last, paddle_pos)
+        ),
+    );
 
     // Text is on screen, and where the game puts it. The font atlas is a
     // texture like any other (renderer.md §6), so "was text drawn" is "did a
     // quad sample the font", and the score's own position is what says the
     // layout ran rather than something merely having been submitted.
     let font = textures_font_id(&last.plan);
-    let Some(font) = font else {
-        fail(
-            "nothing on screen sampled the font atlas",
-            "the score, the readout and the character sample are all text, so a frame \
-             without a font batch has lost all three (renderer.md §6)",
-        );
-    };
-    let glyphs: usize = last
-        .plan
-        .batches
-        .iter()
-        .filter(|batch| batch.texture == font)
-        .map(|batch| batch.quad_count())
-        .sum();
+    checks.require(
+        font.is_some(),
+        "nothing on screen sampled the font atlas",
+        "the score, the readout and the character sample are all text, so a frame without a \
+         font batch has lost all three (renderer.md §6)"
+            .to_owned(),
+    );
+    let glyphs: usize = font.map_or(0, |font| {
+        last.plan
+            .batches
+            .iter()
+            .filter(|batch| batch.texture == font)
+            .map(|batch| batch.quad_count())
+            .sum()
+    });
     // The score is drawn centred at the top; its middle character is a dash,
     // whose cell straddles this point. A layout that stopped centring, or a
     // camera that stopped agreeing with it, moves the text off this spot.
     let score_middle = Vec2::new(0.0, -HEADLESS_VIEW_HEIGHT / 2.0 + 1.0 + SCORE_SIZE / 2.0);
-    let score_drawn = last
-        .covering(score_middle)
-        .into_iter()
-        .any(|quad| quad.texture == font);
-    if !score_drawn {
-        fail(
-            "the score is not where the game draws it",
-            &format!(
-                "no glyph covers ({:.2}, {:.2}), which is the middle of a score centred by \
-                 TextStyle::width_of",
-                score_middle.x, score_middle.y
-            ),
-        );
-    }
+    let score_drawn = font.is_some_and(|font| {
+        last.covering(score_middle)
+            .into_iter()
+            .any(|quad| quad.texture == font)
+    });
+    checks.require(
+        score_drawn,
+        "the score is not where the game draws it",
+        format!(
+            "no glyph covers ({:.2}, {:.2}), which is the middle of a score centred by \
+             TextStyle::width_of; {glyphs} glyphs were drawn in all",
+            score_middle.x, score_middle.y
+        ),
+    );
 
     // The ball is a sprite, and after a fixed number of ticks it is in a fixed
     // place — the whole determinism claim in one number (core.md §7). The
     // engine's own sin/cos is what puts it there (ADR-0009), so this is the
     // assertion that fails if the timestep, the seed of the clock, or the
     // trigonometry ever changes.
-    if !near(ball_pos.x, BALL_X_AT_END) || !near(ball_pos.y, BALL_Y) {
-        fail(
-            "the ball is not where this many ticks should have put it",
-            &format!(
-                "after {TICKS} ticks it is at ({:.4}, {:.4}); it was ({BALL_X_AT_END:.4}, \
-                 {BALL_Y:.4}) when this was written",
-                ball_pos.x, ball_pos.y
-            ),
-        );
-    }
+    checks.require(
+        near(ball_pos.x, BALL_X_AT_END) && near(ball_pos.y, BALL_Y),
+        "the ball is not where this many ticks should have put it",
+        format!(
+            "after {TICKS} ticks it is at ({:.4}, {:.4}); it was ({BALL_X_AT_END:.4}, \
+             {BALL_Y:.4}) when this was written",
+            ball_pos.x, ball_pos.y
+        ),
+    );
     let ball_drawn = last
         .covering(ball_pos)
         .into_iter()
-        .any(|quad| quad.texture != font && quad.bounds().size().x > 2.0);
-    if !ball_drawn {
-        fail(
-            "the ball sprite is not drawn where the world puts it",
-            &format!("the world has it at ({:.2}, {:.2})", ball_pos.x, ball_pos.y),
-        );
-    }
+        .any(|quad| font != Some(quad.texture) && quad.bounds().size().x > 2.0);
+    checks.require(
+        ball_drawn,
+        "the ball sprite is not drawn where the world puts it",
+        format!(
+            "the world has it at ({:.2}, {:.2}); what covers that point is {}",
+            ball_pos.x,
+            ball_pos.y,
+            sizes_covering(last, ball_pos)
+        ),
+    );
 
-    let captured = crate::capture::capture_a_frame(&paddle_track);
+    let captured = crate::capture::capture_a_frame(&mut checks, &paddle_track);
+    let verdict = checks.verdict();
 
     println!("verified prototype_kit over {TICKS} ticks");
     println!(
@@ -416,6 +402,7 @@ pub fn run() {
     );
     println!("  capture: {captured}");
     print!("{}", last.transcript());
+    verdict
 }
 
 /// Which backend texture the font atlas landed on, read off the frame.
@@ -429,8 +416,7 @@ pub fn run() {
 ///
 /// ```ignore
 /// let mut recorder = FrameRecorder::new(PhysicalSize::new(1280, 720));
-/// // Read before the loop: `draw` borrows the recorder for as long as the
-/// // frame it hands back is alive.
+/// // A plain id, borrowing nothing; read out once so the assertions stay short.
 /// let font = recorder.font_texture();
 /// let frame = recorder.draw(&mut sim);
 /// let text_was_drawn = frame.quads().iter().any(|quad| quad.texture == font);

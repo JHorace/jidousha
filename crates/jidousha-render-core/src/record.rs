@@ -197,12 +197,23 @@ impl FrameRecorder {
         self.backend.frames()
     }
 
-    /// The last frame as stable, diffable text.
+    /// Every recorded frame as text, oldest first — not only the last.
     ///
-    /// Every quad's world-space extent and tint, one per line. E0 run 1 called
-    /// this "a genuinely good substitute for a screenshot", and it was the only
-    /// way that run could check its game's layout at all — the machine it ran
-    /// on had no display and no GPU.
+    /// Each frame is headed `frame N:` and then carries every quad's
+    /// world-space extent and tint, one per line. A check that recorded a
+    /// thousand ticks gets a thousand frames here: this is the *history*, and
+    /// it is the right thing to keep as evidence when a failure needs the ticks
+    /// before the one that broke.
+    ///
+    /// **For one frame, use [`FrameRecord::transcript`]** — on the frame
+    /// [`FrameRecorder::draw`] hands back, or on `frames().last()`. That is the
+    /// one that is a substitute for a screenshot; E0 run 1 called it "a
+    /// genuinely good" one, and it was the only way that run could check its
+    /// game's layout at all, on a machine with no display and no GPU. A run
+    /// that prints this method instead emits every frame it ever drew: E0 run 5
+    /// recorded 1,263 of them and got 121,465 lines, under a `--verify`
+    /// convention that keeps the transcript as evidence rather than showing it,
+    /// so nothing said a word (e0-findings.md F-055).
     #[must_use]
     pub fn transcript(&self) -> String {
         self.backend.transcript()
@@ -346,6 +357,88 @@ mod tests {
             recorder.transcript().contains("quad"),
             "{}",
             recorder.transcript()
+        );
+    }
+
+    #[test]
+    fn a_frames_draw_order_is_the_depth_sort_not_the_submission_order() {
+        // The guard for ADR-0024. E0 run 5 concluded that a recorded frame
+        // cannot see draw order, because `DrawnQuad` carries no `Depth`, and
+        // filed a layer field as the one thing it would add to the engine.
+        // What a check actually wants to know is which of two things ends up in
+        // front, and the frame answers that exactly: `quads()` is the sorted
+        // sequence, so an index comparison is a layering assertion, and
+        // `covering()`'s first element is what the player sees.
+        //
+        // The submission order here is deliberately the opposite of the depth
+        // order, so a frame that merely echoed what the game submitted fails.
+        fn draw_small_over_large(ctx: &mut DrawCtx) {
+            ctx.rect(
+                jidousha_core::Rect::from_center_size(Vec2::ZERO, Vec2::new(1.0, 1.0)),
+                Color::RED,
+                Depth::layer(10),
+            );
+            ctx.rect(
+                jidousha_core::Rect::from_center_size(Vec2::ZERO, Vec2::new(2.0, 2.0)),
+                Color::WHITE,
+                Depth::layer(0),
+            );
+        }
+
+        let mut sim = sim_drawing(draw_small_over_large);
+        let mut recorder = FrameRecorder::new(PhysicalSize::new(1280, 720));
+        sim.tick();
+        let frame = recorder.draw(&mut sim);
+
+        let quads = frame.quads();
+        assert_eq!(quads.len(), 2);
+        assert_eq!(
+            quads[0].tint,
+            Color::WHITE,
+            "the lower layer is drawn first, though it was submitted second"
+        );
+        assert_eq!(quads[1].tint, Color::RED, "and the higher layer over it");
+
+        let seen = frame.covering(Vec2::ZERO);
+        assert_eq!(
+            seen[0].tint,
+            Color::RED,
+            "front to back, so the first one back is the one in front"
+        );
+    }
+
+    #[test]
+    fn the_recorders_transcript_carries_every_frame_and_a_records_carries_one() {
+        // The regression guard for e0-findings.md F-055. Both methods were
+        // described as "the last frame", and only one of them is: a run that
+        // printed the recorder's got a line per quad per *tick*, which under
+        // the `--verify` convention is kept as evidence rather than shown, so
+        // the size of it was invisible. The two are pinned apart here so the
+        // descriptions cannot drift back together.
+        let mut sim = sim_drawing(draw_a_square);
+        let mut recorder = FrameRecorder::new(PhysicalSize::new(1280, 720));
+
+        let mut last = None;
+        for _ in 0..3 {
+            sim.tick();
+            last = Some(recorder.draw(&mut sim));
+        }
+        let one = last.expect("three frames were drawn").transcript();
+        let all = recorder.transcript();
+
+        assert_eq!(
+            one.matches("quad (").count(),
+            1,
+            "a record's transcript is one frame:\n{one}"
+        );
+        assert_eq!(
+            all.matches("quad (").count(),
+            3,
+            "the recorder's transcript is every frame:\n{all}"
+        );
+        assert!(
+            all.contains("frame 2:"),
+            "every frame is headed by its index:\n{all}"
         );
     }
 }

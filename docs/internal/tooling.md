@@ -109,6 +109,18 @@ second mode would be a second way to do one thing.
   two statements move together — in particular the `verified ` prefix, which a
   game author cannot discover from anywhere else and whose absence is reported as
   a *tooling* fault rather than as their bug.
+
+  **A verify mode collects its failures rather than exiting on the first**, since
+  E0 run 5 (e0-findings.md F-061). `verify::run` returns an `ExitCode`; a `Checks`
+  accumulator records every failed reading and prints them all in the four-part
+  message shape at the end. The reason is the same one behind "report the numbers
+  it judged": an instrument that halts at the first bad reading costs a cycle per
+  fault, and run 5 measured it — one deliberate break produced six problems and
+  the diagnostic one was fourth. `process::exit` survives only for a reading that
+  makes the rest meaningless (a missing entity, a frame never recorded), which is
+  a different thing from a failure. `prototype_kit` was the worked example
+  teaching the opposite and now teaches this; the document's skeleton shows the
+  `ExitCode` return.
 - **Doctor never hangs.** Every subprocess and network call is bounded by a
   timeout — doctor is what you run when something else hangs.
 - **`fix` is non-empty exactly when a check is `FIXABLE`** (tested), and
@@ -295,7 +307,13 @@ a row (stop rule printed, `failure-streak.json` count 2).
   `WINDOWED_EXAMPLES` set (`window_blank` from M5, `window_clear` from R1,
   `sprites` from R2, `prototype_kit` from R3, `input_echo` from I1,
   `quickstart` from F0, and each E0 run's `pong` — which comes back out with the
-  game at the start of the next run, `e0-prompt.md` step 2); a
+  game at the start of the next run, `e0-prompt.md` step 2, and goes back in when
+  the maintainer adopts the new one at step 6. **That step has now been missed
+  twice**, once after run 4 and once after run 5, each time leaving `tools/test`
+  failing on a Pong it ran as an ordinary example and watched open a window. The
+  symptom is unmistakable once seen — `RunError::NoDisplay` in an
+  `example:pong` phase — and it is worth naming here because the two halves live
+  in different commits by design, so nothing structural connects them); a
   name in it gets `cargo build --example` under a
   phase called `example-build:<name>` instead of `cargo run`, and the runner
   prints which examples it built rather than ran. Three reasons for a list over

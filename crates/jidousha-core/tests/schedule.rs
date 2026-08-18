@@ -187,3 +187,38 @@ fn systems_communicate_through_the_world_alone() {
     values.sort_unstable();
     assert_eq!(values, [1, 2]);
 }
+
+#[test]
+fn the_first_update_system_sees_tick_one() {
+    // e0-findings.md F-062: a game author could not tell from the document
+    // whether the first Update reads 0 or 1, and the two answers are one apart
+    // for anything timed absolutely ("spawn the boss on tick 600"). A tick
+    // advances the clock and then runs Update, so the counter a game can read
+    // is one-based; `Time::new`'s zero is only ever visible to a driver holding
+    // a world between ticks.
+    #[derive(Debug, Default)]
+    struct Seen(Vec<u64>);
+    impl Resource for Seen {}
+
+    fn note_the_tick(world: &mut World) {
+        let tick = world.resource::<Time>().tick;
+        if let Some(seen) = world.find_resource_mut::<Seen>() {
+            seen.0.push(tick);
+        }
+    }
+
+    let mut simulation = Simulation::new(1, Seconds(1.0 / 60.0));
+    simulation.world_mut().insert_resource(Seen::default());
+    simulation.add_system(Update, note_the_tick);
+
+    assert_eq!(
+        simulation.world().resource::<Time>().tick,
+        0,
+        "before any tick the clock is at zero, which no Update ever observes"
+    );
+    simulation.tick();
+    simulation.tick();
+    simulation.tick();
+
+    assert_eq!(simulation.world().resource::<Seen>().0, vec![1, 2, 3]);
+}

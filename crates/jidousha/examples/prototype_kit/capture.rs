@@ -12,7 +12,8 @@
 use jidousha::testing::{PhysicalSize, RenderBackend, WgpuBackend, encode_png};
 use std::path::{Path, PathBuf};
 
-use crate::verify::{fail, play};
+use crate::checks::{Checks, fail};
+use crate::verify::play;
 
 /// How big the captured artifact is.
 ///
@@ -40,7 +41,7 @@ const HANDSHAKE_POLLS: usize = 10_000;
 /// A machine with no GPU is not a failure. Every runner this project has is
 /// headless and some have no graphics stack at all; the run says so and the
 /// rest of the verification stands, exactly as the golden tests do.
-pub(super) fn capture_a_frame(expected_track: &[f32]) -> String {
+pub(super) fn capture_a_frame(checks: &mut Checks, expected_track: &[f32]) -> String {
     let mut gpu = WgpuBackend::offscreen(CAPTURE_SIZE);
     for _ in 0..HANDSHAKE_POLLS {
         match gpu.poll() {
@@ -54,13 +55,20 @@ pub(super) fn capture_a_frame(expected_track: &[f32]) -> String {
     }
 
     let run = play(&mut gpu, CAPTURE_SIZE);
-    if run.paddle_track != expected_track {
-        fail(
-            "the same game did different things on two backends",
-            "everything above the backend seam is backend-agnostic (renderer.md §1), so a \
+    // A reading, not a reason to stop: the capture below is still worth taking,
+    // and a run that reports this alongside whatever else went wrong is more
+    // use than one that reports it alone.
+    checks.require(
+        run.paddle_track == expected_track,
+        "the same game did different things on two backends",
+        format!(
+            "the paddle ended at {:?} through the GPU and {:?} through the null backend; \
+             everything above the backend seam is backend-agnostic (renderer.md §1), so a \
              world that depends on which backend drew it is a layering bug",
-        );
-    }
+            run.paddle_track.last(),
+            expected_track.last(),
+        ),
+    );
 
     let Ok(image) = gpu.capture() else {
         fail(
