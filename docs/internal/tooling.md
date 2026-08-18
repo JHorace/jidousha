@@ -98,6 +98,17 @@ second mode would be a second way to do one thing.
   beginning `verified ` in the output and reports `unverified` (exit 2) without
   it — the single failure mode this script exists to avoid is reporting silence
   as success.
+
+  **The convention is now on the public side too**, since E0 run 4
+  (e0-findings.md F-046): `docs/api/`'s *Testing your game* says the mode is the
+  game's, that the flag is spelled `--verify`, that `main` branches on it before
+  calling `run`, and that the verdict line must begin `verified `. Until then the
+  document's closing line named `tools/verify <example>` without saying that the
+  loop it runs is a mode the example has to implement, so a reader of the document
+  alone got the whole testing section and no way to wire it to a command line. The
+  two statements move together — in particular the `verified ` prefix, which a
+  game author cannot discover from anywhere else and whose absence is reported as
+  a *tooling* fault rather than as their bug.
 - **Doctor never hangs.** Every subprocess and network call is bounded by a
   timeout — doctor is what you run when something else hangs.
 - **`fix` is non-empty exactly when a check is `FIXABLE`** (tested), and

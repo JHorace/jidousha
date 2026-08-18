@@ -284,7 +284,37 @@ not the other would move the hole rather than close it. This is the **second**
 run to find this class by hand; the generator gate F-017 deferred is now overdue,
 and the remaining candidates are listed there.
 
-Rough count: ~45 types/functions. CONTRACT: the v1 prototype substrate
+**Changed after E0 run 4: two signatures, one addition, one refusal.** §2 says a
+final signature changes only as a reviewed API change; this is that record, and
+each has its ADR.
+
+- **`Camera::visible_bounds() -> Rect`**, was `-> (Vec2, Vec2)` (ADR-0021,
+  e0-findings.md F-042). The pair it returned was `Rect`'s two fields under
+  `Rect`'s own documented meaning, and the tuple was never a decision anybody
+  made — no ADR, no `DELIBERATE:` tag, and no crate-boundary reason, since `Rect`
+  is in core and the camera is downstream. It cost six hand-written comparisons in
+  the single assertion `docs/api/` pushes hardest, in three consecutive runs.
+- **`Rect::contains_rect(self, other) -> bool`** joins the inventory, and is the
+  load-bearing half of that change: returning a `Rect` without it would have saved
+  one destructuring line, and the six lines were the comparison. **Closed on all
+  four sides**, unlike `contains`, which is half-open because it partitions space —
+  a quad flush against the camera's edge is on screen. Both doc comments name the
+  other; the distinction is pinned by a test, because getting it wrong would trade
+  one silent trap for another.
+- **`FrameRecorder::draw() -> FrameRecord`**, was `-> &FrameRecord` (ADR-0023,
+  F-040). The borrow made the composition *Testing your game* recommends — inspect
+  the run's last frame, then build the screens it never reached — a compile error,
+  and a run worked around it with a second recorder that silently redirected the
+  transcript. `clear()` was considered and **declined**: the frame history is what
+  a failing assertion reads backwards.
+- **Declined: `Rect::sweep` and `Rect::inflate`** (ADR-0022, F-041), reached for by
+  three runs. A primitive would absorb about eight of the forty lines a Pong writes
+  — the other thirty are the collision *response*, which is the game's model — and
+  answering the first question while refusing the second is the start of a physics
+  subsystem ADR-0001 scopes out. What landed instead is the boundary, stated in
+  Concepts with the eight-line shape, the way `App::quit` is stated.
+
+Rough count: ~46 types/functions. CONTRACT: the v1 prototype substrate
 ("agent Pong/asteroids/breakout") must be expressible with this list alone —
 that's exactly what acceptance milestone E0 tests (implementation plan).
 
@@ -356,6 +386,29 @@ that's exactly what acceptance milestone E0 tests (implementation plan).
   here rather than left implicit: §4 and `gen-api-doc` disagreeing without
   either saying so is precisely what F-001 was, and a second silent disagreement
   in the same paragraph would be the same bug wearing the same hat.
+
+  **Overdue, and now the top of the generator's queue: nothing checks whether the
+  sentence the generator keeps is the sentence that mattered.** `first_sentence`
+  takes the first sentence of a doc comment and `trailing` truncates a member's at
+  68 characters — both correct, both what they were built to do, and between them
+  they are the mechanism behind **four of E0 run 4's sixteen findings**
+  (e0-findings.md F-039, F-043, F-048, and the wording half of F-050). In every
+  case the doc comment was already right and the reference printed something that
+  was not wrong, merely empty: `Submit::circle` explained its fixed segment count in
+  its body and the reference printed "Fill a circle."; `Time::alpha` explained
+  itself in four lines and the reference printed a clause cut mid-sentence.
+
+  This is the fourth consecutive run whose findings are mostly "the document does
+  not say what this *does*", which `e0-findings.md` §6 predicted would mean the
+  sentences are not the problem. The shape of the check: for each rendered item,
+  compare the summary against the rest of its doc comment and fail when the body
+  states a fact the summary drops — a truncated member line, or a second sentence
+  carrying a number, a count, or a "nothing consumes this". It cannot be exact and
+  does not need to be; a warning listing the items whose bodies are much longer
+  than their summaries would have caught all four, because all four were the
+  longest bodies with the shortest summaries in their groups. **This now outranks
+  the F-017/F-036 export gate**, which has cost three runs a lookup each; this one
+  cost a run a debug cycle and cost this file a recorded falsehood (F-039).
 - Fixed structure: **Quickstart** (one complete ~60-line game, compiling,
   CI-tested — it IS an example file, included verbatim) → **Concepts** (seven
   short paragraphs: world/systems/phases, determinism & the tick, drawing,

@@ -51,6 +51,12 @@ use crate::textures::{create_builtin_textures, upload_ready_textures};
 /// sim.tick();
 /// let frame = recorder.draw(&mut sim);
 /// assert!(!frame.covering(Vec2::ZERO).is_empty(), "the dot covers the origin");
+///
+/// // The frame is owned, so looking at the run's history and drawing another
+/// // frame compose in one function rather than fighting (ADR-0023).
+/// let first = recorder.frames()[0].clone();
+/// let staged = recorder.draw(&mut sim);
+/// assert_eq!(first.quad_count(), staged.quad_count());
 /// ```
 pub struct FrameRecorder {
     backend: NullBackend,
@@ -114,13 +120,28 @@ impl FrameRecorder {
 
     /// Run the game's Draw phase once and record the frame it produced.
     ///
+    /// **Returns the frame by value**, and that is deliberate (ADR-0021 is the
+    /// camera's; this is ADR-0023). A borrow would end at the next `draw` and at
+    /// every `frames()`, so the shape *Testing your game* recommends — look at
+    /// the run's last frame, then build the screens the run never reached — was a
+    /// borrow error, and E0 run 4 worked around it with a second `FrameRecorder`
+    /// that silently redirected `transcript()` away from the frame it wanted
+    /// (e0-findings.md F-040). The copy this costs is the copy the caller was
+    /// being told to make anyway.
+    ///
+    /// The frame is still kept: [`frames`](Self::frames) has every one of them,
+    /// oldest first, for the whole life of the recorder. There is no `clear` —
+    /// the history is what a failing assertion reads backwards, and a check that
+    /// could throw away the tick before the one that broke would be throwing away
+    /// the tick the failure message wants.
+    ///
     /// # Panics
     ///
     /// If the recording backend refuses the frame. It has no reason to — it
     /// keeps frames and draws nothing — but a verification whose recorder
     /// silently dropped a frame would assert against the frame before it, which
     /// is worse than stopping.
-    pub fn draw(&mut self, sim: &mut HeadlessSim) -> &FrameRecord {
+    pub fn draw(&mut self, sim: &mut HeadlessSim) -> FrameRecord {
         let camera = Camera {
             viewport: self.viewport,
             ..sim
@@ -155,7 +176,7 @@ impl FrameRecorder {
                 )
             );
         };
-        frame
+        frame.clone()
     }
 
     /// Which backend texture the engine's font atlas is on.
@@ -226,6 +247,36 @@ mod tests {
         let frame = recorder.draw(&mut sim);
         assert_eq!(frame.quad_count(), 1);
         assert!(!frame.covering(Vec2::ZERO).is_empty(), "covers the origin");
+    }
+
+    #[test]
+    fn a_recorded_frame_outlives_the_next_draw() {
+        // The regression guard for e0-findings.md F-040: *Testing your game*
+        // tells a check to inspect the run's last frame and then build the
+        // screens the run never reached, and while `draw` returned a borrow
+        // those two paragraphs did not compile together. A run worked around it
+        // with a second recorder, which quietly moved what `transcript()`
+        // printed away from the frame it cared about.
+        let mut sim = sim_drawing(draw_a_square);
+        let mut recorder = FrameRecorder::new(PhysicalSize::new(1280, 720));
+
+        sim.tick();
+        let match_frame = recorder.draw(&mut sim);
+        let held = recorder.frames().last().cloned().expect("one frame drawn");
+        let staged = recorder.draw(&mut sim);
+
+        assert_eq!(
+            match_frame.quad_count(),
+            1,
+            "still readable after two draws"
+        );
+        assert_eq!(held.quad_count(), 1, "and so is one taken from frames()");
+        assert_eq!(staged.quad_count(), 1);
+        assert_eq!(
+            recorder.frames().len(),
+            2,
+            "both are kept; there is no clear"
+        );
     }
 
     #[test]

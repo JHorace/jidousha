@@ -22,7 +22,6 @@
 //! file — the first example to be a directory rather than one file, because the
 //! game and the check on the game are two things to read.
 
-use jidousha::math::sin_cos;
 use std::process::ExitCode;
 
 use jidousha::prelude::*;
@@ -214,11 +213,11 @@ fn turn(world: &mut World) {
 ///
 /// Every Pong-shaped game draws roughly this, and none of it is art.
 fn draw_the_field(ctx: &mut DrawCtx) {
-    let (top_left, bottom_right) = ctx.world.resource::<Camera>().visible_bounds();
+    let view = ctx.world.resource::<Camera>().visible_bounds();
     let inset = 0.6;
     let field = Rect {
-        min: top_left + Vec2::splat(inset),
-        max: bottom_right - Vec2::splat(inset),
+        min: view.min + Vec2::splat(inset),
+        max: view.max - Vec2::splat(inset),
     };
     let depth = Depth::layer(layers::FIELD);
     let line = Color::rgba(1.0, 1.0, 1.0, 0.18);
@@ -322,7 +321,7 @@ fn draw_the_hitboxes(ctx: &mut DrawCtx) {
 fn draw_the_readout(ctx: &mut DrawCtx) {
     let time = ctx.world.resource::<Time>();
     let camera = ctx.world.resource::<Camera>();
-    let (top_left, bottom_right) = camera.visible_bounds();
+    let view = camera.visible_bounds();
 
     // Centred, by measuring. `width_of` is exact — the font is monospace with
     // no kerning — so this lines up rather than nearly lines up.
@@ -333,7 +332,7 @@ fn draw_the_readout(ctx: &mut DrawCtx) {
     };
     let text = "3 - 2";
     ctx.text(
-        Vec2::new(-score.width_of(text) * 0.5, top_left.y + 1.0),
+        Vec2::new(-score.width_of(text) * 0.5, view.min.y + 1.0),
         text,
         score,
     );
@@ -346,7 +345,7 @@ fn draw_the_readout(ctx: &mut DrawCtx) {
         depth: Depth::layer(layers::UI),
     };
     ctx.text(
-        Vec2::new(top_left.x + 1.0, top_left.y + 1.0),
+        Vec2::new(view.min.x + 1.0, view.min.y + 1.0),
         &format!(
             "tick {}\nelapsed {:.1}s\nalpha {:.2}",
             time.tick,
@@ -364,7 +363,7 @@ fn draw_the_readout(ctx: &mut DrawCtx) {
         depth: Depth::layer(layers::UI),
     };
     ctx.text(
-        Vec2::new(top_left.x + 1.0, bottom_right.y - 2.6),
+        Vec2::new(view.min.x + 1.0, view.max.y - 2.6),
         " !\"#$%&'()*+,-./0123456789:;<=>?\n\
          @ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_\n\
          `abcdefghijklmnopqrstuvwxyz{|}~",

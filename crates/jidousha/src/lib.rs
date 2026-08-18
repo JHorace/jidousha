@@ -56,6 +56,11 @@ pub use jidousha_core::{
 };
 
 // --- Math and primitives ----------------------------------------------------
+// Re-exported as a module so a reader can browse it, and *every name in it* is
+// also in the prelude. A game therefore writes `use jidousha::prelude::*;` and
+// nothing else; `use jidousha::math::sin_cos;` beside that glob imports the same
+// item a second time, which is what two worked examples were doing when E0 run 4
+// concluded there was no rule (e0-findings.md F-045).
 pub use jidousha_core::math;
 pub use jidousha_core::{
     Color, Depth, EntityDeadError, Quad, Rect, Rng, Seconds, TextureId, Time, message,

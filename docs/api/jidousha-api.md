@@ -150,9 +150,12 @@ A system is a function: `fn(&mut World)` for logic, `fn(&mut DrawCtx)` for
 drawing. Nothing inherits from anything, and there is no base class to fill in.
 
 Systems run in **phases**, in this order, every tick: `Startup` once at the
-start of the first tick, then `Update` for logic, then `Draw`. Within a phase
-they run in the order you added them, always, on every machine. There is no
-scheduler deciding for you. Startup running *inside* that first tick is worth
+start of the first tick, then `Update` for logic, then `Draw`. Those three are
+the whole set — `Phase` and `IntoSystem` appear in `add_system`'s signature as
+bounds, are not exported, and are not names a game writes or can collide with, so
+your own `enum Phase` for "which screen are we on" is yours to take. Within a
+phase systems run in the order you added them, always, on every machine. There is
+no scheduler deciding for you. Startup running *inside* that first tick is worth
 knowing if you drive the sim by hand: `headless(..)` hands back a world that is
 still empty, and it is populated once the first `tick()` returns.
 
@@ -200,6 +203,18 @@ smaller than the thinnest thing it must not miss, and assert that against the
 `fixed_dt` the engine actually hands you rather than against the 1/60 you
 assumed.
 
+**There is no `Rect::sweep` and no `Rect::inflate`, and that is a v1 boundary
+rather than something you have missed.** The reason is worth a sentence, because
+the shape you write instead is short and the shape you might expect is not. A
+sweep helper answers "where along this tick's travel did they first touch", which
+is about eight lines of arithmetic; what follows it — the bounce angle, the speed
+change, the remaining fraction of the tick, the order two collisions resolve in —
+is four or five times as much code and is your game's model rather than the
+engine's. A primitive that answered the first and refused the second would be the
+start of a physics engine, which v1 does not have. Write the eight lines: the
+plane your body's leading edge touches, whether it was approaching, whether this
+tick's travel crossed it, and the fraction of the tick at which it did.
+
 Together with the seeded `Rng` in `GameConfig`, that means the same inputs make
 the same game — which is what lets a test replay a session and get the same
 answer.
@@ -208,7 +223,29 @@ answer.
 quads — `ctx.sprite`, `ctx.rect`, `ctx.line`, `ctx.circle`, `ctx.text` — and
 cannot change the world; the type system enforces that. Order comes from
 `Depth { layer, z }`, not from the order you drew in, so a debug outline goes in
-front by saying so rather than by being drawn last.
+front by saying so rather than by being drawn last. `layer`'s numbers are
+**yours**: the engine sorts by them and has no opinion about what they mean, so
+name your bands once in a `mod layers` of your own rather than writing `2` in
+forty places. `examples/prototype_kit` is the worked version.
+
+**A quad is the unit, and two verbs are not one quad.** `ctx.rect` and
+`ctx.line` each submit exactly one; `ctx.circle` submits **sixteen**, a fan of
+wedges around the centre, and that count is fixed rather than scaled by radius.
+`ctx.text` submits one quad per character — each exactly `size` tall and
+`size * 7 / 9` wide, laid out from its top-left corner, with `\n` counting as a
+line break and nothing else, which is the whole of text's vertical metric: an
+N-line block occupies `N * size`. So a circle costs sixteen rectangles and a
+score line costs one per digit — worth knowing before a frame has three hundred of them,
+and worth knowing when you assert on what was drawn, because "a quad the size of
+the thing" is the right question for a rectangle and the wrong one for a circle.
+*Testing your game* has the circle version written out.
+
+`Draw` reads the world's **committed** state — the values the last `Update`
+left — so a fast body steps rather than glides at whatever rate the frames come.
+`Time::alpha` is how far into the next tick the last frame fell, for a game that
+minds enough to keep last tick's position in a component of its own and submit
+`previous.lerp(current, alpha)`. Nothing in v1 consumes it and there is no
+interpolation helper; a prototype ignores it and is right to.
 
 **A game of pure shapes needs no asset story at all.** `ctx.rect`, `ctx.circle`,
 `ctx.line` and `ctx.text` draw without a single file, and nothing requires an
@@ -593,7 +630,7 @@ impl EntityDeadError {
 
 #### `math`
 
-Deterministic maths: the trigonometry and vector types a game may use.
+Deterministic maths: the trigonometry and vector types a game may use, every one of them re-exported by `jidousha::prelude`, so a game imports the prelude and never writes this module's path.
 
 ```rust
 pub mod math
@@ -706,8 +743,10 @@ fn main() {
     assert_eq!(Vec2::X.dot(Vec2::Y), 0.0);
     assert_eq!(Vec2::X.dot(-Vec2::X), -1.0);
 
-    // Angles go through `jidousha::math`, never through `f32::sin`: those are
-    // the deterministic ones, and determinism is what makes a replay replay.
+    // Angles go through the engine's own `sin_cos`, never through `f32::sin`:
+    // those are the deterministic ones, and determinism is what makes a replay
+    // replay. It lives in `jidousha::math` and the prelude re-exports it, so
+    // the glob above is the whole import — there is no second `use` to write.
     let (sin, cos) = sin_cos(Radians::from_degrees(90.0));
     assert!(sin > 0.999 && cos.abs() < 1e-6);
     let turned = rotate(Vec2::X, Radians::from_degrees(90.0));
@@ -766,6 +805,7 @@ impl Rect {
     pub fn center(self) -> Vec2;  // The point in the middle
     pub fn contains(self, point: Vec2) -> bool;  // Whether `point` is inside, counting the top-left edges and not the…
     pub fn overlaps(self, other: Rect) -> bool;  // Whether any part of `other` is inside; touching edges do not count
+    pub fn contains_rect(self, other: Rect) -> bool;  // Whether `other` is entirely inside this one, edges included
 }
 ```
 
@@ -823,7 +863,7 @@ pub struct Time {
     pub tick: u64,  // Update ticks since startup — the canonical timeline
     pub fixed_dt: Seconds,  // The length of one tick
     pub elapsed: Seconds,  // `tick * fixed_dt`
-    pub alpha: f32,  // How far into the next tick the last rendered frame fell, in…
+    pub alpha: f32,  // A Draw-only interpolation fraction that nothing in v1 consumes
 }
 // Clone Copy Debug PartialEq
 
@@ -850,7 +890,7 @@ pub struct Camera {
 
 impl Camera {
     pub fn width(&self) -> f32;  // How many world units the screen spans horizontally
-    pub fn visible_bounds(&self) -> (Vec2, Vec2);  // The world rectangle currently on screen, as (top-left, bottom-right)
+    pub fn visible_bounds(&self) -> Rect;  // The world rectangle currently on screen
     pub fn world_to_screen(&self, world: Vec2) -> Vec2;  // Where a world point lands on screen, in pixels from the top-left
     pub fn screen_to_world(&self, screen: Vec2) -> Vec2;  // What world point a screen pixel is over
     pub fn view_projection(&self) -> Mat4;  // The matrix that takes world space to clip space
@@ -914,7 +954,7 @@ pub trait Submit {
     fn sprite(&mut self, transform: &Transform, sprite: &Sprite);  // Draw `sprite` at `transform`
     fn rect(&mut self, rect: Rect, color: Color, depth: Depth);  // Fill an axis-aligned rectangle
     fn line(&mut self, from: Vec2, to: Vec2, thickness: f32, color: Color, depth: Depth);  // Draw a line from `from` to `to`, `thickness` world units wide
-    fn circle(&mut self, center: Vec2, radius: f32, color: Color, depth: Depth);  // Fill a circle
+    fn circle(&mut self, center: Vec2, radius: f32, color: Color, depth: Depth);  // Fill a circle, as a fan of sixteen quads rather than as one
     fn text(&mut self, at: Vec2, text: &str, style: TextStyle);  // Draw `text` with its first character's top-left corner at `at`
 }
 ```
@@ -925,7 +965,7 @@ How a line of text is drawn — monospace over the ninety-five printable ASCII c
 
 ```rust
 pub struct TextStyle {
-    pub size: f32,  // The height of one line, in world units — including the gap below it
+    pub size: f32,  // One line's height in world units — a glyph quad, top to bottom
     pub color: Color,  // Multiplied into the glyphs, which are white
     pub depth: Depth,  // Where in the draw order, same as every other immediate primitive
 }
@@ -1323,7 +1363,7 @@ pub struct DrawnQuad {
 
 impl DrawnQuad {
     pub fn bounds(&self) -> Rect;  // The axis-aligned box around the quad
-    pub fn contains(&self, world: Vec2) -> bool;  // Whether `world` is inside the quad itself, rotation included
+    pub fn contains(&self, world: Vec2) -> bool;  // Whether `world` is in the quad, rotation and edges included
 }
 ```
 
@@ -1388,7 +1428,7 @@ pub struct FrameRecorder;
 impl FrameRecorder {
     pub fn new(viewport: PhysicalSize) -> Self;  // A recorder drawing to a surface `viewport` pixels across,…
     pub fn settle_assets(&mut self, sim: &mut HeadlessSim, tick: u64);  // Apply what has finished loading and put it on the GPU, as the…
-    pub fn draw(&mut self, sim: &mut HeadlessSim) -> &FrameRecord;  // Run the game's Draw phase once and record the frame it produced
+    pub fn draw(&mut self, sim: &mut HeadlessSim) -> FrameRecord;  // Run the game's Draw phase once and record the frame it produced
     pub fn font_texture(&self) -> BackendTextureId;  // Which backend texture the engine's font atlas is on
     pub fn frames(&self) -> &[FrameRecord];  // Every frame recorded so far, oldest first
     pub fn transcript(&self) -> String;  // The last frame as stable, diffable text
@@ -1783,7 +1823,15 @@ impl WgpuBackend {
 
 - glam types (`Vec2`, `Vec3`, `Mat4`) with `scalar-math`; engine newtypes for
   units (`Radians`, `Seconds`). Std float trig is clippy-banned engine-wide —
-  use `jidousha::math::{sin_cos, atan2, ...}`.
+  use `sin_cos`, `atan2` and `rotate` from `jidousha::math`.
+- **A game spells them from the prelude and nowhere else.** `jidousha::prelude`
+  re-exports every name in `math`, so `use jidousha::prelude::*;` is the whole
+  import and a second `use jidousha::math::sin_cos;` beside it is the same item
+  twice. Engine-internal code has no facade to reach through and names its own
+  module path; that spelling is the engine's and the prelude is the game's, which
+  is what "one way to do everything" means here —
+  E0 run 4 found two worked examples disagreeing about which (e0-findings.md
+  F-045).
 
 ## Testing your game
 
@@ -1857,6 +1905,20 @@ trap wears other clothes — a driver that brakes for every corner never finds t
 top speed, a fighter that blocks everything never tests a combo — and in each
 case the thing being measured is the controller's caution, not the game.
 
+**And the bill does not stop at one bad verdict.** A merely mediocre controller
+does not report "unplayable" — it reports a plausible wrong number, and then you
+tune the game to fix it. One run aimed its returns away from wherever the
+opponent was *currently* standing, which is worthless against an opponent that
+drifts back to the middle between shots, and reported a correct game taking 79
+seconds a match. Six tuning runs went into the game's speed constants before the
+fault was found in the driver; replacing the aim with "try every return this
+paddle can produce, take the one that lands furthest from the middle" took the
+match to 43 seconds **with the game byte-identical**. So the controller is not
+just an instrument that can under-read. It is an instrument that will send you
+off to change the thing you are measuring. Get it playing to win *before* you
+believe any number it prints, and when a number looks wrong, suspect the
+controller first — it is the newer and worse-tested of the two.
+
 Assets are scripted the same way: `MemorySource` lets a test say "this texture
 becomes ready at tick 30", so loading behaviour — placeholders, gates, the frame
 a sprite appears — is something to assert on rather than a race.
@@ -1867,13 +1929,28 @@ so this runs anywhere:
 
 ```rust
 let mut recorder = FrameRecorder::new(PhysicalSize::new(1280, 720));
+let mut last = None;
 for tick in 1..=600 {
     sim.world_mut().insert_resource(Input::new(script.snapshot_at(tick)));
     sim.tick();
-    recorder.draw(&mut sim);          // one frame, recorded
+    last = Some(recorder.draw(&mut sim));   // one frame, recorded and handed back
 }
-let frame = recorder.frames().last().expect("600 frames were drawn");
+let frame = last.expect("600 frames were drawn");
 ```
+
+**`draw` hands back the frame itself, so keep the one you want.** It stays
+readable however many more you draw, which is what lets one function inspect the
+run's last frame **and** build the screens the run never reached — the shape
+recommended twice below. `recorder.frames()` is the other road to the same place
+and it *does* borrow the recorder for as long as the reference lives, so anything
+taken out of it has to be `.clone()`d before the next `draw`;
+`recorder.font_texture()` is worth reading out before the loop for the same
+reason.
+
+The recorder keeps **every** frame, oldest first, with no way to forget them: a
+six-hundred-tick check holds six hundred frames. That is deliberate and it is
+affordable at prototype scale — the history is what a failing assertion reads
+backwards, and the tick before the one that broke is usually the interesting one.
 
 The recorder's viewport **overrides** the `Camera` resource's; everything else —
 centre, height, clear color — is the game's own. Nothing writes the recorder's
@@ -1889,6 +1966,47 @@ stable, diffable text — every quad's world-space extent, one per line. That
 transcript is the closest thing to a screenshot available on a machine with no
 display, and it is good enough to check a layout by eye.
 
+**"A quad the size of the thing is at the thing's position" is how you check a
+rectangle, and it is wrong for a circle.** `ctx.circle` submits sixteen wedge
+quads, not one square, so nothing the size of the ball is drawn anywhere. What is
+true is that all sixteen share the centre as a corner and all sixteen fit inside
+the circle's bounding box, so the union of the quads covering the centre is
+exactly `2r × 2r`. Ask about the union:
+
+```rust
+let box_of_it = Rect::from_center_size(at, Vec2::splat(radius * 2.0));
+let mut union: Option<Rect> = None;
+for quad in frame.covering(at) {
+    let drawn = quad.bounds();
+    // Inside the disc's box, a hair of slack for the rim's arithmetic. Written
+    // out rather than as `Rect::contains`, which is half-open and would throw
+    // away the one wedge that reaches the far edge.
+    let inside = drawn.min.x >= box_of_it.min.x - 1e-3
+        && drawn.min.y >= box_of_it.min.y - 1e-3
+        && drawn.max.x <= box_of_it.max.x + 1e-3
+        && drawn.max.y <= box_of_it.max.y + 1e-3;
+    if !inside {
+        continue;                       // the field behind the ball, not the ball
+    }
+    union = Some(match union {
+        None => drawn,
+        Some(so_far) => Rect { min: so_far.min.min(drawn.min), max: so_far.max.max(drawn.max) },
+    });
+}
+let size = union.expect("nothing at all was drawn where the ball is").size();
+assert!(
+    (size.x - radius * 2.0).abs() < 1e-3 && (size.y - radius * 2.0).abs() < 1e-3,
+    "no ball-sized disc at ({at:?}): the quads covering it span {size:?}, want \
+     {:?} square",
+    radius * 2.0,
+);
+```
+
+`covering` counts a quad whose edge or corner passes exactly through the point,
+which is what makes asking about the centre work at all — every wedge touches it.
+`Rect::contains` is the other way round, half-open so that adjacent rectangles
+never both claim a point, which is why the box test above is spelled out.
+
 To ask whether any of it was *text*, compare a quad's texture against
 `recorder.font_texture()`: the font atlas is a texture like any other, so a quad
 sampling it came from `ctx.text` and nothing else could have produced it.
@@ -1898,26 +2016,48 @@ A game with art also calls `recorder.settle_assets(&mut sim, tick)` before each
 this frame. A game of shapes and text never needs it.
 
 **Assert that nothing is drawn outside `Camera::visible_bounds()`.** It is the
-highest-value check a game of shapes and text can write, and it is six lines:
+highest-value check a game of shapes and text can write, and it is three lines:
 
 ```rust
-let (top_left, bottom_right) = camera.visible_bounds();
+let view = camera.visible_bounds();          // a Rect: min top-left, max bottom-right
 for quad in frame.quads() {
     let bounds = quad.bounds();
     assert!(
-        bounds.min.x >= top_left.x && bounds.min.y >= top_left.y
-            && bounds.max.x <= bottom_right.x && bounds.max.y <= bottom_right.y,
-        "drawn off screen: {bounds:?} against a camera showing {top_left:?}..{bottom_right:?} \
+        view.contains_rect(bounds),
+        "drawn off screen: {bounds:?} against a camera showing {view:?} \
          — text centred by width_of is the usual culprit",
     );
 }
 ```
+
+`contains_rect` is closed on all four sides, because a quad flush against the
+camera's edge is on screen. `Rect::contains`, which takes a point, is half-open
+instead — it partitions space so adjacent rectangles never both claim a point,
+which is a different question and the wrong rule here.
 
 `TextStyle::width_of` is exact and completely silent: centring by it is the
 documented idiom, and a banner one character too long runs off both edges
 without a word from anything. A game that shipped exactly that had eight other
 assertions passing — glyphs existed, the score was placed, the world was
 correct — and only this one would have caught it.
+
+**No assertion over drawn quads can see a wrong character.** The font covers
+space through `~` and draws everything else as a box, at exactly the advance of a
+letter — so a stray em dash, curly quote or middle dot produces a quad the right
+size in the right place, and glyph counts, `width_of` centring and the bounds
+check above all pass identically. The geometry is correct; the picture is not. The
+check has to look at the string rather than at the frame, and it is one line:
+
+```rust
+assert!(
+    HINT.chars().all(|c| (' '..='~').contains(&c)),
+    "unprintable character in {HINT:?} — the font draws a box, and no assertion \
+     over what was drawn can tell the difference",
+);
+```
+
+Worth running over every literal a game draws, because the habit that produces
+one is typing prose. `—`, `’` and `·` are the three that arrive uninvited.
 
 **Then check the screens your run never reaches.** The bounds assertion above
 only judges frames that were drawn, and a controller good enough to finish the
@@ -1936,6 +2076,14 @@ recorder.draw(&mut sim);                           // one frame of the screen no
 Three lines per screen, and it is the losing banner, the timeout banner and the
 paused overlay that need it.
 
+**"On screen" is not "in the right place".** The bounds check passes for anything
+inside the camera, including a hint line drawn on top of a wall. If a layout has
+constants — a field edge, a margin, a band the score lives in — assert quads
+against *those* rather than only against the camera, because otherwise the
+transcript is the only instrument and reading it means holding a hundred lines of
+coordinates in your head. One run found exactly that bug that way, after every
+assertion it had passed.
+
 **A failing assertion has to report the numbers it judged.** Nobody writing a
 game this way can look at it; the assertion is the only instrument there is, so
 a message that says only *this is wrong* costs a whole cycle to turn into a
@@ -1944,6 +2092,36 @@ diagnosis. "No one won after a hundred seconds" says nothing. "No one won: score
 slow for the field, and says it immediately. Print the quantities the condition
 looked at, not the conclusion it reached.
 
-`tools/verify <example>` is the whole loop as one command: scripted input, a
-fixed number of headless ticks, the example's own assertions, and a captured PNG
-if the machine has a GPU.
+**The loop has a name, and it is a mode your game implements.** By convention a
+game takes a `--verify` flag: with it, `main` skips `run` entirely and does the
+headless thing instead — script or drive the input, tick a fixed number of times,
+run every assertion above, print a one-line verdict and then the frame
+transcript. Without it, `main` opens a window as usual. Nothing in the engine
+enforces this; it is the shape the tooling expects:
+
+```rust
+fn main() -> ExitCode {
+    if std::env::args().any(|arg| arg == "--verify") {
+        verify::run();                 // ticks, asserts, prints "verified ..."
+        return ExitCode::SUCCESS;      // or FAILURE, if an assertion reported one
+    }
+    match run(GameConfig::default(), setup) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("{error}");      // Display, not Debug — see the Quickstart
+            ExitCode::FAILURE
+        }
+    }
+}
+```
+
+The verdict line must begin with `verified ` — that is the token the wrapper
+looks for, so an example that quietly ignored the flag and opened a window is
+reported as a tooling fault rather than as a pass. Indented lines immediately
+after it are the summary and are shown; everything after that is kept as
+evidence rather than reprinted, which is where the transcript goes.
+
+`tools/verify <example>` is then the whole loop as one command: it runs that mode
+under a timeout, parses the verdict, writes a report, and captures a PNG if the
+machine has a GPU. `cargo run -p <crate> --example <name> -- --verify` is the
+same thing by hand.

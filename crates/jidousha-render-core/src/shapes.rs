@@ -20,6 +20,12 @@ use jidousha_core::{Color, Depth, Quad, Rect, TextureId};
 /// that a ball in a prototype reads as round at any size a prototype uses.
 /// Revisit with a game that needs a smoother one, and the shape of that change
 /// is an argument, not a different constant.
+///
+/// The resulting **sixteen quads** (two segments each) are now a published number:
+/// `Submit::circle`'s summary says so, Concepts states the per-verb quad budget,
+/// and *Testing your game* has an assertion that relies on the fan being
+/// inscribed and sharing the centre (ADR-0020). Moving this constant is therefore
+/// a documentation change and needs a superseding ADR, not just a smoother circle.
 const CIRCLE_SEGMENTS: u32 = 32;
 
 /// Untextured quads sample the white texel, so any coordinate does.

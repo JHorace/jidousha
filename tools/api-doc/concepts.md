@@ -4,9 +4,12 @@ A system is a function: `fn(&mut World)` for logic, `fn(&mut DrawCtx)` for
 drawing. Nothing inherits from anything, and there is no base class to fill in.
 
 Systems run in **phases**, in this order, every tick: `Startup` once at the
-start of the first tick, then `Update` for logic, then `Draw`. Within a phase
-they run in the order you added them, always, on every machine. There is no
-scheduler deciding for you. Startup running *inside* that first tick is worth
+start of the first tick, then `Update` for logic, then `Draw`. Those three are
+the whole set — `Phase` and `IntoSystem` appear in `add_system`'s signature as
+bounds, are not exported, and are not names a game writes or can collide with, so
+your own `enum Phase` for "which screen are we on" is yours to take. Within a
+phase systems run in the order you added them, always, on every machine. There is
+no scheduler deciding for you. Startup running *inside* that first tick is worth
 knowing if you drive the sim by hand: `headless(..)` hands back a world that is
 still empty, and it is populated once the first `tick()` returns.
 
@@ -54,6 +57,18 @@ smaller than the thinnest thing it must not miss, and assert that against the
 `fixed_dt` the engine actually hands you rather than against the 1/60 you
 assumed.
 
+**There is no `Rect::sweep` and no `Rect::inflate`, and that is a v1 boundary
+rather than something you have missed.** The reason is worth a sentence, because
+the shape you write instead is short and the shape you might expect is not. A
+sweep helper answers "where along this tick's travel did they first touch", which
+is about eight lines of arithmetic; what follows it — the bounce angle, the speed
+change, the remaining fraction of the tick, the order two collisions resolve in —
+is four or five times as much code and is your game's model rather than the
+engine's. A primitive that answered the first and refused the second would be the
+start of a physics engine, which v1 does not have. Write the eight lines: the
+plane your body's leading edge touches, whether it was approaching, whether this
+tick's travel crossed it, and the fraction of the tick at which it did.
+
 Together with the seeded `Rng` in `GameConfig`, that means the same inputs make
 the same game — which is what lets a test replay a session and get the same
 answer.
@@ -62,7 +77,29 @@ answer.
 quads — `ctx.sprite`, `ctx.rect`, `ctx.line`, `ctx.circle`, `ctx.text` — and
 cannot change the world; the type system enforces that. Order comes from
 `Depth { layer, z }`, not from the order you drew in, so a debug outline goes in
-front by saying so rather than by being drawn last.
+front by saying so rather than by being drawn last. `layer`'s numbers are
+**yours**: the engine sorts by them and has no opinion about what they mean, so
+name your bands once in a `mod layers` of your own rather than writing `2` in
+forty places. `examples/prototype_kit` is the worked version.
+
+**A quad is the unit, and two verbs are not one quad.** `ctx.rect` and
+`ctx.line` each submit exactly one; `ctx.circle` submits **sixteen**, a fan of
+wedges around the centre, and that count is fixed rather than scaled by radius.
+`ctx.text` submits one quad per character — each exactly `size` tall and
+`size * 7 / 9` wide, laid out from its top-left corner, with `\n` counting as a
+line break and nothing else, which is the whole of text's vertical metric: an
+N-line block occupies `N * size`. So a circle costs sixteen rectangles and a
+score line costs one per digit — worth knowing before a frame has three hundred of them,
+and worth knowing when you assert on what was drawn, because "a quad the size of
+the thing" is the right question for a rectangle and the wrong one for a circle.
+*Testing your game* has the circle version written out.
+
+`Draw` reads the world's **committed** state — the values the last `Update`
+left — so a fast body steps rather than glides at whatever rate the frames come.
+`Time::alpha` is how far into the next tick the last frame fell, for a game that
+minds enough to keep last tick's position in a component of its own and submit
+`previous.lerp(current, alpha)`. Nothing in v1 consumes it and there is no
+interpolation helper; a prototype ignores it and is right to.
 
 **A game of pure shapes needs no asset story at all.** `ctx.rect`, `ctx.circle`,
 `ctx.line` and `ctx.text` draw without a single file, and nothing requires an

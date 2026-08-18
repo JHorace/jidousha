@@ -50,10 +50,28 @@ pub trait Submit {
     /// line; a screen-space one is a separate future thing, not a flag on this.
     fn line(&mut self, from: Vec2, to: Vec2, thickness: f32, color: Color, depth: Depth);
 
-    /// Fill a circle.
+    /// Fill a circle, as a fan of sixteen quads rather than as one.
     ///
-    /// Made of a fixed number of straight edges, so the same circle always
-    /// produces the same vertices (renderer.md §2).
+    /// **Sixteen, whatever the radius.** The count is fixed rather than scaled,
+    /// so the same circle always produces the same vertices and a circle that
+    /// grows by a pixel does not rewrite a transcript (renderer.md §2, §9).
+    /// A circle therefore costs sixteen times what a rectangle costs; one ball
+    /// in a Pong is comfortably the largest single item in that game's frame.
+    ///
+    /// Each quad is the centre and three points on the rim, so all sixteen
+    /// share the centre as a corner and every one of them lies inside the
+    /// circle's bounding box. Two consequences a check depends on: nothing a
+    /// circle draws reaches outside `2r × 2r`, and the union of the quads
+    /// covering the centre is exactly `2r × 2r`. That union is how a test asks
+    /// "was a disc of this size drawn here" — *Testing your game* has it
+    /// written out, because "a quad the size of the thing" is the answer for
+    /// every other primitive and is the wrong answer for this one.
+    ///
+    /// DELIBERATE: that union is written out in the document and **not** offered
+    /// as a `FrameRecord::disc_drawn` (see ADR-0020). Do not add one: it would be
+    /// a second way to ask what `covering` plus `bounds` already answers, and it
+    /// would promise that circles keep being unionable, which is a stronger
+    /// promise than the fixed segment count makes.
     fn circle(&mut self, center: Vec2, radius: f32, color: Color, depth: Depth);
 
     /// Draw `text` with its first character's top-left corner at `at`.

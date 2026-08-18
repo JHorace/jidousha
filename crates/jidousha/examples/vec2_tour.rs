@@ -61,8 +61,10 @@ fn main() {
     assert_eq!(Vec2::X.dot(Vec2::Y), 0.0);
     assert_eq!(Vec2::X.dot(-Vec2::X), -1.0);
 
-    // Angles go through `jidousha::math`, never through `f32::sin`: those are
-    // the deterministic ones, and determinism is what makes a replay replay.
+    // Angles go through the engine's own `sin_cos`, never through `f32::sin`:
+    // those are the deterministic ones, and determinism is what makes a replay
+    // replay. It lives in `jidousha::math` and the prelude re-exports it, so
+    // the glob above is the whole import — there is no second `use` to write.
     let (sin, cos) = sin_cos(Radians::from_degrees(90.0));
     assert!(sin > 0.999 && cos.abs() < 1e-6);
     let turned = rotate(Vec2::X, Radians::from_degrees(90.0));

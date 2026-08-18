@@ -8,7 +8,7 @@
 //! truth about where things are, and the two would drift.
 
 use jidousha_core::math::{Mat4, Vec2};
-use jidousha_core::{Color, Resource};
+use jidousha_core::{Color, Rect, Resource};
 
 use jidousha_core::PhysicalSize;
 
@@ -83,13 +83,29 @@ impl Camera {
         self.height * self.viewport.aspect()
     }
 
-    /// The world rectangle currently on screen, as (top-left, bottom-right).
+    /// The world rectangle currently on screen.
     ///
-    /// Y is down, so the first corner is the top-left (ADR-0010).
+    /// Y is down, so `min` is the top-left corner and `max` the bottom-right
+    /// (ADR-0010) — which is exactly what [`Rect`] means, and the reason this
+    /// stopped returning the pair loose. With `Rect::contains_rect` the check
+    /// every game should write, *nothing is drawn off screen*, is one call
+    /// rather than four comparisons written out (ADR-0021).
+    ///
+    /// ```
+    /// # use jidousha_render_core::Camera;
+    /// # use jidousha_core::Rect;
+    /// # use jidousha_core::math::Vec2;
+    /// let camera = Camera::default();
+    /// let view = camera.visible_bounds();
+    /// assert!(view.contains_rect(Rect::from_center_size(Vec2::ZERO, Vec2::splat(1.0))));
+    /// ```
     #[must_use]
-    pub fn visible_bounds(&self) -> (Vec2, Vec2) {
+    pub fn visible_bounds(&self) -> Rect {
         let half = Vec2::new(self.width(), self.height) * 0.5;
-        (self.center - half, self.center + half)
+        Rect {
+            min: self.center - half,
+            max: self.center + half,
+        }
     }
 
     /// Where a world point lands on screen, in pixels from the top-left.
@@ -97,8 +113,7 @@ impl Camera {
     /// The only sanctioned world→screen conversion (conventions).
     #[must_use]
     pub fn world_to_screen(&self, world: Vec2) -> Vec2 {
-        let (min, _) = self.visible_bounds();
-        let offset = world - min;
+        let offset = world - self.visible_bounds().min;
         let scale = self.pixels_per_unit();
         Vec2::new(offset.x * scale.x, offset.y * scale.y)
     }
@@ -109,14 +124,13 @@ impl Camera {
     /// a place in the world.
     #[must_use]
     pub fn screen_to_world(&self, screen: Vec2) -> Vec2 {
-        let (min, _) = self.visible_bounds();
         let scale = self.pixels_per_unit();
         // A zero-sized viewport has no meaningful mapping; report the center
         // rather than a NaN that would spread into gameplay.
         if scale.x == 0.0 || scale.y == 0.0 {
             return self.center;
         }
-        min + Vec2::new(screen.x / scale.x, screen.y / scale.y)
+        self.visible_bounds().min + Vec2::new(screen.x / scale.x, screen.y / scale.y)
     }
 
     /// The matrix that takes world space to clip space.
@@ -249,7 +263,8 @@ mod tests {
         let wide = camera.visible_bounds();
         camera.height = 5.0;
         let close = camera.visible_bounds();
-        assert!(close.1.x - close.0.x < wide.1.x - wide.0.x);
+        assert!(close.size().x < wide.size().x);
+        assert!(wide.contains_rect(close), "zooming in shows a subset");
     }
 
     #[test]

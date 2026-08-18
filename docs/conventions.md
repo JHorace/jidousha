@@ -77,7 +77,15 @@ the enforcement. Every entry here is assumed by all subsystem docs.
 
 - glam types (`Vec2`, `Vec3`, `Mat4`) with `scalar-math`; engine newtypes for
   units (`Radians`, `Seconds`). Std float trig is clippy-banned engine-wide —
-  use `jidousha::math::{sin_cos, atan2, ...}` (ADR-0009).
+  use `sin_cos`, `atan2` and `rotate` from `jidousha::math` (ADR-0009).
+- **A game spells them from the prelude and nowhere else.** `jidousha::prelude`
+  re-exports every name in `math`, so `use jidousha::prelude::*;` is the whole
+  import and a second `use jidousha::math::sin_cos;` beside it is the same item
+  twice. Engine-internal code has no facade to reach through and names its own
+  module path; that spelling is the engine's and the prelude is the game's, which
+  is what "one way to do everything" means here —
+  E0 run 4 found two worked examples disagreeing about which (e0-findings.md
+  F-045).
 
 ## Error messages
 

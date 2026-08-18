@@ -365,6 +365,16 @@ frame:
   run Draw phase once
 ```
 
+- **Nothing in the engine reads `alpha`.** It is written every step and consumed
+  only by a game that keeps last tick's value in a component of its own and
+  submits `previous.lerp(current, alpha)` from `Draw`. There is deliberately no
+  lerp helper and no engine-side "previous transform": that would be retained
+  render state, which renderer.md §2 rules out. **Also on the public side** since
+  E0 run 4 (e0-findings.md F-048), in the field's own line and in Concepts — the
+  run read the definition, found no consumer, and could not tell whether the field
+  had a user or was unfinished. It has a user; the user is the game. These
+  statements move together.
+
 - CONTRACT (the engine's central promise): **simulation state is a pure function
   of (seed, registered systems, per-tick input snapshots).** Native and web
   included — same seed and inputs replay to identical state everywhere. The

@@ -29,6 +29,15 @@ impl Seconds {
     ///
     /// Prefer the operators where they suffice: the point of the newtype is
     /// that seconds do not silently become milliseconds.
+    ///
+    /// **`Seconds` adds and subtracts and deliberately does not multiply.**
+    /// `rate * fixed_dt.as_f32()` is the integration step every moving system
+    /// writes, and a `Mul<f32>` that answered it would have to return `Seconds`
+    /// — the wrong type, because a rate times a duration is a distance. No
+    /// operator can express that without a unit system this engine does not
+    /// have, so the escape hatch is the honest spelling and this is the one
+    /// place `as_f32` is the *expected* call rather than a fallback
+    /// (e0-findings.md F-051).
     #[must_use]
     pub fn as_f32(self) -> f32 {
         self.0

@@ -262,7 +262,15 @@ Implemented (R3):
   nearest sampling safe at any scale, because a fragment landing a hair outside
   a glyph finds its neighbour's border instead of its neighbour's ink.
 - `TextStyle::size` is the height of one **line**, in world units, so text
-  scales with the camera like everything else. `TextStyle::width_of` measures a
+  scales with the camera like everything else. A glyph's quad is exactly `size`
+  tall and `size * 7 / 9` wide, laid out from its top-left corner, and `\n` moves
+  the pen down by a full `size` — so the cells tile and a line's vertical extent is
+  `size` with the ink in the middle seven ninths. **Also on the public side** since
+  E0 run 4 (F-043), in `size`'s own field line and in Concepts: the run measured
+  it off a transcript because the old wording said "including the gap below it",
+  which describes a border that is above *and* below. No `height_of` was added —
+  once the metric is stated it is `size` times the line count. These statements
+  move together. `TextStyle::width_of` measures a
   string exactly (monospace, no kerning) — without it a game cannot centre a
   score, and guessing is what makes prototype UI look wrong.
 - `\n` starts a new line. Wrapping remains the non-goal; an explicit line break
@@ -707,6 +715,35 @@ mergeable, tested, green CI on all three targets.
   rather than by bounding box. The segment count is fixed at 32 rather than
   scaled by radius: a radius-dependent count would change the transcript, and
   every golden image, when a circle grows by a pixel.
+
+  **`FrameRecorder::draw` hands the frame back by value** since E0 run 4
+  (e0-findings.md F-040, ADR-0023). A borrow ended at the next `draw` and at every
+  `frames()`, which made the shape the public testing section recommends — inspect
+  the run's last frame, then build the screens the run never reached — a compile
+  error; a run worked around it with a second recorder and silently moved what
+  `transcript()` printed. The history is still whole and there is still no `clear`
+  on the recorder: a failing assertion reads it backwards, and the tick before the
+  one that broke is the interesting one. `NullBackend::clear` stays, because a
+  golden-image comparison genuinely wants a fresh surface — different job.
+
+  **`Camera::visible_bounds` returns a `Rect`** since the same run (F-042,
+  ADR-0021). It always returned `Rect`'s two fields under `Rect`'s own documented
+  meaning; the tuple was never a decision, and it cost six hand-written comparisons
+  in the off-screen assertion that §9's verification story leans on hardest.
+  `Rect::contains_rect` came with it, closed on all four sides where
+  `Rect::contains` is half-open — a quad flush against the camera's edge is on
+  screen.
+
+  **The resulting sixteen quads are now on the public side too**, since E0 run 4
+  (e0-findings.md F-039, ADR-0020). Two runs went looking for this — one lost a
+  debug cycle, one recorded a false answer — because the only worked "was it
+  drawn" assertion checks for a quad the size of the thing, which no circle
+  produces. `Submit::circle`'s summary states the count, Concepts states the
+  per-verb quad budget, and *Testing your game* carries the disc assertion that
+  unions the quads covering the centre. That assertion relies on two properties of
+  the fan above: every wedge is inscribed, and all of them share the centre as a
+  corner. Those three statements and this one move together, and moving the
+  constant needs an ADR superseding ADR-0020.
 
   **Shapes and text are not a debug layer.** They expand into the same `Quad`
   and go through the same sort and batch, so a hitbox outline can be drawn
