@@ -252,7 +252,11 @@ Implemented (R3):
 - Printable ASCII, 32 through 126, plus a **fallback box** for everything else.
   A character the font does not have draws the box rather than nothing, for the
   same reason a missing texture draws the placeholder: "half my text is
-  missing" should be a picture, not a mystery.
+  missing" should be a picture, not a mystery. **This sentence is also on the
+  public side**, in `TextStyle`'s summary, since E0 run 3 (e0-findings.md
+  F-030): a game author cannot open this file, and no assertion available to one
+  distinguishes a fallback box from a real glyph — both are one quad at the same
+  advance. The two statements have to move together.
 - Cells are 7×9 — the glyph plus a one-texel transparent border on every side.
   The border does two jobs: it is the letter spacing, and it is what makes
   nearest sampling safe at any scale, because a fragment landing a hair outside

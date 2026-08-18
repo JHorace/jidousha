@@ -9,8 +9,8 @@ use std::process::ExitCode;
 
 use jidousha::prelude::*;
 
-/// How far the player moves in one tick, in world units.
-const SPEED: f32 = 0.35;
+/// How fast the player moves, in world units per second.
+const SPEED: f32 = 21.0;
 /// How close counts as touching.
 const REACH: f32 = 1.2;
 /// How far from the centre a coin may appear.
@@ -64,12 +64,15 @@ fn walk(world: &mut World) {
     let Some(input) = world.find_resource::<Input>() else {
         return;
     };
-    let step = Vec2::new(
+    let direction = Vec2::new(
         f32::from(input.held(Key::D)) - f32::from(input.held(Key::A)),
         f32::from(input.held(Key::S)) - f32::from(input.held(Key::W)),
     );
+    // Speeds are per second and the timestep is what turns one into a step, so
+    // the game moves at the same rate whatever `GameConfig::fixed_dt` says.
+    let step = direction * SPEED * world.resource::<Time>().fixed_dt.as_f32();
     for (_, transform, _) in world.query_mut::<(&mut Transform, &Player)>() {
-        transform.pos += step * SPEED;
+        transform.pos += step;
     }
 }
 

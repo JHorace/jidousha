@@ -26,6 +26,14 @@ the enforcement. Every entry here is assumed by all subsystem docs.
   `tick * fixed_dt`). Wall-clock time is banned outside `jidousha-platform`
   (ADR-0005; CI-checked).
 - Durations in public APIs are `Seconds(f32)`, never milliseconds, never bare f32.
+- **Speeds and rates are per second, multiplied by `Time::fixed_dt` where they
+  are applied — never per tick.** A per-tick constant is the same arithmetic
+  with the timestep baked into it, so it silently means something else the day
+  `GameConfig::fixed_dt` changes, and it cannot be read against a number a
+  person quotes in seconds. Counting *ticks* is the exception, because the tick
+  is the canonical timeline above: a serve pause is 45 ticks, not 0.75 seconds
+  converted twice. Every example follows this — a game author reads two of them
+  and infers the rule, so two that disagree teach that there is no rule.
 
 ## Color
 

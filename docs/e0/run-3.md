@@ -314,3 +314,55 @@ Recording these because a log of only complaints would misrepresent the run.
 - `tools/test` was not run, per the brief — this example opens a window.
 - The AI is one difficulty. There is no menu and no second-player option; the
   brief allowed either and I chose the AI.
+
+---
+
+## 9. Maintainer's follow-up — what was taken and what was declined
+
+*Appended after the run by a maintainer session with full access to the source,
+the ADRs, the internal docs and runs 1 and 2. Nothing above this line was
+changed. Root causes are in `docs/internal/e0-findings.md` F-030–F-038.*
+
+**The font question is answered.** The atlas holds the ninety-five printable
+ASCII characters, space through `~`. Everything else — below space and above
+tilde alike — maps to a ninety-sixth cell holding a **fallback box**, drawn at
+the same advance as any other glyph. So the `·` drew a visible box, not a blank
+and not garbage. The behaviour is deliberate, tested by name, and stays as it
+is; no ADR, because there is no oddity to explain. What was missing was only
+that you could not find out, and `TextStyle`'s summary now says both the range
+and the fallback.
+
+**Your advance is right.** A cell is 7 texels by 9 and the advance is
+`size * 7 / 9` exactly — extracted from a transcript at size 1.5 and confirmed
+against the source, not taken on trust.
+
+| # | Verdict | Where it landed |
+|---|---|---|
+| 1 | **Taken** | `TextStyle`'s summary states the range and the fallback box. |
+| 2 | **Taken** | The `7/9` ratio is in `TextStyle`'s summary, beside `width_of`'s signature — not in `width_of`'s own member line, which the generator truncates at 68 characters. |
+| 3 | **Taken**, and it is the sharpest thing in the log | *Testing your game*, after the `width_of` paragraph: build the screens your run never reaches, set the resource, draw one frame. Your `pong/verify.rs` fix is the idiom, written out rather than cited — the file is deleted before the next run starts. |
+| 4 | **Taken** | A paragraph under the `SnapshotBuilder` snippet. Run 1 hit the same empty world on tick 1 from a different direction, so two runs through two doors: the document's problem, not yours. |
+| 5 | **Taken, moved** | The line is in Concepts' fixed-timestep paragraph rather than on `Rect::overlaps`, because that is where the cause is — and because that summary is already 66 of the 68 characters it gets. It names `Rect::overlaps` so a search lands there. Your own handling was better than the line you asked for and the fix says so: asserting the margin against the `fixed_dt` the engine hands the game catches a raised timestep that a comment would not. |
+| 6 | **Taken; wider than you could see** | The ruling is per-second-and-multiply, in `conventions.md` under Time, and it reaches the API document through the conventions digest. `prototype_kit` is converted. So is the **Quickstart**, which was the third example and was on the per-tick side — meaning the disagreement was the first thing a copy-and-change author inherited. |
+| 7 | **Taken** | `Batch` and `QuadVertex` are exported in `jidousha::testing` — the second because exporting the first names it. This is the second instance of a class run 2 found and left a gate unbuilt for; the gate is now overdue. |
+| 8 | **Declined as an example; taken as prose** | The lesson is in *Testing your game*, stated as the shape rather than as Pong. The example is declined because a worked closed-loop controller that plays a game to *win* is a worked **game**, and `crates/jidousha/examples/` is on this exercise's allowed list — shipping one there would hand the next author the answer, which is exactly the harness hole that got the previous run's Pong deleted. If a fourth run walks into this trap, the answer is a worked controller in a game deliberately unlike Pong. |
+
+**What runs 1, 2 and 3 all found, independently.** Your §4.1 is the third
+sighting of the same thing: run 1's two exact trackers rallying forever at a
+fixed height, run 2's 0–0 after a hundred simulated seconds, and your 78-touch
+groove. None of the three could read the others. That makes it the
+most-corroborated finding in the file and outranks everything else in your §7 —
+including the items you ranked above it.
+
+Also corroborated: the empty world on the way into tick 1 (#4, run 1 hit it in a
+rally harness), and swept collision (#5, run 1 went looking for an overlap test
+and noted it needed a swept one anyway). Everything else in §7 is yours alone —
+the font's coverage, the advance, the unreached screens, the per-tick/per-second
+split and `Batch` are all first sightings.
+
+**§3.3, `Rng::below` versus clippy, is logged and needs no fix.** You diagnosed
+it correctly and unprompted; a lint that does not know a project's vocabulary is
+not a documentation gap. It is recorded because three of those on one topic
+would be.
+
+**Your game is untouched.** It passes `tools/verify pong`, and it is evidence.

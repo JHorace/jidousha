@@ -28,8 +28,8 @@ use std::process::ExitCode;
 
 use jidousha::prelude::*;
 
-/// How far the player moves in one tick, in world units.
-const SPEED: f32 = 0.35;
+/// How fast the player moves, in world units per second.
+const SPEED: f32 = 21.0;
 /// How close counts as touching.
 const REACH: f32 = 1.2;
 /// How far from the centre a coin may appear.
@@ -83,12 +83,15 @@ fn walk(world: &mut World) {
     let Some(input) = world.find_resource::<Input>() else {
         return;
     };
-    let step = Vec2::new(
+    let direction = Vec2::new(
         f32::from(input.held(Key::D)) - f32::from(input.held(Key::A)),
         f32::from(input.held(Key::S)) - f32::from(input.held(Key::W)),
     );
+    // Speeds are per second and the timestep is what turns one into a step, so
+    // the game moves at the same rate whatever `GameConfig::fixed_dt` says.
+    let step = direction * SPEED * world.resource::<Time>().fixed_dt.as_f32();
     for (_, transform, _) in world.query_mut::<(&mut Transform, &Player)>() {
-        transform.pos += step * SPEED;
+        transform.pos += step;
     }
 }
 
@@ -187,6 +190,15 @@ than one long one. That number is **1/60 of a second** unless you say otherwise:
 is the number to count in when a game wants to say "about three quarters of a
 second" as a number of ticks — a serve pause, a coyote-time window, an
 invulnerability period.
+
+A fixed timestep also means **collisions are only ever tested at tick
+boundaries**. Nothing in v1 sweeps, so a body that moves further in one tick
+than its target is thick steps clean through it and `Rect::overlaps` never sees
+the frame where they touched. That is the first thing that bites a game with a
+fast small ball, and the fix is the game's: keep `speed * Time::fixed_dt`
+smaller than the thinnest thing it must not miss, and assert that against the
+`fixed_dt` the engine actually hands you rather than against the 1/60 you
+assumed.
 
 Together with the seeded `Rng` in `GameConfig`, that means the same inputs make
 the same game — which is what lets a test replay a session and get the same
@@ -909,7 +921,7 @@ pub trait Submit {
 
 #### `TextStyle`
 
-How a line of text is drawn.
+How a line of text is drawn — monospace over the ninety-five printable ASCII characters, space through `~`, every one of them advancing 7/9 of `size`, with anything outside that range drawn as a visible box rather than skipped.
 
 ```rust
 pub struct TextStyle {
@@ -1209,6 +1221,22 @@ pub struct BackendTextureId(pub u32);
 // Clone Copy Debug PartialEq Eq PartialOrd Ord Hash
 ```
 
+#### `Batch`
+
+A run of quads sharing one texture, drawn in one call.
+
+```rust
+pub struct Batch {
+    pub texture: BackendTextureId,  // What every quad in this batch samples
+    pub vertices: Vec<QuadVertex>,  // Six vertices per quad: two triangles, wound the same way every time
+}
+// Clone Debug PartialEq
+
+impl Batch {
+    pub fn quad_count(&self) -> usize;  // How many quads this batch draws
+}
+```
+
 #### `compare`
 
 Compare a capture against a reference.
@@ -1505,6 +1533,19 @@ Turn a frame's submissions into a plan.
 pub fn plan_frame(camera: &Camera, quads: &[Quad], textures: &TextureTable) -> FramePlan;
 ```
 
+#### `QuadVertex`
+
+One vertex of an expanded quad.
+
+```rust
+pub struct QuadVertex {
+    pub position: Vec2,  // Where, in world space
+    pub uv: Vec2,  // Where to sample, normalized
+    pub color: Color,  // The tint, multiplied into the sample
+}
+// Clone Copy Debug PartialEq
+```
+
 #### `RawImage`
 
 Pixels read back off the GPU, for golden-image tests.
@@ -1705,6 +1746,14 @@ impl WgpuBackend {
 - Simulation time: `tick: u64` (canonical) and `Seconds` newtype (derived,
   `tick * fixed_dt`). Wall-clock time is banned outside `jidousha-platform`.
 - Durations in public APIs are `Seconds(f32)`, never milliseconds, never bare f32.
+- **Speeds and rates are per second, multiplied by `Time::fixed_dt` where they
+  are applied — never per tick.** A per-tick constant is the same arithmetic
+  with the timestep baked into it, so it silently means something else the day
+  `GameConfig::fixed_dt` changes, and it cannot be read against a number a
+  person quotes in seconds. Counting *ticks* is the exception, because the tick
+  is the canonical timeline above: a serve pause is 45 ticks, not 0.75 seconds
+  converted twice. Every example follows this — a game author reads two of them
+  and infers the rule, so two that disagree teach that there is no rule.
 
 ### Color
 
@@ -1789,6 +1838,25 @@ one-tick script per tick instead (`hold(key, tick..tick + 1)`) puts a press edge
 on *every* tick, because every tick is the start of its own range.
 `examples/scripted_player.rs` runs both shapes side by side.
 
+**On the way into tick 1 there is nothing to look at.** `Startup` runs inside
+that first `tick()`, so the controller's read at the top of the loop happens
+once against an empty world: `find_resource` rather than `resource`, and a query
+that yields nothing rather than a `[0]` into an empty `Vec`. It is one tick out
+of thousands and it is the first one, so a controller that gets this wrong
+panics before it has tested anything.
+
+**A controller that plays it safe is not a playability test.** A blind script
+never returns the ball; a controller that tracks the ball perfectly returns it
+*dead flat*, straight back down the middle, and if the opponent tracks too the
+rally has nowhere to go — both sides hold a groove neither can lose, and the run
+ends 0–0 with a 78-touch rally and a report that the game is unplayable. The
+game is fine; the controller made it degenerate. Play to **win**: aim the return
+away from where the opponent is standing, meet the ball with the half of the
+paddle that sends it off-centre, take the shot a person would take. The same
+trap wears other clothes — a driver that brakes for every corner never finds the
+top speed, a fighter that blocks everything never tests a combo — and in each
+case the thing being measured is the controller's caution, not the game.
+
 Assets are scripted the same way: `MemorySource` lets a test say "this texture
 becomes ready at tick 30", so loading behaviour — placeholders, gates, the frame
 a sprite appears — is something to assert on rather than a race.
@@ -1850,6 +1918,23 @@ documented idiom, and a banner one character too long runs off both edges
 without a word from anything. A game that shipped exactly that had eight other
 assertions passing — glyphs existed, the score was placed, the world was
 correct — and only this one would have caught it.
+
+**Then check the screens your run never reaches.** The bounds assertion above
+only judges frames that were drawn, and a controller good enough to finish the
+game is a controller that never loses it: a run that wins 5–0 draws the winning
+banner five thousand times and the losing one never, so the longest string in
+the game is the one string nothing measured. Build those screens by hand — one
+tick so `Startup` has run, set the resource that selects the screen, draw one
+frame, and run the same check over it:
+
+```rust
+sim.tick();                                        // Startup, so the world exists
+sim.world_mut().insert_resource(Scoreboard { left: 0, right: 5 });
+recorder.draw(&mut sim);                           // one frame of the screen nobody reached
+```
+
+Three lines per screen, and it is the losing banner, the timeout banner and the
+paused overlay that need it.
 
 **A failing assertion has to report the numbers it judged.** Nobody writing a
 game this way can look at it; the assertion is the only instrument there is, so

@@ -74,9 +74,10 @@ Both of cargo's example layouts count: `examples/<name>.rs`, and
 `examples/<name>/main.rs` for one big enough that the game and the check on the
 game are two reads. `prototype_kit` is the first of the second kind.
 
-A windowed example named in `VERIFIABLE_EXAMPLES` is the exception to the
-exception: instead of `example-build:<name>` it gets `example-verify:<name>`,
-which runs `tools/verify <name>`. "Needs a person to look at it" is a reason to
+A windowed example named in `VERIFIABLE_EXAMPLES` — `prototype_kit`, and each
+E0 run's `pong` while it is in the tree — is the exception to the exception:
+instead of `example-build:<name>` it gets `example-verify:<name>`, which runs
+`tools/verify <name>`. "Needs a person to look at it" is a reason to
 script the looking, not to skip it. Every name in that set must also be windowed
 (tested) — a headless example already asserts in its normal mode, and giving it a
 second mode would be a second way to do one thing.
@@ -281,7 +282,9 @@ a row (stop rule printed, `failure-streak.json` count 2).
 - **Almost every example is run; windowed ones are built and not run.**
   Resolved in M5, which is when it first mattered. `tools/test` carries a
   `WINDOWED_EXAMPLES` set (`window_blank` from M5, `window_clear` from R1,
-  `sprites` from R2, `prototype_kit` from R3, `input_echo` from I1); a
+  `sprites` from R2, `prototype_kit` from R3, `input_echo` from I1,
+  `quickstart` from F0, and each E0 run's `pong` — which comes back out with the
+  game at the start of the next run, `e0-prompt.md` step 2); a
   name in it gets `cargo build --example` under a
   phase called `example-build:<name>` instead of `cargo run`, and the runner
   prints which examples it built rather than ran. Three reasons for a list over

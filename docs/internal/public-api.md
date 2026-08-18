@@ -276,6 +276,14 @@ without it.
 `WgpuBackend`, because a golden image has to be drawn by something. That is not a
 breach of ADR-0003, which forbids `wgpu` *types* escaping; none do.
 
+Added after E0 run 3: `Batch` and `QuadVertex` (e0-findings.md F-036). Same rule
+as `Submissions` under F-017 — `FramePlan::batches` is a public field of an
+exported type, so its element type is game-facing whether it was curated in or
+not, and `Batch::vertices` drags `QuadVertex` in behind it. Exporting one and
+not the other would move the hole rather than close it. This is the **second**
+run to find this class by hand; the generator gate F-017 deferred is now overdue,
+and the remaining candidates are listed there.
+
 Rough count: ~45 types/functions. CONTRACT: the v1 prototype substrate
 ("agent Pong/asteroids/breakout") must be expressible with this list alone —
 that's exactly what acceptance milestone E0 tests (implementation plan).
