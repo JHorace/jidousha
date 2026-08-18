@@ -203,6 +203,18 @@ smaller than the thinnest thing it must not miss, and assert that against the
 `fixed_dt` the engine actually hands you rather than against the 1/60 you
 assumed.
 
+**There is no `Rect::sweep` and no `Rect::inflate`, and that is a v1 boundary
+rather than something you have missed.** The reason is worth a sentence, because
+the shape you write instead is short and the shape you might expect is not. A
+sweep helper answers "where along this tick's travel did they first touch", which
+is about eight lines of arithmetic; what follows it — the bounce angle, the speed
+change, the remaining fraction of the tick, the order two collisions resolve in —
+is four or five times as much code and is your game's model rather than the
+engine's. A primitive that answered the first and refused the second would be the
+start of a physics engine, which v1 does not have. Write the eight lines: the
+plane your body's leading edge touches, whether it was approaching, whether this
+tick's travel crossed it, and the fraction of the tick at which it did.
+
 Together with the seeded `Rng` in `GameConfig`, that means the same inputs make
 the same game — which is what lets a test replay a session and get the same
 answer.
@@ -793,6 +805,7 @@ impl Rect {
     pub fn center(self) -> Vec2;  // The point in the middle
     pub fn contains(self, point: Vec2) -> bool;  // Whether `point` is inside, counting the top-left edges and not the…
     pub fn overlaps(self, other: Rect) -> bool;  // Whether any part of `other` is inside; touching edges do not count
+    pub fn contains_rect(self, other: Rect) -> bool;  // Whether `other` is entirely inside this one, edges included
 }
 ```
 
@@ -877,7 +890,7 @@ pub struct Camera {
 
 impl Camera {
     pub fn width(&self) -> f32;  // How many world units the screen spans horizontally
-    pub fn visible_bounds(&self) -> (Vec2, Vec2);  // The world rectangle currently on screen, as (top-left, bottom-right)
+    pub fn visible_bounds(&self) -> Rect;  // The world rectangle currently on screen
     pub fn world_to_screen(&self, world: Vec2) -> Vec2;  // Where a world point lands on screen, in pixels from the top-left
     pub fn screen_to_world(&self, screen: Vec2) -> Vec2;  // What world point a screen pixel is over
     pub fn view_projection(&self) -> Mat4;  // The matrix that takes world space to clip space
@@ -1415,7 +1428,7 @@ pub struct FrameRecorder;
 impl FrameRecorder {
     pub fn new(viewport: PhysicalSize) -> Self;  // A recorder drawing to a surface `viewport` pixels across,…
     pub fn settle_assets(&mut self, sim: &mut HeadlessSim, tick: u64);  // Apply what has finished loading and put it on the GPU, as the…
-    pub fn draw(&mut self, sim: &mut HeadlessSim) -> &FrameRecord;  // Run the game's Draw phase once and record the frame it produced
+    pub fn draw(&mut self, sim: &mut HeadlessSim) -> FrameRecord;  // Run the game's Draw phase once and record the frame it produced
     pub fn font_texture(&self) -> BackendTextureId;  // Which backend texture the engine's font atlas is on
     pub fn frames(&self) -> &[FrameRecord];  // Every frame recorded so far, oldest first
     pub fn transcript(&self) -> String;  // The last frame as stable, diffable text
@@ -1916,29 +1929,28 @@ so this runs anywhere:
 
 ```rust
 let mut recorder = FrameRecorder::new(PhysicalSize::new(1280, 720));
+let mut last = None;
 for tick in 1..=600 {
     sim.world_mut().insert_resource(Input::new(script.snapshot_at(tick)));
     sim.tick();
-    recorder.draw(&mut sim);          // one frame, recorded
+    last = Some(recorder.draw(&mut sim));   // one frame, recorded and handed back
 }
-let frame = recorder.frames().last().expect("600 frames were drawn").clone();
+let frame = last.expect("600 frames were drawn");
 ```
 
-**`frames()` and `draw()` do not compose — clone the frame you keep.**
-`frames()` borrows the recorder for as long as the reference lives, and `draw`
-wants it mutably, so holding `recorder.frames().last()` and then drawing one more
-frame is a borrow error rather than a runtime surprise. `draw`'s own return value
-has the same rule. The `.clone()` above is the whole fix: it ends the borrow and
-costs one frame's worth of quads. Do it as a matter of course, because every
-check that inspects the run's last frame **and** builds a screen the run never
-reached — which is the shape recommended twice below — needs both halves in the
-same function.
-
+**`draw` hands back the frame itself, so keep the one you want.** It stays
+readable however many more you draw, which is what lets one function inspect the
+run's last frame **and** build the screens the run never reached — the shape
+recommended twice below. `recorder.frames()` is the other road to the same place
+and it *does* borrow the recorder for as long as the reference lives, so anything
+taken out of it has to be `.clone()`d before the next `draw`;
 `recorder.font_texture()` is worth reading out before the loop for the same
-reason. The recorder also keeps **every** frame, oldest first, with no way to
-forget them: a six-hundred-tick check holds six hundred frames to look at one.
-That is affordable at prototype scale and is the reason to reach for
-`.last()` rather than to keep indexes into it.
+reason.
+
+The recorder keeps **every** frame, oldest first, with no way to forget them: a
+six-hundred-tick check holds six hundred frames. That is deliberate and it is
+affordable at prototype scale — the history is what a failing assertion reads
+backwards, and the tick before the one that broke is usually the interesting one.
 
 The recorder's viewport **overrides** the `Camera` resource's; everything else —
 centre, height, clear color — is the game's own. Nothing writes the recorder's
@@ -2004,20 +2016,24 @@ A game with art also calls `recorder.settle_assets(&mut sim, tick)` before each
 this frame. A game of shapes and text never needs it.
 
 **Assert that nothing is drawn outside `Camera::visible_bounds()`.** It is the
-highest-value check a game of shapes and text can write, and it is six lines:
+highest-value check a game of shapes and text can write, and it is three lines:
 
 ```rust
-let (top_left, bottom_right) = camera.visible_bounds();
+let view = camera.visible_bounds();          // a Rect: min top-left, max bottom-right
 for quad in frame.quads() {
     let bounds = quad.bounds();
     assert!(
-        bounds.min.x >= top_left.x && bounds.min.y >= top_left.y
-            && bounds.max.x <= bottom_right.x && bounds.max.y <= bottom_right.y,
-        "drawn off screen: {bounds:?} against a camera showing {top_left:?}..{bottom_right:?} \
+        view.contains_rect(bounds),
+        "drawn off screen: {bounds:?} against a camera showing {view:?} \
          — text centred by width_of is the usual culprit",
     );
 }
 ```
+
+`contains_rect` is closed on all four sides, because a quad flush against the
+camera's edge is on screen. `Rect::contains`, which takes a point, is half-open
+instead — it partitions space so adjacent rectangles never both claim a point,
+which is a different question and the wrong rule here.
 
 `TextStyle::width_of` is exact and completely silent: centring by it is the
 documented idiom, and a banner one character too long runs off both edges

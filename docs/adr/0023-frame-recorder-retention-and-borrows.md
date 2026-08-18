@@ -1,11 +1,6 @@
 # ADR-0023: What `FrameRecorder` hands back, and how long it keeps it
 
-Status: **proposed** · 2026-08-18
-
-> A proposed ADR binds nothing. This one exists because the fix already landed in
-> the document — the snippets compose now — and the question of whether the *shape*
-> should change is a change to the return type every `--verify` mode in the
-> repository is written against.
+Status: accepted · 2026-08-18
 
 ## Context
 
@@ -47,7 +42,7 @@ paragraph naming the borrow rule, saying `draw`'s return value has it too, sayin
 read `font_texture()` out before the loop for the same reason, and stating the
 retention plainly. What follows is whether v1 should also change the shape.
 
-## Decision (proposed)
+## Decision
 
 **Recommendation: `draw` returns an owned `FrameRecord`. Add nothing else.**
 
@@ -97,19 +92,23 @@ If retention ever becomes a real cost, the answer is a constructor that says so 
 `FrameRecorder::keeping_last(viewport)` — not a mutator that makes every existing
 check's history conditional on nobody having called it.
 
-## Consequences if accepted
+## Consequences
 
-- **A breaking change to a published signature**, though the mildest of the three
-  proposals in this batch: existing callers that write `let frame = recorder.draw(&mut sim);`
-  keep compiling, and callers that relied on the borrow are the ones the borrow was
-  breaking.
-- `testing.md`'s `.clone()` paragraph shrinks to the two facts that remain true —
-  `frames()` still borrows, and `font_texture()` is still worth reading out early —
-  and the borrow-error warning goes away. **That shrinkage is the test that the
-  change worked.**
-- `pong/verify.rs` loses its `.cloned()` and its comment about it, and
-  `prototype_kit/verify.rs` is unaffected. The E0 rule holds: the example gets
-  simpler.
+- **A breaking change to a published signature**, and the mildest of the three
+  taken in this batch: every existing caller writing `let frame = recorder.draw(&mut sim);`
+  kept compiling, and the callers that relied on the borrow were the ones the
+  borrow was breaking.
+- `testing.md`'s borrow-error warning is gone. What is left is the loop keeping the
+  frame it drew, plus the two facts that remain true — `frames()` still borrows, and
+  `font_texture()` is still worth reading out early. **That shrinkage is the test
+  that the change worked.**
+- **`pong/verify.rs` lost a whole `FrameRecorder`.** The second one existed only to
+  draw the staged screens while a reference into `frames()` was alive; the staged
+  screens now go through the same recorder as the match, and the three-line comment
+  apologising for the clone is gone with it. `prototype_kit/verify.rs` was
+  unaffected.
+- `a_recorded_frame_outlives_the_next_draw` is the regression guard, and it is
+  written as the two paragraphs of `testing.md` that did not compile together.
 - `tools/gen-api-doc` rerun; no coverage change, since `draw` is already shown.
 
 ## Alternatives considered

@@ -5,11 +5,12 @@ harness is `docs/internal/e0-prompt.md`; the milestone is implementation-plan.md
 §3. The bar is two consecutive runs with no new `engine` or `docs` findings.
 Run 4 answered run 3 and then found sixteen more of its own, so the count of
 consecutive clean runs is still zero. Run 1 found five `engine` findings, run 2
-three, run 3 none, and **run 4 three — two of them proposals rather than fixes**,
-because a tuple in a documented signature and a missing collision primitive are
-v1-scope decisions rather than repairs. Eleven of run 4's sixteen are sentences
-the document does not carry, which is the third consecutive run whose findings are
-mostly that shape; §6 says what follows from that.
+three, run 3 none, and **run 4 three, all now decided**: `visible_bounds` returns
+a `Rect` (ADR-0021), the recorder hands back an owned frame (ADR-0023), and the
+sweep primitive is declined with its boundary documented (ADR-0022). Eleven of run
+4's sixteen are sentences the document does not carry, which is the third
+consecutive run whose findings are mostly that shape; §6 says what follows from
+that.
 
 **Run 4's triage is §4a**, which is the whole run on one page with the class, the
 cross-run corroboration and the settling ADR or `DELIBERATE:` tag for each
@@ -69,7 +70,7 @@ prompt.
 | 1 | 2026-08-16 | Pong shipped; **not** a pass | 5 | 9 | 1 | Game compiled first try, `--verify` green, human playtest good. The document did not survive it. Raw notes: `docs/e0/run-1.md`. All 14 fixed; §6. |
 | 2 | 2026-08-17 | Pong shipped; **not** a pass | 3 | 10 | 1 | Every run-1 finding held up. The reference is now callable; the gap moved to "which of these is a resource". Raw notes: `docs/e0/run-2.md`. §6. |
 | 3 | 2026-08-17 | Pong shipped; **not** a pass | 0 | 8 | 1 | Zero compile errors on the first `cargo check`; "the API document was enough". No `engine` finding. What is left is what the document does not *say* about behaviour that is already right. Raw notes: `docs/e0/run-3.md`. §6. |
-| 4 | 2026-08-18 | Pong shipped; **not** a pass | 3 | 11 | 1 (+1 `environment`) | Compiled clean, `--verify` green. One full debug cycle lost to `ctx.circle`, six tuning runs lost to its own verify controller. Three `engine` findings, all deferred to ADRs 0021–0023 rather than fixed, plus one environment escalation (F-054). Raw notes: `docs/e0/run-4.md`. Triage: §4a. §6. |
+| 4 | 2026-08-18 | Pong shipped; **not** a pass | 3 | 11 | 1 (+1 `environment`) | Compiled clean, `--verify` green. One full debug cycle lost to `ctx.circle`, six tuning runs lost to its own verify controller. Three `engine` findings, decided in ADRs 0021–0023 (two applied, one declined with the boundary documented), plus one environment escalation (F-054). Raw notes: `docs/e0/run-4.md`. Triage: §4a. §6. |
 
 Run 1 produced a working, fun Pong and a document-shaped hole underneath it. The
 game is not the measurement — `docs/e0/run-1.md` is — and it says the run could
@@ -1532,9 +1533,9 @@ purpose and could not say so.
 | # | Finding | Class | Also found by | Settled by | Verdict |
 |---|---|---|---|---|---|
 | F-039 | `ctx.circle` is sixteen quads | docs | **run 3, wrongly** | `DELIBERATE:` at `shapes.rs`'s `CIRCLE_SEGMENTS` | doc fix landed; ADR-0020 records the choice |
-| F-040 | `frames()` + `draw()` do not compose | docs | first | — | doc fix landed; the retention question is **ADR-0023, proposed** |
-| F-041 | no sweep, no `Rect::inflate` | engine | **runs 1, 3** | — | **ADR-0022 proposed**; nothing changed |
-| F-042 | `visible_bounds` returns a tuple | engine | first | **nothing — checked** | **ADR-0021 proposed**; nothing changed |
+| F-040 | `frames()` + `draw()` do not compose | docs | first | — | doc fix landed; **ADR-0023 accepted** — `draw` returns an owned frame |
+| F-041 | no sweep, no `Rect::inflate` | engine | **runs 1, 3** | **ADR-0022** | **declined by decision**; the boundary is now documented |
+| F-042 | `visible_bounds` returns a tuple | engine | first | **nothing — checked** | **ADR-0021 accepted**; returns `Rect`, plus `Rect::contains_rect` |
 | F-043 | no vertical text metric | docs | first | — | doc fix landed; `height_of` declined |
 | F-044 | unprintable chars invisible to assertions | docs | run 3 (other half) | fallback box is deliberate (F-030) | doc fix landed; `debug_assert` **declined**, reasons recorded |
 | F-045 | `sin_cos` has two spellings | docs | first | — | doc fix landed; the *document* taught the wrong one |
@@ -1548,17 +1549,31 @@ purpose and could not say so.
 | F-053 | on screen is not in the right place | docs | all four, as a habit | — | doc fix landed |
 | F-054 | four runs, no display, no pixel ever rendered | environment | **runs 1, 2, 3** | CLAUDE.md's escalation rule | **escalated, unresolved** |
 
-**What this triage could not settle, stated plainly.** Three things.
+**The three proposals were accepted and are applied.** ADR-0020 through 0023 are
+all `accepted`; the surface changes landed with the examples that prove them.
 
-1. **F-041, F-042 and F-040's engine half are not mine to decide.** All three
-   change the public surface and two of them break a documented signature. Each
-   has an ADR proposing it; none has been applied. Where a run's complaint was
-   about a *tuple* or a *missing primitive*, the honest state is "proposed, and
-   the ADR says what it costs".
-2. **F-054 I cannot resolve because this container has no display or GPU
+- **ADR-0021** — `Camera::visible_bounds` returns `Rect`, and `Rect` gains
+  `contains_rect`, closed on all four sides where `contains` is half-open.
+  `testing.md`'s off-screen check went six lines to three; `pong/verify.rs`'s
+  `assert_on_screen` lost its four-comparison body and its tuple parameter.
+- **ADR-0022** — accepted *as recommended*, which means the sweep and
+  `Rect::inflate` are **declined**. Nothing was added; what changed is that
+  Concepts now names the absence as a v1 boundary and gives the eight-line shape
+  to write instead, which is the treatment `App::quit` gets and which run 4 called
+  "the right way to document an absence".
+- **ADR-0023** — `FrameRecorder::draw` returns an owned `FrameRecord`; `clear()`
+  declined, so the frame history stays whole. `pong/verify.rs` lost an entire
+  second `FrameRecorder` that existed only to work around the borrow.
+
+`tools/verify pong` reports the same 2,598 ticks, the same 5–0 in 43.3s and the
+same 101-quad final frame as before the changes, so none of this touched the game.
+
+**What this triage still cannot settle, stated plainly.** Two things.
+
+1. **F-054 I cannot resolve because this container has no display or GPU
    either.** So run 4's claims about how the game looks are still unchecked by
    anybody, and this note does not pretend otherwise.
-3. **F-047's prediction is unfalsifiable until run 5.** Prose has now had two
+2. **F-047's prediction is unfalsifiable until run 5.** Prose has now had two
    attempts at the controller trap and the second one failed differently from the
    first. Whether the third sentence works is a measurement, not an argument.
 
@@ -1659,8 +1674,8 @@ shorter is ADR-0020's rejected alternative and needs authority above this task.
 
 ### F-040 — The document's two recorder snippets are a borrow error together
 
-Class: docs · Run: 4 · Fixed in: this commit · The recorder's *shape* is a
-separate, deferred question: ADR-0023, proposed
+Class: docs · Run: 4 · Fixed in: this commit · The recorder's *shape* was the
+separate question and it is answered: **ADR-0023, accepted**
 
 Classified `docs` and not `engine` under §1's one-class rule, because the run
 needed no new API to get its check written — it needed the document not to teach a
@@ -1713,15 +1728,25 @@ has one.
   the third thing with this rule, and states the retention plainly: every frame,
   oldest first, no way to forget them.
 
-**Fix, engine half: not made. ADR-0023 proposes it** — `draw` returning an owned
-`FrameRecord`, or a `clear()`, or an opt-out of retention. Which of those v1
-absorbs is a design decision, and a change to `draw`'s return type is a change to
-the surface every `--verify` mode in the repository is written against.
+**Fix, engine half: made. ADR-0023 accepted.** `FrameRecorder::draw` returns an
+owned `FrameRecord`, so the two paragraphs compose without a workaround. `clear()`
+was declined and retention stays whole — the frame history is what a failing
+assertion reads backwards, and a check that could throw away the tick before the
+one that broke would be throwing away the tick the failure message wants.
+
+**The measurable result is that `pong/verify.rs` lost a whole `FrameRecorder`.**
+The second one existed only so the staged screens could be drawn while a reference
+into `frames()` was alive; they now go through the same recorder as the match, and
+the three-line comment apologising for the clone is gone with it. The run's other
+workaround — cloning the match's last frame out of `frames()` — became the loop
+simply keeping the frame `draw` handed it.
+`a_recorded_frame_outlives_the_next_draw` is the regression guard, written as the
+two paragraphs of `testing.md` that used not to compile together.
 
 ### F-041 — Nothing sweeps, and the vocabulary stops one question short
 
-Class: engine, deferred by decision · Run: 4 · **Third sighting** (runs 1, 3, 4)
-· Fixed in: nothing; ADR-0022, proposed
+Class: engine, out of v1 by decision · Run: 4 · **Third sighting** (runs 1, 3, 4)
+· Settled by: **ADR-0022, accepted — the primitives are declined**
 
 **What the run did.** Read Concepts' fixed-timestep paragraph — F-034's fix,
 which names tick-boundary tunnelling as "the first thing that bites a game with a
@@ -1760,16 +1785,30 @@ rectangle. Inflate would replace two scalar expressions with a `Rect` the call
 sites then destructure — roughly break-even at this scale, and clearly positive
 in a game with more than one collider shape.
 
-**Not fixed here, and this is a v1-scope decision either way.** "Deliberately out
-of scope, here is the shape to write yourself" is a legitimate answer and the run
-says so; what is not legitimate is the current state, where three runs have
-reached for it and no document says whether it was ever considered. ADR-0022
-records the decision to be made.
+**Decided: declined for v1, and the boundary is documented.** ADR-0022 is accepted
+as recommended, so no `Rect::sweep`, no segment-versus-rect helper and no
+`Rect::inflate`. The argument is the eight-versus-thirty split above: a primitive
+that answered "where did they first touch" and refused "and what happens now"
+would be the start of a collision subsystem, which ADR-0001 scopes out — and the
+bugs all three runs actually shipped (run 1's bounce plane 1.5 units behind the
+paddle, run 4's sign error) were in the thirty lines, not the eight.
+
+**What changed is the document, not the API.** Concepts' fixed-timestep paragraph
+now says the absence is a v1 boundary rather than something the reader has missed,
+and gives the eight-line shape to write instead. That is the treatment `App::quit`
+gets, and run 4 is the evidence it works: it called that "the right way to document
+an absence" and said the quit boundary cost it nothing, in the same log where an
+*undocumented* absence (sound, F-052) was the one thing it felt as a loss.
+
+**`pong` is unchanged**, deliberately: `advance` in `main.rs` stays exactly as run
+4 wrote it. This is the one finding where the E0 rule that a fixed finding should
+simplify the game does not apply, because the decision is that the code is the
+game's job.
 
 ### F-042 — `Camera::visible_bounds` returns `(Vec2, Vec2)` where `Rect` is that pair
 
-Class: engine · Run: 4 · Fixed in: nothing; ADR-0021, proposed · **No ADR or
-`DELIBERATE:` tag fixes the tuple** — checked
+Class: engine · Run: 4 · Fixed in: this commit · **ADR-0021, accepted** · No ADR
+or `DELIBERATE:` tag fixed the tuple — checked, which is what made it changeable
 
 **What the run did.** Wrote the off-screen assertion F-029 added, which is the
 document's own recommended check.
@@ -1796,9 +1835,27 @@ every game that writes the highest-value assertion in the document writes the si
 lines instead. Run 2 wrote them, run 3 wrote them, run 4 wrote them twice and
 factored them into a helper.
 
-**Not fixed here.** It is a breaking change to a documented signature and it
-raises a second question — whether `Rect` should gain a containment test for
-rectangles, which is new public surface — so it is ADR-0021 rather than an edit.
+**Fixed. `visible_bounds` returns `Rect`, and `Rect` gains `contains_rect`.** Both
+halves were needed and the second is the load-bearing one: returning a `Rect` and
+leaving the comparison hand-written would have saved one destructuring line, and
+the six lines *are* the comparison. `testing.md`'s check is three lines now, and
+`pong/verify.rs`'s `assert_on_screen` is one call over a `Rect` parameter instead
+of four comparisons over a tuple.
+
+**`contains_rect` is closed on all four sides where `contains` is half-open**, and
+that asymmetry is the cost the fix accepts. A quad flush against the camera's edge
+is on screen, so an off-screen check written with the half-open rule reports a
+false failure; `contains` is half-open because it partitions space between
+adjacent rectangles, which is a different question. Both doc comments name the
+other and say why, and
+`a_box_flush_against_the_edge_is_still_inside_the_box_around_it` pins it — without
+that test the fix would have traded one silent trap for another.
+
+**Migrated in the same pass**, with no deprecation, because ADR-0012 forbids
+shipping both forms: `pong/verify.rs`, `prototype_kit/main.rs`, `input_echo.rs`,
+`testing.md`'s snippet, and the camera's own `world_to_screen` and
+`screen_to_world` — both of which destructured the tuple in order to throw half of
+it away.
 
 ### F-043 — Text has no vertical metric, and `size` was documented in a way that hid it
 
@@ -2500,13 +2557,16 @@ Run 4 is the second uncontaminated measurement, and it read no other run's log.
   worked controller in a game deliberately unlike Pong. That is the last lever and
   spending it costs the exercise something (F-020), so it should not be spent
   early.
-- **Whether the three proposed ADRs get decided before run 5 or after.** F-041 and
-  F-042 have now been reached for by four runs between them and both are
-  *proposals*. A run 5 that writes the same six-line off-screen assertion and the
-  same hand-rolled sweep is not new evidence; it is the same evidence a fourth
-  time, and it will make this file longer without making the decision easier. If
-  they are going to be declined, declining them in the ADR is what stops the
-  rediscovery.
+- **Whether the three decided ADRs actually land for a reader.** They are applied,
+  not merely written, so run 5 is the measurement. Three specific things to look
+  for. Does the off-screen assertion get written as one `contains_rect` call, or
+  does the run hand-roll four comparisons anyway because it did not notice the
+  method? Does it use `Rect::contains` for that check and get a false failure on a
+  quad flush against the camera's edge — the trap ADR-0021 accepts and documents
+  against? And does it read Concepts' declined-sweep paragraph and write the eight
+  lines, or reach for a `Rect::sweep` that is not there and conclude, as three runs
+  have, that nobody considered it? A boundary that has to be inferred a fourth time
+  is a boundary in the wrong place.
 - **Whether run 5 can see its game.** F-054 is an environment escalation, not a code
   change, and it is the only finding in this file whose fix would change what every
   future run can *observe* rather than what it knows. If run 5 runs on the same

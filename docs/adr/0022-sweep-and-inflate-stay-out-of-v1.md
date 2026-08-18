@@ -1,12 +1,12 @@
-# ADR-0022: Swept collision and `Rect::inflate` — whether v1 owns them
+# ADR-0022: Swept collision and `Rect::inflate` stay out of v1
 
-Status: **proposed** · 2026-08-18
+Status: accepted · 2026-08-18
 
-> A proposed ADR binds nothing. It exists because three E0 runs have now reached
-> for this and no document says whether it was ever considered. "Deliberately out
-> of scope, here is the shape to write yourself" is a legitimate outcome and is
-> the recommendation below — but it has to be written down, or a fourth run
-> reaches for it too.
+> **Accepted as recommended, which means the primitives are declined.** Three E0
+> runs reached for a sweep and no document said whether it had ever been
+> considered; that is what this ADR ends. Nothing was added to the API — what
+> changed is that the absence is now a stated boundary with the shape to write
+> instead, the same treatment `App::quit` gets.
 
 ## Context
 
@@ -54,9 +54,9 @@ inflated the other way. Inflate replaces two scalar expressions with a `Rect` th
 call sites then destructure — roughly break-even in a game with one collider shape,
 and clearly positive in a game with several.
 
-## Decision (proposed)
+## Decision
 
-**Recommendation: decline both for v1, and say so in the document.**
+**Decline both for v1, and say so in the document.**
 
 Concretely:
 
@@ -98,12 +98,18 @@ an absence named as a boundary cost run 4 nothing, and an absence *not* named
 it" — all three runs wrote it, first try, correctly except for their own arithmetic.
 It is "I could not tell whether I was supposed to".
 
-## Consequences if accepted
+## Consequences
 
-- Concepts gains one sentence and `docs/api/` is regenerated. Nothing else changes,
-  no example changes, and `pong/verify.rs` stays as it is — which is the one case
-  where the E0 rule that "the game's workaround should get simpler" does not apply,
-  because the decision is that the workaround is the game's job.
+- Concepts gains a paragraph and `docs/api/` is regenerated. **No API changed and
+  no example changed** — `pong/verify.rs` and `advance` in `pong/main.rs` stay
+  exactly as run 4 wrote them, which is the one case where the E0 rule that "the
+  game's workaround should get simpler" does not apply, because the decision is
+  that the workaround is the game's job.
+- The paragraph does more than name the absence: it gives the eight-line shape
+  (the plane the leading edge touches, whether the body was approaching, whether
+  this tick's travel crossed it, the fraction of the tick at which it did) and says
+  why the thirty lines after it are the game's. A boundary that says only "not in
+  v1" leaves the reader where run 4 was.
 - Every future Pong-shaped game writes those eight lines. That is the accepted cost
   and it is now a number rather than an impression.
 - **The `make-game` skill inherits this.** Per `e0-findings.md` §7 a friction that
@@ -111,7 +117,11 @@ It is "I could not tell whether I was supposed to".
   is designed-away-in-the-other-direction: the skill should carry the eight-line
   shape, and it is the clearest candidate in run 4's set after the controller trap.
 
-## Consequences if declined (i.e. if v1 does add them)
+## What adding them would have looked like
+
+*Kept because the next person to reach for this deserves the design rather than
+just the refusal, and because superseding this ADR should start from a shape
+rather than from scratch.*
 
 - `Rect::sweep(self, motion: Vec2, against: Rect) -> Option<f32>` — the fraction of
   `motion` at which `self` first touches `against`, or `None`. Half-open at the

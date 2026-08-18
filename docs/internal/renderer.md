@@ -716,6 +716,24 @@ mergeable, tested, green CI on all three targets.
   scaled by radius: a radius-dependent count would change the transcript, and
   every golden image, when a circle grows by a pixel.
 
+  **`FrameRecorder::draw` hands the frame back by value** since E0 run 4
+  (e0-findings.md F-040, ADR-0023). A borrow ended at the next `draw` and at every
+  `frames()`, which made the shape the public testing section recommends — inspect
+  the run's last frame, then build the screens the run never reached — a compile
+  error; a run worked around it with a second recorder and silently moved what
+  `transcript()` printed. The history is still whole and there is still no `clear`
+  on the recorder: a failing assertion reads it backwards, and the tick before the
+  one that broke is the interesting one. `NullBackend::clear` stays, because a
+  golden-image comparison genuinely wants a fresh surface — different job.
+
+  **`Camera::visible_bounds` returns a `Rect`** since the same run (F-042,
+  ADR-0021). It always returned `Rect`'s two fields under `Rect`'s own documented
+  meaning; the tuple was never a decision, and it cost six hand-written comparisons
+  in the off-screen assertion that §9's verification story leans on hardest.
+  `Rect::contains_rect` came with it, closed on all four sides where
+  `Rect::contains` is half-open — a quad flush against the camera's edge is on
+  screen.
+
   **The resulting sixteen quads are now on the public side too**, since E0 run 4
   (e0-findings.md F-039, ADR-0020). Two runs went looking for this — one lost a
   debug cycle, one recorded a false answer — because the only worked "was it

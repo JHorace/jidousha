@@ -159,6 +159,31 @@ impl Rect {
             && self.min.y < other.max.y
             && other.min.y < self.max.y
     }
+
+    /// Whether `other` is entirely inside this one, edges included.
+    ///
+    /// **Closed on all four sides, unlike [`contains`](Self::contains).** The
+    /// question this answers is "does that box fit in this one", and a thing
+    /// drawn flush against the camera's edge is on screen. `contains` is
+    /// half-open because it partitions space between adjacent rectangles, which
+    /// is a different job; the two are deliberately not the same rule, and this
+    /// is the one an "is it visible" check wants (ADR-0021).
+    ///
+    /// ```
+    /// # use jidousha_core::Rect;
+    /// # use jidousha_core::math::Vec2;
+    /// let view = Rect::from_center_size(Vec2::ZERO, Vec2::new(10.0, 10.0));
+    /// let flush = Rect::from_min_size(Vec2::new(0.0, 0.0), Vec2::new(5.0, 5.0));
+    /// assert!(view.contains_rect(flush), "touching the far edge is still inside");
+    /// assert!(!view.contains_rect(Rect::from_min_size(Vec2::ZERO, Vec2::splat(6.0))));
+    /// ```
+    #[must_use]
+    pub fn contains_rect(self, other: Rect) -> bool {
+        other.min.x >= self.min.x
+            && other.min.y >= self.min.y
+            && other.max.x <= self.max.x
+            && other.max.y <= self.max.y
+    }
 }
 
 /// Where something sits in the draw order.
@@ -331,6 +356,38 @@ mod tests {
         let overlapping = Rect::from_min_size(Vec2::new(0.5, 0.5), Vec2::new(1.0, 1.0));
         assert!(!a.overlaps(touching), "edge to edge is not overlap");
         assert!(a.overlaps(overlapping));
+    }
+
+    #[test]
+    fn a_box_flush_against_the_edge_is_still_inside_the_box_around_it() {
+        // The whole point of `contains_rect` being closed where `contains` is
+        // half-open: a quad drawn hard against the camera's edge is on screen,
+        // and an off-screen check written with the half-open rule reports it as
+        // drawn off screen (ADR-0021).
+        let view = Rect::from_center_size(Vec2::ZERO, Vec2::new(10.0, 10.0));
+        let flush_bottom_right = Rect::from_min_size(Vec2::new(0.0, 0.0), Vec2::new(5.0, 5.0));
+        let flush_top_left = Rect::from_min_size(Vec2::new(-5.0, -5.0), Vec2::new(5.0, 5.0));
+        assert!(view.contains_rect(flush_bottom_right), "bottom-right edge");
+        assert!(view.contains_rect(flush_top_left), "top-left edge");
+        assert!(view.contains_rect(view), "a rectangle contains itself");
+        assert!(!view.contains_rect(Rect::from_min_size(
+            Vec2::new(0.0, 0.0),
+            Vec2::new(5.001, 5.0)
+        )));
+        assert!(!view.contains_rect(Rect::from_min_size(
+            Vec2::new(-5.001, -5.0),
+            Vec2::new(5.0, 5.0)
+        )));
+    }
+
+    #[test]
+    fn containing_a_rectangle_is_not_the_same_question_as_overlapping_one() {
+        // A half-overlapping box is not contained. Mutation testing found the
+        // version of this that was written as `!overlaps(outside)`.
+        let view = Rect::from_center_size(Vec2::ZERO, Vec2::new(10.0, 10.0));
+        let half_out = Rect::from_min_size(Vec2::new(3.0, 3.0), Vec2::new(5.0, 5.0));
+        assert!(view.overlaps(half_out));
+        assert!(!view.contains_rect(half_out));
     }
 
     #[test]

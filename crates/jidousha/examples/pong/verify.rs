@@ -72,6 +72,9 @@ struct Played {
     ball_max_y: f32,
     /// Where the ball and both paddles were on the last tick.
     last_positions: (Vec2, Vec2, Vec2),
+    /// The last frame drawn, kept as `draw` handed it back — `frames()` would
+    /// borrow the recorder, and the staged screens below still need to draw.
+    last_frame: Option<jidousha::testing::FrameRecord>,
 }
 
 /// Play one match with the controller below, optionally recording every frame.
@@ -85,6 +88,7 @@ fn play(recorder: Option<&mut FrameRecorder>) -> Played {
     let mut keyboard = SnapshotBuilder::new();
     let mut holding: Option<Key> = None;
     let mut recorder = recorder;
+    let mut last_frame = None;
 
     let mut player_extremes = (0.0f32, 0.0f32);
     let mut ball_extremes = (0.0f32, 0.0f32);
@@ -129,9 +133,10 @@ fn play(recorder: Option<&mut FrameRecorder>) -> Played {
         );
 
         if let Some(recorder) = recorder.as_deref_mut() {
-            let bounds = camera_of(&sim).visible_bounds();
+            let view = camera_of(&sim).visible_bounds();
             let frame = recorder.draw(&mut sim);
-            assert_on_screen(frame.quads(), bounds, tick);
+            assert_on_screen(frame.quads(), view, tick);
+            last_frame = Some(frame);
         }
 
         if matches!(
@@ -149,6 +154,7 @@ fn play(recorder: Option<&mut FrameRecorder>) -> Played {
         ball_extremes,
         ball_max_y,
         last_positions,
+        last_frame,
     }
 }
 
@@ -305,15 +311,10 @@ fn fold(value: f32, lo: f32, hi: f32) -> f32 {
 /// The highest-value check a game of shapes and text has, and the one that
 /// catches a banner one character too long — `TextStyle::width_of` is exact and
 /// completely silent, so a line that overruns does so without a word.
-fn assert_on_screen(quads: Vec<jidousha::testing::DrawnQuad>, bounds: (Vec2, Vec2), tick: u64) {
-    let (top_left, bottom_right) = bounds;
+fn assert_on_screen(quads: Vec<jidousha::testing::DrawnQuad>, view: Rect, tick: u64) {
     for quad in quads {
         let drawn = quad.bounds();
-        let inside = drawn.min.x >= top_left.x
-            && drawn.min.y >= top_left.y
-            && drawn.max.x <= bottom_right.x
-            && drawn.max.y <= bottom_right.y;
-        if !inside {
+        if !view.contains_rect(drawn) {
             fail(
                 "something was drawn off screen",
                 &format!(
@@ -324,10 +325,10 @@ fn assert_on_screen(quads: Vec<jidousha::testing::DrawnQuad>, bounds: (Vec2, Vec
                     drawn.min.y,
                     drawn.max.x,
                     drawn.max.y,
-                    top_left.x,
-                    top_left.y,
-                    bottom_right.x,
-                    bottom_right.y,
+                    view.min.x,
+                    view.min.y,
+                    view.max.x,
+                    view.max.y,
                 ),
             );
         }
@@ -495,10 +496,7 @@ pub(crate) fn run() {
             &format!("{frames} frames for {} ticks", played.ticks),
         );
     }
-    // Cloned out of the recorder rather than borrowed from it: the staged
-    // screens below need `draw`, which wants the recorder mutably, and a
-    // reference into `frames()` would still be alive at that point.
-    let Some(last) = recorder.frames().last().cloned() else {
+    let Some(last) = played.last_frame.as_ref() else {
         fail("no frame was recorded", "the loop draws every tick");
     };
     let glyphs = last
@@ -519,7 +517,7 @@ pub(crate) fn run() {
     // is where the game says it is.
     let (ball, left_paddle, right_paddle) = played.last_positions;
     for (what, at) in [("left", left_paddle), ("right", right_paddle)] {
-        if !shaped_like(&last, at, crate::PADDLE_SIZE) {
+        if !shaped_like(last, at, crate::PADDLE_SIZE) {
             fail(
                 "no paddle-shaped quad was drawn where a paddle is",
                 &format!(
@@ -537,7 +535,7 @@ pub(crate) fn run() {
     // answer for the ball — what is drawn there is sixteen slivers whose union
     // is the ball. Union them and ask about that instead.
     let ball_size = Vec2::splat(crate::BALL_RADIUS * 2.0);
-    match disc_drawn(&last, ball, ball_size) {
+    match disc_drawn(last, ball, ball_size) {
         Some(size) if near(size.x, ball_size.x) && near(size.y, ball_size.y) => {}
         found => fail(
             "no ball-sized disc was drawn where the ball is",
@@ -567,8 +565,10 @@ pub(crate) fn run() {
         .world_mut()
         .insert_resource(Input::new(InputSnapshot::new()));
     staged.tick(); // Startup, so the world exists.
-    let bounds = camera_of(&staged).visible_bounds();
-    let mut staging = FrameRecorder::new(VIEWPORT);
+    let view = camera_of(&staged).visible_bounds();
+    // The same recorder the match used. `draw` hands back an owned frame, so
+    // reading the match's last frame and drawing screens it never reached are
+    // two things one function can do — this used to need a second recorder.
     let mut staged_screens = 0;
     for stage in [
         Stage::Over { winner: Side::Left },
@@ -592,8 +592,8 @@ pub(crate) fn run() {
         state.left = crate::WIN_SCORE;
         state.right = crate::WIN_SCORE;
         staged.world_mut().insert_resource(state);
-        let frame = staging.draw(&mut staged);
-        assert_on_screen(frame.quads(), bounds, 0);
+        let frame = recorder.draw(&mut staged);
+        assert_on_screen(frame.quads(), view, 0);
         staged_screens += 1;
     }
 

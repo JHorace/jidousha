@@ -57,6 +57,18 @@ smaller than the thinnest thing it must not miss, and assert that against the
 `fixed_dt` the engine actually hands you rather than against the 1/60 you
 assumed.
 
+**There is no `Rect::sweep` and no `Rect::inflate`, and that is a v1 boundary
+rather than something you have missed.** The reason is worth a sentence, because
+the shape you write instead is short and the shape you might expect is not. A
+sweep helper answers "where along this tick's travel did they first touch", which
+is about eight lines of arithmetic; what follows it — the bounce angle, the speed
+change, the remaining fraction of the tick, the order two collisions resolve in —
+is four or five times as much code and is your game's model rather than the
+engine's. A primitive that answered the first and refused the second would be the
+start of a physics engine, which v1 does not have. Write the eight lines: the
+plane your body's leading edge touches, whether it was approaching, whether this
+tick's travel crossed it, and the fraction of the tick at which it did.
+
 Together with the seeded `Rng` in `GameConfig`, that means the same inputs make
 the same game — which is what lets a test replay a session and get the same
 answer.

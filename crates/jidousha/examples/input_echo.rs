@@ -152,7 +152,7 @@ fn watch_the_input(world: &mut World) {
 fn draw_the_readout(ctx: &mut DrawCtx) {
     let echo = ctx.world.resource::<Echo>();
     let camera = ctx.world.resource::<Camera>();
-    let (top_left, _) = camera.visible_bounds();
+    let view = camera.visible_bounds();
     let world = camera.screen_to_world(echo.screen);
 
     let heading = TextStyle {
@@ -166,8 +166,8 @@ fn draw_the_readout(ctx: &mut DrawCtx) {
         depth: Depth::layer(1),
     };
 
-    let left = top_left.x + 1.0;
-    let mut line = top_left.y + 1.0;
+    let left = view.min.x + 1.0;
+    let mut line = view.min.y + 1.0;
 
     ctx.text(Vec2::new(left, line), "input echo", heading);
     line += heading.size * 1.6;

@@ -1,11 +1,6 @@
 # ADR-0021: `Camera::visible_bounds` returns a `Rect`
 
-Status: **proposed** · 2026-08-18
-
-> A proposed ADR binds nothing. It exists so the decision is made once, on the
-> evidence, instead of being re-reached by each run that trips over it. Accept it
-> or decline it; either outcome ends the rediscovery, and declining is a real
-> answer that this file will then carry.
+Status: accepted · 2026-08-18
 
 ## Context
 
@@ -38,7 +33,7 @@ Run 4 wrote them twice — once per frame of the match, once per staged screen �
 factored them into a helper. Three consecutive runs have paid the same tax on the
 one assertion the document most wants written.
 
-## Decision (proposed)
+## Decision
 
 **Return `Rect`. Add `Rect::contains_rect`. Do not keep a tuple form.**
 
@@ -79,22 +74,29 @@ the doc comments have to say which is which or this ADR has traded one silent tr
 for another. That is the sharpest objection to the proposal and it is met by naming
 it, the way `DrawnQuad::contains` and `Rect::contains` are now distinguished.
 
-## Consequences if accepted
+## Consequences
 
-- **A breaking change to a published signature.** `visible_bounds` is in
-  `docs/api/`, is called by `prototype_kit/verify.rs`, `pong/verify.rs` and
-  `testing.md`'s snippet, and every game written against four E0 runs' worth of
-  document. The migration is one line per call site and there is no deprecation
-  path, because ADR-0012's "one way to do everything" forbids shipping both forms.
-- `tools/gen-api-doc` rerun, `tools/check-api-coverage` needs `contains_rect`
-  shown in an example, and `testing.md`'s snippet shrinks — which is the test that
-  the change worked.
-- **`pong/verify.rs` gets shorter**, which is the regression-target rule the E0
-  harness applies to every fix: `assert_on_screen` collapses to one call. If the
-  example got longer, the fix would be wrong.
+- **A breaking change to a published signature**, taken in one pass with no
+  deprecation, because ADR-0012's "one way to do everything" forbids shipping both
+  forms. Every call site migrated: `pong/verify.rs`, `prototype_kit/main.rs`,
+  `input_echo.rs`, the camera's own `world_to_screen` and `screen_to_world` (both
+  of which destructured the tuple to throw half of it away), and `testing.md`'s
+  snippet.
+- **`testing.md`'s off-screen check went from six lines to three**, which was the
+  test of whether the change addressed the finding rather than its symptom.
+- **`pong/verify.rs`'s `assert_on_screen` lost its four-comparison body and its
+  tuple parameter**, and is now one `contains_rect` call. The regression-target
+  rule holds: the example got simpler, not longer.
 - One more inherent method on `Rect`, which is a type that has grown twice on E0
   evidence already (`contains` and `overlaps` were invisible in run 1, F-003).
   This is the third.
+- **The two containment rules are now a thing to keep straight**, which is the
+  cost this decision accepts. `Rect::contains` is half-open and takes a point;
+  `Rect::contains_rect` is closed and takes a rectangle. Both doc comments name
+  the other and say why they differ, and
+  `a_box_flush_against_the_edge_is_still_inside_the_box_around_it` is the test
+  that pins the distinction — without it, the off-screen check would report a quad
+  drawn hard against the camera's edge as drawn off screen.
 
 ## Alternatives considered
 
