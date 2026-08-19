@@ -238,13 +238,19 @@ forty places. `examples/prototype_kit` is the worked version.
 **A quad is the unit, and two verbs are not one quad.** `ctx.rect` and
 `ctx.line` each submit exactly one; `ctx.circle` submits **sixteen**, a fan of
 wedges around the centre, and that count is fixed rather than scaled by radius.
-`ctx.text` submits one quad per character — each exactly `size` tall and
-`size * 7 / 9` wide, laid out from its top-left corner, with `\n` counting as a
-line break and nothing else, which is the whole of text's vertical metric: an
-N-line block occupies `N * size`. So a circle costs sixteen rectangles and a
-score line costs one per digit — worth knowing before a frame has three hundred of them,
-and worth knowing when you assert on what was drawn, because "a quad the size of
-the thing" is the right question for a rectangle and the wrong one for a circle.
+`ctx.text` submits one quad per character, **spaces included** — each exactly
+`size` tall and `size * 7 / 9` wide, laid out from its top-left corner, with `\n`
+the only exception, counting as a line break and submitting nothing, which is the
+whole of text's vertical metric: an N-line block occupies `N * size`. So a
+26-character line with six spaces in it is 26 quads, and that is a contract you
+can assert an exact count against rather than a coincidence: a space is one of
+the ninety-five printable ASCII characters the font covers, with a blank cell of
+its own.
+
+So a circle costs sixteen rectangles and a score line costs one per digit — worth
+knowing before a frame has three hundred of them, and worth knowing when you
+assert on what was drawn, because "a quad the size of the thing" is the right
+question for a rectangle and the wrong one for a circle.
 *Testing your game* has the circle version written out.
 
 `Draw` reads the world's **committed** state — the values the last `Update`
@@ -314,6 +320,26 @@ takes the context mutably, which looks like the same situation and is not:
 than from the context, so a Draw system draws straight out of its query and
 never needs the `Vec`. Both worked examples do it that way. Collecting first in a
 Draw system costs an allocation a frame and buys nothing.
+
+**A game written in this repository's `examples/` inherits the engine's own
+lints.** `crates/jidousha/Cargo.toml` has `[lints] workspace = true`, and that
+applies to example targets as much as to the crate — so
+`cargo clippy --all-targets -- -D warnings` holds your game to the maintainers'
+rules, and it is the last step of "done" rather than the first, which is a bad
+place to meet a rule for the first time. Four bite in practice:
+
+- `missing_docs`, denied — the file needs a `//!` header, and any `pub` item in
+  it needs a doc comment. This one is a compile error before clippy is reached.
+- `unwrap_used` and `expect_used`, denied — including in the `--verify` mode,
+  where they are the natural spelling. Say what went wrong instead: a `let else`
+  that reports the missing thing is better evidence than a panic, and every
+  example here is written that way.
+- `collapsible_if` — the fix is a let-chain, `if let Some(t) = hit && t > 0.0`.
+- `approx_constant` — a float literal close to π or one of its fractions is
+  rejected, which is what a hand-typed angle in radians looks like. Write the
+  angle in degrees; `Radians::from_degrees` is a `const fn` for this.
+
+Run it while you write rather than at the end, and none of them costs anything.
 
 ## Reference
 
@@ -796,15 +822,18 @@ pub struct Radians(pub f32);
 impl Radians {
     pub const ZERO: Radians = Radians(0.0);  // No rotation
     pub const TAU: Radians = Radians(core::f32::consts::TAU);  // A full turn
-    pub fn from_degrees(degrees: f32) -> Self;  // Convert from degrees, for humans
-    pub fn to_degrees(self) -> f32;  // The angle in degrees, for humans and for debug output
-    pub fn as_f32(self) -> f32;  // The underlying value
+    pub const fn from_degrees(degrees: f32) -> Self;  // Convert from degrees, for humans — usable in a `const`
+    pub const fn to_degrees(self) -> f32;  // The angle in degrees, for humans and for debug output
+    pub const fn as_f32(self) -> f32;  // The underlying value
 }
 ```
 
 ```rust
+const MAX_BOUNCE: Radians = Radians::from_degrees(60.0);
+
 let quarter_turn = Radians::from_degrees(90.0);
 assert!((quarter_turn.as_f32() - std::f32::consts::FRAC_PI_2).abs() < 1e-6);
+assert!(MAX_BOUNCE < quarter_turn);
 ```
 
 #### `atan2`
@@ -860,8 +889,17 @@ Also in `math`, re-exported from `glam`: `Vec2`, `Vec3`. This repository does no
 //! so the reference cannot generate an entry for it — but it is in almost every
 //! line of a game, and "documented there" points at a crate whose docs are not
 //! necessarily to hand. This file is the entry instead: it is embedded in the
-//! API document verbatim, and cargo compiles it, so the list cannot drift away
-//! from what the type actually offers.
+//! API document verbatim, and cargo compiles it, so nothing listed here can
+//! stop existing without the build saying so.
+//!
+//! **What cargo cannot check is the other direction.** An operation `glam` has
+//! and this file omits is invisible — and E0 run 6 hit exactly that, wanting
+//! `lerp` for a swept contact point, finding it unlisted, and writing
+//! `from + (to - from) * t` rather than trust that the omission meant anything.
+//! So: this is the vocabulary, kept complete on purpose and by hand, and a gap
+//! in it is a bug to report rather than an answer. `glam` has more — component
+//! comparisons, rounding, reflection, `Vec3` and matrix types — and `cargo doc
+//! -p glam --open` is where the rest of it is.
 //!
 //! Nothing here is a special jidousha operation. It is the vocabulary a
 //! position, a velocity and a size are written in.
@@ -872,6 +910,15 @@ use jidousha::prelude::*;
 
 /// A position that can be worked out at compile time — `new` is a `const fn`.
 const CORNER: Vec2 = Vec2::new(-16.0, -9.0);
+
+/// An angle a game states once, in the units a person can check.
+///
+/// `Radians::from_degrees` is a `const fn`, so a bounce limit, a cone of vision
+/// or a turn rate is a `const` written as a number you can picture. The two
+/// alternatives are both worse: `Radians(1.0471976)` is rejected by clippy as an
+/// approximation of `FRAC_PI_3`, and `Radians(core::f32::consts::FRAC_PI_3)`
+/// stops being writable the moment the angle is not a tidy fraction of pi.
+const MAX_BOUNCE: Radians = Radians::from_degrees(60.0);
 
 fn main() {
     // Making one. `ZERO`, `ONE`, `X` and `Y` are constants; `splat` repeats a
@@ -903,7 +950,15 @@ fn main() {
     assert_eq!(position.length(), 5.0);
     assert_eq!(position.length_squared(), 25.0);
     assert_eq!(position.distance(Vec2::ZERO), 5.0);
+    assert_eq!(position.distance_squared(Vec2::ZERO), 25.0);
     assert!((position.normalize().length() - 1.0).abs() < 1e-6);
+
+    // `normalize` of a zero vector is NaN, and NaN spreads: a velocity that
+    // reaches exactly zero for one tick poisons every position after it, and
+    // nothing panics. `normalize_or_zero` is the one to reach for whenever the
+    // vector can be still.
+    assert!(Vec2::ZERO.normalize().is_nan());
+    assert_eq!(Vec2::ZERO.normalize_or_zero(), Vec2::ZERO);
 
     // Component-wise shaping: the operations a clamp to a playfield is made of.
     assert_eq!(Vec2::new(-3.0, 4.0).abs(), Vec2::new(3.0, 4.0));
@@ -917,6 +972,31 @@ fn main() {
     assert_eq!(Vec2::X.dot(Vec2::Y), 0.0);
     assert_eq!(Vec2::X.dot(-Vec2::X), -1.0);
 
+    // `lerp` is the point a fraction of the way along — which is how a swept
+    // collision turns "the crossing happened 0.4 of the way through this tick"
+    // into the world position where it happened.
+    let (from, to) = (Vec2::ZERO, Vec2::new(10.0, 20.0));
+    assert_eq!(from.lerp(to, 0.25), Vec2::new(2.5, 5.0));
+
+    // `signum` is the direction of each component, which is what a reflection
+    // or a serve direction is written with. Note it answers 1.0 for zero.
+    assert_eq!(Vec2::new(-3.0, 4.0).signum(), Vec2::new(-1.0, 1.0));
+
+    // `perp` is a quarter turn anticlockwise on paper — (x, y) becomes (-y, x)
+    // — and it does not go through trigonometry at all, so it is exact. The
+    // normal of a wall, and the sideways of a heading.
+    assert_eq!(Vec2::X.perp(), Vec2::new(0.0, 1.0));
+
+    // `move_towards` steps at most a fixed distance at the target and stops
+    // exactly on it, which is a chasing opponent in one line and does not
+    // overshoot on the last tick the way `normalize() * speed` does.
+    let chaser = Vec2::ZERO.move_towards(Vec2::new(3.0, 4.0), 2.5);
+    assert_eq!(chaser, Vec2::new(1.5, 2.0));
+    assert_eq!(
+        Vec2::ZERO.move_towards(Vec2::new(3.0, 4.0), 100.0),
+        Vec2::new(3.0, 4.0)
+    );
+
     // Angles go through the engine's own `sin_cos`, never through `f32::sin`:
     // those are the deterministic ones, and determinism is what makes a replay
     // replay. It lives in `jidousha::math` and the prelude re-exports it, so
@@ -926,6 +1006,9 @@ fn main() {
     let turned = rotate(Vec2::X, Radians::from_degrees(90.0));
     assert!((turned - Vec2::Y).length() < 1e-6);
     assert!(atan2(1.0, 0.0).as_f32() > 0.0);
+    // `from_degrees`, `to_degrees` and `as_f32` are all `const fn`, which is
+    // what makes the constant above compile.
+    assert!((MAX_BOUNCE.to_degrees() - 60.0).abs() < 1e-3);
 
     // Two Vec2s make a Rect, which is what collision and layout are written in.
     let bounds = Rect::from_center_size(position, size);
@@ -1028,7 +1111,7 @@ pub struct Seconds(pub f32);
 
 impl Seconds {
     pub const ZERO: Seconds = Seconds(0.0);  // No time at all
-    pub fn as_f32(self) -> f32;  // The underlying value, for arithmetic the newtype does not cover
+    pub const fn as_f32(self) -> f32;  // The underlying value, for arithmetic the newtype does not cover
 }
 ```
 
@@ -1598,14 +1681,23 @@ in `docs/api/jidousha-testing.md`.
 - glam types (`Vec2`, `Vec3`, `Mat4`) with `scalar-math`; engine newtypes for
   units (`Radians`, `Seconds`). Std float trig is clippy-banned engine-wide —
   use `sin_cos`, `atan2` and `rotate` from `jidousha::math`.
+- **An angle a game states once is a `const`, written in degrees.**
+  `Radians::from_degrees` is a `const fn`, so
+  `const MAX_BOUNCE: Radians = Radians::from_degrees(60.0);` compiles. The
+  alternatives are both worse: `Radians(1.0471976)` is rejected by clippy as an
+  approximation of `FRAC_PI_3`, and `Radians(core::f32::consts::FRAC_PI_3)`
+  stops being writable at fifty degrees. Constructors and accessors of the
+  plain-data types — `Radians`, `Seconds`, `Color`, `Depth`, `PhysicalSize`, the
+  typed handles — are `const fn` for this reason, and a new one follows the same
+  rule. `from_degrees` was the one that was not, and E0 run 6 found it the only
+  way this is findable: by trying to write the constant.
 - **A game spells them from the prelude and nowhere else.** `jidousha::prelude`
   re-exports every name in `math`, so `use jidousha::prelude::*;` is the whole
   import and a second `use jidousha::math::sin_cos;` beside it is the same item
   twice. Engine-internal code has no facade to reach through and names its own
   module path; that spelling is the engine's and the prelude is the game's, which
   is what "one way to do everything" means here —
-  E0 run 4 found two worked examples disagreeing about which (e0-findings.md
-  F-045).
+  E0 run 4 found two worked examples disagreeing about which.
 
 ## Testing your game
 

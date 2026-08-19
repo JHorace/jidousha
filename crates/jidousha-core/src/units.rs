@@ -37,9 +37,11 @@ impl Seconds {
     /// operator can express that without a unit system this engine does not
     /// have, so the escape hatch is the honest spelling and this is the one
     /// place `as_f32` is the *expected* call rather than a fallback
-    /// (e0-findings.md F-051).
+    /// (e0-findings.md F-051). It is a `const fn`, so a duration a game states
+    /// once can be unwrapped into a `const` alongside the constants it is
+    /// multiplied by.
     #[must_use]
-    pub fn as_f32(self) -> f32 {
+    pub const fn as_f32(self) -> f32 {
         self.0
     }
 }

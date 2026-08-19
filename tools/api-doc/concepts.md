@@ -87,13 +87,19 @@ forty places. `examples/prototype_kit` is the worked version.
 **A quad is the unit, and two verbs are not one quad.** `ctx.rect` and
 `ctx.line` each submit exactly one; `ctx.circle` submits **sixteen**, a fan of
 wedges around the centre, and that count is fixed rather than scaled by radius.
-`ctx.text` submits one quad per character — each exactly `size` tall and
-`size * 7 / 9` wide, laid out from its top-left corner, with `\n` counting as a
-line break and nothing else, which is the whole of text's vertical metric: an
-N-line block occupies `N * size`. So a circle costs sixteen rectangles and a
-score line costs one per digit — worth knowing before a frame has three hundred of them,
-and worth knowing when you assert on what was drawn, because "a quad the size of
-the thing" is the right question for a rectangle and the wrong one for a circle.
+`ctx.text` submits one quad per character, **spaces included** — each exactly
+`size` tall and `size * 7 / 9` wide, laid out from its top-left corner, with `\n`
+the only exception, counting as a line break and submitting nothing, which is the
+whole of text's vertical metric: an N-line block occupies `N * size`. So a
+26-character line with six spaces in it is 26 quads, and that is a contract you
+can assert an exact count against rather than a coincidence: a space is one of
+the ninety-five printable ASCII characters the font covers, with a blank cell of
+its own.
+
+So a circle costs sixteen rectangles and a score line costs one per digit — worth
+knowing before a frame has three hundred of them, and worth knowing when you
+assert on what was drawn, because "a quad the size of the thing" is the right
+question for a rectangle and the wrong one for a circle.
 *Testing your game* has the circle version written out.
 
 `Draw` reads the world's **committed** state — the values the last `Update`
@@ -163,3 +169,23 @@ takes the context mutably, which looks like the same situation and is not:
 than from the context, so a Draw system draws straight out of its query and
 never needs the `Vec`. Both worked examples do it that way. Collecting first in a
 Draw system costs an allocation a frame and buys nothing.
+
+**A game written in this repository's `examples/` inherits the engine's own
+lints.** `crates/jidousha/Cargo.toml` has `[lints] workspace = true`, and that
+applies to example targets as much as to the crate — so
+`cargo clippy --all-targets -- -D warnings` holds your game to the maintainers'
+rules, and it is the last step of "done" rather than the first, which is a bad
+place to meet a rule for the first time. Four bite in practice:
+
+- `missing_docs`, denied — the file needs a `//!` header, and any `pub` item in
+  it needs a doc comment. This one is a compile error before clippy is reached.
+- `unwrap_used` and `expect_used`, denied — including in the `--verify` mode,
+  where they are the natural spelling. Say what went wrong instead: a `let else`
+  that reports the missing thing is better evidence than a panic, and every
+  example here is written that way.
+- `collapsible_if` — the fix is a let-chain, `if let Some(t) = hit && t > 0.0`.
+- `approx_constant` — a float literal close to π or one of its fractions is
+  rejected, which is what a hand-typed angle in radians looks like. Write the
+  angle in degrees; `Radians::from_degrees` is a `const fn` for this.
+
+Run it while you write rather than at the end, and none of them costs anything.

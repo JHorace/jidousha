@@ -122,6 +122,7 @@ FORBIDDEN = (
     # parenthetical form; these catch anything written another way.
     "docs/internal",
     "docs/adr",
+    "e0-findings",
     "core.md",
     "renderer.md",
     "assets.md",
@@ -142,10 +143,17 @@ FORBIDDEN = (
 # document is strictly tighter than one whole section in another.
 TESTING_VOCABULARY = ("wgpu", "RenderBackend", "FramePlan")
 
-# `(ADR-0010)`, `(core.md §9)`, `(assets.md §6)`, `(I2)`, `(R4)` — a citation of
-# a maintainers' document, hanging off the end of a sentence.
+# `(ADR-0010)`, `(core.md §9)`, `(assets.md §6)`, `(e0-findings.md F-069)`,
+# `(I2)`, `(R4)` — a citation of a maintainers' document, hanging off the end of
+# a sentence.
+#
+# The filename class carries digits because `e0-findings.md` has one, and until
+# it did that file's citations were the one form of this that reached both
+# generated documents: not caught here, and not caught by FORBIDDEN either,
+# because the guard there names the *directory* it lives in. Two had accumulated.
 CITATION_RE = re.compile(
-    r"\s*\((?:see\s+)?(?:`?(?:docs/internal/)?[a-z-]+\.md`?(?:\s*§[\d.]+)?"
+    r"\s*\((?:see\s+)?(?:`?(?:docs/internal/)?[a-z0-9-]+\.md`?"
+    r"(?:\s*(?:§[\d.]+|[MIRAF]-?\d+))?"
     r"|ADR-\d+|[MIRAF]\d+)(?:[;,]\s*[^)]*)?\)"
 )
 

@@ -344,6 +344,25 @@ mod tests {
     }
 
     #[test]
+    fn a_recorded_frames_plan_carries_the_cameras_clear_color() {
+        // The background leaves no quad behind, so every other assertion over a
+        // frame is identical whatever it was cleared to. This is the one path a
+        // game author has to it, and *Testing your game* once said there was
+        // none (e0-findings.md F-068) — so it is pinned here rather than left
+        // to be true by accident.
+        let mut sim = sim_drawing(draw_a_square);
+        sim.world_mut().insert_resource(Camera {
+            clear_color: Color::rgb(0.02, 0.05, 0.03),
+            ..Camera::default()
+        });
+        let mut recorder = FrameRecorder::new(PhysicalSize::new(1280, 720));
+
+        sim.tick();
+        let frame = recorder.draw(&mut sim);
+        assert_eq!(frame.plan.clear_color, Color::rgb(0.02, 0.05, 0.03));
+    }
+
+    #[test]
     fn frames_accumulate_so_a_session_can_be_replayed_over() {
         let mut sim = sim_drawing(draw_a_square);
         let mut recorder = FrameRecorder::new(PhysicalSize::new(640, 480));
