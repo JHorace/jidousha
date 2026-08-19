@@ -418,7 +418,12 @@ a GPU and lands with R4.
   graphics stack at all; the tests say so and pass, and `tools/doctor` reports
   whether the tier can run, so a skipped tier is a diagnosable fact rather than
   a silence. CI installs `mesa-vulkan-drivers` on Linux, which is what turns the
-  skip into a run.
+  skip into a run — **and since run 5, so does
+  `.claude/hooks/session-start.sh`**, so an authoring session gets the tier too
+  rather than only the runner (e0-findings.md F-054). Note that a skipped golden
+  test also passes, so a green run is not by itself evidence the tier executed:
+  the check is `tools/doctor`'s gpu line, or swapping a wrong reference in and
+  watching the comparison fail.
 
 **Implemented (R4), `tools/verify` integration:** `examples/prototype_kit`'s
 verify run now asserts text on screen (a glyph covers the middle of the score,

@@ -1,6 +1,7 @@
 # E0 findings — what building a game with this engine actually cost
 
-Status: **five runs, sixty-five findings, awaiting run 6.** The
+Status: **five runs, sixty-five findings, awaiting run 6 — the first that can see
+its own work.** The
 harness is `docs/internal/e0-prompt.md`; the milestone is implementation-plan.md
 §3. The bar is two consecutive runs with no new `engine` or `docs` findings.
 Run 5 answered run 4 and then found eleven more of its own, so the count of
@@ -17,6 +18,13 @@ small […] that is a result about the document". The two substantive costs were
 controller that optimised onto the edge of feasibility (F-056) and an opponent
 that needed a reaction time rather than a speed limit (F-064), and only the first
 is something a document could have prevented.
+
+**F-054 is resolved after five runs**, which is the other thing that changed here:
+`.claude/hooks/session-start.sh` installs a software rasterizer in every remote
+session, so `tools/verify` now writes a PNG and the golden-image tier runs instead
+of skipping. Every E0 run so far described a game it had never seen. Run 6 will be
+the first that can look at a frame of its own — though not at a window, which still
+needs a person.
 
 **Run 4's triage is §4a and run 5's is §4b**, each the whole run on one page with
 the class, the cross-run corroboration and the settling ADR or `DELIBERATE:` tag
@@ -77,7 +85,7 @@ prompt.
 | 2 | 2026-08-17 | Pong shipped; **not** a pass | 3 | 10 | 1 | Every run-1 finding held up. The reference is now callable; the gap moved to "which of these is a resource". Raw notes: `docs/e0/run-2.md`. §6. |
 | 3 | 2026-08-17 | Pong shipped; **not** a pass | 0 | 8 | 1 | Zero compile errors on the first `cargo check`; "the API document was enough". No `engine` finding. What is left is what the document does not *say* about behaviour that is already right. Raw notes: `docs/e0/run-3.md`. §6. |
 | 4 | 2026-08-18 | Pong shipped; **not** a pass | 3 | 11 | 1 (+1 `environment`) | Compiled clean, `--verify` green. One full debug cycle lost to `ctx.circle`, six tuning runs lost to its own verify controller. Three `engine` findings, decided in ADRs 0021–0023 (two applied, one declined with the boundary documented), plus one environment escalation (F-054). Raw notes: `docs/e0/run-4.md`. Triage: §4a. §6. |
-| 5 | 2026-08-18 | Pong shipped; **not** a pass | 1 | 7 | 2 (+1 `environment`) | Compiled clean, `--verify` green, 1,263 frames recorded. Two cycles lost to a controller that optimised onto the boundary of what its paddle could reach (F-056) — the fourth run to be sent into its game's constants by its own driver, and the first that had *read* the warning. The one `engine` finding is **declined**: ADR-0024 says draw order was always observable and a `Depth` on `DrawnQuad` would not have caught the bug it was wanted for. Raw notes: `docs/e0/run-5.md`. Triage: §4b. §6. |
+| 5 | 2026-08-19 | Pong shipped; **not** a pass | 1 | 7 | 2 (+1 `environment`) | Compiled clean, `--verify` green, 1,263 frames recorded. Two cycles lost to a controller that optimised onto the boundary of what its paddle could reach (F-056) — the fourth run to be sent into its game's constants by its own driver, and the first that had *read* the warning. The one `engine` finding is **declined**: ADR-0024 says draw order was always observable and a `Depth` on `DrawnQuad` would not have caught the bug it was wanted for. Raw notes: `docs/e0/run-5.md`. Triage: §4b. §6. |
 
 Run 1 produced a working, fun Pong and a document-shaped hole underneath it. The
 game is not the measurement — `docs/e0/run-1.md` is — and it says the run could
@@ -130,11 +138,20 @@ down (F-031).
 things it wanted to grep for and did not — the font's coverage among them, which
 is F-030 and which it shipped a documented workaround for rather than an answer.
 
+**Run 5 was valid, and its game was played.** The maintainer checked the
+transcript for reads under the restricted paths and found none, and ran the game
+in a window and in a browser — both after-the-run steps 1 and 2, taken before the
+decks were cleared for run 6. Worth recording that the order matters: clearing the
+decks deletes `crates/jidousha/examples/pong/`, so a playtest deferred past that
+point is a playtest that cannot happen. Run 5's own §5 lists five things it wanted
+to look up in `src/` and did not, which is the same shape of evidence run 3
+offered, and its `--verify` transcript is the artifact for everything else.
+
 ## 4. Findings
 
 Fifteen findings from run 1 (F-001–F-015), fourteen from run 2 (F-016–F-029),
-nine from run 3 (F-030–F-038) and sixteen from run 4 (F-039–F-054, triaged
-together in §4a). F-001 is the parent of most of run 1's
+nine from run 3 (F-030–F-038), sixteen from run 4 (F-039–F-054, triaged together
+in §4a) and eleven from run 5 (F-055–F-065, §4b). F-001 is the parent of most of run 1's
 `docs` set: six of them
 are one bug — the Reference has no signatures — observed from six different
 angles. They are kept separate anyway, because each one names a distinct thing a
@@ -2357,8 +2374,8 @@ Naming the assertion is the whole available fix.
 
 ### F-054 — Four runs, four machines with no display: nothing in E0 has ever rendered a pixel
 
-Class: environment, escalated · Run: 4 (and 1, 2, 3) · Fixed in: nothing — this
-maintainer session cannot see the game either
+Class: environment, escalated · Run: 4 (and 1, 2, 3) · **Resolved after run 5** —
+see the resolution note at the end of this entry
 
 **What the run said.**
 
@@ -2422,6 +2439,44 @@ behind the seam at a time. The transcript already is the deterministic
 machine-readable frame; what is missing is a human-readable one, and a driver
 supplies that without the engine growing a subsystem.
 
+**Resolved after run 5, and the escalation was accepted.** `.claude/hooks/session-start.sh`
+installs `mesa-vulkan-drivers` in a remote session, registered as a `SessionStart`
+hook so every future E0 container gets it without a maintainer remembering — which
+matters, because the one other thing this checklist asks a maintainer to remember
+was missed twice (§4b). The hook is the CI runner's own apt line, moved to where
+the authoring happens, and it is deliberately a no-op on a local checkout.
+
+**Verified in this container rather than assumed**, which is the whole point of a
+finding about not being able to look:
+
+- `tools/doctor`'s gpu line went from "no vulkan drivers installed" to listing
+  eight ICDs including `lvp_icd.json`, which is lavapipe.
+- `tools/verify prototype_kit` now writes `capture: 480x270 written to
+  target/verify/prototype_kit.png` where it used to say "skipped, no GPU on this
+  machine" — **the first frame any E0-class session has rendered and looked at.**
+- The golden tier runs rather than skips. Confirmed by mutation, not by the tests
+  passing: swapping a wrong image in for `sprite_scene.png` fails
+  `a_rendered_frame_matches_its_reference_image` and leaves
+  `target/verify/golden/sprite_scene-actual.png` behind exactly as renderer.md §9
+  promises, and the correct reference passes. A skipped golden test also passes, so
+  the passing run alone would not have been evidence.
+- Every branch of the hook was executed, including the cold install — the package
+  was purged and the hook reinstalled it. The one path not exercised is the
+  unreachable-archive branch, which needs a broken network to reach; it prints the
+  four-part message and exits 0, degrading to the state described above.
+
+**What this does not resolve.** Still no `DISPLAY`, so `run` still returns
+`RunError::NoDisplay` and a windowed game still cannot be *played* here — the
+after-the-run step 2 playtest remains a human's. What changed is that a run can now
+see a still frame of its own work, which is what four runs of "I have never seen
+this game" were actually asking for.
+
+**And the first thing to do after this lands is now doable**: `pong` ships no
+capture path, so `tools/verify pong` captures nothing even on a machine that can
+render. Run 4 was right not to add a code path it could never execute — that
+condition no longer holds, and the next E0 author will be the first who can write
+that path and run it.
+
 **The related question the brief raised — "is an example that cannot be seen by
 the agent writing it a gap in `tools/verify`" — answers no.** `tools/verify` does
 everything it can without a display: it runs the mode, parses the verdict, keeps
@@ -2461,11 +2516,13 @@ is the one thing that would not have caught the bug it wanted to catch, because 
 
 **What this triage still cannot settle, stated plainly.** Three things.
 
-1. **F-065, for the fifth time.** This container has no display and no adapter
-   either, so nothing in E0 has yet rendered a pixel and run 5's account of how
-   the game *looks* is unchecked by anybody. `tools/doctor` says `ENV_OK` and
-   names the missing package; CI has had that package all along. It is still the
-   cheapest un-taken item in this file.
+1. ~~**F-065, for the fifth time.**~~ **Taken, in the commit after this one.** At
+   triage time this container had no display and no adapter, so nothing in E0 had
+   ever rendered a pixel. The maintainer authorised the escalation immediately
+   afterwards and `.claude/hooks/session-start.sh` now installs the rasterizer in
+   every remote session: `tools/verify prototype_kit` writes a PNG, the golden tier
+   runs, and F-054 carries the verification. Still no `DISPLAY`, so *playing* a
+   windowed game remains a human step.
 2. **F-056's fix is the fourth attempt at one paragraph, and whether it works is
    a measurement.** Run 4's watch list predicted in writing that a fifth run
    mis-tuning its game because its driver was wrong would mean prose had failed
@@ -2940,7 +2997,8 @@ that judgement.
 
 ### F-065 — Five runs, five machines with no display: the game is still unseen
 
-Class: environment · Run: 5 · **Escalated, unresolved** · See: **F-054**
+Class: environment · Run: 5 · **Resolved** (with F-054, immediately after this
+triage) · See: **F-054**
 
 `cargo run -p jidousha --example pong` on run 5's container printed
 `RunError::NoDisplay`, which run 5 calls "a genuinely excellent error message and
@@ -2961,16 +3019,20 @@ field markings are lower than felt right, every literal is checked against the
 printable range. That is F-044's lesson working exactly as intended, and it is
 only necessary because of this finding.
 
-**This triage cannot resolve it either.** `tools/doctor` on this container reports
-`ENV_OK` with `graphics: no DISPLAY/WAYLAND_DISPLAY` and `gpu: no vulkan drivers
-installed`, and naming the package it wants. CI has installed
-`mesa-vulkan-drivers` the whole time. Per CLAUDE.md's never-agent-fixable list,
-installing system packages is a human decision, so the escalation stands.
+**The triage could not resolve it and the commit after it did.** At triage time
+`tools/doctor` reported `ENV_OK` with `gpu: no vulkan drivers installed`, naming the
+package it wanted; CI had installed `mesa-vulkan-drivers` the whole time. Per
+CLAUDE.md's never-agent-fixable list, installing system packages is a human
+decision — so the escalation stood until the maintainer took it, which they did
+immediately afterwards. F-054 carries the resolution, the verification, and what it
+does and does not buy.
 
-**Playing the game is a human step and is still owed**, for run 5's Pong
-specifically: `e0-prompt.md`'s after-the-run step 2 asks a person to run it in a
-window and in a browser, and `b094da6` is the precedent for a maintainer recording
-that they did. Nothing in this commit substitutes for it.
+**The playtest is a human step and was taken.** `e0-prompt.md`'s after-the-run
+step 2 asks a person to run run 5's Pong in a window and in a browser; the
+maintainer confirmed it, along with step 1's transcript check, before the decks
+were cleared for run 6. `b094da6` is the precedent for recording it. **Run 5 is a
+valid run**, and the fifth consecutive one whose game a person had to look at
+because the harness could not.
 
 ## 5. Notes on the run's procedure
 
@@ -3203,8 +3265,15 @@ Run 5 is the third uncontaminated measurement, and it read no other run's log.
   fit in sixty-eight characters. A run 6 finding of the form "the reference told me
   half of it" is evidence that the member line is the wrong home and Concepts is
   the right one.
-- **Whether run 6 can see its game.** Unchanged from run 5's list, for the same
-  reason, and now with five runs behind it.
+- **Whether run 6 can see its game — the first run that can.** F-054 is resolved:
+  the session hook installs the rasterizer, so `tools/verify` captures a frame and
+  the golden tier runs. Three things to watch, and they are new questions rather
+  than the old one. Does run 6 *notice* it can capture, from `tools/verify`'s output
+  alone? Does it ship the capture path for its own `pong`, which no run has been
+  able to write and execute? And does being able to look change what it finds —
+  five runs of findings are the findings of authors reading numbers, and a run that
+  can see a still frame may report a different kind of friction entirely. **The
+  window is still absent**, so "playable" remains a human's judgement.
 - **Whether anything in these fixes reads as an invitation to guess.** Same standard
   as before: a fix is only real if the next run does not have to infer the thing it
   fixed.
