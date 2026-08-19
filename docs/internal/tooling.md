@@ -325,6 +325,21 @@ a row (stop rule printed, `failure-streak.json` count 2).
   the list: that a windowed example is built and not run, and that every name in
   it is an example that exists, so a rename cannot silently start running a
   window or keep skipping something deleted.
+- **A session-start hook installs the software rasterizer, and it is the CI line
+  moved one directory.** `.claude/hooks/session-start.sh` runs on `SessionStart`
+  in a remote session and installs `mesa-vulkan-drivers`, so `tools/verify`
+  captures a PNG and the golden tier runs instead of skipping. Five E0 runs built
+  a game on a machine that could not render one (e0-findings.md F-054); the fix was
+  known and one apt line long from run 4 onward, and it stayed un-taken because
+  installing system packages is a human decision under CLAUDE.md's escalation
+  rule. It is a hook rather than a note in this file because the one other thing
+  the E0 checklist asks a maintainer to remember was missed twice.
+
+  It is a **no-op outside a remote session** (`$CLAUDE_CODE_REMOTE`), idempotent
+  (the container image is cached after it runs, so a warm start does nothing), and
+  it **never fails the session**: an unreachable archive prints the four-part
+  message and exits 0, degrading to the no-adapter state the tests already handle.
+  What it cannot supply is a `DISPLAY` — a windowed example still needs a person.
 - **`cargo clean` deletes the reports.** `target/verify/` lives under `target/`,
   so a clean also resets the failure streak.
 - **CI invokes `python tools/<name>`, not `tools/<name>`.** The shebang path is
