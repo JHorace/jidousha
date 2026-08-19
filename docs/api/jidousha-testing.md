@@ -505,8 +505,47 @@ nothing on its own; the question is whether it writes *your game's* PNG, and a
 path wired to the wrong frame or to a stale plan passes every check that does not
 ask. So look — name what you see — then break the game on purpose and look again:
 move a paddle, stop drawing the score, change the clear colour, and confirm the
-picture follows. Try the clear colour first, because nothing else in this document
-can see it.
+picture follows.
+
+**The clear colour is the one part of the picture that leaves no quad behind, and
+it is still assertable.** A frame drawn on the wrong background is byte-identical
+under every check above, because none of them look at the background — but
+`FrameRecord` carries the `plan` it was drawn into, and a `FramePlan` carries the
+`clear_color` the camera asked for. So it is one line, and it needs no capture and
+no GPU:
+
+```rust
+assert_eq!(frame.plan.clear_color, palette::COURT);
+```
+
+The capture and that assertion answer different questions and both are cheap: the
+picture says whether the frame *looks* right, and the plan says whether it cleared
+to the colour the camera asked for.
+
+**That assertion in its naive form is a trap, and the shape of the trap is
+general.** Comparing what was drawn against the game's own constant does not
+survive somebody changing the constant — the check and the thing it checks move
+together, and a mutation walks straight through. It is still worth writing, because
+it catches a camera set from the *wrong* constant. What bites is a second check
+the constant cannot move: one that states the game's own requirement in numbers.
+Here that is "the court has to be dark enough for a white ball to read against":
+
+```rust
+let cleared = frame.plan.clear_color;
+let brightness = cleared.r.max(cleared.g).max(cleared.b);
+assert!(
+    brightness < 0.25 && cleared.a > 0.99,
+    "the court is not dark enough to see a white ball on: brightest channel \
+     {brightness:.3} at alpha {:.2}",
+    cleared.a,
+);
+```
+
+Any check spelled `assert_eq!(what_was_drawn, the_constant_that_drew_it)` has this
+shape — a size, a position, a speed cap, a colour. Pair it with one that names the
+requirement rather than the constant, and the pair survives the constant changing.
+One run wrote only the first form and reported it: of seventeen deliberate faults
+it injected, the clear colour was the one that escaped.
 
 ## Reference
 

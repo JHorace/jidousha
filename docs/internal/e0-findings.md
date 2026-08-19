@@ -3219,6 +3219,75 @@ output. Worth doing to `prototype_kit` too, and left alone rather than editing a
 verified example in passing.
 
 
+### Findings from run 6 (F-068–)
+
+Run 6's raw notes are `docs/e0/run-6.md`, and that file is not edited: it is the
+record of what one run cost, so a finding that turns out to be wrong is corrected
+here rather than there. Where this triage disagrees with the log, this file is the
+verdict and the log is the evidence.
+
+### F-068 — The document said the clear colour was unassertable, and it is one line
+
+Class: docs · Run: 6 · Fixed in: this commit · Settled by: nothing — the sentence
+was simply false
+
+**What the document said**, in the capture section, about breaking the game on
+purpose and looking at the picture:
+
+> Try the clear colour first, because nothing else in this document can see it.
+
+**What is true.** `FrameRecord` has a `pub plan: FramePlan` and `FramePlan` has a
+`pub clear_color: Color`. Both entries are in that document's own Reference, six
+hundred lines below the sentence that denies them. The assertion is:
+
+```rust
+assert_eq!(frame.plan.clear_color, palette::COURT);
+```
+
+**Verified against the source before acting**: `camera.rs:49` declares the field,
+`plan.rs:206` copies it out of the `Camera` into the plan, `null.rs:87` is the
+record that carries the plan. The run's claim holds exactly as written.
+
+**What it cost.** Run 6 believed the sentence and wrote no check. It then broke
+its own game seventeen ways, one at a time; sixteen faults were caught and the one
+that escaped was the clear colour — the one the document had told it not to
+bother with. So this is the second finding in this file (after F-055) caused by a
+sentence being *false* rather than *absent*, and the two failed in the same way:
+individually plausible, and invisible to every gate the pipeline has.
+
+**The second half of the finding is the more valuable one, and it generalises.**
+The naive assertion — plan against the game's own `palette::COURT` — does not
+survive `palette::COURT` being changed, because the check and the thing it checks
+move together and the mutation walks through. Run 6 wrote that first, watched a
+mutation pass it, and replaced it with a pair: the equality *and* a claim the
+constant cannot move ("the court is dark enough for a white ball to read
+against", spelled in numbers). Only the second catches the constant changing. That
+shape — `assert_eq!(what_was_drawn, the_constant_that_drew_it)` — is everywhere a
+game checks its own drawing, and nothing in the document had named it.
+
+**Fix.**
+
+- The false sentence is gone. *Testing your game* now says the clear colour is the
+  one part of the picture that leaves no quad behind **and** is still assertable,
+  gives the one-line form, and states what the capture answers that the assertion
+  does not — and the reverse.
+- The trap gets its own paragraph, with the pair written out, generalised past
+  colour to any size, position or speed cap checked against the constant that
+  produced it.
+- `a_recorded_frames_plan_carries_the_cameras_clear_color` pins the capability the
+  sentence denied, so the path from a recorded frame to the colour cannot quietly
+  stop existing and make the old sentence true again.
+- `examples/pong/verify.rs` carries both checks, which is where the wording came
+  from.
+
+**What this says about the pipeline.** F-055's conclusion was that no gate over
+rendered summaries catches a false sentence, and the guard has to be a test that
+asserts the claim. This is the same conclusion reached from the other end: the
+sentence here was in hand-written prose rather than in a doc comment, so not even
+the generator touched it. The guard is again a test, and it is again named after
+the claim rather than after the function.
+
+
 ## 5. Notes on the run's procedure
 
 Two things about run 1 that are not findings but would confuse a later reader.
