@@ -69,6 +69,7 @@ from __future__ import annotations
 import dataclasses
 import re
 import sys
+import textwrap
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -894,16 +895,33 @@ def crate_sources(repo: Path) -> "list[Path]":
     return sorted(repo.glob("crates/jidousha-*/src/**/*.rs"))
 
 
-def trailing(summary: str) -> str:
-    """A member's summary, shortened to ride along on its signature line.
+def member_lines(text: str, summary: str, indent: str = "    ") -> "list[str]":
+    """One member: its signature, and **the whole** of its summary.
 
-    The whole sentence stays on the item it belongs to; this is the reminder.
+    A short summary rides along on the signature line, which is the densest form
+    and what most members get. One too long for that goes on its own line above
+    the signature, wrapped — it is *not* cut short.
+
+    That is the fix for four of E0 run 4's sixteen findings (F-039, F-043,
+    F-048, and the wording half of F-050). This function used to truncate at
+    `MEMBER_SUMMARY_CHARS` and append an ellipsis, on the stated grounds that
+    "the whole sentence stays on the item it belongs to; this is the reminder".
+    **That premise was false**: a member has no entry of its own anywhere in
+    this document, so its summary appears here and nowhere else, and the
+    truncated tail was not kept somewhere — it was deleted. `Time::alpha`
+    explained itself in four lines and the reference printed a clause that
+    stopped mid-word. The reader could not tell a sentence had been cut from a
+    sentence that was simply short.
+
+    Costing a line is the right trade: a document that is a few lines longer
+    beats one that silently drops the half of a sentence carrying the number.
     """
     if not summary:
-        return ""
-    if len(summary) > MEMBER_SUMMARY_CHARS:
-        summary = summary[:MEMBER_SUMMARY_CHARS].rsplit(" ", 1)[0] + "…"
-    return f"  // {summary}"
+        return [f"{indent}{text}"]
+    if len(summary) <= MEMBER_SUMMARY_CHARS:
+        return [f"{indent}{text}  // {summary}"]
+    wrapped = textwrap.wrap(summary, width=MEMBER_SUMMARY_CHARS + 8) or [summary]
+    return [f"{indent}// {line}" for line in wrapped] + [f"{indent}{text}"]
 
 
 def declaration(item: Item) -> "list[str]":
@@ -918,7 +936,8 @@ def declaration(item: Item) -> "list[str]":
 
     if item.kind == "struct" and item.fields:
         out.append(item.decl + " {")
-        out += [f"    {text},{trailing(summary)}" for text, summary in item.fields]
+        for text, summary in item.fields:
+            out += member_lines(f"{text},", summary)
         out.append("}")
     elif item.kind == "enum" and item.variants:
         out.append(item.decl + " {")
@@ -928,11 +947,13 @@ def declaration(item: Item) -> "list[str]":
             elif text.startswith("//"):
                 out.append(f"    {text}")
             else:
-                out.append(f"    {text}{'' if text.endswith(',') else ','}{trailing(summary)}")
+                comma = "" if text.endswith(",") else ","
+                out += member_lines(f"{text}{comma}", summary)
         out.append("}")
     elif item.kind == "trait" and item.members:
         out.append(item.decl + " {")
-        out += [f"    {text}{trailing(summary)}" for text, summary in item.members]
+        for text, summary in item.members:
+            out += member_lines(text, summary)
         out.append("}")
     else:
         out.append(item.decl if item.decl.endswith("{}") else item.decl + ";")
@@ -949,7 +970,8 @@ def declaration(item: Item) -> "list[str]":
     if item.members and item.kind != "trait":
         out.append("")
         out.append(f"impl {item.name} {{")
-        out += [f"    {text}{trailing(summary)}" for text, summary in item.members]
+        for text, summary in item.members:
+            out += member_lines(text, summary)
         out.append("}")
     return out
 
@@ -1377,6 +1399,29 @@ def dangling_examples(text: str, repo: Path) -> "list[str]":
     return missing
 
 
+def cut_summaries(text: str) -> "list[str]":
+    """Lines inside a code block whose summary stops mid-sentence.
+
+    The check for the bug `member_lines` fixes, kept because it is the one that
+    would have caught it. Four of E0 run 4's sixteen findings were a member
+    summary truncated at 68 characters, and nothing failed — a cut sentence
+    looks exactly like a short one to every check the project had, and to the
+    reader.
+
+    Scoped to code blocks on purpose. Prose is allowed an ellipsis and the
+    Conventions digest uses one (`Color::WHITE`, `Color::MAGENTA`, …); a
+    *signature line* is never allowed one, because there is nowhere else the
+    rest of that sentence could be.
+    """
+    cut, fence = [], False
+    for line in text.splitlines():
+        if line.startswith("```"):
+            fence = not fence
+        elif fence and line.rstrip().endswith("…"):
+            cut.append(line.strip())
+    return cut
+
+
 def problem(what: str, specifics: str, cause: str, fix: str) -> str:
     return f"[jidousha] {what}\n  {specifics}\n  likely cause: {cause}\n  fix: {fix}"
 
@@ -1419,6 +1464,18 @@ def main(argv: "list[str]") -> int:
                     "the public surface grew, or a prose section did",
                     "curate that document down rather than raising the budget "
                     "(public-api.md §4, ADR-0025) — the budget is the point",
+                )
+            )
+        cut = cut_summaries(document.text)
+        if cut:
+            failures.append(
+                problem(
+                    f"{name} prints a summary that stops mid-sentence",
+                    f"{len(cut)} line(s), the first being: {cut[0]}",
+                    "a member's summary was truncated to ride along on its signature line",
+                    "a member has no entry of its own, so the cut tail reaches the reader "
+                    "nowhere — put the whole summary on its own line above the signature "
+                    "(`member_lines`)",
                 )
             )
         dangling = dangling_examples(document.text, REPO_ROOT)

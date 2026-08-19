@@ -523,6 +523,43 @@ class GenApiDocTest(unittest.TestCase):
             gen_api_doc.forbidden_words(text), list(gen_api_doc.TESTING_VOCABULARY)
         )
 
+    def test_a_long_member_summary_is_kept_whole_above_its_signature(self):
+        # Four of E0 run 4's sixteen findings were this: the reference printed a
+        # clause that stopped mid-sentence. The old code truncated at 68
+        # characters on the stated grounds that "the whole sentence stays on the
+        # item it belongs to" — but a member has no entry of its own, so the
+        # tail reached the reader nowhere at all.
+        short = gen_api_doc.member_lines("pub fn tick(&mut self);", "Advance one tick")
+        self.assertEqual(short, ["    pub fn tick(&mut self);  // Advance one tick"])
+
+        long_summary = (
+            "Every quad drawn this frame, in draw order — the depth sort, "
+            "not submission order"
+        )
+        lines = gen_api_doc.member_lines("pub fn quads(&self) -> Vec<DrawnQuad>;", long_summary)
+        self.assertEqual(lines[-1], "    pub fn quads(&self) -> Vec<DrawnQuad>;")
+        self.assertTrue(all(line.strip().startswith("//") for line in lines[:-1]))
+        # Whole, not shortened: every word of the summary survives.
+        kept = " ".join(line.strip().removeprefix("// ") for line in lines[:-1])
+        self.assertEqual(kept, long_summary)
+        self.assertNotIn("…", "".join(lines))
+
+    def test_a_summary_that_stops_mid_sentence_is_refused(self):
+        # Prose may end in an ellipsis and the Conventions digest does; a
+        # signature line may not, because there is nowhere else the rest of that
+        # sentence could be.
+        code = "```rust\npub fn quads(&self);  // Every quad drawn this frame, in dra…\n```\n"
+        self.assertEqual(len(gen_api_doc.cut_summaries(code)), 1)
+        prose = "Constants for the common colours (`Color::WHITE`, …). No 0-255 in v1.\n"
+        self.assertEqual(gen_api_doc.cut_summaries(prose), [])
+
+    def test_the_committed_documents_cut_no_summary_short(self):
+        root = Path(__file__).resolve().parents[2]
+        for name in ("jidousha-api.md", "jidousha-testing.md"):
+            with self.subTest(document=name):
+                text = (root / "docs/api" / name).read_text(encoding="utf-8")
+                self.assertEqual(gen_api_doc.cut_summaries(text), [])
+
     def test_an_entry_example_is_the_doctest_with_its_setup_removed(self):
         # public-api.md §4's entry spec is "signature, one-liner, tiny example",
         # and the example third went unbuilt until the budget had room. These

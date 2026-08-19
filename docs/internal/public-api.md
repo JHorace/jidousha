@@ -438,6 +438,42 @@ that's exactly what acceptance milestone E0 tests (implementation plan).
   longest bodies with the shortest summaries in their groups. **This now outranks
   the F-017/F-036 export gate**, which has cost three runs a lookup each; this one
   cost a run a debug cycle and cost this file a recorded falsehood (F-039).
+
+  **Built — the exact half. Measured and declined — the fuzzy half.** The two
+  halves of the paragraph above turned out to be very different propositions, and
+  the numbers are recorded here so the next reader does not have to re-derive
+  them.
+
+  The *truncated member line* half was not a heuristic at all, and it was worse
+  than described. `trailing` cut a member's summary at 68 characters and appended
+  an ellipsis, justified by "the whole sentence stays on the item it belongs to;
+  this is the reminder" — **and that premise was false.** A member has no entry of
+  its own anywhere in this document, so its summary appears on that line and
+  nowhere else; the cut tail was not kept somewhere, it was deleted. It was
+  happening to 28 lines. `FrameRecord::quads` was losing "…not *submission*
+  order", which is the whole of ADR-0024. `member_lines` now puts a long summary
+  on its own wrapped line above the signature, `cut_summaries` fails the run on
+  any line inside a code block that ends in an ellipsis, and the cost is a few
+  lines of document.
+
+  The *body states a fact the summary drops* half **is not a gate, deliberately.**
+  Both shapes suggested above were measured against the real sources:
+
+  - "bodies much longer than their summaries" flags **71 of the exported items**
+    at a 3× ratio. That is most of the surface, and it is not a defect — a doc
+    comment's body is *supposed* to be longer than its summary.
+  - "a number in the body the summary drops" flags **67**, and inspection shows
+    the signal is swamped by ADR numbers (`0008`, `0011`, `0015`) and section
+    references (`§6`, `§9`) rather than quantities.
+
+  Neither is worth shipping. A gate that fires on most of the surface trains its
+  reader to ignore it, which is strictly worse than no gate — the same argument
+  this document makes about a thin reference entry being indistinguishable from a
+  complete one. If this returns, the way in is a *targeted* signal rather than a
+  size comparison: the recurring shape is a body sentence that names a count of
+  something the API produces (`circle`'s sixteen wedges, `Submissions`' six
+  vertices per quad), and that is a question about the vocabulary of a handful of
+  doc comments, not about their length.
 - Fixed structure: **Quickstart** (one complete ~60-line game, compiling,
   CI-tested — it IS an example file, included verbatim) → **Concepts** (seven
   short paragraphs: world/systems/phases, determinism & the tick, drawing,

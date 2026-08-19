@@ -421,7 +421,9 @@ pub struct HeadlessSim;
 
 impl HeadlessSim {
     pub fn tick(&mut self);  // Run one Update tick, running Startup first if it has not run yet
-    pub fn draw(&mut self) -> &Submissions;  // Run the Draw phase once, as a rendered frame would, and return what…
+    // Run the Draw phase once, as a rendered frame would, and return what it
+    // submitted
+    pub fn draw(&mut self) -> &Submissions;
     pub fn world(&self) -> &World;  // The world, for asserting on state
     pub fn world_mut(&mut self) -> &mut World;  // The world, for arranging a test's starting state
     pub fn schedule_debug(&self) -> String;  // Every phase and its systems, in run order
@@ -511,7 +513,9 @@ impl Commands {
     pub fn despawn(&mut self, entity: Entity);  // Destroy `entity`
     pub fn insert<T: Component>(&mut self, entity: Entity, value: T);  // Give `entity` a component
     pub fn remove<T: Component>(&mut self, entity: Entity);  // Take a component away from `entity`
-    pub fn pending(&self) -> Vec<(CommandKind, Option<Entity>)>;  // What is queued, in recording order — for debugging a system that is…
+    // What is queued, in recording order — for debugging a system that is not
+    // changing what you expect
+    pub fn pending(&self) -> Vec<(CommandKind, Option<Entity>)>;
 }
 ```
 
@@ -643,13 +647,16 @@ impl World {
     pub fn remove<T: Component>(&mut self, entity: Entity);  // Take `T` away from `entity`
     pub fn try_remove<T: Component>(&mut self, entity: Entity) -> Result<(), EntityDeadError>;  // `World::remove`, reporting a dead entity instead of panicking
     pub fn query<'w, Q: ReadOnlyQuery<'w>>(&'w self) -> QueryIter<'w, Q>;  // Iterate every entity matching a read-only query
-    pub fn query_mut<'w, Q: Query<'w>>(&'w mut self) -> QueryIterMut<'w, Q>;  // Iterate every entity matching a query, with `&mut T` access where…
+    // Iterate every entity matching a query, with `&mut T` access where asked
+    pub fn query_mut<'w, Q: Query<'w>>(&'w mut self) -> QueryIterMut<'w, Q>;
     pub fn is_alive(&self, entity: Entity) -> bool;  // Whether `entity` is still live in this world
     pub fn entity_count(&self) -> usize;  // How many entities are alive
     pub fn component<T: Component>(&self, entity: Entity) -> &T;  // The `T` on `entity`, panicking if it has none
     pub fn component_mut<T: Component>(&mut self, entity: Entity) -> &mut T;  // The `T` on `entity` for modification, panicking if it has none
     pub fn find_component<T: Component>(&self, entity: Entity) -> Option<&T>;  // The `T` on `entity`, or `None` if it has none — or is not alive
-    pub fn find_component_mut<T: Component>(&mut self, entity: Entity) -> Option<&mut T>;  // The `T` on `entity` for modification, or `None` if it has none — or…
+    // The `T` on `entity` for modification, or `None` if it has none — or is not
+    // alive
+    pub fn find_component_mut<T: Component>(&mut self, entity: Entity) -> Option<&mut T>;
     pub fn commands(&self) -> Commands<'_>;  // Record structural changes to apply at the end of the running system
     pub fn insert_resource<T: Resource>(&mut self, value: T);  // Store a resource, replacing any of the same type
     pub fn remove_resource<T: Resource>(&mut self);  // Drop the `T` resource
@@ -730,7 +737,8 @@ impl Color {
     pub const RED: Color = Color::rgb(1.0, 0.0, 0.0);  // Opaque red
     pub const GREEN: Color = Color::rgb(0.0, 1.0, 0.0);  // Opaque green
     pub const BLUE: Color = Color::rgb(0.0, 0.0, 1.0);  // Opaque blue
-    pub const MAGENTA: Color = Color::rgb(1.0, 0.0, 1.0);  // Opaque magenta — the placeholder's color, and the engine's "look…
+    // Opaque magenta — the placeholder's color, and the engine's "look here"
+    pub const MAGENTA: Color = Color::rgb(1.0, 0.0, 1.0);
     pub const TRANSPARENT: Color = Color::rgba(0.0, 0.0, 0.0, 0.0);  // Fully transparent
     pub fn modulate(self, other: Color) -> Color;  // This color multiplied by another, component-wise — how tinting works
 }
@@ -763,7 +771,9 @@ pub struct EntityDeadError;
 
 impl EntityDeadError {
     pub fn entity(&self) -> Entity;  // The entity the failed operation named
-    pub fn operation(&self) -> &'static str;  // The operation that failed, as it is spelled in the API —…
+    // The operation that failed, as it is spelled in the API — `"despawn"`,
+    // `"insert"`, `"remove"`
+    pub fn operation(&self) -> &'static str;
 }
 ```
 
@@ -974,7 +984,9 @@ impl Rect {
     pub const UNIT: Rect = Rect { min: Vec2::ZERO, max: Vec2::ONE };  // The whole of something, in normalized coordinates: (0,0) to (1,1)
     pub fn size(self) -> Vec2;  // Width and height
     pub fn center(self) -> Vec2;  // The point in the middle
-    pub fn contains(self, point: Vec2) -> bool;  // Whether `point` is inside, counting the top-left edges and not the…
+    // Whether `point` is inside, counting the top-left edges and not the bottom-
+    // right ones — so adjacent rectangles never both claim a point
+    pub fn contains(self, point: Vec2) -> bool;
     pub fn overlaps(self, other: Rect) -> bool;  // Whether any part of `other` is inside; touching edges do not count
     pub fn contains_rect(self, other: Rect) -> bool;  // Whether `other` is entirely inside this one, edges included
 }
@@ -1035,7 +1047,8 @@ pub struct TextureId(u64);
 // Clone Copy PartialEq Eq PartialOrd Ord Hash Debug
 
 impl TextureId {
-    pub const WHITE: TextureId = TextureId(0);  // The untextured id: a flat white 1×1, for shapes that carry only a…
+    // The untextured id: a flat white 1×1, for shapes that carry only a color
+    pub const WHITE: TextureId = TextureId(0);
     pub const fn from_bits(bits: u64) -> Self;  // The id for a raw value
     pub const fn bits(self) -> u64;  // The raw value
 }
@@ -1140,7 +1153,9 @@ pub struct Sprite {
     pub texture: TextureHandle,  // What to draw
     pub region: Option<Rect>,  // Which part of the texture, in normalized 0..1 coordinates
     pub size: Vec2,  // How big the quad is, in world units
-    pub anchor: Vec2,  // Where the transform's position sits on the quad: `(0, 0)` is the…
+    // Where the transform's position sits on the quad: `(0, 0)` is the center,
+    // `(-0.5, -0.5)` the top-left corner, `(0.5, 0.5)` the bottom-right
+    pub anchor: Vec2,
     pub tint: Color,  // Multiplied into the texture's color
     pub flip_x: bool,  // Mirror horizontally
     pub flip_y: bool,  // Mirror vertically
@@ -1261,8 +1276,10 @@ pub enum AssetError {
 // Clone Debug PartialEq Eq Display
 
 impl AssetError {
-    pub fn from_http_status(status: u16) -> Option<AssetError>;  // What an HTTP status means for an asset, or `None` if it means…
-    pub fn message(&self, path: &str, kind: AssetKind, requested_at: &str) -> String;  // The failure as a §9 message, given what was being loaded and from…
+    // What an HTTP status means for an asset, or `None` if it means success
+    pub fn from_http_status(status: u16) -> Option<AssetError>;
+    // The failure as a §9 message, given what was being loaded and from where
+    pub fn message(&self, path: &str, kind: AssetKind, requested_at: &str) -> String;
 }
 ```
 
@@ -1274,7 +1291,9 @@ One asset that will not arrive, reported once at the commit that resolved it.
 pub struct AssetFailure {
     pub path: String,  // The path as the game asked for it
     pub kind: AssetKind,  // Which kind of load this was
-    pub requested_at: String,  // Where the game asked, so the message points at the game's line…
+    // Where the game asked, so the message points at the game's line rather than
+    // the loader's
+    pub requested_at: String,
     pub error: AssetError,  // What went wrong, from the source
 }
 // Clone Debug PartialEq Eq
@@ -1298,7 +1317,8 @@ impl Assets {
     pub fn status<H: AssetHandle>(&self, handle: H) -> AssetStatus;  // Where `handle` is in its life
     pub fn bytes_of<H: AssetHandle>(&self, handle: H) -> Option<&[u8]>;  // The bytes behind `handle`, if it is `Ready` and holds bytes
     pub fn texture_of(&self, handle: TextureHandle) -> Option<&TextureData>;  // The decoded image behind `handle`, while the store still holds it
-    pub fn take_uploads(&mut self) -> Vec<TextureUpload>;  // Every texture that has become `Ready` since the last call, with…
+    // Every texture that has become `Ready` since the last call, with texels
+    pub fn take_uploads(&mut self) -> Vec<TextureUpload>;
     pub fn path_of<H: AssetHandle>(&self, handle: H) -> &str;  // The path `handle` was loaded from
     pub fn all_ready(&self) -> bool;  // Whether every load asked for so far has resolved
     pub fn unload<H: AssetHandle>(&mut self, handle: H);  // Throw `handle` away, freeing what it held
@@ -1443,7 +1463,9 @@ pub enum Key {
 impl Key {
     pub const ALL: &'static [Key];  // Every key, in declaration order
     pub fn code(self) -> u16;  // This key's wire code, as written into recordings
-    pub fn find_by_code(code: u16) -> Option<Key>;  // The key a wire code names, or `None` if this build has never heard…
+    // The key a wire code names, or `None` if this build has never heard of it — a
+    // recording from a newer engine, most likely
+    pub fn find_by_code(code: u16) -> Option<Key>;
     pub fn name(self) -> &'static str;  // The variant's name, for messages and for `input_echo`
 }
 ```
@@ -1463,7 +1485,8 @@ pub enum PointerButton {
 impl PointerButton {
     pub const ALL: &'static [PointerButton] = &[ PointerButton::Primary, PointerButton::Secondary, PointerButton::Middle, ];  // Every button, in declaration order
     pub fn code(self) -> u8;  // This button's wire code, as written into recordings
-    pub fn find_by_code(code: u8) -> Option<PointerButton>;  // The button a wire code names, or `None` if this build has never…
+    // The button a wire code names, or `None` if this build has never heard of it
+    pub fn find_by_code(code: u8) -> Option<PointerButton>;
     pub fn name(self) -> &'static str;  // The variant's name, for messages
 }
 ```
@@ -1491,7 +1514,9 @@ One pointer, for one tick.
 ```rust
 pub struct PointerState {
     pub id: PointerId,  // Which pointer this is
-    pub screen: Vec2,  // Where it is, in pixels from the window's top-left — the same…
+    // Where it is, in pixels from the window's top-left — the same orientation as
+    // world space, differing in units and camera offset (conventions)
+    pub screen: Vec2,
     pub scroll: f32,  // Scroll for this tick, in lines
 }
 // Clone Debug PartialEq

@@ -521,7 +521,8 @@ An asset that resolved on some tick.
 
 ```rust
 pub struct AssetReady {
-    pub request: u64,  // Which request resolved, as `RequestId`(crate::RequestIdBits)…
+    // Which request resolved, as `RequestId`(crate::RequestIdBits) numbers them
+    pub request: u64,
     pub arrived: bool,  // Whether it arrived
 }
 // Clone Copy Debug PartialEq Eq
@@ -571,12 +572,14 @@ pub struct Comparison {
     pub total: usize,  // Pixels compared
     pub worst: u8,  // The largest single-channel difference anywhere
     pub worst_at: Option<(u32, u32)>,  // Where `worst` was found, in pixels from the top-left
-    pub size_mismatch: Option<(PhysicalSize, PhysicalSize)>,  // Set when the two are not even the same shape, which no tolerance…
+    // Set when the two are not even the same shape, which no tolerance covers
+    pub size_mismatch: Option<(PhysicalSize, PhysicalSize)>,
 }
 // Clone Debug PartialEq Display
 
 impl Comparison {
-    pub fn differing_fraction(&self) -> f32;  // The fraction of compared pixels that differed, 0.0 when nothing was…
+    // The fraction of compared pixels that differed, 0.0 when nothing was compared
+    pub fn differing_fraction(&self) -> f32;
 }
 ```
 
@@ -610,7 +613,8 @@ pub enum DecodeError {
     UnknownButton { code: u8 },  // A button code this build has never heard of
     NotCanonical { list: &'static str },  // A list that was not sorted, or held a duplicate
     NotFinite { field: &'static str },  // A float that is NaN or infinite
-    MalformedPointers,  // A snapshot with no primary pointer, or with its pointers out of…
+    // A snapshot with no primary pointer, or with its pointers out of order
+    MalformedPointers,
 }
 // Clone Debug PartialEq Eq Display
 ```
@@ -686,8 +690,11 @@ pub struct FrameRecord {
 // Clone Debug PartialEq
 
 impl FrameRecord {
-    pub fn quads(&self) -> Vec<DrawnQuad>;  // Every quad drawn this frame, in draw order — the depth sort, not…
-    pub fn covering(&self, world: Vec2) -> Vec<DrawnQuad>;  // Every quad covering `world`, front to back — the last one drawn…
+    // Every quad drawn this frame, in draw order — the depth sort, not submission
+    // order
+    pub fn quads(&self) -> Vec<DrawnQuad>;
+    // Every quad covering `world`, front to back — the last one drawn first
+    pub fn covering(&self, world: Vec2) -> Vec<DrawnQuad>;
     pub fn quad_count(&self) -> usize;  // How many quads were drawn
     pub fn transcript(&self) -> String;  // This one frame as stable, diffable text — every quad, one per line
 }
@@ -701,8 +708,12 @@ Draws a headless game and keeps every frame, for a test to assert on.
 pub struct FrameRecorder;
 
 impl FrameRecorder {
-    pub fn new(viewport: PhysicalSize) -> Self;  // A recorder drawing to a surface `viewport` pixels across,…
-    pub fn settle_assets(&mut self, sim: &mut HeadlessSim, tick: u64);  // Apply what has finished loading and put it on the GPU, as the…
+    // A recorder drawing to a surface `viewport` pixels across, overriding the
+    // `Camera` resource's own
+    pub fn new(viewport: PhysicalSize) -> Self;
+    // Apply what has finished loading and put it on the GPU, as the driver does at
+    // the top of every frame
+    pub fn settle_assets(&mut self, sim: &mut HeadlessSim, tick: u64);
     pub fn draw(&mut self, sim: &mut HeadlessSim) -> FrameRecord;  // Run the game's Draw phase once and record the frame it produced
     pub fn font_texture(&self) -> BackendTextureId;  // Which backend texture the engine's font atlas is on
     pub fn frames(&self) -> &[FrameRecord];  // Every frame recorded so far, oldest first
@@ -781,11 +792,14 @@ pub struct InputScript;
 impl InputScript {
     pub fn new() -> Self;  // An empty script: every tick reports the player doing nothing
     pub fn hold(mut self, key: Key, ticks: Range<u64>) -> Self;  // Hold `key` down for `ticks`
-    pub fn press(mut self, key: Key, tick: u64) -> Self;  // Tap `key` on `tick`: pressed, held, and released, all on that one…
+    // Tap `key` on `tick`: pressed, held, and released, all on that one tick
+    pub fn press(mut self, key: Key, tick: u64) -> Self;
     pub fn pointer_at(mut self, tick: u64, screen: Vec2) -> Self;  // Put the pointer at `screen` from `tick` onwards
     pub fn click(mut self, button: PointerButton, tick: u64) -> Self;  // Tap `button` on `tick`
     pub fn snapshot_at(&self, tick: u64) -> InputSnapshot;  // What the player is doing on `tick`
-    pub fn last_tick(&self) -> u64;  // The last tick any directive mentions, so a test can drive the whole…
+    // The last tick any directive mentions, so a test can drive the whole script
+    // without restating its length
+    pub fn last_tick(&self) -> u64;
 }
 ```
 
@@ -1045,7 +1059,9 @@ pub struct SnapshotBuilder;
 impl SnapshotBuilder {
     pub fn new() -> Self;  // A builder with nothing pressed and the window focused
     pub fn record(&mut self, event: InputEvent);  // Take note of one event
-    pub fn first_tick_snapshot(&mut self) -> InputSnapshot;  // The snapshot for the first Update tick of this frame, consuming the…
+    // The snapshot for the first Update tick of this frame, consuming the frame's
+    // edges
+    pub fn first_tick_snapshot(&mut self) -> InputSnapshot;
     pub fn catch_up_snapshot(&self) -> InputSnapshot;  // The snapshot for a second or later Update tick of the same frame
 }
 ```
@@ -1104,7 +1120,8 @@ How different two pictures may be and still count as the same picture.
 ```rust
 pub struct Tolerance {
     pub per_channel: u8,  // How far one channel of one pixel may be from the reference, 0–255
-    pub differing_fraction: f32,  // What fraction of pixels may differ by more than `per_channel`,…
+    // What fraction of pixels may differ by more than `per_channel`, 0.0–1.0
+    pub differing_fraction: f32,
 }
 // Clone Copy Debug PartialEq
 
