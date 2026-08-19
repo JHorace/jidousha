@@ -339,6 +339,11 @@ The asset source this platform reads with.
 pub fn asset_source(root: &str) -> impl ByteSource;
 ```
 
+```rust
+let mut assets = Assets::new(asset_source("assets"));
+let hero = assets.load_texture("sprites/hero.png");
+```
+
 #### `Draw`
 
 Once per rendered frame, after Update has caught up.
@@ -363,12 +368,48 @@ pub struct GameConfig {
 // Default = GameConfig { title: "jidousha game", seed: 0, fixed_dt: Seconds(1.0 / 60.0), window_size: PhysicalSize::new(1280, 720) }
 ```
 
+```rust
+let config = GameConfig {
+title: "asteroids",
+seed: 42,
+window_size: PhysicalSize::new(1600, 900),
+..GameConfig::default()
+};
+assert_eq!(config.fixed_dt, Seconds(1.0 / 60.0));
+```
+
 #### `headless`
 
 Build a game and drive it by hand, with no window and no clock.
 
 ```rust
 pub fn headless(config: GameConfig, setup: impl FnOnce(&mut App)) -> HeadlessSim;
+```
+
+```rust
+#[derive(Debug, PartialEq)]
+struct Ticks(u32);
+impl Component for Ticks {}
+
+fn spawn_counter(world: &mut World) {
+let entity = world.spawn();
+world.insert(entity, Ticks(0));
+}
+
+fn count(world: &mut World) {
+for (_, ticks) in world.query_mut::<&mut Ticks>() {
+ticks.0 += 1;
+}
+}
+
+let mut sim = headless(GameConfig::default(), |app| {
+app.add_system(Startup, spawn_counter);
+app.add_system(Update, count);
+});
+
+sim.tick();
+sim.tick();
+assert_eq!(sim.world().query::<&Ticks>().count(), 1);
 ```
 
 #### `HeadlessSim`
@@ -453,6 +494,10 @@ pub trait Bundle: 'static + Send + Sync {
 }
 ```
 
+```rust
+world.commands().spawn((Position(0), Velocity(1)));
+```
+
 #### `Commands`
 
 Records structural changes to apply at the end of the current system.
@@ -470,12 +515,35 @@ impl Commands {
 }
 ```
 
+```rust
+fn reap_the_dead(world: &mut World) {
+let mut commands = world.commands();
+for (entity, health) in world.query::<&Health>() {
+if health.0 <= 0 {
+commands.despawn(entity);
+}
+}
+}
+```
+
 #### `Component`
 
 Marks a plain-data type as storable on an entity.
 
 ```rust
 pub trait Component: 'static + Send + Sync {}
+```
+
+```rust
+struct Position {
+x: f32,
+y: f32,
+}
+impl Component for Position {}
+
+// Zero-sized components are idiomatic as tags.
+struct Frozen;
+impl Component for Frozen {}
 ```
 
 #### `DrawCtx`
@@ -492,6 +560,18 @@ impl DrawCtx {
     pub fn submit(&mut self, quad: Quad);  // Draw one quad
     pub fn submitted(&self) -> usize;  // How many quads have been submitted this frame
 }
+```
+
+```rust
+fn draw_world(ctx: &mut DrawCtx) {
+for (_entity, _position) in ctx.world.query::<&Position>() {
+// ctx.draw(...) — the submission sink arrives with the renderer.
+}
+}
+
+let mut sim = headless(GameConfig::default(), |app| {
+app.add_system(Draw, draw_world);
+});
 ```
 
 #### `Entity`
@@ -511,6 +591,11 @@ Marks a type as storable as a world resource.
 pub trait Resource: 'static + Send + Sync {}
 ```
 
+```rust
+struct Score(u32);
+impl Resource for Score {}
+```
+
 #### `With`
 
 Match only entities that carry `T`, yielding `()` in its tuple position.
@@ -520,6 +605,12 @@ pub struct With<T: Component>(PhantomData<fn() -> T>);
 // Query ReadOnlyQuery
 ```
 
+```rust
+for (entity, position, _) in world.query::<(&Position, With<Player>)>() {
+println!("{entity:?} is at {position:?}");
+}
+```
+
 #### `Without`
 
 Match only entities that do **not** carry `T`, yielding `()` like `With`.
@@ -527,6 +618,12 @@ Match only entities that do **not** carry `T`, yielding `()` like `With`.
 ```rust
 pub struct Without<T: Component>(PhantomData<fn() -> T>);
 // Query ReadOnlyQuery
+```
+
+```rust
+for (entity, position, _) in world.query::<(&Position, Without<Frozen>)>() {
+println!("{entity:?} can still move, from {position:?}");
+}
 ```
 
 #### `World`
@@ -563,6 +660,26 @@ impl World {
 }
 ```
 
+```rust
+#[derive(Debug, PartialEq)]
+struct Position(i32);
+impl Component for Position {}
+#[derive(Debug, PartialEq)]
+struct Velocity(i32);
+impl Component for Velocity {}
+
+let mut world = World::new();
+let entity = world.spawn();
+world.insert(entity, Position(0));
+world.insert(entity, Velocity(3));
+
+for (_entity, position, velocity) in world.query_mut::<(&mut Position, &Velocity)>() {
+position.0 += velocity.0;
+}
+
+assert_eq!(world.component::<Position>(entity), &Position(3));
+```
+
 #### `WorldView`
 
 A read-only view of the world, handed to Draw systems.
@@ -578,6 +695,14 @@ impl WorldView {
     pub fn find_resource<T: Resource>(&self) -> Option<&'w T>;  // The `T` resource, or `None` if the world has none
     pub fn is_alive(&self, entity: Entity) -> bool;  // Whether `entity` is still live
     pub fn entity_count(&self) -> usize;  // How many entities are alive
+}
+```
+
+```rust
+fn draw_positions(ctx: &mut DrawCtx) {
+for (entity, position) in ctx.world.query::<&Position>() {
+println!("{entity:?} at {position:?}");
+}
 }
 ```
 
@@ -667,12 +792,23 @@ impl Radians {
 }
 ```
 
+```rust
+let quarter_turn = Radians::from_degrees(90.0);
+assert!((quarter_turn.as_f32() - std::f32::consts::FRAC_PI_2).abs() < 1e-6);
+```
+
 #### `atan2`
 
 The angle of the vector `(x, y)`, measured from the +X axis.
 
 ```rust
 pub fn atan2(y: f32, x: f32) -> Radians;
+```
+
+```rust
+// Straight down the +Y axis is a quarter turn clockwise.
+let angle = atan2(1.0, 0.0);
+assert!((angle.as_f32() - std::f32::consts::FRAC_PI_2).abs() < 1e-6);
 ```
 
 #### `rotate`
@@ -683,12 +819,26 @@ Turn `vector` by `angle`.
 pub fn rotate(vector: Vec2, angle: Radians) -> Vec2;
 ```
 
+```rust
+let turned = rotate(Vec2::new(1.0, 0.0), Radians::from_degrees(90.0));
+assert!((turned.x - 0.0).abs() < 1e-6);
+assert!((turned.y - 1.0).abs() < 1e-6);
+```
+
 #### `sin_cos`
 
 The sine and cosine of `angle`, both at once.
 
 ```rust
 pub fn sin_cos(angle: Radians) -> (f32, f32);
+```
+
+```rust
+let (sine, cosine) = sin_cos(Radians(0.0));
+assert_eq!((sine, cosine), (0.0, 1.0));
+
+// Same input, same bits, every run and every platform.
+assert_eq!(sin_cos(Radians(1.234)), sin_cos(Radians(1.234)));
 ```
 
 Also in `math`, re-exported from `glam`: `Vec2`, `Vec3`. This repository does not own their documentation, so what follows is a worked file rather than a generated entry — it compiles and runs on every test run.
@@ -785,6 +935,13 @@ Format one engine failure in the house style.
 pub fn message(what: &str, specifics: &str, likely_cause: &str, fix: &str) -> String;
 ```
 
+```rust
+[jidousha] <what happened>
+<specifics: entity/component/system names and values>
+likely cause: <the most common mistake producing this>
+fix: <the concrete change to make>
+```
+
 #### `Quad`
 
 One textured, tinted quadrilateral in world space: everything the engine draws, after expansion.
@@ -839,6 +996,16 @@ impl Rng {
 }
 ```
 
+```rust
+let mut rng = Rng::from_seed(42);
+let first: Vec<u32> = (0..4).map(|_| rng.below(100)).collect();
+
+// The same seed replays the same numbers, always.
+let mut again = Rng::from_seed(42);
+let second: Vec<u32> = (0..4).map(|_| again.below(100)).collect();
+assert_eq!(first, second);
+```
+
 #### `Seconds`
 
 A duration, in seconds.
@@ -851,6 +1018,12 @@ impl Seconds {
     pub const ZERO: Seconds = Seconds(0.0);  // No time at all
     pub fn as_f32(self) -> f32;  // The underlying value, for arithmetic the newtype does not cover
 }
+```
+
+```rust
+let frame = Seconds(1.0 / 60.0);
+let two_frames = frame + frame;
+assert!(two_frames > frame);
 ```
 
 #### `TextureId`
@@ -886,6 +1059,16 @@ impl Time {
 }
 ```
 
+```rust
+let mut simulation = Simulation::new(7, Seconds(1.0 / 60.0));
+simulation.tick();
+simulation.tick();
+
+let time = simulation.world().resource::<Time>();
+assert_eq!(time.tick, 2);
+assert_eq!(time.elapsed, Seconds(2.0 / 60.0));
+```
+
 ### Render
 
 #### `Camera`
@@ -911,12 +1094,24 @@ impl Camera {
 }
 ```
 
+```rust
+let mut camera = Camera::default();
+camera.center = Vec2::new(10.0, 0.0);
+camera.height = 20.0;      // 20 world units tall; zoom by changing this
+```
+
 #### `draw_sprites`
 
 The Draw system almost every game wants: draw every sprite there is.
 
 ```rust
 pub fn draw_sprites(ctx: &mut DrawCtx);
+```
+
+```rust
+let mut sim = headless(GameConfig::default(), |app| {
+app.add_system(Draw, draw_sprites);
+});
 ```
 
 #### `PhysicalSize`
@@ -959,6 +1154,14 @@ impl Sprite {
 }
 ```
 
+```rust
+let ship = Sprite {
+texture: assets.load_texture("ship.png"),
+size: Vec2::new(2.0, 2.0),
+..Sprite::new(assets.load_texture("ship.png"))
+};
+```
+
 #### `Submit`
 
 The drawing verbs, added to `DrawCtx`.
@@ -970,6 +1173,14 @@ pub trait Submit {
     fn line(&mut self, from: Vec2, to: Vec2, thickness: f32, color: Color, depth: Depth);  // Draw a line from `from` to `to`, `thickness` world units wide
     fn circle(&mut self, center: Vec2, radius: f32, color: Color, depth: Depth);  // Fill a circle, as a fan of sixteen quads rather than as one
     fn text(&mut self, at: Vec2, text: &str, style: TextStyle);  // Draw `text` with its first character's top-left corner at `at`
+}
+```
+
+```rust
+fn draw_the_game(ctx: &mut DrawCtx, transform: &Transform, sprite: &Sprite) {
+ctx.sprite(transform, sprite);
+ctx.circle(Vec2::ZERO, 0.5, Color::WHITE, Depth::layer(1));
+ctx.text(Vec2::new(-8.0, -4.0), "score 12", TextStyle::default());
 }
 ```
 
@@ -991,6 +1202,14 @@ impl TextStyle {
 }
 ```
 
+```rust
+let style = TextStyle {
+size: 1.5,                 // one line is 1.5 world units tall
+color: Color::WHITE,
+..TextStyle::default()
+};
+```
+
 #### `Transform`
 
 Position, rotation, and scale in world space.
@@ -1010,6 +1229,17 @@ impl Transform {
     pub fn apply(&self, local: Vec2) -> Vec2;  // Take a point in this transform's local frame into world space
     pub fn depth(&self, layer: i16) -> Depth;  // This transform's draw depth in `layer`
 }
+```
+
+```rust
+let at_origin = Transform::default();
+let placed = Transform {
+pos: Vec2::new(3.0, -2.0),
+rot: Radians::from_degrees(90.0),
+..Transform::default()
+};
+assert_eq!(at_origin.pos, Vec2::ZERO);
+assert_eq!(placed.scale, Vec2::ONE, "scale defaults to natural size");
 ```
 
 ### Assets
@@ -1077,6 +1307,12 @@ impl Assets {
 }
 ```
 
+```rust
+world.insert_resource(Assets::new(source));
+
+let player = world.resource_mut::<Assets>().load_texture("player.png");
+```
+
 #### `AssetStatus`
 
 Where an asset is in its life.
@@ -1116,6 +1352,21 @@ impl MemorySource {
 }
 ```
 
+```rust
+let mut source = MemorySource::new();
+source.insert("player.png", b"fake png".to_vec());
+source.complete_at("player.png", 3);
+
+let mut assets = Assets::new(source);
+let player = assets.load_texture("player.png");
+
+assets.commit(1);
+assert_eq!(assets.status(player), AssetStatus::Loading);
+
+assets.commit(3);
+assert_eq!(assets.status(player), AssetStatus::Ready);
+```
+
 #### `TextureHandle`
 
 A loaded — or loading — image.
@@ -1148,6 +1399,13 @@ impl Input {
     pub fn window_focused(&self) -> bool;  // Whether the window had focus this tick
     pub fn snapshot(&self) -> &InputSnapshot;  // The whole snapshot, for the recorder and for tests
 }
+```
+
+```rust
+world.insert_resource(Input::new(InputSnapshot::new()));
+
+let input = world.resource::<Input>();
+assert!(!input.held(Key::Space));
 ```
 
 #### `Key`

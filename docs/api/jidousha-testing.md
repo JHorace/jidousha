@@ -710,6 +710,23 @@ impl FrameRecorder {
 }
 ```
 
+```rust
+let mut sim = headless(GameConfig::default(), |app| {
+app.add_system(Draw, draw_a_dot);
+});
+let mut recorder = FrameRecorder::new(PhysicalSize::new(1280, 720));
+
+sim.tick();
+let frame = recorder.draw(&mut sim);
+assert!(!frame.covering(Vec2::ZERO).is_empty(), "the dot covers the origin");
+
+// The frame is owned, so looking at the run's history and drawing another
+// frame compose in one function rather than fighting.
+let first = recorder.frames()[0].clone();
+let staged = recorder.draw(&mut sim);
+assert_eq!(first.quad_count(), staged.quad_count());
+```
+
 #### `Input`
 
 What the player did this tick, held as a world resource.
@@ -727,6 +744,13 @@ impl Input {
     pub fn window_focused(&self) -> bool;  // Whether the window had focus this tick
     pub fn snapshot(&self) -> &InputSnapshot;  // The whole snapshot, for the recorder and for tests
 }
+```
+
+```rust
+world.insert_resource(Input::new(InputSnapshot::new()));
+
+let input = world.resource::<Input>();
+assert!(!input.held(Key::Space));
 ```
 
 #### `InputEvent`
@@ -765,6 +789,24 @@ impl InputScript {
 }
 ```
 
+```rust
+let script = InputScript::new()
+.hold(Key::D, 10..120)
+.press(Key::Space, 30)
+.pointer_at(60, Vec2::new(400.0, 300.0))
+.click(PointerButton::Primary, 61);
+
+// Walking right from tick 10, still walking at 100.
+assert!(script.snapshot_at(10).pressed_keys().contains(&Key::D));
+assert!(script.snapshot_at(100).held_keys().contains(&Key::D));
+assert!(script.snapshot_at(120).released_keys().contains(&Key::D));
+
+// The jump is one tick: pressed, held, released, all at 30.
+let jump = script.snapshot_at(30);
+assert!(jump.pressed_keys().contains(&Key::Space));
+assert!(jump.released_keys().contains(&Key::Space));
+```
+
 #### `InputSnapshot`
 
 Everything the player did during one Update tick.
@@ -800,6 +842,21 @@ impl MemorySource {
     pub fn fail(&mut self, path: &str, error: AssetError);  // Make `path` fail, as a missing or unreadable file would
     pub fn complete_at(&mut self, path: &str, tick: u64);  // Hold `path`'s completion until `tick`
 }
+```
+
+```rust
+let mut source = MemorySource::new();
+source.insert("player.png", b"fake png".to_vec());
+source.complete_at("player.png", 3);
+
+let mut assets = Assets::new(source);
+let player = assets.load_texture("player.png");
+
+assets.commit(1);
+assert_eq!(assets.status(player), AssetStatus::Loading);
+
+assets.commit(3);
+assert_eq!(assets.status(player), AssetStatus::Ready);
 ```
 
 #### `NullBackend`
@@ -893,6 +950,20 @@ impl Recording {
 }
 ```
 
+```rust
+let mut recording = Recording::new(42, Seconds(1.0 / 60.0));
+recording.push(TickRecord {
+tick: 1,
+input: InputSnapshot::new(),
+readiness: Vec::new(),
+});
+
+let bytes = recording.encode();
+let read_back = Recording::try_decode(&bytes).expect("it was just written");
+assert_eq!(read_back.seed(), 42);
+assert_eq!(read_back.ticks().len(), 1);
+```
+
 #### `RecordingError`
 
 Why a recording could not be read.
@@ -947,6 +1018,21 @@ impl ReplaySource {
     pub fn new(inner: S, schedule: impl IntoIterator<Item = (u64, u64)>) -> Self;  // A source that plays `inner` back on `schedule`'s ticks
     pub fn unreleased(&self) -> usize;  // Completions that have arrived but are not due yet
 }
+```
+
+```rust
+let mut source = MemorySource::new();
+source.insert("hero.png", b"art".to_vec());
+
+// The session being replayed saw request 0 arrive on tick 5, however fast
+// the disk was on the day.
+let mut assets = Assets::new(ReplaySource::new(source, [(0, 5)]));
+let hero = assets.load_bytes("hero.png");
+
+assets.commit(4);
+assert_eq!(assets.status(hero), AssetStatus::Loading);
+assets.commit(5);
+assert_eq!(assets.status(hero), AssetStatus::Ready);
 ```
 
 #### `SnapshotBuilder`

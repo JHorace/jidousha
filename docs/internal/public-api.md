@@ -388,8 +388,24 @@ that's exactly what acceptance milestone E0 tests (implementation plan).
   reading it, so `completeness_failures` now fails the run when an exported item
   yields no declaration. A generator that can under-report silently will.
 
-  **Still unimplemented: the "tiny example" third of the bullet above.** Entries
-  carry a signature and a one-liner and no example. Deferred until E0 run 2 says
+  ~~**Still unimplemented: the "tiny example" third of the bullet above.**~~
+  **Built, once ADR-0025's split made room.** Entries now carry a signature, a
+  one-liner and the item's own doctest, which costs ~2.1k rather than the ~5k
+  estimated below — only *exported* items render one, and most of the 41 blocks
+  in the crates hang off things this surface never names. The example is the
+  crate's doctest, so it is code CI compiles, the same argument the Quickstart is
+  embedded verbatim for.
+
+  Three things are stripped on the way out, and the third was found by the
+  vocabulary gate firing rather than by foresight: rustdoc's hidden `#` setup
+  lines, visible `use jidousha_…` imports, and internal crate paths written out
+  mid-expression. All three name crates a facade exists to hide, and the
+  document's own second sentence is "everything here is reachable from one
+  import" — so an example that kept them would contradict the page it sits on.
+  What remains is prelude-only and callable, which is what F-001 asked for.
+
+  The original note, kept because its reasoning is what got it built:
+  Entries carried a signature and a one-liner and no example. Deferred until E0 run 2 says
   whether signatures alone are enough (e0-findings.md F-001, "Still open") — the
   document is at ~13.8k tokens of 25,000 and the ~39 doctests already in the
   crates would cost about 5k more, so budget is not the constraint. (It became

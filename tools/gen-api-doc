@@ -274,6 +274,10 @@ class Item:
     kind: str = ""  # struct | enum | trait | fn | const | type | mod
     decl: str = ""  # `pub struct Camera` / the whole signature of a free fn
     summary: str = ""
+    # The doc comment's first code block, rustdoc's hidden lines removed: the
+    # "tiny example" third of public-api.md §4's entry spec. Empty for an item
+    # whose doc comment carries no example, which is most of them.
+    example: "list[str]" = dataclasses.field(default_factory=list)
     derives: "tuple[str, ...]" = ()
     traits: "list[str]" = dataclasses.field(default_factory=list)
     fields: "list[tuple[str, str]]" = dataclasses.field(default_factory=list)
@@ -511,6 +515,67 @@ def first_sentence(block: "list[str]") -> str:
     return scrub_internal_references(sentence).strip()
 
 
+def doc_example(block: "list[str]") -> "list[str]":
+    """The doc comment's first code block, as a reader should see it.
+
+    The third of public-api.md §4's entry spec that went unbuilt: "one entry per
+    item: signature, one-liner, tiny example". These are the crate's own
+    doctests, so the example in the document is an example CI compiles — the
+    same argument the Quickstart is embedded verbatim for.
+
+    **rustdoc's hidden lines are dropped**, which is not cosmetic. A doctest
+    hides its setup behind `# `, and here that setup is almost always
+    `# use jidousha_core::…` — the internal crate paths a doctest needs and the
+    facade's reader must never see. Rendering them would put the whole
+    `FORBIDDEN` list into the document by the back door. Dropping them is also
+    what rustdoc shows a human, so the document and docs.rs agree.
+
+    `##` at the start of a line is rustdoc's escape for a literal `#`, and
+    `#[derive(…)]` is an attribute rather than a hidden line: neither is setup,
+    and both stay.
+
+    **Visible `use jidousha_…` lines go too**, for the same reason as the hidden
+    ones and one more. A doctest imports from the crate it lives in; a reader of
+    this document imports from the facade, and the document's own second
+    sentence is "everything here is reachable from one import". An example
+    carrying `use jidousha_core::Component;` would be telling that reader to do
+    the one thing the facade exists to make unnecessary — so dropping the line
+    makes the example *more* correct for the reader it is shown to, not less.
+    Citations are scrubbed from comments on the same grounds as everywhere else:
+    this reader may not open `docs/adr/`.
+    """
+    fence, body = False, []
+    for line in block:
+        if line.startswith("```"):
+            if fence:
+                break
+            fence = True
+            continue
+        if not fence:
+            continue
+        bare = line.lstrip()
+        if bare.startswith("##"):
+            body.append(line.replace("##", "#", 1))
+        elif bare == "#" or bare.startswith("# "):
+            continue
+        elif bare.startswith("use jidousha_"):
+            continue
+        elif bare.startswith("//"):
+            body.append(unqualify(scrub_internal_references(line)).rstrip())
+        else:
+            # `jidousha_platform::asset_source(..)` written out mid-expression
+            # rather than imported: the same routing `unqualify` hides in a
+            # declaration, and the same reason for hiding it.
+            body.append(unqualify(line))
+    # Dropping the imports usually leaves the blank line that followed them.
+    while body and not body[0].strip():
+        body.pop(0)
+    while body and not body[-1].strip():
+        body.pop()
+    # A block that was nothing but setup has no example left to show.
+    return body if any(line.strip() for line in body) else []
+
+
 def scan_sources(sources: "list[Path]") -> "dict[str, Item]":
     """Every public item the sources declare, by name.
 
@@ -600,7 +665,7 @@ def scan_file(lines: "list[str]", source: str, items: "dict[str, Item]", phase: 
             index += 1
             continue
 
-        summary = first_sentence(doc)
+        summary, example = first_sentence(doc), doc_example(doc)
         doc, held_derives = [], derives
         derives = ()
         top = stack[-1] if stack else ("", -4, "")
@@ -615,7 +680,7 @@ def scan_file(lines: "list[str]", source: str, items: "dict[str, Item]", phase: 
         # lose the one enum the document most needs (F-002).
         if match and not stack:
             index = enter_definition(
-                lines, index, match, summary, held_derives, source, stack, items, phase
+                lines, index, match, summary, example, held_derives, source, stack, items, phase
             )
             continue
 
@@ -706,6 +771,7 @@ def enter_definition(
     index: int,
     match: "re.Match[str]",
     summary: str,
+    example: "list[str]",
     derives: "tuple[str, ...]",
     source: str,
     stack: "list[tuple[str, int, str]]",
@@ -725,6 +791,7 @@ def enter_definition(
     first = not item.kind
     if first:
         item.kind, item.summary, item.derives, item.source = kind, summary, derives, source
+        item.example = example
     if kind in ("fn", "const", "type"):
         decl, index = read_signature(lines, index)
         if first:
@@ -928,13 +995,21 @@ def render_module(
 
 
 def render_item(item: Item) -> "list[str]":
-    """One reference entry: heading, one-liner, and the declaration."""
+    """One reference entry: heading, one-liner, declaration, and an example.
+
+    public-api.md §4's spec in full. The example is the crate's own doctest, so
+    it is code CI compiles rather than code someone typed into a document —
+    which is the same reason the Quickstart is an example file embedded
+    verbatim.
+    """
     out = [f"#### `{item.name}`", ""]
     if item.summary:
         out += [f"{item.summary}.", ""]
     block = declaration(item)
     if block:
         out += ["```rust"] + block + ["```", ""]
+    if item.example:
+        out += ["```rust"] + item.example + ["```", ""]
     return out
 
 
