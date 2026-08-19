@@ -87,7 +87,10 @@ match to 43 seconds **with the game byte-identical**. So the controller is not
 just an instrument that can under-read. It is an instrument that will send you
 off to change the thing you are measuring. Get it playing to win *before* you
 believe any number it prints, and when a number looks wrong, suspect the
-controller first — it is the newer and worse-tested of the two.
+controller first — it is the newer and worse-tested of the two. And suspect it
+*once*: what settles the question in a single run is the contract check three
+paragraphs below. Without that, "suspect the controller" is advice you cannot
+discharge — you can look harder and still not know.
 
 **And "take the best shot available" will lose you the match, because the best
 shot is on the edge of what the paddle can do.** The next run wrote exactly that
@@ -119,6 +122,20 @@ contract like any other, so check the contract on the numbers it actually picked
 every tick. "My aim missed the ball on 94% of returns" is a controller reporting
 its own fault; "the game is unwinnable" is the same fault reported as a fact
 about your game, and only one of those sends you into the constants.
+
+**And it clears the controller as fast as it convicts it, which is the half you
+will not expect.** Everything above is written for the case where the controller
+is at fault, because that is the case four runs in a row hit. The next run hit
+the other one: the exact symptom described above — a 37-touch rally at 0–0 — with
+a controller that was *fine*, 18 of 18 approaches met. Its **game** was the broken
+one. The opponent it had written could cross the whole court during the fastest
+shot the game could produce, so it was unbeatable by arithmetic and no controller
+could ever have scored against it. What let that run stop suspecting its driver
+and go and do the arithmetic was one line of its own summary — `met 18 of 18
+approaches` — a controller reporting itself healthy. So the check is not a nice
+extra on top of the warning. It is what makes the warning actionable in both
+directions: one run tells you which half of the program to open, and without it a
+correct controller and a broken one produce the same 0–0.
 
 Assets are scripted the same way: `MemorySource` lets a test say "this texture
 becomes ready at tick 30", so loading behaviour — placeholders, gates, the frame

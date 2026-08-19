@@ -3485,6 +3485,56 @@ splitting the example duplicates a whole game to say one thing twice.
   too, so both tags now carry the ADR reference practices §1 requires.
 
 
+### F-074 — The controller warning is calibrated in one direction, and run 6 landed in the other
+
+Class: docs · Run: 6 · Fixed in: this commit · Also found by: the other side of
+**F-037/F-047/F-056** (runs 1–5) · Settled by: nothing
+
+**What run 6 hit.** *Testing your game* spends four paragraphs on "a controller
+that plays it safe is not a playability test", ending "when a number looks wrong,
+suspect the controller first". Run 6 hit the exact described symptom — a 37-touch
+rally at 0–0 — and its controller was correct: 18 of 18 approaches met, playing to
+win exactly as the section prescribes. Its **game** was the broken one. Its first
+opponent predicted where the ball would cross and moved at 17.5 u/s; the run's own
+arithmetic, in `docs/e0/run-6.md` §2, shows that opponent crossing the whole
+17.2-unit court during the fastest shot the game could produce. Unbeatable by
+geometry. No controller could ever have scored.
+
+**This is the first run to land on the other side of that warning**, and it is
+worth being precise about what that does and does not say. The warning is not
+wrong: four consecutive runs were sent into their game's constants by a bad
+driver, and F-056's fourth attempt at the paragraph is the response to that. What
+run 6 shows is that the advice is *undischargeable* on its own. "Suspect the
+controller" tells you where to look and never tells you when to stop looking, and
+a correct controller and a broken one produce the same 0–0.
+
+**What resolved it in one step is already in the document, two paragraphs later.**
+F-056's fix asks the controller to assert its own contract on the numbers it
+picked. Run 6 did that, and `met 18 of 18 approaches` is a controller reporting
+itself healthy — which is what let the run stop suspecting its driver and go do
+arithmetic instead. The run's own recommendation:
+
+> the self-check is not a nice extra, it is what makes the warning actionable in
+> both directions.
+
+**Fix.** Two edits, both small, and deliberately not a rewrite of a paragraph that
+is on its fourth attempt.
+
+- The "suspect the controller first" sentence now ends with "and suspect it
+  *once*", pointing at the contract check three paragraphs below and saying
+  plainly that without it the advice cannot be discharged.
+- The contract-check paragraph gains the other direction: run 6's symptom, its
+  healthy controller, the broken game underneath, and the statement that one run
+  of that check tells you which half of the program to open.
+
+**This is evidence about F-056's fourth attempt, and it is good.** Run 4 predicted
+in writing that if a fifth run mis-tuned its game because its driver was wrong,
+prose had failed and the lever — a worked controller in a game unlike Pong —
+should be spent. Run 6 did not do that. It wrote the contract check, its
+`--verify` file contains an assertion about its own controller, and the check is
+what stopped the search. **The lever stays unspent.** §6 carries this forward.
+
+
 ## 5. Notes on the run's procedure
 
 Two things about run 1 that are not findings but would confuse a later reader.
