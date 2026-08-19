@@ -93,7 +93,7 @@ prompt.
 | 3 | 2026-08-17 | Pong shipped; **not** a pass | 0 | 8 | 1 | Zero compile errors on the first `cargo check`; "the API document was enough". No `engine` finding. What is left is what the document does not *say* about behaviour that is already right. Raw notes: `docs/e0/run-3.md`. §6. |
 | 4 | 2026-08-18 | Pong shipped; **not** a pass | 3 | 11 | 1 (+1 `environment`) | Compiled clean, `--verify` green. One full debug cycle lost to `ctx.circle`, six tuning runs lost to its own verify controller. Three `engine` findings, decided in ADRs 0021–0023 (two applied, one declined with the boundary documented), plus one environment escalation (F-054). Raw notes: `docs/e0/run-4.md`. Triage: §4a. §6. |
 | 5 | 2026-08-19 | Pong shipped; **not** a pass | 1 | 7 | 2 (+1 `environment`) | Compiled clean, `--verify` green, 1,263 frames recorded. Two cycles lost to a controller that optimised onto the boundary of what its paddle could reach (F-056) — the fourth run to be sent into its game's constants by its own driver, and the first that had *read* the warning. The one `engine` finding is **declined**: ADR-0024 says draw order was always observable and a `Depth` on `DrawnQuad` would not have caught the bug it was wanted for. Raw notes: `docs/e0/run-5.md`. Triage: §4b. §6. |
-| 6 | 2026-08-19 | Pong shipped; **not** a pass | 1 | 9 | 1 (+1 `environment`) | Compiled clean, `--verify` green, 2,013 ticks, and **the first run to see a frame of its own game** — the capture path landed and the PNG looks like Pong. Blocked once, on its own game design: an opponent unbeatable by arithmetic (F-074, the other side of F-064). The one `engine` finding is **accepted and fixed** — `Radians::from_degrees` is now a `const fn` (F-069). Its headline is a document sentence that was *false* rather than missing (F-068), the second run running. Every claim in its log held under checking. Raw notes: `docs/e0/run-6.md`. Triage: §4c. §6. |
+| 6 | 2026-08-19 | Pong shipped; **not** a pass | 1 | 9 | 1 (+1 `environment`) | Compiled clean, `--verify` green, 2,013 ticks, and **the first run to see a frame of its own game** — the capture path landed and the PNG looks like Pong. Blocked once, on its own game design: an opponent unbeatable by arithmetic (F-074, the other side of F-064). The one `engine` finding is **accepted and fixed** — `Radians::from_degrees` is now a `const fn` (F-069). Its headline is a document sentence that was *false* rather than missing (F-068), the second run running. Every claim in its log held under checking. **Valid, and played** — both after-the-run steps taken before the decks were cleared. Raw notes: `docs/e0/run-6.md`. Triage: §4c. §6. |
 
 Run 1 produced a working, fun Pong and a document-shaped hole underneath it. The
 game is not the measurement — `docs/e0/run-1.md` is — and it says the run could
@@ -146,15 +146,24 @@ down (F-031).
 things it wanted to grep for and did not — the font's coverage among them, which
 is F-030 and which it shipped a documented workaround for rather than an answer.
 
-**Run 6's validity has not been checked, and its game has not been played.** Both
-are after-the-run steps 1 and 2 and both are the maintainer's: the transcript
-check is the one thing that decides whether run 6 counts towards §2's two clean
-runs at all, and until it is done run 6's eleven findings are worth fixing (they
-were) but its place in the streak is unsettled. The playtest is the more urgent of
-the two, for the reason run 5's note gives below: clearing the decks for run 7
-deletes `crates/jidousha/examples/pong/`, and a playtest deferred past that point
-cannot happen. Run 6's own §8 says what it could not check and why, which is the
-usual substitute evidence and is not a substitute for either step.
+**Run 6 was valid, and its game was played.** The maintainer checked the
+transcripts for reads under the restricted paths and ran the game, both
+after-the-run steps 1 and 2, taken before the decks were cleared for run 7 — which
+is the order run 5's note below insists on, because clearing deletes
+`crates/jidousha/examples/pong/` and a playtest deferred past that point cannot
+happen. So run 6 counts as a measurement: **not a pass** — one `engine` and nine
+`docs` findings — but a real reading rather than a void one, and the consecutive
+clean-run counter stays at zero for the reason §2 gives rather than for want of a
+check.
+
+This paragraph records the maintainer's report rather than something this file
+re-derived; the transcript is the artifact. Run 6's own §8 states what the *run*
+could not check — the windowed path and the browser, neither of which a container
+with no display can reach — and F-079 is where that stays open. **If the playtest
+turned up anything about playability, it belongs here**: run 1's is recorded with
+what it found ("controls good, opponent hard but fair at roughly a one-in-four win
+rate, first-to-five the right match length") and that is the only evidence in this
+file for the half of "working" no assertion reaches.
 
 **Run 5 was valid, and its game was played.** The maintainer checked the
 transcript for reads under the restricted paths and found none, and ran the game
@@ -3298,10 +3307,10 @@ the paragraph gets written from three.**
    same `WgpuBackend` a window would use, and the PNG looks like Pong. What is
    still unexercised is window creation and the `winit`→`Input` plumbing, which is
    engine code rather than a run's. No E0 *session* has played its own game — the
-   maintainer has, once, for run 5, and **run 6's playtest is outstanding and
-   expires when the decks are cleared**. That is now a `DISPLAY`-shaped hole rather
-   than a whole-graphics-stack one, which makes it a smaller ask than F-054 was —
-   and still not one an agent may take.
+   maintainer has, twice now — runs 5 and 6, each before its decks were cleared.
+   That is now a `DISPLAY`-shaped hole rather than a whole-graphics-stack one,
+   which makes it a smaller ask than F-054 was — and still not one an agent may
+   take.
 2. **`tools/serve-web` has never run in an E0 container.** It needs
    `wasm-bindgen-cli` 0.2.127, matching the lockfile, which is not installed;
    installing a toolchain is on CLAUDE.md's never-agent-fixable list and run 6 was
@@ -3781,9 +3790,12 @@ triage: `tools/doctor` reports `ENV_OK` with `graphics: no DISPLAY/WAYLAND_DISPL
 **And a live consequence, which is why the correction is worth its space.** Run 5's
 note says the order matters: clearing the decks deletes
 `crates/jidousha/examples/pong/`, so a playtest deferred past that point is a
-playtest that cannot happen. **Run 6's game has not been played, and it is on the
-default branch now.** After-the-run step 2 is outstanding and it expires when the
-decks are cleared for run 7.
+playtest that cannot happen. When this was first written run 6's game was unplayed
+and sitting on the default branch; the maintainer has since played it and checked
+its transcripts, both before the decks were cleared for run 7 (§3). **The
+correction is what surfaced the deadline**, which is the argument for restating an
+overclaim rather than narrowing it quietly: the false half of the sentence was
+hiding a step that expires.
 
 
 ## 5. Notes on the run's procedure
@@ -4034,8 +4046,8 @@ Run 6 is the fourth uncontaminated measurement, and it read no other run's log.
   in writing.
 - **F-054 is half-resolved and F-079 is the other half**: six runs, and no E0
   session has yet run its own game in a window. Playing it is the maintainer's
-  step and has happened once, for run 5 — **run 6's game is still unplayed**, and
-  §3 records why that expires rather than waits: clearing the decks deletes the
+  step, and it has now happened for runs 5 and 6 alike, each before its decks were
+  cleared — which §3 records as the order that matters, since clearing deletes the
   game.
 
 ### What run 7 should be watched for
