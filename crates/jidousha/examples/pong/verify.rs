@@ -664,6 +664,26 @@ fn the_sweep_holds_its_contract(checks: &mut Checks) {
             to.x, from.x
         ),
     );
+    // Already behind the face at the start of the tick, and still travelling
+    // into it. Play never produces this — a ball that has just bounced is
+    // travelling the other way, so the guard against it is unreachable in a
+    // match and removing it changes nothing a played game can see. It is still
+    // the difference between a contact test and a test that hits twice, so it
+    // gets asked rather than assumed.
+    let behind = crate::paddle_contact(
+        Vec2::new(face + 0.1, 0.0),
+        Vec2::new(face + 3.0, 0.0),
+        Side::Right,
+        0.0,
+    );
+    checks.require(
+        behind.is_none(),
+        "a ball that was already past the paddle was counted as hitting it again",
+        format!(
+            "it starts the tick 0.10 behind the face at x={face:.2} and carries on the same \
+             way; got {behind:?}"
+        ),
+    );
     // Not reaching it at all.
     let short = crate::paddle_contact(from, Vec2::new(face - 4.0, 0.0), Side::Right, 0.0);
     checks.require(
