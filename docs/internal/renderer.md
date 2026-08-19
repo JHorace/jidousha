@@ -36,6 +36,16 @@ null backend, §9). All cleverness (sorting, batching, culling if ever) lives in
 render-core so backends stay dumb executors — that's what keeps the ash port and
 the WebGL2 fallback cheap.
 
+**Checked, not merely stated**, by `crates/jidousha/tests/backend_agnostic.rs`:
+one scripted session with art, run through a `NullBackend` and through a real
+`WgpuBackend`, with every position compared as float bits. The upload path is the
+only place the contract can break — `upload_ready_textures` takes `Assets`
+mutably, so a backend that created textures differently could leave a different
+world behind it — which is why that test scripts a texture arriving partway
+through and asserts it really resolved. The check lived in
+`examples/prototype_kit` until ADR-0028; it is a claim about the engine, so it
+moved to a test.
+
 ## 2. Submission model
 
 Drawing is **immediate-mode from the game's point of view**: Draw systems submit

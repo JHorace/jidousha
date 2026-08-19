@@ -1,8 +1,20 @@
-//! The captured frame: the same game, rendered on a GPU, written out as a PNG.
+//! The captured frame: the frame the check already recorded, rendered on a GPU
+//! and written out as a PNG.
 //!
-//! R4's artifact. `verify.rs` asserts on what was *submitted*; this renders it
-//! for real and leaves a picture behind, which is the half a person can look at
-//! and the half that would catch a backend drawing nothing at all.
+//! R4's artifact. `verify.rs` asserts on what was *submitted*; this renders one
+//! of those frames for real and leaves a picture behind, which is the half a
+//! person can look at and the half that would catch a backend drawing nothing
+//! at all.
+//!
+//! There is no second session and no game to re-run: a `FrameRecord` carries
+//! the finished `FramePlan`, with the depth sort and the batching already done,
+//! and a renderer built for the purpose executes it.
+//!
+//! **This game loads art, which is the case the short path does not cover on its
+//! own.** The plan names a texture id, and an id only means anything to a
+//! backend that created its textures in the same order — so the replay creates
+//! the built-ins and then uploads the same art, and checks the ids agree rather
+//! than assuming they do.
 //!
 //! A machine with no GPU is not a failure. Every runner this project has is
 //! headless and some have no graphics stack at all; the run says so and the
@@ -10,11 +22,14 @@
 //! (renderer.md §9).
 
 use jidousha::prelude::*;
-use jidousha::testing::{RenderBackend, RenderError, WgpuBackend, encode_png};
+use jidousha::testing::{
+    BackendTextureId, FONT_TEXTURE, FrameRecord, RenderBackend, RenderError, WgpuBackend,
+    create_builtin_textures, encode_png, upload_ready_textures,
+};
 use std::path::{Path, PathBuf};
 
 use crate::checks::{Checks, fail};
-use crate::verify::play;
+use crate::verify::store;
 
 /// How big the captured artifact is.
 ///
@@ -43,18 +58,16 @@ fn one_line(message: &str) -> String {
     message.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// Render the same session on a GPU and write the last frame out as a PNG.
-///
-/// A second run of the same scripted game, through the wgpu backend instead of
-/// the null one. Two things come out of it: the artifact a person or an agent
-/// can look at, and the assertion that the *world* did the same thing both
-/// times — which is renderer.md §1's contract that everything above the seam is
-/// backend-agnostic, checked rather than asserted.
+/// Render the recorded frame on a GPU and write it out as a PNG.
 ///
 /// A machine with no GPU is not a failure. Every runner this project has is
 /// headless and some have no graphics stack at all; the run says so and the
 /// rest of the verification stands, exactly as the golden tests do.
-pub(super) fn capture_a_frame(checks: &mut Checks, expected_track: &[f32]) -> String {
+pub(super) fn capture_a_frame(
+    checks: &mut Checks,
+    frame: &FrameRecord,
+    font: BackendTextureId,
+) -> String {
     let mut gpu = WgpuBackend::offscreen(CAPTURE_SIZE);
     for _ in 0..HANDSHAKE_POLLS {
         match gpu.poll() {
@@ -92,25 +105,44 @@ pub(super) fn capture_a_frame(checks: &mut Checks, expected_track: &[f32]) -> St
         return "skipped, the GPU handshake never finished".to_owned();
     }
 
-    let run = play(&mut gpu, CAPTURE_SIZE);
-    // A reading, not a reason to stop: the capture below is still worth taking,
-    // and a run that reports this alongside whatever else went wrong is more
-    // use than one that reports it alone.
+    // The built-in textures first, in the order the recorder created them, so
+    // the ids inside the plan mean the same thing here — then the same art,
+    // uploaded the same way, because this game has some and the plan names it.
+    let mut textures = create_builtin_textures(&mut gpu);
+    let mut assets = store();
+    // The same file the game asks for, requested the same way: a store only
+    // has texels for something that was *loaded*, so a replay that skips this
+    // uploads nothing and the plan names a texture the GPU does not have.
+    let _ = assets.load_texture("sprites/hero.png");
+    // Past the tick the store is scripted to resolve on, so the load has
+    // something to hand over.
+    let _ = assets.commit(crate::verify::TICKS);
+    upload_ready_textures(&mut assets, &mut gpu, &mut textures);
+
+    // Checked rather than assumed, which is the whole load-bearing step: both
+    // counters started empty and both were filled by the same calls in the same
+    // order, so the font has to land on the id the recorder reported. If it
+    // does not, every other id in the plan is wrong too and the picture is of
+    // something else.
     checks.require(
-        run.paddle_track == expected_track,
-        "the same game did different things on two backends",
+        textures.resolve(FONT_TEXTURE) == font,
+        "the replay's texture ids do not mean what the recorded plan means",
         format!(
-            "the paddle ended at {:?} through the GPU and {:?} through the null backend; \
-             everything above the backend seam is backend-agnostic (renderer.md §1), so a \
-             world that depends on which backend drew it is a layering bug",
-            run.paddle_track.last(),
-            expected_track.last(),
+            "the recorder put the font on {font:?} and this backend put it on {:?}; the plan \
+             names ids, so a mismatch means the picture samples the wrong textures",
+            textures.resolve(FONT_TEXTURE)
         ),
     );
 
+    if let Err(error) = gpu.render(&frame.plan) {
+        fail(
+            "the GPU refused a plan the recorder had already accepted",
+            &one_line(&error.to_string()),
+        );
+    }
     let Ok(image) = gpu.capture() else {
         fail(
-            "the GPU rendered the session and then would not hand the frame back",
+            "the GPU rendered the frame and then would not hand it back",
             "an offscreen backend can always read its own target",
         );
     };

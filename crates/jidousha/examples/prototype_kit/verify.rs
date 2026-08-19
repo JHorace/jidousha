@@ -9,45 +9,29 @@
 //! and the art from a store with scripted arrival ticks, so the run is the same
 //! on every machine and on every day.
 //!
-//! # One thing here is not the shape to copy
+//! # How a game gets a frame, which is what this file shows
 //!
-//! **A game gets its frames from `FrameRecorder`.** Two calls — `FrameRecorder::new`
-//! with the camera's viewport, then `recorder.draw(&mut sim)` once a tick, which
-//! hands back the `FrameRecord` every assertion reads. `recorder.font_texture()`
-//! answers "which texture is the font on", and `frame.plan` is what a capture
-//! path replays to get a PNG. That is the whole of it, and it is what the testing
-//! document prescribes.
+//! Two calls. `FrameRecorder::new` with the camera's viewport, then
+//! `recorder.draw(&mut sim)` once a tick, which hands back the `FrameRecord`
+//! every assertion below reads. A game with art adds
+//! `recorder.settle_assets(&mut sim, tick)` before each `draw`, so a texture
+//! that resolved this tick is sampled in this frame. `recorder.font_texture()`
+//! answers "which texture is the font on", and `frame.plan` is what
+//! `capture.rs` replays to get a PNG. That is the whole of it.
 //!
-//! **This file does not do that**, and the fifteen lines it spends instead —
-//! `sim.draw()`, its own `TextureTable` from `create_builtin_textures`,
-//! `plan_frame`, `backend.render`, and a throwaway `NullBackend` in
-//! `textures_font_id` below to work out where the font landed — are **not** part
-//! of writing a `--verify` mode. They are here because this example is doing a
-//! second job that a game does not have: `play` takes a `&mut dyn RenderBackend`,
-//! so the identical session runs through a null backend *and* through a real GPU,
-//! and the run can assert that the world did the same thing both times. Driving
-//! the backend by hand is what buys that comparison, and `FrameRecorder` records
-//! into a null backend only.
-//!
-//! So: read this file for the *checks* — what to assert about a world and about
-//! what was drawn, and how to report a failure. Do not read it for how to get a
-//! frame. E0 run 6 read both and had to work out which half was advice.
-//!
-//! DELIBERATE: the divergence is kept rather than fixed, and it is named here at
-//! the top rather than only where it happens (see ADR-0026). Making this file use
-//! the recorder would delete the two-backend comparison, which is the one thing in
-//! the repository that checks a session is backend-agnostic; splitting it into two
-//! examples would duplicate a whole game to say one thing twice. What was wrong
-//! was that the explanation lived two hundred lines down, in the doc comment of a
-//! private helper, where a reader who had already copied the shape would meet it
-//! (e0-findings.md F-073).
+//! This file used to drive a backend by hand instead — `sim.draw()`, its own
+//! `TextureTable`, `plan_frame`, `backend.render` — because it ran the identical
+//! session through a null backend *and* a real GPU and checked the world came
+//! out the same. That comparison was a claim about the **engine**, so it moved
+//! to `crates/jidousha/tests/backend_agnostic.rs` where a claim about the engine
+//! belongs, and this file went back to the shape it was teaching (ADR-0028,
+//! superseding ADR-0026; e0-findings.md F-073).
 
 use crate::checks::{Checks, fail, greater, near, sizes_covering};
 use crate::{Paddle, config, register};
 use jidousha::prelude::*;
 use jidousha::testing::{
-    BackendTextureId, FONT_TEXTURE, FramePlan, InputScript, MemorySource, NullBackend,
-    RenderBackend, create_builtin_textures, decode_png, plan_frame, upload_ready_textures,
+    BackendTextureId, FrameRecord, FrameRecorder, InputScript, MemorySource, decode_png,
 };
 use std::process::ExitCode;
 
@@ -56,7 +40,7 @@ use std::process::ExitCode;
 /// Long enough for the script below to push the paddle into *both* ends of
 /// its clamp — a shorter run would still pass every assertion here, and the
 /// clamp would be asserted only in the sense of never having been reached.
-const TICKS: u64 = 130;
+pub(super) const TICKS: u64 = 130;
 
 /// The tick the art is scripted to arrive on.
 ///
@@ -102,7 +86,7 @@ fn peak_at(track: &[f32], pick: fn(f32, f32) -> bool) -> usize {
 /// it is the same on a machine that checked the repository out somewhere
 /// else, and the bytes are the ones the window would have shown, so a
 /// picture that stopped decoding fails here rather than passing on a stub.
-fn store() -> Assets {
+pub(super) fn store() -> Assets {
     let Ok(hero) = decode_png(include_bytes!("../../../../assets/sprites/hero.png")) else {
         fail(
             "the example's own art no longer decodes",
@@ -126,10 +110,9 @@ fn script() -> InputScript {
 
 /// What one scripted run of the game did.
 ///
-/// Returned rather than asserted on inside the loop, so the *same* loop can be
-/// played through two different backends and the results compared — which is
-/// how this file checks renderer.md §1's contract that everything above the
-/// seam is backend-agnostic.
+/// Gathered as the loop goes and asserted on afterwards, so the assertions read
+/// as a list of claims about the game rather than as a commentary threaded
+/// through it.
 pub(super) struct Run {
     /// The paddle's Y after each tick.
     pub(super) paddle_track: Vec<f32>,
@@ -137,10 +120,19 @@ pub(super) struct Run {
     pub(super) paddle_pos: Vec2,
     /// Where the ball ended up.
     pub(super) ball_pos: Vec2,
-    /// How many frames drew the checkered placeholder.
-    pub(super) placeholder_frames: u32,
-    /// How many frames were submitted.
+    /// Which texture the art sampled on each tick, oldest first.
+    ///
+    /// The placeholder before the file resolves and the art itself after, so
+    /// the *tick they differ on* is the tick the art arrived — read off the
+    /// frames rather than off the world, which is the half a game can get
+    /// wrong while `Assets::status` says everything is fine.
+    pub(super) art_texture: Vec<BackendTextureId>,
+    /// How many frames were recorded.
     pub(super) frames: usize,
+    /// The last frame, which every assertion about drawing reads.
+    pub(super) last: FrameRecord,
+    /// Which backend texture the font atlas landed on.
+    pub(super) font: BackendTextureId,
     /// The camera the last frame was drawn with.
     ///
     /// The game's own, with the viewport this run chose stamped on — which is
@@ -150,35 +142,29 @@ pub(super) struct Run {
     pub(super) camera: Camera,
 }
 
-/// Play the scripted session through `backend`, drawing every tick.
+/// Play the scripted session, recording every frame.
 ///
-/// `viewport` is the camera's, which decides the frame's aspect ratio and
-/// nothing else — the world is the same whatever it is set to, which is the
-/// point of the comparison the caller makes.
-pub(super) fn play(backend: &mut dyn RenderBackend, viewport: PhysicalSize) -> Run {
+/// The two calls a game makes — `FrameRecorder::new` with the camera's
+/// viewport, then `draw` once a tick — plus `settle_assets`, which this game
+/// needs because it has art and a game of shapes and text does not.
+pub(super) fn play() -> Run {
     let mut sim = headless(config(), register);
     // Before Startup, which is what `set_the_scene` checks for.
     sim.world_mut().insert_resource(store());
 
     let script = script();
-    let mut textures = create_builtin_textures(backend);
+    // The recorder's viewport overrides the `Camera` resource's, so give it the
+    // one the game's camera already has and the question stops existing.
+    let mut recorder = FrameRecorder::new(HEADLESS_VIEWPORT);
+    // A plain id, borrowing nothing; read out once so the assertions stay short.
+    let font = recorder.font_texture();
     let mut paddle_track = Vec::new();
     let mut paddle_pos = Vec2::ZERO;
     let mut ball_pos = Vec2::ZERO;
-    let mut placeholder_frames = 0;
-    let mut frames = 0;
-    let mut last_camera = Camera::default();
+    let mut art_texture = Vec::new();
+    let mut last = None;
 
     for tick in 1..=TICKS {
-        let Some(assets) = sim.world_mut().find_resource_mut::<Assets>() else {
-            fail(
-                "the store vanished",
-                "Startup installs one and nothing removes it",
-            );
-        };
-        assets.commit(tick);
-        upload_ready_textures(assets, backend, &mut textures);
-
         sim.world_mut()
             .insert_resource(Input::new(script.snapshot_at(tick)));
         sim.tick();
@@ -205,53 +191,68 @@ pub(super) fn play(backend: &mut dyn RenderBackend, viewport: PhysicalSize) -> R
             None => fail("the ball is gone", "Startup spawns exactly one sprite"),
         }
 
-        // Draw every tick, so the transcript covers the frames before the
-        // art arrives as well as the ones after.
-        let camera = Camera {
-            viewport,
-            ..*sim.world().resource::<Camera>()
-        };
-        last_camera = camera;
-        let quads = sim.draw().quads().to_vec();
-        let plan = plan_frame(&camera, &quads, &textures);
-        if plan
-            .batches
-            .iter()
-            .any(|batch| batch.texture == textures.placeholder())
-        {
-            placeholder_frames += 1;
+        // What makes a texture that resolved on *this* tick appear in *this*
+        // frame. A game of shapes and text never needs it.
+        recorder.settle_assets(&mut sim, tick);
+        // Drawn every tick, so the recorder's history covers the frames before
+        // the art arrives as well as the ones after.
+        let frame = recorder.draw(&mut sim);
+        if let Some(sprite) = sprite_quad(&frame, ball_pos, font) {
+            art_texture.push(sprite.texture);
         }
-        if let Err(error) = backend.render(&plan) {
-            fail("a backend refused a frame", &error.to_string());
-        }
-        frames += 1;
+        last = Some(frame);
     }
 
+    let Some(last) = last else {
+        fail("no frame was recorded", "the loop above draws every tick");
+    };
     Run {
         paddle_track,
         paddle_pos,
         ball_pos,
-        placeholder_frames,
-        frames,
-        camera: last_camera,
+        art_texture,
+        frames: TICKS as usize,
+        camera: Camera {
+            viewport: HEADLESS_VIEWPORT,
+            ..*sim.world().resource::<Camera>()
+        },
+        last,
+        font,
     }
+}
+
+/// The quad the art was drawn as, in `frame`, if it is there.
+///
+/// Identified by geometry rather than by texture, because *which* texture it
+/// samples is the thing the caller is asking about: the placeholder before the
+/// file resolves, the art itself after. It is the one quad that is not a glyph,
+/// is bigger than the debug marks around it, and is centred on the sprite.
+fn sprite_quad(
+    frame: &FrameRecord,
+    at: Vec2,
+    font: BackendTextureId,
+) -> Option<jidousha::testing::DrawnQuad> {
+    frame.covering(at).into_iter().find(|quad| {
+        let bounds = quad.bounds();
+        quad.texture != font
+            && greater(bounds.size().x, 2.0)
+            && near(bounds.center().x, at.x)
+            && near(bounds.center().y, at.y)
+    })
 }
 
 pub fn run() -> ExitCode {
     let mut checks = Checks::default();
-    let mut backend = NullBackend::new();
-    let transcript_run = play(&mut backend, HEADLESS_VIEWPORT);
     let Run {
         paddle_track,
         paddle_pos,
         ball_pos,
-        placeholder_frames,
+        art_texture,
         frames,
+        last,
+        font,
         camera,
-    } = &transcript_run;
-    let (paddle_track, paddle_pos, ball_pos) = (paddle_track.clone(), *paddle_pos, *ball_pos);
-    let (placeholder_frames, frames) = (*placeholder_frames, *frames);
-    let camera = *camera;
+    } = play();
 
     // --- what the world did ------------------------------------------
     // Y is down (ADR-0010), so the bottom of the screen is the larger number.
@@ -292,9 +293,6 @@ pub fn run() -> ExitCode {
         "one frame per tick was expected",
         format!("{frames} frames for {TICKS} ticks"),
     );
-    let Some(last) = backend.last_frame() else {
-        fail("no frame was recorded", "the loop above draws every tick");
-    };
     // The field markings, the paddles, the ball and the text: several
     // batches, because they do not all sample the same texture.
     checks.require(
@@ -305,19 +303,32 @@ pub fn run() -> ExitCode {
             last.plan.batches.len()
         ),
     );
-    // Exactly the frames before the art arrives, rather than "at least one" and
-    // "not all of them". Both of the looser forms pass for a store that resolves
-    // on tick 1, which is the state this example exists to show is survivable —
-    // a requirement stated where it can hardly fail is a requirement about a
-    // case that hardly happens.
+    // Read off the frames rather than off `Assets::status`: the question is
+    // which texture was *drawn*, and a game can get that wrong while the world
+    // says everything resolved on time. The art sampled one texture before it
+    // arrived — the checkered placeholder — and another after, so the tick they
+    // differ on is the tick it arrived (renderer.md §5).
+    //
+    // Stated as "exactly this tick" rather than "at least one placeholder frame
+    // and not all of them". Both of the looser forms pass for a store that
+    // resolves on tick 1, which is the state this example exists to show is
+    // survivable, and a requirement stated where it can hardly fail is a
+    // requirement about a case that hardly happens.
+    let drew_art = art_texture.len() == frames;
+    let arrived_at = art_texture.first().and_then(|placeholder| {
+        art_texture
+            .iter()
+            .position(|texture| texture != placeholder)
+            .map(|index| index as u64 + 1)
+    });
     checks.require(
-        u64::from(placeholder_frames) == ART_ARRIVES - 1,
-        "the placeholder did not cover exactly the frames before the art arrived",
+        drew_art && arrived_at == Some(ART_ARRIVES),
+        "the art did not replace the placeholder on the tick it was scripted to arrive",
         format!(
-            "{placeholder_frames} of {frames} frames drew it; the art is scripted to arrive \
-             on tick {ART_ARRIVES}, so the {} frames before it must show the checkered \
-             placeholder and none after it may (renderer.md §5)",
-            ART_ARRIVES - 1
+            "the sprite was drawn in {} of {frames} frames and changed texture on tick \
+             {arrived_at:?}; the store is scripted to resolve on tick {ART_ARRIVES}, so the \
+             frames before it must draw the checkered placeholder and none after it may",
+            art_texture.len()
         ),
     );
     // And the paddle really is on screen where the world says it is — the
@@ -351,7 +362,7 @@ pub fn run() -> ExitCode {
             paddle_pos.y,
             crate::PADDLE_SIZE.x,
             crate::PADDLE_SIZE.y,
-            sizes_covering(last, paddle_pos)
+            sizes_covering(&last, paddle_pos)
         ),
     );
 
@@ -359,22 +370,21 @@ pub fn run() -> ExitCode {
     // texture like any other (renderer.md §6), so "was text drawn" is "did a
     // quad sample the font", and the score's own position is what says the
     // layout ran rather than something merely having been submitted.
-    let font = textures_font_id(&last.plan);
+    let font_was_drawn = last.quads().iter().any(|quad| quad.texture == font);
     checks.require(
-        font.is_some(),
+        font_was_drawn,
         "nothing on screen sampled the font atlas",
         "the score, the readout and the character sample are all text, so a frame without a \
          font batch has lost all three (renderer.md §6)"
             .to_owned(),
     );
-    let glyphs: usize = font.map_or(0, |font| {
-        last.plan
-            .batches
-            .iter()
-            .filter(|batch| batch.texture == font)
-            .map(|batch| batch.quad_count())
-            .sum()
-    });
+    let glyphs: usize = last
+        .plan
+        .batches
+        .iter()
+        .filter(|batch| batch.texture == font)
+        .map(|batch| batch.quad_count())
+        .sum();
     // The score is drawn centred at the top; its middle character is a dash,
     // whose cell straddles this point. A layout that stopped centring, or a
     // camera that stopped agreeing with it, moves the text off this spot.
@@ -386,8 +396,7 @@ pub fn run() -> ExitCode {
     // overlap. `covering` is the depth sort read backwards, so its first entry
     // is what a player sees.
     let front_at_score = last.covering(score_middle).into_iter().next();
-    let score_drawn =
-        font.is_some_and(|font| front_at_score.is_some_and(|quad| quad.texture == font));
+    let score_drawn = front_at_score.is_some_and(|quad| quad.texture == font);
     checks.require(
         score_drawn,
         "the score is not the front-most thing where the game draws it",
@@ -418,7 +427,7 @@ pub fn run() -> ExitCode {
     let ball_drawn = last
         .covering(ball_pos)
         .into_iter()
-        .any(|quad| font != Some(quad.texture) && quad.bounds().size().x > 2.0);
+        .any(|quad| quad.texture != font && quad.bounds().size().x > 2.0);
     checks.require(
         ball_drawn,
         "the ball sprite is not drawn where the world puts it",
@@ -426,7 +435,7 @@ pub fn run() -> ExitCode {
             "the world has it at ({:.2}, {:.2}); what covers that point is {}",
             ball_pos.x,
             ball_pos.y,
-            sizes_covering(last, ball_pos)
+            sizes_covering(&last, ball_pos)
         ),
     );
 
@@ -443,7 +452,7 @@ pub fn run() -> ExitCode {
     let quads = last.quads();
     let sprite_at = quads.iter().position(|quad| {
         let bounds = quad.bounds();
-        font != Some(quad.texture)
+        quad.texture != font
             && greater(bounds.size().x, 2.0)
             && near(bounds.center().x, ball_pos.x)
             && near(bounds.center().y, ball_pos.y)
@@ -653,7 +662,7 @@ pub fn run() -> ExitCode {
         );
     }
 
-    let captured = crate::capture::capture_a_frame(&mut checks, &paddle_track);
+    let captured = crate::capture::capture_a_frame(&mut checks, &last, font);
     let verdict = checks.verdict();
 
     println!("verified prototype_kit over {TICKS} ticks");
@@ -663,7 +672,10 @@ pub fn run() -> ExitCode {
         bottom_at + 1,
         top_at + 1,
     );
-    println!("  frames: {frames}, {placeholder_frames} of them with the placeholder");
+    println!(
+        "  frames: {frames}, the art replaced the placeholder on tick {} of {ART_ARRIVES} scripted",
+        arrived_at.map_or("never".to_owned(), |tick| tick.to_string()),
+    );
     println!(
         "  ball: ({:.3}, {:.3}) after {TICKS} ticks",
         ball_pos.x, ball_pos.y
@@ -675,40 +687,4 @@ pub fn run() -> ExitCode {
     println!("  capture: {captured}");
     print!("{}", last.transcript());
     verdict
-}
-
-/// Which backend texture the font atlas landed on, read off the frame.
-///
-/// The table is gone by the time the assertions run, and the atlas is not at a
-/// fixed id — it is whatever `create_builtin_textures` assigned. So: rebuild a
-/// table against a throwaway backend, in the same order, and ask it.
-///
-/// **A game does not do this.** `FrameRecorder::font_texture()` answers the
-/// question directly, because the recorder still owns the table that knows:
-///
-/// ```ignore
-/// let mut recorder = FrameRecorder::new(PhysicalSize::new(1280, 720));
-/// // A plain id, borrowing nothing; read out once so the assertions stay short.
-/// let font = recorder.font_texture();
-/// let frame = recorder.draw(&mut sim);
-/// let text_was_drawn = frame.quads().iter().any(|quad| quad.texture == font);
-/// ```
-///
-/// This example keeps the long way round because `play` below runs against a
-/// *real* backend too, to capture a PNG, and the recorder records into a null
-/// backend only. That is the whole reason the ceremony survives here: a golden
-/// image needs a GPU, and asserting on what was drawn does not.
-///
-/// DELIBERATE: the shape above is written out rather than cited (see ADR-0026).
-/// It used to point at another example's file, which is a dependency an example
-/// has no business having — that file is free to be rewritten or deleted, and
-/// this comment would quietly start naming something that is not there.
-fn textures_font_id(plan: &FramePlan) -> Option<BackendTextureId> {
-    let mut scratch = NullBackend::new();
-    let table = create_builtin_textures(&mut scratch);
-    let font = table.resolve(FONT_TEXTURE);
-    plan.batches
-        .iter()
-        .any(|batch| batch.texture == font)
-        .then_some(font)
 }

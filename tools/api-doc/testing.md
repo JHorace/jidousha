@@ -12,7 +12,7 @@ assert_eq!(sim.world().resource::<Score>().0, 3);
 
 **A tick is cheap, and thousands of them are not something to budget for.** There
 is no frame to wait for, no vsync and no window — a tick is the systems you wrote
-and nothing else. One run's whole `--verify` — a 2,013-tick match, two more
+and nothing else. A whole `--verify` — a 2,013-tick match, two more
 headless runs, three staged screens and a GPU capture — takes about two seconds
 in a *debug* build, with a controller rolling the game forward thirteen candidate
 futures deep, up to four hundred ticks each, on every decision. So simulate
@@ -84,27 +84,24 @@ never finds the top speed, a fighter that blocks everything never tests a combo.
 
 **And the bill does not stop at one bad verdict.** A merely mediocre controller
 does not report "unplayable"; it reports a plausible wrong number, and then you
-tune the game to fix it. Six tuning runs went into one game's speed constants
-before the fault was found in its driver, and the game was byte-identical at the
-end. So when a number looks wrong, suspect the controller first — it is the newer
-and worse-tested of the two — and suspect it *once*: the three numbers below
-settle it in a single run, and without them "suspect the controller" is advice
-you cannot discharge.
+tune the game to fix it — six rounds of constants, and the game byte-identical
+at the end of them. So when a number looks wrong, suspect the controller first:
+it is the newer and worse-tested of the two. And suspect it *once* — the three
+numbers below settle it in a single run, and without them "suspect the
+controller" is advice you cannot discharge.
 
-**Aim at where the opponent will be, not at where it is standing.** That is the
-objective, and it is worth carrying as the principle rather than as one of its
-reductions, because the reductions are not interchangeable. Against an opponent
-that **drifts back to the middle** between shots it reduces to "try every return
-this paddle can produce, take the one that lands furthest from the middle" — the
-change that took that same match from 79 seconds to 43. Against an opponent that
-**chases the ball**, which is at least as natural a first opponent to write, that
-same reduction is close to the worst objective available: the returns landing
+**Aim at where the opponent will be, not at where it is standing.** Carry that
+as the principle rather than as any of its reductions, because the reductions are
+not interchangeable and following the wrong one produces the degenerate rally
+above. **Against an opponent that drifts back to the middle** between shots it
+reduces to "try every return this paddle can produce, take the one that lands
+furthest from the middle", which is worth most of a minute a match. **Against an
+opponent that chases the ball** — at least as natural a first opponent to write —
+that same rule is close to the worst objective available: the returns landing
 furthest from the middle are the steep ones, and a steep shot gets there by
-rebounding off a wall into the path the chaser is already following. The run that
-wrote a chaser and then wrote the reduction went 0–0 over 3,600 ticks with a
-54-touch rally — the exact symptom the reduction is quoted as curing. For a
-chaser there is no reduction: run the opponent's own rule forward beside the
-ball's, and score the landing against where that puts it.
+rebounding off a wall into the path the chaser is already following. For a chaser
+there is no reduction: run the opponent's own rule forward beside the ball's, and
+score the landing against where that puts it.
 
 **Which is a requirement on the game, not only on the check.** A controller can
 only ask where the opponent will be if the opponent's decision is a **pure
@@ -114,14 +111,14 @@ discipline as simulating the ball rather than solving for it, applied to the
 second moving thing, and worth doing to the game before the controller needs it.
 
 **And "take the best shot available" will lose you the match, because the best
-shot is on the edge of what the paddle can do.** One run searched thirteen
-contact points across its paddle and took the one landing furthest from the
-opponent — and went down **0–5**, making six returns in a minute. The sharpest
-return is always the one struck at the very tip, where the bounce angle is
-widest, so "the best available" resolves every time to "stand so the ball hits
-your last millimetre". The optimum sits on the *boundary* of the feasible set,
-and there any error at all — half a tick of overshoot, a dead band — is a clean
-miss rather than a worse return.
+shot is on the edge of what the paddle can do.** Searching contact points across
+the paddle and taking the one landing furthest from the opponent is worth **0–5,
+six returns in a minute** — worse than not searching at all. The sharpest return
+is always the one struck at the very tip, where the bounce angle is widest, so
+"the best available" resolves every time to "stand so the ball hits your last
+millimetre". The optimum sits on the *boundary* of the feasible set, and there
+any error at all — half a tick of overshoot, a dead band — is a clean miss rather
+than a worse return.
 
 So **constrain first, then optimise**. Score only the positions that (a) really
 make contact, with margin — a fixed fraction of the paddle's half-length, so the
@@ -135,23 +132,23 @@ achieve. A paddle driven by a key moves in steps of `speed * fixed_dt` and canno
 stand between them, so it arrives about a fifth of a unit from where it meant to;
 across a paddle's reach that is a twelfth of a contact offset, five degrees of
 bounce, four units of landing over a court's width — and the wall reflections
-fold that into something with no useful relationship to the aim. One run measured
-its shots landing **7.43 units from where they were planned, on a court 17.1
-units tall**: not approximately right, noise. What worked was scoring each
+fold that into something with no useful relationship to the aim. Measured, shots
+land **7.43 units from where they were planned on a court 17.1 units tall** — not
+approximately right, noise. What works is scoring each
 candidate by its **worst** outcome across the error the controller knows it has —
-three samples, plus and minus one step of quantisation, best of those worsts.
-That took the match from 0–0 to 3–0 and halved the aim error, because it stops
-picking candidates whose apparent merit is a coincidence of where the folds
-landed. It is the boundary failure above, one level up: both are optimising
-against a noisy objective.
+three samples, plus and minus one step of quantisation, best of those worsts. It
+is worth 0–0 to 3–0 and halves the aim error, because it stops picking candidates
+whose apparent merit is a coincidence of where the folds landed. It is the
+boundary failure above, one level up: both are optimising against a noisy
+objective.
 
 **Three numbers, printed every run, and one of them is not the one you would
 write.** A controller is code with a contract like any other, so check the
-contract on the numbers it actually picked. Prose has failed at this five times;
-an assertion has not failed once. And one number is not the contract: a run
-reported `met 27 of 27 approaches` while producing a 0–0 match, because meeting a
-ball and threatening with it are different contracts and that line covers only
-the first.
+contract on the numbers it actually picked — reading this is not the same as it
+working, and an assertion is the only form of it that holds. One number is not
+the contract: `met 27 of 27 approaches` prints happily alongside a 0–0 match,
+because meeting a ball and threatening with it are different contracts and that
+line covers only the first.
 
 - `met N of M approaches` — did it reach the ball at all. Clears it as a
   *returner*.
@@ -167,16 +164,13 @@ can do. N far below M: it cannot reach the ball. N healthy and Y large: it is
 aiming at noise — constrain, then minimax. N healthy, Y small and X small: it
 meets the ball and hits where it aimed, and its aims are not threats, so the
 objective is wrong. **All three healthy and still 0–0: the controller is fine and
-the game is not.** One run reached exactly that with 18 of 18 met, and its
-opponent turned out to be able to cross the whole court during the fastest shot
-the game could produce — unbeatable by arithmetic. That is when to stop reading
-the driver and go do the arithmetic on the game, and it is the half a run without
-these numbers cannot reach: a correct controller and a broken one produce the
-same 0–0.
+the game is not** — stop reading the driver and go do the arithmetic on the game.
+That is the half a run without these numbers cannot reach, because a correct
+controller and a broken one produce the same 0–0.
 
-**And the arithmetic is nearly always the same one.** Three runs in a row wrote
-an opponent nobody could score against, by three different mechanisms, and every
-one of them reduces to `opponent_speed * crossing_time >= the interval it has to
+**And the arithmetic is nearly always the same one.** An opponent nobody can
+score against is the commonest way a first game is broken, by many mechanisms
+that all reduce to `opponent_speed * crossing_time >= the interval it has to
 defend`. If that holds, the opponent reaches everything and no shot exists;
 whether it does is decided by the speeds a rally *actually* reaches rather than
 by the top speed, so check it at the slow end. Every first opponent is written by
@@ -209,16 +203,11 @@ recorder for as long as the reference lives, so anything taken out of it has to
 be `.clone()`d before the next `draw`. `recorder.font_texture()` borrows nothing
 and is free to call wherever you like.
 
-**Those two calls are the whole way in, and an example that does more is doing
-something else.** There is a longer road — draw the simulation yourself, build a
-texture table, plan the frame, hand it to a backend — and `draw` **is** that road,
-done for you and with the result kept: same submissions, same plan, same
-arithmetic, so there is nothing to gain by walking it. It exists because the
-engine's own examples run one session through two different backends and check
-the world came out the same, which is a claim about the *engine* that a game has
-no reason to make. If you are reading an example that spends fifteen lines
-getting to a frame, read it for what it asserts, not for how it got there; it
-will say so at the top.
+**Those two calls are the whole way in.** There is a longer road — draw the
+simulation yourself, build a texture table, plan the frame, hand it to a
+backend — and `draw` **is** that road, done for you and with the result kept:
+same submissions, same plan, same arithmetic, so there is nothing to gain by
+walking it, and nothing in this surface asks you to.
 
 The recorder keeps **every** frame, oldest first, with no way to forget them: a
 six-hundred-tick check holds six hundred frames. That is deliberate and it is
@@ -262,11 +251,10 @@ pass just as happily for a `mod layers` whose constants are in the wrong order.
 only visible where it changes the order.** The sort is `(layer, z, submission
 index)`, so wherever the bands already agree with the order the game submitted
 in, `quads()` *is* the submission order and no assertion over drawn quads can
-see a band at all. One run moved its winner's banner from the UI band down to the
-field band and every check in a file that caught sixteen other injected faults
-passed, because the banner was submitted last and had the screen to itself:
-nothing else was drawn where it was, and nothing else was drawn after it. Both
-spellings inherit this. `covering(p)` needs two bands to cover the same point;
+see a band at all. Move a winner's banner from the UI band down to the field
+band, on a screen where it was submitted last and nothing else was drawn where it
+was, and no check can tell: it was already last in the order and it still is.
+Both spellings inherit this. `covering(p)` needs two bands to cover the same point;
 comparing indices in `quads()` does not need the overlap, but still needs a pair
 whose order the bands decide rather than the submission sequence.
 
@@ -403,12 +391,12 @@ paused overlay that need it.
 **Then check the contracts your run never exercises.** Those screens are the
 visible half of a general problem: **a run only tests the states it reaches, and
 the safety margins a game is built on are exactly the states a correct game never
-reaches.** One run wrote the swept collision test Concepts asks for, and also
-capped its ball at 0.55 units of travel per tick against a paddle 0.7 thick — so
-the ball *could not* tunnel, the sweep never did anything a naive position test
-would not, and replacing the swept test with a position-only one passed the
-entire session: every assertion, the same 5–0, every drawn frame. The margin was
-real and the run could not see it. So ask the function its contract directly
+reaches.** Write the swept collision test Concepts asks for, then cap the ball at
+0.55 units of travel per tick against a paddle 0.7 thick, and the ball *cannot*
+tunnel: the sweep never does anything a naive position test would not, and
+replacing it with a position-only one passes the entire session — every
+assertion, the same 5–0, every drawn frame. The margin is real and a played
+session cannot see it. So ask the function its contract directly
 rather than hoping play reaches the case: one tick of travel eight units long
 across that same paddle, plus the two negative cases — past the end of it, and
 leaving through the same face — is three calls and no match at all. It will be
@@ -420,29 +408,28 @@ decoration is to break the game on purpose — one constant, one sign, one swapp
 constraint — and see whether the run says so. The natural way back from each
 mutation is `git checkout -- <file>`, which also throws away every *uncommitted*
 change in that file, including the check you wrote ten minutes ago to catch the
-fault you are injecting now. One run lost work to this twice before it learned,
-and a later one lost more after committing, because it was watching the check
-file and the revert was eating an uncommitted fix in the *game* file. Commit
-every file the harness touches, mutate, revert, repeat. Two more things the
-harness itself has to get right, both silent when it does not: a
-search-and-replace that matches nothing writes the file back unchanged and
-reports success, so make a miss an error rather than a no-op; and a mutation
-that does not compile is not a caught fault, so tell a failed build apart from a
-failed check before counting it. It is worth doing, because the answers are not guessable: one run
-broke its own game seventeen ways and caught all seventeen, but only after
-tightening two checks it had written carefully and believed were thorough. The
-swept test above was one. The other was a paddle drawn half out of position,
-which passed a "paddle-sized quad covers this point" check for the reason such a
-check always passes — a paddle still covers its own centre when it is displaced.
-Assert on the quad's *bounds*, not on the fact that something is there.
+fault you are injecting now. Commit **every** file the harness touches, not just
+the one holding the checks: the revert eats an uncommitted fix in the *game* file
+just as happily. Two more things the harness itself has to get right, both silent
+when it does not: a search-and-replace that matches nothing writes the file back
+unchanged and reports success, so make a miss an error rather than a no-op; and a
+mutation that does not compile is not a caught fault, so tell a failed build apart
+from a failed check before counting it.
+
+It is worth doing, because the answers are not guessable. A file that catches
+seventeen of seventeen injected faults usually gets there only after two checks
+written carefully and believed thorough turn out to be loose. The swept test
+above is one. The other is a paddle drawn half out of position, which passes a
+"paddle-sized quad covers this point" check for the reason such a check always
+passes — a paddle still covers its own centre when it is displaced. Assert on the
+quad's *bounds*, not on the fact that something is there.
 
 **"On screen" is not "in the right place".** The bounds check passes for anything
 inside the camera, including a hint line drawn on top of a wall. If a layout has
 constants — a field edge, a margin, a band the score lives in — assert quads
 against *those* rather than only against the camera, because otherwise the
 transcript is the only instrument and reading it means holding a hundred lines of
-coordinates in your head. One run found exactly that bug that way, after every
-assertion it had passed.
+coordinates in your head.
 
 **A failing assertion has to report the numbers it judged.** Nobody writing a
 game this way can look at it; the assertion is the only instrument there is, so
@@ -480,10 +467,10 @@ whole of the difference, and it is worth the dozen lines: an instrument that
 stops at the first bad reading costs a cycle per fault, for exactly the reason a
 message that reports a conclusion instead of numbers does. Keep a `Vec` of
 failures, push into it, print all of them in the four-part shape at the end, and
-return `FAILURE` if it is not empty. One run measured this: a single deliberate
-break produced six reported problems, and the precisely diagnostic one was
-**fourth** — exiting first would have shown only "no one won the match", which is
-the conclusion rather than the fault. The exception is a reading that makes the
+return `FAILURE` if it is not empty. A single deliberate break can produce six
+reported problems with the precisely diagnostic one **fourth**; exiting first
+shows only "no one won the match", which is the conclusion rather than the
+fault. The exception is a reading that makes the
 rest meaningless: a missing entity, a frame that was never recorded. Stop there,
 because there is nothing left to measure — not because something is wrong.
 
@@ -620,17 +607,17 @@ assert!(
 
 Any check spelled `assert_eq!(what_was_drawn, the_constant_that_drew_it)` has this
 shape — a size, a position, a speed cap, a colour. Pair it with one that names the
-requirement rather than the constant, and the pair survives the constant changing.
-One run wrote only the first form and reported it: of seventeen deliberate faults
-it injected, the clear colour was the one that escaped.
+requirement rather than the constant, and the pair survives the constant
+changing. Written in the first form alone, the clear colour is exactly the fault
+that escapes a mutation round.
 
 **And state the requirement where the game actually operates, not at its most
 favourable point.** A requirement stated at a boundary is a requirement about a
 case that hardly ever happens, so it passes for a game that fails everywhere
-else. One run's winnability check asked whether the player could reach the
-fastest ball the game could produce — a speed a rally touches only at its very
-end — and passed twice in a row for two consecutive opponents that could not be
-scored against inside a minute. Where the arithmetic needs a precision the game
+else. A winnability check asking whether the player can reach the fastest ball
+the game produces — a speed a rally touches only at its very end — passes for
+opponents that cannot be scored against inside a minute. Where the arithmetic
+needs a precision the game
 does not permit, stop deriving and **measure**: "the opponent returns at least
 half the balls that reach it" is a number the run already has, and it is about
 the game as played rather than about the game at its limit.

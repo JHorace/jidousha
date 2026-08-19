@@ -3597,6 +3597,17 @@ reader meets *after* copying the shape. That is the finding: a `DELIBERATE:` tag
 is a defense only where the surprise is, and the surprise was the file's whole
 structure.
 
+**Reopened and reversed by ADR-0028.** ADR-0026's reasoning below holds and its
+question was incomplete: it asked whether the comparison was worth keeping, and
+never asked *where a claim about the engine belongs*. It belongs in a test. The
+comparison moved to `crates/jidousha/tests/backend_agnostic.rs`, `prototype_kit`
+went back to `FrameRecorder`, and six items that existed only for the long road
+left `jidousha::testing`. What made this worth revisiting was not the argument —
+it was two measurements ADR-0026 could not have had: run 7 copying a second thing
+out of the same file against a stated rule (F-088), and the testing document
+reaching 98% of its budget with a fifth of its reference spent on vocabulary no
+game is meant to use. The original decision is below, unedited.
+
 **Decision: keep it, name it. ADR-0026.** The two alternatives both cost more
 than they buy — using the recorder deletes the two-backend comparison, and
 splitting the example duplicates a whole game to say one thing twice.
@@ -3909,16 +3920,23 @@ thing that only shows up when somebody runs the tools rather than reads them.
    renders a recorded frame through the same `WgpuBackend` a window would use,
    and the PNG looks like Pong. What is still unexercised is window creation and
    the `winit`→`Input` plumbing. Not an agent's to take.
-2. **The testing document is at 97% of its budget.** *Testing your game* is
-   ~14,700 tokens of 15,000 after this commit, and it got there by four
-   consecutive runs' fixes all landing in the same file — the controller
-   paragraph alone has been rewritten five times and is now the longest thing in
-   it. This commit added roughly a thousand tokens of findings and curated
-   roughly the same back out, which worked once and does not scale. **Run 8's
-   fixes will require deciding what leaves.** The budget is deliberate (ADR-0025,
-   public-api.md §4) and raising it is not the answer; what is missing is any
-   principle for what a `--verify` document keeps when it is full, and nobody has
-   proposed one.
+2. ~~**The testing document is at 97% of its budget.**~~ **Settled in a
+   follow-up commit, and the settlement is half structural and half not.**
+   *Testing your game* hit ~14,700 tokens of 15,000 on this triage's fixes and is
+   now at ~13,600. Two moves got it there, and only one of them scales. ADR-0028
+   took **~767 tokens out of the reference** by ending the divergence that put
+   six items in `jidousha::testing` for a road only `prototype_kit` walked — a
+   fifth of the reference, removed rather than compressed. Curating the prose
+   took **~300 more**, on a principle worth stating because it falls out of F-080
+   rather than out of budget pressure: evidence here does two jobs, and only
+   *persuasion* belongs — *specification*, meaning numbers a reader can lift as a
+   recipe, is the hazard run 7 hit, so the document keeps the rule and the scope
+   qualifier and sends the case history here. The prose is now near its floor,
+   the reference will not grow, and public-api.md §4 carries what is still open:
+   the prose grows with each run's findings, the `make-game` skill cannot take
+   them while E0's read list is `docs/api/` + `examples/`, and the honest reading
+   of a document that fills again is that it is a **convergence** signal — the
+   prose half is supposed to stop growing when E0 passes.
 3. **Whether `--verify` prose belongs in the document at all.** Related to the
    above and larger than it. Five of the seventeen findings here are lessons
    about writing a *controller*, which is not an engine question — the document
