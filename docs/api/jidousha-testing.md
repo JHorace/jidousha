@@ -114,7 +114,10 @@ match to 43 seconds **with the game byte-identical**. So the controller is not
 just an instrument that can under-read. It is an instrument that will send you
 off to change the thing you are measuring. Get it playing to win *before* you
 believe any number it prints, and when a number looks wrong, suspect the
-controller first — it is the newer and worse-tested of the two.
+controller first — it is the newer and worse-tested of the two. And suspect it
+*once*: what settles the question in a single run is the contract check three
+paragraphs below. Without that, "suspect the controller" is advice you cannot
+discharge — you can look harder and still not know.
 
 **And "take the best shot available" will lose you the match, because the best
 shot is on the edge of what the paddle can do.** The next run wrote exactly that
@@ -147,6 +150,20 @@ every tick. "My aim missed the ball on 94% of returns" is a controller reporting
 its own fault; "the game is unwinnable" is the same fault reported as a fact
 about your game, and only one of those sends you into the constants.
 
+**And it clears the controller as fast as it convicts it, which is the half you
+will not expect.** Everything above is written for the case where the controller
+is at fault, because that is the case four runs in a row hit. The next run hit
+the other one: the exact symptom described above — a 37-touch rally at 0–0 — with
+a controller that was *fine*, 18 of 18 approaches met. Its **game** was the broken
+one. The opponent it had written could cross the whole court during the fastest
+shot the game could produce, so it was unbeatable by arithmetic and no controller
+could ever have scored against it. What let that run stop suspecting its driver
+and go and do the arithmetic was one line of its own summary — `met 18 of 18
+approaches` — a controller reporting itself healthy. So the check is not a nice
+extra on top of the warning. It is what makes the warning actionable in both
+directions: one run tells you which half of the program to open, and without it a
+correct controller and a broken one produce the same 0–0.
+
 Assets are scripted the same way: `MemorySource` lets a test say "this texture
 becomes ready at tick 30", so loading behaviour — placeholders, gates, the frame
 a sprite appears — is something to assert on rather than a race.
@@ -175,6 +192,16 @@ taken out of it has to be `.clone()`d before the next `draw`.
 `recorder.font_texture()` hands back a plain id and borrows nothing, so it is
 free to call wherever you like; reading it out once before the loop just keeps
 the assertions below it short.
+
+**Those two calls are the whole way in, and an example that does more is doing
+something else.** There is a longer road — draw the simulation yourself, build a
+texture table, plan the frame, hand it to a backend — and it exists because the
+engine's own examples use it to run one session through two different backends
+and check the world came out the same. That is a claim about the *engine*, and a
+game has no reason to make it. If you are reading an example that spends fifteen
+lines getting to a frame, read it for what it asserts, not for how it got there:
+`FrameRecorder::new` and `draw` are how a game gets there, and the example will
+say so at the top.
 
 The recorder keeps **every** frame, oldest first, with no way to forget them: a
 six-hundred-tick check holds six hundred frames. That is deliberate and it is
@@ -350,10 +377,14 @@ across that same paddle, plus the two negative cases — past the end of it, and
 leaving through the same face — is three calls and no match at all. It will be
 the only check in the file that is not about a played game.
 
-**Mutate the game and check the run notices.** The cheapest way to find out
-whether a `--verify` file is an instrument or a decoration is to break the game
-on purpose — one constant, one sign, one swapped constraint — and see whether the
-run says so. It is worth doing, because the answers are not guessable: one run
+**Mutate the game and check the run notices — and commit before you start.** The
+cheapest way to find out whether a `--verify` file is an instrument or a
+decoration is to break the game on purpose — one constant, one sign, one swapped
+constraint — and see whether the run says so. The natural way back from each
+mutation is `git checkout -- <file>`, which also throws away every *uncommitted*
+change in that file, including the check you wrote ten minutes ago to catch the
+fault you are injecting now. One run lost work to this twice before it learned.
+Commit, mutate, revert, repeat. It is worth doing, because the answers are not guessable: one run
 broke its own game seventeen ways and caught all seventeen, but only after
 tightening two checks it had written carefully and believed were thorough. The
 swept test above was one. The other was a paddle drawn half out of position,

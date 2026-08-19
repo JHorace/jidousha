@@ -314,6 +314,23 @@ mod tests {
     }
 
     #[test]
+    fn a_space_is_a_glyph_and_a_newline_is_not() {
+        // A game asserting an exact glyph count on a line it drew needs to know
+        // which characters cost a quad, and space is the one nobody can guess
+        // (e0-findings.md F-076). It is one of the ninety-five printable ASCII
+        // characters this font covers, with a blank cell of its own, so it is
+        // laid out and advances like any other.
+        let style = TextStyle {
+            size: 9.0,
+            ..TextStyle::default()
+        };
+        let glyphs = layout(Vec2::ZERO, "a b", &style);
+        assert_eq!(glyphs.len(), 3, "the space is a glyph");
+        assert_eq!(glyphs[2].at, Vec2::new(14.0, 0.0), "and it advanced");
+        assert_eq!(layout(Vec2::ZERO, "a\nb", &style).len(), 2);
+    }
+
+    #[test]
     fn a_newline_returns_to_the_left_and_moves_down() {
         // Down is +Y (ADR-0010), and a newline submits no glyph of its own.
         let style = TextStyle {

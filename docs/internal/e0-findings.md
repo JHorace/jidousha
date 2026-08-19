@@ -3551,6 +3551,32 @@ document is recommending rather than general git advice: commit, mutate, revert,
 repeat.
 
 
+### F-076 — "One quad per character" does not say whether a space is a character
+
+Class: docs · Run: 6 · Fixed in: this commit · Settled by: nothing
+
+Run 6 wanted an exact glyph count on its hint line and could not tell from
+"`ctx.text` submits one quad per character" whether a space counted. It wrote a
+weaker assertion — combined bounds plus `width_of` — rather than guess, which cost
+it nothing (that check is better anyway) and left the question open. It then
+measured the answer out of its own run's numbers: a rally frame is 61 quads =
+2 walls + 13 dashes + 2 paddles + 16 ball wedges + 2 score digits + **26** hint
+glyphs, and `"W / S to move - first to 5"` is 26 characters including six spaces.
+
+**Verified in the source, and it is a contract rather than an accident.** `layout`
+skips `\n` and pushes a glyph for every other character; space is one of the
+ninety-five printable ASCII characters the atlas covers, with a blank cell and the
+same `size * 7 / 9` advance as any letter. The `TextStyle` doc comment already
+says "monospace over the ninety-five printable ASCII characters, space through
+`~`, every one of them advancing 7/9 of `size`" — so the fact was documented one
+level down and the sentence a game author reads was the ambiguous one.
+
+**Fix.** Concepts says "one quad per character, **spaces included**", names `\n`
+as the only exception, gives the worked count, and says plainly that it is a
+contract an exact assertion may be written against.
+`a_space_is_a_glyph_and_a_newline_is_not` pins both halves.
+
+
 ## 5. Notes on the run's procedure
 
 Two things about run 1 that are not findings but would confuse a later reader.

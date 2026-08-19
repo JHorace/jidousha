@@ -238,13 +238,19 @@ forty places. `examples/prototype_kit` is the worked version.
 **A quad is the unit, and two verbs are not one quad.** `ctx.rect` and
 `ctx.line` each submit exactly one; `ctx.circle` submits **sixteen**, a fan of
 wedges around the centre, and that count is fixed rather than scaled by radius.
-`ctx.text` submits one quad per character — each exactly `size` tall and
-`size * 7 / 9` wide, laid out from its top-left corner, with `\n` counting as a
-line break and nothing else, which is the whole of text's vertical metric: an
-N-line block occupies `N * size`. So a circle costs sixteen rectangles and a
-score line costs one per digit — worth knowing before a frame has three hundred of them,
-and worth knowing when you assert on what was drawn, because "a quad the size of
-the thing" is the right question for a rectangle and the wrong one for a circle.
+`ctx.text` submits one quad per character, **spaces included** — each exactly
+`size` tall and `size * 7 / 9` wide, laid out from its top-left corner, with `\n`
+the only exception, counting as a line break and submitting nothing, which is the
+whole of text's vertical metric: an N-line block occupies `N * size`. So a
+26-character line with six spaces in it is 26 quads, and that is a contract you
+can assert an exact count against rather than a coincidence: a space is one of
+the ninety-five printable ASCII characters the font covers, with a blank cell of
+its own.
+
+So a circle costs sixteen rectangles and a score line costs one per digit — worth
+knowing before a frame has three hundred of them, and worth knowing when you
+assert on what was drawn, because "a quad the size of the thing" is the right
+question for a rectangle and the wrong one for a circle.
 *Testing your game* has the circle version written out.
 
 `Draw` reads the world's **committed** state — the values the last `Update`
