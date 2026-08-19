@@ -350,10 +350,14 @@ across that same paddle, plus the two negative cases — past the end of it, and
 leaving through the same face — is three calls and no match at all. It will be
 the only check in the file that is not about a played game.
 
-**Mutate the game and check the run notices.** The cheapest way to find out
-whether a `--verify` file is an instrument or a decoration is to break the game
-on purpose — one constant, one sign, one swapped constraint — and see whether the
-run says so. It is worth doing, because the answers are not guessable: one run
+**Mutate the game and check the run notices — and commit before you start.** The
+cheapest way to find out whether a `--verify` file is an instrument or a
+decoration is to break the game on purpose — one constant, one sign, one swapped
+constraint — and see whether the run says so. The natural way back from each
+mutation is `git checkout -- <file>`, which also throws away every *uncommitted*
+change in that file, including the check you wrote ten minutes ago to catch the
+fault you are injecting now. One run lost work to this twice before it learned.
+Commit, mutate, revert, repeat. It is worth doing, because the answers are not guessable: one run
 broke its own game seventeen ways and caught all seventeen, but only after
 tightening two checks it had written carefully and believed were thorough. The
 swept test above was one. The other was a paddle drawn half out of position,

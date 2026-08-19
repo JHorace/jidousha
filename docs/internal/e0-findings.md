@@ -3535,6 +3535,22 @@ should be spent. Run 6 did not do that. It wrote the contract check, its
 what stopped the search. **The lever stays unspent.** §6 carries this forward.
 
 
+### F-075 — The document recommends breaking the game on purpose and not committing first
+
+Class: docs · Run: 6 · Fixed in: this commit · Settled by: nothing
+
+Mutation testing arrived in the document as F-058's fix, and run 6 calls it "the
+most valuable thing either document recommends" — seventeen faults injected,
+seventeen caught after the checks were tightened. The paragraph does not say to
+commit first, and the natural revert, `git checkout -- <file>`, destroys every
+uncommitted change in that file. It ate one of run 6's checks twice: the check
+written to catch the fault being injected lived in the same file as the fault.
+
+One clause, in the same paragraph, since it is a property of the technique the
+document is recommending rather than general git advice: commit, mutate, revert,
+repeat.
+
+
 ## 5. Notes on the run's procedure
 
 Two things about run 1 that are not findings but would confuse a later reader.
