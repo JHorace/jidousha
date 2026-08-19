@@ -3109,7 +3109,7 @@ budget is deliberately a curation conversation rather than a number to raise.
 ### F-067 — "no graphics adapter" is reported as `Unsupported`, so the engine diagnoses the wrong thing
 
 Class: engine · Run: none — found by executing the skip path on purpose ·
-**Open, not fixed here**
+**Fixed**: `RenderError::NoAdapter`, in the commit after the one that filed this
 
 **What happens.** On a machine with no adapter, `WgpuBackend::poll` reports
 `RenderError::Unsupported { detail: "no graphics adapter: ..." }`
@@ -3143,22 +3143,61 @@ and it breaks it for the reader least able to check.
 `tools/verify pong` prints exactly the message above, inside an otherwise green
 run.
 
-**Not fixed here, deliberately.** `RenderError` is public surface, so the shape of
-the fix is a decision rather than a typo: either a fourth variant (`NoAdapter`, or
-`DeviceUnavailable`) with its own cause and fix, which is the honest modelling —
-"there is no device" is not "the plan asked for too much" — or `Unsupported`
-carrying its cause and fix per-site instead of per-variant, which is a smaller
-change and a weaker taxonomy. It touches the error taxonomy (core §9), the
-generated reference and renderer.md §10, and it is not what this session was asked
-to do. The two options and the recommendation (the variant) are recorded here so
-the decision starts from a written-down choice.
+**Two ways to fix it**, recorded before either was taken: a fourth variant with
+its own cause and fix, which is the honest modelling — "there is no device" is not
+"the plan asked for too much" — or `Unsupported` carrying its cause and fix
+per-site instead of per-variant, which is a smaller change and a weaker taxonomy.
+The variant was recommended and, on the maintainer's instruction, taken.
 
-**Both examples' capture paths quote this message today**, which is how it was
-found: it arrives inside a one-line `capture:` summary. `pong`'s flattens it onto
-one line so the `--verify` summary block keeps one fact per line;
-`prototype_kit`'s does not, and spills four lines of somebody else's paragraph
-into `tools/verify`'s PASS output. Worth doing to `prototype_kit` too, and left
-alone here rather than editing a verified example in passing.
+**Fixed as `RenderError::NoAdapter { detail }`.** The message now names the
+driver, names `mesa-vulkan-drivers` as the package that supplies a software
+rasterizer, and says a run asserting on the draw transcript needs no adapter at
+all and should report this as a skip (renderer.md §9). Confirmed by execution
+rather than by reading: hiding the ICD and running `pong` prints the new message
+inside a still-green run. Two tests, both mutation-checked by giving `NoAdapter`
+its old text back and watching them fail —
+`a_missing_adapter_is_not_reported_as_a_frame_the_backend_cannot_draw` pins the
+message, and `no_two_render_errors_offer_the_same_diagnosis` stops the next
+variant being added carrying a copy of its neighbour's advice, which is precisely
+the mistake this was.
+
+**The taxonomy asked for this and R1 did not deliver it**, which is the part worth
+keeping. renderer.md §10's design bullet reads "No adapter/device at startup →
+`Result` … (likely cause: missing drivers/headless env; fix: doctor hints)", and
+`RenderError`'s own doc comment has always opened "Environmental: **no adapter**,
+a lost device, a surface that vanished". The case was designed, described, and
+then implemented into the variant next to it. Nothing caught the gap because a
+wrong-but-well-formed four-part message passes every check the project has — the
+same shape as F-055, one layer down.
+
+**Two things this does *not* fix.**
+
+- **`Unsupported` is still a grab-bag with a fixed diagnosis.** Its cause and fix
+  name the WebGL2 envelope, which is right for exactly one of its remaining
+  members (a device request that could not meet the limits) and wrong for the
+  other six — the null backend having no pixels, a zero-sized capture target, a
+  windowed backend refusing to read its surface back, `read_back` on the web, a
+  surface taken twice, an adapter that cannot present. **This is the larger half
+  of the finding and it is open.** It needs either more variants or a cause and
+  fix carried per site, and that is a wider decision than the one taken here.
+  Recorded in renderer.md §10 as well, so a reader who sees one message fixed does
+  not conclude the taxonomy is sound.
+- **A `--verify` mode still cannot tell a missing adapter from a real fault.**
+  `RenderError` is not exported by `jidousha::testing` — it is *named* by
+  `RenderBackend`'s signatures in the generated reference and defined nowhere in
+  it, which is F-017's shape — so an example can print the message but cannot
+  match on the variant. Both capture paths therefore treat every handshake error
+  as "no GPU on this machine", including a genuine one. The engine now draws the
+  distinction and the surface that needs it cannot see it; exporting `RenderError`
+  would close that, and is public-surface growth with a reference entry and an
+  example behind it rather than a message fix.
+
+**Both examples' capture paths quote this message**, which is how it was found: it
+arrives inside a one-line `capture:` summary. `pong`'s flattens it onto one line
+so the `--verify` summary block keeps one fact per line; `prototype_kit`'s does
+not, and spills four lines of somebody else's paragraph into `tools/verify`'s PASS
+output. Worth doing to `prototype_kit` too, and left alone rather than editing a
+verified example in passing.
 
 
 ## 5. Notes on the run's procedure

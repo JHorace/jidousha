@@ -533,8 +533,33 @@ bounds say where it is.
 
 Implemented (R1): the adapter and device are asked for asynchronously, so their
 failures cannot come back from `run` — it has already returned to the event
-loop by then. They surface from `render` instead, as `RenderError::Unsupported`
-naming what wgpu said. A frame that cannot be drawn is reported and skipped
+loop by then. They surface from `poll` and `render` instead, naming what wgpu
+said.
+
+**Amended (e0-findings.md F-067): a missing adapter is `RenderError::NoAdapter`,
+not `Unsupported`.** R1 folded it into `Unsupported`, whose `Display` carries a
+fixed cause and fix — "the frame asked for something outside the WebGL2 envelope
+(§8)", "check the texture sizes and the batch count". Both are wrong for a
+machine with no driver, and that machine is the common case: every runner this
+project has is headless, and for five E0 runs this was the only render message
+any of them ever saw. The design in the bullet above asked for exactly the right
+message ("likely cause: missing drivers/headless env; fix: doctor hints") and
+the implementation did not deliver it. `NoAdapter` does: it names the driver,
+names `mesa-vulkan-drivers` as the package that supplies a software rasterizer,
+and says that a run asserting on the draw transcript needs no adapter at all and
+should treat this as a skip (§9). `no_two_render_errors_offer_the_same_diagnosis`
+keeps a later variant from being added carrying a copy of its neighbour's advice,
+which is the mistake this is.
+
+**What is not fixed, and it is the larger half.** `Unsupported`'s fixed cause and
+fix are still wrong for most of what remains inside it — the null backend having
+no pixels, a zero-sized capture target, a windowed backend refusing to read its
+surface back, `read_back` on the web. Only the device-limits case is about the
+envelope. The variant is a grab-bag whose members share nothing but the word
+"cannot", so no single pair of sentences can be right for all of them; the answer
+is either more variants or a cause and fix carried per site, and it is a wider
+decision than F-067 was. Recorded here so the next reader does not conclude from
+one fixed message that the taxonomy is now sound. A frame that cannot be drawn is reported and skipped
 rather than fatal: a lost surface usually comes back, and quitting a game
 because one frame failed is worse than missing one frame. `JIDOUSHA_BACKEND=gl`
 does not exist yet; wgpu picks a backend itself, and an override is worth adding
