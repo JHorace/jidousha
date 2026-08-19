@@ -657,12 +657,35 @@ class GenApiDocTest(unittest.TestCase):
         # correct on the day it is written and dangling on the day a run would
         # follow it. A stat-only check passes on the commit that introduces the
         # bug and fails nowhere afterwards — which is exactly what happened.
-        root = Path(__file__).resolve().parents[2]
-        self.assertTrue((root / "crates/jidousha/examples/pong").exists(), "on disk today")
-        self.assertEqual(
-            gen_api_doc.dangling_examples("written down in `examples/pong/capture.rs`", root),
-            ["examples/pong/capture.rs (deleted before the next run)"],
-        )
+        #
+        # Built against a temporary tree rather than this repository, and that
+        # is the point of the test rather than tidiness: the first version
+        # asserted `crates/jidousha/examples/pong` was on disk, to show the
+        # check was not merely stat-ing. True between runs and false during
+        # one — so the reset that deletes `pong/` would have turned this test
+        # red, and a test that fails on a scheduled, documented, correct
+        # operation is a test that gets deleted rather than read. Here `pong/`
+        # is present by construction on every run of the suite.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            examples = root / "crates" / "jidousha" / "examples"
+            (examples / "pong").mkdir(parents=True)
+            (examples / "pong" / "capture.rs").write_text("")
+            (examples / "prototype_kit").mkdir()
+            (examples / "prototype_kit" / "capture.rs").write_text("")
+
+            self.assertTrue((examples / "pong" / "capture.rs").exists(), "on disk here")
+            self.assertEqual(
+                gen_api_doc.dangling_examples("written down in `examples/pong/capture.rs`", root),
+                ["examples/pong/capture.rs (deleted before the next run)"],
+            )
+            # The example that outlives a run is accepted from the same tree, so
+            # the refusal above is about *which* example rather than about the
+            # tree being empty.
+            self.assertEqual(
+                gen_api_doc.dangling_examples("see `examples/prototype_kit/capture.rs`", root),
+                [],
+            )
 
     def test_the_committed_documents_point_only_at_examples_that_outlive_a_run(self):
         root = Path(__file__).resolve().parents[2]
