@@ -327,6 +327,20 @@ fn play(recorder: Option<&mut FrameRecorder>) -> Session {
         fingerprint: Vec::new(),
         mean_threat: 0.0,
     };
+    // The timestep the engine hands this run, read once. `Time` is in the world
+    // before the first tick, so this is available before `Startup` has run — and
+    // reading it rather than writing 1/60 is what keeps the controller's
+    // predictions in step with the game if `GameConfig::fixed_dt` ever changes.
+    let Some(dt) = sim
+        .world()
+        .find_resource::<Time>()
+        .map(|time| time.fixed_dt.as_f32())
+    else {
+        fail(
+            "a headless run has no clock",
+            "`headless` inserts `Time` before the first tick",
+        );
+    };
     let mut approach_open = false;
     let mut points_conceded = 0;
     let mut threat_total = 0.0f32;
@@ -357,10 +371,6 @@ fn play(recorder: Option<&mut FrameRecorder>) -> Session {
             .world()
             .find_resource::<Scoreboard>()
             .is_some_and(|board| matches!(board.phase, Phase::Rally));
-        let dt = sim
-            .world()
-            .find_resource::<Time>()
-            .map_or(1.0 / 60.0, |time| time.fixed_dt.as_f32());
 
         let push = match (state, mine) {
             (Some((ball, velocity, speed)), Some(paddle_y)) => {
@@ -779,6 +789,22 @@ fn the_game_is_winnable(checks: &mut Checks, their_touches: u32, conceded: u32) 
     // a shot can be placed exactly, and no keyboard controller can place one
     // within seven units on this court. It failed for a game whose rallies ran
     // to eighteen touches.
+    // The timestep the engine actually hands this game, not the 1/60 it is
+    // configured with: the two are the same today and a check written against
+    // the constant would go on passing on the day they are not. `Time` is in
+    // the world before the first tick, so this needs no tick to read.
+    let sim = headless(config(), register);
+    let Some(dt) = sim
+        .world()
+        .find_resource::<Time>()
+        .map(|time| time.fixed_dt.as_f32())
+    else {
+        fail(
+            "a headless run has no clock",
+            "`headless` inserts `Time` before the first tick",
+        );
+    };
+
     let reached = their_touches + conceded;
     checks.require(
         reached > 0 && their_touches * 2 >= reached,
@@ -789,7 +815,6 @@ fn the_game_is_winnable(checks: &mut Checks, their_touches: u32, conceded: u32) 
              nothing about whether the game can be played"
         ),
     );
-    let dt = 1.0 / 60.0;
     // Nothing the ball can do steps through a paddle in one tick.
     checks.require(
         greater(PADDLE.x * 2.0, TOP_SPEED * dt),
