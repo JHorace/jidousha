@@ -248,6 +248,10 @@ struct Session {
     aimed_well: u32,
     last: Keepsake,
     rally: Option<Keepsake>,
+    /// The camera the game installed, read back out of the world rather than
+    /// rebuilt here from the same constants -- a check carrying its own copy of
+    /// the framing would keep passing after the framing changed.
+    camera: Camera,
 }
 
 /// Play one match with the controller at the left paddle, recording every tick.
@@ -371,6 +375,7 @@ fn play_a_match(recorder: &mut FrameRecorder) -> Session {
             "the loop above runs at least once",
         );
     };
+    let camera = *sim.world().resource::<Camera>();
     Session {
         ticks,
         finished_on,
@@ -384,6 +389,7 @@ fn play_a_match(recorder: &mut FrameRecorder) -> Session {
         aimed_well,
         last,
         rally,
+        camera,
     }
 }
 
@@ -781,13 +787,25 @@ pub fn run() -> ExitCode {
     check_the_bounce(&mut checks);
 
     // --- what was drawn ----------------------------------------------
-    let camera = Camera {
-        center: Vec2::ZERO,
-        height: VIEW_HEIGHT,
-        clear_color: Color::BLACK,
-        viewport: VIEWPORT,
-    };
-    let view = camera.visible_bounds();
+    // The recorder's viewport overrides the `Camera` resource's, and nothing
+    // writes it back into the world -- so a check reading bounds from the world
+    // and quads from the recorder compares against the wrong rectangle unless
+    // the two agree. They are both VIEWPORT, and this asserts it rather than
+    // remembering it.
+    checks.require(
+        session.camera.viewport == VIEWPORT && near(session.camera.height, VIEW_HEIGHT),
+        "the recorder is not framing what the game's camera frames",
+        format!(
+            "the game's camera is {}x{} at {} world units tall and the recorder was given \
+             {}x{}; every bounds check below judges against the camera's rectangle",
+            session.camera.viewport.width,
+            session.camera.viewport.height,
+            session.camera.height,
+            VIEWPORT.width,
+            VIEWPORT.height,
+        ),
+    );
+    let view = session.camera.visible_bounds();
     let Some(rally) = session.rally.as_ref().map(Keepsake::clone_of) else {
         fail(
             "no frame of live play was recorded",
@@ -1112,13 +1130,18 @@ fn check_the_text(checks: &mut Checks, rally: &Keepsake, font: BackendTextureId)
     });
     let (width, centre) = span.map_or((0.0, f32::MAX), |rect| (rect.size().x, rect.center().x));
     checks.require(
-        near(width, style.width_of(HINT)) && near(centre, 0.0),
+        near(width, style.width_of(HINT))
+            && near(centre, 0.0)
+            && hint.len() == HINT.chars().count(),
         "the hint line is not the width the layout measured, or is not centred",
         format!(
             "{} glyphs spanning {width:.3} centred at {centre:.3}; TextStyle::width_of \
-             says {:.3} and the layout centres on x=0",
+             says {:.3}, the layout centres on x=0, and {:?} is {} characters -- spaces \
+             included, because ctx.text submits a quad for one",
             hint.len(),
-            style.width_of(HINT)
+            style.width_of(HINT),
+            HINT,
+            HINT.chars().count(),
         ),
     );
 }

@@ -564,9 +564,11 @@ fn draw_the_banner(ctx: &mut DrawCtx) {
         }
         Stage::Over { winner } => {
             // A dimmer, so the banner reads against a court that is still
-            // drawn underneath it.
+            // drawn underneath it. Over the whole camera rather than over the
+            // field, or the margins outside the walls stay bright and the
+            // screen reads as a vignette.
             ctx.rect(
-                Rect::from_center_size(Vec2::ZERO, FIELD_HALF * 2.0),
+                ctx.world.resource::<Camera>().visible_bounds(),
                 palette::DIM,
                 Depth::layer(layers::UI),
             );
