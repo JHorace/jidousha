@@ -146,6 +146,16 @@ down (F-031).
 things it wanted to grep for and did not — the font's coverage among them, which
 is F-030 and which it shipped a documented workaround for rather than an answer.
 
+**Run 6's validity has not been checked, and its game has not been played.** Both
+are after-the-run steps 1 and 2 and both are the maintainer's: the transcript
+check is the one thing that decides whether run 6 counts towards §2's two clean
+runs at all, and until it is done run 6's eleven findings are worth fixing (they
+were) but its place in the streak is unsettled. The playtest is the more urgent of
+the two, for the reason run 5's note gives below: clearing the decks for run 7
+deletes `crates/jidousha/examples/pong/`, and a playtest deferred past that point
+cannot happen. Run 6's own §8 says what it could not check and why, which is the
+usual substitute evidence and is not a substitute for either step.
+
 **Run 5 was valid, and its game was played.** The maintainer checked the
 transcript for reads under the restricted paths and found none, and ran the game
 in a window and in a browser — both after-the-run steps 1 and 2, taken before the
@@ -159,9 +169,11 @@ offered, and its `--verify` transcript is the artifact for everything else.
 
 Fifteen findings from run 1 (F-001–F-015), fourteen from run 2 (F-016–F-029),
 nine from run 3 (F-030–F-038), sixteen from run 4 (F-039–F-054, triaged together
-in §4a) and eleven from run 5 (F-055–F-065, §4b). F-066 and F-067 come from **no
-run at all** — a maintainer session between runs 5 and 6, closing the last item
-F-054 named — and §2's counter does not move for them; see the note above them. F-001 is the parent of most of run 1's
+in §4a), eleven from run 5 (F-055–F-065, §4b) and eleven from run 6
+(F-068–F-079, §4c). F-066, F-067 and F-070 come from **no run at all** — the
+first two a maintainer session between runs 5 and 6 closing the last item F-054
+named, the third found while triaging run 6 — and §2's counter does not move for
+any of them; see the notes above them. F-001 is the parent of most of run 1's
 `docs` set: six of them
 are one bug — the Reference has no signatures — observed from six different
 angles. They are kept separate anyway, because each one names a distinct thing a
@@ -3208,10 +3220,17 @@ same shape as F-055, one layer down.
   example could print the message and not match on it, and both capture paths
   treated every handshake error as "no GPU on this machine". It is now exported by
   `jidousha::testing` with a reference entry of its own, and `pong`'s capture path
-  skips on `NoAdapter` and *fails* on anything else. **`prototype_kit`'s still
-  conflates them**, along with the four-line message spill below; both are the
-  same five-line change and are left rather than editing a verified example in
-  passing.
+  skips on `NoAdapter` and *fails* on anything else.
+
+  ~~**`prototype_kit`'s still conflates them**, along with the four-line message
+  spill below.~~ **Both were closed in `19945a7`, and this paragraph was stale
+  until run 6's triage checked it.** `capture.rs` matches
+  `RenderError::NoAdapter` and skips, reports every other handshake error through
+  `checks.require` as a fault, and flattens the message with its own `one_line`.
+  Recorded rather than quietly deleted, because the reason it went stale is worth
+  seeing: "left rather than editing a verified example in passing" is a correct
+  instinct that leaves a to-do in a document nothing re-reads, and the next
+  maintainer either redoes the work or goes looking for a bug that is not there.
 
   Worth stating why the export was the right call rather than completeness for
   its own sake: a naming without a definition is not merely untidy, it decides
@@ -3220,11 +3239,10 @@ same shape as F-055, one layer down.
   half-delivered until the type came with it.
 
 **Both examples' capture paths quote this message**, which is how it was found: it
-arrives inside a one-line `capture:` summary. `pong`'s flattens it onto one line
-so the `--verify` summary block keeps one fact per line; `prototype_kit`'s does
-not, and spills four lines of somebody else's paragraph into `tools/verify`'s PASS
-output. Worth doing to `prototype_kit` too, and left alone rather than editing a
-verified example in passing.
+arrives inside a one-line `capture:` summary. Both flatten it onto one line now,
+so the `--verify` summary block keeps one fact per line — `prototype_kit`'s
+`one_line` carries the reasoning, which is that `RenderError`'s four-part `Display`
+is right when it is the only thing on the screen and wrong inside a summary block.
 
 
 ## 4c. Run 6 triage — the whole run on one page
@@ -3245,7 +3263,7 @@ where one does.
 | F-078 | is `FrameRecorder::draw` the same as the long way underneath? | docs | first | **ADR-0026** | doc fix landed; the answer is yes, exactly |
 | F-076 | "one quad per character" does not say whether a space counts | docs | first | — | doc fix landed; it is a contract, and now a test |
 | F-075 | mutation testing is recommended without "commit first" | docs | first | — | one clause, in the paragraph that recommends it |
-| F-079 | six runs, no window: `--verify` is green and nobody has played it | environment | **runs 1–5** (F-054, F-065) | F-054, half-resolved | **escalated again**, and it is a smaller ask than it was |
+| F-079 | no E0 *session* has run its own game in a window, in six runs | environment | **runs 1–5** (F-054, F-065) | F-054, half-resolved | **escalated again**, and a smaller ask than it was; the entry carries a correction to its own first wording |
 
 Plus one **author** finding that is not new: run 6's opponent was unbeatable by
 arithmetic, which is **F-064** a second time in two runs. See below.
@@ -3279,9 +3297,11 @@ the paragraph gets written from three.**
    through `headless`, the capture renders one of its recorded frames through the
    same `WgpuBackend` a window would use, and the PNG looks like Pong. What is
    still unexercised is window creation and the `winit`→`Input` plumbing, which is
-   engine code rather than a run's. No run has played its own game. That is now a
-   `DISPLAY`-shaped hole rather than a whole-graphics-stack one, which makes it a
-   smaller ask than F-054 was — and still not one an agent may take.
+   engine code rather than a run's. No E0 *session* has played its own game — the
+   maintainer has, once, for run 5, and **run 6's playtest is outstanding and
+   expires when the decks are cleared**. That is now a `DISPLAY`-shaped hole rather
+   than a whole-graphics-stack one, which makes it a smaller ask than F-054 was —
+   and still not one an agent may take.
 2. **`tools/serve-web` has never run in an E0 container.** It needs
    `wasm-bindgen-cli` 0.2.127, matching the lockfile, which is not installed;
    installing a toolchain is on CLAUDE.md's never-agent-fixable list and run 6 was
@@ -3721,35 +3741,49 @@ way is the long way, done for me". *Testing your game* now says it in one clause
 where it distinguishes the two roads.
 
 
-### F-079 — Six runs, and nobody has played the game
+### F-079 — No E0 session has ever run its own game in a window
 
 Class: environment · Run: 6 · Also found by: **runs 1–5** (F-054, F-065) ·
 Fixed in: not fixed — escalated
 
+**Correction, and it is this finding's own.** This entry was first written as "six
+runs, and nobody has played the game", which is false and was false in this file
+when it was written: §3 records that **run 5's game was played** — the maintainer
+checked its transcript and ran it in a window and in a browser, after-the-run
+steps 1 and 2, before the decks were cleared for run 6. The claim was too strong
+by exactly the distinction that matters here, so it is restated rather than
+quietly narrowed.
+
+**What is true.** No E0 *session* has ever run its own game in a window, in six
+runs. Playing it is a maintainer step on a maintainer's machine, and it has
+happened once, for run 5. The container has no display: `cargo run -p jidousha
+--example pong` reports `RunError::NoDisplay` — with a four-part message naming
+`headless` as the fix, which run 6 singled out as good — so what stays unexercised
+*inside a run* is window creation and the `winit`→`Input` plumbing between a real
+keyboard and a tick's `InputSnapshot`. Both are engine code rather than a run's,
+and both are the part of "playable" that `--verify` structurally cannot reach.
+
 **Half of F-054 is resolved and this is the other half.** The session hook
 installs a software rasterizer, so run 6 is the first that could capture a frame:
 `tools/verify pong` wrote a 640×360 PNG, the run looked at it, and it looks like
-Pong. That is a genuine change in what E0 can measure and it is recorded as such.
+Pong. That is a genuine change in what E0 can measure.
 
-What is still missing is a display. `cargo run -p jidousha --example pong` reports
-`RunError::NoDisplay` — with a four-part message that names `headless` as the fix,
-which the run singled out as good — so the windowed path has never been executed
-by any run. What that leaves unexercised is precisely: window creation, and the
-`winit`→`Input` plumbing between a real keyboard and a tick's `InputSnapshot`.
-Both are engine code rather than a run's, and both are the part of "playable" that
-`--verify` structurally cannot reach.
-
-**Also unexercised: the web target.** `tools/serve-web pong --check` would drive
-the game in a real browser. It needs `wasm-bindgen-cli` 0.2.127 — the lockfile's
-version, checked — which is not installed in the container. Run 6 declined to
-install a toolchain to route around it, which is exactly right per CLAUDE.md. So
-wasm is gated at `cargo check --target wasm32-unknown-unknown` in CI and has never
-been *run* by anybody.
+**Same distinction for the web target.** `tools/serve-web pong --check` needs
+`wasm-bindgen-cli` 0.2.127 — the lockfile's version, checked — which is not
+installed in this container, so no run has driven its game in a browser. The
+maintainer has, once, for run 5.
 
 **Escalated, and it is a smaller ask than F-054 was.** A `DISPLAY` in the session
 (Xvfb, or a hosted browser for the wasm half) is the whole of it. Verified in this
 triage: `tools/doctor` reports `ENV_OK` with `graphics: no DISPLAY/WAYLAND_DISPLAY
 — headless`, and `wasm-bindgen` is absent from `PATH`.
+
+**And a live consequence, which is why the correction is worth its space.** Run 5's
+note says the order matters: clearing the decks deletes
+`crates/jidousha/examples/pong/`, so a playtest deferred past that point is a
+playtest that cannot happen. **Run 6's game has not been played, and it is on the
+default branch now.** After-the-run step 2 is outstanding and it expires when the
+decks are cleared for run 7.
 
 
 ## 5. Notes on the run's procedure
@@ -3998,8 +4032,11 @@ Run 6 is the fourth uncontaminated measurement, and it read no other run's log.
   anything, and the one background fault it could have caught was caught by an
   assertion instead (F-068). Worth stating because the opposite was predicted here
   in writing.
-- **F-054 is half-resolved and F-079 is the other half**, which is the sixth run
-  with nobody having played the game.
+- **F-054 is half-resolved and F-079 is the other half**: six runs, and no E0
+  session has yet run its own game in a window. Playing it is the maintainer's
+  step and has happened once, for run 5 — **run 6's game is still unplayed**, and
+  §3 records why that expires rather than waits: clearing the decks deletes the
+  game.
 
 ### What run 7 should be watched for
 

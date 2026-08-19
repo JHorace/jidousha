@@ -529,8 +529,22 @@ that's exactly what acceptance milestone E0 tests (implementation plan).
 
 `examples/` is part of the public surface (practices §5.1): `headless_sim`,
 `window_clear`, `sprites`, `prototype_kit`, `input_echo`, `homing`,
-`spawn_and_reap`, plus `quickstart` (the docs/api embed). CONTRACT: every §2 item appears in at least
+`spawn_and_reap`, `scripted_player`, `load_from_disk`, `loading_gate`,
+`what_was_drawn`, plus the two the documents embed verbatim — `quickstart` and
+`vec2_tour`. CONTRACT: every §2 item appears in at least
 one example; `tools/check-api-coverage` (grep-level) enforces in CI.
+
+**The two embedded ones carry a reference's job and need a reference's care.**
+`quickstart` is the game document's opening, and `vec2_tour` *is* the `Vec2`
+entry — the generator has nothing to generate from for a foreign type, so F-018
+made an example the entry instead. The consequence, which E0 run 6 paid for
+(F-071): cargo checks that everything the file lists exists and can say nothing
+about what it omits, so completeness there is curated by hand. An operation a game
+reaches for and that file does not name is a bug in the file. Neither example may
+be deleted or thinned without regenerating `docs/api/`, and the list above is
+prose rather than a gate — `tools/test` discovers examples from cargo, so a new
+one runs in CI whether or not anybody adds it here. This paragraph drifted for
+five examples before run 6's triage caught it.
 
 **Before F0**, the facade did not exist, so an example had no `jidousha` crate
 to depend on. Examples written in the meantime lived beside the crate they
