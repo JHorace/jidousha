@@ -10,6 +10,18 @@ for _ in 0..60 { sim.tick(); }
 assert_eq!(sim.world().resource::<Score>().0, 3);
 ```
 
+**A tick is cheap, and thousands of them are not something to budget for.** There
+is no frame to wait for, no vsync and no window — a tick is the systems you wrote
+and nothing else. One run's whole `--verify` — a 2,013-tick match, two more
+headless runs, three staged screens and a GPU capture — takes about two seconds
+in a *debug* build, and that run's controller was rolling the game forward
+thirteen candidate futures deep, up to four hundred ticks each, on every decision
+it made. So simulate rather than solve: if a controller wants to know where the
+ball ends up, running the game forward and looking is allowed, and it is usually
+both simpler and more honest than a closed form that has to be kept in step with
+the game by hand. Design for a slow tick and you will design around a cost that
+is not there.
+
 Input comes from `jidousha::testing::InputScript`, which is a pure function of
 the tick — no cursor, so a test can seek, replay and bisect freely:
 
@@ -168,7 +180,10 @@ the assertions below it short.
 
 **Those two calls are the whole way in, and an example that does more is doing
 something else.** There is a longer road — draw the simulation yourself, build a
-texture table, plan the frame, hand it to a backend — and it exists because the
+texture table, plan the frame, hand it to a backend — and `draw` **is** that road,
+done for you and with the result kept: same submissions, same plan, same
+arithmetic, so a frame you record is the frame the long way would have produced
+and there is nothing to gain by walking it. The long road exists because the
 engine's own examples use it to run one session through two different backends
 and check the world came out the same. That is a claim about the *engine*, and a
 game has no reason to make it. If you are reading an example that spends fifteen

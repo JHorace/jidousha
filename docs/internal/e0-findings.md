@@ -3577,6 +3577,57 @@ contract an exact assertion may be written against.
 `a_space_is_a_glyph_and_a_newline_is_not` pins both halves.
 
 
+### F-077 — Nothing says what a headless tick costs, and run 6 nearly designed around it
+
+Class: docs · Run: 6 · Fixed in: this commit · Settled by: nothing
+
+**The one friction in run 6 that changed a design decision.** Once its opponent
+chased the ball rather than predicting it, there was no closed form for where that
+opponent would be, so the run's controller had to roll the game forward tick by
+tick — thirteen candidate shots, up to four hundred ticks each, per decision. It
+expected that to be too slow. It is not: the whole `--verify` run, 2,013 ticks of
+match plus two idle runs plus three staged screens plus a GPU capture, takes 2.3
+seconds in a debug build. In the run's words, "I nearly designed around a cost
+that is not there."
+
+**Verified independently**: timed at 2.2 s on this machine, same debug build. The
+number is worth carrying rather than a per-tick figure, because it is the number
+a reader can reproduce with one command.
+
+**Why the absence bites specifically here.** Every other cost question a game
+author has is about a shipped game, where the answer is "look at a frame budget".
+This one is about a *check*, where there is no frame budget at all and the only
+reference point a reader has is the intuition that simulation is expensive. The
+consequence is not a slow run — it is a controller that solves in closed form what
+it could simulate, which then has to be kept in step with the game by hand, which
+is F-056's failure mode wearing yet another hat.
+
+**Fix.** A paragraph beside the `headless` snippet: a tick is the systems you
+wrote and nothing else, the measured aggregate as an anchor, the permission stated
+plainly ("simulate rather than solve"), and why the closed form is the worse of
+the two.
+
+### F-078 — Whether `FrameRecorder::draw` and the long way are the same underneath
+
+Class: docs · Run: 6 · Fixed in: this commit · Settled by: **ADR-0026** (which
+keeps the long way in one example)
+
+Second on run 6's list of things it wanted to look up in the source and did not.
+Having found two ways to get a frame (F-073), it wanted to know whether the
+recorder was doing something the hand-driven path was not — which is the question
+that decides whether the ceremony in `prototype_kit` is *buying* anything.
+
+**The answer is no, and it is four lines of `record.rs`**: `draw` takes the game's
+`Camera` with the recorder's viewport substituted, calls `sim.draw()`, calls
+`plan_frame`, hands the plan to its recording backend and returns the kept frame.
+Identical submissions, identical plan, identical arithmetic.
+
+That is a fact a game author needs and cannot get: it is the difference between
+"the short way is a convenience I might be trading something for" and "the short
+way is the long way, done for me". *Testing your game* now says it in one clause,
+where it distinguishes the two roads.
+
+
 ## 5. Notes on the run's procedure
 
 Two things about run 1 that are not findings but would confuse a later reader.
