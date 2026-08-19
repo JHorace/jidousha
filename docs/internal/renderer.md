@@ -434,6 +434,40 @@ that a sprite-sized quad is drawn where the world puts it. It then replays the
 same thing on both backends (§1's contract, checked rather than asserted), and
 writes the last frame to `target/verify/prototype_kit.png`.
 
+**A recorded plan replays on a second backend, and that is the cheap way to
+capture (R4, `pong`).** `prototype_kit` gets its picture by playing the whole
+session again, which it can do because its `play` is *handed* the backend to
+render through. Most games are not written that way — `pong`'s `play` is handed a
+`FrameRecorder` and never names a backend — and they do not have to be.
+`FrameRecord::plan` is the `FramePlan` the recorder's null backend was given,
+`RenderBackend::render` takes a plan, and a plan is finished work: world space,
+the sort and the batching are already consumed, and what is left is vertices and
+texture ids. So the frame a `--verify` run already recorded can be handed
+straight to an offscreen `WgpuBackend` and captured — no second play-through, no
+restructuring of the game to thread a backend through it.
+
+The catch is the texture ids. A plan names textures by `BackendTextureId`, which
+is whatever backend created them counting upwards, and a fresh backend counts
+from zero again. **For a game that loads no assets they agree**: both counters
+start empty, both are filled by `create_builtin_textures` — white, then the
+placeholder, then the font atlas, in that fixed order — and nothing else is ever
+created to shift the numbering, so the capture path's whole setup is that one
+call. `a_recorded_plan_names_the_texture_ids_any_fresh_backend_would_assign`
+pins it, because it is an argument a capture path relies on and nothing else
+would notice breaking: a plan replayed against a shifted table draws the wrong
+texels while every transcript assertion goes on passing. `pong`'s capture path
+checks it again at runtime rather than trusting it — a game that *did* load an
+asset would need the replay to upload that asset too, and this is where it would
+find out.
+
+Two traps either way, both silent. The capture must be the **same aspect** as the
+recorder's viewport, because `view_projection` was baked into the plan and
+nothing downstream can recompute it: a picture taken at another shape stretches,
+with every assertion still passing because none of them look at pixels (`pong`
+makes that a `const` assertion, by cross-multiplication, so it fails at compile
+time). And **no adapter is still not a failure** — a skipped capture says it
+skipped and the run stays green.
+
 **Closed (web harness):** `tools/serve-web <example>` builds an example for
 wasm, runs `wasm-bindgen`, writes the page from `tools/web/index.html`, and
 serves it. `--check` additionally drives a headless Chromium at it, screenshots

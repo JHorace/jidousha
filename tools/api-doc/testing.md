@@ -394,6 +394,56 @@ evidence rather than reprinted, which is where the transcript goes —
 `frame.transcript()`, one frame, unless a failure genuinely wants the history.
 
 `tools/verify <example>` is then the whole loop as one command: it runs that mode
-under a timeout, parses the verdict, writes a report, and captures a PNG if the
-machine has a GPU. `cargo run -p <crate> --example <name> -- --verify` is the
-same thing by hand.
+under a timeout, parses the verdict, writes a report, and lifts the path of any
+picture the run captured into a field of its own in that report.
+`cargo run -p <crate> --example <name> -- --verify` is the same thing by hand.
+
+**The picture is yours to take.** `tools/verify` renders nothing — it has no game
+and no renderer, and all it does about pictures is read one line out of what your
+`--verify` mode printed. A run that captures nothing is reported as capturing
+nothing, and passes. So if you want a frame you can *look* at rather than only
+assert on, your `--verify` mode has to draw one — and it is worth doing, because a
+picture answers what no assertion here can reach: whether it looks like the
+game.
+
+**And the frame you already recorded is the one to draw.** You do not replay the
+session, and you do not restructure your game to hand it a renderer. `FrameRecord`
+carries a `plan` — the finished frame, with the depth sort and the batching
+already done — and a renderer built for the purpose will execute it. The whole of
+it is: build an offscreen renderer, poll it until it is ready, create the built-in
+textures on it (the same call your recorder made, so the texture ids inside the
+plan mean the same thing), hand it `frame.plan`, capture, write the pixels out as
+a PNG. Every signature is in the **Testing (`jidousha::testing`)** block of the
+Reference above, and `examples/pong/capture.rs` is the whole path in one file.
+
+That "the ids mean the same thing" step is the load-bearing one, and it holds
+because both counters start empty and both are filled by the same call in the same
+fixed order. It holds for **a game that loads no assets** — every shape a colour,
+every string the built-in font. If yours loads art, the replay has to upload that
+art too, or the plan names a texture the new renderer does not have. Check the ids
+rather than assuming them; the example does.
+
+Three things are easy to get wrong here, and silent when you do:
+
+- **Capture at the recorder's aspect ratio.** The projection was computed from the
+  viewport you handed `FrameRecorder::new` and is baked into every plan; nothing
+  downstream can recompute it. A capture of another shape stretches the picture
+  while every assertion you wrote goes on passing, because none of them look at
+  pixels. 480x270 for a 1280x720 recorder — and assert the ratio rather than
+  remembering it.
+- **Print the path in the line the tool reads.** `tools/verify` takes the first
+  line whose text starts with `capture:` and contains ` written to `, and puts
+  what follows into the report. Word it differently and the run still passes while
+  the report says no picture was taken.
+- **A machine with no GPU must still pass.** Every runner is headless and some
+  have no graphics stack at all. Return a string saying the capture was skipped,
+  and put it in the summary; do not fail the run, and do not skip in silence
+  either.
+
+**Then open the file and look at it.** A capture path that writes a PNG is worth
+nothing on its own; the question is whether it writes *your game's* PNG, and a
+path wired to the wrong frame or to a stale plan passes every check that does not
+ask. So look — name what you see — then break the game on purpose and look again:
+move a paddle, stop drawing the score, change the clear colour, and confirm the
+picture follows. Try the clear colour first, because nothing else in this document
+can see it.
