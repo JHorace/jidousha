@@ -163,3 +163,23 @@ takes the context mutably, which looks like the same situation and is not:
 than from the context, so a Draw system draws straight out of its query and
 never needs the `Vec`. Both worked examples do it that way. Collecting first in a
 Draw system costs an allocation a frame and buys nothing.
+
+**A game written in this repository's `examples/` inherits the engine's own
+lints.** `crates/jidousha/Cargo.toml` has `[lints] workspace = true`, and that
+applies to example targets as much as to the crate — so
+`cargo clippy --all-targets -- -D warnings` holds your game to the maintainers'
+rules, and it is the last step of "done" rather than the first, which is a bad
+place to meet a rule for the first time. Four bite in practice:
+
+- `missing_docs`, denied — the file needs a `//!` header, and any `pub` item in
+  it needs a doc comment. This one is a compile error before clippy is reached.
+- `unwrap_used` and `expect_used`, denied — including in the `--verify` mode,
+  where they are the natural spelling. Say what went wrong instead: a `let else`
+  that reports the missing thing is better evidence than a panic, and every
+  example here is written that way.
+- `collapsible_if` — the fix is a let-chain, `if let Some(t) = hit && t > 0.0`.
+- `approx_constant` — a float literal close to π or one of its fractions is
+  rejected, which is what a hand-typed angle in radians looks like. Write the
+  angle in degrees; `Radians::from_degrees` is a `const fn` for this.
+
+Run it while you write rather than at the end, and none of them costs anything.

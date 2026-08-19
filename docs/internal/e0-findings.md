@@ -3410,6 +3410,31 @@ No run has hit it yet; it is in the tour now because the tour is where a run
 would look.
 
 
+### F-072 — A game in `examples/` is held to the engine's lints, and neither document said so
+
+Class: docs · Run: 6 · Fixed in: this commit · Settled by: nothing
+
+**What run 6 hit.** `crates/jidousha/Cargo.toml` carries `[lints] workspace = true`,
+which applies to example targets, so `cargo clippy --all-targets -- -D warnings`
+judged its game by the maintainers' rules. Neither document mentions it. The run
+met the rules at the "definition of done" step rather than while writing, and two
+of its three clippy failures were in the `--verify` check rather than in the game.
+
+**Verified, by writing a deliberately bad example and compiling it.** The four
+that reach an example target are `missing_docs` (a *compile* error, before clippy
+runs — the file needs a `//!` header), `unwrap_used` and `expect_used`,
+`collapsible_if`, and `approx_constant`. Worth being exact about one thing the
+existing comment in `clippy.toml` gets half right: it says examples "are not
+covered by these flags", meaning the `allow-unwrap-in-tests` knobs, which is true
+— but the `unwrap_used` **lint** does apply, and an example that wants `unwrap`
+needs its own `allow`. No example currently does.
+
+**Fix.** A Concepts paragraph, naming all four with the fix for each, and saying
+to run clippy while writing rather than at the end. The `approx_constant` entry
+points at F-069's `const fn`, because the two findings are the same five minutes
+of one run's life.
+
+
 ## 5. Notes on the run's procedure
 
 Two things about run 1 that are not findings but would confuse a later reader.
