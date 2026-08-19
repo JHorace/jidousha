@@ -3341,6 +3341,31 @@ protects the *next* newtype.
   thing the run could not do.
 
 
+### F-070 — `e0-findings.md` was the one citation the scrubber could not see
+
+Class: docs (tooling) · Run: found while triaging 6, not by it · Fixed in: this
+commit
+
+Not a run 6 finding: found by this triage, while adding a `conventions.md` bullet
+whose rationale cited F-069. **It does not count towards §2's two clean runs, in
+either direction.**
+
+`CITATION_RE` strips `(ADR-0010)`, `(core.md §9)` and `(I2)` out of the generated
+documents, because the E0 reader may not open any of those and a citation of a
+document they cannot read is worse than silence (F-005). Its filename class was
+`[a-z-]+\.md`, with no digits — so `(e0-findings.md F-045)` was not a citation as
+far as the pattern was concerned. `FORBIDDEN` did not catch it either, because the
+entry there is `docs/internal`, the directory, and the citation names the bare
+file. Two had accumulated in `docs/api/jidousha-api.md`, both pointing a game
+author at the one document in this repository that is *about* game authors failing.
+
+**Fix.** The filename class takes digits, the citation form accepts a `F-045`
+suffix as well as a `§9` one, and `e0-findings` joins `FORBIDDEN` so anything
+written another way fails the build rather than shipping. Both existing citations
+are gone from the generated text and both survive in `conventions.md`, which is
+the point of scrubbing on the way out rather than rewording the source.
+
+
 ## 5. Notes on the run's procedure
 
 Two things about run 1 that are not findings but would confuse a later reader.

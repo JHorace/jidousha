@@ -489,6 +489,20 @@ class GenApiDocTest(unittest.TestCase):
             gen_api_doc.scrub_internal_references("The whole snapshot, for the recorder (I2)"),
             "The whole snapshot, for the recorder",
         )
+        # A filename with a digit in it is still a filename. `e0-findings.md`
+        # was the one form of this that reached both generated documents: the
+        # pattern's filename class had no digits, and FORBIDDEN names the
+        # directory rather than the file. Two citations had accumulated.
+        self.assertEqual(
+            gen_api_doc.scrub_internal_references(
+                "two examples disagreed (e0-findings.md F-045)"
+            ),
+            "two examples disagreed",
+        )
+        self.assertIn(
+            "e0-findings",
+            gen_api_doc.forbidden_words("the run that found it, in e0-findings.md"),
+        )
         # Ordinary parentheses are not citations and must survive.
         self.assertEqual(
             gen_api_doc.scrub_internal_references("Width and height (in world units)"),

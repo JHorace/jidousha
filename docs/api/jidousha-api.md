@@ -1622,15 +1622,14 @@ in `docs/api/jidousha-testing.md`.
   plain-data types — `Radians`, `Seconds`, `Color`, `Depth`, `PhysicalSize`, the
   typed handles — are `const fn` for this reason, and a new one follows the same
   rule. `from_degrees` was the one that was not, and E0 run 6 found it the only
-  way this is findable: by trying to write the constant (e0-findings.md F-069).
+  way this is findable: by trying to write the constant.
 - **A game spells them from the prelude and nowhere else.** `jidousha::prelude`
   re-exports every name in `math`, so `use jidousha::prelude::*;` is the whole
   import and a second `use jidousha::math::sin_cos;` beside it is the same item
   twice. Engine-internal code has no facade to reach through and names its own
   module path; that spelling is the engine's and the prelude is the game's, which
   is what "one way to do everything" means here —
-  E0 run 4 found two worked examples disagreeing about which (e0-findings.md
-  F-045).
+  E0 run 4 found two worked examples disagreeing about which.
 
 ## Testing your game
 
