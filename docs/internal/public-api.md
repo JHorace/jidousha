@@ -363,6 +363,16 @@ that's exactly what acceptance milestone E0 tests (implementation plan).
   CI; the budget is the point — it must fit comfortably in a game-writing
   agent's context alongside the game itself).
 
+  **Amended (ADR-0025): two files, split by what the reader is doing.**
+  `jidousha-api.md` is how a game is written — Quickstart, Concepts, Reference,
+  Conventions — with the 25k budget above, now at ~13.3k. `jidousha-testing.md`
+  is how one is checked — *Testing your game* and the `jidousha::testing`
+  reference — with its own 15k budget, at ~11.6k. The trigger was measuring the
+  one file at ~24.1k and finding **46% of it was about verifying a game rather
+  than writing one**, which is 46% of a game-writing agent's budget spent on a
+  job it is not doing. Both budgets are enforced per document; growth past
+  either is still a curation conversation, not a bigger number.
+
   Implemented (impl): not rustdoc JSON — that needs a nightly toolchain and
   `rust-toolchain.toml` pins stable (ADR-0005) — but a text extractor over the
   crate sources, with tests. Blocks close on indentation rather than brace
@@ -382,7 +392,10 @@ that's exactly what acceptance milestone E0 tests (implementation plan).
   carry a signature and a one-liner and no example. Deferred until E0 run 2 says
   whether signatures alone are enough (e0-findings.md F-001, "Still open") — the
   document is at ~13.8k tokens of 25,000 and the ~39 doctests already in the
-  crates would cost about 5k more, so budget is not the constraint. Recorded
+  crates would cost about 5k more, so budget is not the constraint. (It became
+  the constraint at ~24.1k, and stopped being one again at ~13.3k after
+  ADR-0025 — that estimate is roughly the headroom the split handed back.)
+  Recorded
   here rather than left implicit: §4 and `gen-api-doc` disagreeing without
   either saying so is precisely what F-001 was, and a second silent disagreement
   in the same paragraph would be the same bug wearing the same hat.
@@ -419,10 +432,34 @@ that's exactly what acceptance milestone E0 tests (implementation plan).
   grouped as above, one entry per item: signature, one-liner, tiny example) →
   **Conventions digest** (auto-included from conventions.md) → **Testing your
   game** (headless + InputScript, brief).
+
+  **Amended (ADR-0025).** That is the *game* document's structure, minus the
+  last item: **Testing your game** is now the other document, which runs
+  *Testing your game* → **Reference** (`jidousha::testing`). The game document
+  keeps a pointer where each half used to be — one in the Reference group that
+  held the testing signatures, one in the section that held the prose — because
+  the single cost of a split surface is an agent not knowing the second file is
+  there.
 - CONTRACT: `docs/api/` never mentions internal crates, the backend seam,
   archetype storage, or any implementation vocabulary. Quality bar (practices
-  §2.3): a fresh agent with only this file + `examples/` ships a working
+  §2.3): a fresh agent with only these files + `examples/` ships a working
   prototype. E0 is the test.
+
+  **Amended (ADR-0025): the CONTRACT is per document, and tighter than it was.**
+  The game document is checked entire, with no exemption of any kind. The
+  testing document may use exactly three words the game document may not —
+  `wgpu`, `RenderBackend`, `FramePlan` — because a picture has to be drawn by
+  something and a capture recipe cannot be written without naming the renderer.
+  Everything else in `FORBIDDEN` applies to both: an internal crate name or a
+  pointer into `docs/internal/` is refused in either. This *replaces* a wider
+  exemption — `gen-api-doc` used to cut the whole `jidousha::testing` reference
+  block out of the check, so anything forbidden could sit inside it unnoticed.
+  Three words in one document beats one whole section in another.
+
+  The old carve-out also failed for prose rather than entries, which is what
+  forced the question: F-066 needed a capture recipe in *Testing your game*,
+  could not name a renderer there, and shipped words and a pointer instead. That
+  recipe is now compiling code.
 
 ## 5. Examples as API fixtures
 

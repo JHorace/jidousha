@@ -64,7 +64,7 @@ A0/I0/R0 are independent of each other (all pure, no platform deps) — natural
 parallel work if multiple sessions ever run concurrently (worktrees).
 
 **E0 — acceptance ("agent Pong").** A *fresh* Claude Code session, given only
-`docs/api/jidousha-api.md` + `examples/` (enforced: it may not read `src/` or
+`docs/api/` + `examples/` (enforced: it may not read `src/` or
 `docs/internal/` — this restriction is stated in its prompt and honored on
 trust + checked by reviewing its transcript), builds a playable Pong with score
 text, verified via `tools/verify` script + a human web playtest. Failures are

@@ -3095,16 +3095,27 @@ game* prose is not, and a capture snippet cannot be written without naming
 `WgpuBackend` (which contains `wgpu`) and importing `RenderBackend` (whose methods
 `render` and `capture` are trait methods, not inherent ones). So the prose states
 the recipe in words, points at the reference block for the signatures and at
-`examples/pong/capture.rs` for the code, and does not carry a snippet. **Not
-proposed here:** widening the exemption to the whole testing section. It is a
-documented CONTRACT and the carve-out is deliberate; if a later run reports that
-words-plus-a-pointer was not enough, that report is the argument for changing it,
-and this paragraph is the place to start.
+`examples/pong/capture.rs` for the code, and does not carry a snippet.
 
-**The budget is now the constraint on this document.** The addition costs about
-900 tokens and `docs/api/jidousha-api.md` sits at ~23,900 of its 25,000-token
-budget (public-api.md §4). The next substantial section will not fit, and the
-budget is deliberately a curation conversation rather than a number to raise.
+~~**Not proposed here:** widening the exemption to the whole testing section.~~
+**Superseded by ADR-0025, two commits later, and by a better answer than the one
+this paragraph was holding open.** The exemption was not widened — the *document*
+was split. Testing is now `docs/api/jidousha-testing.md`, which may name a
+renderer and exactly two other words, while the game document is checked entire
+with no exemption at all. So the carve-out got **narrower**, not wider, and the
+recipe is compiling code rather than prose and a pointer.
+
+Worth keeping as a lesson about where this wrinkle came from: the carve-out was
+sound for *reference entries* and quietly wrong for *prose*, and nothing said so
+because no prose had needed it before. A rule that has only ever been exercised
+by one kind of content is a rule whose scope is untested.
+
+~~**The budget is now the constraint on this document.**~~ It was — at ~23,900
+of 25,000 — and that pressure is what produced the measurement behind ADR-0025:
+**46% of the document was about verifying a game rather than writing one.** The
+game document now sits at ~13.3k of 25k and the testing document at ~11.6k of its
+own 15k. The lesson generalises past this file: a full budget is usually evidence
+of a missing seam rather than a number that wants raising.
 
 ### F-067 — "no graphics adapter" is reported as `Unsupported`, so the engine diagnoses the wrong thing
 
@@ -3454,6 +3465,18 @@ Run 5 is the third uncontaminated measurement, and it read no other run's log.
   five runs of findings are the findings of authors reading numbers, and a run that
   can see a still frame may report a different kind of friction entirely. **The
   window is still absent**, so "playable" remains a human's judgement.
+- **Whether run 6 finds the second API document at all.** ADR-0025 split
+  `docs/api/` in two by what the reader is doing, so the run writes its game from
+  `jidousha-api.md` and its `--verify` mode from `jidousha-testing.md`. Nothing
+  was added or taken away — the same prose, the same entries — but a run now has
+  to notice a second file exists. Three pointers say so (the game document's
+  header, the Reference group where the testing signatures used to be, and the
+  section where the prose used to be) and `e0-prompt.md`'s may-read list names
+  both. **A run that writes a `--verify` mode without ever opening
+  `jidousha-testing.md` is a finding about the split, not about the run**, and
+  the first evidence that discoverability was underpaid. The opposite result —
+  a run that finds it immediately and says the game document felt focused — is
+  the case for splitting again when the next subsystem lands.
 - **Whether anything in these fixes reads as an invitation to guess.** Same standard
   as before: a fix is only real if the next run does not have to infer the thing it
   fixed.

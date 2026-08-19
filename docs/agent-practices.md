@@ -119,15 +119,23 @@ impact" in the commit message to silence it).
 
 ### 2.3 Generated: `docs/api/`
 
-The game-agent-facing public API reference, generated from source doc comments into a
-**single compact file** designed to fit in a game-building agent's context (~20–30k tokens).
-Never hand-maintain anything that duplicates code.
+The game-agent-facing public API reference, generated from source doc comments into
+**compact files** designed to fit in a game-building agent's context. Never
+hand-maintain anything that duplicates code.
+
+It was one file until ADR-0025 split it in two by what the reader is doing:
+`jidousha-api.md` is how a game is written and `jidousha-testing.md` is how one is
+checked, each with its own budget. The measurement that forced it — 46% of a
+game-writing agent's documentation budget spent on verification material — is the
+general lesson: a budget protects relevance, not size, so the fix for a full one is
+usually a seam rather than a bigger number.
 
 `docs/api/` is a **product surface** — arguably the most important one. Its quality metric:
 can a fresh agent, given only `docs/api/` and `examples/`, produce a working prototype?
 It gets evaluated like a product, not proofread like a doc.
 
-*Enforcement:* `tools/gen-api-doc` regenerates it; CI fails if the committed copy is stale.
+*Enforcement:* `tools/gen-api-doc` regenerates them; CI fails if either committed copy
+is stale, is over its budget, or names implementation vocabulary.
 
 ### 2.4 Two audiences, strict separation
 
