@@ -140,7 +140,7 @@ I went back to them.
 `ctx.circle` really is sixteen wedges sharing the centre; the union trick in the
 testing document is exactly right and I copied it into a helper. `ctx.text`
 really is one quad per character including spaces, which is what let me assert
-`in_hint == HINT.len()` on the nose. `covering(p)[0]` really is what a player
+the hint's glyph count on the nose (in `chars()`, not bytes — see 4.6). `covering(p)[0]` really is what a player
 sees. The clear colour really is on `frame.plan`. Every single claim in
 "Testing your game" held.
 
