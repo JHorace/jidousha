@@ -20,13 +20,24 @@ were asked the same question.
 | 1 | — | Original. |
 | 3 | Friction log moves from `E0-NOTES.md` at the root to `docs/e0/run-N.md`, chosen by the author; `docs/e0/` added to the may-not-read list. | Run 2 was pointed at run 1's file and read it, so it knew the timestep and three key names before opening the API document (F-020). |
 | 3 | *Before starting a run* deletes the previous run's `pong/` and its `tools/test` registrations; step 6 puts the registrations back. | The previous run's finished game sat inside `crates/jidousha/examples/`, which is on the **allowed** list — a complete worked solution the next author could read without breaking a rule (F-020). |
+| 6 | The may-read list names two API documents instead of one: `docs/api/jidousha-api.md` and `docs/api/jidousha-testing.md`. | The surface split by what the reader is doing (ADR-0025). The material is unchanged and both files were always inside the `docs/api/` the list already allowed; naming them is so a run does not have to guess that the second exists. |
 
-Neither change alters what the run is asked to *build* or what it may read of
+No change alters what the run is asked to *build* or what it may read of
 the engine, so runs 1–2 and 3+ remain comparable on the thing being measured:
-whether `docs/api/jidousha-api.md` is enough on its own. Both changes remove
+whether `docs/api/` is enough on its own. The first two changes remove
 information the earlier runs had and should not have had, which makes later runs
 strictly harder — the safe direction for a bar to move. **Any future change that
 makes a run *easier* invalidates the streak and restarts the count.**
+
+**The split does not make a run easier, and the reasoning is worth writing down
+rather than asserting.** Not one sentence of guidance was added, removed or
+softened by it — the same prose and the same reference entries, in two files
+chosen by task. What changed is that a run must now find a second file, which is
+a hazard rather than a help: a run that misses it writes its `--verify` mode
+without the testing reference, which is *harder* than run 5 had it. So the streak
+stands. The honest risk runs the other way, and §6 should watch for it — if run 6
+never opens `jidousha-testing.md`, the three pointers into it are not enough and
+that is a finding about the split, not about the run.
 
 ---
 
@@ -105,6 +116,9 @@ makes a run *easier* invalidates the streak and restarts the count.**
 >
 > **What you may read:**
 > - `docs/api/jidousha-api.md` — the engine's API. This is the document.
+> - `docs/api/jidousha-testing.md` — its other half: how to check the game you
+>   wrote. Headless runs, asserting on what was drawn, the `--verify` convention,
+>   and capturing a picture of a frame.
 > - `crates/jidousha/examples/` — worked examples, including `quickstart.rs`.
 >
 > **What you may not read**, at all, for any reason:

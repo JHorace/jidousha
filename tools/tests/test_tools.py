@@ -445,18 +445,22 @@ class GenApiDocTest(unittest.TestCase):
         self.assertIn("archetype", gen_api_doc.forbidden_words("stored in an Archetype"))
         self.assertEqual(gen_api_doc.forbidden_words("a plain sentence"), [])
 
-    def test_the_testing_reference_may_name_a_backend_and_nothing_else_may(self):
-        # A golden image has to be drawn by something, and naming that thing is
-        # the point of the entry. Exempting a named block beats exempting the
-        # words globally, which would let them back into the game surface.
-        text = (
-            "## Reference\n\n### Render\n\n- **`Sprite`**\n\n"
-            "### Testing (`jidousha::testing`)\n\n- **`WgpuBackend`** — backed by wgpu\n\n"
-            "## Conventions\n\nplain prose\n"
-        )
-        self.assertEqual(gen_api_doc.forbidden_words(text), [])
-        leaked = text.replace("- **`Sprite`**", "- **`Sprite`** — see wgpu")
-        self.assertIn("wgpu", gen_api_doc.forbidden_words(leaked))
+    def test_only_the_document_given_the_exception_may_use_it(self):
+        # The exception used to be a *section* cut out of the check, which meant
+        # everything else forbidden could sit inside that section unnoticed. It
+        # is a per-document parameter now (ADR-0025): the testing document may
+        # name a renderer, and nothing else is excused anywhere.
+        text = "the capture goes through wgpu"
+        self.assertIn("wgpu", gen_api_doc.forbidden_words(text))
+        self.assertEqual(gen_api_doc.forbidden_words(text, gen_api_doc.TESTING_VOCABULARY), [])
+        # The exception is three words wide and covers nothing else, so a
+        # document holding the exception is still held to all the rest.
+        for refused in ("see jidousha_render_core", "stored in an Archetype", "see ADR-0010"):
+            self.assertNotEqual(
+                gen_api_doc.forbidden_words(refused, gen_api_doc.TESTING_VOCABULARY),
+                [],
+                refused,
+            )
 
     def test_a_citation_of_a_maintainers_document_is_refused(self):
         # E0 run 1 read `**message** — The failure in the engine's message
@@ -491,19 +495,44 @@ class GenApiDocTest(unittest.TestCase):
             "Width and height (in world units)",
         )
 
-    def test_the_committed_document_cites_no_document_its_reader_may_not_open(self):
+    def test_the_game_document_names_no_renderer_and_has_no_exemption(self):
+        # Stronger than it used to be, and worth stating: the whole
+        # `jidousha::testing` block used to be cut out of this check, so an
+        # internal crate name or a pointer into `docs/internal/` could sit
+        # inside it unnoticed. The block is a separate document now, and the
+        # game document is checked entire, with nothing allowed through
+        # (ADR-0025).
         root = Path(__file__).resolve().parents[2]
         text = (root / "docs/api/jidousha-api.md").read_text(encoding="utf-8")
         self.assertEqual(gen_api_doc.forbidden_words(text), [])
 
-    def test_the_budget_is_counted_and_the_committed_document_is_under_it(self):
-        # The budget is the point: the whole surface has to fit in a
-        # game-writing agent's context beside the game (public-api.md §4).
+    def test_the_testing_document_may_name_a_renderer_and_nothing_else(self):
+        # A picture has to be drawn by something, so the capture recipe cannot
+        # be written without naming the renderer it is written against. That is
+        # the whole exception, and this pins its size: three words. Everything
+        # else — internal crates, archetype storage, pointers into
+        # `docs/internal/` — is as forbidden here as in the game document.
         root = Path(__file__).resolve().parents[2]
-        text = (root / "docs/api/jidousha-api.md").read_text(encoding="utf-8")
-        self.assertLess(gen_api_doc.token_estimate(text), gen_api_doc.TOKEN_BUDGET)
+        text = (root / "docs/api/jidousha-testing.md").read_text(encoding="utf-8")
+        self.assertEqual(
+            gen_api_doc.forbidden_words(text, gen_api_doc.TESTING_VOCABULARY), []
+        )
+        # And the exception is really being used, so a later reader does not
+        # conclude it could simply be deleted.
+        self.assertEqual(
+            gen_api_doc.forbidden_words(text), list(gen_api_doc.TESTING_VOCABULARY)
+        )
 
-    def test_the_committed_document_is_what_the_facade_generates(self):
+    def test_each_document_is_counted_against_its_own_budget(self):
+        # The budget is the point (public-api.md §4): everything in a document
+        # has to be relevant to what its reader is doing. Two readers, two
+        # numbers — a single number over both would let the testing half eat
+        # the game half's room again, which is what ADR-0025 is about.
+        for document in gen_api_doc.documents(Path(__file__).resolve().parents[2]):
+            with self.subTest(document=document.path.name):
+                self.assertLess(gen_api_doc.token_estimate(document.text), document.budget)
+
+    def test_the_committed_documents_are_what_the_facade_generates(self):
         # The same thing CI checks, so a stale document fails here first.
         self.assertEqual(gen_api_doc.main(["gen-api-doc", "--check"]), 0)
 
@@ -512,34 +541,53 @@ class GenApiDocTest(unittest.TestCase):
         # branch could be deleted and every test above would still pass. A
         # document that silently stops matching the code is worse than none,
         # because an agent believes it.
-        original = gen_api_doc.OUTPUT
-        with tempfile.TemporaryDirectory() as directory:
-            stale = Path(directory) / "jidousha-api.md"
-            stale.write_text("# not what the facade generates\n")
-            gen_api_doc.OUTPUT = stale
-            try:
-                out, err = io.StringIO(), io.StringIO()
-                with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-                    code = gen_api_doc.main(["gen-api-doc", "--check"])
-                self.assertEqual(code, 1)
-                self.assertIn("stale", err.getvalue())
-            finally:
-                gen_api_doc.OUTPUT = original
+        #
+        # Run over *each* document: one check that only ever looked at the game
+        # document would pass while the testing document rotted, which is the
+        # failure a split invites and the reason the check is written once and
+        # applied to a list.
+        for attribute in ("GAME_OUTPUT", "TESTING_OUTPUT"):
+            with self.subTest(document=attribute):
+                original = getattr(gen_api_doc, attribute)
+                with tempfile.TemporaryDirectory() as directory:
+                    stale = Path(directory) / original.name
+                    stale.write_text("# not what the facade generates\n")
+                    setattr(gen_api_doc, attribute, stale)
+                    try:
+                        out, err = io.StringIO(), io.StringIO()
+                        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                            code = gen_api_doc.main(["gen-api-doc", "--check"])
+                        self.assertEqual(code, 1)
+                        self.assertIn("stale", err.getvalue())
+                    finally:
+                        setattr(gen_api_doc, attribute, original)
 
     def test_a_document_over_budget_fails(self):
-        # The budget is the point (public-api.md §4): growth past it is a
-        # curation conversation, not a bigger doc. A budget nothing enforces is
-        # a number in a comment.
-        original = gen_api_doc.TOKEN_BUDGET
-        gen_api_doc.TOKEN_BUDGET = 1
-        try:
-            out, err = io.StringIO(), io.StringIO()
-            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-                code = gen_api_doc.main(["gen-api-doc", "--check"])
-            self.assertEqual(code, 1)
-            self.assertIn("over the 1 budget", err.getvalue())
-        finally:
-            gen_api_doc.TOKEN_BUDGET = original
+        # A budget nothing enforces is a number in a comment. Both, for the
+        # same reason the staleness check runs over both.
+        for attribute in ("GAME_BUDGET", "TESTING_BUDGET"):
+            with self.subTest(budget=attribute):
+                original = getattr(gen_api_doc, attribute)
+                setattr(gen_api_doc, attribute, 1)
+                try:
+                    out, err = io.StringIO(), io.StringIO()
+                    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                        code = gen_api_doc.main(["gen-api-doc", "--check"])
+                    self.assertEqual(code, 1)
+                    self.assertIn("over the 1 budget", err.getvalue())
+                finally:
+                    setattr(gen_api_doc, attribute, original)
+
+    def test_the_game_document_points_at_the_testing_document(self):
+        # The one cost a split surface has to pay: an agent that does not know
+        # the second file exists will not find it. Both places a reader would
+        # look — the Reference group that used to hold the testing signatures,
+        # and the section that used to hold the prose — name it.
+        root = Path(__file__).resolve().parents[2]
+        text = (root / "docs/api/jidousha-api.md").read_text(encoding="utf-8")
+        self.assertEqual(text.count("docs/api/jidousha-testing.md"), 3)
+        self.assertIn("### Testing (`jidousha::testing`)", text)
+        self.assertIn("## Testing your game", text)
 
 
 def scan_snippet(*texts):
@@ -971,15 +1019,20 @@ class ApiReferenceContentTest(unittest.TestCase):
     """The E0 gaps, asserted against the committed document.
 
     These are the tests that would have caught the original failure. They read
-    `docs/api/jidousha-api.md` because that is the artifact a game author gets:
+    the committed documents because those are the artifacts a game author gets:
     a generator that extracts correctly and renders nothing is still a document
     that cannot be written from.
+
+    `reference` is the game document and `testing` its other half; assertions
+    about a *game's* vocabulary read the first, and anything about the size of
+    the surface reads both (ADR-0025).
     """
 
     @classmethod
     def setUpClass(cls):
         root = Path(__file__).resolve().parents[2]
         cls.reference = (root / "docs/api/jidousha-api.md").read_text(encoding="utf-8")
+        cls.testing = (root / "docs/api/jidousha-testing.md").read_text(encoding="utf-8")
         cls.root = root
 
     def test_the_reference_names_the_rectangle_overlap_helpers(self):
@@ -1103,8 +1156,14 @@ class ApiReferenceContentTest(unittest.TestCase):
         # A floor, not an exact count: ordinary API growth must not churn this,
         # but a parser regression that halves the output has to fail loudly —
         # and it would be invisible in the diff of a document this size.
-        self.assertGreater(self.reference.count("pub fn "), 150)
-        self.assertGreater(self.reference.count("#### `"), 80)
+        #
+        # Counted over **both** documents, because the surface is what must not
+        # shrink and it now lives in two files. A floor on the game document
+        # alone would be satisfied by a bug that emitted the testing reference
+        # nowhere at all.
+        whole = self.reference + self.testing
+        self.assertGreater(whole.count("pub fn "), 150)
+        self.assertGreater(whole.count("#### `"), 80)
 
 
 class ApiCoverageTest(unittest.TestCase):

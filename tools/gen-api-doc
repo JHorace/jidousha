@@ -1,8 +1,17 @@
 #!/usr/bin/env python3
-"""tools/gen-api-doc — regenerate `docs/api/jidousha-api.md` from the facade.
+"""tools/gen-api-doc — regenerate `docs/api/` from the facade.
 
-The one file a game-writing agent reads. Its structure is fixed (public-api.md
-§4): Quickstart, Concepts, Reference, Conventions digest, Testing your game.
+**Two documents, split by what the reader is doing** (ADR-0025, public-api.md
+§4). `jidousha-api.md` is how a game is written — Quickstart, Concepts,
+Reference, Conventions digest — and is read while the game does not exist yet.
+`jidousha-testing.md` is how a game is checked — the *Testing your game* prose
+and the `jidousha::testing` reference — and is read once there is a game to
+check. They were one file until the testing half reached 46% of it, which is 46%
+of a game-writing agent's budget spent on a job it is not doing.
+
+Each has its own budget and its own vocabulary rule; `Document` carries both, so
+the budget, vocabulary and staleness checks are one piece of code each rather
+than two copies that drift.
 
 **Generated, never hand-edited.** The Reference section is built from the
 facade's own `pub use` lists, so an item that is not re-exported cannot appear
@@ -39,17 +48,20 @@ F-016). See `scan_sources`.
 
 Usage:  tools/gen-api-doc [--check]
 
-`--check` regenerates into memory and fails if the committed file differs, which
-is what CI runs. Exit codes: 0 written/current · 1 stale, over budget, leaking
+`--check` regenerates into memory and fails if either committed file differs,
+which is what CI runs. Exit codes: 0 written/current · 1 stale, over budget, leaking
 internal vocabulary, or incomplete · 2 the generator could not run.
 
-Key functions: `facade_exports`, `scan_sources`, `render`, `token_estimate`,
-`completeness_failures`, `main`.
+Key functions: `facade_exports`, `scan_sources`, `documents`, `render_game`,
+`render_testing`, `token_estimate`, `completeness_failures`, `main`.
 Depends on: the Python 3.8+ standard library only.
-INVARIANT (public-api.md §4): the generated file must never name an internal
+INVARIANT (public-api.md §4): a generated file must never name an internal
 crate, the backend seam, or any implementation vocabulary. `forbidden_words`
 enforces it, and the check runs on the generated text rather than on the sources
-it came from.
+it came from. The testing document may name a renderer and nothing else —
+`TESTING_VOCABULARY`, three words — because a picture has to be drawn by
+something. That replaces a wider exemption, which cut a whole section out of the
+check.
 """
 
 from __future__ import annotations
@@ -64,12 +76,22 @@ FACADE = REPO_ROOT / "crates" / "jidousha" / "src" / "lib.rs"
 QUICKSTART = REPO_ROOT / "crates" / "jidousha" / "examples" / "quickstart.rs"
 PROSE = REPO_ROOT / "tools" / "api-doc"
 CONVENTIONS = REPO_ROOT / "docs" / "conventions.md"
-OUTPUT = REPO_ROOT / "docs" / "api" / "jidousha-api.md"
+GAME_OUTPUT = REPO_ROOT / "docs" / "api" / "jidousha-api.md"
+TESTING_OUTPUT = REPO_ROOT / "docs" / "api" / "jidousha-testing.md"
 
-# The budget from public-api.md §4. The point is that the whole surface fits in
-# a game-writing agent's context beside the game itself; growth past it is a
-# curation conversation, not a bigger doc.
-TOKEN_BUDGET = 25_000
+# The budgets from public-api.md §4, one per document (ADR-0025). The point was
+# never the number: it is that everything in a document is relevant to what its
+# reader is doing, because a reference stays *callable* only while that holds,
+# and F-001 is what an uncallable reference costs. Growth past a budget is a
+# curation conversation, not a bigger number.
+#
+# They differ because the two readers are in different states. The game document
+# is read while the game is being written, so it competes for context with a
+# game that does not exist yet. The testing document is read while a `--verify`
+# mode is being written, beside a game that is finished and already understood —
+# a later and much cheaper moment.
+GAME_BUDGET = 25_000
+TESTING_BUDGET = 15_000
 
 # No tokenizer in the standard library, so this is the usual approximation:
 # English prose and code average close to four characters a token. Deliberately
@@ -108,6 +130,16 @@ FORBIDDEN = (
     "agent-practices",
     "ADR-",
 )
+
+# What the *testing* document may say that the game document may not, and
+# nothing else (ADR-0025). A picture has to be drawn by something, so a capture
+# recipe cannot be written without naming the renderer it is written against.
+#
+# This replaces a wider exemption: the whole `jidousha::testing` reference block
+# used to be cut out of the check, which meant an internal crate name or a
+# pointer into `docs/internal/` could reach it unnoticed. Three words in one
+# document is strictly tighter than one whole section in another.
+TESTING_VOCABULARY = ("wgpu", "RenderBackend", "FramePlan")
 
 # `(ADR-0010)`, `(core.md §9)`, `(assets.md §6)`, `(I2)`, `(R4)` — a citation of
 # a maintainers' document, hanging off the end of a sentence.
@@ -926,16 +958,54 @@ def conventions_digest(text: str) -> str:
     return scrub_internal_references("\n".join(out).strip())
 
 
-def render(repo: Path) -> str:
-    """The whole document."""
-    facade = FACADE.read_text(encoding="utf-8") if FACADE.exists() else ""
-    if repo != REPO_ROOT:
-        facade = (repo / "crates/jidousha/src/lib.rs").read_text(encoding="utf-8")
+@dataclasses.dataclass
+class Document:
+    """One generated file, and the two rules it is held to.
+
+    Modelled rather than written out twice: the budget check, the vocabulary
+    check and the staleness check are one piece of code each, applied to a list.
+    Two copies of the staleness check is precisely the drift this tool exists to
+    catch (e0-findings.md F-016).
+    """
+
+    path: Path
+    budget: int
+    # Words from FORBIDDEN this document is allowed to use.
+    allowed: "tuple[str, ...]"
+    text: str
+
+
+def documents(repo: Path) -> "list[Document]":
+    """Both generated documents, from one scan of the sources.
+
+    **Two documents, split by what the reader is doing** (ADR-0025): the game
+    document is how a game is written, the testing document is how it is
+    checked. They were one file until the testing half reached 46% of it, which
+    is 46% of a game-writing agent's budget spent on a job it is not doing.
+    """
+    facade = (repo / "crates/jidousha/src/lib.rs").read_text(encoding="utf-8")
+    items = scan_sources(crate_sources(repo))
+    return [
+        Document(
+            path=GAME_OUTPUT,
+            budget=GAME_BUDGET,
+            allowed=(),
+            text=render_game(repo, facade, items),
+        ),
+        Document(
+            path=TESTING_OUTPUT,
+            budget=TESTING_BUDGET,
+            allowed=TESTING_VOCABULARY,
+            text=render_testing(repo, facade, items),
+        ),
+    ]
+
+
+def render_game(repo: Path, facade: str, items: "dict[str, Item]") -> str:
+    """The document a game is written from."""
     quickstart = (repo / "crates/jidousha/examples/quickstart.rs").read_text(encoding="utf-8")
     concepts = (repo / "tools/api-doc/concepts.md").read_text(encoding="utf-8").strip()
-    testing = (repo / "tools/api-doc/testing.md").read_text(encoding="utf-8").strip()
     conventions = (repo / "docs/conventions.md").read_text(encoding="utf-8")
-    items = scan_sources(crate_sources(repo))
 
     out = [
         "# Jidousha — the API a game is written against",
@@ -951,6 +1021,11 @@ def render(repo: Path) -> str:
         "",
         "There is no other crate to depend on and nothing below this surface to",
         "reach for. If something you want is not here, it is not part of v1.",
+        "",
+        "**Checking the game you write is the other document**,",
+        "`docs/api/jidousha-testing.md` — headless runs, asserting on what was drawn,",
+        "the `--verify` convention, and capturing a picture. Write the game from this",
+        "one; write the check from that one.",
         "",
         "## Quickstart",
         "",
@@ -976,17 +1051,17 @@ def render(repo: Path) -> str:
             if item.kind == "mod":
                 out += render_module(item, facade, items, repo)
 
-    testing_names = testing_exports(facade)
-    if testing_names:
+    if testing_exports(facade):
+        # A signpost, not a section: a reader scanning the groups would
+        # otherwise find `jidousha::testing` missing and conclude it does not
+        # exist. The one thing a split surface has to pay for is discoverability.
         out += [
             "### Testing (`jidousha::testing`)",
             "",
-            "Not part of a shipped game — this is the vocabulary a test or a",
-            "`--verify` mode uses. See *Testing your game* below.",
+            "Not part of a shipped game, and not in this document. Every signature is",
+            "in `docs/api/jidousha-testing.md`.",
             "",
         ]
-        for name in testing_names:
-            out += render_item(items.get(name, Item(name=name)))
 
     out += [
         "## Conventions",
@@ -995,36 +1070,72 @@ def render(repo: Path) -> str:
         "",
         "## Testing your game",
         "",
-        testing,
+        "`docs/api/jidousha-testing.md`, in full: how to run the game headless, how to",
+        "ask what it drew, how to script or drive its input, the `--verify` convention",
+        "`tools/verify` expects, and how to capture a picture of a frame.",
+        "",
+        "It is a separate document because it is read at a different time. This one is",
+        "read while the game is being written; that one is read once there is a game to",
+        "check, and nothing in it helps you write the game itself.",
         "",
     ]
+    return "\n".join(out)
+
+
+def render_testing(repo: Path, facade: str, items: "dict[str, Item]") -> str:
+    """The document a game's check is written from."""
+    testing = (repo / "tools/api-doc/testing.md").read_text(encoding="utf-8").strip()
+
+    out = [
+        "# Jidousha — checking a game you wrote",
+        "",
+        "GENERATED by `tools/gen-api-doc`. Do not edit; edit the facade crate or",
+        "`tools/api-doc/` and regenerate.",
+        "",
+        "The other half of `docs/api/jidousha-api.md`: that document is how a game is",
+        "written, this one is how it is checked. It assumes the game exists and that",
+        "you know how it works — so nothing here repeats the Concepts, and every type",
+        "the game itself is made of is in that document rather than this one.",
+        "",
+        "The Reference at the end is one import:",
+        "",
+        "```rust",
+        "use jidousha::testing::*;",
+        "```",
+        "",
+        "The prose before it also uses the game's own vocabulary — `headless`,",
+        "`GameConfig`, `Vec2` and the rest come from `jidousha::prelude` and are",
+        "documented in the other file. A check imports both.",
+        "",
+        "**This document names a renderer and the other one does not**, and that is",
+        "deliberate rather than an oversight: a picture has to be drawn by something,",
+        "so the capture recipe cannot be written without it. A shipped game still never",
+        "names a backend — only a check does.",
+        "",
+        "## Testing your game",
+        "",
+        testing,
+        "",
+        "## Reference",
+        "",
+    ]
+    testing_names = testing_exports(facade)
+    if testing_names:
+        out += [
+            "### `jidousha::testing`",
+            "",
+            "The vocabulary a test or a `--verify` mode uses, and nothing a shipped game",
+            "needs.",
+            "",
+        ]
+        for name in testing_names:
+            out += render_item(items.get(name, Item(name=name)))
     return "\n".join(out)
 
 
 def token_estimate(text: str) -> int:
     """Roughly how many tokens the document costs. See `CHARS_PER_TOKEN`."""
     return len(text) // CHARS_PER_TOKEN
-
-
-# The one section that is allowed to name a backend, because it is the section
-# about taking a picture of your game (`jidousha::testing`, added at R4).
-TESTING_HEADING = "### Testing (`jidousha::testing`)"
-
-
-def game_facing(text: str) -> str:
-    """The document minus the testing reference block.
-
-    Everything an agent reads while *writing* a game. The testing block is
-    exempt from the vocabulary rule for one reason: a golden image has to be
-    drawn by something, and naming that thing is the whole point of the entry.
-    Exempting a named block beats exempting words globally, which would let the
-    same words back into the game surface unnoticed.
-    """
-    if TESTING_HEADING not in text:
-        return text
-    before, rest = text.split(TESTING_HEADING, 1)
-    after = rest.split("\n## ", 1)
-    return before + ("\n## " + after[1] if len(after) > 1 else "")
 
 
 def completeness_failures(
@@ -1107,15 +1218,37 @@ def completeness_failures(
     return failures
 
 
-def forbidden_words(text: str) -> "list[str]":
-    """Implementation vocabulary that reached the game-facing document.
+def forbidden_words(text: str, allowed: "tuple[str, ...]" = ()) -> "list[str]":
+    """Implementation vocabulary that reached a generated document.
 
     §4 CONTRACT: `docs/api/` never mentions internal crates, the backend seam,
     archetype storage, or any implementation vocabulary. Checked on the output,
     because that is what an agent reads.
+
+    `allowed` is the per-document exception, and only the testing document has
+    one (`TESTING_VOCABULARY`). It is passed in rather than read from a global
+    so the game document's call site says, by having nothing to pass, that it
+    has no exceptions at all.
     """
-    lowered = game_facing(text).lower()
-    return [word for word in FORBIDDEN if word.lower() in lowered]
+    lowered = text.lower()
+    return [
+        word
+        for word in FORBIDDEN
+        if word not in allowed and word.lower() in lowered
+    ]
+
+
+def shown(path: Path) -> str:
+    """A document's path as a reader would name it.
+
+    Repo-relative where possible and absolute otherwise: a test redirects a
+    document to a temporary directory to prove the staleness check bites, and a
+    reporting call that raised there would make the check untestable.
+    """
+    try:
+        return str(path.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(path)
 
 
 def problem(what: str, specifics: str, cause: str, fix: str) -> str:
@@ -1125,15 +1258,15 @@ def problem(what: str, specifics: str, cause: str, fix: str) -> str:
 def main(argv: "list[str]") -> int:
     check_only = "--check" in argv[1:]
     try:
-        text = render(REPO_ROOT)
+        generated = documents(REPO_ROOT)
     except OSError as error:
         print(
             problem(
-                "could not generate the API document",
+                "could not generate the API documents",
                 str(error),
                 "a source the generator reads was moved or removed",
-                "check that the facade crate, tools/api-doc/, and the examples this "
-                "document embeds — quickstart.rs and everything in TOURS — exist",
+                "check that the facade crate, tools/api-doc/, and the examples these "
+                "documents embed — quickstart.rs and everything in TOURS — exist",
             ),
             file=sys.stderr,
         )
@@ -1142,10 +1275,40 @@ def main(argv: "list[str]") -> int:
     facade = FACADE.read_text(encoding="utf-8") if FACADE.exists() else ""
     items = scan_sources(crate_sources(REPO_ROOT))
     groups, testing_names = facade_exports(facade), testing_exports(facade)
+    failures = completeness_failures(groups, testing_names, items)
 
-    tokens = token_estimate(text)
-    leaked = forbidden_words(text)
-    print(f"[gen-api-doc] {len(text)} chars, ~{tokens} tokens of {TOKEN_BUDGET}")
+    for document in generated:
+        name = shown(document.path)
+        tokens = token_estimate(document.text)
+        print(
+            f"[gen-api-doc] {name}: {len(document.text)} chars, "
+            f"~{tokens} tokens of {document.budget}"
+        )
+        if tokens > document.budget:
+            failures.append(
+                problem(
+                    f"{name} is ~{tokens} tokens, over the {document.budget} budget",
+                    "everything in a document has to be relevant to what its reader is "
+                    "doing, and a reference stays callable only while that holds",
+                    "the public surface grew, or a prose section did",
+                    "curate that document down rather than raising the budget "
+                    "(public-api.md §4, ADR-0025) — the budget is the point",
+                )
+            )
+        leaked = forbidden_words(document.text, document.allowed)
+        if leaked:
+            failures.append(
+                problem(
+                    f"implementation vocabulary reached {name}",
+                    f"found: {', '.join(leaked)}",
+                    "a doc comment on a public item names an internal crate or the "
+                    "backend seam",
+                    "reword the doc comment at the definition; docs/api never mentions "
+                    "internals (public-api.md §4). Only the testing document may name a "
+                    "renderer, and only the three words in TESTING_VOCABULARY",
+                )
+            )
+
     # The census is here so a human reviewing a regenerated diff sees the shape
     # move. A parser regression that halves the surface is obvious in these
     # numbers and invisible in the diff of a 1,700-line file.
@@ -1156,43 +1319,26 @@ def main(argv: "list[str]") -> int:
         f"{sum(len(item.variants) for item in items.values())} variant lines"
     )
 
-    failures = completeness_failures(groups, testing_names, items)
-    if tokens > TOKEN_BUDGET:
-        failures.append(
-            problem(
-                f"the API document is ~{tokens} tokens, over the {TOKEN_BUDGET} budget",
-                "it has to fit in a game-writing agent's context beside the game",
-                "the public surface grew, or a prose section did",
-                "curate the surface down rather than raising the budget "
-                "(public-api.md §4) — the budget is the point",
+    for document in generated:
+        name = shown(document.path)
+        if check_only:
+            current = (
+                document.path.read_text(encoding="utf-8") if document.path.is_file() else None
             )
-        )
-    if leaked:
-        failures.append(
-            problem(
-                "implementation vocabulary reached the API document",
-                f"found: {', '.join(leaked)}",
-                "a doc comment on a public item names an internal crate or the backend seam",
-                "reword the doc comment at the definition; docs/api never mentions "
-                "internals (public-api.md §4)",
-            )
-        )
-
-    if check_only:
-        current = OUTPUT.read_text(encoding="utf-8") if OUTPUT.is_file() else None
-        if current != text:
-            failures.append(
-                problem(
-                    "docs/api/jidousha-api.md is stale",
-                    "the committed file differs from what the facade generates",
-                    "the public surface or a prose section changed without regenerating",
-                    "run `tools/gen-api-doc` and commit the result",
+            if current != document.text:
+                failures.append(
+                    problem(
+                        f"{name} is stale",
+                        "the committed file differs from what the facade generates",
+                        "the public surface or a prose section changed without "
+                        "regenerating",
+                        "run `tools/gen-api-doc` and commit the result",
+                    )
                 )
-            )
-    else:
-        OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-        OUTPUT.write_text(text, encoding="utf-8")
-        print(f"[gen-api-doc] wrote {OUTPUT.relative_to(REPO_ROOT)}")
+        else:
+            document.path.parent.mkdir(parents=True, exist_ok=True)
+            document.path.write_text(document.text, encoding="utf-8")
+            print(f"[gen-api-doc] wrote {name}")
 
     for failure in failures:
         print(f"\n{failure}", file=sys.stderr)

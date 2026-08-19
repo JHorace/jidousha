@@ -25,7 +25,7 @@ import, so they keep working when the package ecosystem is exactly what broke.
 | `tools/check-compile-fail` | Do the errors that must be compile errors still say the right thing? | 0 ok · 1 drifted · 2 harness broke |
 | `tools/verify` | What did the game actually do, with nobody watching? | 0 verified · 1 the example's assertions failed · 2 tooling/env fault |
 | `tools/check-assets` | Does every asset path in the code name a file that exists? | 0 all resolve · 1 a reference is broken · 2 the check could not run |
-| `tools/gen-api-doc` | Is `docs/api/` what the facade actually says? | 0 written/current · 1 stale or over budget · 2 could not run |
+| `tools/gen-api-doc` | Is `docs/api/` what the facade actually says? | 0 both written/current · 1 either stale, over its budget, or leaking vocabulary · 2 could not run |
 | `tools/check-api-coverage` | Is every public item shown in an example, written against the facade? | 0 covered · 1 a gap or a breach · 2 could not run |
 
 Not built yet: `tools/check-tags`, `tools/check-headers`.
@@ -178,8 +178,15 @@ a row (stop rule printed, `failure-streak.json` count 2).
 - **`docs/api/` is generated, never written.** `tools/gen-api-doc` builds it
   from the facade's own `pub use` lists plus the prose in `tools/api-doc/`, so an
   item that is not re-exported cannot appear in the documentation and one that is
-  cannot be forgotten. CI runs `--check`, which fails when the committed file
+  cannot be forgotten. CI runs `--check`, which fails when a committed file
   differs — stale documentation is worse than none, because an agent believes it.
+
+  **Two documents since ADR-0025**, split by what the reader is doing:
+  `jidousha-api.md` (writing a game) and `jidousha-testing.md` (checking one),
+  each with its own token budget and its own vocabulary rule. `Document` carries
+  path, budget and vocabulary exception, so the budget, vocabulary and staleness
+  checks are each written once and applied to a list — two copies of the
+  staleness check is the drift F-016 was.
   Not rustdoc JSON, which needs nightly while `rust-toolchain.toml` pins stable;
   summaries are lifted from the `///` line above each definition, which is a
   bounded text problem with tests rather than a second toolchain.
