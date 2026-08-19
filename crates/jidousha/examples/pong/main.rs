@@ -381,12 +381,20 @@ pub(crate) struct Step {
 /// paddle on the left, which the ball reaches while moving in `-X`. `reach` is
 /// the interval of Y the paddle covers, already widened by the ball's radius.
 ///
-/// CONTRACT: `None` unless all four hold — the ball is moving toward `face`,
-/// it started on the outside of it, this tick's travel reaches it, and the
-/// crossing point falls inside `reach`. The three interesting `None`s are a
-/// ball moving away, a ball that is already through (so it is *leaving* by the
-/// same face and must not be batted back), and a ball that crosses the plane
-/// past the end of the paddle.
+/// CONTRACT: `None` unless all of these hold — the ball is moving toward
+/// `face`, this tick's travel reaches it, the crossing happens *within* this
+/// tick, and the crossing point falls inside `reach`. The three interesting
+/// `None`s are a ball moving away, a ball that is already through (so it is
+/// *leaving* by the same face and must not be batted back), and a ball that
+/// crosses the plane past the end of the paddle.
+///
+/// The second of those has no test of its own on purpose. A ball already past
+/// the plane and still travelling that way puts the numerator and the
+/// denominator of `fraction` on opposite signs, so the `0.0..=1.0` test rejects
+/// it — and an explicit `already past the plane` guard above that one is a
+/// branch nothing can enter. It was written, and a deliberately broken build
+/// with it deleted passed every check in `verify.rs`, which is how it was found
+/// to be dead rather than untested.
 pub(crate) fn crossing(
     from: Vec2,
     to: Vec2,
@@ -398,15 +406,15 @@ pub(crate) fn crossing(
     if travel * toward <= 0.0 {
         return None; // going the other way, or not moving in X at all
     }
-    if (from.x - face) * toward > 0.0 {
-        return None; // already past the plane: it is leaving through this face
-    }
     if (to.x - face) * toward < 0.0 {
         return None; // this tick's travel does not get there
     }
     let fraction = (face - from.x) / travel;
     if !(0.0..=1.0).contains(&fraction) {
-        return None; // NaN, or arithmetic that disagrees with the tests above
+        // Not inside this tick: either the ball is already through the plane
+        // and leaving by it, or the arithmetic disagrees with the tests above,
+        // or something upstream is NaN.
+        return None;
     }
     let at = from.y + (to.y - from.y) * fraction;
     if at < reach.0 || at > reach.1 {

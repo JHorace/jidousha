@@ -27,8 +27,8 @@ use std::process::ExitCode;
 
 use jidousha::prelude::*;
 use jidousha::testing::{
-    BackendTextureId, DrawnQuad, FrameRecord, FrameRecorder, InputEvent, InputSnapshot,
-    SnapshotBuilder,
+    BackendTextureId, DrawnQuad, FrameRecord, FrameRecorder, InputEvent, InputScript,
+    InputSnapshot, SnapshotBuilder,
 };
 
 use crate::checks::{Checks, disc_span, fail, greater, near, sizes_covering, within};
@@ -343,6 +343,44 @@ fn play_naively() -> (Scoreboard, u64) {
     (*sim.world().resource::<Scoreboard>(), ticks)
 }
 
+/// Drive the player's paddle into both ends of its travel, with a script.
+///
+/// `InputScript` rather than a controller, because this input does not depend
+/// on anything the game does back — and both holds deliberately last far longer
+/// than the travel available, so the clamp is *exercised* rather than merely
+/// not violated. A match never reaches it: both players aim inside their own
+/// limits, so deleting the clamp altogether changes nothing a played session
+/// can see. (It was deleted, on purpose, and every other check in this file
+/// went on passing.)
+fn play_the_clamp() -> (Vec<f32>, usize, usize) {
+    let script = InputScript::new()
+        .hold(Key::S, 5..300)
+        .hold(Key::W, 305..700);
+    let mut sim = headless(config(), register);
+    let mut track = Vec::new();
+    for tick in 1..=script.last_tick() {
+        sim.world_mut()
+            .insert_resource(Input::new(script.snapshot_at(tick)));
+        sim.tick();
+        track.push(paddles_of(sim.world())[Side::Left.index()]);
+    }
+    // Y is down, so the bottom of the screen is the larger number.
+    let bottom = peak_at(&track, greater);
+    let top = peak_at(&track, |a, b| greater(b, a));
+    (track, bottom, top)
+}
+
+/// Where in `track` the value `pick` prefers first appears.
+fn peak_at(track: &[f32], pick: fn(f32, f32) -> bool) -> usize {
+    let mut best = 0;
+    for (index, value) in track.iter().enumerate() {
+        if pick(*value, track[best]) {
+            best = index;
+        }
+    }
+    best
+}
+
 /// Every quad in `frame` that sampled the font.
 fn glyphs(frame: &FrameRecord, font: BackendTextureId) -> Vec<DrawnQuad> {
     frame
@@ -651,6 +689,54 @@ pub(crate) fn run() -> ExitCode {
         ),
     );
 
+    // The order the systems run in, which is a claim `advance` makes in prose
+    // and nothing else in this file can see. Swapping these two lines in
+    // `register` makes the ball consult the paddles where the *previous* tick
+    // left them, so a paddle closing on the ball is a paddle the ball passes
+    // through — and every assertion about where things ended up goes on
+    // passing, because the two orders differ by one tick of a paddle's travel.
+    let schedule = sim.schedule_debug();
+    let ordered = |first: &str, second: &str| match (schedule.find(first), schedule.find(second)) {
+        (Some(a), Some(b)) => a < b,
+        _ => false,
+    };
+    checks.require(
+        ordered("run_the_clock", "drive_the_paddles")
+            && ordered("drive_the_paddles", "move_the_ball")
+            && ordered("move_the_ball", "keep_score"),
+        "the Update systems do not run in the order the ball's arithmetic assumes",
+        format!(
+            "`advance` treats each paddle as standing still at its post-move position for the \
+             whole tick, which is only true if the paddles move first. the schedule is:\n{schedule}"
+        ),
+    );
+
+    // The paddle's clamp, driven into both ends by a script. A played match
+    // never touches it: both players aim inside their own limits.
+    let (track, bottom_at, top_at) = play_the_clamp();
+    let (bottom, top) = (track[bottom_at], track[top_at]);
+    checks.require(
+        near(bottom, PADDLE_LIMIT) && near(top, -PADDLE_LIMIT),
+        "the paddle does not come to rest against both ends of its travel",
+        format!(
+            "held against each end for hundreds of ticks it reached {bottom:.3} and {top:.3}; \
+             the clamp is +/-{PADDLE_LIMIT:.2}, which is the wall at \
+             {COURT_HALF_HEIGHT:.1} less half a paddle"
+        ),
+    );
+    // Down first, then up. Both extremes are reached either way round, so only
+    // the order tells a swapped pair of keys apart.
+    checks.require(
+        bottom_at < top_at,
+        "S and W move the paddle the wrong way round",
+        format!(
+            "the script holds S first, but the paddle was at the top on tick {} before it was \
+             at the bottom on tick {}",
+            top_at + 1,
+            bottom_at + 1,
+        ),
+    );
+
     // --- what the world did over the match -------------------------------
     checks.require(
         greater(0.001, worst_escape),
@@ -783,6 +869,52 @@ pub(crate) fn run() -> ExitCode {
             font_quads.len()
         ),
     );
+    // And the same layout stated as a *requirement* rather than as the constant
+    // that produced it. The band check above reads SCORE_TOP, so it moves when
+    // SCORE_TOP moves: a score dropped into the middle of the court passes it
+    // happily, which is what a deliberately broken build proved. What a
+    // scoreboard actually has to be is up out of the play and one number either
+    // side of the centre line, evenly set — and none of that mentions
+    // SCORE_TOP. The glyphs are picked out by being much taller than the hint's.
+    let score_marks: Vec<Rect> = font_quads
+        .iter()
+        .map(|quad| quad.bounds())
+        .filter(|bounds| greater(bounds.size().y, HINT_SIZE * 2.0))
+        .collect();
+    let top_third = -COURT_HALF_HEIGHT / 3.0;
+    let lowest = score_marks
+        .iter()
+        .map(|bounds| bounds.max.y)
+        .fold(f32::NEG_INFINITY, f32::max);
+    checks.require(
+        score_marks.len() == want_score && greater(top_third, lowest),
+        "the score does not read as a scoreboard",
+        format!(
+            "{} big glyphs (want {want_score}), reaching down to y {lowest:.2}; a score belongs \
+             in the top third of a court that runs to y {top_third:.2}, not in the middle of \
+             the play",
+            score_marks.len(),
+        ),
+    );
+    let left_gap = score_marks
+        .iter()
+        .filter(|bounds| greater(0.0, bounds.max.x))
+        .map(|bounds| -bounds.max.x)
+        .fold(f32::INFINITY, f32::min);
+    let right_gap = score_marks
+        .iter()
+        .filter(|bounds| greater(bounds.min.x, 0.0))
+        .map(|bounds| bounds.min.x)
+        .fold(f32::INFINITY, f32::min);
+    checks.require(
+        left_gap.is_finite() && right_gap.is_finite() && within(left_gap, right_gap, 0.01),
+        "the two scores do not sit evenly either side of the centre line",
+        format!(
+            "the nearer edges are {left_gap:.3} left of the middle and {right_gap:.3} right of \
+             it; an infinity means that side drew no score at all"
+        ),
+    );
+
     // The hint belongs outside the court, under the bottom wall, where a ball
     // can never be. "Inside the camera" would pass for a hint drawn across the
     // middle of the play.
