@@ -513,6 +513,18 @@ that's exactly what acceptance milestone E0 tests (implementation plan).
   could not name a renderer there, and shipped words and a pointer instead. That
   recipe is now compiling code.
 
+  **"A pointer into `docs/internal/` is refused in either" became true in F-070**,
+  and was not before. The guard has two halves — `CITATION_RE`, which strips a
+  parenthetical citation on the way out, and `FORBIDDEN`, which fails the build on
+  anything written another way — and `e0-findings.md` fell between them: the
+  pattern's filename class carried no digits, and the `FORBIDDEN` entry names
+  `docs/internal`, the directory, rather than the file. Two citations of it had
+  reached the game document. The class takes digits now and `e0-findings` is in
+  `FORBIDDEN`. Worth recording as the shape rather than the instance: a guard
+  written as *pattern plus deny-list* leaves a gap wherever the pattern's
+  assumptions and the deny-list's spelling do not line up, and the gap is silent
+  by construction.
+
 ## 5. Examples as API fixtures
 
 `examples/` is part of the public surface (practices §5.1): `headless_sim`,
