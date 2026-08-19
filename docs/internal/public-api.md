@@ -373,6 +373,38 @@ that's exactly what acceptance milestone E0 tests (implementation plan).
   job it is not doing. Both budgets are enforced per document; growth past
   either is still a curation conversation, not a bigger number.
 
+  **After seven E0 runs that conversation came due, and was had.**
+  `jidousha-testing.md` reached ~14.7k of its 15k on run 7's fixes, because four
+  consecutive runs' findings all landed in the same file. Two things brought it
+  back to ~13.6k, and they are worth separating because only one of them scales.
+
+  - **~767 tokens came out of the reference, structurally** (ADR-0028).
+    `NullBackend`, `plan_frame`, `compare`, `Comparison`, `Tolerance` and
+    `diff_image` were exported for a road only `prototype_kit` walked; the
+    example stopped walking it and they left. That is a fifth of the reference,
+    recovered by removing items rather than by compressing prose, and it does not
+    come back.
+  - **~300 tokens came out of the prose, on a stated principle.** Evidence in
+    this document does two jobs and only one belongs here: *persuasion* ("this
+    really cost someone") earns a clause, while *specification* — numbers a
+    reader can lift as a recipe — is a hazard, because F-080 is a run following a
+    measured anecdote out of its scope. So the document keeps the rule and the
+    scope qualifier and sends the case history to `e0-findings.md`, which holds
+    all of it already. That is deduplication rather than loss, but it is a
+    one-time recovery: the prose is now near its floor.
+
+  **The open half.** The prose grows with each run's findings and the reference
+  no longer does, so the next squeeze is prose again and there is nothing left to
+  compress. The `make-game` skill is the obvious other home and `e0-findings.md`
+  §7 has declined it four times, on the grounds that two homes for one lesson is
+  worse than one crowded home — and it cannot be the answer while E0's read list
+  is `docs/api/` + `examples/`, since a skill is either invisible to the run or
+  changes what E0 measures. Watch it as a **convergence** signal instead: the
+  prose half is supposed to stop growing when E0 passes, so a document full again
+  *and* an E0 that still has not passed is evidence about the acceptance bar
+  rather than about tokens. Raising a budget stays the one answer ADR-0025
+  forecloses.
+
   Implemented (impl): not rustdoc JSON — that needs a nightly toolchain and
   `rust-toolchain.toml` pins stable (ADR-0005) — but a text extractor over the
   crate sources, with tests. Blocks close on indentation rather than brace

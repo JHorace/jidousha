@@ -93,6 +93,12 @@ that is a finding about the split, not about the run.
    asking a game author to register their game with the engine's test harness
    would be asking them out of the role the run is measuring.
 
+   **`tools/test` now says so if you forget.** An example with a `verify.rs`
+   beside its `main.rs` and no entry in either list fails the wrapper before any
+   phase runs, naming this step. It was missed after runs 4, 5 and 7, each time
+   surfacing as `RunError::NoDisplay` in an `example:pong` phase — a symptom that
+   says nothing about its cause (e0-findings.md F-094).
+
    **Every run, not only the one that passes.** This step used to say "on the
    run that passes", written before anyone had run E0; run 1 registered its game
    immediately and that was both harmless and useful, since a game nobody

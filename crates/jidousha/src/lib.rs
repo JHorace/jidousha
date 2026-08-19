@@ -109,7 +109,7 @@ pub mod prelude {
 ///
 /// ```
 /// use jidousha::prelude::*;
-/// use jidousha::testing::{InputScript, NullBackend, create_builtin_textures, plan_frame};
+/// use jidousha::testing::{FrameRecorder, InputScript};
 ///
 /// fn move_it(world: &mut World) {
 ///     let Some(input) = world.find_resource::<Input>() else { return };
@@ -119,8 +119,16 @@ pub mod prelude {
 ///     }
 /// }
 ///
+/// fn draw_it(ctx: &mut DrawCtx) {
+///     for (_, transform) in ctx.world.query::<&Transform>() {
+///         let box_of_it = Rect::from_center_size(transform.pos, Vec2::ONE);
+///         ctx.rect(box_of_it, Color::WHITE, Depth::layer(0));
+///     }
+/// }
+///
 /// let mut sim = headless(GameConfig::default(), |app| {
 ///     app.add_system(Update, move_it);
+///     app.add_system(Draw, draw_it);
 /// });
 /// let entity = sim.world_mut().spawn();
 /// sim.world_mut().insert(entity, Transform::at(Vec2::ZERO));
@@ -131,6 +139,12 @@ pub mod prelude {
 ///     sim.tick();
 /// }
 /// assert_eq!(sim.world().component::<Transform>(entity).pos.x, 5.0);
+///
+/// // And what was drawn, which is the other half: one recorder, one `draw`.
+/// let mut recorder = FrameRecorder::new(PhysicalSize::new(1280, 720));
+/// let frame = recorder.draw(&mut sim);
+/// assert_eq!(frame.quads().len(), 1);
+/// assert_eq!(frame.quads()[0].bounds().center().x, 5.0);
 /// ```
 pub mod testing {
     // Scripting what a load returns, and when. `decode_png` turns real bytes
@@ -159,8 +173,20 @@ pub mod testing {
     // the texture table and the plan, so a `--verify` mode says `draw(&mut sim)`
     // once instead of writing the driver's five steps out and then rebuilding
     // the texture table against a throwaway backend to learn which id the font
-    // got (e0-findings.md F-010). The pieces below it stay public because the
-    // golden-image path composes them differently — a game uses the recorder.
+    // got (e0-findings.md F-010). It is now the *only* way in: the hand-driven
+    // pieces — `NullBackend`, `plan_frame`, and the golden-image comparison
+    // vocabulary `compare`/`Comparison`/`Tolerance`/`diff_image` — left this
+    // surface with ADR-0028. They were here because `prototype_kit` drove a
+    // backend by hand to buy one claim about the engine, that claim is now a
+    // test, and nothing a *game* writes ever named them: the testing document
+    // never mentioned one of the six, and `check-api-coverage` skips this
+    // module, so they were exported and taught nowhere for four milestones.
+    // The engine's own crates still have them; they are simply not a game's.
+    // `create_builtin_textures`, `upload_ready_textures` and `TextureTable` do
+    // stay, because a capture replays a recorded plan and a plan names texture
+    // ids — a game with art has to create the built-ins and upload its own art
+    // in the same order before the ids mean the same thing
+    // (`examples/prototype_kit/capture.rs`).
     // `Batch` and `QuadVertex` are here for the same reason `Submissions` is
     // (e0-findings.md F-017): `FramePlan::batches` is a `Vec<Batch>` and
     // `Batch::vertices` a `Vec<QuadVertex>`, so both were named by a field a
@@ -178,10 +204,9 @@ pub mod testing {
     // hardware. The distinction is `RenderError::NoAdapter`, and matching on it
     // needs the type. `examples/prototype_kit/capture.rs` is the worked case.
     pub use jidousha_render_core::{
-        BackendTextureId, Batch, Comparison, DrawnQuad, FONT_TEXTURE, FramePlan, FrameRecord,
-        FrameRecorder, NullBackend, PhysicalSize, QuadVertex, RawImage, RenderBackend, RenderError,
-        TextureTable, Tolerance, compare, create_builtin_textures, diff_image, encode_png,
-        plan_frame, upload_ready_textures,
+        BackendTextureId, Batch, DrawnQuad, FONT_TEXTURE, FramePlan, FrameRecord, FrameRecorder,
+        PhysicalSize, QuadVertex, RawImage, RenderBackend, RenderError, TextureTable,
+        create_builtin_textures, encode_png, upload_ready_textures,
     };
 
     /// The renderer a golden image comes from.

@@ -1,6 +1,13 @@
 # ADR-0026: `prototype_kit`'s verify drives its own backend; `FrameRecorder` is still the one way
 
-Status: accepted · 2026-08-19
+Status: **superseded by ADR-0028** · 2026-08-19
+
+> ADR-0028 moves the two-backend comparison into
+> `crates/jidousha/tests/backend_agnostic.rs` and puts `prototype_kit` back on
+> `FrameRecorder`. The reasoning below is kept because it is why the divergence
+> survived as long as it did — and the thing it did not ask is where a claim
+> about the engine belongs.
+
 
 > **The divergence is kept and made unmissable, rather than removed or split.**
 > Nothing in the API changed. What changed is where the explanation lives: at

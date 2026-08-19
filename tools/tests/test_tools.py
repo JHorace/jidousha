@@ -1650,6 +1650,47 @@ class ExampleDiscoveryTest(unittest.TestCase):
             "a verifiable example that is not windowed would stop being run normally",
         )
 
+    def test_an_example_with_a_verify_mode_must_be_registered_as_one(self):
+        # The E0 harness adds a game to examples/ and a maintainer registers it
+        # in both lists afterwards (e0-prompt.md, after-the-run step 6). That
+        # step has been missed three times, each time leaving this wrapper
+        # running a windowed game bare and dying on NoDisplay — a symptom that
+        # says nothing about its cause (e0-findings.md F-094).
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "crates/jidousha/examples/newgame").mkdir(parents=True)
+            (root / "crates/jidousha/examples/newgame/verify.rs").write_text("")
+            self.assertEqual(
+                test_wrapper.unregistered_verify_modes([("jidousha", "newgame")], root),
+                ["newgame"],
+            )
+
+    def test_an_example_without_a_verify_mode_needs_no_registration(self):
+        # The rule is "has a verify mode", not "is a directory": an example that
+        # asserts in its normal mode is run normally and is not this check's.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "crates/jidousha/examples/tour").mkdir(parents=True)
+            (root / "crates/jidousha/examples/tour/main.rs").write_text("")
+            self.assertEqual(
+                test_wrapper.unregistered_verify_modes([("jidousha", "tour")], root),
+                [],
+            )
+
+    def test_the_committed_tree_has_every_verify_mode_registered(self):
+        # The check applied to this repository, which is the instance that keeps
+        # being wrong.
+        root = Path(__file__).resolve().parents[2]
+        examples = [
+            ("jidousha", path.parent.name)
+            for path in root.glob("crates/*/examples/*/main.rs")
+        ]
+        self.assertEqual(
+            test_wrapper.unregistered_verify_modes(examples, root),
+            [],
+            "an example carries a --verify mode and is in neither of tools/test's lists",
+        )
+
 
 class VerifyToolTest(unittest.TestCase):
     OUTPUT = (

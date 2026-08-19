@@ -32,11 +32,55 @@ const ASSET_ROOT: &str = "assets";
 /// The world is twenty units tall; everything below is in those units.
 const VIEW_HEIGHT: f32 = 20.0;
 
+/// How big the art is drawn, in world units.
+const ART_SIZE: Vec2 = Vec2::new(3.0, 3.0);
+
+/// What a hitbox outline is drawn in.
+const HITBOX_LINE: Color = Color::rgba(0.2, 1.0, 0.4, 0.9);
+
+/// How thick a hitbox outline's lines are, in world units.
+const HITBOX_THICKNESS: f32 = 0.08;
+
+/// How big the centre marking is, as a radius in world units.
+const CENTRE_RADIUS: f32 = 3.0;
+
+/// What the field markings are drawn in.
+const FIELD_LINE: Color = Color::rgba(1.0, 1.0, 1.0, 0.18);
+
+/// The dot a hitbox puts on the transform's own position.
+const HITBOX_DOT: Color = Color::rgb(1.0, 0.3, 0.3);
+
+/// What the court is cleared to.
+///
+/// Named because the verify run asserts it two ways: against this constant, and
+/// against the requirement it exists to meet — the field markings are white and
+/// have to read against it.
+const COURT: Color = Color::rgb(0.07, 0.09, 0.13);
+
 /// How big a paddle is drawn, in world units.
 ///
 /// Stated once because the verify run asserts against it: a check that carried
 /// its own copy of the number would keep passing after the paddle changed size.
 const PADDLE_SIZE: Vec2 = Vec2::new(0.5, 4.0);
+
+/// The score line.
+const SCORE_TEXT: &str = "3 - 2";
+
+/// The whole printable range, so the font is inspectable at a glance.
+const FONT_SAMPLE: &str = " !\"#$%&'()*+,-./0123456789:;<=>?\n\
+     @ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_\n\
+     `abcdefghijklmnopqrstuvwxyz{|}~";
+
+/// The debug readout, as one string.
+///
+/// A function rather than a `format!` inside the draw system so that a check can
+/// ask the game for the exact text it draws. No assertion over drawn quads can
+/// see a wrong *character* — the font draws an identically sized box for one —
+/// so the only instrument is the string itself, and a check that cannot reach
+/// the string has nothing to look at.
+fn readout_text(tick: u64, elapsed: f32, alpha: f32) -> String {
+    format!("tick {tick}\nelapsed {elapsed:.1}s\nalpha {alpha:.2}")
+}
 
 /// Draw bands, so the ordering is stated once rather than guessed at each site.
 ///
@@ -97,9 +141,15 @@ fn register(app: &mut App) {
     app.add_system(Update, drive_the_paddle);
     app.add_system(Update, bounce);
     app.add_system(Update, turn);
+    // The hitboxes go down *first* and are drawn *last*, and the field goes down
+    // after the art and is drawn behind it. Both orders are the bands' doing
+    // rather than the submission sequence's, which is the claim `Depth` makes —
+    // and it is also the only arrangement in which a check can see a band at
+    // all: where submission order already agrees with the layers, swapping two
+    // constants in `mod layers` changes nothing a recorded frame can show.
+    app.add_system(Draw, draw_the_hitboxes);
     app.add_system(Draw, draw_sprites);
     app.add_system(Draw, draw_the_field);
-    app.add_system(Draw, draw_the_hitboxes);
     app.add_system(Draw, draw_the_readout);
 }
 
@@ -125,7 +175,7 @@ fn main() -> ExitCode {
 
 fn set_the_scene(world: &mut World) {
     world.insert_resource(Camera {
-        clear_color: Color::rgb(0.07, 0.09, 0.13),
+        clear_color: COURT,
         height: VIEW_HEIGHT,
         ..Camera::default()
     });
@@ -153,7 +203,7 @@ fn set_the_scene(world: &mut World) {
     world.insert(
         ball,
         Sprite {
-            size: Vec2::new(3.0, 3.0),
+            size: ART_SIZE,
             layer: layers::PLAY,
             ..Sprite::new(hero)
         },
@@ -220,7 +270,7 @@ fn draw_the_field(ctx: &mut DrawCtx) {
         max: view.max - Vec2::splat(inset),
     };
     let depth = Depth::layer(layers::FIELD);
-    let line = Color::rgba(1.0, 1.0, 1.0, 0.18);
+    let line = FIELD_LINE;
 
     // A border, as four lines rather than a filled rectangle — an outline is
     // what a border is, and there is no "stroke" mode to remember.
@@ -247,7 +297,7 @@ fn draw_the_field(ctx: &mut DrawCtx) {
     // value that actually reads as a field marking.
     ctx.circle(
         field.center(),
-        3.0,
+        CENTRE_RADIUS,
         Color::rgba(1.0, 1.0, 1.0, 0.015),
         depth,
     );
@@ -297,8 +347,8 @@ fn draw_the_hitboxes(ctx: &mut DrawCtx) {
             ctx.line(
                 corners[index],
                 corners[(index + 1) % 4],
-                0.08,
-                Color::rgba(0.2, 1.0, 0.4, 0.9),
+                HITBOX_THICKNESS,
+                HITBOX_LINE,
                 depth,
             );
         }
@@ -307,7 +357,7 @@ fn draw_the_hitboxes(ctx: &mut DrawCtx) {
         ctx.circle(
             bounds.center(),
             0.12,
-            Color::rgb(1.0, 0.3, 0.3),
+            HITBOX_DOT,
             Depth::layer(layers::DEBUG),
         );
     }
@@ -326,7 +376,7 @@ fn draw_the_readout(ctx: &mut DrawCtx) {
         color: Color::WHITE,
         depth: Depth::layer(layers::UI),
     };
-    let text = "3 - 2";
+    let text = SCORE_TEXT;
     ctx.text(
         Vec2::new(-score.width_of(text) * 0.5, view.min.y + 1.0),
         text,
@@ -342,12 +392,7 @@ fn draw_the_readout(ctx: &mut DrawCtx) {
     };
     ctx.text(
         Vec2::new(view.min.x + 1.0, view.min.y + 1.0),
-        &format!(
-            "tick {}\nelapsed {:.1}s\nalpha {:.2}",
-            time.tick,
-            time.elapsed.as_f32(),
-            time.alpha
-        ),
+        &readout_text(time.tick, time.elapsed.as_f32(), time.alpha),
         readout,
     );
 
@@ -360,9 +405,7 @@ fn draw_the_readout(ctx: &mut DrawCtx) {
     };
     ctx.text(
         Vec2::new(view.min.x + 1.0, view.max.y - 2.6),
-        " !\"#$%&'()*+,-./0123456789:;<=>?\n\
-         @ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_\n\
-         `abcdefghijklmnopqrstuvwxyz{|}~",
+        FONT_SAMPLE,
         sample,
     );
 }

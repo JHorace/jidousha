@@ -104,6 +104,7 @@ WINDOWED_EXAMPLES = frozenset(
         "prototype_kit",
         "input_echo",
         "quickstart",
+        "pong",
     }
 )
 
@@ -114,7 +115,7 @@ WINDOWED_EXAMPLES = frozenset(
 # name here must also be windowed (tested): an example that already runs
 # headless asserts in its normal mode, and a second mode would be a second way
 # to do one thing.
-VERIFIABLE_EXAMPLES = frozenset({"prototype_kit"})
+VERIFIABLE_EXAMPLES = frozenset({"prototype_kit", "pong"})
 
 
 def example_phase(package: str, example: str) -> "tuple[str, list[str]]":
@@ -139,6 +140,35 @@ def example_phase(package: str, example: str) -> "tuple[str, list[str]]":
         f"example:{example}",
         ["cargo", "run", "--quiet", "-p", package, "--example", example],
     )
+
+
+def unregistered_verify_modes(examples: "list[tuple[str, str]]", repo: Path) -> "list[str]":
+    """Examples that carry a `--verify` mode and are not registered as one.
+
+    A directory example with a `verify.rs` beside its `main.rs` has a headless
+    check, which means it must not be run bare — bare, it opens a window and dies
+    on a runner with no display — and must be run through `tools/verify` rather
+    than merely built. Both facts are name lists above, and a name list is a
+    checklist step somebody has to take.
+
+    The step is `e0-prompt.md`'s after-the-run 6, *adopt the game*, and it has been
+    missed three times: after E0 runs 4, 5 and 7, each time leaving this wrapper
+    failing on a `pong` it ran as an ordinary example and watched open a window
+    (e0-findings.md F-094). The symptom is unmistakable and says nothing about the
+    cause, which is what makes it expensive. This says the cause.
+
+    Deliberately structural rather than a special case for `pong`: the property
+    that matters is "has a verify mode", the file that proves it is on disk, and
+    any future directory example with one is covered without editing this.
+    """
+    missing = []
+    for _, example in examples:
+        if not (repo / "crates/jidousha/examples" / example / "verify.rs").is_file():
+            continue
+        if example in VERIFIABLE_EXAMPLES and example in WINDOWED_EXAMPLES:
+            continue
+        missing.append(example)
+    return missing
 
 
 def parse_example_targets(metadata: dict) -> "list[tuple[str, str]]":
@@ -357,6 +387,24 @@ def main(argv: "list[str]") -> int:
     # Examples are run, not merely compiled: each one asserts its own behaviour,
     # so a broken example fails here rather than in a game agent's face.
     examples = discover_examples()
+    unregistered = unregistered_verify_modes(examples, REPO_ROOT)
+    if unregistered:
+        print(
+            "[tools/test] "
+            + f"example with a --verify mode is not registered: {', '.join(unregistered)}",
+            file=sys.stderr,
+        )
+        print(
+            "  likely cause: a game was added to examples/ and the harness step that adopts "
+            "it was not taken (docs/internal/e0-prompt.md, after-the-run step 6)",
+            file=sys.stderr,
+        )
+        print(
+            f"  fix: add {' and '.join(unregistered)} to both WINDOWED_EXAMPLES and "
+            "VERIFIABLE_EXAMPLES in tools/test",
+            file=sys.stderr,
+        )
+        return 2
     verified = [example for _, example in examples if example in VERIFIABLE_EXAMPLES]
     windowed = [
         example

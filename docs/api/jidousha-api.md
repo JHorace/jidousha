@@ -177,7 +177,7 @@ there:
 |---|---|---|
 | `Time` | `run` and `headless` both, before the first tick | no |
 | `Rng` | the same, seeded from `GameConfig::seed` | no |
-| `Input` | `run`, before every Update tick | **yes** — not before the first tick, and never under `headless` unless a test inserts it |
+| `Input` | `run`, before every Update tick | **yes** — `Startup` never sees one, because it runs inside the first tick before that tick's `Input` exists; and never under `headless` unless a test inserts it |
 | `Camera` | the game, in `Startup` | **yes** under `headless`; under `run`, a game that inserts none is given `Camera::default()` before the first frame |
 | `Assets` | the game, if it has art | **yes** — a game of shapes and text never inserts one |
 
@@ -189,6 +189,25 @@ in `Startup` may read it back with `world.resource::<Camera>()` anywhere,
 because `Startup` has run by then — but a game that relies on the driver's
 default has no camera at all in a headless run, and a check reading one will
 panic where the window would not.
+
+**The camera is the game's; its `viewport` is the driver's.** `run` measures the
+window before the first frame and stamps that size into `Camera::viewport` on
+**every** frame, after the frame's Update ticks and before `Draw` — so a
+`viewport` set in `Startup` is never the one anything is drawn with, and a
+resized window is honest from the frame the resize arrives rather than only
+until the first one. Setting it is therefore not wrong and not useful: set
+`center`, `height` and `clear_color`, leave `viewport` to `..Camera::default()`,
+and read the real one back. Two consequences worth having:
+
+- `visible_bounds()` in a `Draw` system is always the window's true aspect. In
+  an `Update` system it is the size the *previous* frame stamped, which is the
+  same number except on the first tick, where it is whatever the game put there.
+  Compute a layout in `Draw`, or from your own constants, rather than from a
+  viewport read on tick 1.
+- **Under `headless` nothing stamps it at all.** There is no window to measure,
+  so the viewport stays exactly what the game set — which is why
+  `FrameRecorder::new` takes one and overrides the resource's. *Testing your
+  game* has the trap that follows from that.
 
 The engine runs on a **fixed timestep**. `Time::fixed_dt` is the same number
 every tick, `Time::tick` counts them, and a slow frame runs several ticks rather
@@ -222,6 +241,17 @@ start of a physics engine, which v1 does not have. Write the eight lines: the
 plane your body's leading edge touches, whether it was approaching, whether this
 tick's travel crossed it, and the fraction of the tick at which it did.
 
+**And the thing you sweep against has usually moved this tick as well.** That
+arithmetic is written against a plane that stands still; a paddle is not one,
+because a system earlier in the same tick moved it. Nothing in the engine orders
+that for you and there is no sub-tick to appeal to, so pick one and say so at the
+site: the prototype answer is to treat the collider as stationary at its
+**post-move** position for the whole tick, which is wrong by at most one tick of
+its travel and is right about the case that matters, a paddle moving to meet the
+ball. The failure from not deciding is a ball that passes through a paddle
+closing on it, and it survives every assertion that only asks where things ended
+up.
+
 Together with the seeded `Rng` in `GameConfig`, that means the same inputs make
 the same game — which is what lets a test replay a session and get the same
 answer.
@@ -252,6 +282,15 @@ knowing before a frame has three hundred of them, and worth knowing when you
 assert on what was drawn, because "a quad the size of the thing" is the right
 question for a rectangle and the wrong one for a circle.
 *Testing your game* has the circle version written out.
+
+**Those five verbs are the whole vocabulary, and every one of them fills.**
+There is no outline mode, no stroke width and no dash pattern anywhere: a disc is
+`ctx.circle` and a ring is not a thing you ask for. The reason is `Rect::sweep`'s
+reason — an outline is one parameter until you ask how it behaves at a corner, at
+a camera zoom, or with a gap in it — and the shapes you write instead are short.
+A ring is two circles with the inner one in the background colour. A box around
+something is four `ctx.line` calls, which is what `examples/prototype_kit` draws
+its field border with. A dashed centre marking is a column of `ctx.rect` calls.
 
 `Draw` reads the world's **committed** state — the values the last `Update`
 left — so a fast body steps rather than glides at whatever rate the frames come.
@@ -302,6 +341,19 @@ bind a component you do not read. A component holding an enum — `Paddle {
 control: Control }` — is the other way to say the same thing, and it keeps the
 tuple shorter.
 
+**Iteration order is deterministic, which is not the same as stable, and the
+difference is what a game may lean on.** The order a query yields entities in is
+a pure function of the world's operation history: the same spawns, inserts and
+despawns in the same sequence give the same order, on every machine and every
+run. That is what lets a check replay a session and compare it to the first one
+bit for bit. What it is *not* is sorted by entity id, and it is not spawn order
+once anything has been despawned — a removal moves the last row into the hole it
+left. So: rely on "the same run twice yields the same order", never on "the first
+one out is the one I spawned first". A query that matches exactly one entity is
+unambiguous however things are ordered, so `.next()` for *the* ball is fine; a
+`Vec` of both paddles is not, and wants a `sort_by_key` on something the game
+owns — the side they play, not the order they came out.
+
 **A game does not close itself.** There is no `App::quit` and nothing on `World`
 or `Commands`: `run` is the whole program until the player closes the window.
 That is a v1 boundary rather than an omission you have missed — `Key::Escape` is
@@ -320,6 +372,13 @@ takes the context mutably, which looks like the same situation and is not:
 than from the context, so a Draw system draws straight out of its query and
 never needs the `Vec`. Both worked examples do it that way. Collecting first in a
 Draw system costs an allocation a frame and buys nothing.
+
+**An example can be a directory, and a game with a `--verify` mode wants one.**
+`cargo run --example <name>` picks up `examples/<name>.rs` and
+`examples/<name>/main.rs` alike, with no `[[example]]` entry in any `Cargo.toml`
+either way. The second is what lets the game, its checks and its capture path be
+files beside each other, reached with `mod verify;` from `main.rs`.
+`examples/prototype_kit` is the worked version.
 
 **A game written in this repository's `examples/` inherits the engine's own
 lints.** `crates/jidousha/Cargo.toml` has `[lints] workspace = true`, and that
@@ -1698,6 +1757,14 @@ in `docs/api/jidousha-testing.md`.
   module path; that spelling is the engine's and the prelude is the game's, which
   is what "one way to do everything" means here —
   E0 run 4 found two worked examples disagreeing about which.
+- **And that holds for any name the prelude has, not only `math`'s.** A few are
+  in the prelude *and* in `jidousha::testing` — `PhysicalSize` is the one that
+  bites, because `FrameRecorder::new` takes one — since the testing surface has
+  to define what its own signatures name (F-017's rule). A game globs the
+  prelude, so it takes them from there and lists only the testing-*only* names
+  in its `use jidousha::testing::{..}`. E0 run 7 copied the other spelling out of
+  `prototype_kit`, which had it wrong, and the document said the class of thing
+  was settled.
 
 ## Testing your game
 
