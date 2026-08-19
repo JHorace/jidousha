@@ -1,1250 +1,1445 @@
-//! The check: play a whole match with nobody watching, then ask what the world
-//! did and what was drawn.
+//! The check: play a whole match headless, assert on what the world did and on
+//! what was drawn, then leave a picture behind.
 //!
 //! `cargo run -p jidousha --example pong -- --verify` runs this. It registers
-//! the *same* systems and the same config the window does — a check that built
-//! a different game would be checking a different program — and replaces only
-//! what a person would otherwise supply: the hands on the keyboard.
+//! the *same* systems and the same config the window does, so what is verified
+//! is what a person plays. What differs is only what a person would otherwise
+//! supply: the left paddle is moved by the controller below.
 //!
-//! The controller is the part to distrust. A script cannot play Pong at all
-//! (it never returns a ball), and a controller that merely tracks the ball
-//! returns it dead flat down the middle against an opponent that tracks too,
-//! so the rally never ends and the run reports a correct game as unplayable.
-//! So this one plays to *win*: it pushes every contact point it could reach
-//! through the game's own bounce function and takes the one that lands
-//! furthest from where the opponent will be. And because "the best shot
-//! available" is always the one struck at the very tip — where any error at
-//! all is a clean miss — it constrains before it optimises: only offsets well
-//! inside the paddle, and only positions it can actually reach in time.
+//! # The controller is the instrument, so it checks itself
 //!
-//! None of that is trustworthy because it is written down. It is trustworthy
-//! because the run checks the controller's own contract on the numbers it
-//! picked — how often the aim actually met the ball, and how far the return it
-//! got was from the return it planned — and reports a miss as *the
-//! controller's* fault rather than as a fact about the game.
+//! A blind `InputScript` never returns a ball, so it can prove the controls
+//! work and say nothing about whether the game is playable. This one looks at
+//! the world every tick and plays to win — and, because a mediocre controller
+//! does not report "unplayable" but a plausible wrong number that sends you off
+//! to tune the game, it reports its own hit rate as a check of its own. `met
+//! N of N approaches` is what says which half of the program to open when the
+//! score comes out wrong.
+//!
+//! It aims by **constrain, then optimise**: only contact points that really
+//! land on the paddle with margin, and that this paddle can reach before the
+//! ball arrives, are scored at all. The optimum otherwise sits on the boundary
+//! of what the paddle can do — the sharpest return is always the one struck at
+//! the very tip — where half a tick of overshoot is a clean miss.
 
 use std::process::ExitCode;
 
 use jidousha::prelude::*;
-use jidousha::testing::{
-    BackendTextureId, FrameRecord, FrameRecorder, InputEvent, InputSnapshot, SnapshotBuilder,
-};
+use jidousha::testing::{FrameRecord, FrameRecorder, InputEvent, InputScript, SnapshotBuilder};
 
-use crate::checks::{Checks, fail, greater, near, sizes_covering, within};
-use crate::rules::{
-    BALL_LIMIT, BALL_RADIUS, FIELD_HALF, MAX_BALL_SPEED, MAX_BOUNCE, PADDLE_LIMIT, PADDLE_SIZE,
-    PLAYER_SPEED, SERVE_SPEED, SPEEDUP, Side, advance_ball, bounce_velocity, contact_offset,
-    fold_between_walls, opponent_step, sweep_contact,
-};
+use crate::checks::{Checks, disc_union, fail, greater, near, sizes_covering, within};
 use crate::{
-    Ball, EVERY_LITERAL, HINT, HINT_SIZE, HINT_TOP, Paddle, SCORE_OFFSET, SCORE_SIZE, SCORE_TOP,
-    Scoreboard, Stage, VIEW_HEIGHT, VIEWPORT, WINNING_SCORE, config, register,
+    BALL_RADIUS, Ball, COURT, Control, HINT, HINT_OVER, HINT_SIZE, MAX_BOUNCE, OPPONENT_SPEED,
+    PADDLE, PADDLE_LIMIT, PADDLE_X, PLAYER_SPEED, Paddle, Phase, SCORE_SIZE, SCORE_X, SERVE_SPEED,
+    SPEED_PER_TOUCH, Scoreboard, Side, TOP_SPEED, WIN_SCORE, WINDOW, banner_text, bounce_off,
+    config, face_of, fold_into_court, machine_push, palette, register, step_paddle,
+    travel_one_tick,
 };
 
-/// How long the played match is given to finish.
+/// The longest match the check will sit through, in ticks.
 ///
-/// A match is five points; at the speeds in `rules.rs` a point takes a couple
-/// of seconds, so this is roughly three times what a finished match needs. It
-/// is a ceiling on the run, not a target — the check that matters is that the
-/// match *ended*, and by how much room to spare.
-const MATCH_TICKS: u64 = 2600;
+/// A minute of game at the default timestep. The run asserts the match ended
+/// well inside this and prints the tick it ended on, so a game that got slower
+/// shows up as a number rather than as a timeout.
+const TICKS: u64 = 3600;
 
-/// How long the idle run gets to lose.
-const IDLE_TICKS: u64 = 1500;
-
-/// How far up the paddle from its centre the controller will aim, as a
-/// fraction of the paddle's half-height.
+/// How far ahead the controller replays the ball, in ticks.
 ///
-/// Strictly inside 1.0, and that is the whole point. The sharpest return a
-/// paddle can produce is the one struck at its very tip, so an optimiser with
-/// the tip on its menu picks the tip every time — and on that boundary half a
-/// tick of overshoot is a clean miss rather than a worse return.
-const CONTACT_MARGIN: f32 = 0.70;
+/// The longest crossing the game can produce is the court's width at serve
+/// speed, about 105 ticks; this is comfortably past it and bounds the search
+/// so a ball that somehow stopped moving cannot hang the run.
+const LOOKAHEAD: u32 = 400;
+
+/// How much of a paddle the controller will aim with, as a fraction of the
+/// distance from its centre to where a ball stops touching it.
+///
+/// Not 1.0, and that is the whole point: the best shot available is always the
+/// one struck at the very tip, because that is where the bounce is widest — so
+/// an unconstrained search stands the paddle on its last millimetre every time
+/// and any error at all becomes a clean miss instead of a worse return.
+const AIM_MARGIN: f32 = 0.72;
+
+/// How many contact points across the paddle the controller tries.
+const AIM_POINTS: usize = 9;
 
 /// How much of the travel the controller believes it has, when asking whether
-/// it can reach a place in time.
+/// it can reach a contact point in time.
 const REACH_SAFETY: f32 = 0.85;
 
-/// How many contact points the controller tries per decision.
-const CANDIDATES: usize = 13;
+/// How far off its chosen line the controller will sit rather than correct, so
+/// it does not chatter a key on and off around the target.
+///
+/// This is also, unavoidably, how wrong its aim is: a keyboard paddle moves in
+/// steps of `PLAYER_SPEED * fixed_dt` and cannot stand anywhere in between, so
+/// it arrives somewhere within this of where it meant to be.
+const CONTROL_DEADZONE: f32 = 0.2;
 
-/// How far the achieved contact may be from the planned one before the run
-/// calls it a controller fault, as a fraction of the paddle's half-height.
-const AIM_SLACK: f32 = 0.30;
+/// How wrong the controller assumes its own contact point will be, as a
+/// fraction of the paddle's reach.
+///
+/// `CONTROL_DEADZONE` expressed in the units a bounce is computed in. It is
+/// about five degrees of bounce angle, which over a court this wide is seven
+/// units of landing — measured, not guessed: the first controller to plan an
+/// exact landing produced shots that arrived 7.43 units from where it planned,
+/// on a court 17.1 units tall. The flight is chaotic in the aim angle, so no
+/// amount of care in the prediction fixes that; what fixes it is scoring a shot
+/// by its *worst* outcome across the error the controller knows it has.
+const AIM_UNCERTAINTY: f32 = CONTROL_DEADZONE / (PADDLE.y + BALL_RADIUS);
 
-/// The least fraction of approaches the controller must actually meet.
-const MIN_CONTACT_RATE: f32 = 0.75;
+/// What one played match came out as.
+struct Session {
+    /// The tick the match was decided on, if it was.
+    ended_at: Option<u64>,
+    /// The scoreboard at the end.
+    board: Scoreboard,
+    /// How many times the ball came at the controller's paddle.
+    approaches: u32,
+    /// How many of those it met.
+    met: u32,
+    /// How far from where the opponent will be standing the controller's chosen
+    /// return was predicted to land, worst and best over the match.
+    threat: (f32, f32),
+    /// How many returns it planned at all.
+    planned: u32,
+    /// The furthest the ball ever was from the opponent's centre at the moment
+    /// the opponent touched it: how stretched it ever actually got.
+    their_stretch: f32,
+    /// How many balls the opponent touched.
+    their_touches: u32,
+    /// How far the ball actually landed from where the plan said it would:
+    /// worst, and the running total.
+    aim_error: (f32, f32),
+    /// How many shots that was measured over.
+    shots: u32,
+    /// The furthest the ball ever got from the centre line, in each axis.
+    ball_extent: Vec2,
+    /// The lowest and highest the controller's paddle ever sat.
+    player_span: (f32, f32),
+    /// The lowest and highest the opponent's paddle ever sat.
+    opponent_span: (f32, f32),
+    /// The last frame drawn while the ball was live, and what the world held
+    /// when it was drawn.
+    rally: Option<Snapshot>,
+    /// The very last frame drawn.
+    last_frame: Option<FrameRecord>,
+    /// Enough of the final world to compare two runs bit for bit.
+    fingerprint: Vec<u32>,
+    /// The average of those predicted landings.
+    mean_threat: f32,
+}
 
-/// The least fraction of met balls that must land where they were aimed.
-const MIN_AIM_RATE: f32 = 0.75;
-
-/// What the controller can see of the world at the top of a tick.
-struct Sight {
+/// A frame, and the world positions it should be a picture of.
+struct Snapshot {
+    /// The frame.
+    frame: FrameRecord,
+    /// Where the ball was.
     ball: Vec2,
-    vel: Vec2,
-    speed: f32,
-    mine: f32,
-    theirs: f32,
-    live: bool,
+    /// Where each paddle was.
+    paddles: Vec<(Side, Vec2)>,
 }
 
-/// What the controller decided: where it wants its paddle, and — when it has
-/// one — which contact point that position is aiming for.
-struct Aim {
-    target: f32,
-    offset: Option<f32>,
-}
-
-/// How many ticks a rolled-forward shot is followed before it is given up on.
+/// Run the ball and the opponent forward together until the ball reaches
+/// `side`'s paddle face.
 ///
-/// The slowest crossing this game allows is a serve struck at the steepest
-/// angle: half its speed goes sideways, so it needs a little over three
-/// seconds. This is twice that.
-const ROLL_LIMIT: u32 = 400;
-
-/// Where a ball ends up, and where the opponent is when it gets there.
-struct Rolled {
-    /// The ball's y as it reaches the plane.
-    ball: f32,
-    /// The opponent's paddle centre at that moment.
-    opponent: f32,
-    seconds: f32,
-}
-
-/// Roll the ball and the opponent forward, through the game's own functions,
-/// until the ball reaches `side`'s paddle face.
+/// Returns where the ball's centre is when it gets there, how many ticks that
+/// took, and where the opponent is standing by then. Every step goes through
+/// the game's own `travel_one_tick`, `machine_push` and `step_paddle`, in the
+/// order the game's systems run them, so this is a prediction *by simulation*
+/// rather than a closed form to keep in step by hand.
 ///
-/// This is the controller's whole model of the future and it is not a model at
-/// all: `advance_ball`, `opponent_step` and `sweep_contact` are the functions
-/// the `Update` systems call, in the order the systems call them. A closed
-/// form would have been shorter and would have had to be kept in step with the
-/// game by hand — and the opponent chases where the ball *is*, so there is no
-/// closed form for where it ends up anyway.
-fn roll_forward(ball: Vec2, vel: Vec2, opponent: f32, side: Side, dt: f32) -> Option<Rolled> {
-    let plane = side.contact_plane();
-    let approach = -side.hits_toward();
-    let (mut ball, mut vel, mut opponent) = (ball, vel, opponent);
-    for tick in 0..ROLL_LIMIT {
-        // The systems run steer, then move, then ball — so the opponent reacts
-        // to where the ball was at the top of the tick.
-        opponent = opponent_step(opponent, ball.y, dt);
-        let to = ball + vel * dt;
-        // An infinite span asks only "did it reach the plane this tick", which
-        // is the question here: how far the paddle is from it is the answer
-        // being measured rather than a condition on it.
-        if let Some(t) = sweep_contact(ball, to, plane, approach, opponent, f32::INFINITY) {
-            return Some(Rolled {
-                ball: fold_between_walls(ball.y + (to.y - ball.y) * t, BALL_LIMIT),
-                opponent,
-                seconds: (tick as f32 + t) * dt,
-            });
+/// `None` if the ball is not going that way, or does not get there inside
+/// `LOOKAHEAD`.
+fn run_to_face(
+    mut ball: Vec2,
+    mut velocity: Vec2,
+    mut opponent_y: f32,
+    side: Side,
+    dt: f32,
+) -> Option<(f32, u32, f32)> {
+    let sign = side.sign();
+    let face = face_of(side);
+    if velocity.x * sign <= 0.0 {
+        return None;
+    }
+    for tick in 0..LOOKAHEAD {
+        let lead = ball.x + sign * BALL_RADIUS;
+        if (lead - face) * sign >= 0.0 {
+            return Some((ball.y, tick, opponent_y));
         }
-        let stepped = advance_ball(ball, vel, dt);
-        ball = stepped.0;
-        vel = stepped.1;
+        // The game's order: steer, move the paddles, then move the ball.
+        let push = machine_push(opponent_y, ball, velocity, Side::Right);
+        opponent_y = step_paddle(opponent_y, push, OPPONENT_SPEED, dt);
+        let raw = ball + velocity * dt;
+        if (raw.x + sign * BALL_RADIUS - face) * sign >= 0.0 {
+            let fraction = ((face - lead) / (raw.x - ball.x)).clamp(0.0, 1.0);
+            // Folded rather than taken raw: a tick that crosses the face may
+            // also cross a wall, and the game folds before it does anything
+            // else.
+            let (y, _) = fold_into_court(ball.y + velocity.y * dt * fraction);
+            return Some((y, tick, opponent_y));
+        }
+        let (next, going) = travel_one_tick(ball, velocity, dt);
+        ball = next;
+        velocity = going;
     }
     None
 }
 
-/// Where to stand, and what to aim for.
-///
-/// Constrain, then optimise. The set searched is the contact points that
-/// really make contact, with margin, *and* that the paddle can reach before
-/// the ball arrives; the score inside that set is how far past the opponent's
-/// paddle the return would land, with the opponent rolled forward through its
-/// own function rather than guessed at. When nothing survives both constraints,
-/// run at the ball — a late return beats a beautiful one that is not there.
-fn plan(sight: &Sight, dt: f32) -> Aim {
-    let home = Aim {
-        target: 0.0,
-        offset: None,
-    };
-    if !sight.live {
-        return home;
-    }
-    // Leg one: where the ball reaches me, and where the opponent has drifted
-    // to by then. Candidate-independent, so it is rolled once.
-    let Some(arrival) = roll_forward(sight.ball, sight.vel, sight.theirs, Side::Left, dt) else {
-        // The ball is going the other way, or will not arrive: go back to the
-        // middle, which is the position with the smallest worst case.
-        return home;
-    };
-    let my_plane = Side::Left.contact_plane();
-    let next_speed = (sight.speed + SPEEDUP).min(MAX_BALL_SPEED);
-    let half = PADDLE_SIZE.y * 0.5;
-    let reach = half + BALL_RADIUS;
+/// One planned return: where to stand, and what that shot is expected to do.
+#[derive(Clone, Copy, Debug)]
+struct Plan {
+    /// Where the paddle should be when the ball arrives.
+    target: f32,
+    /// Where the return is predicted to reach the opponent's face.
+    landing: f32,
+    /// Where the opponent is predicted to be standing when it does.
+    opponent_at_landing: f32,
+}
 
-    let mut best: Option<(f32, f32, f32)> = None;
-    for index in 0..CANDIDATES {
-        let offset =
-            -CONTACT_MARGIN + 2.0 * CONTACT_MARGIN * index as f32 / (CANDIDATES - 1) as f32;
-        let target = arrival.ball - offset * half;
-        // (a) a position the paddle may legally occupy, so the contact really
-        // happens where the offset says it does.
+impl Plan {
+    /// How far past the opponent this shot is expected to land.
+    fn threat(&self) -> f32 {
+        (self.landing - self.opponent_at_landing).abs()
+    }
+}
+
+/// Where the controller's paddle should be sitting this tick.
+///
+/// Constrain, then optimise. Every contact point that survives both constraints
+/// is scored by how far from the opponent its return lands — with "the
+/// opponent" meaning where that paddle will have walked to by the time the ball
+/// gets there, which is a thing this can only know by running the opponent's
+/// own rule forward beside the ball's.
+///
+/// Two cheaper objectives were tried first and both are wrong here. "Away from
+/// where it is standing now" is worth nothing against a paddle that walks back
+/// to the middle between shots. "Furthest from the middle" is the fix for
+/// *that*, and it is wrong against a paddle that chases: the shots that land
+/// furthest from the middle are the steep ones, which get there by rebounding
+/// off a wall straight into the path the chaser is already following. Aiming
+/// that way met every ball, aimed every return to within a tenth of the wall,
+/// and could not finish a match in a minute.
+fn aim(
+    ball: Vec2,
+    velocity: Vec2,
+    speed: f32,
+    paddle_y: f32,
+    opponent_y: f32,
+    dt: f32,
+) -> (f32, Option<Plan>) {
+    // Forward to the moment of contact, opponent and all. Predicting the shot
+    // against where the opponent is standing *now* is the bug that hid inside
+    // the first two versions of this controller: the plan is made a second
+    // before the ball arrives, and the opponent spends that second walking back
+    // to the middle. Every candidate below is scored against where it will
+    // actually be.
+    let Some((arrival, ticks, opponent_then)) =
+        run_to_face(ball, velocity, opponent_y, Side::Left, dt)
+    else {
+        // Not coming: stand in the middle, which is the best place to be for
+        // whatever comes next.
+        return (0.0, None);
+    };
+    let reach = PADDLE.y + BALL_RADIUS;
+    let travel = PLAYER_SPEED * dt * ticks as f32 * REACH_SAFETY;
+    let struck = (speed + SPEED_PER_TOUCH).min(TOP_SPEED);
+
+    let mut best: Option<Plan> = None;
+    for step in 0..AIM_POINTS {
+        let offset = (step as f32 / (AIM_POINTS - 1) as f32 * 2.0 - 1.0) * AIM_MARGIN;
+        let target = arrival - offset * reach;
+        // Constraint one: the paddle is allowed to be there at all.
         if target.abs() > PADDLE_LIMIT {
             continue;
         }
-        // (b) a position it can get to before the ball does.
-        if (target - sight.mine).abs() > PLAYER_SPEED * arrival.seconds * REACH_SAFETY {
+        // Constraint two: it can get there before the ball does.
+        if (target - paddle_y).abs() > travel {
             continue;
         }
-        // Leg two: the shot this contact would produce, followed to the other
-        // end of the court with the opponent chasing it the whole way.
-        let outgoing = bounce_velocity(offset, next_speed, Side::Left.hits_toward());
-        let Some(landing) = roll_forward(
-            Vec2::new(my_plane, arrival.ball),
-            outgoing,
-            arrival.opponent,
-            Side::Right,
-            dt,
-        ) else {
-            continue;
-        };
-        // How far past the opponent's paddle it lands. Positive is a point.
-        let score = (landing.ball - landing.opponent).abs() - reach;
-        if best.is_none_or(|(so_far, _, _)| score > so_far) {
-            best = Some((score, target, offset));
+        // Only now is it worth asking how good the shot is: how far from the
+        // opponent, as the opponent will actually have moved, it lands.
+        // Minimax over the error the controller knows it has. Scoring the
+        // nominal shot alone picks whichever candidate happens to land in a
+        // gap, which is worth nothing when the shot actually produced is five
+        // degrees away from the one scored. The worst of the three is a shot
+        // that works whichever of them comes out.
+        let contact = Vec2::new(face_of(Side::Left) + BALL_RADIUS, arrival);
+        let mut worst: Option<Plan> = None;
+        for wobble in [-AIM_UNCERTAINTY, 0.0, AIM_UNCERTAINTY] {
+            let returned = bounce_off(Side::Left, offset + wobble, struck);
+            let Some((landing, _, waiting)) =
+                run_to_face(contact, returned, opponent_then, Side::Right, dt)
+            else {
+                worst = None;
+                break;
+            };
+            let plan = Plan {
+                target,
+                landing,
+                opponent_at_landing: waiting,
+            };
+            if worst.is_none_or(|so_far| greater(so_far.threat(), plan.threat())) {
+                worst = Some(plan);
+            }
+        }
+        let Some(plan) = worst else { continue };
+        if best.is_none_or(|so_far| greater(plan.threat(), so_far.threat())) {
+            best = Some(plan);
         }
     }
+    // Nothing survived both constraints: run at the ball, which is the only
+    // thing left that can still touch it.
+    //
+    // The score comes back too. "Did it meet the ball" clears the controller as
+    // a returner and says nothing about it as an attacker, and those are two
+    // different contracts: a controller that returns everything dead flat down
+    // the middle produces exactly the endless rally an unbeatable opponent
+    // does. This is the number that tells them apart.
     match best {
-        Some((_, target, offset)) => Aim {
-            target,
-            offset: Some(offset),
-        },
-        // Nothing was both safe and reachable: get in front of it anyway.
-        None => Aim {
-            target: arrival.ball.clamp(-PADDLE_LIMIT, PADDLE_LIMIT),
-            offset: None,
-        },
+        None => (arrival, None),
+        Some(plan) => (plan.target, Some(plan)),
     }
 }
 
-/// One frame kept out of the run, with the world state that produced it.
-struct Keepsake {
-    frame: FrameRecord,
-    ball: Vec2,
-    left: f32,
-    right: f32,
-    left_score: u32,
-    right_score: u32,
-}
-
-/// Everything one played match left behind.
-struct Session {
-    ticks: u64,
-    finished_on: Option<u64>,
-    board: Scoreboard,
-    fixed_dt: f32,
-    /// The furthest the ball ever got, in each direction.
-    ball_span: (Vec2, Vec2),
-    /// The furthest either paddle's centre ever got from the middle.
-    paddle_span: (f32, f32),
-    /// Balls that arrived at the player's plane, and balls the player met.
-    approaches: u32,
-    contacts: u32,
-    /// Contacts the controller had a plan for, and those that came out within
-    /// `AIM_SLACK` of it.
-    aimed: u32,
-    aimed_well: u32,
-    last: Keepsake,
-    rally: Option<Keepsake>,
-    /// The camera the game installed, read back out of the world rather than
-    /// rebuilt here from the same constants -- a check carrying its own copy of
-    /// the framing would keep passing after the framing changed.
-    camera: Camera,
-}
-
-/// Play one match with the controller at the left paddle, recording every tick.
-fn play_a_match(recorder: &mut FrameRecorder) -> Session {
+/// Play one whole match, drawing every tick into `recorder` if there is one.
+fn play(recorder: Option<&mut FrameRecorder>) -> Session {
     let mut sim = headless(config(), register);
+    let mut recorder = recorder;
     let mut keyboard = SnapshotBuilder::new();
-    let mut holding = (false, false);
+    let (mut holding_up, mut holding_down) = (false, false);
 
-    let mut finished_on = None;
-    let mut ball_span = (Vec2::splat(f32::MAX), Vec2::splat(f32::MIN));
-    let mut paddle_span = (f32::MAX, f32::MIN);
-    let (mut approaches, mut contacts) = (0, 0);
-    let (mut aimed, mut aimed_well) = (0, 0);
-    let mut planned: Option<f32> = None;
-    let mut previous: Option<(Vec2, Vec2)> = None;
-    let mut last: Option<Keepsake> = None;
-    let mut rally: Option<Keepsake> = None;
-    let mut ticks = 0;
+    let mut session = Session {
+        ended_at: None,
+        board: Scoreboard::default(),
+        approaches: 0,
+        met: 0,
+        threat: (f32::MAX, 0.0),
+        planned: 0,
+        their_stretch: 0.0,
+        their_touches: 0,
+        aim_error: (0.0, 0.0),
+        shots: 0,
+        ball_extent: Vec2::ZERO,
+        player_span: (0.0, 0.0),
+        opponent_span: (0.0, 0.0),
+        rally: None,
+        last_frame: None,
+        fingerprint: Vec::new(),
+        mean_threat: 0.0,
+    };
+    // The timestep the engine hands this run, read once. `Time` is in the world
+    // before the first tick, so this is available before `Startup` has run — and
+    // reading it rather than writing 1/60 is what keeps the controller's
+    // predictions in step with the game if `GameConfig::fixed_dt` ever changes.
+    let Some(dt) = sim
+        .world()
+        .find_resource::<Time>()
+        .map(|time| time.fixed_dt.as_f32())
+    else {
+        fail(
+            "a headless run has no clock",
+            "`headless` inserts `Time` before the first tick",
+        );
+    };
+    let mut approach_open = false;
+    let mut points_conceded = 0;
+    let mut threat_total = 0.0f32;
+    let mut was_going_right = false;
+    let mut last_plan: Option<Plan> = None;
+    let mut pending: Option<Plan> = None;
 
-    for tick in 1..=MATCH_TICKS {
-        // On the way into tick 1 there is nothing to look at: Startup runs
-        // inside that first tick, so every read here has to tolerate an empty
-        // world rather than index into it.
-        let sight = look(&sim);
-        let aim = match &sight {
-            Some(sight) => plan(sight, fixed_dt(&sim)),
-            None => Aim {
-                target: 0.0,
-                offset: None,
-            },
+    for tick in 1..=TICKS {
+        // The read at the top of the loop happens once against a world that
+        // does not exist yet: `Startup` runs *inside* the first `tick()`, so
+        // this is `find_resource` and a query that may yield nothing.
+        let state = sim
+            .world()
+            .query::<(&Transform, &Ball)>()
+            .map(|(_, transform, ball)| (transform.pos, ball.velocity, ball.speed))
+            .next();
+        let mine = sim
+            .world()
+            .query::<(&Transform, &Paddle)>()
+            .find(|(_, _, paddle)| paddle.control == Control::Keys)
+            .map(|(_, transform, _)| transform.pos.y);
+        let theirs = sim
+            .world()
+            .query::<(&Transform, &Paddle)>()
+            .find(|(_, _, paddle)| paddle.control == Control::Machine)
+            .map_or(0.0, |(_, transform, _)| transform.pos.y);
+        let live = sim
+            .world()
+            .find_resource::<Scoreboard>()
+            .is_some_and(|board| matches!(board.phase, Phase::Rally));
+
+        let push = match (state, mine) {
+            (Some((ball, velocity, speed)), Some(paddle_y)) => {
+                let (target, threat) = if live {
+                    aim(ball, velocity, speed, paddle_y, theirs, dt)
+                } else {
+                    (0.0, None)
+                };
+                if let Some(plan) = threat {
+                    last_plan = Some(plan);
+                }
+                let gap = target - paddle_y;
+                if gap.abs() < CONTROL_DEADZONE {
+                    0.0
+                } else {
+                    gap.signum()
+                }
+            }
+            _ => 0.0,
         };
-        if let Some(sight) = &sight {
-            if sight.live && aim.offset.is_some() {
-                planned = aim.offset;
-            }
-            // Stop when a whole step would carry the paddle past the target:
-            // chattering either side of it costs exactly the precision the
-            // whole search was for.
-            let dead = PLAYER_SPEED * fixed_dt(&sim) * 0.5;
-            let gap = aim.target - sight.mine;
-            let want = (gap < -dead, gap > dead);
-            if want.0 != holding.0 {
-                keyboard.record(key_event(Key::W, want.0));
-                holding.0 = want.0;
-            }
-            if want.1 != holding.1 {
-                keyboard.record(key_event(Key::S, want.1));
-                holding.1 = want.1;
+
+        // Events, not states: that is what makes a key held for a hundred ticks
+        // press exactly once, and it is why the two flags are here at all.
+        let (want_up, want_down) = (push < 0.0, push > 0.0);
+        for (want, holding, key) in [
+            (want_up, &mut holding_up, Key::W),
+            (want_down, &mut holding_down, Key::S),
+        ] {
+            if want != *holding {
+                keyboard.record(if want {
+                    InputEvent::KeyPressed(key)
+                } else {
+                    InputEvent::KeyReleased(key)
+                });
+                *holding = want;
             }
         }
 
         sim.world_mut()
             .insert_resource(Input::new(keyboard.first_tick_snapshot()));
         sim.tick();
-        ticks = tick;
 
-        let Some(after) = look(&sim) else {
+        // --- what the tick did -------------------------------------------
+        let Some(board) = sim.world().find_resource::<Scoreboard>().copied() else {
             fail(
-                "the court is empty after a tick",
-                "Startup spawns two paddles and a ball, and nothing despawns them",
+                "the scoreboard is gone",
+                "Startup inserts exactly one and nothing removes it",
             );
         };
-        let board = sim.world().resource::<Scoreboard>().clone();
-        if after.live {
-            ball_span.0 = ball_span.0.min(after.ball);
-            ball_span.1 = ball_span.1.max(after.ball);
+        session.board = board;
+        let Some((ball, velocity, _)) = sim
+            .world()
+            .query::<(&Transform, &Ball)>()
+            .map(|(_, transform, b)| (transform.pos, b.velocity, b.speed))
+            .next()
+        else {
+            fail("the ball is gone", "Startup spawns exactly one");
+        };
+        let paddles: Vec<(Side, Vec2)> = sim
+            .world()
+            .query::<(&Transform, &Paddle)>()
+            .map(|(_, transform, paddle)| (paddle.side, transform.pos))
+            .collect();
+        if paddles.len() != 2 {
+            fail(
+                "there are not two paddles",
+                &format!(
+                    "Startup spawns one per side; this world has {}",
+                    paddles.len()
+                ),
+            );
         }
-        paddle_span.0 = paddle_span.0.min(after.mine.min(after.theirs));
-        paddle_span.1 = paddle_span.1.max(after.mine.max(after.theirs));
 
-        // A ball that was coming at the player and is now going away was met;
-        // one that was coming at the player and is now on the spot was missed.
-        if let Some((_, was)) = previous
-            && greater(0.0, was.x)
+        // The opponent has just hit it if the ball turned back this tick. The
+        // ball is on their face at that moment, so this is exactly how far they
+        // had to stretch — the measurement that says whether the shots the
+        // controller *plans* are the shots it actually produces.
+        // The controller has just hit it if the ball turned away this tick. The
+        // plan standing at that moment is the one this shot came from.
+        if !was_going_right
+            && velocity.x > 0.0
+            && let Some(plan) = last_plan
         {
-            if greater(after.vel.x, 0.0) {
-                approaches += 1;
-                contacts += 1;
-                // The angle the ball actually left at says exactly which part
-                // of the paddle it met -- no guessing back from positions.
-                let achieved = atan2(after.vel.y, after.vel.x).as_f32() / MAX_BOUNCE.as_f32();
-                if let Some(wanted) = planned.take() {
-                    aimed += 1;
-                    if within(achieved, wanted, AIM_SLACK) {
-                        aimed_well += 1;
-                    }
-                }
-            } else if !after.live {
-                approaches += 1;
-                planned = None;
+            session.planned += 1;
+            session.threat.0 = session.threat.0.min(plan.threat());
+            session.threat.1 = session.threat.1.max(plan.threat());
+            threat_total += plan.threat();
+            pending = Some(plan);
+        }
+        if was_going_right && velocity.x < 0.0 {
+            let theirs = paddles
+                .iter()
+                .find(|(side, _)| *side == Side::Right)
+                .map_or(0.0, |(_, position)| position.y);
+            session.their_stretch = session.their_stretch.max((ball.y - theirs).abs());
+            session.their_touches += 1;
+            // And the whole question in one number: did the shot land where the
+            // plan said it would?
+            if let Some(plan) = pending.take() {
+                let error = (plan.landing - ball.y).abs();
+                session.aim_error.0 = session.aim_error.0.max(error);
+                session.aim_error.1 += error;
+                session.shots += 1;
             }
         }
-        previous = Some((after.ball, after.vel));
+        was_going_right = velocity.x > 0.0;
 
-        let frame = recorder.draw(&mut sim);
-        let keepsake = Keepsake {
-            frame,
-            ball: after.ball,
-            left: after.mine,
-            right: after.theirs,
-            left_score: board.left,
-            right_score: board.right,
-        };
-        // One frame of live play with both scores on the board and a rally
-        // under way: the frame worth asserting the whole picture against, and
-        // the frame worth looking at as a PNG.
-        if rally.is_none() && after.live && board.touches >= 2 && board.left + board.right >= 2 {
-            rally = Some(Keepsake::clone_of(&keepsake));
+        let rally = matches!(board.phase, Phase::Rally);
+        if rally {
+            session.ball_extent = session.ball_extent.max(ball.abs());
         }
-        last = Some(keepsake);
+        for (side, position) in &paddles {
+            let span = match side {
+                Side::Left => &mut session.player_span,
+                Side::Right => &mut session.opponent_span,
+            };
+            span.0 = span.0.min(position.y);
+            span.1 = span.1.max(position.y);
+        }
 
-        if matches!(board.stage, Stage::Over { .. }) {
-            finished_on = Some(tick);
+        // The controller's own contract, measured on the choices it made: an
+        // approach opens when the ball turns towards this paddle and closes
+        // when the ball turns away again (met) or the opponent scores (missed).
+        let conceded = board.right;
+        if conceded != points_conceded {
+            approach_open = false;
+            points_conceded = conceded;
+        } else if rally && velocity.x < 0.0 && !approach_open {
+            approach_open = true;
+            session.approaches += 1;
+        } else if approach_open && velocity.x > 0.0 {
+            approach_open = false;
+            session.met += 1;
+        }
+
+        if let Some(recorder) = recorder.as_mut() {
+            let frame = recorder.draw(&mut sim);
+            if rally {
+                session.rally = Some(Snapshot {
+                    frame: frame.clone(),
+                    ball,
+                    paddles: paddles.clone(),
+                });
+            }
+            session.last_frame = Some(frame);
+        }
+
+        if let Phase::Over { .. } = board.phase {
+            session.ended_at = Some(tick);
+            session.fingerprint = vec![
+                ball.x.to_bits(),
+                ball.y.to_bits(),
+                velocity.x.to_bits(),
+                velocity.y.to_bits(),
+                board.left,
+                board.right,
+                board.longest_rally,
+                board.top_speed.to_bits(),
+            ];
             break;
         }
     }
+    if session.planned > 0 {
+        session.mean_threat = threat_total / session.planned as f32;
+    }
+    session
+}
 
-    let Some(last) = last else {
+/// W and S, held in turn, against a paddle that is otherwise not being driven.
+///
+/// The closed-loop controller above cannot answer this: it presses whichever
+/// key gets it where it wants to go, so a game with W and S swapped would look
+/// exactly the same through it. A blind script is the right instrument for the
+/// one question that does not depend on the game answering back.
+fn controls_move_the_right_way(checks: &mut Checks) {
+    /// Long enough for each hold to run past the clamp rather than merely up to
+    /// it, so the clamp is exercised and not just not violated.
+    const RUN: u64 = 90;
+    let mut sim = headless(config(), register);
+    let script = InputScript::new().hold(Key::W, 1..30).hold(Key::S, 35..RUN);
+    let mut track = Vec::new();
+    for tick in 1..=RUN {
+        sim.world_mut()
+            .insert_resource(Input::new(script.snapshot_at(tick)));
+        sim.tick();
+        let found = sim
+            .world()
+            .query::<(&Transform, &Paddle)>()
+            .find(|(_, _, paddle)| paddle.control == Control::Keys)
+            .map(|(_, transform, _)| transform.pos.y);
+        match found {
+            Some(y) => track.push(y),
+            None => fail("the player's paddle is gone", "Startup spawns one per side"),
+        }
+    }
+    let (mut top_at, mut bottom_at) = (0usize, 0usize);
+    for (index, y) in track.iter().enumerate() {
+        if greater(track[top_at], *y) {
+            top_at = index;
+        }
+        if greater(*y, track[bottom_at]) {
+            bottom_at = index;
+        }
+    }
+    let (top, bottom) = (track[top_at], track[bottom_at]);
+    // Y is down, so the top of the screen is the smaller number.
+    checks.require(
+        near(top, -PADDLE_LIMIT) && near(bottom, PADDLE_LIMIT),
+        "the player's paddle did not come to rest against both ends of its field",
+        format!(
+            "it reached {top:.3} and {bottom:.3}; the clamp is +/-{PADDLE_LIMIT:.2} and each \
+             hold lasts longer than the travel available"
+        ),
+    );
+    // Both ends are reached either way round, so only the order tells a swap
+    // apart: W is held first, so the top must come first.
+    checks.require(
+        top_at < bottom_at,
+        "W and S move the paddle the wrong way round",
+        format!(
+            "the script holds W first, but the paddle was at the bottom on tick {} before it \
+             was at the top on tick {}",
+            bottom_at + 1,
+            top_at + 1
+        ),
+    );
+}
+
+/// Ask the swept collision test its contract directly, in the cases a played
+/// match never reaches.
+///
+/// The ball is capped at 0.45 units of travel a tick against a paddle 0.7
+/// thick, so it *cannot* tunnel and no rally will ever distinguish this
+/// function from a naive position test. The margin is real and a played game
+/// cannot see it, so the function is asked rather than the match.
+fn the_sweep_holds_its_contract(checks: &mut Checks) {
+    let face = face_of(Side::Right);
+    let reach = PADDLE.y + BALL_RADIUS;
+    // Eight units of travel in one tick, straight through the paddle: many
+    // times anything the game can produce.
+    let from = Vec2::new(face - 8.0, 0.0);
+    let to = Vec2::new(face + 2.0, 0.0);
+    let hit = crate::paddle_contact(from, to, Side::Right, 0.0);
+    match hit {
+        None => checks.require(
+            false,
+            "a ball that crossed a paddle in one long tick was not caught",
+            format!(
+                "travelling from x={:.2} to x={:.2} past a face at x={face:.2} with the paddle \
+                 at y=0: the position at the end of the tick is past it, which is exactly the \
+                 case a position-only test misses",
+                from.x, to.x
+            ),
+        ),
+        Some(contact) => {
+            checks.require(
+                greater(contact.at_fraction, 0.0) && greater(1.0, contact.at_fraction),
+                "the crossing was not found inside the tick",
+                format!(
+                    "it reports {:.4} of the way through, which is not between 0 and 1",
+                    contact.at_fraction
+                ),
+            );
+            checks.require(
+                near(contact.centre.x, face - BALL_RADIUS),
+                "the contact is not on the paddle's face",
+                format!(
+                    "the ball's centre is reported at x={:.4}; a ball of radius {BALL_RADIUS} \
+                     touching a face at x={face:.2} has its centre at {:.4}",
+                    contact.centre.x,
+                    face - BALL_RADIUS
+                ),
+            );
+            checks.require(
+                near(contact.offset, 0.0),
+                "a ball down the middle did not report a middle contact",
+                format!("it reports an offset of {:.4}, wanted 0", contact.offset),
+            );
+        }
+    }
+    // Past the end of the paddle: the same travel, with the paddle moved out of
+    // the way. This is a point, not a hit.
+    let missed = crate::paddle_contact(from, to, Side::Right, reach + 1.0);
+    checks.require(
+        missed.is_none(),
+        "a ball that went past the end of a paddle was counted as a hit",
+        format!(
+            "the paddle is at y={:.2} and the ball crosses at y=0, which is {:.2} past where it \
+             stops touching; got {missed:?}",
+            reach + 1.0,
+            1.0
+        ),
+    );
+    // Leaving through the same face, which is the ball already behind it.
+    let leaving = crate::paddle_contact(to, from, Side::Right, 0.0);
+    checks.require(
+        leaving.is_none(),
+        "a ball travelling away from a paddle was counted as a hit",
+        format!(
+            "crossing the same face from x={:.2} to x={:.2}; got {leaving:?}",
+            to.x, from.x
+        ),
+    );
+    // Already behind the face at the start of the tick, and still travelling
+    // into it. Play never produces this — a ball that has just bounced is
+    // travelling the other way, so the guard against it is unreachable in a
+    // match and removing it changes nothing a played game can see. It is still
+    // the difference between a contact test and a test that hits twice, so it
+    // gets asked rather than assumed.
+    let behind = crate::paddle_contact(
+        Vec2::new(face + 0.1, 0.0),
+        Vec2::new(face + 3.0, 0.0),
+        Side::Right,
+        0.0,
+    );
+    checks.require(
+        behind.is_none(),
+        "a ball that was already past the paddle was counted as hitting it again",
+        format!(
+            "it starts the tick 0.10 behind the face at x={face:.2} and carries on the same \
+             way; got {behind:?}"
+        ),
+    );
+    // Not reaching it at all.
+    let short = crate::paddle_contact(from, Vec2::new(face - 4.0, 0.0), Side::Right, 0.0);
+    checks.require(
+        short.is_none(),
+        "a ball that never reached the paddle was counted as a hit",
+        format!("it stopped {:.2} short of the face; got {short:?}", 4.0),
+    );
+
+    // And the bounce the contact feeds: the middle sends it straight back, the
+    // end throws it at the full angle, and neither changes its speed.
+    let flat = bounce_off(Side::Right, 0.0, 20.0);
+    checks.require(
+        near(flat.y, 0.0) && greater(0.0, flat.x) && near(flat.length(), 20.0),
+        "a ball struck down the middle of a paddle did not come back straight",
+        format!(
+            "it leaves at ({:.4}, {:.4}), wanted (-20, 0)",
+            flat.x, flat.y
+        ),
+    );
+    let edge = bounce_off(Side::Right, 1.0, 20.0);
+    let angle = atan2(edge.y, -edge.x).to_degrees();
+    checks.require(
+        within(angle, MAX_BOUNCE.to_degrees(), 0.01) && near(edge.length(), 20.0),
+        "a ball struck at the end of a paddle did not leave at the full angle",
+        format!(
+            "it leaves {angle:.3} degrees off the straight at speed {:.3}; the widest the game \
+             allows is {:.1} degrees at an unchanged 20",
+            edge.length(),
+            MAX_BOUNCE.to_degrees()
+        ),
+    );
+}
+
+/// Ask the wall model its contract directly.
+///
+/// A played match cannot tell a wall that *reflects* from one that *clamps*:
+/// both keep the ball on court, both let the match finish, and the run's "the
+/// ball never went through the top or bottom" check passes for either, because
+/// a clamped ball sits exactly on the wall rather than past it. Replacing the
+/// reflection with a clamp escaped every other assertion in this file.
+fn the_walls_reflect(checks: &mut Checks) {
+    let wall = COURT.y - BALL_RADIUS;
+    // One tick that overshoots the bottom wall by 5.9 units. A reflection sends
+    // it back that far the other way and turns it round; a clamp leaves it on
+    // the wall still travelling into it.
+    let (moved, going) = travel_one_tick(Vec2::new(0.0, wall - 0.1), Vec2::new(0.0, 6.0), 1.0);
+    checks.require(
+        near(moved.y, wall - 5.9) && near(going.y, -6.0),
+        "the bottom wall does not bounce the ball, it stops it",
+        format!(
+            "a tick that would end {:.2} past the wall at {wall:.2} left the ball at {:.4} \
+             going {:.4}; a reflection puts it at {:.4} going -6",
+            5.9,
+            moved.y,
+            going.y,
+            wall - 5.9
+        ),
+    );
+    let (moved, going) = travel_one_tick(Vec2::new(0.0, -wall + 0.1), Vec2::new(0.0, -6.0), 1.0);
+    checks.require(
+        near(moved.y, -wall + 5.9) && near(going.y, 6.0),
+        "the top wall does not bounce the ball, it stops it",
+        format!(
+            "the ball came back to {:.4} going {:.4}; a reflection puts it at {:.4} going 6",
+            moved.y,
+            going.y,
+            -wall + 5.9
+        ),
+    );
+    // And a tick that stays clear of both leaves the ball entirely alone.
+    let (moved, going) = travel_one_tick(Vec2::ZERO, Vec2::new(3.0, 1.0), 1.0);
+    checks.require(
+        near(moved.x, 3.0) && near(moved.y, 1.0) && near(going.y, 1.0),
+        "a ball nowhere near a wall was turned round anyway",
+        format!(
+            "it ended at ({:.4}, {:.4}) going {:.4} in Y",
+            moved.x, moved.y, going.y
+        ),
+    );
+}
+
+/// The numbers the game is built on, stated as requirements rather than as the
+/// constants that happen to satisfy them.
+///
+/// `assert_eq!(what_was_drawn, the_constant_that_drew_it)` moves when somebody
+/// moves the constant. These do not: each one says what the game *needs* to be
+/// true, in a form a changed constant can break.
+fn the_game_is_winnable(checks: &mut Checks, their_touches: u32, conceded: u32) {
+    // The other half of "winnable": it must not be *trivially* winnable, or the
+    // opponent is scenery. This one is measured rather than derived, on purpose.
+    // The derived version — "the opponent must be unbeatable at the speed a
+    // ball is served at" — looks like the same statement and is not: it assumes
+    // a shot can be placed exactly, and no keyboard controller can place one
+    // within seven units on this court. It failed for a game whose rallies ran
+    // to eighteen touches.
+    // The timestep the engine actually hands this game, not the 1/60 it is
+    // configured with: the two are the same today and a check written against
+    // the constant would go on passing on the day they are not. `Time` is in
+    // the world before the first tick, so this needs no tick to read.
+    let sim = headless(config(), register);
+    let Some(dt) = sim
+        .world()
+        .find_resource::<Time>()
+        .map(|time| time.fixed_dt.as_f32())
+    else {
         fail(
-            "no tick was run at all",
-            "the loop above runs at least once",
+            "a headless run has no clock",
+            "`headless` inserts `Time` before the first tick",
         );
     };
-    let camera = *sim.world().resource::<Camera>();
-    Session {
-        ticks,
-        finished_on,
-        board: sim.world().resource::<Scoreboard>().clone(),
-        fixed_dt: fixed_dt(&sim),
-        ball_span,
-        paddle_span,
-        approaches,
-        contacts,
-        aimed,
-        aimed_well,
-        last,
-        rally,
-        camera,
-    }
+
+    let reached = their_touches + conceded;
+    checks.require(
+        reached > 0 && their_touches * 2 >= reached,
+        "the opponent returned hardly anything that reached it",
+        format!(
+            "it touched {their_touches} of the {reached} balls that got to its end of the \
+             court; below half it is scenery rather than an opponent, and the match says \
+             nothing about whether the game can be played"
+        ),
+    );
+    // Nothing the ball can do steps through a paddle in one tick.
+    checks.require(
+        greater(PADDLE.x * 2.0, TOP_SPEED * dt),
+        "the ball can step clean through a paddle in one tick",
+        format!(
+            "one tick at the top speed is {:.3} units against a paddle {:.3} thick; collisions \
+             are only tested at tick boundaries",
+            TOP_SPEED * dt,
+            PADDLE.x * 2.0
+        ),
+    );
+    // The steepest shot the game can produce climbs faster than the opponent
+    // can follow. Without this the opponent is a wall and no controller, human
+    // or otherwise, can ever score against it.
+    let (steepest, _) = sin_cos(MAX_BOUNCE);
+    let climb = TOP_SPEED * steepest;
+    checks.require(
+        greater(climb, OPPONENT_SPEED),
+        "the opponent cannot be beaten by arithmetic, never mind by playing",
+        format!(
+            "the steepest ball the game can produce climbs at {climb:.2} units/s and the \
+             opponent moves at {OPPONENT_SPEED:.2}, so it can follow anything"
+        ),
+    );
+    // And the player's paddle can follow that same shot, so a miss is a
+    // decision rather than a fact about the constants.
+    checks.require(
+        greater(PLAYER_SPEED, climb),
+        "the player cannot reach the fastest ball the game can produce",
+        format!(
+            "the steepest ball climbs at {climb:.2} units/s and the player's paddle moves at \
+             {PLAYER_SPEED:.2}"
+        ),
+    );
+    // The opponent has to be beatable at a speed a rally actually reaches, and
+    // that is a stronger statement than "beatable at the top speed" — which is
+    // the version this check had first, and which passed happily for an
+    // opponent the game could not be scored against at all. The ball only
+    // touches its cap at the end of a long rally, so a requirement stated
+    // there is a requirement about a case that hardly ever happens.
+    //
+    // The opponent drifts to the middle and starts chasing when the ball
+    // reaches its half, so it answers a shot aimed at either end by covering
+    // that distance in the time the ball takes to cross that half. Below the
+    // speed where those two are equal it always gets there.
+    //
+    // The distance is *not* how far the ball lands from the middle. A paddle
+    // defends everything within its own half-height plus the ball's radius, so
+    // it gets that much for free and only has to travel the rest — 2.35 units
+    // of head start here, which is a third of the court. Leaving it out is what
+    // made this check pass for two opponents in a row that could not be scored
+    // against inside a minute.
+    let furthest_landing = COURT.y - BALL_RADIUS;
+    let must_travel = furthest_landing - (PADDLE.y + BALL_RADIUS);
+    let beatable_above = OPPONENT_SPEED * (PADDLE_X - PADDLE.x) / must_travel;
+    let a_few_touches_in = SERVE_SPEED + 4.0 * SPEED_PER_TOUCH;
+    checks.require(
+        greater(a_few_touches_in, beatable_above),
+        "the opponent cannot be beaten at any speed a rally reaches",
+        format!(
+            "it only starts missing above {beatable_above:.2} units/s; a ball serves at \
+             {SERVE_SPEED:.1}, gains {SPEED_PER_TOUCH:.1} a touch and so is at \
+             {a_few_touches_in:.2} four touches into a rally. it moves at {OPPONENT_SPEED:.1} \
+             and has {:.2} units of ball travel in which to cover the {must_travel:.2} units \
+             between where it waits and the furthest a shot can land ({furthest_landing:.2}, \
+             less the {:.2} it defends without moving)",
+            PADDLE_X - PADDLE.x,
+            PADDLE.y + BALL_RADIUS
+        ),
+    );
+
+    // The court is dark enough to see a white ball on. Stated as the
+    // requirement, so it survives somebody changing the colour.
+    let court = palette::COURT;
+    let brightest = court.r.max(court.g).max(court.b);
+    checks.require(
+        greater(0.25, brightest) && greater(court.a, 0.99),
+        "the court is not dark enough to see a white ball on",
+        format!(
+            "its brightest channel is {brightest:.3} at alpha {:.2}",
+            court.a
+        ),
+    );
 }
 
-impl Keepsake {
-    fn clone_of(other: &Keepsake) -> Keepsake {
-        Keepsake {
-            frame: other.frame.clone(),
-            ball: other.ball,
-            left: other.left,
-            right: other.right,
-            left_score: other.left_score,
-            right_score: other.right_score,
-        }
-    }
-}
-
-fn key_event(key: Key, down: bool) -> InputEvent {
-    if down {
-        InputEvent::KeyPressed(key)
-    } else {
-        InputEvent::KeyReleased(key)
-    }
-}
-
-fn fixed_dt(sim: &HeadlessSim) -> f32 {
-    sim.world()
-        .find_resource::<Time>()
-        .map_or(1.0 / 60.0, |time| time.fixed_dt.as_f32())
-}
-
-/// What the controller can see, or `None` before Startup has run.
-fn look(sim: &HeadlessSim) -> Option<Sight> {
-    let world = sim.world();
-    let (ball, vel, speed) = world
-        .query::<(&Transform, &Ball)>()
-        .map(|(_, transform, ball)| (transform.pos, ball.vel, ball.speed))
-        .next()?;
-    let mut mine = None;
-    let mut theirs = None;
-    for (_, transform, paddle) in world.query::<(&Transform, &Paddle)>() {
-        match paddle.side {
-            Side::Left => mine = Some(transform.pos.y),
-            Side::Right => theirs = Some(transform.pos.y),
-        }
-    }
-    let live = matches!(world.find_resource::<Scoreboard>()?.stage, Stage::Rally);
-    Some(Sight {
-        ball,
-        vel,
-        speed,
-        mine: mine?,
-        theirs: theirs?,
-        live,
-    })
-}
-
-/// Play with nobody at the keyboard at all, which is how a game proves it can
-/// be *lost*.
+/// Every string this game draws, checked for characters the font actually has.
 ///
-/// Not the same thing as inserting no `Input`: the player is there, and doing
-/// nothing.
-fn play_idle() -> (Scoreboard, Vec2, u64) {
-    let mut sim = headless(config(), register);
-    let mut ball = Vec2::ZERO;
-    let mut ticks = 0;
-    for tick in 1..=IDLE_TICKS {
-        sim.world_mut()
-            .insert_resource(Input::new(InputSnapshot::new()));
-        sim.tick();
-        ticks = tick;
-        if let Some((_, transform, _)) = sim.world().query::<(&Transform, &Ball)>().next() {
-            ball = transform.pos;
-        }
-        if let Some(board) = sim.world().find_resource::<Scoreboard>()
-            && matches!(board.stage, Stage::Over { .. })
-        {
-            break;
-        }
-    }
-    let board = sim
-        .world()
-        .find_resource::<Scoreboard>()
-        .cloned()
-        .unwrap_or_else(|| {
-            fail(
-                "the scoreboard vanished",
-                "Startup inserts one and only a restart replaces it",
-            )
-        });
-    (board, ball, ticks)
-}
-
-// --- reading a drawn frame ------------------------------------------------
-
-/// Every quad in `frame` that sampled the font.
-fn glyphs(frame: &FrameRecord, font: BackendTextureId) -> Vec<Rect> {
-    frame
-        .quads()
+/// The font covers space through `~` and draws everything else as a box at
+/// exactly a letter's advance, so a stray em dash or curly quote produces a
+/// quad of the right size in the right place and no assertion over what was
+/// drawn can tell the difference.
+fn every_string_is_printable(checks: &mut Checks) {
+    let banners = [
+        banner_text(Side::Left, WIN_SCORE, 0),
+        banner_text(Side::Right, 0, WIN_SCORE),
+        format!("{WIN_SCORE}"),
+    ];
+    let strings: Vec<&str> = [HINT, HINT_OVER]
         .into_iter()
-        .filter(|quad| quad.texture == font)
-        .map(|quad| quad.bounds())
-        .collect()
-}
-
-/// Nothing was drawn outside what the camera can see.
-///
-/// The highest-value check a game of shapes and text has, and the one that
-/// catches a banner centred by `width_of` running off both edges.
-fn nothing_off_screen(checks: &mut Checks, frame: &FrameRecord, view: Rect, screen: &str) {
-    let strays: Vec<String> = frame
-        .quads()
-        .into_iter()
-        .map(|quad| quad.bounds())
-        .filter(|bounds| !view.contains_rect(*bounds))
-        .map(|bounds| {
-            format!(
-                "({:.2},{:.2})-({:.2},{:.2})",
-                bounds.min.x, bounds.min.y, bounds.max.x, bounds.max.y
-            )
-        })
+        .chain(banners.iter().map(String::as_str))
         .collect();
-    checks.require(
-        strays.is_empty(),
-        "something was drawn off screen",
-        format!(
-            "on the {screen} screen, {} of {} quads fall outside a camera showing \
-             ({:.2},{:.2})-({:.2},{:.2}): {}",
-            strays.len(),
-            frame.quad_count(),
-            view.min.x,
-            view.min.y,
-            view.max.x,
-            view.max.y,
-            strays.join(" ")
-        ),
-    );
+    for text in strings {
+        checks.require(
+            text.chars().all(|c| (' '..='~').contains(&c)),
+            "a string this game draws has a character the font does not have",
+            format!(
+                "{text:?} — the font draws a box at a letter's width for anything outside \
+                 space through ~, so no assertion over what was drawn can see this"
+            ),
+        );
+    }
 }
 
-/// A quad the size of a paddle, centred where the world says the paddle is.
-///
-/// Bounds rather than "something covers this point": a paddle still covers its
-/// own centre when it is drawn a long way out of position.
-fn paddle_drawn(checks: &mut Checks, frame: &FrameRecord, at: Vec2, which: &str) {
-    let found = frame.covering(at).into_iter().any(|quad| {
+/// Nothing in `frame` is drawn outside what the camera shows.
+fn nothing_is_off_screen(checks: &mut Checks, frame: &FrameRecord, view: Rect, screen: &str) {
+    let mut worst: Option<Rect> = None;
+    for quad in frame.quads() {
         let bounds = quad.bounds();
-        near(bounds.size().x, PADDLE_SIZE.x)
-            && near(bounds.size().y, PADDLE_SIZE.y)
-            && near(bounds.center().x, at.x)
-            && near(bounds.center().y, at.y)
-    });
-    checks.require(
-        found,
-        "no paddle-shaped quad was drawn where a paddle is",
-        format!(
-            "the {which} paddle is at ({:.3}, {:.3}) and is {} by {}; what covers that point \
-             is {}",
-            at.x,
-            at.y,
-            PADDLE_SIZE.x,
-            PADDLE_SIZE.y,
-            sizes_covering(frame, at)
-        ),
-    );
-}
-
-/// A ball-sized disc where the world says the ball is.
-///
-/// `ctx.circle` submits sixteen wedges rather than one square, so nothing the
-/// size of the ball is drawn anywhere. What is true is that every wedge has the
-/// centre as a corner and fits inside the disc's box, so the union of the quads
-/// covering the centre is exactly `2r` square.
-fn ball_drawn(checks: &mut Checks, frame: &FrameRecord, at: Vec2) {
-    let box_of_it = Rect::from_center_size(at, Vec2::splat(BALL_RADIUS * 2.0));
-    let mut union: Option<Rect> = None;
-    let mut wedges = 0;
-    for quad in frame.covering(at) {
-        let drawn = quad.bounds();
-        // Written out rather than as `Rect::contains`, which is half-open and
-        // would throw away the wedges reaching the far edge.
-        let inside = drawn.min.x >= box_of_it.min.x - 1e-3
-            && drawn.min.y >= box_of_it.min.y - 1e-3
-            && drawn.max.x <= box_of_it.max.x + 1e-3
-            && drawn.max.y <= box_of_it.max.y + 1e-3;
-        if !inside {
+        if view.contains_rect(bounds) {
             continue;
         }
-        wedges += 1;
-        union = Some(match union {
-            None => drawn,
-            Some(so_far) => Rect {
-                min: so_far.min.min(drawn.min),
-                max: so_far.max.max(drawn.max),
-            },
-        });
+        worst = Some(bounds);
     }
-    let span = union.map(|rect| rect.size()).unwrap_or(Vec2::ZERO);
     checks.require(
-        near(span.x, BALL_RADIUS * 2.0) && near(span.y, BALL_RADIUS * 2.0),
-        "no ball-sized disc where the world puts the ball",
+        worst.is_none(),
+        "something is drawn off screen",
         format!(
-            "the ball is at ({:.3}, {:.3}); {wedges} wedges inside its box span \
-             {:.3}x{:.3}, and a disc of radius {BALL_RADIUS} spans {:.3} square. \
-             Everything covering that point is {}",
-            at.x,
-            at.y,
-            span.x,
-            span.y,
-            BALL_RADIUS * 2.0,
-            sizes_covering(frame, at)
+            "on the {screen} screen, {worst:?} against a camera showing {view:?} — text centred \
+             by width_of is the usual culprit"
         ),
     );
+}
+
+/// Draw one frame of a screen the match never reached, and check it.
+///
+/// Three lines per screen and it is the only thing that ever measures the
+/// losing banner: a controller good enough to win the match is a controller
+/// that never loses it, so the longest string in the game is the one string a
+/// successful run never draws.
+fn staged_screen(
+    checks: &mut Checks,
+    sim: &mut HeadlessSim,
+    recorder: &mut FrameRecorder,
+    view: Rect,
+    name: &str,
+    board: Scoreboard,
+) -> FrameRecord {
+    sim.world_mut().insert_resource(board);
+    let frame = recorder.draw(sim);
+    nothing_is_off_screen(checks, &frame, view, name);
+    checks.require(
+        frame.quad_count() > 0,
+        "a staged screen drew nothing at all",
+        format!("the {name} screen produced an empty frame"),
+    );
+    frame
 }
 
 pub fn run() -> ExitCode {
     let mut checks = Checks::default();
-    let mut recorder = FrameRecorder::new(VIEWPORT);
-    // A plain id, borrowing nothing, so the assertions below stay short.
+    let mut recorder = FrameRecorder::new(WINDOW);
     let font = recorder.font_texture();
-    let session = play_a_match(&mut recorder);
-    let board = session.board.clone();
+    let session = play(Some(&mut recorder));
 
-    // --- the game is playable ----------------------------------------
+    let Session {
+        ended_at,
+        board,
+        approaches,
+        met,
+        threat,
+        planned,
+        their_stretch,
+        their_touches,
+        aim_error,
+        shots,
+        ball_extent,
+        player_span,
+        opponent_span,
+        rally,
+        last_frame,
+        fingerprint,
+        mean_threat,
+    } = session;
+
+    // --- the controller's own contract, first ---------------------------
+    // If this is bad, every number below it is the controller's fault rather
+    // than the game's, and knowing which half to open is worth a whole cycle.
     checks.require(
-        session.finished_on.is_some(),
-        "nobody won the match",
+        approaches > 0 && met * 10 >= approaches * 8,
+        "the controller in verify.rs missed most of the balls that came at it",
         format!(
-            "after {} ticks it was {}-{}: {} rallies' worth of {} returns, longest rally \
-             {} touches, top ball speed {:.1} u/s. A match that does not end in \
-             {MATCH_TICKS} ticks is either too slow or unwinnable",
-            session.ticks,
-            board.left,
-            board.right,
-            board.left + board.right,
-            board.returns,
-            board.longest_rally,
-            board.top_speed
-        ),
-    );
-    checks.require(
-        board.left >= WINNING_SCORE,
-        "the controller did not win the match",
-        format!(
-            "it finished {}-{} on tick {:?}. The controller is the newer and worse-tested \
-             of the two, so read its own contract below before touching the game's \
-             constants: it met {} of {} approaches and landed {} of {} aimed returns",
-            board.left,
-            board.right,
-            session.finished_on,
-            session.contacts,
-            session.approaches,
-            session.aimed_well,
-            session.aimed
-        ),
-    );
-    checks.require(
-        board.longest_rally >= 3,
-        "no rally lasted long enough to be a rally",
-        format!(
-            "the longest was {} touches over {} returns in a {}-{} match; a Pong where \
-             nobody returns anything twice is a scoring machine, not a game",
-            board.longest_rally, board.returns, board.left, board.right
-        ),
-    );
-    checks.require(
-        greater(board.top_speed, SERVE_SPEED),
-        "the ball never got faster than its serve",
-        format!(
-            "top speed {:.2} u/s against a serve of {SERVE_SPEED:.2}; every touch is \
-             supposed to add {SPEEDUP}",
-            board.top_speed
+            "it met {met} of {approaches} approaches; below about 8 in 10 the run is measuring \
+             the controller's aim rather than the game, so read verify.rs before touching the \
+             game's constants"
         ),
     );
 
-    // --- the controller's own contract -------------------------------
-    // The instrument reports on itself first. "The game is unwinnable" and
-    // "my aim missed the ball on 94% of returns" are the same fault seen from
-    // two ends, and only one of them sends somebody into the game's constants.
-    let contact_rate = if session.approaches == 0 {
-        0.0
-    } else {
-        session.contacts as f32 / session.approaches as f32
-    };
-    checks.require(
-        session.approaches > 0 && contact_rate >= MIN_CONTACT_RATE,
-        "the controller kept missing the ball, so nothing below is about the game",
-        format!(
-            "it met {} of {} balls that reached its plane ({:.0}%), against a floor of \
-             {:.0}%. Suspect the reach test in `plan` and CONTACT_MARGIN before suspecting \
-             the paddle's speed",
-            session.contacts,
-            session.approaches,
-            contact_rate * 100.0,
-            MIN_CONTACT_RATE * 100.0
-        ),
-    );
-    let aim_rate = if session.aimed == 0 {
-        0.0
-    } else {
-        session.aimed_well as f32 / session.aimed as f32
-    };
-    checks.require(
-        session.aimed > 0 && aim_rate >= MIN_AIM_RATE,
-        "the controller did not hit the ball where it meant to",
-        format!(
-            "{} of {} returns came off within {AIM_SLACK} of the planned contact offset \
-             ({:.0}%), against a floor of {:.0}%. A shot search grading itself against \
-             contacts it did not achieve is measuring nothing",
-            session.aimed_well,
-            session.aimed,
-            aim_rate * 100.0,
-            MIN_AIM_RATE * 100.0
-        ),
-    );
-
-    // --- the world stayed inside its own rules -----------------------
-    let (low, high) = session.ball_span;
-    checks.require(
-        greater(FIELD_HALF.x + 1.0, low.x.abs().max(high.x.abs())),
-        "the ball left the court sideways and kept going",
-        format!(
-            "its x ran from {:.3} to {:.3}; the goal lines are at +/-{:.1} and a point \
-             should be scored the tick it passes one",
-            low.x, high.x, FIELD_HALF.x
-        ),
-    );
-    checks.require(
-        greater(BALL_LIMIT + 0.01, low.y.abs().max(high.y.abs())),
-        "the ball went through a wall",
-        format!(
-            "its y ran from {:.3} to {:.3}; with a radius of {BALL_RADIUS} it may reach \
-             +/-{BALL_LIMIT:.3}",
-            low.y, high.y
-        ),
-    );
-    checks.require(
-        greater(PADDLE_LIMIT + 0.001, session.paddle_span.0.abs())
-            && greater(PADDLE_LIMIT + 0.001, session.paddle_span.1.abs()),
-        "a paddle left the court",
-        format!(
-            "paddle centres ran from {:.3} to {:.3}; the clamp is +/-{PADDLE_LIMIT:.3}",
-            session.paddle_span.0, session.paddle_span.1
-        ),
-    );
-    // The margin the fixed timestep needs, asked of the timestep the engine
-    // actually handed the game rather than of the 1/60 it was picked against.
-    let travel = MAX_BALL_SPEED * session.fixed_dt;
-    checks.require(
-        greater(PADDLE_SIZE.x, travel),
-        "the ball can cross a paddle in one tick",
-        format!(
-            "at {MAX_BALL_SPEED} u/s and a timestep of {:.5}s it travels {travel:.3} per \
-             tick, against a paddle {} thick. The swept test in rules.rs is what makes \
-             the game correct anyway, so this is the margin that makes it correct twice",
-            session.fixed_dt, PADDLE_SIZE.x
-        ),
-    );
-
-    // --- the game can be lost ----------------------------------------
-    let (idle, idle_ball, idle_ticks) = play_idle();
-    checks.require(
-        idle.right >= WINNING_SCORE,
-        "a player who does nothing at all does not lose",
-        format!(
-            "after {idle_ticks} idle ticks it was {}-{}; a game that cannot be lost by \
-             standing still has no goal line on the left",
-            idle.left, idle.right
-        ),
-    );
-    let (again, again_ball, _) = play_idle();
-    checks.require(
-        [idle_ball.x.to_bits(), idle_ball.y.to_bits()]
-            == [again_ball.x.to_bits(), again_ball.y.to_bits()]
-            && idle.left == again.left
-            && idle.right == again.right,
-        "the same game played twice did different things",
-        format!(
-            "the ball finished at ({:.6}, {:.6}) and then at ({:.6}, {:.6}), {}-{} against \
-             {}-{}. The serve angle is the only random thing here and it comes from the \
-             seeded Rng",
-            idle_ball.x,
-            idle_ball.y,
-            again_ball.x,
-            again_ball.y,
-            idle.left,
-            idle.right,
-            again.left,
-            again.right
-        ),
-    );
-
-    // --- the rules' own contracts, asked directly --------------------
-    // A played match only exercises the states a correct game reaches, and the
-    // margins a game is built on are exactly the ones it never reaches. So ask.
-    check_the_sweep(&mut checks);
-    check_the_bounce(&mut checks);
-
-    // --- what was drawn ----------------------------------------------
-    // The recorder's viewport overrides the `Camera` resource's, and nothing
-    // writes it back into the world -- so a check reading bounds from the world
-    // and quads from the recorder compares against the wrong rectangle unless
-    // the two agree. They are both VIEWPORT, and this asserts it rather than
-    // remembering it.
-    checks.require(
-        session.camera.viewport == VIEWPORT && near(session.camera.height, VIEW_HEIGHT),
-        "the recorder is not framing what the game's camera frames",
-        format!(
-            "the game's camera is {}x{} at {} world units tall and the recorder was given \
-             {}x{}; every bounds check below judges against the camera's rectangle",
-            session.camera.viewport.width,
-            session.camera.viewport.height,
-            session.camera.height,
-            VIEWPORT.width,
-            VIEWPORT.height,
-        ),
-    );
-    let view = session.camera.visible_bounds();
-    let Some(rally) = session.rally.as_ref().map(Keepsake::clone_of) else {
+    // --- what the match did ---------------------------------------------
+    let Some(ended_at) = ended_at else {
+        // The controller's own reading goes in the message, because this exact
+        // symptom — a long rally at 0-0 — is produced both by a controller that
+        // cannot aim and by an opponent that cannot be beaten, and the two need
+        // opposite fixes. `met N of N` says which.
         fail(
-            "no frame of live play was recorded",
-            "the match ran, so some tick had a rally under way with both scores on the \
-             board; without one there is no frame to judge the picture against",
+            "no one won the match",
+            &format!(
+                "after {TICKS} ticks the score is {}-{}, the longest rally was {} touches and \
+                 the ball's top speed was {:.1} units/s (it serves at {SERVE_SPEED:.1} and is \
+                 capped at {TOP_SPEED:.1}). the controller met {met} of {approaches} \
+                 approaches and aimed its {planned} returns to land {:.2} from the opponent on \
+                 average, at best {:.2}, while the opponent touched {their_touches} balls and \
+                 stretched at most {their_stretch:.2} from its centre to do it (it covers \
+                 {:.2}). those shots landed {:.2} from where they were planned to on average. \
+                 if the controller met nearly every ball and its planned threat is much larger \
+                 than the stretch the opponent was actually put under, the shots it plans are \
+                 not the shots it produces and the fault is in verify.rs",
+                board.left,
+                board.right,
+                board.longest_rally,
+                board.top_speed,
+                mean_threat,
+                threat.1,
+                PADDLE.y + BALL_RADIUS,
+                if shots > 0 {
+                    aim_error.1 / shots as f32
+                } else {
+                    0.0
+                }
+            ),
         );
     };
-    // The background, which is the one part of the picture that leaves no quad
-    // behind: a frame drawn on the wrong colour is byte-identical under every
-    // other assertion here. `FrameRecord::plan` carries it, so this is two
-    // lines rather than something only a person looking at the capture can see.
-    //
-    // Two questions, and only the second survives the constant itself being
-    // changed: that the frame cleared to what the camera asked for, and that
-    // what it asked for is dark enough for a white ball to read against. The
-    // first is the engine's contract; the second is the game's own, and is
-    // spelled with numbers rather than with the constant it is judging.
-    let cleared = rally.frame.plan.clear_color;
     checks.require(
-        cleared == crate::palette::COURT,
-        "the frame did not clear to the colour the camera asked for",
+        board.left == WIN_SCORE,
+        "the controller did not win the match",
         format!(
-            "the plan clears to {cleared:?} and the game's camera is set to {:?}",
-            crate::palette::COURT
+            "it finished {}-{} on tick {ended_at}, having met {met} of {approaches} approaches; \
+             a controller that meets nearly every ball and still loses is a game the player \
+             cannot win",
+            board.left, board.right
         ),
     );
-    let brightness = cleared.r.max(cleared.g).max(cleared.b);
     checks.require(
-        greater(0.25, brightness) && near(cleared.a, 1.0),
-        "the court is not dark enough to see a white ball on",
+        matches!(board.phase, Phase::Over { winner: Side::Left }),
+        "the match ended in a state that does not match the score",
         format!(
-            "its brightest channel is {brightness:.3} at alpha {:.2}; the ball, the walls \
-             and the hint are all near-white, and nothing else in this run looks at the \
-             background at all",
-            cleared.a
+            "the score is {}-{} and the phase is {:?}",
+            board.left, board.right, board.phase
         ),
     );
-    nothing_off_screen(&mut checks, &rally.frame, view, "rally");
-    nothing_off_screen(&mut checks, &session.last.frame, view, "final");
-    paddle_drawn(
-        &mut checks,
-        &rally.frame,
-        Vec2::new(Side::Left.paddle_x(), rally.left),
-        "left",
+    checks.require(
+        board.longest_rally >= 4,
+        "no rally in the whole match lasted more than three touches",
+        format!(
+            "the longest was {} touches over {ended_at} ticks; a game whose ball never comes \
+             back twice is not a game",
+            board.longest_rally
+        ),
     );
-    paddle_drawn(
-        &mut checks,
-        &rally.frame,
-        Vec2::new(Side::Right.paddle_x(), rally.right),
-        "right",
+    checks.require(
+        greater(board.top_speed, SERVE_SPEED) && !greater(board.top_speed, TOP_SPEED),
+        "the ball did not speed up during play, or went past its cap",
+        format!(
+            "its top speed was {:.3} units/s; it serves at {SERVE_SPEED:.1}, gains \
+             {SPEED_PER_TOUCH:.1} a touch and is capped at {TOP_SPEED:.1}",
+            board.top_speed
+        ),
     );
-    ball_drawn(&mut checks, &rally.frame, rally.ball);
-    check_the_text(&mut checks, &rally, font);
-    check_the_layers(&mut checks, &rally, font);
-
-    // --- the screens the run never reached ---------------------------
-    // A controller good enough to finish the match is a controller that never
-    // loses it, so the losing banner — the longest string in the game — is the
-    // one string nothing above measured.
-    let unreached = draw_the_unreached(&mut recorder, &mut checks, view);
-
-    // Every literal, checked as a string rather than as quads: the font draws
-    // anything outside space-through-tilde as a box at exactly a letter's
-    // advance, so no assertion over what was drawn can tell one from a letter.
-    for literal in EVERY_LITERAL {
+    // The ball stays on court. Y is a wall it must never pass; X it may reach
+    // the very edge of, because that is a point.
+    checks.require(
+        !greater(ball_extent.y, COURT.y - BALL_RADIUS + 1e-3),
+        "the ball went through the top or bottom of the court",
+        format!(
+            "it reached {:.4} from the centre line; the wall stops a ball of radius \
+             {BALL_RADIUS} at {:.4}",
+            ball_extent.y,
+            COURT.y - BALL_RADIUS
+        ),
+    );
+    checks.require(
+        !greater(ball_extent.x, COURT.x + BALL_RADIUS + 1e-3),
+        "the ball carried on past the end of the court",
+        format!(
+            "it reached {:.4} from the centre line; a point is scored by {:.4}",
+            ball_extent.x,
+            COURT.x + BALL_RADIUS
+        ),
+    );
+    // Both paddles used the court, and neither left it.
+    for (name, span) in [("player", player_span), ("opponent", opponent_span)] {
         checks.require(
-            literal.chars().all(|c| (' '..='~').contains(&c)),
-            "a string the game draws has a character the font cannot draw",
+            greater(0.0, span.0) && greater(span.1, 0.0),
+            "a paddle spent the whole match on one side of the court",
             format!(
-                "{literal:?} is outside space-through-tilde, which the font renders as a \
-                 box at a letter's advance -- so it passes every check on the geometry"
+                "the {name}'s paddle ranged over {:.2}..{:.2}; a paddle that only ever moves \
+                 one way is a paddle whose other direction is untested",
+                span.0, span.1
+            ),
+        );
+        checks.require(
+            !greater(span.0.abs().max(span.1.abs()), PADDLE_LIMIT + 1e-3),
+            "a paddle left the court",
+            format!(
+                "the {name}'s paddle ranged over {:.3}..{:.3} against a clamp of \
+                 +/-{PADDLE_LIMIT:.3}",
+                span.0, span.1
             ),
         );
     }
 
+    controls_move_the_right_way(&mut checks);
+    the_sweep_holds_its_contract(&mut checks);
+    the_walls_reflect(&mut checks);
+    the_game_is_winnable(&mut checks, their_touches, board.left);
+    every_string_is_printable(&mut checks);
+
+    // --- the same match again, bit for bit -------------------------------
+    let replay = play(None);
+    checks.require(
+        replay.fingerprint == fingerprint && replay.ended_at == Some(ended_at),
+        "the same match played twice came out differently",
+        format!(
+            "it ended {}-{} on tick {:?} the second time and {}-{} on tick {ended_at} the \
+             first; the seed, the timestep and the controller are all the same, so the world \
+             has picked up something that is not",
+            replay.board.left, replay.board.right, replay.ended_at, board.left, board.right
+        ),
+    );
+
+    // --- what was drawn ---------------------------------------------------
+    let Some(rally) = rally else {
+        fail(
+            "no frame was recorded while the ball was live",
+            "the loop draws every tick, and a match has rallies in it",
+        );
+    };
+    let Some(final_frame) = last_frame else {
+        fail("no frame was recorded at all", "the loop draws every tick");
+    };
+    // A second world, one tick in, so `Startup` has run: it is where the
+    // staged screens below are drawn, and it is also where the camera comes
+    // from — read out of the game rather than restated here, so the two cannot
+    // drift apart.
+    let mut staged = headless(config(), register);
+    staged.tick();
+    let Some(camera) = staged.world().find_resource::<Camera>().copied() else {
+        fail(
+            "the game set no camera",
+            "set_the_court inserts one, and a headless run is given no default",
+        );
+    };
+    // The recorder's viewport overrides the camera's, so ask the bounds of a
+    // camera that has the recorder's — otherwise this judges every quad against
+    // a rectangle nothing was drawn into.
+    let view = Camera {
+        viewport: WINDOW,
+        ..camera
+    }
+    .visible_bounds();
+
+    nothing_is_off_screen(&mut checks, &rally.frame, view, "rally");
+    nothing_is_off_screen(&mut checks, &final_frame, view, "final");
+
+    // The clear colour, which leaves no quad behind and is otherwise invisible
+    // to every check above.
+    checks.require(
+        rally.frame.plan.clear_color == palette::COURT,
+        "the frame was cleared to the wrong colour",
+        format!(
+            "it cleared to {:?} and the court is {:?}",
+            rally.frame.plan.clear_color,
+            palette::COURT
+        ),
+    );
+
+    // Each paddle is drawn at its size, centred where the world puts it.
+    // "Something covers this point" is not enough: a paddle-sized quad covers
+    // its own centre even when it is drawn a long way out of position.
+    for (side, position) in &rally.paddles {
+        let drawn = rally.frame.covering(*position).into_iter().any(|quad| {
+            let bounds = quad.bounds();
+            near(bounds.size().x, PADDLE.x * 2.0)
+                && near(bounds.size().y, PADDLE.y * 2.0)
+                && near(bounds.center().x, position.x)
+                && near(bounds.center().y, position.y)
+        });
+        checks.require(
+            drawn,
+            "no paddle-shaped quad was drawn where a paddle is",
+            format!(
+                "the world puts the {} paddle at ({:.2}, {:.2}), {} by {}; what covers that \
+                 point is {}",
+                side.name(),
+                position.x,
+                position.y,
+                PADDLE.x * 2.0,
+                PADDLE.y * 2.0,
+                sizes_covering(&rally.frame, *position)
+            ),
+        );
+        // And it is where the game says a paddle lives, not merely on screen.
+        checks.require(
+            near(position.x, side.sign() * PADDLE_X),
+            "a paddle has wandered off its own end of the court",
+            format!(
+                "the {} paddle is at x={:.3}; its end is at {:.3}",
+                side.name(),
+                position.x,
+                side.sign() * PADDLE_X
+            ),
+        );
+    }
+
+    // The ball is a circle, so nothing the size of the ball is drawn anywhere:
+    // sixteen wedges share its centre and fit inside its box, and their union
+    // is exactly that box.
+    let union = disc_union(&rally.frame, rally.ball, BALL_RADIUS * 2.0);
+    match union {
+        None => checks.require(
+            false,
+            "nothing at all was drawn where the ball is",
+            format!(
+                "the world has it at ({:.2}, {:.2}); what covers that point is {}",
+                rally.ball.x,
+                rally.ball.y,
+                sizes_covering(&rally.frame, rally.ball)
+            ),
+        ),
+        Some(union) => checks.require(
+            near(union.size().x, BALL_RADIUS * 2.0) && near(union.size().y, BALL_RADIUS * 2.0),
+            "no ball-sized disc is drawn where the ball is",
+            format!(
+                "the quads covering ({:.2}, {:.2}) span {:.4}x{:.4}, wanted {:.3} square",
+                rally.ball.x,
+                rally.ball.y,
+                union.size().x,
+                union.size().y,
+                BALL_RADIUS * 2.0
+            ),
+        ),
+    }
+
+    // The score: a glyph where each side's digit is centred. The font atlas is
+    // a texture like any other, so "was this text" is "did it sample the font".
+    for side in [Side::Left, Side::Right] {
+        let at = Vec2::new(side.sign() * SCORE_X, -COURT.y + 0.7 + SCORE_SIZE * 0.5);
+        let drawn = rally
+            .frame
+            .covering(at)
+            .into_iter()
+            .any(|quad| quad.texture == font);
+        checks.require(
+            drawn,
+            "a side's score is not where the game draws it",
+            format!(
+                "no glyph covers ({:.2}, {:.2}), the middle of the {} score as centred by \
+                 TextStyle::width_of; what is there is {}",
+                at.x,
+                at.y,
+                side.name(),
+                sizes_covering(&rally.frame, at)
+            ),
+        );
+    }
+
+    // Draw order, which is the failure nothing else catches: the banner is in
+    // the UI band, so the front-most thing at its centre is a glyph and not the
+    // court behind it.
+    let banner_at = Vec2::ZERO;
+    let front = final_frame.covering(banner_at).into_iter().next();
+    checks.require(
+        front.is_some_and(|quad| quad.texture == font),
+        "the winner's banner is behind the court instead of over it",
+        format!(
+            "the front-most quad at the middle of the screen is {:?}; covering() reads the \
+             depth sort backwards, so its first entry is what a player actually sees",
+            front.map(|quad| quad.bounds().size())
+        ),
+    );
+
+    // --- the screens the run never reached --------------------------------
+    let lost = staged_screen(
+        &mut checks,
+        &mut staged,
+        &mut recorder,
+        view,
+        "losing",
+        Scoreboard {
+            left: 2,
+            right: WIN_SCORE,
+            phase: Phase::Over {
+                winner: Side::Right,
+            },
+            ..Scoreboard::default()
+        },
+    );
+    // The losing banner is the longest string the game can draw, and a winning
+    // run never draws it. Check it is really there rather than merely on
+    // screen.
+    let losing_text = banner_text(Side::Right, 2, WIN_SCORE);
+    checks.require(
+        lost.covering(Vec2::ZERO)
+            .into_iter()
+            .any(|quad| quad.texture == font),
+        "the losing banner was not drawn",
+        format!("{losing_text:?} should be centred on the middle of the screen"),
+    );
+    let _ = staged_screen(
+        &mut checks,
+        &mut staged,
+        &mut recorder,
+        view,
+        "serving",
+        Scoreboard::default(),
+    );
+
+    // --- the bands, checked where they actually overlap --------------------
+    // A frame records the order quads went down in, not the `Depth` that
+    // produced it, so a layer is only observable where two bands cover the same
+    // point *and* disagree with submission order. Almost nothing a match draws
+    // does: moving the banner out of the UI band was invisible to every
+    // assertion above until the game stopped hiding the ball behind it. These
+    // two frames arrange the remaining overlaps on purpose.
+    let Some(ball_entity) = staged
+        .world()
+        .query::<(&Transform, &Ball)>()
+        .map(|(entity, _, _)| entity)
+        .next()
+    else {
+        fail("the staged world has no ball", "Startup spawns exactly one");
+    };
+    staged.world_mut().insert_resource(Scoreboard::default());
+
+    // The UI band over the play band: put the ball under the hint line.
+    let under_the_hint = Vec2::new(0.0, COURT.y - 1.35 + HINT_SIZE * 0.5);
+    staged
+        .world_mut()
+        .component_mut::<Transform>(ball_entity)
+        .pos = under_the_hint;
+    let frame = recorder.draw(&mut staged);
+    let front = frame.covering(under_the_hint).into_iter().next();
+    checks.require(
+        front.is_some_and(|quad| quad.texture == font),
+        "the hint line is behind the ball instead of over it",
+        format!(
+            "with the ball moved under it so the two bands overlap, the front-most quad at \
+             ({:.2}, {:.2}) is {:?} rather than a glyph",
+            under_the_hint.x,
+            under_the_hint.y,
+            front.map(|quad| quad.tint)
+        ),
+    );
+
+    // The field band under the play band: put the ball on a centre-line dash.
+    // Asked as "which colour is in front" rather than "is it a glyph", because
+    // neither of these two is text and a glyph test cannot tell them apart.
+    let on_a_dash = Vec2::new(0.0, -COURT.y + 0.55 + 1.6 * 5.0);
+    staged
+        .world_mut()
+        .component_mut::<Transform>(ball_entity)
+        .pos = on_a_dash;
+    let frame = recorder.draw(&mut staged);
+    let front = frame.covering(on_a_dash).into_iter().next();
+    checks.require(
+        front.is_some_and(|quad| quad.tint == palette::BALL),
+        "the centre line is drawn over the ball instead of behind it",
+        format!(
+            "with the ball moved onto a dash so the two bands overlap, the front-most quad at \
+             ({:.2}, {:.2}) is tinted {:?} and the ball is {:?}",
+            on_a_dash.x,
+            on_a_dash.y,
+            front.map(|quad| quad.tint),
+            palette::BALL
+        ),
+    );
+
     let captured = crate::capture::capture_a_frame(&mut checks, &rally.frame);
     let verdict = checks.verdict();
 
+    println!("verified pong over {ended_at} ticks");
     println!(
-        "verified pong: {}-{} to the {} on tick {:?}, {} ticks recorded",
+        "  match: {}-{} to the {}, longest rally {} touches, ball topped out at {:.1} units/s",
         board.left,
         board.right,
-        if board.left > board.right {
-            "player"
-        } else {
-            "opponent"
-        },
-        session.finished_on,
-        session.ticks,
-    );
-    println!(
-        "  match: {} returns, longest rally {} touches, top ball speed {:.1} u/s, \
-         {:.2}s of play",
-        board.returns,
+        Side::Left.name(),
         board.longest_rally,
-        board.top_speed,
-        session.ticks as f32 * session.fixed_dt,
+        board.top_speed
     );
     println!(
-        "  controller: met {}/{} approaches ({:.0}%), aim landed {}/{} ({:.0}%)",
-        session.contacts,
-        session.approaches,
-        contact_rate * 100.0,
-        session.aimed_well,
-        session.aimed,
-        aim_rate * 100.0,
+        "  controller: met {met} of {approaches} approaches, planned {planned} returns aimed to \
+         land {:.2}..{:.2} from the opponent (mean {mean_threat:.2}, its reach is {:.2})",
+        threat.0,
+        threat.1,
+        PADDLE.y + BALL_RADIUS
     );
     println!(
-        "  idle run: lost {}-{} in {idle_ticks} ticks, and replayed bit for bit",
-        idle.left, idle.right
+        "  opponent: touched {their_touches} balls, stretched at most {their_stretch:.2} from \
+         its centre to reach one (it covers {:.2})",
+        PADDLE.y + BALL_RADIUS
     );
     println!(
-        "  rally frame: {} quads at {}-{}, ball ({:.2}, {:.2})",
+        "  aim: {shots} shots landed {:.2} from where they were planned to on average, at worst \
+         {:.2}",
+        if shots > 0 {
+            aim_error.1 / shots as f32
+        } else {
+            0.0
+        },
+        aim_error.0
+    );
+    println!(
+        "  paddles: player {:.2}..{:.2}, opponent {:.2}..{:.2}, clamp +/-{PADDLE_LIMIT:.2}",
+        player_span.0, player_span.1, opponent_span.0, opponent_span.1
+    );
+    println!(
+        "  ball reached {:.2} across and {:.2} down from the centre; the court is {:.1}x{:.1}",
+        ball_extent.x, ball_extent.y, COURT.x, COURT.y
+    );
+    println!(
+        "  frames: {} quads in the last rally frame, {} on the winner's screen",
         rally.frame.quad_count(),
-        rally.left_score,
-        rally.right_score,
-        rally.ball.x,
-        rally.ball.y,
+        final_frame.quad_count()
     );
-    println!("  unreached screens: {unreached}");
+    println!("  checks: {} failed", checks.failures());
     println!("  capture: {captured}");
-    println!("  failures: {}", checks.failures());
-    // Evidence, kept rather than shown: one frame, not the whole recorder.
     print!("{}", rally.frame.transcript());
     verdict
-}
-
-/// The swept contact, asked its contract directly.
-///
-/// A played match cannot reach these: the speed cap keeps the ball to well
-/// under a paddle's thickness per tick, so the sweep never does anything a
-/// position test would not, and replacing it with a position test would pass
-/// the entire session above. The margin is real and the run cannot see it.
-fn check_the_sweep(checks: &mut Checks) {
-    let plane = Side::Left.contact_plane();
-    let half = PADDLE_SIZE.y * 0.5 + BALL_RADIUS;
-    // Eight units of travel in one tick, straight across a paddle 0.6 thick.
-    let across = sweep_contact(
-        Vec2::new(plane + 4.0, 0.0),
-        Vec2::new(plane - 4.0, 0.0),
-        plane,
-        -1.0,
-        0.0,
-        half,
-    );
-    checks.require(
-        across.is_some_and(|t| near(t, 0.5)),
-        "a ball that crosses a paddle in one tick is not caught",
-        format!(
-            "eight units of travel centred on the paddle's face gave {across:?}, want \
-             Some(0.5). Nothing in the engine sweeps, so a fast ball steps clean through \
-             any test that only asks where it ended up"
-        ),
-    );
-    // Past the end of it.
-    let past = sweep_contact(
-        Vec2::new(plane + 4.0, 0.0),
-        Vec2::new(plane - 4.0, 0.0),
-        plane,
-        -1.0,
-        8.0,
-        half,
-    );
-    checks.require(
-        past.is_none(),
-        "a ball that crosses the plane past the end of the paddle counts as a hit",
-        format!(
-            "the paddle was at y=8.0 and the ball crossed at y=0.0, {} away from a paddle \
-             reaching {half:.2}; got {past:?}",
-            8.0
-        ),
-    );
-    // Leaving through the same face, which is what a just-struck ball does.
-    let leaving = sweep_contact(
-        Vec2::new(plane, 0.0),
-        Vec2::new(plane + 8.0, 0.0),
-        plane,
-        -1.0,
-        0.0,
-        half,
-    );
-    checks.require(
-        leaving.is_none(),
-        "a ball leaving a paddle is caught by it again",
-        format!(
-            "travel away from the face on the tick after a hit gave {leaving:?}; a ball \
-             struck once and re-struck on the way out never leaves the paddle"
-        ),
-    );
-    // And the wall fold, over a ball thrown far past several walls at once.
-    let folded = fold_between_walls(BALL_LIMIT * 5.0, BALL_LIMIT);
-    checks.require(
-        greater(BALL_LIMIT + 1e-4, folded.abs()) && near(folded, BALL_LIMIT),
-        "folding a ball back between the walls does not land it between them",
-        format!(
-            "five half-courts of travel folded to {folded:.4}, want {BALL_LIMIT:.4} -- \
-             two reflections and a half"
-        ),
-    );
-}
-
-/// The bounce, asked its contract directly.
-fn check_the_bounce(checks: &mut Checks) {
-    let flat = bounce_velocity(0.0, 20.0, 1.0);
-    checks.require(
-        near(flat.y, 0.0) && near(flat.x, 20.0),
-        "a ball struck dead centre does not come back flat",
-        format!("got ({:.4}, {:.4}), want (20.0, 0.0)", flat.x, flat.y),
-    );
-    let tip = bounce_velocity(1.0, 20.0, -1.0);
-    let angle = atan2(tip.y, -tip.x);
-    checks.require(
-        near(angle.as_f32(), MAX_BOUNCE.as_f32()) && greater(0.0, tip.x),
-        "a ball struck at the tip does not leave at the steepest angle",
-        format!(
-            "off the right paddle's bottom tip it left at {:.2} degrees going x={:.2}; \
-             want {:.2} degrees going left",
-            angle.to_degrees(),
-            tip.x,
-            MAX_BOUNCE.to_degrees()
-        ),
-    );
-    let clamped = bounce_velocity(4.0, 20.0, 1.0);
-    checks.require(
-        near(clamped.x, tip.x.abs()) && near(clamped.y, tip.y),
-        "a contact off the end of the paddle is not clamped to the end of it",
-        format!(
-            "an offset of 4.0 gave ({:.3}, {:.3}); an offset of 1.0 gives ({:.3}, {:.3})",
-            clamped.x,
-            clamped.y,
-            tip.x.abs(),
-            tip.y
-        ),
-    );
-    let outside = contact_offset(100.0, 0.0);
-    checks.require(
-        near(outside, 1.0),
-        "an impossible contact point is not clamped",
-        format!("a ball 100 units below the paddle gave an offset of {outside:.3}"),
-    );
-}
-
-/// Text is where the layout says it is, not merely somewhere on screen.
-///
-/// "On screen" passes for a hint line drawn on top of a wall, so the bands the
-/// layout is built from are what these judge against.
-fn check_the_text(checks: &mut Checks, rally: &Keepsake, font: BackendTextureId) {
-    let all = glyphs(&rally.frame, font);
-    let score_band = (SCORE_TOP - 1e-3, SCORE_TOP + SCORE_SIZE + 1e-3);
-    let hint_band = (HINT_TOP - 1e-3, HINT_TOP + HINT_SIZE + 1e-3);
-    let in_band =
-        |bounds: &Rect, band: (f32, f32)| bounds.min.y >= band.0 && bounds.max.y <= band.1;
-
-    let score: Vec<&Rect> = all.iter().filter(|b| in_band(b, score_band)).collect();
-    let hint: Vec<&Rect> = all.iter().filter(|b| in_band(b, hint_band)).collect();
-    checks.require(
-        score.len() + hint.len() == all.len() && !all.is_empty(),
-        "a glyph was drawn outside every band the layout has",
-        format!(
-            "{} glyphs in all: {} in the score band [{:.2}, {:.2}], {} in the hint band \
-             [{:.2}, {:.2}], and {} in neither. A frame of live play draws the score and \
-             the hint and nothing else",
-            all.len(),
-            score.len(),
-            score_band.0,
-            score_band.1,
-            hint.len(),
-            hint_band.0,
-            hint_band.1,
-            all.len() - score.len() - hint.len(),
-        ),
-    );
-    // Two single-digit scores, each its own quad, each centred on its column
-    // and exactly a glyph's cell. The font is monospace: `size` tall and
-    // `size * 7 / 9` wide.
-    let cell = Vec2::new(SCORE_SIZE * 7.0 / 9.0, SCORE_SIZE);
-    let placed = |column: f32| {
-        score.iter().any(|bounds| {
-            near(bounds.center().x, column)
-                && near(bounds.center().y, SCORE_TOP + SCORE_SIZE * 0.5)
-                && near(bounds.size().x, cell.x)
-                && near(bounds.size().y, cell.y)
-        })
-    };
-    checks.require(
-        placed(-SCORE_OFFSET) && placed(SCORE_OFFSET),
-        "a score is not in its column",
-        format!(
-            "the two scores are centred at x=+/-{SCORE_OFFSET} with cells {:.3}x{:.3}; \
-             the {} glyphs in the score band are at {}",
-            cell.x,
-            cell.y,
-            score.len(),
-            score
-                .iter()
-                .map(|b| format!(
-                    "({:.2},{:.2}) {:.2}x{:.2}",
-                    b.center().x,
-                    b.center().y,
-                    b.size().x,
-                    b.size().y
-                ))
-                .collect::<Vec<_>>()
-                .join(" ")
-        ),
-    );
-    // The hint, centred by its own measured width. `width_of` is exact and
-    // completely silent, so a line one character too long runs off both edges
-    // with nothing to say about it.
-    let style = TextStyle {
-        size: HINT_SIZE,
-        ..TextStyle::default()
-    };
-    let span = hint.iter().fold(None::<Rect>, |so_far, bounds| {
-        Some(match so_far {
-            None => **bounds,
-            Some(rect) => Rect {
-                min: rect.min.min(bounds.min),
-                max: rect.max.max(bounds.max),
-            },
-        })
-    });
-    let (width, centre) = span.map_or((0.0, f32::MAX), |rect| (rect.size().x, rect.center().x));
-    checks.require(
-        near(width, style.width_of(HINT))
-            && near(centre, 0.0)
-            && hint.len() == HINT.chars().count(),
-        "the hint line is not the width the layout measured, or is not centred",
-        format!(
-            "{} glyphs spanning {width:.3} centred at {centre:.3}; TextStyle::width_of \
-             says {:.3}, the layout centres on x=0, and {:?} is {} characters -- spaces \
-             included, because ctx.text submits a quad for one",
-            hint.len(),
-            style.width_of(HINT),
-            HINT,
-            HINT.chars().count(),
-        ),
-    );
-}
-
-/// The score is painted on the court, behind the play.
-///
-/// `quads()` comes back in the depth sort, so an index in it is a place in the
-/// painter's sequence. Move `layers::SCORE` above `layers::PLAY` and the score
-/// paints over the ball, in the right place, at the right size, with every
-/// geometric assertion above still passing — this is the only check that sees
-/// it.
-fn check_the_layers(checks: &mut Checks, rally: &Keepsake, font: BackendTextureId) {
-    let quads = rally.frame.quads();
-    let score_band = (SCORE_TOP - 1e-3, SCORE_TOP + SCORE_SIZE + 1e-3);
-    let last_score = quads
-        .iter()
-        .enumerate()
-        .filter(|(_, quad)| {
-            quad.texture == font
-                && quad.bounds().min.y >= score_band.0
-                && quad.bounds().max.y <= score_band.1
-        })
-        .map(|(index, _)| index)
-        .next_back();
-    let first_paddle = quads
-        .iter()
-        .position(|quad| near(quad.bounds().size().y, PADDLE_SIZE.y));
-    checks.require(
-        matches!((last_score, first_paddle), (Some(score), Some(paddle)) if score < paddle),
-        "the score is not painted behind the play",
-        format!(
-            "in draw order the last score glyph is at {last_score:?} and the first paddle \
-             at {first_paddle:?}, out of {} quads; the score belongs on the court under \
-             the ball",
-            quads.len()
-        ),
-    );
-}
-
-/// Build the screens the played match never reached, and judge them the same
-/// way.
-fn draw_the_unreached(recorder: &mut FrameRecorder, checks: &mut Checks, view: Rect) -> String {
-    let mut sim = headless(config(), register);
-    sim.world_mut()
-        .insert_resource(Input::new(InputSnapshot::new()));
-    // One tick, so Startup has run and there is a world to draw.
-    sim.tick();
-
-    let screens = [
-        (
-            "opponent wins",
-            Scoreboard {
-                left: 3,
-                right: WINNING_SCORE,
-                stage: Stage::Over {
-                    winner: Side::Right,
-                },
-                ..blank_board()
-            },
-        ),
-        (
-            "player wins",
-            Scoreboard {
-                left: WINNING_SCORE,
-                right: 4,
-                stage: Stage::Over { winner: Side::Left },
-                ..blank_board()
-            },
-        ),
-        (
-            "serving",
-            Scoreboard {
-                left: 2,
-                right: 2,
-                stage: Stage::Serving {
-                    ticks_left: crate::SERVE_PAUSE,
-                    toward: 1.0,
-                },
-                ..blank_board()
-            },
-        ),
-    ];
-    for (name, board) in screens {
-        sim.world_mut().insert_resource(board);
-        let frame = recorder.draw(&mut sim);
-        nothing_off_screen(checks, &frame, view, name);
-        checks.require(
-            frame.quad_count() > 0,
-            "a screen drew nothing at all",
-            format!("the {name} screen submitted no quads"),
-        );
-    }
-    "opponent wins, player wins, serving".to_owned()
-}
-
-fn blank_board() -> Scoreboard {
-    Scoreboard {
-        left: 0,
-        right: 0,
-        stage: Stage::Rally,
-        touches: 0,
-        longest_rally: 0,
-        top_speed: 0.0,
-        returns: 0,
-    }
 }
