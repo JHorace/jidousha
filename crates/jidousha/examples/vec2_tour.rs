@@ -4,8 +4,17 @@
 //! so the reference cannot generate an entry for it — but it is in almost every
 //! line of a game, and "documented there" points at a crate whose docs are not
 //! necessarily to hand. This file is the entry instead: it is embedded in the
-//! API document verbatim, and cargo compiles it, so the list cannot drift away
-//! from what the type actually offers.
+//! API document verbatim, and cargo compiles it, so nothing listed here can
+//! stop existing without the build saying so.
+//!
+//! **What cargo cannot check is the other direction.** An operation `glam` has
+//! and this file omits is invisible — and E0 run 6 hit exactly that, wanting
+//! `lerp` for a swept contact point, finding it unlisted, and writing
+//! `from + (to - from) * t` rather than trust that the omission meant anything.
+//! So: this is the vocabulary, kept complete on purpose and by hand, and a gap
+//! in it is a bug to report rather than an answer. `glam` has more — component
+//! comparisons, rounding, reflection, `Vec3` and matrix types — and `cargo doc
+//! -p glam --open` is where the rest of it is.
 //!
 //! Nothing here is a special jidousha operation. It is the vocabulary a
 //! position, a velocity and a size are written in.
@@ -56,7 +65,15 @@ fn main() {
     assert_eq!(position.length(), 5.0);
     assert_eq!(position.length_squared(), 25.0);
     assert_eq!(position.distance(Vec2::ZERO), 5.0);
+    assert_eq!(position.distance_squared(Vec2::ZERO), 25.0);
     assert!((position.normalize().length() - 1.0).abs() < 1e-6);
+
+    // `normalize` of a zero vector is NaN, and NaN spreads: a velocity that
+    // reaches exactly zero for one tick poisons every position after it, and
+    // nothing panics. `normalize_or_zero` is the one to reach for whenever the
+    // vector can be still.
+    assert!(Vec2::ZERO.normalize().is_nan());
+    assert_eq!(Vec2::ZERO.normalize_or_zero(), Vec2::ZERO);
 
     // Component-wise shaping: the operations a clamp to a playfield is made of.
     assert_eq!(Vec2::new(-3.0, 4.0).abs(), Vec2::new(3.0, 4.0));
@@ -69,6 +86,31 @@ fn main() {
     assert_eq!(Vec2::X.dot(Vec2::X), 1.0);
     assert_eq!(Vec2::X.dot(Vec2::Y), 0.0);
     assert_eq!(Vec2::X.dot(-Vec2::X), -1.0);
+
+    // `lerp` is the point a fraction of the way along — which is how a swept
+    // collision turns "the crossing happened 0.4 of the way through this tick"
+    // into the world position where it happened.
+    let (from, to) = (Vec2::ZERO, Vec2::new(10.0, 20.0));
+    assert_eq!(from.lerp(to, 0.25), Vec2::new(2.5, 5.0));
+
+    // `signum` is the direction of each component, which is what a reflection
+    // or a serve direction is written with. Note it answers 1.0 for zero.
+    assert_eq!(Vec2::new(-3.0, 4.0).signum(), Vec2::new(-1.0, 1.0));
+
+    // `perp` is a quarter turn anticlockwise on paper — (x, y) becomes (-y, x)
+    // — and it does not go through trigonometry at all, so it is exact. The
+    // normal of a wall, and the sideways of a heading.
+    assert_eq!(Vec2::X.perp(), Vec2::new(0.0, 1.0));
+
+    // `move_towards` steps at most a fixed distance at the target and stops
+    // exactly on it, which is a chasing opponent in one line and does not
+    // overshoot on the last tick the way `normalize() * speed` does.
+    let chaser = Vec2::ZERO.move_towards(Vec2::new(3.0, 4.0), 2.5);
+    assert_eq!(chaser, Vec2::new(1.5, 2.0));
+    assert_eq!(
+        Vec2::ZERO.move_towards(Vec2::new(3.0, 4.0), 100.0),
+        Vec2::new(3.0, 4.0)
+    );
 
     // Angles go through the engine's own `sin_cos`, never through `f32::sin`:
     // those are the deterministic ones, and determinism is what makes a replay

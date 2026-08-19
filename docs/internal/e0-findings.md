@@ -3366,6 +3366,50 @@ are gone from the generated text and both survive in `conventions.md`, which is
 the point of scrubbing on the way out rather than rewording the source.
 
 
+### F-071 — `Vec2::lerp` exists, and the file that calls itself the entry for `Vec2` did not list it
+
+Class: docs · Run: 6 · Fixed in: this commit · Settled by: nothing
+
+**What run 6 hit.** `examples/vec2_tour.rs` opens by saying the reference cannot
+generate an entry for `Vec2` and that "this file is the entry instead". It did not
+list `lerp`. Swept collision — which Concepts explicitly sends a game author off
+to write themselves (ADR-0022) — needs to turn "the crossing happened 0.4 of the
+way through this tick" into a world position, which is one `lerp`. The run could
+not tell whether the omission meant the method did not exist, so it wrote
+`from + (to - from) * t` and moved on.
+
+**Verified.** `lerp` exists — glam 0.33, `Vec2::lerp(self, rhs, s)` — along with
+several other everyday operations the tour omitted. Checked by compiling them:
+`distance_squared`, `normalize_or_zero`, `try_normalize`, `signum`, `perp`,
+`perp_dot`, `move_towards`, `midpoint`, `project_onto`, `reflect`, `floor`,
+`round`, `ceil`, `to_array`, `extend`, `element_sum`, `recip`, `rem_euclid`,
+`copysign`, `cmpgt`/`select`, `mul_add`. So the run's finding holds, and the
+tour's claim to be *the* entry did not.
+
+**The finding underneath the finding.** The tour also said "cargo compiles it, so
+the list cannot drift away from what the type actually offers". That is only true
+in one direction: cargo checks that everything listed exists, and can say nothing
+about what is missing. The file was making a completeness claim its own guard
+could not support, which is the same failure as F-068 and F-055 — a sentence that
+is false rather than absent — in a third place.
+
+**Fix.** Both halves, because either alone leaves the same question open.
+
+- Six everyday operations added, each with the game situation it belongs to:
+  `lerp` (the swept contact point, named as such), `distance_squared`,
+  `normalize_or_zero` **and the NaN it avoids**, `signum`, `perp`,
+  `move_towards`.
+- The header now states the boundary instead of overclaiming: what cargo checks
+  and what it cannot, that the vocabulary is curated by hand, that a gap is a bug
+  to report rather than an answer, and where the rest of glam is.
+
+**`normalize_or_zero` is the one worth calling out.** `Vec2::ZERO.normalize()` is
+NaN, nothing panics, and NaN spreads through every position after it — a velocity
+that reaches exactly zero for one tick is a game that silently stops existing.
+No run has hit it yet; it is in the tour now because the tour is where a run
+would look.
+
+
 ## 5. Notes on the run's procedure
 
 Two things about run 1 that are not findings but would confuse a later reader.
