@@ -795,6 +795,36 @@ pub fn run() -> ExitCode {
              board; without one there is no frame to judge the picture against",
         );
     };
+    // The background, which is the one part of the picture that leaves no quad
+    // behind: a frame drawn on the wrong colour is byte-identical under every
+    // other assertion here. `FrameRecord::plan` carries it, so this is two
+    // lines rather than something only a person looking at the capture can see.
+    //
+    // Two questions, and only the second survives the constant itself being
+    // changed: that the frame cleared to what the camera asked for, and that
+    // what it asked for is dark enough for a white ball to read against. The
+    // first is the engine's contract; the second is the game's own, and is
+    // spelled with numbers rather than with the constant it is judging.
+    let cleared = rally.frame.plan.clear_color;
+    checks.require(
+        cleared == crate::palette::COURT,
+        "the frame did not clear to the colour the camera asked for",
+        format!(
+            "the plan clears to {cleared:?} and the game's camera is set to {:?}",
+            crate::palette::COURT
+        ),
+    );
+    let brightness = cleared.r.max(cleared.g).max(cleared.b);
+    checks.require(
+        greater(0.25, brightness) && near(cleared.a, 1.0),
+        "the court is not dark enough to see a white ball on",
+        format!(
+            "its brightest channel is {brightness:.3} at alpha {:.2}; the ball, the walls \
+             and the hint are all near-white, and nothing else in this run looks at the \
+             background at all",
+            cleared.a
+        ),
+    );
     nothing_off_screen(&mut checks, &rally.frame, view, "rally");
     nothing_off_screen(&mut checks, &session.last.frame, view, "final");
     paddle_drawn(
