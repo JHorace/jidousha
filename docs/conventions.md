@@ -96,6 +96,14 @@ the enforcement. Every entry here is assumed by all subsystem docs.
   is what "one way to do everything" means here —
   E0 run 4 found two worked examples disagreeing about which (e0-findings.md
   F-045).
+- **And that holds for any name the prelude has, not only `math`'s.** A few are
+  in the prelude *and* in `jidousha::testing` — `PhysicalSize` is the one that
+  bites, because `FrameRecorder::new` takes one — since the testing surface has
+  to define what its own signatures name (F-017's rule). A game globs the
+  prelude, so it takes them from there and lists only the testing-*only* names
+  in its `use jidousha::testing::{..}`. E0 run 7 copied the other spelling out of
+  `prototype_kit`, which had it wrong, and the document said the class of thing
+  was settled (e0-findings.md F-081).
 
 ## Error messages
 

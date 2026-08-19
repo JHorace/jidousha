@@ -18,9 +18,9 @@
 
 use std::path::{Path, PathBuf};
 
+use jidousha::prelude::*;
 use jidousha::testing::{
-    FrameRecord, PhysicalSize, RenderBackend, RenderError, WgpuBackend, create_builtin_textures,
-    encode_png,
+    FrameRecord, RenderBackend, RenderError, WgpuBackend, create_builtin_textures, encode_png,
 };
 
 use crate::checks::{Checks, fail};

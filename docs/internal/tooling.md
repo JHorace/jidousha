@@ -316,8 +316,11 @@ a row (stop rule printed, `failure-streak.json` count 2).
   `quickstart` from F0, and each E0 run's `pong` — which comes back out with the
   game at the start of the next run, `e0-prompt.md` step 2, and goes back in when
   the maintainer adopts the new one at step 6. **That step has now been missed
-  twice**, once after run 4 and once after run 5, each time leaving `tools/test`
-  failing on a Pong it ran as an ordinary example and watched open a window. The
+  three times**, after runs 4, 5 and 7, each time leaving `tools/test`
+  failing on a Pong it ran as an ordinary example and watched open a window.
+  Run 6's triage recorded the miss as not having recurred; it had not, because a
+  maintainer took the step, which is not the same as the trap being closed
+  (e0-findings.md F-094). The
   symptom is unmistakable once seen — `RunError::NoDisplay` in an
   `example:pong` phase — and it is worth naming here because the two halves live
   in different commits by design, so nothing structural connects them); a
@@ -331,7 +334,13 @@ a row (stop rule printed, `failure-streak.json` count 2).
   *runs*, which for a window means "a person looked at it". Two self-tests guard
   the list: that a windowed example is built and not run, and that every name in
   it is an example that exists, so a rename cannot silently start running a
-  window or keep skipping something deleted.
+  window or keep skipping something deleted. A third guard closes the checklist
+  step itself: **an example with a `verify.rs` beside its `main.rs` must be in
+  both lists**, checked before any phase runs and reported with the step that was
+  missed rather than as a `NoDisplay` a hundred lines later
+  (`unregistered_verify_modes`). Structural rather than a special case for
+  `pong`, because the property that matters is "has a verify mode" and the file
+  that proves it is on disk.
 - **A session-start hook installs the software rasterizer, and it is the CI line
   moved one directory.** `.claude/hooks/session-start.sh` runs on `SessionStart`
   in a remote session and installs `mesa-vulkan-drivers`, so `tools/verify`

@@ -373,6 +373,19 @@ that's exactly what acceptance milestone E0 tests (implementation plan).
   job it is not doing. Both budgets are enforced per document; growth past
   either is still a curation conversation, not a bigger number.
 
+  **And after seven E0 runs that conversation is due.** `jidousha-testing.md` is
+  at ~14.7k of its 15k after run 7's fixes, and it got there because four
+  consecutive runs' findings all landed in the same file: the controller
+  paragraph alone has been rewritten five times and is the longest thing in it.
+  Run 7's commit added roughly a thousand tokens and curated roughly the same
+  back out, which worked once and does not scale. What is missing is a principle
+  for **what a full `--verify` document keeps**, and nobody has one — the
+  `make-game` skill is the obvious other home and `e0-findings.md` §7 has
+  declined it four times, on the grounds that two homes for one lesson is worse
+  than one crowded home. That reasoning is sound and the crowding is now
+  measurable; the two halves have to be decided together, before run 8's fixes
+  need somewhere to go. Raising a budget is the one answer ADR-0025 forecloses.
+
   Implemented (impl): not rustdoc JSON — that needs a nightly toolchain and
   `rust-toolchain.toml` pins stable (ADR-0005) — but a text extractor over the
   crate sources, with tests. Blocks close on indentation rather than brace

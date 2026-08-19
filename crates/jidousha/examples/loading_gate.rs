@@ -85,6 +85,13 @@ fn main() {
     sim.world_mut().insert_resource(Assets::new(source));
     sim.world_mut().insert_resource(Stage::Loading);
 
+    // Which tick the gate opened on, so the assertions below can say *when*
+    // rather than only *whether*. A run only tests the states it reaches, and a
+    // gate that was never shut reaches the same final state as one that worked:
+    // asserting `Stage::Playing` at the end passes for a game that started
+    // there. Recorded rather than derived, because that is the whole claim.
+    let mut opened_at = None;
+
     for tick in 1..=6 {
         // The commit point: the one moment statuses may change. Everything the
         // tick below does sees one consistent picture of what is ready.
@@ -93,6 +100,9 @@ fn main() {
             println!("{}", failure.message());
         }
         sim.tick();
+        if opened_at.is_none() && *sim.world().resource::<Stage>() == Stage::Playing {
+            opened_at = Some(tick);
+        }
 
         let art = sim.world().resource::<Art>();
         let assets = sim.world().resource::<Assets>();
@@ -113,6 +123,16 @@ fn main() {
         "a missing file resolves as Failed — it does not load forever"
     );
     assert_eq!(*sim.world().resource::<Stage>(), Stage::Playing);
+    // And it was shut until everything resolved. `hero.png` completes at 4 and
+    // the missing `banner.png` resolves at the same commit, so the gate opens
+    // on the tick after the last commit that could change a status — never
+    // before, and never not at all.
+    assert_eq!(
+        opened_at,
+        Some(4),
+        "the gate opened on tick {opened_at:?}; hero.png completes at tick 4 and the gate \
+         must stay shut until then and open once it has"
+    );
 
     // What most games should do instead: nothing. Draw the hero from tick one
     // and let the renderer show a placeholder until the texels arrive — no

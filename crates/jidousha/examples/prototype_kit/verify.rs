@@ -47,8 +47,7 @@ use crate::{Paddle, config, register};
 use jidousha::prelude::*;
 use jidousha::testing::{
     BackendTextureId, FONT_TEXTURE, FramePlan, InputScript, MemorySource, NullBackend,
-    PhysicalSize, RenderBackend, create_builtin_textures, decode_png, plan_frame,
-    upload_ready_textures,
+    RenderBackend, create_builtin_textures, decode_png, plan_frame, upload_ready_textures,
 };
 use std::process::ExitCode;
 
@@ -142,6 +141,13 @@ pub(super) struct Run {
     pub(super) placeholder_frames: u32,
     /// How many frames were submitted.
     pub(super) frames: usize,
+    /// The camera the last frame was drawn with.
+    ///
+    /// The game's own, with the viewport this run chose stamped on — which is
+    /// the pair that has to agree before any assertion about *where* a quad is
+    /// means anything. Carried out rather than rebuilt here, so a check reads
+    /// the camera the frame was actually planned from.
+    pub(super) camera: Camera,
 }
 
 /// Play the scripted session through `backend`, drawing every tick.
@@ -161,6 +167,7 @@ pub(super) fn play(backend: &mut dyn RenderBackend, viewport: PhysicalSize) -> R
     let mut ball_pos = Vec2::ZERO;
     let mut placeholder_frames = 0;
     let mut frames = 0;
+    let mut last_camera = Camera::default();
 
     for tick in 1..=TICKS {
         let Some(assets) = sim.world_mut().find_resource_mut::<Assets>() else {
@@ -204,6 +211,7 @@ pub(super) fn play(backend: &mut dyn RenderBackend, viewport: PhysicalSize) -> R
             viewport,
             ..*sim.world().resource::<Camera>()
         };
+        last_camera = camera;
         let quads = sim.draw().quads().to_vec();
         let plan = plan_frame(&camera, &quads, &textures);
         if plan
@@ -225,6 +233,7 @@ pub(super) fn play(backend: &mut dyn RenderBackend, viewport: PhysicalSize) -> R
         ball_pos,
         placeholder_frames,
         frames,
+        camera: last_camera,
     }
 }
 
@@ -238,9 +247,11 @@ pub fn run() -> ExitCode {
         ball_pos,
         placeholder_frames,
         frames,
+        camera,
     } = &transcript_run;
     let (paddle_track, paddle_pos, ball_pos) = (paddle_track.clone(), *paddle_pos, *ball_pos);
     let (placeholder_frames, frames) = (*placeholder_frames, *frames);
+    let camera = *camera;
 
     // --- what the world did ------------------------------------------
     // Y is down (ADR-0010), so the bottom of the screen is the larger number.
@@ -294,21 +305,19 @@ pub fn run() -> ExitCode {
             last.plan.batches.len()
         ),
     );
+    // Exactly the frames before the art arrives, rather than "at least one" and
+    // "not all of them". Both of the looser forms pass for a store that resolves
+    // on tick 1, which is the state this example exists to show is survivable —
+    // a requirement stated where it can hardly fail is a requirement about a
+    // case that hardly happens.
     checks.require(
-        placeholder_frames > 0,
-        "the placeholder never appeared",
+        u64::from(placeholder_frames) == ART_ARRIVES - 1,
+        "the placeholder did not cover exactly the frames before the art arrived",
         format!(
             "{placeholder_frames} of {frames} frames drew it; the art is scripted to arrive \
-             on tick {ART_ARRIVES}, so the frames before it must show the checkered \
-             placeholder (renderer.md §5)"
-        ),
-    );
-    checks.require(
-        (placeholder_frames as u64) < TICKS,
-        "the placeholder never went away",
-        format!(
-            "all {placeholder_frames} frames drew it; the art is scripted to arrive on tick \
-             {ART_ARRIVES}, so the later frames must draw the art itself"
+             on tick {ART_ARRIVES}, so the {} frames before it must show the checkered \
+             placeholder and none after it may (renderer.md §5)",
+            ART_ARRIVES - 1
         ),
     );
     // And the paddle really is on screen where the world says it is — the
@@ -370,18 +379,25 @@ pub fn run() -> ExitCode {
     // whose cell straddles this point. A layout that stopped centring, or a
     // camera that stopped agreeing with it, moves the text off this spot.
     let score_middle = Vec2::new(0.0, -HEADLESS_VIEW_HEIGHT / 2.0 + 1.0 + SCORE_SIZE / 2.0);
-    let score_drawn = font.is_some_and(|font| {
-        last.covering(score_middle)
-            .into_iter()
-            .any(|quad| quad.texture == font)
-    });
+    // Asked as "what is in *front* here" rather than "is a glyph here at all".
+    // The halfway line runs through this point too, on the field band, so this
+    // one question answers both "did the layout run" and "is the UI band over
+    // the field band" — and the second is only answerable because the two
+    // overlap. `covering` is the depth sort read backwards, so its first entry
+    // is what a player sees.
+    let front_at_score = last.covering(score_middle).into_iter().next();
+    let score_drawn =
+        font.is_some_and(|font| front_at_score.is_some_and(|quad| quad.texture == font));
     checks.require(
         score_drawn,
-        "the score is not where the game draws it",
+        "the score is not the front-most thing where the game draws it",
         format!(
-            "no glyph covers ({:.2}, {:.2}), which is the middle of a score centred by \
-             TextStyle::width_of; {glyphs} glyphs were drawn in all",
-            score_middle.x, score_middle.y
+            "the front-most quad at ({:.2}, {:.2}) — the middle of a score centred by \
+             TextStyle::width_of, where the halfway line also runs — is {:?} rather than a \
+             glyph; {glyphs} glyphs were drawn in all",
+            score_middle.x,
+            score_middle.y,
+            front_at_score.map(|quad| quad.tint),
         ),
     );
 
@@ -413,6 +429,229 @@ pub fn run() -> ExitCode {
             sizes_covering(last, ball_pos)
         ),
     );
+
+    // --- the bands, where the sort disagrees with the submission order ---
+    //
+    // A frame carries the order quads were drawn in, not the `Depth` that
+    // produced it, so a band is only visible where it *changes* that order.
+    // `register` submits the hitboxes before the art and the field after it for
+    // exactly this reason: both pairs come back sorted the other way round, so
+    // swapping two constants in `mod layers` moves them and a check can say so.
+    // Where a game's submission order already agrees with its bands, no
+    // assertion over drawn quads can see a layer at all — which is how a whole
+    // layering goes untested while every other check passes.
+    let quads = last.quads();
+    let sprite_at = quads.iter().position(|quad| {
+        let bounds = quad.bounds();
+        font != Some(quad.texture)
+            && greater(bounds.size().x, 2.0)
+            && near(bounds.center().x, ball_pos.x)
+            && near(bounds.center().y, ball_pos.y)
+    });
+    let field_at = quads.iter().position(|quad| quad.tint == crate::FIELD_LINE);
+    let marker_at = quads.iter().position(|quad| quad.tint == crate::HITBOX_DOT);
+    checks.require(
+        sprite_at.is_some() && field_at.is_some() && marker_at.is_some(),
+        "one of the three bands drew nothing in the last frame",
+        format!(
+            "as indices into the draw order: field {field_at:?}, art {sprite_at:?}, debug \
+             marker {marker_at:?}; None means that band drew nothing where it was looked for"
+        ),
+    );
+    if let (Some(sprite), Some(field), Some(marker)) = (sprite_at, field_at, marker_at) {
+        checks.require(
+            field < sprite,
+            "the field is drawn over the art instead of behind it",
+            format!(
+                "the field marking is at index {field} in the draw order and the art at \
+                 {sprite}; the game submits the field *after* the art, so only FIELD sorting \
+                 under PLAY can put it first"
+            ),
+        );
+        checks.require(
+            marker > sprite,
+            "the debug marker is drawn behind the art instead of over it",
+            format!(
+                "the debug marker is at index {marker} in the draw order and the art at \
+                 {sprite}; the game submits the hitboxes *before* the art, so only DEBUG \
+                 sorting over PLAY can put it last"
+            ),
+        );
+    }
+
+    // --- the two shapes whose size an "is something there" check cannot see ---
+    //
+    // "A quad the size of the thing is at the thing's position" is right for a
+    // rectangle and wrong for a circle: `ctx.circle` submits sixteen wedges and
+    // nothing the size of the disc is drawn anywhere. What is true is that all
+    // sixteen share the centre as a corner and all sixteen fit inside the
+    // circle's bounding box, so the union of the quads covering the centre —
+    // filtered to that box, because the halfway line runs through the centre
+    // too — is exactly `2r x 2r`.
+    let centre = Vec2::ZERO;
+    let box_of_it = Rect::from_center_size(centre, Vec2::splat(crate::CENTRE_RADIUS * 2.0));
+    let mut disc: Option<Rect> = None;
+    for quad in last.covering(centre) {
+        let drawn = quad.bounds();
+        // Written out rather than as `Rect::contains`, which is half-open and
+        // would throw away the wedges reaching the far edge.
+        let inside = greater(drawn.min.x, box_of_it.min.x - 0.001)
+            && greater(drawn.min.y, box_of_it.min.y - 0.001)
+            && greater(box_of_it.max.x + 0.001, drawn.max.x)
+            && greater(box_of_it.max.y + 0.001, drawn.max.y);
+        if !inside {
+            continue;
+        }
+        disc = Some(match disc {
+            None => drawn,
+            Some(so_far) => Rect {
+                min: so_far.min.min(drawn.min),
+                max: so_far.max.max(drawn.max),
+            },
+        });
+    }
+    let disc_size = disc.map(|rect| rect.size()).unwrap_or(Vec2::ZERO);
+    checks.require(
+        near(disc_size.x, crate::CENTRE_RADIUS * 2.0)
+            && near(disc_size.y, crate::CENTRE_RADIUS * 2.0),
+        "the centre marking is not a disc of the size the game draws",
+        format!(
+            "the wedges covering ({:.2}, {:.2}) span {:.3}x{:.3}; a radius of \
+             {:.2} is {:.2} square",
+            centre.x,
+            centre.y,
+            disc_size.x,
+            disc_size.y,
+            crate::CENTRE_RADIUS,
+            crate::CENTRE_RADIUS * 2.0,
+        ),
+    );
+    // And a second check the constant cannot move with. The one above compares
+    // what was drawn against the number that drew it, so it goes on passing
+    // after somebody changes that number — which is not hypothetical: it was
+    // the one fault of fourteen that escaped this file when it was written.
+    // This one states the requirement instead: a centre marking has to read as
+    // one, which means a useful fraction of the court and not the whole of it.
+    let court_height = camera.visible_bounds().size().y;
+    checks.require(
+        greater(disc_size.y, court_height * 0.1) && greater(court_height * 0.5, disc_size.y),
+        "the centre marking is not a readable fraction of the court",
+        format!(
+            "it is {:.2} across on a court {court_height:.2} tall, which is {:.0}% of it; a \
+             centre marking wants between a tenth and a half",
+            disc_size.y,
+            disc_size.y / court_height * 100.0
+        ),
+    );
+
+    // And the hitbox outline really is the art's *component* size rather than
+    // the bounds of the rotated quad — the difference this example exists to
+    // show. Four lines of thickness `t` laid on the box's edges span the box
+    // plus `t` in each direction, which is a number stated by the two constants
+    // rather than written down here.
+    let mut outline: Option<Rect> = None;
+    for quad in quads.iter().filter(|quad| quad.tint == crate::HITBOX_LINE) {
+        let drawn = quad.bounds();
+        outline = Some(match outline {
+            None => drawn,
+            Some(so_far) => Rect {
+                min: so_far.min.min(drawn.min),
+                max: so_far.max.max(drawn.max),
+            },
+        });
+    }
+    let outline_size = outline.map(|rect| rect.size()).unwrap_or(Vec2::ZERO);
+    let want = crate::ART_SIZE + Vec2::splat(crate::HITBOX_THICKNESS);
+    checks.require(
+        near(outline_size.x, want.x) && near(outline_size.y, want.y),
+        "the hitbox outline is not the art's own size",
+        format!(
+            "the outline spans {:.3}x{:.3}; the art is {:.2}x{:.2} and the lines are \
+             {:.2} thick, so it should span {:.3}x{:.3}",
+            outline_size.x,
+            outline_size.y,
+            crate::ART_SIZE.x,
+            crate::ART_SIZE.y,
+            crate::HITBOX_THICKNESS,
+            want.x,
+            want.y,
+        ),
+    );
+
+    // --- nothing off screen ---------------------------------------------
+    //
+    // The highest-value check a game of shapes and text can write, and three
+    // lines. `contains_rect` is closed on all four sides, because a quad flush
+    // against the camera's edge is on screen; `Rect::contains` takes a point and
+    // is half-open, which is a different question and the wrong rule here.
+    let view = camera.visible_bounds();
+    let off_screen: Vec<Rect> = quads
+        .iter()
+        .map(|quad| quad.bounds())
+        .filter(|bounds| !view.contains_rect(*bounds))
+        .collect();
+    checks.require(
+        off_screen.is_empty(),
+        "something was drawn outside what the camera shows",
+        format!(
+            "{} of {} quads fall outside {view:?}; the first is {:?} — text centred by \
+             TextStyle::width_of is the usual culprit",
+            off_screen.len(),
+            quads.len(),
+            off_screen.first(),
+        ),
+    );
+
+    // --- the background, which leaves no quad behind ----------------------
+    //
+    // Two checks rather than one. The first moves with the constant it compares
+    // against and would keep passing if somebody changed that constant; the
+    // second states the requirement the colour exists to meet, and does not.
+    let cleared = last.plan.clear_color;
+    checks.require(
+        cleared == crate::COURT,
+        "the court was cleared to a colour the game does not name",
+        format!(
+            "the frame cleared to {cleared:?}; the game's constant is {:?}",
+            crate::COURT
+        ),
+    );
+    let brightness = cleared.r.max(cleared.g).max(cleared.b);
+    checks.require(
+        greater(0.25, brightness) && greater(cleared.a, 0.99),
+        "the court is not dark enough for the white field markings to read against it",
+        format!(
+            "its brightest channel is {brightness:.3} at alpha {:.2}",
+            cleared.a
+        ),
+    );
+
+    // --- the strings themselves -------------------------------------------
+    //
+    // No assertion over drawn quads can see a wrong *character*: the font draws
+    // an unknown one as a box at exactly a letter's advance, so a stray em dash
+    // or curly quote passes the glyph count, the centring and the bounds check
+    // alike. The string is the only instrument there is, which is why `main.rs`
+    // hands its readout back as one rather than formatting it inside the draw
+    // system where nothing could reach it.
+    let readout = crate::readout_text(TICKS, TICKS as f32 / 60.0, 0.0);
+    for (name, text) in [
+        ("the score", crate::SCORE_TEXT),
+        ("the font sample", crate::FONT_SAMPLE),
+        ("the readout", readout.as_str()),
+    ] {
+        let stray = text
+            .chars()
+            .find(|glyph| *glyph != '\n' && !(' '..='~').contains(glyph));
+        checks.require(
+            stray.is_none(),
+            "a string the game draws has a character the font cannot draw",
+            format!(
+                "{name} contains {stray:?}, which draws as a box at exactly a letter's width \
+                 — no assertion over what was drawn can tell the difference"
+            ),
+        );
+    }
 
     let captured = crate::capture::capture_a_frame(&mut checks, &paddle_track);
     let verdict = checks.verdict();
