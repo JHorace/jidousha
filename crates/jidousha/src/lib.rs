@@ -168,9 +168,18 @@ pub mod testing {
     // `plan.batches.iter().filter(|batch| batch.texture == font)` — needs to
     // know a batch has a texture and a `quad_count`; `FrameRecorder` is still
     // the shorter road and the one a game should take.
+    // `RenderError` is F-017's shape a third time — named by every
+    // `RenderBackend` signature here and defined nowhere in this surface — and
+    // it is exported for a reason a check can act on rather than only for
+    // completeness (e0-findings.md F-067). A capture path has to tell **no
+    // adapter on this machine** from a fault: the first is a fact about the
+    // runner and the run stays green, the second is a real problem and
+    // reporting it as "no GPU here" files an engine bug as a property of the
+    // hardware. The distinction is `RenderError::NoAdapter`, and matching on it
+    // needs the type. `examples/pong/capture.rs` is the worked case.
     pub use jidousha_render_core::{
         BackendTextureId, Batch, Comparison, DrawnQuad, FONT_TEXTURE, FramePlan, FrameRecord,
-        FrameRecorder, NullBackend, PhysicalSize, QuadVertex, RawImage, RenderBackend,
+        FrameRecorder, NullBackend, PhysicalSize, QuadVertex, RawImage, RenderBackend, RenderError,
         TextureTable, Tolerance, compare, create_builtin_textures, diff_image, encode_png,
         plan_frame, upload_ready_textures,
     };

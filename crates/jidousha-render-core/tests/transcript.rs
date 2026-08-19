@@ -6,11 +6,14 @@
 //! including wasm CI.
 
 use jidousha_assets::{Assets, MemorySource, TextureHandle};
+
 use jidousha_core::math::{Radians, Vec2};
-use jidousha_core::{Color, Draw, GameConfig, Transform, headless};
+use jidousha_core::{
+    Color, Depth, Draw, DrawCtx, GameConfig, PhysicalSize, Rect, Transform, headless,
+};
 use jidousha_render_core::{
-    BackendTextureId, Camera, FrameRecord, NullBackend, RenderBackend, Sprite, TextureTable,
-    draw_sprites, plan_frame,
+    BackendTextureId, Camera, FONT_TEXTURE, FrameRecord, FrameRecorder, NullBackend, RenderBackend,
+    Sprite, Submit, TextStyle, TextureTable, create_builtin_textures, draw_sprites, plan_frame,
 };
 
 const WHITE: BackendTextureId = BackendTextureId(0);
@@ -401,4 +404,63 @@ fn each_frame_starts_empty() {
 
     sim.world_mut().despawn(entity);
     assert_eq!(sim.draw().quads().len(), 0);
+}
+
+/// A frame a recorder kept can be handed straight to a second backend, which is
+/// what lets a `--verify` run capture a picture without playing the game twice.
+///
+/// A `FramePlan` names textures by `BackendTextureId` — whichever backend
+/// created them, counting upwards — so on its face a plan is only meaningful to
+/// the backend that was there when it was made. For a game that loads no assets
+/// it is meaningful to any of them, and this is why: both counters start empty,
+/// and both are filled by `create_builtin_textures`, which creates white, then
+/// the placeholder, then the font atlas, in that fixed order. Nothing else is
+/// ever created, so nothing shifts the numbering.
+///
+/// Asserted rather than left as an argument, because it is an argument a
+/// capture path is entitled to rely on and nothing else would notice it
+/// breaking: a plan replayed against a shifted table draws the wrong texels,
+/// and every transcript assertion above goes on passing while it does
+/// (renderer.md §9).
+#[test]
+fn a_recorded_plan_names_the_texture_ids_any_fresh_backend_would_assign() {
+    fn draw_a_shape_and_a_word(ctx: &mut DrawCtx) {
+        ctx.rect(
+            Rect::from_center_size(Vec2::ZERO, Vec2::splat(2.0)),
+            Color::WHITE,
+            Depth::default(),
+        );
+        ctx.text(Vec2::new(-4.0, -3.0), "score 12", TextStyle::default());
+    }
+
+    // A shape and a string: between them they name both textures a game of no
+    // assets can name — the white texel every colour goes through, and the atlas.
+    let mut sim = headless(GameConfig::default(), |app| {
+        app.add_system(Draw, draw_a_shape_and_a_word);
+    });
+    sim.world_mut().insert_resource(Camera::default());
+    let mut recorder = FrameRecorder::new(PhysicalSize::new(1280, 720));
+    sim.tick();
+    let frame = recorder.draw(&mut sim);
+    assert!(frame.plan.quad_count() > 1, "the scene drew something");
+
+    // The backend a capture path would build: brand new, and given the
+    // built-ins the same way the recorder was.
+    let mut fresh = NullBackend::new();
+    let table = create_builtin_textures(&mut fresh);
+    let font = table.resolve(FONT_TEXTURE);
+    assert_eq!(
+        font,
+        recorder.font_texture(),
+        "the font atlas is the last built-in, so two dense sequences from empty backends \
+         agreeing about it agree about all three"
+    );
+    for batch in &frame.plan.batches {
+        assert!(
+            batch.texture.0 <= font.0,
+            "the recorded frame names {:?}, which comes after the last built-in ({font:?}) and \
+             so exists on no backend that has only just been built",
+            batch.texture
+        );
+    }
 }

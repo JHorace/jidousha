@@ -418,6 +418,10 @@ pub(crate) fn run() -> ExitCode {
     check_the_swept_test(&mut checks);
     check_the_screens_never_reached(&mut checks, &mut recorder);
     let (idle_loss, idle_ticks) = check_an_idle_player_loses(&mut checks);
+    // The frame the match ended on, drawn for real. Before the verdict, so a
+    // capture that went wrong is one of the problems reported rather than a
+    // line of prose after a pass.
+    let captured = crate::capture::capture_a_frame(&mut checks, &frame.plan, font);
 
     let verdict = checks.verdict();
     let decided = session.decided_at.unwrap_or(TICKS);
@@ -455,6 +459,7 @@ pub(crate) fn run() -> ExitCode {
         frame.quad_count(),
         recorder.frames().len()
     );
+    println!("  capture: {captured}");
     // `FrameRecord::transcript`, not `FrameRecorder::transcript`. The recorder's
     // renders *every* frame it holds, which for this run is 1263 of them and
     // 121,465 lines. The record's is the one frame, which is what the evidence

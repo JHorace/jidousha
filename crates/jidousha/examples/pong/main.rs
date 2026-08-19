@@ -18,6 +18,7 @@ use std::process::ExitCode;
 
 use jidousha::prelude::*;
 
+mod capture;
 mod checks;
 mod controller;
 mod draw;

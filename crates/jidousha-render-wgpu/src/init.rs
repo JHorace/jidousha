@@ -206,8 +206,14 @@ impl Pending {
                     let Some(result) = poll_once(future.as_mut()) else {
                         return Ok(None);
                     };
-                    let adapter = result.map_err(|error| RenderError::Unsupported {
-                        detail: format!("no graphics adapter: {error}"),
+                    // `NoAdapter`, not `Unsupported`: there being no GPU on
+                    // this machine is not the backend declining a frame, and
+                    // the two want opposite advice (e0-findings.md F-067).
+                    let adapter = result.map_err(|error| RenderError::NoAdapter {
+                        // Just what wgpu said. The "no graphics adapter"
+                        // prefix this used to carry was doing the variant's
+                        // job back when the variant said something else.
+                        detail: error.to_string(),
                     })?;
                     let future = adapter.request_device(&wgpu::DeviceDescriptor {
                         label: Some("jidousha device"),

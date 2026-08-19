@@ -151,7 +151,9 @@ offered, and its `--verify` transcript is the artifact for everything else.
 
 Fifteen findings from run 1 (F-001–F-015), fourteen from run 2 (F-016–F-029),
 nine from run 3 (F-030–F-038), sixteen from run 4 (F-039–F-054, triaged together
-in §4a) and eleven from run 5 (F-055–F-065, §4b). F-001 is the parent of most of run 1's
+in §4a) and eleven from run 5 (F-055–F-065, §4b). F-066 and F-067 come from **no
+run at all** — a maintainer session between runs 5 and 6, closing the last item
+F-054 named — and §2's counter does not move for them; see the note above them. F-001 is the parent of most of run 1's
 `docs` set: six of them
 are one bug — the Reference has no signatures — observed from six different
 angles. They are kept separate anyway, because each one names a distinct thing a
@@ -3034,6 +3036,178 @@ were cleared for run 6. `b094da6` is the precedent for recording it. **Run 5 is 
 valid run**, and the fifth consecutive one whose game a person had to look at
 because the harness could not.
 
+### Findings from outside a run (F-066–)
+
+**These do not count towards §2's two clean runs, in either direction.** They were
+found by a maintainer session writing `pong`'s capture path — the thing F-054 said
+was "the first thing to do after that lands" — and a maintainer reading the
+document is not the measurement E0 is taking. They are numbered and filed here
+anyway because they are exactly the shape the register exists for, and because a
+run *will* hit both: F-066 is a sentence run 5 already read and correctly declined
+to act on, and F-067 is the message any run without a GPU gets.
+
+### F-066 — `tools/verify` captures no picture on its own, and the only sentence about it said it did
+
+Class: docs · Run: none — found while writing `pong`'s capture path · Fixed in:
+this commit
+
+**What the document said**, as the last sentence of *Testing your game*, and the
+only sentence anywhere on the subject:
+
+> `tools/verify <example>` is then the whole loop as one command: it runs that
+> mode under a timeout, parses the verdict, writes a report, and **captures a PNG
+> if the machine has a GPU**.
+
+It does not. `tools/verify` has no game, no renderer and no backend; it runs the
+example, and its whole involvement with pictures is `parse_artifact`, which reads
+one line of the example's output and lifts the path out of it. The PNG is captured
+by the *example*, in code the example's author writes. `prototype_kit` has such a
+path; `pong` did not, so `tools/verify pong` captured nothing on a machine that
+could render — silently, and with a green verdict, which is F-054's second
+consequence stated as a fact about the document rather than about the runner.
+
+**This is F-055's shape** — a description that is false rather than absent — and
+it is worse than F-055 in one way: a reader who acts on it does nothing, and
+nothing is indistinguishable from having done the right thing. E0 run 5 read this
+sentence and declined to write a capture path, on the correct ground that on its
+machine the path could only ever print "skipped". The triage recorded that as
+right. What nobody noticed is that had run 5 been on a machine *with* a driver,
+the same sentence would have told it there was nothing to write.
+
+**The engine had every piece and never joined them up.** The `jidousha::testing`
+reference block already carries `FrameRecord { pub plan: FramePlan }`,
+`RenderBackend::render(&plan)` and `capture()`, `WgpuBackend::offscreen`,
+`create_builtin_textures`, `RawImage` and `encode_png` — every signature the path
+needs, each with an entry of its own. The missing thing was the sentence that
+connects them: **the plan on the frame you already recorded is replayable on a
+second backend.** That is a fifteen-line capture path with no second play-through,
+and it is now stated — in renderer.md §9 for maintainers, and in *Testing your
+game* for authors, with the three silent traps (aspect, the `capture:` wording,
+no-GPU-is-not-a-failure) and the rule that you have to open the file and mutate the
+game.
+
+**One wrinkle worth recording, because the next person to document this will hit
+it.** `docs/api/` may not name the backend seam (public-api.md §4 CONTRACT), and
+`gen-api-doc` enforces it on the generated text. The Reference's
+`### Testing (jidousha::testing)` block is exempt — a maintainer carved it out
+because "a golden image has to be drawn by something" — but the *Testing your
+game* prose is not, and a capture snippet cannot be written without naming
+`WgpuBackend` (which contains `wgpu`) and importing `RenderBackend` (whose methods
+`render` and `capture` are trait methods, not inherent ones). So the prose states
+the recipe in words, points at the reference block for the signatures and at
+`examples/pong/capture.rs` for the code, and does not carry a snippet. **Not
+proposed here:** widening the exemption to the whole testing section. It is a
+documented CONTRACT and the carve-out is deliberate; if a later run reports that
+words-plus-a-pointer was not enough, that report is the argument for changing it,
+and this paragraph is the place to start.
+
+**The budget is now the constraint on this document.** The addition costs about
+900 tokens and `docs/api/jidousha-api.md` sits at ~23,900 of its 25,000-token
+budget (public-api.md §4). The next substantial section will not fit, and the
+budget is deliberately a curation conversation rather than a number to raise.
+
+### F-067 — "no graphics adapter" is reported as `Unsupported`, so the engine diagnoses the wrong thing
+
+Class: engine · Run: none — found by executing the skip path on purpose ·
+**Fixed**: `RenderError::NoAdapter`, in the commit after the one that filed this
+
+**What happens.** On a machine with no adapter, `WgpuBackend::poll` reports
+`RenderError::Unsupported { detail: "no graphics adapter: ..." }`
+(`jidousha-render-wgpu/src/init.rs:210`). `Unsupported`'s `Display` is the
+engine's four-part message with a *fixed* cause and fix:
+
+```
+[jidousha] the backend cannot render this frame
+  no graphics adapter: No suitable graphics adapter found; ... vulkan
+  drivers/libraries could not be loaded, ...
+  likely cause: the frame asked for something outside the WebGL2 envelope
+  fix: check the texture sizes and the batch count against the envelope
+```
+
+The detail is right and the diagnosis under it is wrong twice over. The frame
+asked for nothing — there is no device to ask. And the fix sends the reader to
+count texture sizes against the WebGL2 envelope (renderer.md §8), a subsystem with
+no bearing on the problem, when the actual fix is `apt-get install
+mesa-vulkan-drivers` — the very line `.claude/hooks/session-start.sh` and
+`ci.yml` both run, and the one F-054 spent five runs escalating.
+
+**Who reads it.** Every headless machine without the hook, which per F-054 is the
+default condition of an E0 container and of any developer laptop that has not run
+the hook. It is the single most common render failure this project produces, and
+it is the one whose message is furthest from the truth. Practices §5.5 — errors
+are documentation delivered at exactly the right moment — is the rule it breaks,
+and it breaks it for the reader least able to check.
+
+**Confirmed by execution, not by reading**: hiding the ICD with
+`VK_DRIVER_FILES=/nonexistent WGPU_BACKEND=vulkan` and running
+`tools/verify pong` prints exactly the message above, inside an otherwise green
+run.
+
+**Two ways to fix it**, recorded before either was taken: a fourth variant with
+its own cause and fix, which is the honest modelling — "there is no device" is not
+"the plan asked for too much" — or `Unsupported` carrying its cause and fix
+per-site instead of per-variant, which is a smaller change and a weaker taxonomy.
+The variant was recommended and, on the maintainer's instruction, taken.
+
+**Fixed as `RenderError::NoAdapter { detail }`.** The message now names the
+driver, names `mesa-vulkan-drivers` as the package that supplies a software
+rasterizer, and says a run asserting on the draw transcript needs no adapter at
+all and should report this as a skip (renderer.md §9). Confirmed by execution
+rather than by reading: hiding the ICD and running `pong` prints the new message
+inside a still-green run. Two tests, both mutation-checked by giving `NoAdapter`
+its old text back and watching them fail —
+`a_missing_adapter_is_not_reported_as_a_frame_the_backend_cannot_draw` pins the
+message, and `no_two_render_errors_offer_the_same_diagnosis` stops the next
+variant being added carrying a copy of its neighbour's advice, which is precisely
+the mistake this was.
+
+**The taxonomy asked for this and R1 did not deliver it**, which is the part worth
+keeping. renderer.md §10's design bullet reads "No adapter/device at startup →
+`Result` … (likely cause: missing drivers/headless env; fix: doctor hints)", and
+`RenderError`'s own doc comment has always opened "Environmental: **no adapter**,
+a lost device, a surface that vanished". The case was designed, described, and
+then implemented into the variant next to it. Nothing caught the gap because a
+wrong-but-well-formed four-part message passes every check the project has — the
+same shape as F-055, one layer down.
+
+**Two things this does *not* fix.**
+
+- **`Unsupported` is still a grab-bag with a fixed diagnosis.** Its cause and fix
+  name the WebGL2 envelope, which is right for exactly one of its remaining
+  members (a device request that could not meet the limits) and wrong for the
+  other six — the null backend having no pixels, a zero-sized capture target, a
+  windowed backend refusing to read its surface back, `read_back` on the web, a
+  surface taken twice, an adapter that cannot present. **This is the larger half
+  of the finding and it is open.** It needs either more variants or a cause and
+  fix carried per site, and that is a wider decision than the one taken here.
+  Recorded in renderer.md §10 as well, so a reader who sees one message fixed does
+  not conclude the taxonomy is sound.
+- ~~**A `--verify` mode still cannot tell a missing adapter from a real
+  fault.**~~ **Closed, on the maintainer's instruction, in the same series.**
+  `RenderError` was *named* by every `RenderBackend` signature in the generated
+  reference and defined nowhere in it — F-017's shape a third time — so an
+  example could print the message and not match on it, and both capture paths
+  treated every handshake error as "no GPU on this machine". It is now exported by
+  `jidousha::testing` with a reference entry of its own, and `pong`'s capture path
+  skips on `NoAdapter` and *fails* on anything else. **`prototype_kit`'s still
+  conflates them**, along with the four-line message spill below; both are the
+  same five-line change and are left rather than editing a verified example in
+  passing.
+
+  Worth stating why the export was the right call rather than completeness for
+  its own sake: a naming without a definition is not merely untidy, it decides
+  what a check can express. The engine had drawn the distinction one commit
+  earlier and the only surface that needed it could not see it, so the fix was
+  half-delivered until the type came with it.
+
+**Both examples' capture paths quote this message**, which is how it was found: it
+arrives inside a one-line `capture:` summary. `pong`'s flattens it onto one line
+so the `--verify` summary block keeps one fact per line; `prototype_kit`'s does
+not, and spills four lines of somebody else's paragraph into `tools/verify`'s PASS
+output. Worth doing to `prototype_kit` too, and left alone rather than editing a
+verified example in passing.
+
+
 ## 5. Notes on the run's procedure
 
 Two things about run 1 that are not findings but would confuse a later reader.
@@ -3270,7 +3444,13 @@ Run 5 is the third uncontaminated measurement, and it read no other run's log.
   the golden tier runs. Three things to watch, and they are new questions rather
   than the old one. Does run 6 *notice* it can capture, from `tools/verify`'s output
   alone? Does it ship the capture path for its own `pong`, which no run has been
-  able to write and execute? And does being able to look change what it finds —
+  able to write and execute? **What that second question measures changed after
+  this was written, on purpose:** F-066 found that the one sentence on the subject
+  said `tools/verify` captured the picture itself, which is false and is what run 5
+  read; *Testing your game* now says the picture is the example's to take, and how.
+  So run 6 is being asked whether corrected instructions are enough, not whether it
+  can invent the path from a reference block. And does being able to look change
+  what it finds —
   five runs of findings are the findings of authors reading numbers, and a run that
   can see a still frame may report a different kind of friction entirely. **The
   window is still absent**, so "playable" remains a human's judgement.
