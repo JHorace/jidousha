@@ -439,10 +439,11 @@ let image = gpu.capture().expect("an offscreen renderer reads its own target");
 std::fs::write("target/verify/mygame.png", encode_png(&image))?;
 ```
 
-`examples/pong/capture.rs` is that with its reasoning written down, and
-`examples/prototype_kit/capture.rs` is the other shape — a game whose own `play`
-is handed the renderer, so it can run the session twice and check that both
-renderers agreed about the world.
+`examples/prototype_kit/capture.rs` is that with its reasoning written down. It
+also shows the other shape available to you: because its own `play` is handed the
+renderer, it can run the whole session twice and check that the world did the
+same thing both times. Replaying the recorded plan is the cheaper road and the
+one that works whatever shape your game is.
 
 That "the ids mean the same thing" step is the load-bearing one, and it holds
 because both counters start empty and both are filled by the same call in the same

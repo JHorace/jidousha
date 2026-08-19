@@ -9,7 +9,7 @@
 //! rest of the verification stands, exactly as the golden tests do
 //! (renderer.md §9).
 
-use jidousha::testing::{PhysicalSize, RenderBackend, WgpuBackend, encode_png};
+use jidousha::testing::{PhysicalSize, RenderBackend, RenderError, WgpuBackend, encode_png};
 use std::path::{Path, PathBuf};
 
 use crate::checks::{Checks, fail};
@@ -30,6 +30,18 @@ const CAPTURE_SIZE: PhysicalSize = PhysicalSize::new(480, 270);
 /// loop, so it does the asking itself.
 const HANDSHAKE_POLLS: usize = 10_000;
 
+/// An engine message flattened onto one line.
+///
+/// `RenderError`'s `Display` is the four-part shape, which is right when it is
+/// the only thing on the screen and wrong inside a `--verify` summary: the
+/// convention there is a verdict line and then one indented line per fact
+/// (`tools/verify` prints exactly that block), and a four-line value turns the
+/// summary into three lines of somebody else's paragraph. Every word is kept —
+/// a machine with no GPU is precisely where the detail is worth having.
+fn one_line(message: &str) -> String {
+    message.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 /// Render the same session on a GPU and write the last frame out as a PNG.
 ///
 /// A second run of the same scripted game, through the wgpu backend instead of
@@ -47,7 +59,32 @@ pub(super) fn capture_a_frame(checks: &mut Checks, expected_track: &[f32]) -> St
         match gpu.poll() {
             Ok(()) if gpu.is_ready() => break,
             Ok(()) => {}
-            Err(error) => return format!("skipped, no GPU on this machine ({error})"),
+            // Two different things, and only the first is a fact about the
+            // machine. `NoAdapter` means there is no GPU here, which every
+            // headless runner reports and which the transcript tier does not
+            // need — the run stays green and says it skipped (renderer.md §9).
+            // Anything else is a fault, and calling one of those "no GPU on
+            // this machine" files an engine bug as a property of the hardware.
+            Err(error @ RenderError::NoAdapter { .. }) => {
+                return format!(
+                    "skipped, no GPU on this machine ({})",
+                    one_line(&error.to_string())
+                );
+            }
+            Err(error) => {
+                checks.require(
+                    false,
+                    "the GPU handshake failed, and not because the machine has no GPU",
+                    format!(
+                        "an adapter was found and the handshake still did not finish: {}",
+                        one_line(&error.to_string())
+                    ),
+                );
+                return format!(
+                    "skipped, the GPU handshake failed ({})",
+                    one_line(&error.to_string())
+                );
+            }
         }
     }
     if !gpu.is_ready() {

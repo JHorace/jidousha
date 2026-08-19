@@ -1251,6 +1251,57 @@ def shown(path: Path) -> str:
         return str(path)
 
 
+# `examples/pong/capture.rs`, `examples/homing.rs`, `examples/prototype_kit` —
+# a pointer at a worked example, which is half of what this document promises.
+EXAMPLE_RE = re.compile(r"examples/([A-Za-z0-9_][A-Za-z0-9_./-]*)")
+
+# The example a run *writes*, deleted before the next run starts (e0-prompt.md,
+# before-the-run step 2). Named here because "does the file exist" cannot see
+# it: `pong/` is on disk for most of this repository's life and absent at
+# exactly the moment a run would follow a pointer to it, so a check that only
+# stats the path passes on the commit that introduces the bug and fails nowhere.
+# That is not hypothetical — it is what happened, and this constant is the half
+# of the check that catches it.
+EPHEMERAL_EXAMPLES = ("pong",)
+
+
+def dangling_examples(text: str, repo: Path) -> "list[str]":
+    """Pointers at worked examples that name nothing on disk.
+
+    `docs/api/` is only half a teaching surface: the other half is
+    `examples/`, and a document is *entitled* to say "the whole path is in
+    `examples/pong/capture.rs`" instead of repeating it. That entitlement is
+    what makes a stale pointer expensive — the reader who follows it is the
+    reader who most needed the example, and what they get is nothing.
+
+    The failure this exists for is not a typo. `e0-prompt.md`'s
+    before-the-run step 2 **deletes `crates/jidousha/examples/pong/`**, because
+    a previous run's finished game sitting on the allowed list is a worked
+    solution the next author may read without breaking a rule. So every
+    reference to `examples/pong/…` is correct while it is written and dangling
+    by the time the run that needs it starts, and nothing said so: this check
+    is the gate that would have caught it, and it caught exactly that pointer
+    on the commit that added it.
+
+    The same shape as `tools/check-assets`, one document up: an asset path that
+    names no file, and a documentation path that names no example, fail for the
+    same reason and are worth the same thirty lines.
+    """
+    root = repo / "crates" / "jidousha" / "examples"
+    seen, missing = set(), []
+    for match in EXAMPLE_RE.finditer(text):
+        # A trailing `/` or `.` is sentence punctuation, not part of the path.
+        reference = match.group(1).rstrip("/.")
+        if not reference or reference in seen:
+            continue
+        seen.add(reference)
+        if reference.split("/")[0] in EPHEMERAL_EXAMPLES:
+            missing.append(f"examples/{reference} (deleted before the next run)")
+        elif not (root / reference).exists():
+            missing.append(f"examples/{reference}")
+    return missing
+
+
 def problem(what: str, specifics: str, cause: str, fix: str) -> str:
     return f"[jidousha] {what}\n  {specifics}\n  likely cause: {cause}\n  fix: {fix}"
 
@@ -1293,6 +1344,19 @@ def main(argv: "list[str]") -> int:
                     "the public surface grew, or a prose section did",
                     "curate that document down rather than raising the budget "
                     "(public-api.md §4, ADR-0025) — the budget is the point",
+                )
+            )
+        dangling = dangling_examples(document.text, REPO_ROOT)
+        if dangling:
+            failures.append(
+                problem(
+                    f"{name} points at a worked example that is not there",
+                    f"missing: {', '.join(dangling)}",
+                    "the example was renamed or deleted — note that a run's `pong/` is "
+                    "deleted before the next run starts (e0-prompt.md), so a pointer at it "
+                    "is dangling by the time it is read",
+                    "point at an example that outlives a run, or drop the pointer and say "
+                    "the thing in the document",
                 )
             )
         leaked = forbidden_words(document.text, document.allowed)

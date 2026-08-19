@@ -523,6 +523,38 @@ class GenApiDocTest(unittest.TestCase):
             gen_api_doc.forbidden_words(text), list(gen_api_doc.TESTING_VOCABULARY)
         )
 
+    def test_a_pointer_at_a_worked_example_that_is_not_there_is_refused(self):
+        root = Path(__file__).resolve().parents[2]
+        self.assertEqual(
+            gen_api_doc.dangling_examples("the whole loop is `examples/no_such.rs`", root),
+            ["examples/no_such.rs"],
+        )
+        self.assertEqual(
+            gen_api_doc.dangling_examples("see `examples/homing.rs` and `examples/`.", root),
+            [],
+        )
+
+    def test_a_pointer_at_the_example_a_run_writes_is_refused_while_it_still_exists(self):
+        # The half of the check that "does the file exist" cannot do, and the
+        # reason the check exists at all. `e0-prompt.md`'s before-the-run step 2
+        # deletes `crates/jidousha/examples/pong/`, so a pointer at it is
+        # correct on the day it is written and dangling on the day a run would
+        # follow it. A stat-only check passes on the commit that introduces the
+        # bug and fails nowhere afterwards — which is exactly what happened.
+        root = Path(__file__).resolve().parents[2]
+        self.assertTrue((root / "crates/jidousha/examples/pong").exists(), "on disk today")
+        self.assertEqual(
+            gen_api_doc.dangling_examples("written down in `examples/pong/capture.rs`", root),
+            ["examples/pong/capture.rs (deleted before the next run)"],
+        )
+
+    def test_the_committed_documents_point_only_at_examples_that_outlive_a_run(self):
+        root = Path(__file__).resolve().parents[2]
+        for name in ("jidousha-api.md", "jidousha-testing.md"):
+            with self.subTest(document=name):
+                text = (root / "docs/api" / name).read_text(encoding="utf-8")
+                self.assertEqual(gen_api_doc.dangling_examples(text, root), [])
+
     def test_each_document_is_counted_against_its_own_budget(self):
         # The budget is the point (public-api.md §4): everything in a document
         # has to be relevant to what its reader is doing. Two readers, two

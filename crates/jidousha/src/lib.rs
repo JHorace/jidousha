@@ -176,7 +176,7 @@ pub mod testing {
     // runner and the run stays green, the second is a real problem and
     // reporting it as "no GPU here" files an engine bug as a property of the
     // hardware. The distinction is `RenderError::NoAdapter`, and matching on it
-    // needs the type. `examples/pong/capture.rs` is the worked case.
+    // needs the type. `examples/prototype_kit/capture.rs` is the worked case.
     pub use jidousha_render_core::{
         BackendTextureId, Batch, Comparison, DrawnQuad, FONT_TEXTURE, FramePlan, FrameRecord,
         FrameRecorder, NullBackend, PhysicalSize, QuadVertex, RawImage, RenderBackend, RenderError,
