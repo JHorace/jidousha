@@ -468,6 +468,17 @@ makes that a `const` assertion, by cross-multiplication, so it fails at compile
 time). And **no adapter is still not a failure** — a skipped capture says it
 skipped and the run stays green.
 
+"No adapter" is now a thing a check can *ask*, rather than a guess it has to make
+from the fact that something went wrong: `RenderError::NoAdapter` is its own
+variant (§10, e0-findings.md F-067) and `RenderError` is exported by
+`jidousha::testing`, so a capture path matches on it. That matters more than it
+looks. Every handshake error used to arrive as one kind, so both capture paths
+reported a device that arrived and died — or a surface that could not be made —
+as "no GPU on this machine", which files an engine bug as a property of the
+hardware and goes on doing it on every machine. `pong`'s capture path now skips
+on `NoAdapter` and fails on anything else; `prototype_kit`'s still conflates them
+and should be brought over.
+
 **Closed (web harness):** `tools/serve-web <example>` builds an example for
 wasm, runs `wasm-bindgen`, writes the page from `tools/web/index.html`, and
 serves it. `--check` additionally drives a headless Chromium at it, screenshots

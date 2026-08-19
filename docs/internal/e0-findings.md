@@ -3182,15 +3182,23 @@ same shape as F-055, one layer down.
   fix carried per site, and that is a wider decision than the one taken here.
   Recorded in renderer.md §10 as well, so a reader who sees one message fixed does
   not conclude the taxonomy is sound.
-- **A `--verify` mode still cannot tell a missing adapter from a real fault.**
-  `RenderError` is not exported by `jidousha::testing` — it is *named* by
-  `RenderBackend`'s signatures in the generated reference and defined nowhere in
-  it, which is F-017's shape — so an example can print the message but cannot
-  match on the variant. Both capture paths therefore treat every handshake error
-  as "no GPU on this machine", including a genuine one. The engine now draws the
-  distinction and the surface that needs it cannot see it; exporting `RenderError`
-  would close that, and is public-surface growth with a reference entry and an
-  example behind it rather than a message fix.
+- ~~**A `--verify` mode still cannot tell a missing adapter from a real
+  fault.**~~ **Closed, on the maintainer's instruction, in the same series.**
+  `RenderError` was *named* by every `RenderBackend` signature in the generated
+  reference and defined nowhere in it — F-017's shape a third time — so an
+  example could print the message and not match on it, and both capture paths
+  treated every handshake error as "no GPU on this machine". It is now exported by
+  `jidousha::testing` with a reference entry of its own, and `pong`'s capture path
+  skips on `NoAdapter` and *fails* on anything else. **`prototype_kit`'s still
+  conflates them**, along with the four-line message spill below; both are the
+  same five-line change and are left rather than editing a verified example in
+  passing.
+
+  Worth stating why the export was the right call rather than completeness for
+  its own sake: a naming without a definition is not merely untidy, it decides
+  what a check can express. The engine had drawn the distinction one commit
+  earlier and the only surface that needed it could not see it, so the fix was
+  half-delivered until the type came with it.
 
 **Both examples' capture paths quote this message**, which is how it was found: it
 arrives inside a one-line `capture:` summary. `pong`'s flattens it onto one line

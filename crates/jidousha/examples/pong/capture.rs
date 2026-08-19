@@ -24,8 +24,8 @@
 use std::path::{Path, PathBuf};
 
 use jidousha::testing::{
-    BackendTextureId, FONT_TEXTURE, FramePlan, PhysicalSize, RenderBackend, WgpuBackend,
-    create_builtin_textures, encode_png,
+    BackendTextureId, FONT_TEXTURE, FramePlan, PhysicalSize, RenderBackend, RenderError,
+    WgpuBackend, create_builtin_textures, encode_png,
 };
 
 use crate::checks::{Checks, VIEWPORT};
@@ -111,9 +111,31 @@ pub(crate) fn capture_a_frame(
         match gpu.poll() {
             Ok(()) if gpu.is_ready() => break,
             Ok(()) => {}
-            Err(error) => {
+            // Two different things, and only the first is a fact about the
+            // machine. `NoAdapter` means there is no GPU here, which every
+            // headless runner reports and which the transcript tier does not
+            // need — the run stays green and says it skipped (renderer.md §9).
+            // Anything else is a fault: a device that arrived and died, a
+            // surface that could not be made. Reporting one of those as "no GPU
+            // on this machine" would file an engine bug as a property of the
+            // hardware, and it would go on doing so on every machine.
+            Err(error @ RenderError::NoAdapter { .. }) => {
                 return format!(
                     "skipped, no GPU on this machine ({})",
+                    one_line(&error.to_string())
+                );
+            }
+            Err(error) => {
+                checks.require(
+                    false,
+                    "the GPU handshake failed, and not because the machine has no GPU",
+                    format!(
+                        "an adapter was found and the handshake still did not finish: {}",
+                        one_line(&error.to_string())
+                    ),
+                );
+                return format!(
+                    "skipped, the GPU handshake failed ({})",
                     one_line(&error.to_string())
                 );
             }

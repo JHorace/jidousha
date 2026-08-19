@@ -435,10 +435,14 @@ Three things are easy to get wrong here, and silent when you do:
   line whose text starts with `capture:` and contains ` written to `, and puts
   what follows into the report. Word it differently and the run still passes while
   the report says no picture was taken.
-- **A machine with no GPU must still pass.** Every runner is headless and some
-  have no graphics stack at all. Return a string saying the capture was skipped,
-  and put it in the summary; do not fail the run, and do not skip in silence
-  either.
+- **A machine with no GPU must still pass, and a broken one must not.** Every
+  runner is headless and some have no graphics stack at all, so
+  `RenderError::NoAdapter` is a fact about the machine: say the capture was
+  skipped, put that in the summary, keep the run green — and do not skip in
+  silence either. Every *other* handshake error is a fault, and reporting one of
+  those as "no GPU here" files a real problem as a property of the hardware, on
+  every machine, for ever. Match on the variant; it is in the Testing reference
+  with the rest.
 
 **Then open the file and look at it.** A capture path that writes a PNG is worth
 nothing on its own; the question is whether it writes *your game's* PNG, and a
