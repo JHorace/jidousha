@@ -842,11 +842,16 @@ pub(crate) fn run() -> ExitCode {
     // right place, and every one of these numbers is a layout constant the
     // game states once.
     let font_quads = glyphs(&last, font);
-    let want_score = shown.left.to_string().len() + shown.right.to_string().len();
+    // Characters, not bytes: `ctx.text` submits one quad per character, and a
+    // stray multi-byte glyph would make `len()` and the count disagree — which
+    // is exactly the case the printable-ASCII check further down exists for, so
+    // the two must not contradict each other about how many quads to expect.
+    let want_score =
+        shown.left.to_string().chars().count() + shown.right.to_string().chars().count();
     let in_score = glyphs_in_band(&font_quads, SCORE_TOP, SCORE_SIZE);
     let in_hint = glyphs_in_band(&font_quads, HINT_TOP, HINT_SIZE);
     checks.require(
-        in_score == want_score && in_hint == HINT.len(),
+        in_score == want_score && in_hint == HINT.chars().count(),
         "the score or the hint is not in the band the layout puts it in",
         format!(
             "{in_score} glyphs in the score band at y {SCORE_TOP:.2}..{:.2} (want {want_score} \
@@ -856,7 +861,7 @@ pub(crate) fn run() -> ExitCode {
             shown.left,
             shown.right,
             HINT_TOP + HINT_SIZE,
-            HINT.len(),
+            HINT.chars().count(),
             font_quads.len(),
         ),
     );
@@ -1049,7 +1054,11 @@ pub(crate) fn run() -> ExitCode {
             ),
         );
         let banner_glyphs = glyphs(&frame, font).len();
-        let want = crate::BANNER_WON.len().max(crate::BANNER_LOST.len()) + crate::BANNER_SUB.len();
+        let want = crate::BANNER_WON
+            .chars()
+            .count()
+            .max(crate::BANNER_LOST.chars().count())
+            + crate::BANNER_SUB.chars().count();
         checks.require(
             banner_glyphs > font_quads.len(),
             "a banner was staged and nothing extra was drawn",

@@ -266,6 +266,46 @@ was running clippy as I went, as the document says to. Curiously the identical
 shape in `crossing()` — `at < reach.0 || at > reach.1` — is not flagged, because
 the bounds are tuple fields rather than a symmetric pair.
 
+### 4.6 The mutation round: 19 of 23, then 23 of 23
+
+The testing document says to break the game on purpose and see whether the run
+notices, and that the answers are not guessable. They were not. I wrote a
+harness (a scratch script, not in the repository) that applies one
+search-and-replace, rebuilds, runs `--verify`, and reverts — with a
+pattern that matches anything other than exactly once treated as a harness
+error, and a failed build told apart from a failed check, both of which the
+document warns about and both of which I would have got wrong.
+
+First round: **19 caught, 4 missed.** The four are the interesting part, and no
+two of them wanted the same kind of fix.
+
+| what I broke | why the run did not notice | what fixed it |
+|---|---|---|
+| deleted the sweep's `already past the plane` guard | it is **dead code**: a ball past the plane and still travelling that way puts `(face - from.x)` and `travel` on opposite signs, so the `0.0..=1.0` test had already rejected it | deleted the guard, and said at the site that the range test is what does that job. A branch nothing can enter is worse than an untested one, and only the mutation could tell me which I had |
+| moved the score from y −8.3 to y −3.0, into the middle of the play | my band check reads `SCORE_TOP`, so **the check moved with the constant** — precisely the `assert_eq!(what_was_drawn, the_constant_that_drew_it)` trap the document names, which I had already guarded the *clear colour* against and not thought to apply to a layout | a paired requirement that names no constant: the score sits in the top third of the court, and one number either side of the centre line, evenly set |
+| deleted the paddle's clamp to the court | **no player ever aims past it** — the controller clamps its own targets and so does the opponent, so the clamp is a margin a correct game never reaches | a fourth run, this one an `InputScript` holding S and then W for far longer than the travel available, exactly as `prototype_kit` does. It kills a swapped W/S too, independently of the match |
+| swapped `drive_the_paddles` and `move_the_ball` in `register` | the two orders differ by **one tick of a paddle's travel**, which is the failure the API document predicts word for word: "a ball that passes through a paddle closing on it… survives every assertion that only asks where things ended up" | `HeadlessSim::schedule_debug()`, which returns the phases and their systems in run order as a string. It is the only instrument in the whole surface that can see this, and I had not used it before this mutation |
+
+Second round after those four fixes: **23 of 23.**
+
+Two things I would not have found any other way:
+
+- **The em-dash mutation was caught by the wrong check.** I put a `\u{2014}` in
+  the hint expecting my printable-ASCII assertion to fire. It did — but the
+  *first* complaint was the glyph-band count, because I had written
+  `in_hint == HINT.len()` and `len()` is **bytes**. An em dash is three of them,
+  so the expectation was wrong for a reason unrelated to the fault. Pure ASCII
+  hides this completely. `ctx.text` submits one quad per *character*, so the
+  count has to be `chars().count()`, and now is.
+- **`schedule_debug` is the answer to a question I did not know I could ask.**
+  It is one line in the reference with no prose around it, and it is the only
+  way to assert the ordering that the entire swept-collision argument in
+  Concepts depends on. The API document spends four paragraphs establishing
+  that the paddle has already moved this tick and that the game must pick an
+  order and say so — and does not mention that there is a call which lets a
+  check *hold the game to* the order it picked. Those two should be next to each
+  other.
+
 ---
 
 ## 5. Things I wanted to look up in the engine's source, and what for
