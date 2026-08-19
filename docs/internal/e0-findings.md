@@ -3435,6 +3435,56 @@ points at F-069's `const fn`, because the two findings are the same five minutes
 of one run's life.
 
 
+### F-073 — Two ways to get a frame out of a headless game, and the worked example uses the other one
+
+Class: docs · Run: 6 · Fixed in: this commit · Settled by: **ADR-0026** (the
+divergence is kept and named at the top of the file)
+
+**What run 6 hit.** `jidousha-testing.md` prescribes `FrameRecorder::new(viewport)`
+then `recorder.draw(&mut sim)`. `examples/prototype_kit/verify.rs` — the file a
+run browsing `examples/` takes the `--verify` shape from — instead calls
+`sim.draw()`, builds its own `TextureTable`, calls `plan_frame` and
+`backend.render`, and reconstructs the font's backend id through a throwaway
+`NullBackend`. That is fifteen lines of ceremony against
+`jidousha-api.md`'s own opening convention, "One way to do everything".
+
+**Verified.** Both paths are real and both are public. `prototype_kit`'s exists
+because `play` takes a `&mut dyn RenderBackend` and the run puts the identical
+session through a `NullBackend` and a `WgpuBackend`, asserting the world came out
+the same — the only check in the repository that a session is backend-agnostic.
+`FrameRecorder` records into a null backend only, so it cannot buy that.
+
+**The run's own account is the useful part**, because it is not "the example is
+wrong":
+
+> `prototype_kit` explains *why* it keeps the long way […] That is honest and I
+> still lost time: the example is the thing you read to learn the shape, and the
+> shape it teaches has fifteen lines of ceremony that the document says a game
+> does not need.
+
+So the reasoning existed and was correct, and was two hundred lines below the
+code that raises the question, in the doc comment of a private helper — which a
+reader meets *after* copying the shape. That is the finding: a `DELIBERATE:` tag
+is a defense only where the surprise is, and the surprise was the file's whole
+structure.
+
+**Decision: keep it, name it. ADR-0026.** The two alternatives both cost more
+than they buy — using the recorder deletes the two-backend comparison, and
+splitting the example duplicates a whole game to say one thing twice.
+
+**Fix.**
+
+- `prototype_kit/verify.rs` opens with "One thing here is not the shape to copy":
+  the recorder's two calls stated positively first, then what this file does
+  instead, which lines are the difference, why they are here, and "read it for
+  the checks, not for how to get a frame".
+- *Testing your game* says the same from its side, in one paragraph, **naming no
+  file** — E0 games are deleted before the next run (`e0-prompt.md` step 2), so a
+  permanent document may not cite one, which is the same rule the existing
+  `DELIBERATE:` on `textures_font_id` was written for. ADR-0026 settles that one
+  too, so both tags now carry the ADR reference practices §1 requires.
+
+
 ## 5. Notes on the run's procedure
 
 Two things about run 1 that are not findings but would confuse a later reader.

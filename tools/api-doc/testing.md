@@ -149,6 +149,16 @@ taken out of it has to be `.clone()`d before the next `draw`.
 free to call wherever you like; reading it out once before the loop just keeps
 the assertions below it short.
 
+**Those two calls are the whole way in, and an example that does more is doing
+something else.** There is a longer road — draw the simulation yourself, build a
+texture table, plan the frame, hand it to a backend — and it exists because the
+engine's own examples use it to run one session through two different backends
+and check the world came out the same. That is a claim about the *engine*, and a
+game has no reason to make it. If you are reading an example that spends fifteen
+lines getting to a frame, read it for what it asserts, not for how it got there:
+`FrameRecorder::new` and `draw` are how a game gets there, and the example will
+say so at the top.
+
 The recorder keeps **every** frame, oldest first, with no way to forget them: a
 six-hundred-tick check holds six hundred frames. That is deliberate and it is
 affordable at prototype scale — the history is what a failing assertion reads

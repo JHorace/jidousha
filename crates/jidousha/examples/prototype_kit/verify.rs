@@ -8,6 +8,39 @@
 //! is only what a person would otherwise supply: the input comes from a script,
 //! and the art from a store with scripted arrival ticks, so the run is the same
 //! on every machine and on every day.
+//!
+//! # One thing here is not the shape to copy
+//!
+//! **A game gets its frames from `FrameRecorder`.** Two calls — `FrameRecorder::new`
+//! with the camera's viewport, then `recorder.draw(&mut sim)` once a tick, which
+//! hands back the `FrameRecord` every assertion reads. `recorder.font_texture()`
+//! answers "which texture is the font on", and `frame.plan` is what a capture
+//! path replays to get a PNG. That is the whole of it, and it is what the testing
+//! document prescribes.
+//!
+//! **This file does not do that**, and the fifteen lines it spends instead —
+//! `sim.draw()`, its own `TextureTable` from `create_builtin_textures`,
+//! `plan_frame`, `backend.render`, and a throwaway `NullBackend` in
+//! `textures_font_id` below to work out where the font landed — are **not** part
+//! of writing a `--verify` mode. They are here because this example is doing a
+//! second job that a game does not have: `play` takes a `&mut dyn RenderBackend`,
+//! so the identical session runs through a null backend *and* through a real GPU,
+//! and the run can assert that the world did the same thing both times. Driving
+//! the backend by hand is what buys that comparison, and `FrameRecorder` records
+//! into a null backend only.
+//!
+//! So: read this file for the *checks* — what to assert about a world and about
+//! what was drawn, and how to report a failure. Do not read it for how to get a
+//! frame. E0 run 6 read both and had to work out which half was advice.
+//!
+//! DELIBERATE: the divergence is kept rather than fixed, and it is named here at
+//! the top rather than only where it happens (see ADR-0026). Making this file use
+//! the recorder would delete the two-backend comparison, which is the one thing in
+//! the repository that checks a session is backend-agnostic; splitting it into two
+//! examples would duplicate a whole game to say one thing twice. What was wrong
+//! was that the explanation lived two hundred lines down, in the doc comment of a
+//! private helper, where a reader who had already copied the shape would meet it
+//! (e0-findings.md F-073).
 
 use crate::checks::{Checks, fail, greater, near, sizes_covering};
 use crate::{Paddle, config, register};
@@ -427,10 +460,10 @@ pub fn run() -> ExitCode {
 /// backend only. That is the whole reason the ceremony survives here: a golden
 /// image needs a GPU, and asserting on what was drawn does not.
 ///
-/// DELIBERATE: the shape above is written out rather than cited. It used to
-/// point at another example's file, which is a dependency an example has no
-/// business having — that file is free to be rewritten or deleted, and this
-/// comment would quietly start naming something that is not there.
+/// DELIBERATE: the shape above is written out rather than cited (see ADR-0026).
+/// It used to point at another example's file, which is a dependency an example
+/// has no business having — that file is free to be rewritten or deleted, and
+/// this comment would quietly start naming something that is not there.
 fn textures_font_id(plan: &FramePlan) -> Option<BackendTextureId> {
     let mut scratch = NullBackend::new();
     let table = create_builtin_textures(&mut scratch);
