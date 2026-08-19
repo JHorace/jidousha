@@ -4377,6 +4377,30 @@ F-054 opened.
 5–0, a capture written). Run 5's triage predicted this trap and run 6's recorded
 it as not having fired; §4d carries the correction.
 
+**And then the fix was wrong, which is worth recording because it was caught by
+rehearsing the next run rather than by review.** The first version made the
+missing registration a hard failure *before any phase ran*, printing "fix: add
+pong to WINDOWED_EXAMPLES and VERIFIABLE_EXAMPLES in tools/test". Rehearsing run
+8's state — the game in the tree, un-adopted, exactly as an author leaves it —
+showed two problems with that. It **instructs the game's author to edit the
+engine's tooling**, which their own prompt forbids in as many words; and it
+denies them every other phase, where the old failure at least ran the suite and
+broke on one example. It also cited `docs/internal/e0-prompt.md`, a path the run
+may not read.
+
+The second version inverts it: `tools/test` reads each example's source for the
+`--verify` flag — **both cargo layouts**, since the prompt offers a run either and
+the first version only understood directories — and treats anything unregistered
+as verifiable-and-windowed for that run, with a note addressed to both readers by
+name. The registration became bookkeeping, so nothing fails on it; the self-test
+now checks the other direction, that a registered name really takes the flag.
+Rehearsed again: `tools/test` passes in run 8's state and verifies the game.
+
+**The general lesson is the one this file keeps relearning.** A guard written for
+a maintainer is read by whoever trips it, and the person who trips this one is a
+game author who has been told that file is not theirs. Ask who reads a failure
+before writing what it says.
+
 ### F-095 — `prototype_kit`'s `--verify` was missing five of the checks the document tells a game to write
 
 Class: docs · Run: 7 (found in triage) · Fixed in: this commit · Also found by:

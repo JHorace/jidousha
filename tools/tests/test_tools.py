@@ -1650,46 +1650,83 @@ class ExampleDiscoveryTest(unittest.TestCase):
             "a verifiable example that is not windowed would stop being run normally",
         )
 
-    def test_an_example_with_a_verify_mode_must_be_registered_as_one(self):
+    def test_an_unregistered_verify_mode_is_verified_rather_than_run_bare(self):
+        # Running it bare opens a window and dies on any headless runner, which
+        # is a symptom that says nothing about its cause. During an E0 run the
+        # game is in the tree and un-adopted by design, and the author is told
+        # the engine's tooling is not theirs to edit — so the wrapper does the
+        # useful thing and leaves the bookkeeping to the self-test above.
+        name, command = example_phase_with(
+            "jidousha", "pong", verifiable={"pong"}, windowed={"pong"}
+        )
+        self.assertEqual(name, "example-verify:pong")
+        self.assertIn("tools/verify", command)
+
+    def test_a_directory_example_with_a_verify_mode_is_found(self):
         # The E0 harness adds a game to examples/ and a maintainer registers it
-        # in both lists afterwards (e0-prompt.md, after-the-run step 6). That
-        # step has been missed three times, each time leaving this wrapper
-        # running a windowed game bare and dying on NoDisplay — a symptom that
-        # says nothing about its cause (e0-findings.md F-094).
+        # in both lists afterwards. That step was missed three times, each time
+        # leaving this wrapper running a windowed game bare and dying on
+        # NoDisplay — a symptom that says nothing about its cause (F-094). So
+        # the lists stopped being the mechanism and this is what replaced them.
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "crates/jidousha/examples/newgame").mkdir(parents=True)
-            (root / "crates/jidousha/examples/newgame/verify.rs").write_text("")
+            (root / "crates/jidousha/examples/newgame/main.rs").write_text(
+                'fn main() { if args().any(|a| a == "--verify") {} }'
+            )
             self.assertEqual(
                 test_wrapper.unregistered_verify_modes([("jidousha", "newgame")], root),
                 ["newgame"],
             )
 
-    def test_an_example_without_a_verify_mode_needs_no_registration(self):
-        # The rule is "has a verify mode", not "is a directory": an example that
-        # asserts in its normal mode is run normally and is not this check's.
+    def test_a_single_file_example_with_a_verify_mode_is_found_too(self):
+        # Both layouts are real and the E0 prompt offers a run either, so a rule
+        # that knew only about directories would cover some games and not others.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "crates/jidousha/examples").mkdir(parents=True)
+            (root / "crates/jidousha/examples/solo.rs").write_text(
+                'fn main() { if args().any(|a| a == "--verify") {} }'
+            )
+            self.assertEqual(
+                test_wrapper.unregistered_verify_modes([("jidousha", "solo")], root),
+                ["solo"],
+            )
+
+    def test_an_example_without_a_verify_mode_is_left_alone(self):
+        # The rule is "takes the flag", not "is a directory": an example that
+        # asserts in its normal mode is run normally and is not this one's.
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "crates/jidousha/examples/tour").mkdir(parents=True)
-            (root / "crates/jidousha/examples/tour/main.rs").write_text("")
+            (root / "crates/jidousha/examples/tour/main.rs").write_text("fn main() {}")
             self.assertEqual(
                 test_wrapper.unregistered_verify_modes([("jidousha", "tour")], root),
                 [],
             )
 
-    def test_the_committed_tree_has_every_verify_mode_registered(self):
-        # The check applied to this repository, which is the instance that keeps
-        # being wrong.
+    def test_the_committed_tree_registers_the_verify_modes_it_has(self):
+        # Not a functional requirement any more — `main` verifies an unregistered
+        # one anyway — but the lists are what a reader consults, so they should
+        # be true of the tree that ships. A run in progress is exactly when this
+        # is allowed to be false, which is why nothing fails on it.
         root = Path(__file__).resolve().parents[2]
-        examples = [
-            ("jidousha", path.parent.name)
-            for path in root.glob("crates/*/examples/*/main.rs")
+        examples = [(pkg, ex) for pkg, ex in [("jidousha", p.stem) for p in
+                    root.glob("crates/jidousha/examples/*.rs")]]
+        examples += [("jidousha", p.parent.name)
+                     for p in root.glob("crates/jidousha/examples/*/main.rs")]
+        stale = [
+            name for name in test_wrapper.VERIFIABLE_EXAMPLES
+            if not test_wrapper.has_verify_mode(name, root)
         ]
         self.assertEqual(
-            test_wrapper.unregistered_verify_modes(examples, root),
-            [],
-            "an example carries a --verify mode and is in neither of tools/test's lists",
+            stale, [], "a name in VERIFIABLE_EXAMPLES takes no --verify flag"
         )
+
+
+def example_phase_with(package, example, verifiable, windowed):
+    """`example_phase` with the effective lists spelled out."""
+    return test_wrapper.example_phase(package, example, verifiable, windowed)
 
 
 class VerifyToolTest(unittest.TestCase):

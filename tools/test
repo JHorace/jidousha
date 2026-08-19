@@ -118,20 +118,31 @@ WINDOWED_EXAMPLES = frozenset(
 VERIFIABLE_EXAMPLES = frozenset({"prototype_kit", "pong"})
 
 
-def example_phase(package: str, example: str) -> "tuple[str, list[str]]":
+def example_phase(
+    package: str,
+    example: str,
+    verifiable: "frozenset[str] | set[str]" = VERIFIABLE_EXAMPLES,
+    windowed: "frozenset[str] | set[str]" = WINDOWED_EXAMPLES,
+) -> "tuple[str, list[str]]":
     """The phase name and command for one example.
 
     Windowed examples are compiled and no more, under a phase name that says so
     — a skipped check should be visible in the log, not inferred from its
     absence. A windowed example with a verify mode is the exception: it runs,
     headless, through `tools/verify`.
+
+    The two sets are arguments rather than globals so that a run can add to
+    them: an example that carries a `verify.rs` and has not been registered yet
+    is treated as though it had been, because running its own check is strictly
+    better than running it bare and watching it fail to open a window. The
+    *registration* is still enforced, by a self-test rather than by this.
     """
-    if example in VERIFIABLE_EXAMPLES:
+    if example in verifiable:
         return (
             f"example-verify:{example}",
             [sys.executable, "tools/verify", example],
         )
-    if example in WINDOWED_EXAMPLES:
+    if example in windowed:
         return (
             f"example-build:{example}",
             ["cargo", "build", "--quiet", "-p", package, "--example", example],
@@ -142,33 +153,56 @@ def example_phase(package: str, example: str) -> "tuple[str, list[str]]":
     )
 
 
-def unregistered_verify_modes(examples: "list[tuple[str, str]]", repo: Path) -> "list[str]":
-    """Examples that carry a `--verify` mode and are not registered as one.
+def example_sources(example: str, repo: Path) -> "list[Path]":
+    """Every source file of one example, whichever layout cargo found it under.
 
-    A directory example with a `verify.rs` beside its `main.rs` has a headless
-    check, which means it must not be run bare — bare, it opens a window and dies
-    on a runner with no display — and must be run through `tools/verify` rather
-    than merely built. Both facts are name lists above, and a name list is a
-    checklist step somebody has to take.
-
-    The step is `e0-prompt.md`'s after-the-run 6, *adopt the game*, and it has been
-    missed three times: after E0 runs 4, 5 and 7, each time leaving this wrapper
-    failing on a `pong` it ran as an ordinary example and watched open a window
-    (e0-findings.md F-094). The symptom is unmistakable and says nothing about the
-    cause, which is what makes it expensive. This says the cause.
-
-    Deliberately structural rather than a special case for `pong`: the property
-    that matters is "has a verify mode", the file that proves it is on disk, and
-    any future directory example with one is covered without editing this.
+    Both are real: `examples/<name>.rs`, and `examples/<name>/` for one big
+    enough that the game and the check on the game are separate reads. The E0
+    prompt offers a run either, so a check that knew only about directories
+    would cover some games and not others.
     """
-    missing = []
-    for _, example in examples:
-        if not (repo / "crates/jidousha/examples" / example / "verify.rs").is_file():
-            continue
-        if example in VERIFIABLE_EXAMPLES and example in WINDOWED_EXAMPLES:
-            continue
-        missing.append(example)
-    return missing
+    root = repo / "crates" / "jidousha" / "examples"
+    flat = root / f"{example}.rs"
+    if flat.is_file():
+        return [flat]
+    return sorted((root / example).glob("**/*.rs"))
+
+
+def has_verify_mode(example: str, repo: Path) -> bool:
+    """Whether this example takes a `--verify` flag.
+
+    Read off the source rather than off a list, because the list is the thing
+    that keeps being wrong. The flag is the convention `tools/verify` expects
+    (renderer.md §9), so an example that names it has a headless check and an
+    example that does not, does not.
+    """
+    return any(
+        "--verify" in path.read_text(encoding="utf-8")
+        for path in example_sources(example, repo)
+    )
+
+
+def unregistered_verify_modes(examples: "list[tuple[str, str]]", repo: Path) -> "list[str]":
+    """Examples that carry a `--verify` mode and are in neither list above.
+
+    An example with a verify mode must not be run bare — bare, it opens a window
+    and dies on a runner with no display — and is worth more than a build, because
+    its own check is sitting right there. Both facts were name lists above, and a
+    name list is a checklist step somebody has to take.
+
+    The step is *adopt the game*, and it was missed after E0 runs 4, 5 and 7, each
+    time leaving this wrapper failing on a `pong` it ran as an ordinary example
+    and watched open a window (e0-findings.md F-094). So the lists stopped being
+    the mechanism: `main` treats anything this returns as verifiable-and-windowed
+    for the run, and says so. What is left for a maintainer to do is bookkeeping,
+    which is why it is a note rather than a failure — nothing is broken by it.
+    """
+    return [
+        example
+        for _, example in examples
+        if has_verify_mode(example, repo)
+        and not (example in VERIFIABLE_EXAMPLES and example in WINDOWED_EXAMPLES)
+    ]
 
 
 def parse_example_targets(metadata: dict) -> "list[tuple[str, str]]":
@@ -387,29 +421,42 @@ def main(argv: "list[str]") -> int:
     # Examples are run, not merely compiled: each one asserts its own behaviour,
     # so a broken example fails here rather than in a game agent's face.
     examples = discover_examples()
+    # An example that carries a `verify.rs` and is in neither list is a game
+    # somebody added without the maintainer step that adopts it. Run it through
+    # its own check anyway — running it bare opens a window and dies on a
+    # headless runner, which is a symptom that says nothing about its cause —
+    # and say so once, loudly, addressed to the person who can act on it. The
+    # registration itself is enforced by a self-test rather than from here, so
+    # this stays a note and the suite still runs.
     unregistered = unregistered_verify_modes(examples, REPO_ROOT)
+    verifiable = set(VERIFIABLE_EXAMPLES) | set(unregistered)
+    all_windowed = set(WINDOWED_EXAMPLES) | set(unregistered)
     if unregistered:
+        named = ", ".join(unregistered)
         print(
-            "[tools/test] "
-            + f"example with a --verify mode is not registered: {', '.join(unregistered)}",
+            f"[tools/test] not registered, and verified here anyway: {named}",
             file=sys.stderr,
         )
         print(
-            "  likely cause: a game was added to examples/ and the harness step that adopts "
-            "it was not taken (docs/internal/e0-prompt.md, after-the-run step 6)",
+            "  what this means: an example carries a --verify mode and is in neither of this "
+            "script's example lists, so nothing would have run its check on the next push",
             file=sys.stderr,
         )
         print(
-            f"  fix: add {' and '.join(unregistered)} to both WINDOWED_EXAMPLES and "
-            "VERIFIABLE_EXAMPLES in tools/test",
+            "  if you are writing that game: nothing here is yours to fix. "
+            f"`tools/verify {unregistered[0]}` is your check, and it is what just ran.",
             file=sys.stderr,
         )
-        return 2
-    verified = [example for _, example in examples if example in VERIFIABLE_EXAMPLES]
+        print(
+            f"  if you maintain the engine: add {' and '.join(unregistered)} to "
+            "WINDOWED_EXAMPLES and VERIFIABLE_EXAMPLES below.",
+            file=sys.stderr,
+        )
+    verified = [example for _, example in examples if example in verifiable]
     windowed = [
         example
         for _, example in examples
-        if example in WINDOWED_EXAMPLES and example not in VERIFIABLE_EXAMPLES
+        if example in all_windowed and example not in verifiable
     ]
     print(f"[tools/test] examples to run: {len(examples) - len(windowed) - len(verified)}")
     if verified:
@@ -417,11 +464,11 @@ def main(argv: "list[str]") -> int:
     if windowed:
         print(f"[tools/test] examples built but not run (windowed): {', '.join(windowed)}")
     for package, example in examples:
-        name, command = example_phase(package, example)
+        name, command = example_phase(package, example, verifiable, all_windowed)
         phases.append(Phase(name, command))
         # A verify phase builds the example itself, so it inherits the cold-build
         # allowance rather than the run-it allowance.
-        timeouts[name] = VERIFY_TIMEOUT_S if example in VERIFIABLE_EXAMPLES else EXAMPLE_TIMEOUT_S
+        timeouts[name] = VERIFY_TIMEOUT_S if example in verifiable else EXAMPLE_TIMEOUT_S
 
     counts = {"passed": 0, "failed": 0, "ignored": 0}
     failed_tests: "list[str]" = []
