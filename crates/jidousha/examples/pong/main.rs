@@ -785,11 +785,16 @@ fn draw_the_players(ctx: &mut DrawCtx) {
     }
 }
 
-/// The ball, hidden while the match is over so the banner has the court.
+/// The ball, drawn wherever it is — including at rest under the winner's
+/// banner, which is where a decided match leaves it.
+///
+/// Hiding it on that screen would be tidier, and it is drawn there on purpose:
+/// the banner over the ball is the only place in the whole game where two draw
+/// bands cover the same point. Without that overlap, moving the banner out of
+/// the UI band changes nothing any assertion over drawn quads can see — a frame
+/// records the order the quads went down in and not the `Depth` that produced
+/// it, and the banner is submitted last either way.
 fn draw_the_ball(ctx: &mut DrawCtx) {
-    if matches!(ctx.world.resource::<Scoreboard>().phase, Phase::Over { .. }) {
-        return;
-    }
     for (_, transform, _) in ctx.world.query::<(&Transform, &Ball)>() {
         ctx.circle(
             transform.pos,

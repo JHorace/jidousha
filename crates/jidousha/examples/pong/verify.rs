@@ -29,8 +29,8 @@ use jidousha::testing::{FrameRecord, FrameRecorder, InputEvent, InputScript, Sna
 
 use crate::checks::{Checks, disc_union, fail, greater, near, sizes_covering, within};
 use crate::{
-    BALL_RADIUS, Ball, COURT, Control, HINT, HINT_OVER, MAX_BOUNCE, OPPONENT_SPEED, PADDLE,
-    PADDLE_LIMIT, PADDLE_X, PLAYER_SPEED, Paddle, Phase, SCORE_SIZE, SCORE_X, SERVE_SPEED,
+    BALL_RADIUS, Ball, COURT, Control, HINT, HINT_OVER, HINT_SIZE, MAX_BOUNCE, OPPONENT_SPEED,
+    PADDLE, PADDLE_LIMIT, PADDLE_X, PLAYER_SPEED, Paddle, Phase, SCORE_SIZE, SCORE_X, SERVE_SPEED,
     SPEED_PER_TOUCH, Scoreboard, Side, TOP_SPEED, WIN_SCORE, WINDOW, banner_text, bounce_off,
     config, face_of, fold_into_court, machine_push, palette, register, step_paddle,
     travel_one_tick,
@@ -697,6 +697,54 @@ fn the_sweep_holds_its_contract(checks: &mut Checks) {
     );
 }
 
+/// Ask the wall model its contract directly.
+///
+/// A played match cannot tell a wall that *reflects* from one that *clamps*:
+/// both keep the ball on court, both let the match finish, and the run's "the
+/// ball never went through the top or bottom" check passes for either, because
+/// a clamped ball sits exactly on the wall rather than past it. Replacing the
+/// reflection with a clamp escaped every other assertion in this file.
+fn the_walls_reflect(checks: &mut Checks) {
+    let wall = COURT.y - BALL_RADIUS;
+    // One tick that overshoots the bottom wall by 5.9 units. A reflection sends
+    // it back that far the other way and turns it round; a clamp leaves it on
+    // the wall still travelling into it.
+    let (moved, going) = travel_one_tick(Vec2::new(0.0, wall - 0.1), Vec2::new(0.0, 6.0), 1.0);
+    checks.require(
+        near(moved.y, wall - 5.9) && near(going.y, -6.0),
+        "the bottom wall does not bounce the ball, it stops it",
+        format!(
+            "a tick that would end {:.2} past the wall at {wall:.2} left the ball at {:.4} \
+             going {:.4}; a reflection puts it at {:.4} going -6",
+            5.9,
+            moved.y,
+            going.y,
+            wall - 5.9
+        ),
+    );
+    let (moved, going) = travel_one_tick(Vec2::new(0.0, -wall + 0.1), Vec2::new(0.0, -6.0), 1.0);
+    checks.require(
+        near(moved.y, -wall + 5.9) && near(going.y, 6.0),
+        "the top wall does not bounce the ball, it stops it",
+        format!(
+            "the ball came back to {:.4} going {:.4}; a reflection puts it at {:.4} going 6",
+            moved.y,
+            going.y,
+            -wall + 5.9
+        ),
+    );
+    // And a tick that stays clear of both leaves the ball entirely alone.
+    let (moved, going) = travel_one_tick(Vec2::ZERO, Vec2::new(3.0, 1.0), 1.0);
+    checks.require(
+        near(moved.x, 3.0) && near(moved.y, 1.0) && near(going.y, 1.0),
+        "a ball nowhere near a wall was turned round anyway",
+        format!(
+            "it ended at ({:.4}, {:.4}) going {:.4} in Y",
+            moved.x, moved.y, going.y
+        ),
+    );
+}
+
 /// The numbers the game is built on, stated as requirements rather than as the
 /// constants that happen to satisfy them.
 ///
@@ -1034,6 +1082,7 @@ pub fn run() -> ExitCode {
 
     controls_move_the_right_way(&mut checks);
     the_sweep_holds_its_contract(&mut checks);
+    the_walls_reflect(&mut checks);
     the_game_is_winnable(&mut checks, their_touches, board.left);
     every_string_is_printable(&mut checks);
 
@@ -1235,6 +1284,66 @@ pub fn run() -> ExitCode {
         view,
         "serving",
         Scoreboard::default(),
+    );
+
+    // --- the bands, checked where they actually overlap --------------------
+    // A frame records the order quads went down in, not the `Depth` that
+    // produced it, so a layer is only observable where two bands cover the same
+    // point *and* disagree with submission order. Almost nothing a match draws
+    // does: moving the banner out of the UI band was invisible to every
+    // assertion above until the game stopped hiding the ball behind it. These
+    // two frames arrange the remaining overlaps on purpose.
+    let Some(ball_entity) = staged
+        .world()
+        .query::<(&Transform, &Ball)>()
+        .map(|(entity, _, _)| entity)
+        .next()
+    else {
+        fail("the staged world has no ball", "Startup spawns exactly one");
+    };
+    staged.world_mut().insert_resource(Scoreboard::default());
+
+    // The UI band over the play band: put the ball under the hint line.
+    let under_the_hint = Vec2::new(0.0, COURT.y - 1.35 + HINT_SIZE * 0.5);
+    staged
+        .world_mut()
+        .component_mut::<Transform>(ball_entity)
+        .pos = under_the_hint;
+    let frame = recorder.draw(&mut staged);
+    let front = frame.covering(under_the_hint).into_iter().next();
+    checks.require(
+        front.is_some_and(|quad| quad.texture == font),
+        "the hint line is behind the ball instead of over it",
+        format!(
+            "with the ball moved under it so the two bands overlap, the front-most quad at \
+             ({:.2}, {:.2}) is {:?} rather than a glyph",
+            under_the_hint.x,
+            under_the_hint.y,
+            front.map(|quad| quad.tint)
+        ),
+    );
+
+    // The field band under the play band: put the ball on a centre-line dash.
+    // Asked as "which colour is in front" rather than "is it a glyph", because
+    // neither of these two is text and a glyph test cannot tell them apart.
+    let on_a_dash = Vec2::new(0.0, -COURT.y + 0.55 + 1.6 * 5.0);
+    staged
+        .world_mut()
+        .component_mut::<Transform>(ball_entity)
+        .pos = on_a_dash;
+    let frame = recorder.draw(&mut staged);
+    let front = frame.covering(on_a_dash).into_iter().next();
+    checks.require(
+        front.is_some_and(|quad| quad.tint == palette::BALL),
+        "the centre line is drawn over the ball instead of behind it",
+        format!(
+            "with the ball moved onto a dash so the two bands overlap, the front-most quad at \
+             ({:.2}, {:.2}) is tinted {:?} and the ball is {:?}",
+            on_a_dash.x,
+            on_a_dash.y,
+            front.map(|quad| quad.tint),
+            palette::BALL
+        ),
     );
 
     let captured = crate::capture::capture_a_frame(&mut checks, &rally.frame);
