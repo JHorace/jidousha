@@ -17,6 +17,15 @@ use jidousha::prelude::*;
 /// A position that can be worked out at compile time — `new` is a `const fn`.
 const CORNER: Vec2 = Vec2::new(-16.0, -9.0);
 
+/// An angle a game states once, in the units a person can check.
+///
+/// `Radians::from_degrees` is a `const fn`, so a bounce limit, a cone of vision
+/// or a turn rate is a `const` written as a number you can picture. The two
+/// alternatives are both worse: `Radians(1.0471976)` is rejected by clippy as an
+/// approximation of `FRAC_PI_3`, and `Radians(core::f32::consts::FRAC_PI_3)`
+/// stops being writable the moment the angle is not a tidy fraction of pi.
+const MAX_BOUNCE: Radians = Radians::from_degrees(60.0);
+
 fn main() {
     // Making one. `ZERO`, `ONE`, `X` and `Y` are constants; `splat` repeats a
     // scalar; `new` takes the two components, X first.
@@ -70,6 +79,9 @@ fn main() {
     let turned = rotate(Vec2::X, Radians::from_degrees(90.0));
     assert!((turned - Vec2::Y).length() < 1e-6);
     assert!(atan2(1.0, 0.0).as_f32() > 0.0);
+    // `from_degrees`, `to_degrees` and `as_f32` are all `const fn`, which is
+    // what makes the constant above compile.
+    assert!((MAX_BOUNCE.to_degrees() - 60.0).abs() < 1e-3);
 
     // Two Vec2s make a Rect, which is what collision and layout are written in.
     let bounds = Rect::from_center_size(position, size);

@@ -796,15 +796,18 @@ pub struct Radians(pub f32);
 impl Radians {
     pub const ZERO: Radians = Radians(0.0);  // No rotation
     pub const TAU: Radians = Radians(core::f32::consts::TAU);  // A full turn
-    pub fn from_degrees(degrees: f32) -> Self;  // Convert from degrees, for humans
-    pub fn to_degrees(self) -> f32;  // The angle in degrees, for humans and for debug output
-    pub fn as_f32(self) -> f32;  // The underlying value
+    pub const fn from_degrees(degrees: f32) -> Self;  // Convert from degrees, for humans — usable in a `const`
+    pub const fn to_degrees(self) -> f32;  // The angle in degrees, for humans and for debug output
+    pub const fn as_f32(self) -> f32;  // The underlying value
 }
 ```
 
 ```rust
+const MAX_BOUNCE: Radians = Radians::from_degrees(60.0);
+
 let quarter_turn = Radians::from_degrees(90.0);
 assert!((quarter_turn.as_f32() - std::f32::consts::FRAC_PI_2).abs() < 1e-6);
+assert!(MAX_BOUNCE < quarter_turn);
 ```
 
 #### `atan2`
@@ -873,6 +876,15 @@ use jidousha::prelude::*;
 /// A position that can be worked out at compile time — `new` is a `const fn`.
 const CORNER: Vec2 = Vec2::new(-16.0, -9.0);
 
+/// An angle a game states once, in the units a person can check.
+///
+/// `Radians::from_degrees` is a `const fn`, so a bounce limit, a cone of vision
+/// or a turn rate is a `const` written as a number you can picture. The two
+/// alternatives are both worse: `Radians(1.0471976)` is rejected by clippy as an
+/// approximation of `FRAC_PI_3`, and `Radians(core::f32::consts::FRAC_PI_3)`
+/// stops being writable the moment the angle is not a tidy fraction of pi.
+const MAX_BOUNCE: Radians = Radians::from_degrees(60.0);
+
 fn main() {
     // Making one. `ZERO`, `ONE`, `X` and `Y` are constants; `splat` repeats a
     // scalar; `new` takes the two components, X first.
@@ -926,6 +938,9 @@ fn main() {
     let turned = rotate(Vec2::X, Radians::from_degrees(90.0));
     assert!((turned - Vec2::Y).length() < 1e-6);
     assert!(atan2(1.0, 0.0).as_f32() > 0.0);
+    // `from_degrees`, `to_degrees` and `as_f32` are all `const fn`, which is
+    // what makes the constant above compile.
+    assert!((MAX_BOUNCE.to_degrees() - 60.0).abs() < 1e-3);
 
     // Two Vec2s make a Rect, which is what collision and layout are written in.
     let bounds = Rect::from_center_size(position, size);
@@ -1028,7 +1043,7 @@ pub struct Seconds(pub f32);
 
 impl Seconds {
     pub const ZERO: Seconds = Seconds(0.0);  // No time at all
-    pub fn as_f32(self) -> f32;  // The underlying value, for arithmetic the newtype does not cover
+    pub const fn as_f32(self) -> f32;  // The underlying value, for arithmetic the newtype does not cover
 }
 ```
 
@@ -1598,6 +1613,16 @@ in `docs/api/jidousha-testing.md`.
 - glam types (`Vec2`, `Vec3`, `Mat4`) with `scalar-math`; engine newtypes for
   units (`Radians`, `Seconds`). Std float trig is clippy-banned engine-wide —
   use `sin_cos`, `atan2` and `rotate` from `jidousha::math`.
+- **An angle a game states once is a `const`, written in degrees.**
+  `Radians::from_degrees` is a `const fn`, so
+  `const MAX_BOUNCE: Radians = Radians::from_degrees(60.0);` compiles. The
+  alternatives are both worse: `Radians(1.0471976)` is rejected by clippy as an
+  approximation of `FRAC_PI_3`, and `Radians(core::f32::consts::FRAC_PI_3)`
+  stops being writable at fifty degrees. Constructors and accessors of the
+  plain-data types — `Radians`, `Seconds`, `Color`, `Depth`, `PhysicalSize`, the
+  typed handles — are `const fn` for this reason, and a new one follows the same
+  rule. `from_degrees` was the one that was not, and E0 run 6 found it the only
+  way this is findable: by trying to write the constant (e0-findings.md F-069).
 - **A game spells them from the prelude and nowhere else.** `jidousha::prelude`
   re-exports every name in `math`, so `use jidousha::prelude::*;` is the whole
   import and a second `use jidousha::math::sin_cos;` beside it is the same item

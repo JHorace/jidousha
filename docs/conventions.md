@@ -78,6 +78,16 @@ the enforcement. Every entry here is assumed by all subsystem docs.
 - glam types (`Vec2`, `Vec3`, `Mat4`) with `scalar-math`; engine newtypes for
   units (`Radians`, `Seconds`). Std float trig is clippy-banned engine-wide —
   use `sin_cos`, `atan2` and `rotate` from `jidousha::math` (ADR-0009).
+- **An angle a game states once is a `const`, written in degrees.**
+  `Radians::from_degrees` is a `const fn`, so
+  `const MAX_BOUNCE: Radians = Radians::from_degrees(60.0);` compiles. The
+  alternatives are both worse: `Radians(1.0471976)` is rejected by clippy as an
+  approximation of `FRAC_PI_3`, and `Radians(core::f32::consts::FRAC_PI_3)`
+  stops being writable at fifty degrees. Constructors and accessors of the
+  plain-data types — `Radians`, `Seconds`, `Color`, `Depth`, `PhysicalSize`, the
+  typed handles — are `const fn` for this reason, and a new one follows the same
+  rule. `from_degrees` was the one that was not, and E0 run 6 found it the only
+  way this is findable: by trying to write the constant (e0-findings.md F-069).
 - **A game spells them from the prelude and nowhere else.** `jidousha::prelude`
   re-exports every name in `math`, so `use jidousha::prelude::*;` is the whole
   import and a second `use jidousha::math::sin_cos;` beside it is the same item

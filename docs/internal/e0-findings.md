@@ -3288,6 +3288,59 @@ the generator touched it. The guard is again a test, and it is again named after
 the claim rather than after the function.
 
 
+### F-069 — A `const` angle in degrees could not be written
+
+Class: engine · Run: 6 · Fixed in: this commit · Settled by: nothing — ADR-0009
+governs `Radians` and says nothing about `const`
+
+**What run 6 hit.** `Radians::from_degrees` is documented as existing "for
+humans", and a game that bounces something has an angle constant. It was not a
+`const fn`, so `const MAX_BOUNCE: Radians = Radians::from_degrees(60.0);` did not
+compile. The run wrote `Radians(1.0471976)`; clippy rejected it as
+`approx_constant`. The spelling that compiled was
+`Radians(core::f32::consts::FRAC_PI_3)` — used by nothing in either document, and
+unwritable the moment the angle is fifty degrees rather than sixty.
+
+**Verified before acting.** Confirmed against `math.rs`: `from_degrees` was
+`pub fn`, one multiplication, no reason beyond nobody having tried. Confirmed the
+`const fn` compiles on this toolchain — const float arithmetic has been stable
+since 1.82 and the workspace pins 1.94.
+
+**Checked against "one way to do everything", which is the question that matters
+here.** Making an existing function `const` adds no second way to do anything: it
+is the same function, callable in one more position. The check that would have
+failed is the opposite one — a `Radians::DEGREES_60` constant, or a `deg!` macro,
+either of which would be a second spelling of an existing call. Neither was
+considered for long.
+
+**Checked against the ADR that governs the type.** ADR-0009 decides that `Radians`
+is a newtype over `f32`, that std trig is banned, and that the engine owns
+deterministic `sin_cos`. `from_degrees` is one multiply by `PI / 180.0` and
+touches none of that: it is IEEE multiplication, which the ADR itself names as
+bit-exact everywhere, and const evaluation of it produces the same bits as the
+runtime call. So nothing in ADR-0009 is reopened and no new ADR is owed — this is
+a gap rather than a decision, which is why it is fixed rather than argued.
+
+**Why it was not caught by the rest of the surface.** `Color::rgb`, `Depth::layer`,
+`TextureId::from_bits` and `PhysicalSize::new` are all `const fn` already, so the
+convention existed and `Radians` was simply the one that missed it. That is now
+written down as a convention rather than left as a pattern, which is the part that
+protects the *next* newtype.
+
+**Fix.**
+
+- `Radians::from_degrees`, `Radians::to_degrees` and `Radians::as_f32` are
+  `const fn`. `Seconds::as_f32` too, for the same reason and by the same argument.
+- `conventions.md` §Math states the rule, in the section the generated game
+  document carries, with the two bad spellings named so a reader recognises the
+  situation.
+- `examples/vec2_tour.rs` — the file that presents itself as the entry for this
+  vocabulary — carries `const MAX_BOUNCE: Radians = Radians::from_degrees(60.0);`
+  and asserts on it.
+- `an_angle_in_degrees_can_be_a_const` is the behavioural test, named after the
+  thing the run could not do.
+
+
 ## 5. Notes on the run's procedure
 
 Two things about run 1 that are not findings but would confuse a later reader.

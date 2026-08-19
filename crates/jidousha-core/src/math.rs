@@ -15,13 +15,18 @@ use crate::resource::Resource;
 /// An angle, in radians.
 ///
 /// Degrees appear nowhere in the engine; `Radians::from_degrees` exists for
-/// humans typing a number they can picture.
+/// humans typing a number they can picture. It is a `const fn`, so an angle a
+/// game states once — a bounce limit, a cone of vision, a turn rate — is a
+/// `const` written in the units a person can check.
 ///
 /// ```
 /// use jidousha_core::math::Radians;
 ///
+/// const MAX_BOUNCE: Radians = Radians::from_degrees(60.0);
+///
 /// let quarter_turn = Radians::from_degrees(90.0);
 /// assert!((quarter_turn.as_f32() - std::f32::consts::FRAC_PI_2).abs() < 1e-6);
+/// assert!(MAX_BOUNCE < quarter_turn);
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
 pub struct Radians(pub f32);
@@ -33,21 +38,21 @@ impl Radians {
     /// A full turn.
     pub const TAU: Radians = Radians(core::f32::consts::TAU);
 
-    /// Convert from degrees, for humans.
+    /// Convert from degrees, for humans — usable in a `const`.
     #[must_use]
-    pub fn from_degrees(degrees: f32) -> Self {
+    pub const fn from_degrees(degrees: f32) -> Self {
         Radians(degrees * (core::f32::consts::PI / 180.0))
     }
 
     /// The angle in degrees, for humans and for debug output.
     #[must_use]
-    pub fn to_degrees(self) -> f32 {
+    pub const fn to_degrees(self) -> f32 {
         self.0 * (180.0 / core::f32::consts::PI)
     }
 
     /// The underlying value.
     #[must_use]
-    pub fn as_f32(self) -> f32 {
+    pub const fn as_f32(self) -> f32 {
         self.0
     }
 }
@@ -336,6 +341,20 @@ mod tests {
             let angle = Radians::from_degrees(degrees);
             assert!((angle.to_degrees() - degrees).abs() < 1e-3, "{degrees}");
         }
+    }
+
+    #[test]
+    fn an_angle_in_degrees_can_be_a_const() {
+        // The spelling a game reaches for when it has a bounce limit, and the
+        // one `from_degrees` did not support until E0 run 6 tried to write it
+        // (e0-findings.md F-069). The alternative is a bare radian literal,
+        // which clippy rejects when it is close to a fraction of pi and which
+        // nobody can check by eye when it is not.
+        const MAX_BOUNCE: Radians = Radians::from_degrees(60.0);
+        const IN_DEGREES: f32 = MAX_BOUNCE.to_degrees();
+
+        assert!((MAX_BOUNCE.as_f32() - core::f32::consts::FRAC_PI_3).abs() < 1e-6);
+        assert!((IN_DEGREES - 60.0).abs() < 1e-3);
     }
 
     #[test]
