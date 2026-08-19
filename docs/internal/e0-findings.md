@@ -100,7 +100,7 @@ prompt.
 | 4 | 2026-08-18 | Pong shipped; **not** a pass | 3 | 11 | 1 (+1 `environment`) | Compiled clean, `--verify` green. One full debug cycle lost to `ctx.circle`, six tuning runs lost to its own verify controller. Three `engine` findings, decided in ADRs 0021–0023 (two applied, one declined with the boundary documented), plus one environment escalation (F-054). Raw notes: `docs/e0/run-4.md`. Triage: §4a. §6. |
 | 5 | 2026-08-19 | Pong shipped; **not** a pass | 1 | 7 | 2 (+1 `environment`) | Compiled clean, `--verify` green, 1,263 frames recorded. Two cycles lost to a controller that optimised onto the boundary of what its paddle could reach (F-056) — the fourth run to be sent into its game's constants by its own driver, and the first that had *read* the warning. The one `engine` finding is **declined**: ADR-0024 says draw order was always observable and a `Depth` on `DrawnQuad` would not have caught the bug it was wanted for. Raw notes: `docs/e0/run-5.md`. Triage: §4b. §6. |
 | 6 | 2026-08-19 | Pong shipped; **not** a pass | 1 | 9 | 1 (+1 `environment`) | Compiled clean, `--verify` green, 2,013 ticks, and **the first run to see a frame of its own game** — the capture path landed and the PNG looks like Pong. Blocked once, on its own game design: an opponent unbeatable by arithmetic (F-074, the other side of F-064). The one `engine` finding is **accepted and fixed** — `Radians::from_degrees` is now a `const fn` (F-069). Its headline is a document sentence that was *false* rather than missing (F-068), the second run running. Every claim in its log held under checking. **Valid, and played** — both after-the-run steps taken before the decks were cleared. Raw notes: `docs/e0/run-6.md`. Triage: §4c. §6. |
-| 7 | 2026-08-19 | Pong shipped; **not** a pass | 0 | 14 | 1 (+2 `environment`) | Compiled clean, `--verify` green, 3,092 ticks, 5–0, and **seventeen of seventeen injected faults caught** — the first run to score full marks on its own mutation round. Two rounds and two wrong constant changes lost to the document's own controller prescription, which is a property of one opponent taught as the lesson (F-080) and the third false sentence in three runs. No `engine` finding: the one engine-shaped question is whether `jidousha::testing` should *ship* the controller self-check, and it is **declined** — ADR-0027. Two of the findings are the maintainer's rather than the run's, from the verification tasks: `tools/test` was red on `main` (F-094) and `prototype_kit`'s own `--verify` was missing five of the checks the document prescribes (F-095). Raw notes: `docs/e0/run-7.md`. Triage: §4d. §6. |
+| 7 | 2026-08-19 | Pong shipped; **not** a pass | 0 | 14 | 1 (+2 `environment`) | Compiled clean, `--verify` green, 3,092 ticks, 5–0, and **seventeen of seventeen injected faults caught** — the first run to score full marks on its own mutation round. Two rounds and two wrong constant changes lost to the document's own controller prescription, which is a property of one opponent taught as the lesson (F-080) and the third false sentence in three runs. No `engine` finding: the one engine-shaped question is whether `jidousha::testing` should *ship* the controller self-check, and it is **declined** — ADR-0027. Two of the findings are the maintainer's rather than the run's, from the verification tasks: `tools/test` was red on `main` (F-094) and `prototype_kit`'s own `--verify` was missing five of the checks the document prescribes (F-095). **Valid, and played** — the transcript was reviewed and the game played before the decks were cleared. Raw notes: `docs/e0/run-7.md`. Triage: §4d. §6. |
 
 Run 1 produced a working, fun Pong and a document-shaped hole underneath it. The
 game is not the measurement — `docs/e0/run-1.md` is — and it says the run could
@@ -3919,7 +3919,9 @@ thing that only shows up when somebody runs the tools rather than reads them.
    `--verify` mode drives the identical systems through `headless`, the capture
    renders a recorded frame through the same `WgpuBackend` a window would use,
    and the PNG looks like Pong. What is still unexercised is window creation and
-   the `winit`→`Input` plumbing. Not an agent's to take.
+   the `winit`→`Input` plumbing. Not an agent's to take — and the two steps that
+   *are* a person's were both taken for this run before the decks were cleared:
+   the transcript reviewed, and the game played (§3, F-096).
 2. ~~**The testing document is at 97% of its budget.**~~ **Settled in a
    follow-up commit, and the settlement is half structural and half not.**
    *Testing your game* hit ~14,700 tokens of 15,000 on this triage's fixes and is
@@ -4377,6 +4379,30 @@ F-054 opened.
 5–0, a capture written). Run 5's triage predicted this trap and run 6's recorded
 it as not having fired; §4d carries the correction.
 
+**And then the fix was wrong, which is worth recording because it was caught by
+rehearsing the next run rather than by review.** The first version made the
+missing registration a hard failure *before any phase ran*, printing "fix: add
+pong to WINDOWED_EXAMPLES and VERIFIABLE_EXAMPLES in tools/test". Rehearsing run
+8's state — the game in the tree, un-adopted, exactly as an author leaves it —
+showed two problems with that. It **instructs the game's author to edit the
+engine's tooling**, which their own prompt forbids in as many words; and it
+denies them every other phase, where the old failure at least ran the suite and
+broke on one example. It also cited `docs/internal/e0-prompt.md`, a path the run
+may not read.
+
+The second version inverts it: `tools/test` reads each example's source for the
+`--verify` flag — **both cargo layouts**, since the prompt offers a run either and
+the first version only understood directories — and treats anything unregistered
+as verifiable-and-windowed for that run, with a note addressed to both readers by
+name. The registration became bookkeeping, so nothing fails on it; the self-test
+now checks the other direction, that a registered name really takes the flag.
+Rehearsed again: `tools/test` passes in run 8's state and verifies the game.
+
+**The general lesson is the one this file keeps relearning.** A guard written for
+a maintainer is read by whoever trips it, and the person who trips this one is a
+game author who has been told that file is not theirs. Ask who reads a failure
+before writing what it says.
+
 ### F-095 — `prototype_kit`'s `--verify` was missing five of the checks the document tells a game to write
 
 Class: docs · Run: 7 (found in triage) · Fixed in: this commit · Also found by:
@@ -4443,6 +4469,15 @@ capture renders a recorded frame through the same `WgpuBackend` a window would
 use, so what is unexercised is window creation and the `winit`→`Input` plumbing.
 That is engine code rather than a run's, it is a `DISPLAY`-shaped hole rather than
 a graphics-stack one, and it is on CLAUDE.md's never-agent-fixable list.
+
+**The owner has since played it**, which is the third run running (5, 6, 7) where
+the game was seen by a person and not by its author. That is what keeps
+"playable" an observation rather than an inference, and it is why the deletion in
+`e0-prompt.md`'s before-the-run step 2 has to wait for it: the artifact goes with
+the directory, and a playtest not taken before then cannot be taken afterwards.
+It does not close this finding. The hole is that no *session* has run its own
+game, and a maintainer playing it is the workaround that has stood in for the fix
+for seven runs.
 
 
 ## 5. Notes on the run's procedure

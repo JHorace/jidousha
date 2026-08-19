@@ -93,11 +93,22 @@ that is a finding about the split, not about the run.
    asking a game author to register their game with the engine's test harness
    would be asking them out of the role the run is measuring.
 
-   **`tools/test` now says so if you forget.** An example with a `verify.rs`
-   beside its `main.rs` and no entry in either list fails the wrapper before any
-   phase runs, naming this step. It was missed after runs 4, 5 and 7, each time
-   surfacing as `RunError::NoDisplay` in an `example:pong` phase — a symptom that
-   says nothing about its cause (e0-findings.md F-094).
+   **This step is now bookkeeping rather than a gate.** `tools/test` reads each
+   example's source for a `--verify` flag and runs anything it finds through
+   `tools/verify`, registered or not, printing a note that says what was not
+   registered. So a game is checked on every push from the moment it lands, and
+   the failure this step used to cause — missed after runs 4, 5 and 7, each time
+   surfacing as `RunError::NoDisplay` in an `example:pong` phase (e0-findings.md
+   F-094) — cannot recur. Take the step anyway: the lists are what a reader
+   consults.
+
+   **A consequence for the prompt below, which is deliberately *not* changed.**
+   It tells the author "you do not need `tools/test` to pass … yours opens a
+   window, so it fails for a reason that has nothing to do with your game". The
+   reason is now out of date — their game is verified rather than run bare — but
+   the instruction is still true and still what we want, and the ledger above
+   says a prompt that changes between runs makes the runs incomparable. Left
+   alone on purpose.
 
    **Every run, not only the one that passes.** This step used to say "on the
    run that passes", written before anyone had run E0; run 1 registered its game

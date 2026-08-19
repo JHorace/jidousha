@@ -334,13 +334,28 @@ a row (stop rule printed, `failure-streak.json` count 2).
   *runs*, which for a window means "a person looked at it". Two self-tests guard
   the list: that a windowed example is built and not run, and that every name in
   it is an example that exists, so a rename cannot silently start running a
-  window or keep skipping something deleted. A third guard closes the checklist
-  step itself: **an example with a `verify.rs` beside its `main.rs` must be in
-  both lists**, checked before any phase runs and reported with the step that was
-  missed rather than as a `NoDisplay` a hundred lines later
-  (`unregistered_verify_modes`). Structural rather than a special case for
-  `pong`, because the property that matters is "has a verify mode" and the file
-  that proves it is on disk.
+  window or keep skipping something deleted. **And the lists stopped being the
+  mechanism**, which is the part worth knowing: `unregistered_verify_modes`
+  reads each example's source for the `--verify` flag — both cargo layouts — and
+  anything it finds outside the lists is treated as verifiable-and-windowed for
+  that run, with a note naming what was not registered. So a game added to
+  `examples/` is verified on the next push whether or not a maintainer took the
+  adoption step, and the failure mode F-094 describes — the wrapper running a
+  windowed game bare and dying on `NoDisplay` — cannot recur.
+
+  Two consequences follow, and the second is why the note is a note.
+
+  - **The E0 author is never told to edit this file.** Their prompt says the
+    engine's tooling is not theirs, so the note addresses both readers by name
+    and tells the game's author that nothing in it is theirs to fix. An earlier
+    version of this check exited before any phase ran and printed a `fix:` line
+    instructing them to edit these lists, which is worse than the bug it
+    replaced: it contradicted the prompt *and* denied them the rest of the suite.
+  - **Nothing fails on an unregistered example**, because nothing is broken by
+    one. The lists are now what a reader consults rather than what the wrapper
+    obeys, so leaving a name out is bookkeeping. The self-test that remains
+    checks the other direction — that a name *in* `VERIFIABLE_EXAMPLES` really
+    takes the flag — which is the half that can go stale silently.
 - **A session-start hook installs the software rasterizer, and it is the CI line
   moved one directory.** `.claude/hooks/session-start.sh` runs on `SessionStart`
   in a remote session and installs `mesa-vulkan-drivers`, so `tools/verify`
