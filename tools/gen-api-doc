@@ -69,6 +69,7 @@ from __future__ import annotations
 import dataclasses
 import re
 import sys
+import textwrap
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -274,6 +275,10 @@ class Item:
     kind: str = ""  # struct | enum | trait | fn | const | type | mod
     decl: str = ""  # `pub struct Camera` / the whole signature of a free fn
     summary: str = ""
+    # The doc comment's first code block, rustdoc's hidden lines removed: the
+    # "tiny example" third of public-api.md §4's entry spec. Empty for an item
+    # whose doc comment carries no example, which is most of them.
+    example: "list[str]" = dataclasses.field(default_factory=list)
     derives: "tuple[str, ...]" = ()
     traits: "list[str]" = dataclasses.field(default_factory=list)
     fields: "list[tuple[str, str]]" = dataclasses.field(default_factory=list)
@@ -511,6 +516,67 @@ def first_sentence(block: "list[str]") -> str:
     return scrub_internal_references(sentence).strip()
 
 
+def doc_example(block: "list[str]") -> "list[str]":
+    """The doc comment's first code block, as a reader should see it.
+
+    The third of public-api.md §4's entry spec that went unbuilt: "one entry per
+    item: signature, one-liner, tiny example". These are the crate's own
+    doctests, so the example in the document is an example CI compiles — the
+    same argument the Quickstart is embedded verbatim for.
+
+    **rustdoc's hidden lines are dropped**, which is not cosmetic. A doctest
+    hides its setup behind `# `, and here that setup is almost always
+    `# use jidousha_core::…` — the internal crate paths a doctest needs and the
+    facade's reader must never see. Rendering them would put the whole
+    `FORBIDDEN` list into the document by the back door. Dropping them is also
+    what rustdoc shows a human, so the document and docs.rs agree.
+
+    `##` at the start of a line is rustdoc's escape for a literal `#`, and
+    `#[derive(…)]` is an attribute rather than a hidden line: neither is setup,
+    and both stay.
+
+    **Visible `use jidousha_…` lines go too**, for the same reason as the hidden
+    ones and one more. A doctest imports from the crate it lives in; a reader of
+    this document imports from the facade, and the document's own second
+    sentence is "everything here is reachable from one import". An example
+    carrying `use jidousha_core::Component;` would be telling that reader to do
+    the one thing the facade exists to make unnecessary — so dropping the line
+    makes the example *more* correct for the reader it is shown to, not less.
+    Citations are scrubbed from comments on the same grounds as everywhere else:
+    this reader may not open `docs/adr/`.
+    """
+    fence, body = False, []
+    for line in block:
+        if line.startswith("```"):
+            if fence:
+                break
+            fence = True
+            continue
+        if not fence:
+            continue
+        bare = line.lstrip()
+        if bare.startswith("##"):
+            body.append(line.replace("##", "#", 1))
+        elif bare == "#" or bare.startswith("# "):
+            continue
+        elif bare.startswith("use jidousha_"):
+            continue
+        elif bare.startswith("//"):
+            body.append(unqualify(scrub_internal_references(line)).rstrip())
+        else:
+            # `jidousha_platform::asset_source(..)` written out mid-expression
+            # rather than imported: the same routing `unqualify` hides in a
+            # declaration, and the same reason for hiding it.
+            body.append(unqualify(line))
+    # Dropping the imports usually leaves the blank line that followed them.
+    while body and not body[0].strip():
+        body.pop(0)
+    while body and not body[-1].strip():
+        body.pop()
+    # A block that was nothing but setup has no example left to show.
+    return body if any(line.strip() for line in body) else []
+
+
 def scan_sources(sources: "list[Path]") -> "dict[str, Item]":
     """Every public item the sources declare, by name.
 
@@ -600,7 +666,7 @@ def scan_file(lines: "list[str]", source: str, items: "dict[str, Item]", phase: 
             index += 1
             continue
 
-        summary = first_sentence(doc)
+        summary, example = first_sentence(doc), doc_example(doc)
         doc, held_derives = [], derives
         derives = ()
         top = stack[-1] if stack else ("", -4, "")
@@ -615,7 +681,7 @@ def scan_file(lines: "list[str]", source: str, items: "dict[str, Item]", phase: 
         # lose the one enum the document most needs (F-002).
         if match and not stack:
             index = enter_definition(
-                lines, index, match, summary, held_derives, source, stack, items, phase
+                lines, index, match, summary, example, held_derives, source, stack, items, phase
             )
             continue
 
@@ -706,6 +772,7 @@ def enter_definition(
     index: int,
     match: "re.Match[str]",
     summary: str,
+    example: "list[str]",
     derives: "tuple[str, ...]",
     source: str,
     stack: "list[tuple[str, int, str]]",
@@ -725,6 +792,7 @@ def enter_definition(
     first = not item.kind
     if first:
         item.kind, item.summary, item.derives, item.source = kind, summary, derives, source
+        item.example = example
     if kind in ("fn", "const", "type"):
         decl, index = read_signature(lines, index)
         if first:
@@ -827,16 +895,33 @@ def crate_sources(repo: Path) -> "list[Path]":
     return sorted(repo.glob("crates/jidousha-*/src/**/*.rs"))
 
 
-def trailing(summary: str) -> str:
-    """A member's summary, shortened to ride along on its signature line.
+def member_lines(text: str, summary: str, indent: str = "    ") -> "list[str]":
+    """One member: its signature, and **the whole** of its summary.
 
-    The whole sentence stays on the item it belongs to; this is the reminder.
+    A short summary rides along on the signature line, which is the densest form
+    and what most members get. One too long for that goes on its own line above
+    the signature, wrapped — it is *not* cut short.
+
+    That is the fix for four of E0 run 4's sixteen findings (F-039, F-043,
+    F-048, and the wording half of F-050). This function used to truncate at
+    `MEMBER_SUMMARY_CHARS` and append an ellipsis, on the stated grounds that
+    "the whole sentence stays on the item it belongs to; this is the reminder".
+    **That premise was false**: a member has no entry of its own anywhere in
+    this document, so its summary appears here and nowhere else, and the
+    truncated tail was not kept somewhere — it was deleted. `Time::alpha`
+    explained itself in four lines and the reference printed a clause that
+    stopped mid-word. The reader could not tell a sentence had been cut from a
+    sentence that was simply short.
+
+    Costing a line is the right trade: a document that is a few lines longer
+    beats one that silently drops the half of a sentence carrying the number.
     """
     if not summary:
-        return ""
-    if len(summary) > MEMBER_SUMMARY_CHARS:
-        summary = summary[:MEMBER_SUMMARY_CHARS].rsplit(" ", 1)[0] + "…"
-    return f"  // {summary}"
+        return [f"{indent}{text}"]
+    if len(summary) <= MEMBER_SUMMARY_CHARS:
+        return [f"{indent}{text}  // {summary}"]
+    wrapped = textwrap.wrap(summary, width=MEMBER_SUMMARY_CHARS + 8) or [summary]
+    return [f"{indent}// {line}" for line in wrapped] + [f"{indent}{text}"]
 
 
 def declaration(item: Item) -> "list[str]":
@@ -851,7 +936,8 @@ def declaration(item: Item) -> "list[str]":
 
     if item.kind == "struct" and item.fields:
         out.append(item.decl + " {")
-        out += [f"    {text},{trailing(summary)}" for text, summary in item.fields]
+        for text, summary in item.fields:
+            out += member_lines(f"{text},", summary)
         out.append("}")
     elif item.kind == "enum" and item.variants:
         out.append(item.decl + " {")
@@ -861,11 +947,13 @@ def declaration(item: Item) -> "list[str]":
             elif text.startswith("//"):
                 out.append(f"    {text}")
             else:
-                out.append(f"    {text}{'' if text.endswith(',') else ','}{trailing(summary)}")
+                comma = "" if text.endswith(",") else ","
+                out += member_lines(f"{text}{comma}", summary)
         out.append("}")
     elif item.kind == "trait" and item.members:
         out.append(item.decl + " {")
-        out += [f"    {text}{trailing(summary)}" for text, summary in item.members]
+        for text, summary in item.members:
+            out += member_lines(text, summary)
         out.append("}")
     else:
         out.append(item.decl if item.decl.endswith("{}") else item.decl + ";")
@@ -882,7 +970,8 @@ def declaration(item: Item) -> "list[str]":
     if item.members and item.kind != "trait":
         out.append("")
         out.append(f"impl {item.name} {{")
-        out += [f"    {text}{trailing(summary)}" for text, summary in item.members]
+        for text, summary in item.members:
+            out += member_lines(text, summary)
         out.append("}")
     return out
 
@@ -928,13 +1017,21 @@ def render_module(
 
 
 def render_item(item: Item) -> "list[str]":
-    """One reference entry: heading, one-liner, and the declaration."""
+    """One reference entry: heading, one-liner, declaration, and an example.
+
+    public-api.md §4's spec in full. The example is the crate's own doctest, so
+    it is code CI compiles rather than code someone typed into a document —
+    which is the same reason the Quickstart is an example file embedded
+    verbatim.
+    """
     out = [f"#### `{item.name}`", ""]
     if item.summary:
         out += [f"{item.summary}.", ""]
     block = declaration(item)
     if block:
         out += ["```rust"] + block + ["```", ""]
+    if item.example:
+        out += ["```rust"] + item.example + ["```", ""]
     return out
 
 
@@ -1251,6 +1348,80 @@ def shown(path: Path) -> str:
         return str(path)
 
 
+# `examples/pong/capture.rs`, `examples/homing.rs`, `examples/prototype_kit` —
+# a pointer at a worked example, which is half of what this document promises.
+EXAMPLE_RE = re.compile(r"examples/([A-Za-z0-9_][A-Za-z0-9_./-]*)")
+
+# The example a run *writes*, deleted before the next run starts (e0-prompt.md,
+# before-the-run step 2). Named here because "does the file exist" cannot see
+# it: `pong/` is on disk for most of this repository's life and absent at
+# exactly the moment a run would follow a pointer to it, so a check that only
+# stats the path passes on the commit that introduces the bug and fails nowhere.
+# That is not hypothetical — it is what happened, and this constant is the half
+# of the check that catches it.
+EPHEMERAL_EXAMPLES = ("pong",)
+
+
+def dangling_examples(text: str, repo: Path) -> "list[str]":
+    """Pointers at worked examples that name nothing on disk.
+
+    `docs/api/` is only half a teaching surface: the other half is
+    `examples/`, and a document is *entitled* to say "the whole path is in
+    `examples/pong/capture.rs`" instead of repeating it. That entitlement is
+    what makes a stale pointer expensive — the reader who follows it is the
+    reader who most needed the example, and what they get is nothing.
+
+    The failure this exists for is not a typo. `e0-prompt.md`'s
+    before-the-run step 2 **deletes `crates/jidousha/examples/pong/`**, because
+    a previous run's finished game sitting on the allowed list is a worked
+    solution the next author may read without breaking a rule. So every
+    reference to `examples/pong/…` is correct while it is written and dangling
+    by the time the run that needs it starts, and nothing said so: this check
+    is the gate that would have caught it, and it caught exactly that pointer
+    on the commit that added it.
+
+    The same shape as `tools/check-assets`, one document up: an asset path that
+    names no file, and a documentation path that names no example, fail for the
+    same reason and are worth the same thirty lines.
+    """
+    root = repo / "crates" / "jidousha" / "examples"
+    seen, missing = set(), []
+    for match in EXAMPLE_RE.finditer(text):
+        # A trailing `/` or `.` is sentence punctuation, not part of the path.
+        reference = match.group(1).rstrip("/.")
+        if not reference or reference in seen:
+            continue
+        seen.add(reference)
+        if reference.split("/")[0] in EPHEMERAL_EXAMPLES:
+            missing.append(f"examples/{reference} (deleted before the next run)")
+        elif not (root / reference).exists():
+            missing.append(f"examples/{reference}")
+    return missing
+
+
+def cut_summaries(text: str) -> "list[str]":
+    """Lines inside a code block whose summary stops mid-sentence.
+
+    The check for the bug `member_lines` fixes, kept because it is the one that
+    would have caught it. Four of E0 run 4's sixteen findings were a member
+    summary truncated at 68 characters, and nothing failed — a cut sentence
+    looks exactly like a short one to every check the project had, and to the
+    reader.
+
+    Scoped to code blocks on purpose. Prose is allowed an ellipsis and the
+    Conventions digest uses one (`Color::WHITE`, `Color::MAGENTA`, …); a
+    *signature line* is never allowed one, because there is nowhere else the
+    rest of that sentence could be.
+    """
+    cut, fence = [], False
+    for line in text.splitlines():
+        if line.startswith("```"):
+            fence = not fence
+        elif fence and line.rstrip().endswith("…"):
+            cut.append(line.strip())
+    return cut
+
+
 def problem(what: str, specifics: str, cause: str, fix: str) -> str:
     return f"[jidousha] {what}\n  {specifics}\n  likely cause: {cause}\n  fix: {fix}"
 
@@ -1293,6 +1464,31 @@ def main(argv: "list[str]") -> int:
                     "the public surface grew, or a prose section did",
                     "curate that document down rather than raising the budget "
                     "(public-api.md §4, ADR-0025) — the budget is the point",
+                )
+            )
+        cut = cut_summaries(document.text)
+        if cut:
+            failures.append(
+                problem(
+                    f"{name} prints a summary that stops mid-sentence",
+                    f"{len(cut)} line(s), the first being: {cut[0]}",
+                    "a member's summary was truncated to ride along on its signature line",
+                    "a member has no entry of its own, so the cut tail reaches the reader "
+                    "nowhere — put the whole summary on its own line above the signature "
+                    "(`member_lines`)",
+                )
+            )
+        dangling = dangling_examples(document.text, REPO_ROOT)
+        if dangling:
+            failures.append(
+                problem(
+                    f"{name} points at a worked example that is not there",
+                    f"missing: {', '.join(dangling)}",
+                    "the example was renamed or deleted — note that a run's `pong/` is "
+                    "deleted before the next run starts (e0-prompt.md), so a pointer at it "
+                    "is dangling by the time it is read",
+                    "point at an example that outlives a run, or drop the pointer and say "
+                    "the thing in the document",
                 )
             )
         leaked = forbidden_words(document.text, document.allowed)

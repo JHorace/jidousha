@@ -339,6 +339,11 @@ The asset source this platform reads with.
 pub fn asset_source(root: &str) -> impl ByteSource;
 ```
 
+```rust
+let mut assets = Assets::new(asset_source("assets"));
+let hero = assets.load_texture("sprites/hero.png");
+```
+
 #### `Draw`
 
 Once per rendered frame, after Update has caught up.
@@ -363,12 +368,48 @@ pub struct GameConfig {
 // Default = GameConfig { title: "jidousha game", seed: 0, fixed_dt: Seconds(1.0 / 60.0), window_size: PhysicalSize::new(1280, 720) }
 ```
 
+```rust
+let config = GameConfig {
+title: "asteroids",
+seed: 42,
+window_size: PhysicalSize::new(1600, 900),
+..GameConfig::default()
+};
+assert_eq!(config.fixed_dt, Seconds(1.0 / 60.0));
+```
+
 #### `headless`
 
 Build a game and drive it by hand, with no window and no clock.
 
 ```rust
 pub fn headless(config: GameConfig, setup: impl FnOnce(&mut App)) -> HeadlessSim;
+```
+
+```rust
+#[derive(Debug, PartialEq)]
+struct Ticks(u32);
+impl Component for Ticks {}
+
+fn spawn_counter(world: &mut World) {
+let entity = world.spawn();
+world.insert(entity, Ticks(0));
+}
+
+fn count(world: &mut World) {
+for (_, ticks) in world.query_mut::<&mut Ticks>() {
+ticks.0 += 1;
+}
+}
+
+let mut sim = headless(GameConfig::default(), |app| {
+app.add_system(Startup, spawn_counter);
+app.add_system(Update, count);
+});
+
+sim.tick();
+sim.tick();
+assert_eq!(sim.world().query::<&Ticks>().count(), 1);
 ```
 
 #### `HeadlessSim`
@@ -380,7 +421,9 @@ pub struct HeadlessSim;
 
 impl HeadlessSim {
     pub fn tick(&mut self);  // Run one Update tick, running Startup first if it has not run yet
-    pub fn draw(&mut self) -> &Submissions;  // Run the Draw phase once, as a rendered frame would, and return what…
+    // Run the Draw phase once, as a rendered frame would, and return what it
+    // submitted
+    pub fn draw(&mut self) -> &Submissions;
     pub fn world(&self) -> &World;  // The world, for asserting on state
     pub fn world_mut(&mut self) -> &mut World;  // The world, for arranging a test's starting state
     pub fn schedule_debug(&self) -> String;  // Every phase and its systems, in run order
@@ -453,6 +496,10 @@ pub trait Bundle: 'static + Send + Sync {
 }
 ```
 
+```rust
+world.commands().spawn((Position(0), Velocity(1)));
+```
+
 #### `Commands`
 
 Records structural changes to apply at the end of the current system.
@@ -466,7 +513,20 @@ impl Commands {
     pub fn despawn(&mut self, entity: Entity);  // Destroy `entity`
     pub fn insert<T: Component>(&mut self, entity: Entity, value: T);  // Give `entity` a component
     pub fn remove<T: Component>(&mut self, entity: Entity);  // Take a component away from `entity`
-    pub fn pending(&self) -> Vec<(CommandKind, Option<Entity>)>;  // What is queued, in recording order — for debugging a system that is…
+    // What is queued, in recording order — for debugging a system that is not
+    // changing what you expect
+    pub fn pending(&self) -> Vec<(CommandKind, Option<Entity>)>;
+}
+```
+
+```rust
+fn reap_the_dead(world: &mut World) {
+let mut commands = world.commands();
+for (entity, health) in world.query::<&Health>() {
+if health.0 <= 0 {
+commands.despawn(entity);
+}
+}
 }
 ```
 
@@ -476,6 +536,18 @@ Marks a plain-data type as storable on an entity.
 
 ```rust
 pub trait Component: 'static + Send + Sync {}
+```
+
+```rust
+struct Position {
+x: f32,
+y: f32,
+}
+impl Component for Position {}
+
+// Zero-sized components are idiomatic as tags.
+struct Frozen;
+impl Component for Frozen {}
 ```
 
 #### `DrawCtx`
@@ -492,6 +564,18 @@ impl DrawCtx {
     pub fn submit(&mut self, quad: Quad);  // Draw one quad
     pub fn submitted(&self) -> usize;  // How many quads have been submitted this frame
 }
+```
+
+```rust
+fn draw_world(ctx: &mut DrawCtx) {
+for (_entity, _position) in ctx.world.query::<&Position>() {
+// ctx.draw(...) — the submission sink arrives with the renderer.
+}
+}
+
+let mut sim = headless(GameConfig::default(), |app| {
+app.add_system(Draw, draw_world);
+});
 ```
 
 #### `Entity`
@@ -511,6 +595,11 @@ Marks a type as storable as a world resource.
 pub trait Resource: 'static + Send + Sync {}
 ```
 
+```rust
+struct Score(u32);
+impl Resource for Score {}
+```
+
 #### `With`
 
 Match only entities that carry `T`, yielding `()` in its tuple position.
@@ -520,6 +609,12 @@ pub struct With<T: Component>(PhantomData<fn() -> T>);
 // Query ReadOnlyQuery
 ```
 
+```rust
+for (entity, position, _) in world.query::<(&Position, With<Player>)>() {
+println!("{entity:?} is at {position:?}");
+}
+```
+
 #### `Without`
 
 Match only entities that do **not** carry `T`, yielding `()` like `With`.
@@ -527,6 +622,12 @@ Match only entities that do **not** carry `T`, yielding `()` like `With`.
 ```rust
 pub struct Without<T: Component>(PhantomData<fn() -> T>);
 // Query ReadOnlyQuery
+```
+
+```rust
+for (entity, position, _) in world.query::<(&Position, Without<Frozen>)>() {
+println!("{entity:?} can still move, from {position:?}");
+}
 ```
 
 #### `World`
@@ -546,13 +647,16 @@ impl World {
     pub fn remove<T: Component>(&mut self, entity: Entity);  // Take `T` away from `entity`
     pub fn try_remove<T: Component>(&mut self, entity: Entity) -> Result<(), EntityDeadError>;  // `World::remove`, reporting a dead entity instead of panicking
     pub fn query<'w, Q: ReadOnlyQuery<'w>>(&'w self) -> QueryIter<'w, Q>;  // Iterate every entity matching a read-only query
-    pub fn query_mut<'w, Q: Query<'w>>(&'w mut self) -> QueryIterMut<'w, Q>;  // Iterate every entity matching a query, with `&mut T` access where…
+    // Iterate every entity matching a query, with `&mut T` access where asked
+    pub fn query_mut<'w, Q: Query<'w>>(&'w mut self) -> QueryIterMut<'w, Q>;
     pub fn is_alive(&self, entity: Entity) -> bool;  // Whether `entity` is still live in this world
     pub fn entity_count(&self) -> usize;  // How many entities are alive
     pub fn component<T: Component>(&self, entity: Entity) -> &T;  // The `T` on `entity`, panicking if it has none
     pub fn component_mut<T: Component>(&mut self, entity: Entity) -> &mut T;  // The `T` on `entity` for modification, panicking if it has none
     pub fn find_component<T: Component>(&self, entity: Entity) -> Option<&T>;  // The `T` on `entity`, or `None` if it has none — or is not alive
-    pub fn find_component_mut<T: Component>(&mut self, entity: Entity) -> Option<&mut T>;  // The `T` on `entity` for modification, or `None` if it has none — or…
+    // The `T` on `entity` for modification, or `None` if it has none — or is not
+    // alive
+    pub fn find_component_mut<T: Component>(&mut self, entity: Entity) -> Option<&mut T>;
     pub fn commands(&self) -> Commands<'_>;  // Record structural changes to apply at the end of the running system
     pub fn insert_resource<T: Resource>(&mut self, value: T);  // Store a resource, replacing any of the same type
     pub fn remove_resource<T: Resource>(&mut self);  // Drop the `T` resource
@@ -561,6 +665,26 @@ impl World {
     pub fn find_resource<T: Resource>(&self) -> Option<&T>;  // The `T` resource, or `None` if the world has none
     pub fn find_resource_mut<T: Resource>(&mut self) -> Option<&mut T>;  // The `T` resource for modification, or `None` if the world has none
 }
+```
+
+```rust
+#[derive(Debug, PartialEq)]
+struct Position(i32);
+impl Component for Position {}
+#[derive(Debug, PartialEq)]
+struct Velocity(i32);
+impl Component for Velocity {}
+
+let mut world = World::new();
+let entity = world.spawn();
+world.insert(entity, Position(0));
+world.insert(entity, Velocity(3));
+
+for (_entity, position, velocity) in world.query_mut::<(&mut Position, &Velocity)>() {
+position.0 += velocity.0;
+}
+
+assert_eq!(world.component::<Position>(entity), &Position(3));
 ```
 
 #### `WorldView`
@@ -578,6 +702,14 @@ impl WorldView {
     pub fn find_resource<T: Resource>(&self) -> Option<&'w T>;  // The `T` resource, or `None` if the world has none
     pub fn is_alive(&self, entity: Entity) -> bool;  // Whether `entity` is still live
     pub fn entity_count(&self) -> usize;  // How many entities are alive
+}
+```
+
+```rust
+fn draw_positions(ctx: &mut DrawCtx) {
+for (entity, position) in ctx.world.query::<&Position>() {
+println!("{entity:?} at {position:?}");
+}
 }
 ```
 
@@ -605,7 +737,8 @@ impl Color {
     pub const RED: Color = Color::rgb(1.0, 0.0, 0.0);  // Opaque red
     pub const GREEN: Color = Color::rgb(0.0, 1.0, 0.0);  // Opaque green
     pub const BLUE: Color = Color::rgb(0.0, 0.0, 1.0);  // Opaque blue
-    pub const MAGENTA: Color = Color::rgb(1.0, 0.0, 1.0);  // Opaque magenta — the placeholder's color, and the engine's "look…
+    // Opaque magenta — the placeholder's color, and the engine's "look here"
+    pub const MAGENTA: Color = Color::rgb(1.0, 0.0, 1.0);
     pub const TRANSPARENT: Color = Color::rgba(0.0, 0.0, 0.0, 0.0);  // Fully transparent
     pub fn modulate(self, other: Color) -> Color;  // This color multiplied by another, component-wise — how tinting works
 }
@@ -638,7 +771,9 @@ pub struct EntityDeadError;
 
 impl EntityDeadError {
     pub fn entity(&self) -> Entity;  // The entity the failed operation named
-    pub fn operation(&self) -> &'static str;  // The operation that failed, as it is spelled in the API —…
+    // The operation that failed, as it is spelled in the API — `"despawn"`,
+    // `"insert"`, `"remove"`
+    pub fn operation(&self) -> &'static str;
 }
 ```
 
@@ -667,12 +802,23 @@ impl Radians {
 }
 ```
 
+```rust
+let quarter_turn = Radians::from_degrees(90.0);
+assert!((quarter_turn.as_f32() - std::f32::consts::FRAC_PI_2).abs() < 1e-6);
+```
+
 #### `atan2`
 
 The angle of the vector `(x, y)`, measured from the +X axis.
 
 ```rust
 pub fn atan2(y: f32, x: f32) -> Radians;
+```
+
+```rust
+// Straight down the +Y axis is a quarter turn clockwise.
+let angle = atan2(1.0, 0.0);
+assert!((angle.as_f32() - std::f32::consts::FRAC_PI_2).abs() < 1e-6);
 ```
 
 #### `rotate`
@@ -683,12 +829,26 @@ Turn `vector` by `angle`.
 pub fn rotate(vector: Vec2, angle: Radians) -> Vec2;
 ```
 
+```rust
+let turned = rotate(Vec2::new(1.0, 0.0), Radians::from_degrees(90.0));
+assert!((turned.x - 0.0).abs() < 1e-6);
+assert!((turned.y - 1.0).abs() < 1e-6);
+```
+
 #### `sin_cos`
 
 The sine and cosine of `angle`, both at once.
 
 ```rust
 pub fn sin_cos(angle: Radians) -> (f32, f32);
+```
+
+```rust
+let (sine, cosine) = sin_cos(Radians(0.0));
+assert_eq!((sine, cosine), (0.0, 1.0));
+
+// Same input, same bits, every run and every platform.
+assert_eq!(sin_cos(Radians(1.234)), sin_cos(Radians(1.234)));
 ```
 
 Also in `math`, re-exported from `glam`: `Vec2`, `Vec3`. This repository does not own their documentation, so what follows is a worked file rather than a generated entry — it compiles and runs on every test run.
@@ -785,6 +945,13 @@ Format one engine failure in the house style.
 pub fn message(what: &str, specifics: &str, likely_cause: &str, fix: &str) -> String;
 ```
 
+```rust
+[jidousha] <what happened>
+<specifics: entity/component/system names and values>
+likely cause: <the most common mistake producing this>
+fix: <the concrete change to make>
+```
+
 #### `Quad`
 
 One textured, tinted quadrilateral in world space: everything the engine draws, after expansion.
@@ -817,7 +984,9 @@ impl Rect {
     pub const UNIT: Rect = Rect { min: Vec2::ZERO, max: Vec2::ONE };  // The whole of something, in normalized coordinates: (0,0) to (1,1)
     pub fn size(self) -> Vec2;  // Width and height
     pub fn center(self) -> Vec2;  // The point in the middle
-    pub fn contains(self, point: Vec2) -> bool;  // Whether `point` is inside, counting the top-left edges and not the…
+    // Whether `point` is inside, counting the top-left edges and not the bottom-
+    // right ones — so adjacent rectangles never both claim a point
+    pub fn contains(self, point: Vec2) -> bool;
     pub fn overlaps(self, other: Rect) -> bool;  // Whether any part of `other` is inside; touching edges do not count
     pub fn contains_rect(self, other: Rect) -> bool;  // Whether `other` is entirely inside this one, edges included
 }
@@ -839,6 +1008,16 @@ impl Rng {
 }
 ```
 
+```rust
+let mut rng = Rng::from_seed(42);
+let first: Vec<u32> = (0..4).map(|_| rng.below(100)).collect();
+
+// The same seed replays the same numbers, always.
+let mut again = Rng::from_seed(42);
+let second: Vec<u32> = (0..4).map(|_| again.below(100)).collect();
+assert_eq!(first, second);
+```
+
 #### `Seconds`
 
 A duration, in seconds.
@@ -853,6 +1032,12 @@ impl Seconds {
 }
 ```
 
+```rust
+let frame = Seconds(1.0 / 60.0);
+let two_frames = frame + frame;
+assert!(two_frames > frame);
+```
+
 #### `TextureId`
 
 Which texture a quad samples.
@@ -862,7 +1047,8 @@ pub struct TextureId(u64);
 // Clone Copy PartialEq Eq PartialOrd Ord Hash Debug
 
 impl TextureId {
-    pub const WHITE: TextureId = TextureId(0);  // The untextured id: a flat white 1×1, for shapes that carry only a…
+    // The untextured id: a flat white 1×1, for shapes that carry only a color
+    pub const WHITE: TextureId = TextureId(0);
     pub const fn from_bits(bits: u64) -> Self;  // The id for a raw value
     pub const fn bits(self) -> u64;  // The raw value
 }
@@ -884,6 +1070,16 @@ pub struct Time {
 impl Time {
     pub fn new(fixed_dt: Seconds) -> Self;  // The clock at the start of a run, before the first tick
 }
+```
+
+```rust
+let mut simulation = Simulation::new(7, Seconds(1.0 / 60.0));
+simulation.tick();
+simulation.tick();
+
+let time = simulation.world().resource::<Time>();
+assert_eq!(time.tick, 2);
+assert_eq!(time.elapsed, Seconds(2.0 / 60.0));
 ```
 
 ### Render
@@ -911,12 +1107,24 @@ impl Camera {
 }
 ```
 
+```rust
+let mut camera = Camera::default();
+camera.center = Vec2::new(10.0, 0.0);
+camera.height = 20.0;      // 20 world units tall; zoom by changing this
+```
+
 #### `draw_sprites`
 
 The Draw system almost every game wants: draw every sprite there is.
 
 ```rust
 pub fn draw_sprites(ctx: &mut DrawCtx);
+```
+
+```rust
+let mut sim = headless(GameConfig::default(), |app| {
+app.add_system(Draw, draw_sprites);
+});
 ```
 
 #### `PhysicalSize`
@@ -945,7 +1153,9 @@ pub struct Sprite {
     pub texture: TextureHandle,  // What to draw
     pub region: Option<Rect>,  // Which part of the texture, in normalized 0..1 coordinates
     pub size: Vec2,  // How big the quad is, in world units
-    pub anchor: Vec2,  // Where the transform's position sits on the quad: `(0, 0)` is the…
+    // Where the transform's position sits on the quad: `(0, 0)` is the center,
+    // `(-0.5, -0.5)` the top-left corner, `(0.5, 0.5)` the bottom-right
+    pub anchor: Vec2,
     pub tint: Color,  // Multiplied into the texture's color
     pub flip_x: bool,  // Mirror horizontally
     pub flip_y: bool,  // Mirror vertically
@@ -959,6 +1169,14 @@ impl Sprite {
 }
 ```
 
+```rust
+let ship = Sprite {
+texture: assets.load_texture("ship.png"),
+size: Vec2::new(2.0, 2.0),
+..Sprite::new(assets.load_texture("ship.png"))
+};
+```
+
 #### `Submit`
 
 The drawing verbs, added to `DrawCtx`.
@@ -970,6 +1188,14 @@ pub trait Submit {
     fn line(&mut self, from: Vec2, to: Vec2, thickness: f32, color: Color, depth: Depth);  // Draw a line from `from` to `to`, `thickness` world units wide
     fn circle(&mut self, center: Vec2, radius: f32, color: Color, depth: Depth);  // Fill a circle, as a fan of sixteen quads rather than as one
     fn text(&mut self, at: Vec2, text: &str, style: TextStyle);  // Draw `text` with its first character's top-left corner at `at`
+}
+```
+
+```rust
+fn draw_the_game(ctx: &mut DrawCtx, transform: &Transform, sprite: &Sprite) {
+ctx.sprite(transform, sprite);
+ctx.circle(Vec2::ZERO, 0.5, Color::WHITE, Depth::layer(1));
+ctx.text(Vec2::new(-8.0, -4.0), "score 12", TextStyle::default());
 }
 ```
 
@@ -989,6 +1215,14 @@ pub struct TextStyle {
 impl TextStyle {
     pub fn width_of(&self, text: &str) -> f32;  // In world units — its widest line only, so a block centres crooked
 }
+```
+
+```rust
+let style = TextStyle {
+size: 1.5,                 // one line is 1.5 world units tall
+color: Color::WHITE,
+..TextStyle::default()
+};
 ```
 
 #### `Transform`
@@ -1012,6 +1246,17 @@ impl Transform {
 }
 ```
 
+```rust
+let at_origin = Transform::default();
+let placed = Transform {
+pos: Vec2::new(3.0, -2.0),
+rot: Radians::from_degrees(90.0),
+..Transform::default()
+};
+assert_eq!(at_origin.pos, Vec2::ZERO);
+assert_eq!(placed.scale, Vec2::ONE, "scale defaults to natural size");
+```
+
 ### Assets
 
 #### `AssetError`
@@ -1031,8 +1276,10 @@ pub enum AssetError {
 // Clone Debug PartialEq Eq Display
 
 impl AssetError {
-    pub fn from_http_status(status: u16) -> Option<AssetError>;  // What an HTTP status means for an asset, or `None` if it means…
-    pub fn message(&self, path: &str, kind: AssetKind, requested_at: &str) -> String;  // The failure as a §9 message, given what was being loaded and from…
+    // What an HTTP status means for an asset, or `None` if it means success
+    pub fn from_http_status(status: u16) -> Option<AssetError>;
+    // The failure as a §9 message, given what was being loaded and from where
+    pub fn message(&self, path: &str, kind: AssetKind, requested_at: &str) -> String;
 }
 ```
 
@@ -1044,7 +1291,9 @@ One asset that will not arrive, reported once at the commit that resolved it.
 pub struct AssetFailure {
     pub path: String,  // The path as the game asked for it
     pub kind: AssetKind,  // Which kind of load this was
-    pub requested_at: String,  // Where the game asked, so the message points at the game's line…
+    // Where the game asked, so the message points at the game's line rather than
+    // the loader's
+    pub requested_at: String,
     pub error: AssetError,  // What went wrong, from the source
 }
 // Clone Debug PartialEq Eq
@@ -1068,13 +1317,20 @@ impl Assets {
     pub fn status<H: AssetHandle>(&self, handle: H) -> AssetStatus;  // Where `handle` is in its life
     pub fn bytes_of<H: AssetHandle>(&self, handle: H) -> Option<&[u8]>;  // The bytes behind `handle`, if it is `Ready` and holds bytes
     pub fn texture_of(&self, handle: TextureHandle) -> Option<&TextureData>;  // The decoded image behind `handle`, while the store still holds it
-    pub fn take_uploads(&mut self) -> Vec<TextureUpload>;  // Every texture that has become `Ready` since the last call, with…
+    // Every texture that has become `Ready` since the last call, with texels
+    pub fn take_uploads(&mut self) -> Vec<TextureUpload>;
     pub fn path_of<H: AssetHandle>(&self, handle: H) -> &str;  // The path `handle` was loaded from
     pub fn all_ready(&self) -> bool;  // Whether every load asked for so far has resolved
     pub fn unload<H: AssetHandle>(&mut self, handle: H);  // Throw `handle` away, freeing what it held
     pub fn commit(&mut self, tick: u64) -> Vec<AssetFailure>;  // Apply everything that finished, and nothing else
     pub fn resolved(&self) -> &[Resolution];  // What the most recent `commit`(Assets::commit) resolved, in order
 }
+```
+
+```rust
+world.insert_resource(Assets::new(source));
+
+let player = world.resource_mut::<Assets>().load_texture("player.png");
 ```
 
 #### `AssetStatus`
@@ -1116,6 +1372,21 @@ impl MemorySource {
 }
 ```
 
+```rust
+let mut source = MemorySource::new();
+source.insert("player.png", b"fake png".to_vec());
+source.complete_at("player.png", 3);
+
+let mut assets = Assets::new(source);
+let player = assets.load_texture("player.png");
+
+assets.commit(1);
+assert_eq!(assets.status(player), AssetStatus::Loading);
+
+assets.commit(3);
+assert_eq!(assets.status(player), AssetStatus::Ready);
+```
+
 #### `TextureHandle`
 
 A loaded — or loading — image.
@@ -1148,6 +1419,13 @@ impl Input {
     pub fn window_focused(&self) -> bool;  // Whether the window had focus this tick
     pub fn snapshot(&self) -> &InputSnapshot;  // The whole snapshot, for the recorder and for tests
 }
+```
+
+```rust
+world.insert_resource(Input::new(InputSnapshot::new()));
+
+let input = world.resource::<Input>();
+assert!(!input.held(Key::Space));
 ```
 
 #### `Key`
@@ -1185,7 +1463,9 @@ pub enum Key {
 impl Key {
     pub const ALL: &'static [Key];  // Every key, in declaration order
     pub fn code(self) -> u16;  // This key's wire code, as written into recordings
-    pub fn find_by_code(code: u16) -> Option<Key>;  // The key a wire code names, or `None` if this build has never heard…
+    // The key a wire code names, or `None` if this build has never heard of it — a
+    // recording from a newer engine, most likely
+    pub fn find_by_code(code: u16) -> Option<Key>;
     pub fn name(self) -> &'static str;  // The variant's name, for messages and for `input_echo`
 }
 ```
@@ -1205,7 +1485,8 @@ pub enum PointerButton {
 impl PointerButton {
     pub const ALL: &'static [PointerButton] = &[ PointerButton::Primary, PointerButton::Secondary, PointerButton::Middle, ];  // Every button, in declaration order
     pub fn code(self) -> u8;  // This button's wire code, as written into recordings
-    pub fn find_by_code(code: u8) -> Option<PointerButton>;  // The button a wire code names, or `None` if this build has never…
+    // The button a wire code names, or `None` if this build has never heard of it
+    pub fn find_by_code(code: u8) -> Option<PointerButton>;
     pub fn name(self) -> &'static str;  // The variant's name, for messages
 }
 ```
@@ -1233,7 +1514,9 @@ One pointer, for one tick.
 ```rust
 pub struct PointerState {
     pub id: PointerId,  // Which pointer this is
-    pub screen: Vec2,  // Where it is, in pixels from the window's top-left — the same…
+    // Where it is, in pixels from the window's top-left — the same orientation as
+    // world space, differing in units and camera offset (conventions)
+    pub screen: Vec2,
     pub scroll: f32,  // Scroll for this tick, in lines
 }
 // Clone Debug PartialEq

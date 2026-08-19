@@ -388,8 +388,24 @@ that's exactly what acceptance milestone E0 tests (implementation plan).
   reading it, so `completeness_failures` now fails the run when an exported item
   yields no declaration. A generator that can under-report silently will.
 
-  **Still unimplemented: the "tiny example" third of the bullet above.** Entries
-  carry a signature and a one-liner and no example. Deferred until E0 run 2 says
+  ~~**Still unimplemented: the "tiny example" third of the bullet above.**~~
+  **Built, once ADR-0025's split made room.** Entries now carry a signature, a
+  one-liner and the item's own doctest, which costs ~2.1k rather than the ~5k
+  estimated below — only *exported* items render one, and most of the 41 blocks
+  in the crates hang off things this surface never names. The example is the
+  crate's doctest, so it is code CI compiles, the same argument the Quickstart is
+  embedded verbatim for.
+
+  Three things are stripped on the way out, and the third was found by the
+  vocabulary gate firing rather than by foresight: rustdoc's hidden `#` setup
+  lines, visible `use jidousha_…` imports, and internal crate paths written out
+  mid-expression. All three name crates a facade exists to hide, and the
+  document's own second sentence is "everything here is reachable from one
+  import" — so an example that kept them would contradict the page it sits on.
+  What remains is prelude-only and callable, which is what F-001 asked for.
+
+  The original note, kept because its reasoning is what got it built:
+  Entries carried a signature and a one-liner and no example. Deferred until E0 run 2 says
   whether signatures alone are enough (e0-findings.md F-001, "Still open") — the
   document is at ~13.8k tokens of 25,000 and the ~39 doctests already in the
   crates would cost about 5k more, so budget is not the constraint. (It became
@@ -422,6 +438,42 @@ that's exactly what acceptance milestone E0 tests (implementation plan).
   longest bodies with the shortest summaries in their groups. **This now outranks
   the F-017/F-036 export gate**, which has cost three runs a lookup each; this one
   cost a run a debug cycle and cost this file a recorded falsehood (F-039).
+
+  **Built — the exact half. Measured and declined — the fuzzy half.** The two
+  halves of the paragraph above turned out to be very different propositions, and
+  the numbers are recorded here so the next reader does not have to re-derive
+  them.
+
+  The *truncated member line* half was not a heuristic at all, and it was worse
+  than described. `trailing` cut a member's summary at 68 characters and appended
+  an ellipsis, justified by "the whole sentence stays on the item it belongs to;
+  this is the reminder" — **and that premise was false.** A member has no entry of
+  its own anywhere in this document, so its summary appears on that line and
+  nowhere else; the cut tail was not kept somewhere, it was deleted. It was
+  happening to 28 lines. `FrameRecord::quads` was losing "…not *submission*
+  order", which is the whole of ADR-0024. `member_lines` now puts a long summary
+  on its own wrapped line above the signature, `cut_summaries` fails the run on
+  any line inside a code block that ends in an ellipsis, and the cost is a few
+  lines of document.
+
+  The *body states a fact the summary drops* half **is not a gate, deliberately.**
+  Both shapes suggested above were measured against the real sources:
+
+  - "bodies much longer than their summaries" flags **71 of the exported items**
+    at a 3× ratio. That is most of the surface, and it is not a defect — a doc
+    comment's body is *supposed* to be longer than its summary.
+  - "a number in the body the summary drops" flags **67**, and inspection shows
+    the signal is swamped by ADR numbers (`0008`, `0011`, `0015`) and section
+    references (`§6`, `§9`) rather than quantities.
+
+  Neither is worth shipping. A gate that fires on most of the surface trains its
+  reader to ignore it, which is strictly worse than no gate — the same argument
+  this document makes about a thin reference entry being indistinguishable from a
+  complete one. If this returns, the way in is a *targeted* signal rather than a
+  size comparison: the recurring shape is a body sentence that names a count of
+  something the API produces (`circle`'s sixteen wedges, `Submissions`' six
+  vertices per quad), and that is a question about the vocabulary of a handful of
+  doc comments, not about their length.
 - Fixed structure: **Quickstart** (one complete ~60-line game, compiling,
   CI-tested — it IS an example file, included verbatim) → **Concepts** (seven
   short paragraphs: world/systems/phases, determinism & the tick, drawing,

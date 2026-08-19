@@ -523,6 +523,154 @@ class GenApiDocTest(unittest.TestCase):
             gen_api_doc.forbidden_words(text), list(gen_api_doc.TESTING_VOCABULARY)
         )
 
+    def test_a_long_member_summary_is_kept_whole_above_its_signature(self):
+        # Four of E0 run 4's sixteen findings were this: the reference printed a
+        # clause that stopped mid-sentence. The old code truncated at 68
+        # characters on the stated grounds that "the whole sentence stays on the
+        # item it belongs to" — but a member has no entry of its own, so the
+        # tail reached the reader nowhere at all.
+        short = gen_api_doc.member_lines("pub fn tick(&mut self);", "Advance one tick")
+        self.assertEqual(short, ["    pub fn tick(&mut self);  // Advance one tick"])
+
+        long_summary = (
+            "Every quad drawn this frame, in draw order — the depth sort, "
+            "not submission order"
+        )
+        lines = gen_api_doc.member_lines("pub fn quads(&self) -> Vec<DrawnQuad>;", long_summary)
+        self.assertEqual(lines[-1], "    pub fn quads(&self) -> Vec<DrawnQuad>;")
+        self.assertTrue(all(line.strip().startswith("//") for line in lines[:-1]))
+        # Whole, not shortened: every word of the summary survives.
+        kept = " ".join(line.strip().removeprefix("// ") for line in lines[:-1])
+        self.assertEqual(kept, long_summary)
+        self.assertNotIn("…", "".join(lines))
+
+    def test_a_summary_that_stops_mid_sentence_is_refused(self):
+        # Prose may end in an ellipsis and the Conventions digest does; a
+        # signature line may not, because there is nowhere else the rest of that
+        # sentence could be.
+        code = "```rust\npub fn quads(&self);  // Every quad drawn this frame, in dra…\n```\n"
+        self.assertEqual(len(gen_api_doc.cut_summaries(code)), 1)
+        prose = "Constants for the common colours (`Color::WHITE`, …). No 0-255 in v1.\n"
+        self.assertEqual(gen_api_doc.cut_summaries(prose), [])
+
+    def test_the_committed_documents_cut_no_summary_short(self):
+        root = Path(__file__).resolve().parents[2]
+        for name in ("jidousha-api.md", "jidousha-testing.md"):
+            with self.subTest(document=name):
+                text = (root / "docs/api" / name).read_text(encoding="utf-8")
+                self.assertEqual(gen_api_doc.cut_summaries(text), [])
+
+    def test_an_entry_example_is_the_doctest_with_its_setup_removed(self):
+        # public-api.md §4's entry spec is "signature, one-liner, tiny example",
+        # and the example third went unbuilt until the budget had room. These
+        # are the crate's own doctests, so the example in the document is code
+        # CI compiles.
+        block = [
+            "Turn `vector` by `angle`.",
+            "",
+            "```",
+            "# use jidousha_core::math::{Radians, Vec2, rotate};",
+            "let turned = rotate(Vec2::new(1.0, 0.0), Radians::from_degrees(90.0));",
+            "```",
+        ]
+        self.assertEqual(
+            gen_api_doc.doc_example(block),
+            ["let turned = rotate(Vec2::new(1.0, 0.0), Radians::from_degrees(90.0));"],
+        )
+
+    def test_an_entry_example_never_names_an_internal_crate(self):
+        # Three ways a doctest names its own crate, all of which would put the
+        # whole FORBIDDEN list into the document by the back door: a hidden
+        # setup line, a visible import, and a path written out mid-expression.
+        # The document's own second sentence is "everything here is reachable
+        # from one import", so dropping them makes the example more correct for
+        # the reader it is shown to, not less.
+        block = [
+            "```",
+            "# use jidousha_core::World;",
+            "use jidousha_assets::Assets;",
+            "let mut assets = Assets::new(jidousha_platform::asset_source(\"assets\"));",
+            "```",
+        ]
+        rendered = gen_api_doc.doc_example(block)
+        self.assertEqual(rendered, ['let mut assets = Assets::new(asset_source("assets"));'])
+        self.assertEqual(gen_api_doc.forbidden_words("\n".join(rendered)), [])
+
+    def test_an_entry_example_cites_no_document_its_reader_may_not_open(self):
+        block = ["```", "// The frame is owned (ADR-0023).", "let first = frames[0];", "```"]
+        self.assertEqual(
+            gen_api_doc.doc_example(block),
+            ["// The frame is owned.", "let first = frames[0];"],
+        )
+
+    def test_a_doctest_that_is_only_setup_shows_no_example(self):
+        # Rendering an empty code fence would be worse than rendering nothing:
+        # it reads as "there is an example and it is blank".
+        self.assertEqual(gen_api_doc.doc_example(["```", "# use jidousha_core::World;", "```"]), [])
+        self.assertEqual(gen_api_doc.doc_example(["No code here at all."]), [])
+
+    def test_a_literal_hash_survives_rustdocs_escape(self):
+        self.assertEqual(gen_api_doc.doc_example(["```", "## not setup", "```"]), ["# not setup"])
+
+    def test_the_committed_documents_carry_worked_examples(self):
+        # A floor, like the anti-shrink one: the extractor silently returning
+        # nothing would take the whole feature out and change no other check.
+        #
+        # Counting code blocks against entries is NOT enough and was tried: the
+        # Quickstart and Concepts carry blocks of their own, so "more blocks
+        # than entries" stays true with every example removed. Checked by
+        # mutation — that version passed with the extractor stubbed to return
+        # nothing, which is the whole failure it was supposed to catch.
+        #
+        # What is specific to an entry carrying an example is the *shape*: a
+        # declaration block closed and a second block opened immediately after.
+        root = Path(__file__).resolve().parents[2]
+        for name, floor in (("jidousha-api.md", 20), ("jidousha-testing.md", 5)):
+            with self.subTest(document=name):
+                text = (root / "docs/api" / name).read_text(encoding="utf-8")
+                self.assertGreater(text.count("```\n\n```rust"), floor)
+
+    def test_the_extractor_finds_examples_in_the_real_sources(self):
+        # The other end of the same guard. The check above reads the committed
+        # documents; this one reads the crates, so a doc comment convention that
+        # drifts out from under the extractor fails here rather than quietly
+        # emptying the reference.
+        root = Path(__file__).resolve().parents[2]
+        items = gen_api_doc.scan_sources(gen_api_doc.crate_sources(root))
+        self.assertGreater(len([item for item in items.values() if item.example]), 20)
+
+    def test_a_pointer_at_a_worked_example_that_is_not_there_is_refused(self):
+        root = Path(__file__).resolve().parents[2]
+        self.assertEqual(
+            gen_api_doc.dangling_examples("the whole loop is `examples/no_such.rs`", root),
+            ["examples/no_such.rs"],
+        )
+        self.assertEqual(
+            gen_api_doc.dangling_examples("see `examples/homing.rs` and `examples/`.", root),
+            [],
+        )
+
+    def test_a_pointer_at_the_example_a_run_writes_is_refused_while_it_still_exists(self):
+        # The half of the check that "does the file exist" cannot do, and the
+        # reason the check exists at all. `e0-prompt.md`'s before-the-run step 2
+        # deletes `crates/jidousha/examples/pong/`, so a pointer at it is
+        # correct on the day it is written and dangling on the day a run would
+        # follow it. A stat-only check passes on the commit that introduces the
+        # bug and fails nowhere afterwards — which is exactly what happened.
+        root = Path(__file__).resolve().parents[2]
+        self.assertTrue((root / "crates/jidousha/examples/pong").exists(), "on disk today")
+        self.assertEqual(
+            gen_api_doc.dangling_examples("written down in `examples/pong/capture.rs`", root),
+            ["examples/pong/capture.rs (deleted before the next run)"],
+        )
+
+    def test_the_committed_documents_point_only_at_examples_that_outlive_a_run(self):
+        root = Path(__file__).resolve().parents[2]
+        for name in ("jidousha-api.md", "jidousha-testing.md"):
+            with self.subTest(document=name):
+                text = (root / "docs/api" / name).read_text(encoding="utf-8")
+                self.assertEqual(gen_api_doc.dangling_examples(text, root), [])
+
     def test_each_document_is_counted_against_its_own_budget(self):
         # The budget is the point (public-api.md §4): everything in a document
         # has to be relevant to what its reader is doing. Two readers, two

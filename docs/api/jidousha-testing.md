@@ -466,10 +466,11 @@ let image = gpu.capture().expect("an offscreen renderer reads its own target");
 std::fs::write("target/verify/mygame.png", encode_png(&image))?;
 ```
 
-`examples/pong/capture.rs` is that with its reasoning written down, and
-`examples/prototype_kit/capture.rs` is the other shape — a game whose own `play`
-is handed the renderer, so it can run the session twice and check that both
-renderers agreed about the world.
+`examples/prototype_kit/capture.rs` is that with its reasoning written down. It
+also shows the other shape available to you: because its own `play` is handed the
+renderer, it can run the whole session twice and check that the world did the
+same thing both times. Replaying the recorded plan is the cheaper road and the
+one that works whatever shape your game is.
 
 That "the ids mean the same thing" step is the load-bearing one, and it holds
 because both counters start empty and both are filled by the same call in the same
@@ -520,7 +521,8 @@ An asset that resolved on some tick.
 
 ```rust
 pub struct AssetReady {
-    pub request: u64,  // Which request resolved, as `RequestId`(crate::RequestIdBits)…
+    // Which request resolved, as `RequestId`(crate::RequestIdBits) numbers them
+    pub request: u64,
     pub arrived: bool,  // Whether it arrived
 }
 // Clone Copy Debug PartialEq Eq
@@ -570,12 +572,14 @@ pub struct Comparison {
     pub total: usize,  // Pixels compared
     pub worst: u8,  // The largest single-channel difference anywhere
     pub worst_at: Option<(u32, u32)>,  // Where `worst` was found, in pixels from the top-left
-    pub size_mismatch: Option<(PhysicalSize, PhysicalSize)>,  // Set when the two are not even the same shape, which no tolerance…
+    // Set when the two are not even the same shape, which no tolerance covers
+    pub size_mismatch: Option<(PhysicalSize, PhysicalSize)>,
 }
 // Clone Debug PartialEq Display
 
 impl Comparison {
-    pub fn differing_fraction(&self) -> f32;  // The fraction of compared pixels that differed, 0.0 when nothing was…
+    // The fraction of compared pixels that differed, 0.0 when nothing was compared
+    pub fn differing_fraction(&self) -> f32;
 }
 ```
 
@@ -609,7 +613,8 @@ pub enum DecodeError {
     UnknownButton { code: u8 },  // A button code this build has never heard of
     NotCanonical { list: &'static str },  // A list that was not sorted, or held a duplicate
     NotFinite { field: &'static str },  // A float that is NaN or infinite
-    MalformedPointers,  // A snapshot with no primary pointer, or with its pointers out of…
+    // A snapshot with no primary pointer, or with its pointers out of order
+    MalformedPointers,
 }
 // Clone Debug PartialEq Eq Display
 ```
@@ -685,8 +690,11 @@ pub struct FrameRecord {
 // Clone Debug PartialEq
 
 impl FrameRecord {
-    pub fn quads(&self) -> Vec<DrawnQuad>;  // Every quad drawn this frame, in draw order — the depth sort, not…
-    pub fn covering(&self, world: Vec2) -> Vec<DrawnQuad>;  // Every quad covering `world`, front to back — the last one drawn…
+    // Every quad drawn this frame, in draw order — the depth sort, not submission
+    // order
+    pub fn quads(&self) -> Vec<DrawnQuad>;
+    // Every quad covering `world`, front to back — the last one drawn first
+    pub fn covering(&self, world: Vec2) -> Vec<DrawnQuad>;
     pub fn quad_count(&self) -> usize;  // How many quads were drawn
     pub fn transcript(&self) -> String;  // This one frame as stable, diffable text — every quad, one per line
 }
@@ -700,13 +708,34 @@ Draws a headless game and keeps every frame, for a test to assert on.
 pub struct FrameRecorder;
 
 impl FrameRecorder {
-    pub fn new(viewport: PhysicalSize) -> Self;  // A recorder drawing to a surface `viewport` pixels across,…
-    pub fn settle_assets(&mut self, sim: &mut HeadlessSim, tick: u64);  // Apply what has finished loading and put it on the GPU, as the…
+    // A recorder drawing to a surface `viewport` pixels across, overriding the
+    // `Camera` resource's own
+    pub fn new(viewport: PhysicalSize) -> Self;
+    // Apply what has finished loading and put it on the GPU, as the driver does at
+    // the top of every frame
+    pub fn settle_assets(&mut self, sim: &mut HeadlessSim, tick: u64);
     pub fn draw(&mut self, sim: &mut HeadlessSim) -> FrameRecord;  // Run the game's Draw phase once and record the frame it produced
     pub fn font_texture(&self) -> BackendTextureId;  // Which backend texture the engine's font atlas is on
     pub fn frames(&self) -> &[FrameRecord];  // Every frame recorded so far, oldest first
     pub fn transcript(&self) -> String;  // Every recorded frame as text, oldest first — not only the last
 }
+```
+
+```rust
+let mut sim = headless(GameConfig::default(), |app| {
+app.add_system(Draw, draw_a_dot);
+});
+let mut recorder = FrameRecorder::new(PhysicalSize::new(1280, 720));
+
+sim.tick();
+let frame = recorder.draw(&mut sim);
+assert!(!frame.covering(Vec2::ZERO).is_empty(), "the dot covers the origin");
+
+// The frame is owned, so looking at the run's history and drawing another
+// frame compose in one function rather than fighting.
+let first = recorder.frames()[0].clone();
+let staged = recorder.draw(&mut sim);
+assert_eq!(first.quad_count(), staged.quad_count());
 ```
 
 #### `Input`
@@ -726,6 +755,13 @@ impl Input {
     pub fn window_focused(&self) -> bool;  // Whether the window had focus this tick
     pub fn snapshot(&self) -> &InputSnapshot;  // The whole snapshot, for the recorder and for tests
 }
+```
+
+```rust
+world.insert_resource(Input::new(InputSnapshot::new()));
+
+let input = world.resource::<Input>();
+assert!(!input.held(Key::Space));
 ```
 
 #### `InputEvent`
@@ -756,12 +792,33 @@ pub struct InputScript;
 impl InputScript {
     pub fn new() -> Self;  // An empty script: every tick reports the player doing nothing
     pub fn hold(mut self, key: Key, ticks: Range<u64>) -> Self;  // Hold `key` down for `ticks`
-    pub fn press(mut self, key: Key, tick: u64) -> Self;  // Tap `key` on `tick`: pressed, held, and released, all on that one…
+    // Tap `key` on `tick`: pressed, held, and released, all on that one tick
+    pub fn press(mut self, key: Key, tick: u64) -> Self;
     pub fn pointer_at(mut self, tick: u64, screen: Vec2) -> Self;  // Put the pointer at `screen` from `tick` onwards
     pub fn click(mut self, button: PointerButton, tick: u64) -> Self;  // Tap `button` on `tick`
     pub fn snapshot_at(&self, tick: u64) -> InputSnapshot;  // What the player is doing on `tick`
-    pub fn last_tick(&self) -> u64;  // The last tick any directive mentions, so a test can drive the whole…
+    // The last tick any directive mentions, so a test can drive the whole script
+    // without restating its length
+    pub fn last_tick(&self) -> u64;
 }
+```
+
+```rust
+let script = InputScript::new()
+.hold(Key::D, 10..120)
+.press(Key::Space, 30)
+.pointer_at(60, Vec2::new(400.0, 300.0))
+.click(PointerButton::Primary, 61);
+
+// Walking right from tick 10, still walking at 100.
+assert!(script.snapshot_at(10).pressed_keys().contains(&Key::D));
+assert!(script.snapshot_at(100).held_keys().contains(&Key::D));
+assert!(script.snapshot_at(120).released_keys().contains(&Key::D));
+
+// The jump is one tick: pressed, held, released, all at 30.
+let jump = script.snapshot_at(30);
+assert!(jump.pressed_keys().contains(&Key::Space));
+assert!(jump.released_keys().contains(&Key::Space));
 ```
 
 #### `InputSnapshot`
@@ -799,6 +856,21 @@ impl MemorySource {
     pub fn fail(&mut self, path: &str, error: AssetError);  // Make `path` fail, as a missing or unreadable file would
     pub fn complete_at(&mut self, path: &str, tick: u64);  // Hold `path`'s completion until `tick`
 }
+```
+
+```rust
+let mut source = MemorySource::new();
+source.insert("player.png", b"fake png".to_vec());
+source.complete_at("player.png", 3);
+
+let mut assets = Assets::new(source);
+let player = assets.load_texture("player.png");
+
+assets.commit(1);
+assert_eq!(assets.status(player), AssetStatus::Loading);
+
+assets.commit(3);
+assert_eq!(assets.status(player), AssetStatus::Ready);
 ```
 
 #### `NullBackend`
@@ -892,6 +964,20 @@ impl Recording {
 }
 ```
 
+```rust
+let mut recording = Recording::new(42, Seconds(1.0 / 60.0));
+recording.push(TickRecord {
+tick: 1,
+input: InputSnapshot::new(),
+readiness: Vec::new(),
+});
+
+let bytes = recording.encode();
+let read_back = Recording::try_decode(&bytes).expect("it was just written");
+assert_eq!(read_back.seed(), 42);
+assert_eq!(read_back.ticks().len(), 1);
+```
+
 #### `RecordingError`
 
 Why a recording could not be read.
@@ -948,6 +1034,21 @@ impl ReplaySource {
 }
 ```
 
+```rust
+let mut source = MemorySource::new();
+source.insert("hero.png", b"art".to_vec());
+
+// The session being replayed saw request 0 arrive on tick 5, however fast
+// the disk was on the day.
+let mut assets = Assets::new(ReplaySource::new(source, [(0, 5)]));
+let hero = assets.load_bytes("hero.png");
+
+assets.commit(4);
+assert_eq!(assets.status(hero), AssetStatus::Loading);
+assets.commit(5);
+assert_eq!(assets.status(hero), AssetStatus::Ready);
+```
+
 #### `SnapshotBuilder`
 
 Accumulates events between frames and hands out one snapshot per tick.
@@ -958,7 +1059,9 @@ pub struct SnapshotBuilder;
 impl SnapshotBuilder {
     pub fn new() -> Self;  // A builder with nothing pressed and the window focused
     pub fn record(&mut self, event: InputEvent);  // Take note of one event
-    pub fn first_tick_snapshot(&mut self) -> InputSnapshot;  // The snapshot for the first Update tick of this frame, consuming the…
+    // The snapshot for the first Update tick of this frame, consuming the frame's
+    // edges
+    pub fn first_tick_snapshot(&mut self) -> InputSnapshot;
     pub fn catch_up_snapshot(&self) -> InputSnapshot;  // The snapshot for a second or later Update tick of the same frame
 }
 ```
@@ -1017,7 +1120,8 @@ How different two pictures may be and still count as the same picture.
 ```rust
 pub struct Tolerance {
     pub per_channel: u8,  // How far one channel of one pixel may be from the reference, 0–255
-    pub differing_fraction: f32,  // What fraction of pixels may differ by more than `per_channel`,…
+    // What fraction of pixels may differ by more than `per_channel`, 0.0–1.0
+    pub differing_fraction: f32,
 }
 // Clone Copy Debug PartialEq
 
