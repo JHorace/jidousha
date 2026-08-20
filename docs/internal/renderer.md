@@ -280,7 +280,13 @@ Implemented (R3):
   it off a transcript because the old wording said "including the gap below it",
   which describes a border that is above *and* below. No `height_of` was added —
   once the metric is stated it is `size` times the line count. These statements
-  move together. `TextStyle::width_of` measures a
+  move together — and **the pen clause is half of the metric, not a detail of
+  it**. The public side carried "an N-line block occupies `N * size`" alone for
+  five runs, which constrains the total and says nothing about where line two
+  starts; E0 run 10 built every vertical layout number in its game on an
+  inference from recorded quad bounds. Concepts now states the spacing and the
+  total, and `Submit::text`'s doc comment says the same thing for a reader who is
+  in the source. Three sites, one metric. `TextStyle::width_of` measures a
   string exactly (monospace, no kerning) — without it a game cannot centre a
   score, and guessing is what makes prototype UI look wrong.
 - `\n` starts a new line. Wrapping remains the non-goal; an explicit line break

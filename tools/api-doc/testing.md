@@ -20,6 +20,69 @@ rather than solve: running the game forward and looking is allowed, and it is
 usually both simpler and more honest than a closed form kept in step by hand.
 Design for a slow tick and you will design around a cost that is not there.
 
+**A whole *game* is cheap to build too, which is what makes a tuning sweep a loop
+rather than a shell script.** `headless(config, setup)` builds a fresh simulation
+on every call and keeps nothing between them, so forty candidate settings are
+forty sims in one process. The thing that stops a game taking that offer is where
+its numbers live: a `const` is fixed when the binary is, so a game whose speeds
+and sizes are constants can only be swept by rewriting its own source between
+runs. That script is a reasonable thing to write and it does work; it is worth
+knowing before you write it that you do not have to.
+
+**A game that expects to be tuned puts the numbers a sweep would vary in a
+resource.** One `Copy` struct, an associated constant for the set the game ships
+with, and a `Startup` system that takes what it finds in the world or falls back
+to that set:
+
+```rust
+#[derive(Clone, Copy)]
+struct Tuning {
+    paddle_speed: f32,
+    ball_speed: f32,
+    ramp: f32,
+}
+impl Resource for Tuning {}
+
+impl Tuning {
+    /// What the game ships with — the row the sweep chose.
+    const SHIPPED: Self = Self { paddle_speed: 20.0, ball_speed: 42.0, ramp: 1.12 };
+}
+
+fn spawn_court(world: &mut World) {
+    // Whatever a harness put here before the first tick, or the shipped set.
+    let tuning = world.find_resource::<Tuning>().copied().unwrap_or(Tuning::SHIPPED);
+    world.insert_resource(tuning);
+    // ... spawn the paddles and the ball from `tuning`
+}
+```
+
+**The window between building a game and running it is where a check gets its
+say.** `Startup` runs *inside* the first tick, and `world_mut()` is yours before
+you call it — so a candidate inserted there is what `Startup` finds:
+
+```rust
+for candidate in candidates {
+    let mut sim = headless(GameConfig::default(), build_game);
+    sim.world_mut().insert_resource(candidate);   // before tick 1
+    for _ in 0..TICKS {
+        sim.tick();
+    }
+    println!("{candidate:?}: {}", score_of(&sim));
+}
+```
+
+The windowed `run` inserts nothing and gets `SHIPPED`, so the game a person plays
+is the game the sweep's best row describes — and after `Startup` every system
+reads `world.resource::<Tuning>()` and cannot miss, because `Startup` pinned it.
+
+**It is a trade, and a game with two numbers should not take it.** A constant is
+checked at compile time, reads with no indirection and can appear in a `const fn`;
+a resource is none of those. What buys the change is a sweep you expect to run
+more than twice. Below that bar, rewrite the source between runs and do not
+apologise for it — just keep the winning row in the source rather than in the
+script, because the script's last write is whatever the last candidate happened
+to be.
+
 **"Forward" means your game's own step functions, not a copy of the
 simulation.** There is no way to fork a `HeadlessSim` — `World` is not
 cloneable, `Recording` replays input rather than state, and rebuilding from

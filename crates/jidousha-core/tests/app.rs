@@ -1,7 +1,8 @@
 //! The app lifecycle and the Draw phase (core.md §7–§8, ADR-0008).
 
 use jidousha_core::{
-    Component, Draw, DrawCtx, GameConfig, Rng, Seconds, Startup, Time, Update, World, headless,
+    Component, Draw, DrawCtx, GameConfig, Resource, Rng, Seconds, Startup, Time, Update, World,
+    headless,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -200,6 +201,64 @@ fn a_message_outside_any_system_names_none() {
         let _ = world.component::<Position>(entity);
     });
     assert!(!message.contains("in system:"), "{message}");
+}
+
+/// Everything a tuning sweep would vary, as the shape *Testing your game*
+/// recommends for a game that expects to be swept.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Tuning(i32);
+impl Resource for Tuning {}
+
+impl Tuning {
+    /// What the game would ship with.
+    const SHIPPED: Self = Self(1);
+}
+
+/// Startup takes whatever a harness left in the world, or the shipped numbers.
+fn pin_tuning(world: &mut World) {
+    let tuning = world
+        .find_resource::<Tuning>()
+        .copied()
+        .unwrap_or(Tuning::SHIPPED);
+    world.insert_resource(tuning);
+}
+
+#[test]
+fn a_resource_inserted_before_the_first_tick_is_what_startup_finds() {
+    let mut sim = headless(GameConfig::default(), |app| {
+        app.add_system(Startup, pin_tuning);
+    });
+    sim.world_mut().insert_resource(Tuning(7));
+    sim.tick();
+    assert_eq!(*sim.world().resource::<Tuning>(), Tuning(7));
+}
+
+#[test]
+fn a_run_that_sets_nothing_gets_the_shipped_numbers() {
+    let mut sim = headless(GameConfig::default(), |app| {
+        app.add_system(Startup, pin_tuning);
+    });
+    sim.tick();
+    assert_eq!(*sim.world().resource::<Tuning>(), Tuning::SHIPPED);
+}
+
+#[test]
+fn each_headless_call_builds_a_fresh_game_so_a_sweep_is_a_loop() {
+    let swept: Vec<Tuning> = (1..=4)
+        .map(|candidate| {
+            let mut sim = headless(GameConfig::default(), |app| {
+                app.add_system(Startup, pin_tuning);
+            });
+            sim.world_mut().insert_resource(Tuning(candidate));
+            sim.tick();
+            *sim.world().resource::<Tuning>()
+        })
+        .collect();
+    assert_eq!(
+        swept,
+        vec![Tuning(1), Tuning(2), Tuning(3), Tuning(4)],
+        "one process, four games, no recompile"
+    );
 }
 
 /// Run `body`, returning the message it panicked with.

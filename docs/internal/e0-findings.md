@@ -4989,6 +4989,37 @@ lint fires on a symmetric pair and not on the same test written against two
 separately named bounds, so it arrives when you tidy the constants rather than
 when you write the check.
 
+**Run 10 found a sixth and a seventh, and the list's shape was the finding.**
+`neg_cmp_op_on_partial_ord` and `question_mark`, both met as build errors after
+the game was written — the bad place the passage exists to prevent. Four, then
+five, then seven: the list is an accumulation of what past runs happened to trip
+over, so it is incomplete by construction and appending to it once a run has paid
+is the fix that does not converge. What landed instead names the two sources of
+truth and says which of them is enumerable. `[workspace.lints]` holds four rules
+and that is the whole of the repository's own choices; everything else is stock
+clippy promoted by `-D warnings`, several hundred lints written for Rust rather
+than for games. The passage now says the list below it is a **sample rather than
+a specification** and that the tool is the authority, and then gives the seven.
+The class is closed even though the list will keep growing.
+
+The first of the two is worth its own paragraph, because the lint's obvious fix
+is a behaviour change and nothing said so. `!(a > b)` and `a <= b` differ exactly
+at NaN — the first is true for it, the second false — so flipping the operator to
+satisfy `neg_cmp_op_on_partial_ord` turns a guard that rejects a poisoned
+velocity into one that admits it, silently. `prototype_kit/checks.rs` already
+spends a paragraph on that difference, which is why run 10 met a contradiction
+rather than a gap: the repository teaches the hazard and clippy bans one of the
+two spellings of it. The document now gives one sanctioned form, and it is the
+form that resolves the contradiction rather than picking a side — lift the `!`
+off the comparison instead of flipping the operator, by naming each condition
+the positive way round and negating the conjunction once. Obeying the lint and
+being right about NaN then become the same edit, which is the sentence that was
+missing.
+
+**Run 10's triage proper is still outstanding** — this note records how its lint
+finding was settled, not a classification of its log. `docs/e0/run-10.md` has not
+been root-caused into §4, and the run log below has no row for it.
+
 ### F-111 — The container could not open a window, and the reason was one missing library
 
 Class: environment · Run: 8 · Also found by: **the unlooked-for half of F-054 /
