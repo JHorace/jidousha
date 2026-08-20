@@ -498,13 +498,31 @@ pub fn run() -> ExitCode {
         BALL_RADIUS,
         face,
     );
+    // The third negative case, and the one a played match cannot reach: a ball
+    // already behind the paddle and still going, on its way to the goal line.
+    // Without the guard against it the crossing comes back at a *negative*
+    // fraction of the tick — a contact extrapolated backwards out of this
+    // tick's travel — and the ball is bounced off a paddle it went past two
+    // ticks ago. A whole session survives that, because by then the ball is a
+    // couple of ticks from the goal and the extrapolated contact usually lands
+    // off the end of the paddle: deleting the guard changed no score here.
+    let behind_it = face_crossing(
+        Vec2::new(-16.0, 0.0),
+        Vec2::new(-16.4, 0.0),
+        BALL_RADIUS,
+        face,
+    );
     checks.require(
-        across.is_some_and(|at| near(at, want)) && past_the_end.is_none() && leaving.is_none(),
+        across.is_some_and(|at| near(at, want))
+            && past_the_end.is_none()
+            && leaving.is_none()
+            && behind_it.is_none(),
         "the swept contact test does not hold its contract",
         format!(
             "eight units of travel straight across the paddle gave {across:?}, wanted \
-             Some({want:.4}); the same travel {:.0} units off the end gave {past_the_end:?} \
-             and a ball leaving through the same face gave {leaving:?}, both wanted None",
+             Some({want:.4}); the same travel {:.0} units off the end gave {past_the_end:?}, \
+             a ball leaving through the same face gave {leaving:?}, and a ball already \
+             behind the paddle and still going gave {behind_it:?} — all three wanted None",
             6.0,
         ),
     );
@@ -587,6 +605,17 @@ pub fn run() -> ExitCode {
         format!("{} frames over at most {TICKS} ticks", session.frames),
     );
 
+    // How big the court actually is, read off the markings that draw it rather
+    // than off the constant that placed them — so the requirement below is
+    // about the picture and not about a number the game owns.
+    let drawn_court = union(
+        live_frame
+            .quads()
+            .iter()
+            .filter(|quad| quad.tint == MARKING)
+            .map(|quad| quad.bounds()),
+    );
+
     // Both paddles, by their *bounds* rather than by something being there. A
     // paddle-sized quad covers its own centre even when it is drawn a long way
     // out of position, so "a quad of the right size covers this point" passes
@@ -612,6 +641,28 @@ pub fn run() -> ExitCode {
             ),
         );
     }
+
+    // And a claim about the paddles that `PADDLE_SIZE` cannot move with. The
+    // check above compares what was drawn against the number that drew it, so
+    // it goes on passing after somebody changes that number — and a paddle half
+    // the height of the goal behind it is a game with nothing to get past,
+    // which every other check in this file survives.
+    let paddle_share = drawn_court.map(|court| PADDLE_SIZE.y / court.size().y);
+    checks.require(
+        paddle_share.is_some_and(|share| greater(share, 0.12) && greater(0.35, share)),
+        "a paddle is not a defensible fraction of the goal behind it",
+        format!(
+            "the paddles are {:.2} long against a court {:?} tall, which is {}; a paddle \
+             wants between an eighth and a third of the goal it defends — much more and \
+             there is nothing to get past, much less and nothing can be returned",
+            PADDLE_SIZE.y,
+            drawn_court.map(|court| court.size().y),
+            paddle_share.map_or("nothing at all".to_owned(), |share| format!(
+                "{:.0}%",
+                share * 100.0
+            )),
+        ),
+    );
 
     let disc = disc_at(&live_frame, live_ball, BALL_RADIUS);
     let disc_size = disc.map_or(Vec2::ZERO, |rect| rect.size());
