@@ -167,7 +167,7 @@ prompt.
 | 7 | 2026-08-19 | Pong shipped; **not** a pass | 0 | 14 | 1 (+2 `environment`) | Compiled clean, `--verify` green, 3,092 ticks, 5–0, and **seventeen of seventeen injected faults caught** — the first run to score full marks on its own mutation round. Two rounds and two wrong constant changes lost to the document's own controller prescription, which is a property of one opponent taught as the lesson (F-080) and the third false sentence in three runs. No `engine` finding: the one engine-shaped question is whether `jidousha::testing` should *ship* the controller self-check, and it is **declined** — ADR-0027. Two of the findings are the maintainer's rather than the run's, from the verification tasks: `tools/test` was red on `main` (F-094) and `prototype_kit`'s own `--verify` was missing five of the checks the document prescribes (F-095). **Valid, and played** — the transcript was reviewed and the game played before the decks were cleared. Raw notes: `docs/e0/run-7.md`. Triage: §4d. §6. |
 | 8 | 2026-08-20 | Pong shipped; **not** a pass | 0 | 14 | 0 (+2 `environment`) | Compiled clean, `--verify` green in 2.3 s, 713 tests, ten CI checks on Linux and Windows, and **23 of 23 injected faults caught** after a first round of 19 — the second run to reach full marks, and the first to fix all four misses with four different kinds of instrument. Its headline is that the two documents were **enough**: never blocked, and never wanting the source to learn what a function *did*. The one engine-shaped finding is a doc comment that says the opposite of what the code does (F-097), not a behaviour anybody wants changed, so no `engine` finding stands. One cycle lost to the document prescribing a minimax where an exact enumeration was available (F-100), and one game bug — an opponent that centres on the ball — found only by a third, deliberately mediocre controller the document never asked for (F-101). **Valid, and played in full** — the transcript was reviewed and the game played by the owner in a window and in a browser, and F-111's fix let this triage play it in a window too: 0–2 down, **won 5–4** (F-112, `docs/e0/run-8-playtest.png`). Raw notes: `docs/e0/run-8.md`. Triage: §4e. §6. |
 
-| 9 | 2026-08-20 | Pong shipped; **not** a pass | 1 | 8 | 0 | Compiled clean, `--verify` green over 3,600 ticks with **three** controllers, `fmt` and `clippy` clean, and **18 of 20 injected faults caught** — the two escapes both the shape the document predicts, and the second (a deleted "already behind the plane" guard) invisible to a whole played session rather than merely unlikely. Forty minutes and a restructure of three systems lost to a requirement filed in the document a run is told to read last (F-113) — the first cost in this file caused by a fix rather than by a gap. The one `engine` finding is **accepted and fixed**: `find_bounds`, the fold six checks were writing by hand (F-116, ADR-0032). Three novel `docs` findings, five re-treads, one confirmation (F-123) and two the triage found while fixing the rest. **Valid, and played in a window by this triage** (`docs/e0/run-9-playtest.png`) — the transcript is reviewed and clean; the browser half of step 2 is the owner's. Raw notes: `docs/e0/run-9.md`. Triage: §4f. §6. |
+| 9 | 2026-08-20 | Pong shipped; **not** a pass | 1 | 8 | 0 | Compiled clean, `--verify` green over 3,600 ticks with **three** controllers, `fmt` and `clippy` clean, and **18 of 20 injected faults caught** — the two escapes both the shape the document predicts, and the second (a deleted "already behind the plane" guard) invisible to a whole played session rather than merely unlikely. Forty minutes and a restructure of three systems lost to a requirement filed in the document a run is told to read last (F-113) — the first cost in this file caused by a fix rather than by a gap. The one `engine` finding is **accepted and fixed**: `find_bounds`, the fold six checks were writing by hand (F-116, ADR-0032). Three novel `docs` findings, five re-treads, one confirmation (F-123) and two the triage found while fixing the rest. **Valid, and played in full** — the transcript is reviewed and clean, the owner has played it in a window and in a browser, and F-111's fix let this triage play it in a window too (`docs/e0/run-9-playtest.png`). Raw notes: `docs/e0/run-9.md`. Triage: §4f. §6. |
 
 Run 1 produced a working, fun Pong and a document-shaped hole underneath it. The
 game is not the measurement — `docs/e0/run-1.md` is — and it says the run could
@@ -5190,8 +5190,14 @@ as verifiable-and-windowed for the run, so `tools/test` has been running
 `example-verify:pong`. The registration is bookkeeping, exactly as
 `e0-prompt.md` step 6 now says.
 
-**Run 9 is valid, and its game has been played in a window by this triage.**
-Three claims, stated separately, because they are different kinds of claim.
+**Run 9 is valid, and its game has been played in full.** Both of
+`e0-prompt.md`'s after-the-run person-steps are taken — the transcript reviewed,
+and the game played by the owner in a window and in a browser — so nothing is
+outstanding against run 9 and the decks can be cleared for run 10. This triage
+played it in a window as well, which is the second run running that a session has
+done so rather than the claim being rescued afterwards (F-112's close holding).
+Three claims below, stated separately, because they are different kinds of
+claim.
 
 *The window path works end to end.* `Xvfb` on `:99`, `xdotool windowfocus --sync`
 as F-111's note insists, real `w`/`s` key events through `winit`, real frames out
@@ -5203,6 +5209,12 @@ and the hint line at the bottom. A match played out to "the machine wins" at 0�
 and the end screen is the one the staged-frame checks describe. So run 9's "it
 runs in a window and is playable" is an observation here rather than an
 inference.
+
+*The browser half is the owner's and is done.* `tools/serve-web pong`, which is
+the only thing that exercises the wasm target as a *running program* rather than
+as the `cargo check` CI has gated since M0. It is not a duplicate of the window
+half and it is still not something this container can take: F-112's note records
+`wasm-bindgen-cli` 0.2.127 as the one absent piece, and that has not changed.
 
 *It is not a verdict on difficulty, and this triage will not pretend otherwise.*
 The player was a screen-reader at about 50 Hz that could not see the ball on most
