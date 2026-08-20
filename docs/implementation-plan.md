@@ -70,7 +70,10 @@ trust + checked by reviewing its transcript), builds a playable Pong with score
 text, verified via `tools/verify` script + a human web playtest. Failures are
 treated as engine/docs bugs first, not prompt bugs: each E0 failure gets a
 root-cause note in `docs/internal/e0-findings.md` and a fix. E0 repeats until
-it passes clean twice in a row. This is the project's definition of working.
+it passes clean twice in a row — **clean meaning no `engine` finding and no
+*novel* `docs` finding** (ADR-0029; a re-tread of an already-recorded shape is
+fixed but does not reset the streak). This is the project's definition of
+working.
 
 **Harness ready** (see `docs/internal/e0-prompt.md` for the prompt and the
 before/after procedure, and `e0-findings.md` for the classification rule and the

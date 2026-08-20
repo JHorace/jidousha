@@ -85,6 +85,16 @@ that yields nothing rather than a `[0]` into an empty `Vec`. It is one tick out
 of thousands and it is the first one, so a controller that gets this wrong
 panics before it has tested anything.
 
+**`examples/slalom` is all of the next few pages, worked.** Everything from here
+to *the arithmetic is nearly always the same one* is about driving a game you
+cannot look at, and it is genre-neutral prose whose every worked instance used to
+be a paddle returning a ball — which made it impossible to tell the lesson from
+the Pong. `examples/slalom` is the same four steps in a game with no opponent, no
+bounce and no rally: a glider falling through gates that swing faster than it can
+fly, so steering at where a gate *is* can never catch it. Its `controller.rs`
+names each step at the point it happens and says which of them has no analogue
+outside a game with an adversary. Read the prose for why; read that file for how.
+
 **A controller that plays it safe is not a playability test.** A blind script
 never returns the ball; a controller that tracks the ball perfectly returns it
 *dead flat*, straight back down the middle, and if the opponent tracks too the
@@ -95,43 +105,43 @@ the half of the paddle that sends it off-centre, take the shot a person would
 take. The trap wears other clothes too — a driver that brakes for every corner
 never finds the top speed, a fighter that blocks everything never tests a combo.
 
-**And the bill does not stop at one bad verdict.** A merely mediocre controller
-does not report "unplayable"; it reports a plausible wrong number, and then you
-tune the game to fix it — six rounds of constants, and the game byte-identical
-at the end of them. So when a number looks wrong, suspect the controller first:
-it is the newer and worse-tested of the two. And suspect it *once* — the three
-numbers below settle it in a single run, and without them "suspect the
-controller" is advice you cannot discharge.
+**And the bill does not stop at one bad verdict.** A mediocre controller does not
+report "unplayable"; it reports a plausible wrong number, and you tune the game
+to fix it — six rounds of constants, the game byte-identical at the end. So when
+a number looks wrong, suspect the controller first: it is the newer and
+worse-tested of the two. And suspect it *once* — the three numbers below settle
+it in one run, and without them "suspect the controller" is advice you cannot
+discharge.
 
-**Aim at where the opponent will be, not at where it is standing.** Carry that
-as the principle rather than as any of its reductions, because the reductions are
-not interchangeable and following the wrong one produces the degenerate rally
-above. **Against an opponent that drifts back to the middle** between shots it
-reduces to "try every return this paddle can produce, take the one that lands
-furthest from the middle", which is worth most of a minute a match. **Against an
-opponent that chases the ball** — at least as natural a first opponent to write —
-that same rule is close to the worst objective available: the returns landing
-furthest from the middle are the steep ones, and a steep shot gets there by
-rebounding off a wall into the path the chaser is already following. For a chaser
-there is no reduction: run the opponent's own rule forward beside the ball's, and
-score the landing against where that puts it.
+**Aim at where the target will be, not at where it is standing.** Carry that as
+the principle rather than as any of its reductions: the reductions are not
+interchangeable, and following one meant for a different opponent produces the
+degenerate rally above. Against an opponent that drifts back to the middle
+between shots it reduces to "take the return landing furthest from the middle";
+against one that *chases*, that same rule is close to the worst objective
+available, and there is no reduction — run the opponent's own rule forward beside
+the ball's and score the landing against where that puts it. `examples/slalom`
+is the version with no opponent at all, where the same principle is "where will
+this gate have swung to when I arrive".
 
 **Which is a requirement on the game, not only on the check.** A controller can
-only ask where the opponent will be if the opponent's decision is a **pure
-function** of the world — `fn opponent_push(&Ball, &Paddle) -> f32`, called by
-the system that moves it — rather than a branch inside that system. Same
-discipline as simulating the ball rather than solving for it, applied to the
-second moving thing, and worth doing to the game before the controller needs it.
+only ask where something will be if the answer is a **pure function** of the
+world — `fn opponent_push(&Ball, &Paddle) -> f32`, or slalom's
+`fn gate_center_at(index, phase, seconds) -> f32`, called by the system that acts
+on it rather than being a branch inside that system. It costs nothing while you
+are writing the game and is expensive to retrofit, because by the time the
+controller needs it the answer is buried in a `&mut World`.
 
-**And "take the best shot available" will lose you the match, because the best
-shot is on the edge of what the paddle can do.** Searching contact points across
-the paddle and taking the one landing furthest from the opponent is worth **0–5,
-six returns in a minute** — worse than not searching at all. The sharpest return
-is always the one struck at the very tip, where the bounce angle is widest, so
-"the best available" resolves every time to "stand so the ball hits your last
-millimetre". The optimum sits on the *boundary* of the feasible set, and there
-any error at all — half a tick of overshoot, a dead band — is a clean miss rather
-than a worse return.
+**And "take the best available" will lose you the match, because the best is on
+the edge of what you can do.** Searching contact points across the paddle and
+taking the one landing furthest from the opponent is worth **0–5, six returns in
+a minute** — worse than not searching at all, because the sharpest return is
+always the one struck at the very tip and "the best available" resolves every
+time to "stand so the ball hits your last millimetre". The optimum sits on the
+*boundary* of the feasible set, and there any error at all — half a tick of
+overshoot, a dead band — is a clean miss rather than a worse result. Slalom's
+`EDGE_MARGIN` is the same constant under another name, for a gap rather than a
+paddle.
 
 So **constrain first, then optimise**. Score only the positions that (a) really
 make contact, with margin — a fixed fraction of the paddle's half-length, so the
@@ -165,12 +175,11 @@ exact enumeration it buys nothing and costs a cycle, because the worst of three
 fictions is still a fiction. Ask where the paddle can actually be first.
 
 **Three numbers, printed every run, and one of them is not the one you would
-write.** A controller is code with a contract like any other, so check the
-contract on the numbers it actually picked — reading this is not the same as it
-working, and an assertion is the only form of it that holds. One number is not
-the contract: `met 27 of 27 approaches` prints happily alongside a 0–0 match,
-because meeting a ball and threatening with it are different contracts and that
-line covers only the first.
+write.** A controller is code with a contract like any other, so check that
+contract on the numbers it actually picked: reading it is not the same as it
+working. One number is not the contract — `met 27 of 27 approaches` prints
+happily alongside a 0–0 match, because meeting a ball and threatening with it are
+different contracts and that line covers only the first.
 
 - `met N of M approaches` — did it reach the ball at all. Clears it as a
   *returner*.
@@ -182,13 +191,13 @@ line covers only the first.
   unprompted.
 
 Read together they say which half of the program to open, which no single number
-can do. N far below M: it cannot reach the ball. N healthy and Y large: it is
-aiming at noise — constrain, then minimax. N healthy, Y small and X small: it
-meets the ball and hits where it aimed, and its aims are not threats, so the
-objective is wrong. **All three healthy and still 0–0: the controller is fine and
-the game is not** — stop reading the driver and go do the arithmetic on the game.
-That is the half a run without these numbers cannot reach, because a correct
-controller and a broken one produce the same 0–0.
+can. N far below M: it cannot reach the ball. N healthy and Y large: it is aiming
+at noise. N healthy with Y and X both small: it hits where it aimed and its aims
+are not threats, so the objective is wrong. **All three healthy and still 0–0:
+the controller is fine and the game is not** — go and do the arithmetic on the
+game. That is the half a run without these numbers cannot reach, because a
+correct controller and a broken one produce the same 0–0.
+`examples/slalom`'s `Report` is these three for a game with no opponent.
 
 **And the arithmetic is nearly always the same one.** An opponent nobody can
 score against is the commonest way a first game is broken, by many mechanisms

@@ -48,6 +48,10 @@ that is a finding about the split, not about the run.
    `git rm -r crates/jidousha/examples/pong/`, then remove `pong` from
    `WINDOWED_EXAMPLES` and `VERIFIABLE_EXAMPLES` in `tools/test`.
 
+   **Only `pong/`.** `crates/jidousha/examples/slalom/` is a permanent worked
+   example — run 4's lever, spent after run 8 (e0-findings.md §6) — and is not a
+   previous run's game. It stays. A run reading it is the point of it existing.
+
    The deletion is not tidying, it is the measurement.
    `crates/jidousha/examples/` is on the run's *allowed* list, so a previous
    run's finished Pong sitting in it is a complete worked solution the next
@@ -105,8 +109,18 @@ that is a finding about the split, not about the run.
    document — but "the run guessed at nothing" is weaker evidence when the run
    was handed the answers (e0-findings.md F-020).
 4. Fix what the findings say to fix. Then run E0 again, fresh.
-5. E0 passes when two consecutive runs produce no new findings of the
-   engine-bug or docs-gap kind.
+5. E0 passes when two consecutive runs produce **no `engine` finding and no
+   *novel* `docs` finding** (ADR-0029, e0-findings.md §2). A `docs` finding whose
+   cross-run column names a prior `F-` number is a re-tread: record it, fix it,
+   and do not reset the streak for it. An `engine` finding resets the streak
+   whatever its history.
+
+   **This changed after run 8 and the ledger above applies to it**, so the streak
+   restarted at zero — which cost nothing, because it had been zero since run 1.
+   The prompt itself is deliberately unchanged: it is right to ask a run for
+   every friction, and the conflict between "do not soften these" and a bar that
+   required silence is resolved on the counting side rather than by asking runs
+   to report less.
 6. Adopt the game: put `pong` back into `WINDOWED_EXAMPLES` and
    `VERIFIABLE_EXAMPLES` in `tools/test`, so it is built and verified on every
    push like every other example. This is deliberately the maintainer's step —
