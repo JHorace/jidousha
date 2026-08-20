@@ -188,6 +188,7 @@ run's last frame **and** build the screens the run never reached.
 recorder for as long as the reference lives, so anything taken out of it has to
 be `.clone()`d before the next `draw`. `recorder.font_texture()` borrows nothing
 and is free to call wherever you like.
+<!-- asserted-by: the_recorders_transcript_carries_every_frame_and_a_records_carries_one -->
 
 **The frame a match ends on is not a picture of the game being played.** `last`
 out of that loop is the frame somebody won on, so it carries the end screen
@@ -274,6 +275,7 @@ the right size, with every geometric assertion still passing. What a frame does
 *not* carry is the `Depth` that produced the order, deliberately — a `layer`
 number read back only says the game submitted what the game submitted, and would
 pass just as happily for a `mod layers` whose constants are in the wrong order.
+<!-- asserted-by: quads_sort_by_layer_then_z_then_submission_order, equal_depths_keep_their_submission_order -->
 
 **Which has a consequence about your own frames that is easy to miss: a band is
 only visible where it changes the order.** The sort is `(layer, z, submission
@@ -304,6 +306,7 @@ the circle's bounding box, so the box around the quads covering the centre is
 exactly `2r × 2r`. `find_bounds` is that box — the fold over `quad.bounds()`
 that "how big is the thing that was drawn" always comes down to, and `None` when
 nothing was drawn there at all:
+<!-- asserted-by: the_wedges_of_a_circle_and_the_glyphs_of_a_string_fold_back_to_one_box -->
 
 ```rust
 # let (sim, recorder, frame, camera) = game::played();
@@ -338,6 +341,7 @@ out of several primitives.
 which is what makes asking about the centre work at all — every wedge touches it.
 `Rect::contains` is the other way round, half-open so that adjacent rectangles
 never both claim a point, which is why the box test above is spelled out.
+<!-- asserted-by: a_circle_covers_a_disc_and_not_its_bounding_box -->
 
 To ask whether any of it was *text*, compare a quad's texture against
 `recorder.font_texture()`: the font atlas is a texture like any other, so a quad
@@ -367,6 +371,7 @@ for quad in frame.quads() {
 camera's edge is on screen. `Rect::contains`, which takes a point, is half-open
 instead — it partitions space so adjacent rectangles never both claim a point,
 which is a different question and the wrong rule here.
+<!-- asserted-by: adjacent_rectangles_never_both_claim_a_point -->
 
 `TextStyle::width_of` is exact and completely silent: centring by it is the
 documented idiom, and a banner one character too long runs off both edges

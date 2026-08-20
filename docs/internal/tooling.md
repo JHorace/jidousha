@@ -25,7 +25,7 @@ import, so they keep working when the package ecosystem is exactly what broke.
 | `tools/check-compile-fail` | Do the errors that must be compile errors still say the right thing? | 0 ok · 1 drifted · 2 harness broke |
 | `tools/verify` | What did the game actually do, with nobody watching? | 0 verified · 1 the example's assertions failed · 2 tooling/env fault |
 | `tools/check-assets` | Does every asset path in the code name a file that exists? | 0 all resolve · 1 a reference is broken · 2 the check could not run |
-| `tools/gen-api-doc` | Is `docs/api/` what the facade actually says? | 0 both written/current · 1 either stale, over its budget, or leaking vocabulary · 2 could not run |
+| `tools/gen-api-doc` | Is `docs/api/` what the facade actually says? | 0 written/current · 1 stale, over budget, leaking vocabulary, or naming a test or example that is not there · 2 could not run |
 | `tools/check-api-coverage` | Is every public item shown in an example, written against the facade? | 0 covered · 1 a gap or a breach · 2 could not run |
 | `tools/check-api-prose` | Does the hand-written half of `docs/api/` contain code that compiles? | 0 every block compiles · 1 one does not · 2 could not build the facade |
 
@@ -217,6 +217,26 @@ a row (stop rule printed, `failure-streak.json` count 2).
 
   Nothing is *run*: a fragment's value is the sentence beside it, and what a
   fragment can be wrong about is whether it compiles.
+
+  **`<!-- asserted-by: … -->` links a claim to the test that holds it true**, and
+  `gen-api-doc` refuses a marker naming a test that does not exist. Three
+  sentences in ten E0 runs have been *false* — a document claim contradicting the
+  code it described (F-055, F-068, F-097) — each found by a run leaning on it and
+  each fixed with a test written afterwards. Be exact about which half this is:
+  it does **not** check that a claim is true, because nothing mechanical can. It
+  checks that a claim which names its proof still has one, so the linkage rots
+  loudly. Same bargain as `dangling_examples` one level up — there a pointer at a
+  worked example, here a pointer at a proof.
+
+  Scoped to claims a game's `--verify` leans on: draw order and its
+  submission-order tie-break, `covering`'s boundary rule, quads per primitive,
+  the text metrics, tick numbering, registration order, `contains_rect` versus
+  `contains`. A falsehood there makes every game's check quietly wrong, which is
+  what justifies the ceremony. Claims about game design (F-080) and about the
+  document's own coverage (F-068) are assertable by nothing and are not asked to
+  be — saying so is part of the mechanism rather than an apology for it. Markers
+  are dropped on the way to `docs/api/` like hidden lines, so one costs no
+  tokens and can go on every claim that deserves it.
 
   Not rustdoc JSON, which needs nightly while `rust-toolchain.toml` pins stable;
   summaries are lifted from the `///` line above each definition, which is a

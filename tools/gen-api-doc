@@ -599,6 +599,63 @@ def doc_example(block: "list[str]") -> "list[str]":
     return body if any(line.strip() for line in body) else []
 
 
+# `<!-- asserted-by: the_first_update_system_sees_tick_one -->` — the test that
+# holds a claim true. On its own line, or at the end of the line it belongs to.
+ASSERTED_BY_RE = re.compile(r"[ \t]*<!--\s*asserted-by:\s*([A-Za-z0-9_, ]+?)\s*-->")
+ASSERTED_BY_LINE_RE = re.compile(r"^[ \t]*<!--\s*asserted-by:[^>]*-->[ \t]*\n", re.M)
+
+# A test's definition, wherever it lives: an integration test, a unit test beside
+# the code, or a check inside a worked example.
+TEST_FN_RE = re.compile(r"\bfn\s+([a-z_][a-z0-9_]*)\s*\(")
+
+
+def known_test_names(repo: Path) -> "set[str]":
+    """Every function name defined under `crates/`.
+
+    Function rather than `#[test]` function: a claim can be held by a named
+    helper an example's `--verify` calls, and `slalom/checks.rs` is full of
+    those. What this is guarding against is a name that resolves to *nothing* —
+    a test renamed or deleted while the sentence it backs stayed — and for that,
+    "is there something called this" is the whole question.
+    """
+    names = set()
+    for path in repo.glob("crates/**/*.rs"):
+        names.update(TEST_FN_RE.findall(path.read_text(encoding="utf-8")))
+    return names
+
+
+def unasserted_claims(text: str, repo: Path) -> "list[str]":
+    """`asserted-by:` markers naming a test that does not exist.
+
+    Three sentences in ten E0 runs have been **false** — a document claim
+    contradicting the code it described (F-055, F-068, F-097). Each was found by a
+    run leaning on it, and each fix wrote a test afterwards. That is a guard that
+    arrives one sentence at a time, after the expensive part.
+
+    This is the cheap half of a mechanism, and it is worth being exact about which
+    half. It does **not** check that a claim is true; nothing mechanical can. It
+    checks that a claim which *names* its test still has one, so the linkage rots
+    loudly instead of silently — the same bargain as `dangling_examples`, one
+    level up: there a pointer at a worked example, here a pointer at a proof.
+
+    Scoped on purpose to claims a game's `--verify` leans on — draw order,
+    `covering`'s boundary, quads per primitive, text metrics, tick numbering. A
+    falsehood there makes every game's check quietly wrong, which is the case that
+    justifies the ceremony. Claims about game design (F-080) and about the
+    document's own coverage (F-068) are not assertable by anything and are not
+    asked to be: those stay a reader's job, and saying so is part of the
+    mechanism rather than an apology for it.
+    """
+    known = known_test_names(repo)
+    missing = []
+    for match in ASSERTED_BY_RE.finditer(text):
+        for name in match.group(1).split(","):
+            name = name.strip()
+            if name and name not in known and name not in missing:
+                missing.append(name)
+    return missing
+
+
 def visible_prose(text: str) -> str:
     """Prose with each `rust` block's hidden setup lines dropped.
 
@@ -618,7 +675,15 @@ def visible_prose(text: str) -> str:
     is an attribute rather than setup and stays. Only `rust` blocks are touched —
     a `#` opening a line of shell or of transcript output is a comment or a
     prompt, not hidden code.
+
+    **`<!-- asserted-by: … -->` markers go too.** They name the test that holds a
+    claim true (`unasserted_claims`), which is a fact about the repository rather
+    than about the game being written, and the reader of `docs/api/` cannot open
+    the test anyway. Dropping them keeps the marker free: a maintainer can put one
+    on every claim that deserves it without spending a token.
     """
+    text = ASSERTED_BY_LINE_RE.sub("", text)
+    text = ASSERTED_BY_RE.sub("", text)
     out, in_rust = [], False
     for line in text.splitlines():
         stripped = line.lstrip()
@@ -1625,6 +1690,25 @@ def main(argv: "list[str]") -> int:
                     "reword the doc comment at the definition; docs/api never mentions "
                     "internals (public-api.md §4). Only the testing document may name a "
                     "renderer, and only the three words in TESTING_VOCABULARY",
+                )
+            )
+
+    # The `asserted-by:` markers are checked against the *source* prose rather
+    # than the generated document, because rendering drops them: they are the
+    # maintainer's linkage between a claim and its proof, and a reader of
+    # `docs/api/` neither sees them nor could open what they name.
+    for source in sorted(PROSE.glob("*.md")):
+        missing = unasserted_claims(source.read_text(encoding="utf-8"), REPO_ROOT)
+        if missing:
+            failures.append(
+                problem(
+                    f"{source.relative_to(REPO_ROOT)} names a test that does not exist",
+                    f"missing: {', '.join(missing)}",
+                    "the test was renamed or deleted while the claim it backs stayed — "
+                    "which is how a document sentence outlives the thing that made it true",
+                    "point the marker at the test that holds the claim now, or write one. "
+                    "If the claim has stopped being true, the sentence goes rather than "
+                    "the marker",
                 )
             )
 

@@ -5724,7 +5724,7 @@ inference.
 
 ## 4g. Run 10 triage — the whole run on one page
 
-Nine findings from the run, plus one the triage found while fixing them.
+Nine findings from the run, plus two the triage found while fixing them.
 **Class** is §1's; **settled by** names the ADR or `DELIBERATE:` tag that answers
 the complaint, where one does.
 
@@ -5772,6 +5772,7 @@ what F-111 and F-124 bought.
 | F-132 | `Rect::from_center_size` with a negative `size` is the half F-107's fix did not say | docs | **F-107**, whose wording carefully covers only non-negative | — | **fixed** in both constructors' doc comments, with a test pinning the inverted result |
 | F-133 | `Rng::next_f32`'s distribution at the endpoints is unstated | docs | first | — | **fixed**; half-open, `0.0` drawn and `1.0` never, with a test over 100,000 draws |
 | F-134 | the prose half of `docs/api/` was compiled by nothing, and contained code that does not compile | docs | **the triage's**, and **F-040**'s class — a snippet wrong in a way only a compiler sees | `tools/check-api-prose` | **fixed**; eighteen blocks now gated, three defects found on the first run |
+| F-135 | three false sentences in ten runs, and the guard was still one test at a time | docs | **the triage's**, closing §4c's open question over **F-055, F-068, F-097** | `gen-api-doc`'s `asserted-by:` check | **half fixed, and scoped**; nine check-load-bearing claims now name their proof, and the two unassertable classes are named as staying a reader's job |
 
 **Three of the nine are novel: F-128, F-131, F-133.** The other six each name a
 prior `F-` number, and five of those six are a *previous fix's boundary* rather
@@ -6088,6 +6089,63 @@ expensive way, and its fix was to correct the two snippets. Nobody asked the
 next question, which is what else in that file has never been compiled. That is
 the neighbour defect this triage names in its headline, one level up: the fix
 answered the instance and not the class, for six runs.
+
+### F-135 — Three false sentences, and the guard was still one test at a time
+
+Class: docs · Run: **the triage's** · Also found by: **F-055, F-068, F-097**, and §4c's open question · Settled by: `gen-api-doc`'s `asserted-by:` check
+
+§4c filed this as the open question it was:
+
+> Two false sentences in two runs, and the guard is still one test at a time.
+> F-055 and F-068 are the same failure: a document sentence that contradicts the
+> code it describes, surviving every gate. … Nobody has proposed a way to
+> *enumerate* the sentences that need one, and this triage does not have one
+> either.
+
+F-097 made it three. Run 7's watch list proposed a pass over *Testing your game*
+asking of each load-bearing claim "what test asserts this?", and run 7's own
+triage corrected the proposal: F-080 is a claim about *controllers* and no test
+can assert it. **Two classes, one testable** — and nothing was done about the
+testable one for three runs, because the proposal had been shown to be incomplete
+and incomplete read as wrong.
+
+**What landed is the incomplete half, scoped and named as such.** A claim may
+carry `<!-- asserted-by: some_test -->`, and `gen-api-doc` refuses a marker whose
+test does not exist. It does **not** check that a claim is true — nothing
+mechanical can, and a mechanism that implied otherwise would be worse than none.
+It checks that a claim which names its proof still has one, so a test renamed or
+deleted under a sentence is a build failure rather than a silence. The same
+bargain as `dangling_examples`, one level up: there a pointer at a worked
+example, here a pointer at a proof.
+
+**Scoped to claims a game's `--verify` leans on**, which is where the ceremony
+pays: draw order and its submission-order tie-break, `covering`'s boundary rule,
+quads per primitive, the text metrics, tick numbering, registration order,
+`contains_rect` versus `contains`. A falsehood in one of those makes every game's
+check quietly wrong. Run 8 said as much about two of them without knowing it was
+describing this mechanism:
+
+> Both documents assert it, in the same words, in two places. My band checks
+> depend on it and so does my "the ball is drawn after the paddles" reasoning.
+> Again: documented, and I wanted the source only to *believe* it.
+
+Nine claims are marked. One of them needed a test written —
+`a_second_line_starts_exactly_one_size_below_the_first_with_no_leading`, for
+F-127's metric, which this triage documented an hour earlier and which nothing
+held. The other eight already had one, which is the encouraging half: the
+repository mostly *had* the proofs and had never linked them.
+
+**Markers cost the token budget nothing** — dropped on the way to `docs/api/`
+like the hidden code lines, since a reader cannot open a test anyway. So the
+scope can widen whenever a claim earns it, without the widening being a budget
+conversation (ADR-0034).
+
+**What stays a reader's job, said plainly rather than left implied.** Claims
+about game design (F-080) and claims about the document's own coverage (F-068 —
+"nothing else in this document can see it", of a field the same document's
+reference lists) are assertable by nothing here. Two of the four false sentences
+on file are in that class. This mechanism halves the exposure; it does not close
+it, and a note claiming otherwise would be the fourth false sentence.
 
 ### F-133 — `Rng::next_f32`'s distribution at the endpoints is unstated
 

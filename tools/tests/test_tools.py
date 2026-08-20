@@ -894,6 +894,71 @@ class ApiProseTest(unittest.TestCase):
             self.assertIn(f"fn block_{index}()", source)
 
 
+class AssertedByTest(unittest.TestCase):
+    """The linkage between a claim and the test that holds it true.
+
+    Three sentences in ten E0 runs have been false. This does not check that a
+    claim is true — nothing mechanical can — it checks that a claim naming its
+    proof still has one, so the linkage rots loudly rather than silently.
+    """
+
+    def test_a_marker_naming_a_missing_test_is_reported(self):
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            (repo / "crates").mkdir()
+            (repo / "crates" / "a.rs").write_text("fn the_real_one() {}", encoding="utf-8")
+            missing = gen_api_doc.unasserted_claims(
+                "a claim\n<!-- asserted-by: the_real_one, the_deleted_one -->\n", repo
+            )
+        self.assertEqual(missing, ["the_deleted_one"])
+
+    def test_a_marker_naming_a_test_that_exists_is_accepted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            (repo / "crates" / "deep").mkdir(parents=True)
+            (repo / "crates" / "deep" / "b.rs").write_text(
+                "#[test]\nfn a_named_proof() { assert!(true); }", encoding="utf-8"
+            )
+            self.assertEqual(
+                gen_api_doc.unasserted_claims("<!-- asserted-by: a_named_proof -->", repo), []
+            )
+
+    def test_a_marker_never_reaches_the_reader(self):
+        rendered = gen_api_doc.visible_prose(
+            "The first Update sees tick == 1.\n<!-- asserted-by: the_first_update_system_sees_tick_one -->\nnext\n"
+        )
+        self.assertEqual(rendered, "The first Update sees tick == 1.\nnext")
+
+    def test_a_trailing_marker_leaves_the_sentence_it_marks(self):
+        rendered = gen_api_doc.visible_prose("sixteen quads. <!-- asserted-by: a_proof -->\n")
+        self.assertEqual(rendered, "sixteen quads.")
+
+    def test_every_marker_in_the_real_prose_resolves(self):
+        # The check `gen-api-doc` runs, asserted here too so a breakage is a named
+        # test rather than a tool exit code.
+        for source in sorted(gen_api_doc.PROSE.glob("*.md")):
+            missing = gen_api_doc.unasserted_claims(
+                source.read_text(encoding="utf-8"), REPO_ROOT
+            )
+            self.assertEqual(missing, [], f"{source.name} names tests that do not exist")
+
+    def test_the_claims_that_a_verify_leans_on_are_marked(self):
+        # The mechanism is scoped to claims a game's `--verify` is built on, and
+        # a scope nobody checks is a scope that drifts. These are the ones.
+        marked = "".join(
+            source.read_text(encoding="utf-8") for source in gen_api_doc.PROSE.glob("*.md")
+        )
+        for proof in (
+            "quads_sort_by_layer_then_z_then_submission_order",
+            "a_circle_covers_a_disc_and_not_its_bounding_box",
+            "a_second_line_starts_exactly_one_size_below_the_first_with_no_leading",
+            "adjacent_rectangles_never_both_claim_a_point",
+            "the_first_update_system_sees_tick_one",
+            "update_systems_run_in_registration_order",
+        ):
+            self.assertIn(proof, marked, f"{proof} backs a claim and should be named by one")
+
+
 class ApiExtractionTest(unittest.TestCase):
     """The declaration extractor, on synthetic sources.
 

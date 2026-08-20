@@ -17,6 +17,7 @@ phase systems run in the order you added them, always, on every machine. There i
 no scheduler deciding for you. Startup running *inside* that first tick is worth
 knowing if you drive the sim by hand: `headless(..)` hands back a world that is
 still empty, and it is populated once the first `tick()` returns.
+<!-- asserted-by: update_systems_run_in_registration_order, headless_runs_startup_then_update_like_the_windowed_driver_will, a_resource_inserted_before_the_first_tick_is_what_startup_finds -->
 
 **A resource is a thing there is exactly one of** — the score, the round state,
 the camera. `world.insert_resource(Score::default())` puts one in,
@@ -93,6 +94,7 @@ advances the clock and then runs Update — so a game timing something absolute,
 is the number to count in when a game wants to say "about three quarters of a
 second" as a number of ticks — a serve pause, a coyote-time window, an
 invulnerability period.
+<!-- asserted-by: the_first_update_system_sees_tick_one, a_tick_advances_the_clock_by_exactly_one_step -->
 
 A fixed timestep also means **collisions are only ever tested at tick
 boundaries**. Nothing in v1 sweeps, so a body that moves further in one tick
@@ -195,6 +197,7 @@ the only exception, counting as a line break and submitting nothing. So a
 can assert an exact count against rather than a coincidence: a space is one of
 the ninety-five printable ASCII characters the font covers, with a blank cell of
 its own.
+<!-- asserted-by: a_circle_covers_a_disc_and_not_its_bounding_box, text_becomes_one_quad_per_character_from_the_font_atlas, text_advances_by_one_cell_per_character -->
 
 **Text's vertical metric, exactly, because every vertical number in a game's
 layout rests on it.** `at` is the top-left of the first character's *cell*, not
@@ -207,6 +210,7 @@ well as the total; the total alone would not tell you where line two begins. Y i
 down, so later lines are at larger `y`, and the number to solve for when you want
 a line's *bottom* to clear something is `at.y = bottom - size` — the whole of
 `size`, not half of it and not the height of a capital.
+<!-- asserted-by: a_second_line_starts_exactly_one_size_below_the_first_with_no_leading, text_sits_where_it_says_it_does_and_measures_what_it_occupies -->
 
 So a circle costs sixteen rectangles and a score line costs one per digit — worth
 knowing before a frame has three hundred of them, and worth knowing when you
