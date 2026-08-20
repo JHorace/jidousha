@@ -7120,6 +7120,26 @@ one worked example. For most of this file it does not, and the argument below
 stands unchanged.
 
 
+**And since run 10, where a fix goes is a decision with a rule (ADR-0034).** A
+finding does not default to a paragraph. A fact about one API item goes in that
+item's doc comment, where it costs a summary line; a shape or a technique goes in
+a worked example with a pointer; prose is for a rule that spans the surface, and
+a rule that lands in prose displaces something. The test between the middle two
+is §7's own, plus: would a second worked instance say what a second paragraph
+cannot?
+
+The trigger was arithmetic rather than taste. Novel findings have a floor of
+three a run (§6), a novel finding cost roughly a 200-token paragraph, and
+`jidousha-testing.md` had 548 tokens left — so the prose grew for ever unless the
+per-finding cost changed. F-134 is the case against the alternative, measured:
+the capture path existed in the document *and* in `prototype_kit/capture.rs`, the
+two drifted, and the document's copy was the wrong one for six runs.
+
+The rule changes the rate rather than the level, which ADR-0034 records with the
+number its own pilot recovered (63 tokens, against ~200 projected). A document
+already near its budget still needs a curation pass or a fourth split; what this
+stops is the next finding costing a paragraph by default.
+
 The `make-game` skill (agent-practices §3) is written from E0's findings after
 it passes. A friction that recurs across runs and cannot be designed away is
 exactly what a skill is for — and one that *was* designed away must not appear
