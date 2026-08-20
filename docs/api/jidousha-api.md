@@ -159,8 +159,13 @@ component is a plain struct you attach to one (`impl Component for Health {}`).
 A system is a function: `fn(&mut World)` for logic, `fn(&mut DrawCtx)` for
 drawing. Nothing inherits from anything, and there is no base class to fill in.
 
-Systems run in **phases**, in this order, every tick: `Startup` once at the
-start of the first tick, then `Update` for logic, then `Draw`. Those three are
+Systems run in **phases**, in this order: `Startup` once at the start of the
+first tick, then `Update` for logic, then `Draw`. `Startup` and `Update` are
+per *tick*; **`Draw` is not** — a window draws once a frame, however many ticks
+that frame ran, including none, and a headless `tick()` does not draw at all.
+So a `Draw` system sees the world the last `Update` left and must not count on
+being called the same number of times; a check that wants a frame asks for one,
+with `HeadlessSim::draw()`. Those three are
 the whole set — `Phase` and `IntoSystem` appear in `add_system`'s signature as
 bounds, are not exported, and are not names a game writes or can collide with, so
 your own `enum Phase` for "which screen are we on" is yours to take. Within a
@@ -254,6 +259,13 @@ smaller than the thinnest thing it must not miss, and assert that against the
 `fixed_dt` the engine actually hands you rather than against the 1/60 you
 assumed.
 
+**Which couples two constants that look unrelated: the thinnest collider is the
+ceiling on speed.** A paddle's thickness reads as a cosmetic number and is not
+one — it is the largest `speed * fixed_dt` the game may ever reach. So a game
+that plays too slowly is not fixed by raising the speed; it is fixed by
+thickening the thing the fast body must not miss, *then* raising the speed. Pick
+the two together, and put both in the assertion.
+
 **There is no `Rect::sweep` and no `Rect::inflate`, and that is a v1 boundary
 rather than something you have missed.** The reason is worth a sentence, because
 the shape you write instead is short and the shape you might expect is not. A
@@ -289,6 +301,22 @@ out.
 Together with the seeded `Rng` in `GameConfig`, that means the same inputs make
 the same game — which is what lets a test replay a session and get the same
 answer.
+
+**Write the two decisions a check will want as free functions, now, while they
+are free.** A `--verify` mode that plays your game rather than scripting it has
+to ask *where will the ball be* and *where will the opponent move to*, and it can
+only ask if the answer is a function it can call —
+`fn opponent_target(ball: &Ball, paddle: &Paddle) -> f32`, called by the system
+that acts on it rather than written as a branch inside that system. The same goes
+for the collision response above: a `rebound(..) -> Vec2` the system applies is a
+question a check can put to it directly, and a mutation in the middle of an
+`Update` body is not. Nothing copies a running simulation — there is no way to
+fork one and roll it forward — so *your* functions are what a check rolls
+forward, and it is the same eight lines either way while the game is being
+written. Retrofitting is not: by the time the check needs the answer it is
+buried in a `&mut World`, and one run spent forty minutes and a restructure of
+its main loop moving it back out. `docs/api/jidousha-controllers.md` is what does
+the asking.
 
 **Drawing is submission, not painting.** A `Draw` system hands the renderer
 quads — `ctx.sprite`, `ctx.rect`, `ctx.line`, `ctx.circle`, `ctx.text` — and
@@ -510,10 +538,10 @@ pub struct GameConfig {
 
 ```rust
 let config = GameConfig {
-title: "asteroids",
-seed: 42,
-window_size: PhysicalSize::new(1600, 900),
-..GameConfig::default()
+    title: "asteroids",
+    seed: 42,
+    window_size: PhysicalSize::new(1600, 900),
+    ..GameConfig::default()
 };
 assert_eq!(config.fixed_dt, Seconds(1.0 / 60.0));
 ```
@@ -532,19 +560,19 @@ struct Ticks(u32);
 impl Component for Ticks {}
 
 fn spawn_counter(world: &mut World) {
-let entity = world.spawn();
-world.insert(entity, Ticks(0));
+    let entity = world.spawn();
+    world.insert(entity, Ticks(0));
 }
 
 fn count(world: &mut World) {
-for (_, ticks) in world.query_mut::<&mut Ticks>() {
-ticks.0 += 1;
-}
+    for (_, ticks) in world.query_mut::<&mut Ticks>() {
+        ticks.0 += 1;
+    }
 }
 
 let mut sim = headless(GameConfig::default(), |app| {
-app.add_system(Startup, spawn_counter);
-app.add_system(Update, count);
+    app.add_system(Startup, spawn_counter);
+    app.add_system(Update, count);
 });
 
 sim.tick();
@@ -661,12 +689,12 @@ impl Commands {
 
 ```rust
 fn reap_the_dead(world: &mut World) {
-let mut commands = world.commands();
-for (entity, health) in world.query::<&Health>() {
-if health.0 <= 0 {
-commands.despawn(entity);
-}
-}
+    let mut commands = world.commands();
+    for (entity, health) in world.query::<&Health>() {
+        if health.0 <= 0 {
+            commands.despawn(entity);
+        }
+    }
 }
 ```
 
@@ -680,8 +708,8 @@ pub trait Component: 'static + Send + Sync {}
 
 ```rust
 struct Position {
-x: f32,
-y: f32,
+    x: f32,
+    y: f32,
 }
 impl Component for Position {}
 
@@ -708,13 +736,13 @@ impl DrawCtx {
 
 ```rust
 fn draw_world(ctx: &mut DrawCtx) {
-for (_entity, _position) in ctx.world.query::<&Position>() {
-// ctx.draw(...) — the submission sink arrives with the renderer.
-}
+    for (_entity, _position) in ctx.world.query::<&Position>() {
+        // ctx.draw(...) — the submission sink arrives with the renderer.
+    }
 }
 
 let mut sim = headless(GameConfig::default(), |app| {
-app.add_system(Draw, draw_world);
+    app.add_system(Draw, draw_world);
 });
 ```
 
@@ -751,7 +779,7 @@ pub struct With<T: Component>(PhantomData<fn() -> T>);
 
 ```rust
 for (entity, position, _) in world.query::<(&Position, With<Player>)>() {
-println!("{entity:?} is at {position:?}");
+    println!("{entity:?} is at {position:?}");
 }
 ```
 
@@ -766,7 +794,7 @@ pub struct Without<T: Component>(PhantomData<fn() -> T>);
 
 ```rust
 for (entity, position, _) in world.query::<(&Position, Without<Frozen>)>() {
-println!("{entity:?} can still move, from {position:?}");
+    println!("{entity:?} can still move, from {position:?}");
 }
 ```
 
@@ -821,7 +849,7 @@ world.insert(entity, Position(0));
 world.insert(entity, Velocity(3));
 
 for (_entity, position, velocity) in world.query_mut::<(&mut Position, &Velocity)>() {
-position.0 += velocity.0;
+    position.0 += velocity.0;
 }
 
 assert_eq!(world.component::<Position>(entity), &Position(3));
@@ -847,9 +875,9 @@ impl WorldView {
 
 ```rust
 fn draw_positions(ctx: &mut DrawCtx) {
-for (entity, position) in ctx.world.query::<&Position>() {
-println!("{entity:?} at {position:?}");
-}
+    for (entity, position) in ctx.world.query::<&Position>() {
+        println!("{entity:?} at {position:?}");
+    }
 }
 ```
 
@@ -1164,9 +1192,9 @@ pub fn message(what: &str, specifics: &str, likely_cause: &str, fix: &str) -> St
 
 ```rust
 [jidousha] <what happened>
-<specifics: entity/component/system names and values>
-likely cause: <the most common mistake producing this>
-fix: <the concrete change to make>
+  <specifics: entity/component/system names and values>
+  likely cause: <the most common mistake producing this>
+  fix: <the concrete change to make>
 ```
 
 #### `Quad`
@@ -1340,7 +1368,7 @@ pub fn draw_sprites(ctx: &mut DrawCtx);
 
 ```rust
 let mut sim = headless(GameConfig::default(), |app| {
-app.add_system(Draw, draw_sprites);
+    app.add_system(Draw, draw_sprites);
 });
 ```
 
@@ -1388,9 +1416,9 @@ impl Sprite {
 
 ```rust
 let ship = Sprite {
-texture: assets.load_texture("ship.png"),
-size: Vec2::new(2.0, 2.0),
-..Sprite::new(assets.load_texture("ship.png"))
+    texture: assets.load_texture("ship.png"),
+    size: Vec2::new(2.0, 2.0),
+    ..Sprite::new(assets.load_texture("ship.png"))
 };
 ```
 
@@ -1410,9 +1438,9 @@ pub trait Submit {
 
 ```rust
 fn draw_the_game(ctx: &mut DrawCtx, transform: &Transform, sprite: &Sprite) {
-ctx.sprite(transform, sprite);
-ctx.circle(Vec2::ZERO, 0.5, Color::WHITE, Depth::layer(1));
-ctx.text(Vec2::new(-8.0, -4.0), "score 12", TextStyle::default());
+    ctx.sprite(transform, sprite);
+    ctx.circle(Vec2::ZERO, 0.5, Color::WHITE, Depth::layer(1));
+    ctx.text(Vec2::new(-8.0, -4.0), "score 12", TextStyle::default());
 }
 ```
 
@@ -1436,9 +1464,9 @@ impl TextStyle {
 
 ```rust
 let style = TextStyle {
-size: 1.5,                 // one line is 1.5 world units tall
-color: Color::WHITE,
-..TextStyle::default()
+    size: 1.5,                 // one line is 1.5 world units tall
+    color: Color::WHITE,
+    ..TextStyle::default()
 };
 ```
 
@@ -1466,9 +1494,9 @@ impl Transform {
 ```rust
 let at_origin = Transform::default();
 let placed = Transform {
-pos: Vec2::new(3.0, -2.0),
-rot: Radians::from_degrees(90.0),
-..Transform::default()
+    pos: Vec2::new(3.0, -2.0),
+    rot: Radians::from_degrees(90.0),
+    ..Transform::default()
 };
 assert_eq!(at_origin.pos, Vec2::ZERO);
 assert_eq!(placed.scale, Vec2::ONE, "scale defaults to natural size");
@@ -1627,7 +1655,7 @@ What the player did this tick, held as a world resource.
 pub struct Input;
 
 impl Input {
-    pub fn new(snapshot: InputSnapshot) -> Self;  // The input resource for one tick
+    pub fn new(snapshot: InputSnapshot) -> Self;  // The input resource for one tick — built by the driver, not by a game
     pub fn held(&self, key: Key) -> bool;  // Whether `key` is down this tick
     pub fn just_pressed(&self, key: Key) -> bool;  // Whether `key` went down this tick
     pub fn just_released(&self, key: Key) -> bool;  // Whether `key` came up this tick
@@ -1639,10 +1667,12 @@ impl Input {
 ```
 
 ```rust
-world.insert_resource(Input::new(InputSnapshot::new()));
-
-let input = world.resource::<Input>();
-assert!(!input.held(Key::Space));
+fn jump(world: &mut World) {
+    let Some(input) = world.find_resource::<Input>() else { return };
+    if input.just_pressed(Key::Space) {
+        // ... and the rest of the game.
+    }
+}
 ```
 
 #### `Key`

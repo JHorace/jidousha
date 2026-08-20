@@ -82,6 +82,51 @@ impl DrawnQuad {
     }
 }
 
+/// The box around everything in `quads`, or `None` if there is nothing.
+///
+/// "How big is the thing that was drawn" has no single-quad answer for most of
+/// the drawing vocabulary: `ctx.circle` submits sixteen wedges and `ctx.text`
+/// one quad per character, so the size of the disc and the extent of a string
+/// are both a fold over [`DrawnQuad::bounds`] and never a quad anybody drew.
+/// Every check that measures a drawn thing was writing that fold out — three
+/// worked examples and the testing document, five copies of
+/// `min.min(min), max.max(max)` (e0-findings.md F-116).
+///
+/// It takes quads rather than rectangles because that is the shape the question
+/// arrives in: [`FrameRecord::quads`] and [`FrameRecord::covering`] both hand
+/// back `Vec<DrawnQuad>`, so a filtered iterator over either goes straight in.
+///
+/// ```
+/// # use jidousha_render_core::{BackendTextureId, DrawnQuad, find_bounds};
+/// # use jidousha_core::{Color, Rect};
+/// # use jidousha_core::math::Vec2;
+/// # fn quad(min: Vec2, max: Vec2) -> DrawnQuad {
+/// #     DrawnQuad {
+/// #         batch: 0,
+/// #         texture: BackendTextureId(0),
+/// #         corners: [min, Vec2::new(max.x, min.y), max, Vec2::new(min.x, max.y)],
+/// #         tint: Color::WHITE,
+/// #     }
+/// # }
+/// # let covering_the_ball = vec![
+/// #     quad(Vec2::new(-1.0, -1.0), Vec2::ZERO),
+/// #     quad(Vec2::ZERO, Vec2::new(2.0, 1.0)),
+/// # ];
+/// let all_of_it = find_bounds(covering_the_ball).expect("something was drawn");
+/// assert_eq!(all_of_it, Rect { min: Vec2::new(-1.0, -1.0), max: Vec2::new(2.0, 1.0) });
+/// assert!(find_bounds(Vec::new()).is_none());
+/// ```
+#[must_use]
+pub fn find_bounds(quads: impl IntoIterator<Item = DrawnQuad>) -> Option<Rect> {
+    quads
+        .into_iter()
+        .map(|quad| quad.bounds())
+        .reduce(|so_far, next| Rect {
+            min: so_far.min.min(next.min),
+            max: so_far.max.max(next.max),
+        })
+}
+
 /// One frame, as it was submitted to the backend.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FrameRecord {

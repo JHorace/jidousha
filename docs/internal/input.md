@@ -249,6 +249,20 @@ idiom it was meant to replace is not merely absurd but wrong — `hold(k, t..t+1
 presses on every tick, because every tick is the start of its own range.
 `examples/scripted_player.rs` runs both shapes.
 
+**`InputSnapshot` stays out of the prelude, and `Input::new` says so** (E0 run 9,
+e0-findings.md F-114). The constructor is in the *game* document's reference,
+because `Input` is a game-facing resource, and it names a type only
+`jidousha::testing` exports — so the document's own example did not compile
+against the document's own import line, which run 9 proved by deleting the name
+and reading the `E0425`. The type does not move: a game *reads* `Input` and never
+builds one, only the driver and a check do, so putting a snapshot in every game's
+prelude would be curating in a name with no game-side caller (facade
+`INVARIANT`). What changed is the signature's own one-liner, which now says who
+constructs an `Input` and names the document where `InputSnapshot` is defined —
+F-017's rule applied across the ADR-0025 split rather than inside one document.
+The entry's example no longer builds an `Input` at all: it shows a system reading
+one, which is the only thing a game does with it.
+
 Implemented (I2): the loop, end to end, including the draw transcript.
 `examples/prototype_kit/` grows a `verify.rs` module that runs the *same* systems
 and the same `GameConfig` the window does, differing only in what a person would

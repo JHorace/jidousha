@@ -21,7 +21,7 @@
 use std::process::ExitCode;
 
 use jidousha::prelude::*;
-use jidousha::testing::{FrameRecord, FrameRecorder};
+use jidousha::testing::{DrawnQuad, FrameRecord, FrameRecorder, find_bounds};
 
 use crate::checks::{Checks, fail, greater, near, sizes_covering, within};
 use crate::controller::{Brain, Controller, Report};
@@ -274,21 +274,12 @@ fn staged_board(winner: Option<Side>) -> Scoreboard {
 }
 
 /// Every quad in `frame` that sampled the font.
-fn glyphs(frame: &FrameRecord, font: jidousha::testing::BackendTextureId) -> Vec<Rect> {
+fn glyphs(frame: &FrameRecord, font: jidousha::testing::BackendTextureId) -> Vec<DrawnQuad> {
     frame
         .quads()
-        .iter()
+        .into_iter()
         .filter(|quad| quad.texture == font)
-        .map(|quad| quad.bounds())
         .collect()
-}
-
-/// The union of a list of rectangles.
-fn union(rects: impl IntoIterator<Item = Rect>) -> Option<Rect> {
-    rects.into_iter().reduce(|so_far, next| Rect {
-        min: so_far.min.min(next.min),
-        max: so_far.max.max(next.max),
-    })
 }
 
 /// Everything drawn where the ball is, taken as one shape.
@@ -310,7 +301,7 @@ fn disc_at(frame: &FrameRecord, at: Vec2, radius: f32) -> Option<Rect> {
             && greater(box_of_it.max.x + 0.001, drawn.max.x)
             && greater(box_of_it.max.y + 0.001, drawn.max.y)
     });
-    union(inside.map(|quad| quad.bounds()))
+    find_bounds(inside)
 }
 
 /// Complain about every quad `frame` drew outside what the camera shows.
@@ -608,12 +599,11 @@ pub fn run() -> ExitCode {
     // How big the court actually is, read off the markings that draw it rather
     // than off the constant that placed them — so the requirement below is
     // about the picture and not about a number the game owns.
-    let drawn_court = union(
+    let drawn_court = find_bounds(
         live_frame
             .quads()
-            .iter()
-            .filter(|quad| quad.tint == MARKING)
-            .map(|quad| quad.bounds()),
+            .into_iter()
+            .filter(|quad| quad.tint == MARKING),
     );
 
     // Both paddles, by their *bounds* rather than by something being there. A
@@ -701,19 +691,19 @@ pub fn run() -> ExitCode {
     // that constant in the middle of the court and the check follows it down,
     // passes, and leaves the score across the play.
     let top_third = view.min.y + view.size().y / 3.0;
-    let score_glyphs: Vec<Rect> = glyphs(&live_frame, font)
+    let score_glyphs: Vec<DrawnQuad> = glyphs(&live_frame, font)
         .into_iter()
-        .filter(|bounds| greater(top_third, bounds.max.y))
+        .filter(|quad| greater(top_third, quad.bounds().max.y))
         .collect();
-    let left_digits: Vec<Rect> = score_glyphs
+    let left_digits: Vec<DrawnQuad> = score_glyphs
         .iter()
         .copied()
-        .filter(|bounds| greater(0.0, bounds.center().x))
+        .filter(|quad| greater(0.0, quad.bounds().center().x))
         .collect();
-    let right_digits: Vec<Rect> = score_glyphs
+    let right_digits: Vec<DrawnQuad> = score_glyphs
         .iter()
         .copied()
-        .filter(|bounds| greater(bounds.center().x, 0.0))
+        .filter(|quad| greater(quad.bounds().center().x, 0.0))
         .collect();
     let expected_digits =
         live_score.0.to_string().chars().count() + live_score.1.to_string().chars().count();
@@ -733,7 +723,7 @@ pub fn run() -> ExitCode {
             right_digits.len(),
         ),
     );
-    if let (Some(left), Some(right)) = (union(left_digits), union(right_digits)) {
+    if let (Some(left), Some(right)) = (find_bounds(left_digits), find_bounds(right_digits)) {
         checks.require(
             near(-left.max.x, right.min.x) && near(left.size().y, right.size().y),
             "the two halves of the score are not evenly set about the centre line",

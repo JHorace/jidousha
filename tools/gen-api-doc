@@ -674,7 +674,14 @@ def scan_file(lines: "list[str]", source: str, items: "dict[str, Item]", phase: 
 
         # Doc comments and attributes accumulate onto whatever comes next.
         if stripped.startswith("///"):
-            doc.append(stripped[3:].strip())
+            # Only the one space rustdoc puts after the slashes comes off, so a
+            # doctest's own indentation survives into the document. Stripping
+            # both ends flattened every nested example in all three files — an
+            # `if` inside an `fn` came out flush against the margin, in the
+            # documents whose whole job is to be copied from (F-114's fix wrote
+            # the first one that made it obvious).
+            body = stripped[3:]
+            doc.append((body[1:] if body.startswith(" ") else body).rstrip())
             index += 1
             continue
         if stripped.startswith("#["):

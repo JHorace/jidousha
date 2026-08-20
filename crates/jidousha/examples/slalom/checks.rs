@@ -9,7 +9,7 @@
 //! the game, so the assertion is the only instrument there is.
 
 use jidousha::prelude::*;
-use jidousha::testing::{BackendTextureId, FrameRecord, FrameRecorder};
+use jidousha::testing::{BackendTextureId, FrameRecord, FrameRecorder, find_bounds};
 
 use crate::{
     COURSE_HALF_WIDTH, DESCENT_SPEED, DRIFT_AMPLITUDE, FIRST_GATE_Y, GATE_HALF_GAP, GATE_SPACING,
@@ -132,25 +132,16 @@ pub(crate) fn everything_is_on_screen(frame: &FrameRecord, camera: &Camera) -> C
 /// covering the centre is exactly `2r × 2r`.
 pub(crate) fn the_glider_is_drawn_at(frame: &FrameRecord, at: Vec2, radius: f32) -> Check {
     let box_of_it = Rect::from_center_size(at, Vec2::splat(radius * 2.0));
-    let mut union: Option<Rect> = None;
-    for quad in frame.covering(at) {
+    let disc = find_bounds(frame.covering(at).into_iter().filter(|quad| {
+        // A gate or a wall behind the glider covers the same point and is not
+        // the glider.
         let drawn = quad.bounds();
-        let inside = drawn.min.x >= box_of_it.min.x - 1e-3
+        drawn.min.x >= box_of_it.min.x - 1e-3
             && drawn.min.y >= box_of_it.min.y - 1e-3
             && drawn.max.x <= box_of_it.max.x + 1e-3
-            && drawn.max.y <= box_of_it.max.y + 1e-3;
-        if !inside {
-            continue; // a gate or a wall behind the glider, not the glider
-        }
-        union = Some(match union {
-            None => drawn,
-            Some(so_far) => Rect {
-                min: so_far.min.min(drawn.min),
-                max: so_far.max.max(drawn.max),
-            },
-        });
-    }
-    let Some(size) = union.map(|u| u.size()) else {
+            && drawn.max.y <= box_of_it.max.y + 1e-3
+    }));
+    let Some(size) = disc.map(|disc| disc.size()) else {
         return Err(format!(
             "nothing at all was drawn where the glider is, {at:?}"
         ));

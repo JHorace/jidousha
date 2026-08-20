@@ -195,6 +195,15 @@ a row (stop rule printed, `failure-streak.json` count 2).
   Not rustdoc JSON, which needs nightly while `rust-toolchain.toml` pins stable;
   summaries are lifted from the `///` line above each definition, which is a
   bounded text problem with tests rather than a second toolchain.
+- **A doctest keeps its indentation on the way into the document.** Every `///`
+  line used to be `.strip()`ped at both ends, which is right for wrapped prose
+  and wrong for the code block inside it: an `if` inside an `fn` came out flush
+  against the margin, in three documents whose whole purpose is to be copied
+  from. Only the one space rustdoc puts after the slashes comes off now. Nine E0
+  runs read the flattened form and none reported it — which is the argument for
+  the maintainer looking at the artifact rather than only at the diff, since the
+  runs that copy it write `cargo fmt`-shaped code anyway and never notice they
+  reformatted what they copied (e0-findings.md F-114's fix surfaced it).
 - **The sources are scanned twice: declarations, then `impl` blocks.** A type's
   blocks are not obliged to live in the file that declares it, and a single pass
   in path order attached members only to types it had already seen. That deleted

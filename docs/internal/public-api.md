@@ -314,6 +314,36 @@ each has its ADR.
   subsystem ADR-0001 scopes out. What landed instead is the boundary, stated in
   Concepts with the eight-line shape, the way `App::quit` is stated.
 
+**Changed after E0 run 9: one addition, one refusal, one signature clarified.**
+
+- **`jidousha::testing::find_bounds(quads) -> Option<Rect>`** joins the
+  inventory (ADR-0032, e0-findings.md F-116). `ctx.circle` is sixteen wedges and
+  `ctx.text` one quad per character, so "how big is the thing that was drawn" is
+  a fold over `DrawnQuad::bounds()` and never a quad anybody drew — and six
+  copies of that fold had accumulated across three worked examples and the
+  testing document's own circle recipe. It takes quads rather than rectangles
+  because that is the shape `quads()` and `covering()` hand back, and it is
+  `find_` because it returns `Option` (conventions §Naming). **`Rect::union` in
+  the game surface is declined** in the same breath: the fold belongs where the
+  quads are, and a general geometry primitive in `math` is the door ADR-0022
+  closed.
+- **Declined: `HeadlessSim::fork`** (ADR-0031, F-115), which run 9 asked for
+  after reading "running the game forward and looking is allowed" as an offer the
+  surface does not make. Copying a world needs a `Clone` bound on `Component`
+  **and** `Resource` — both are `'static + Send + Sync` and their storage is
+  type-erased — plus a decision about whether a forked `Rng` shares its stream,
+  which has no answer a reader would guess and one that would make results depend
+  on how many futures a controller explored. What landed instead is the boundary,
+  in the paragraph that made the offer, plus the requirement in Concepts that
+  makes the working shape cheap: the game's own step written as free functions.
+- **`Input::new`'s one-liner now says who calls it.** The constructor is named in
+  the *game* document's reference and takes an `InputSnapshot` the game surface
+  cannot obtain — F-017's rule across the ADR-0025 split rather than inside one
+  document (F-114). The type stays in `jidousha::testing`, because a game reads
+  `Input` and never builds one; what changed is that the signature now says so
+  and names the document where its argument lives. The entry's example was a
+  construction a game never writes, and is now a game reading input in a system.
+
 Rough count: ~46 types/functions. CONTRACT: the v1 prototype substrate
 ("agent Pong/asteroids/breakout") must be expressible with this list alone —
 that's exactly what acceptance milestone E0 tests (implementation plan).

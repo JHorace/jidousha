@@ -324,6 +324,13 @@ Implemented (M3):
   is self-punishing and therefore the whole enforcement.
 - `schedule_debug` landed in M3 rather than M4 — it costs nothing once names
   are captured, and a schedule you cannot print is a schedule you cannot debug.
+  **Its format is now part of the published surface** (e0-findings.md F-118):
+  `schedule:` then one indented line per phase with its system count, then the
+  systems numbered from zero within it, names verbatim. E0 run 8 was told to
+  assert on the string and run 9 discovered it had to guess what was in it, so
+  the testing document shows a sample. Changing the layout now breaks published
+  checks — which is the point of writing it down rather than an argument against
+  it, since a check asserting on an unspecified string is the worse position.
 - Implemented (M4): `Draw` joins the phase set. `IntoSystem<P>` is where a
   phase's signature is enforced, and it carries the `on_unimplemented` text.
   A caveat worth knowing, found by the compile-fail harness: registering a

@@ -32,6 +32,7 @@ use crate::{Paddle, config, register};
 use jidousha::prelude::*;
 use jidousha::testing::{
     BackendTextureId, FrameRecord, FrameRecorder, InputScript, MemorySource, decode_png,
+    find_bounds,
 };
 use std::process::ExitCode;
 
@@ -499,26 +500,15 @@ pub fn run() -> ExitCode {
     // too — is exactly `2r x 2r`.
     let centre = Vec2::ZERO;
     let box_of_it = Rect::from_center_size(centre, Vec2::splat(crate::CENTRE_RADIUS * 2.0));
-    let mut disc: Option<Rect> = None;
-    for quad in last.covering(centre) {
-        let drawn = quad.bounds();
+    let disc = find_bounds(last.covering(centre).into_iter().filter(|quad| {
         // Written out rather than as `Rect::contains`, which is half-open and
         // would throw away the wedges reaching the far edge.
-        let inside = greater(drawn.min.x, box_of_it.min.x - 0.001)
+        let drawn = quad.bounds();
+        greater(drawn.min.x, box_of_it.min.x - 0.001)
             && greater(drawn.min.y, box_of_it.min.y - 0.001)
             && greater(box_of_it.max.x + 0.001, drawn.max.x)
-            && greater(box_of_it.max.y + 0.001, drawn.max.y);
-        if !inside {
-            continue;
-        }
-        disc = Some(match disc {
-            None => drawn,
-            Some(so_far) => Rect {
-                min: so_far.min.min(drawn.min),
-                max: so_far.max.max(drawn.max),
-            },
-        });
-    }
+            && greater(box_of_it.max.y + 0.001, drawn.max.y)
+    }));
     let disc_size = disc.map(|rect| rect.size()).unwrap_or(Vec2::ZERO);
     checks.require(
         near(disc_size.x, crate::CENTRE_RADIUS * 2.0)
@@ -558,17 +548,12 @@ pub fn run() -> ExitCode {
     // show. Four lines of thickness `t` laid on the box's edges span the box
     // plus `t` in each direction, which is a number stated by the two constants
     // rather than written down here.
-    let mut outline: Option<Rect> = None;
-    for quad in quads.iter().filter(|quad| quad.tint == crate::HITBOX_LINE) {
-        let drawn = quad.bounds();
-        outline = Some(match outline {
-            None => drawn,
-            Some(so_far) => Rect {
-                min: so_far.min.min(drawn.min),
-                max: so_far.max.max(drawn.max),
-            },
-        });
-    }
+    let outline = find_bounds(
+        quads
+            .iter()
+            .copied()
+            .filter(|quad| quad.tint == crate::HITBOX_LINE),
+    );
     let outline_size = outline.map(|rect| rect.size()).unwrap_or(Vec2::ZERO);
     let want = crate::ART_SIZE + Vec2::splat(crate::HITBOX_THICKNESS);
     checks.require(
