@@ -39,6 +39,13 @@ because `Startup` has run by then — but a game that relies on the driver's
 default has no camera at all in a headless run, and a check reading one will
 panic where the window would not.
 
+**And that is a fact about `Startup`, not about `Camera`.** Anything your own
+`Startup` inserts — a scoreboard, a round state, a layout you computed once — is
+there for every `Update` and every `Draw` that follows, so `world.resource::<T>()`
+and `ctx.world.resource::<T>()` are the right spellings for it. The table above
+is short because the engine inserts little; the resources a game inserts itself
+are the ones it can count on.
+
 **The camera is the game's; its `viewport` is the driver's.** `run` measures the
 window before the first frame and stamps that size into `Camera::viewport` on
 **every** frame, after the frame's Update ticks and before `Draw` — so a
@@ -57,6 +64,19 @@ and read the real one back. Two consequences worth having:
   so the viewport stays exactly what the game set — which is why
   `FrameRecorder::new` takes one and overrides the resource's. *Testing your
   game* has the trap that follows from that.
+
+**A layout in constants is the prototype answer, and it is an answer about one
+aspect.** You already know which: `GameConfig::window_size` is the size `run`
+opens at and `PhysicalSize::aspect` is the number it implies, so pick the shape
+there, lay the game out for it, and give the recorder the same size. What that
+buys is checkable — a headless run has exactly one viewport, so every bounds
+assertion is about the aspect you chose. What it costs is not: a player dragging
+the window narrower than that moves the edges in, and anything placed against
+them goes off the sides with no check able to see it, because there is no second
+viewport to run. Deriving the layout from `visible_bounds()` in `Draw` is the
+other answer and it survives the drag; it also means every position is computed
+rather than named, which is the trade. A prototype takes the constants, states
+the aspect it took, and knows what it gave up.
 
 The engine runs on a **fixed timestep**. `Time::fixed_dt` is the same number
 every tick, `Time::tick` counts them, and a slow frame runs several ticks rather
@@ -101,6 +121,15 @@ ball. The failure from not deciding is a ball that passes through a paddle
 closing on it, and it survives every assertion that only asks where things ended
 up.
 
+**Having picked an order, hold the game to it.** The order *is* the sequence of
+your `add_system` calls, and nothing but a reader protects it — so a tidy-up that
+moves one of them reverses the decision silently and the ball starts passing
+through the paddle again. `HeadlessSim::schedule_debug()` returns every phase and
+its systems in run order as a string, which makes the order something a check can
+assert on — the one instrument in this surface that sees it, and the only thing
+that catches a swap of the two systems above. *Testing your game* has it written
+out.
+
 Together with the seeded `Rng` in `GameConfig`, that means the same inputs make
 the same game — which is what lets a test replay a session and get the same
 answer.
@@ -113,6 +142,13 @@ front by saying so rather than by being drawn last. `layer`'s numbers are
 **yours**: the engine sorts by them and has no opinion about what they mean, so
 name your bands once in a `mod layers` of your own rather than writing `2` in
 forty places. `examples/prototype_kit` is the worked version.
+
+**Write the literal when you want a `z`; `Depth::layer(n)` is the shorthand for
+`z` 0.** Higher `z` draws on top, so `Depth::layer(n)` is that band's *floor* and
+everything else you put in the band gets a positive number above it. The fields
+are public for this: a game with three bands and nothing sharing one never needs
+a `z`, and a game with a stack of UI inside one band writes
+`Depth { layer: layers::UI, z: 2.0 }` and is not reaching past an intended door.
 
 **A quad is the unit, and two verbs are not one quad.** `ctx.rect` and
 `ctx.line` each submit exactly one; `ctx.circle` submits **sixteen**, a fan of
@@ -170,6 +206,15 @@ world units, not pixels. The camera is `height` world units tall and as wide as
 the window's aspect makes it. `Camera::world_to_screen` and `screen_to_world`
 convert when you need pixels — pointer positions arrive in pixels and become
 world coordinates through the camera you choose.
+
+Which is why a `Rect` is `min` at the **top-left** and `max` at the
+bottom-right, and why **a `Rect` is only well-formed with `min <= max`
+component-wise — nothing checks**. Every method assumes it: `size()` on an
+inverted rect returns negative components rather than complaining, and
+`overlaps` and `contains` quietly answer about a rectangle that is not there.
+`from_min_size` and `from_center_size` cannot produce one from a non-negative
+`size`, so build through them, and when you do assemble a rect by hand from two
+corners, subtract from `max` and add to `min` rather than the other way round.
 
 **A query is a shape, and these are all the shapes there are.** A part is `&T`,
 `&mut T`, `With<T>` or `Without<T>`; a query is one part, or a tuple of up to six
@@ -234,7 +279,7 @@ lints.** `crates/jidousha/Cargo.toml` has `[lints] workspace = true`, and that
 applies to example targets as much as to the crate — so
 `cargo clippy --all-targets -- -D warnings` holds your game to the maintainers'
 rules, and it is the last step of "done" rather than the first, which is a bad
-place to meet a rule for the first time. Four bite in practice:
+place to meet a rule for the first time. Five bite in practice:
 
 - `missing_docs`, denied — the file needs a `//!` header, and any `pub` item in
   it needs a doc comment. This one is a compile error before clippy is reached.
@@ -246,5 +291,10 @@ place to meet a rule for the first time. Four bite in practice:
 - `approx_constant` — a float literal close to π or one of its fractions is
   rejected, which is what a hand-typed angle in radians looks like. Write the
   angle in degrees; `Radians::from_degrees` is a `const fn` for this.
+- `manual_range_contains` — `y < -LIMIT || y > LIMIT` wants
+  `!(-LIMIT..=LIMIT).contains(&y)`. A clamp against a symmetric pair is the
+  shape that trips it, and the same test written against two separately named
+  bounds does not, so it arrives once you tidy the constants rather than when
+  you write the check.
 
 Run it while you write rather than at the end, and none of them costs anything.

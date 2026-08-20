@@ -370,7 +370,23 @@ a row (stop rule printed, `failure-streak.json` count 2).
   (the container image is cached after it runs, so a warm start does nothing), and
   it **never fails the session**: an unreachable archive prints the four-part
   message and exits 0, degrading to the no-adapter state the tests already handle.
-  What it cannot supply is a `DISPLAY` — a windowed example still needs a person.
+
+  **It supplies a `DISPLAY` too, since run 8.** That line used to end "what it
+  cannot supply is a `DISPLAY` — a windowed example still needs a person", and
+  four triages repeated it. It was wrong. `xvfb-run` was installed the whole time;
+  what was missing was `libxkbcommon-x11.so`, which winit's X11 backend dlopens
+  and the image did not carry, so a windowed example panicked inside `xkbcommon-dl`
+  rather than failing for want of a display (e0-findings.md F-111). The hook now
+  installs `libxkbcommon-x11-0`, `xvfb`, `xdotool` and `x11-apps`, which together
+  make a windowed example openable, drivable by real key events, and readable back
+  as pixels — the whole of `e0-prompt.md`'s after-the-run step 2 bar the browser.
+
+  **One thing about Xvfb is worth carrying here rather than rediscovering.** It has
+  no window manager, so nothing sets the input focus and every key event goes to
+  the root window: the game looks deaf and is not. `xdotool windowfocus --sync
+  <id>` once, after the window appears, is the fix. Measured: a paddle under a
+  1.5-second `keydown s` moves zero pixels without it and 286 with it. A session
+  that does not know this files an input bug that does not exist.
 - **`cargo clean` deletes the reports.** `target/verify/` lives under `target/`,
   so a clean also resets the failure streak.
 - **CI invokes `python tools/<name>`, not `tools/<name>`.** The shebang path is

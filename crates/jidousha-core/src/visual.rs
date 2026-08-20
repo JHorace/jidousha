@@ -90,6 +90,13 @@ impl Default for Color {
 ///
 /// Y is down (ADR-0010), so `min` is the top-left corner and `max` the
 /// bottom-right.
+///
+/// CONTRACT: a `Rect` is well-formed only with `min <= max` component-wise, and
+/// nothing here checks. Every method below assumes it — `size` on an inverted
+/// rect returns negative components rather than complaining, and `overlaps` and
+/// `contains` answer about a rectangle that does not exist. The two
+/// constructors cannot produce one from a non-negative `size`; a rect assembled
+/// from two corners by hand can, which is what E0 run 8 asked to be told.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Rect {
     /// Top-left.
@@ -193,14 +200,32 @@ impl Rect {
 /// position on the spatial +Z axis, which points into the screen (ADR-0010).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Depth {
-    /// The coarse band. Higher layers draw over lower ones.
+    /// The coarse band — higher layers draw over lower ones.
     pub layer: i16,
-    /// The fine order within a layer. Higher draws on top.
+    /// The fine order within a layer, with higher drawing on top.
     pub z: f32,
 }
 
 impl Depth {
-    /// The front of `layer`'s band.
+    /// The floor of `layer`'s band: that layer at `z` 0.
+    ///
+    /// So it is the **back** of the band as a game normally builds one — higher
+    /// `z` draws on top, and a band's other occupants take positive numbers
+    /// above this. It is a floor rather than a limit: `z` is a plain `f32`, so
+    /// a negative one draws under this, which is how a game says "behind
+    /// everything else on this layer".
+    ///
+    /// Shorthand, not the only door. `Depth { layer, z }` is the general form
+    /// and the one to write for a layer *and* a `z` inside it; the fields are
+    /// public for exactly that.
+    ///
+    /// ```
+    /// # use jidousha_core::Depth;
+    /// assert_eq!(Depth::layer(3), Depth { layer: 3, z: 0.0 });
+    /// // Something to sit over it in the same band:
+    /// let over_it = Depth { layer: 3, z: 1.0 };
+    /// assert!(over_it.z > Depth::layer(3).z);
+    /// ```
     #[must_use]
     pub const fn layer(layer: i16) -> Self {
         Self { layer, z: 0.0 }
