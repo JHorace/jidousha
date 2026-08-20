@@ -107,9 +107,22 @@ and the answer to that one is more pointers rather than more paragraphs.
    window manager, so without it every key goes to the root window and the game
    looks deaf. A session that skips it will file an input bug that does not exist.
 
-   Doing it in the container does **not** retire the person. It answers "does the
-   window path work end to end", which is what F-079 and F-096 were about; it does
-   not answer "is this fun", and it cannot see the browser.
+   **And the browser half is doable from the container too**, since run 9's triage
+   (F-124): the hook now installs the `wasm-bindgen` version `Cargo.lock` pins, and
+   a Chromium was in the image all along, so
+
+   ```
+   tools/serve-web pong --check
+   ```
+
+   builds the wasm, drives the browser at it and reports what the canvas drew,
+   writing `target/web/check.png`. That is the only check that runs the web target
+   as a *program* rather than as the `cargo check` CI has gated since M0.
+
+   Doing either in the container does **not** retire the person. Together they
+   answer "do the window and web paths work end to end", which is what F-079,
+   F-096 and F-112 were about; neither answers "is this fun", and that is the
+   question step 2 exists for.
 3. Take the run's `docs/e0/run-N.md` and root-cause each entry into
    `docs/internal/e0-findings.md`. **Every friction is an engine or docs bug
    until proven otherwise** — that is the rule the milestone turns on.

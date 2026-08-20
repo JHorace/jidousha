@@ -1,6 +1,6 @@
 # E0 findings — what building a game with this engine actually cost
 
-Status: **nine runs, a hundred and twenty-three findings, awaiting run 10.** The
+Status: **nine runs, a hundred and twenty-four findings, awaiting run 10.** The
 harness is `docs/internal/e0-prompt.md`; the milestone is implementation-plan.md
 §3. **The bar moved after run 8** (ADR-0029, §2): two consecutive runs with no
 `engine` finding and no *novel* `docs` finding, a re-tread of a recorded shape
@@ -167,7 +167,7 @@ prompt.
 | 7 | 2026-08-19 | Pong shipped; **not** a pass | 0 | 14 | 1 (+2 `environment`) | Compiled clean, `--verify` green, 3,092 ticks, 5–0, and **seventeen of seventeen injected faults caught** — the first run to score full marks on its own mutation round. Two rounds and two wrong constant changes lost to the document's own controller prescription, which is a property of one opponent taught as the lesson (F-080) and the third false sentence in three runs. No `engine` finding: the one engine-shaped question is whether `jidousha::testing` should *ship* the controller self-check, and it is **declined** — ADR-0027. Two of the findings are the maintainer's rather than the run's, from the verification tasks: `tools/test` was red on `main` (F-094) and `prototype_kit`'s own `--verify` was missing five of the checks the document prescribes (F-095). **Valid, and played** — the transcript was reviewed and the game played before the decks were cleared. Raw notes: `docs/e0/run-7.md`. Triage: §4d. §6. |
 | 8 | 2026-08-20 | Pong shipped; **not** a pass | 0 | 14 | 0 (+2 `environment`) | Compiled clean, `--verify` green in 2.3 s, 713 tests, ten CI checks on Linux and Windows, and **23 of 23 injected faults caught** after a first round of 19 — the second run to reach full marks, and the first to fix all four misses with four different kinds of instrument. Its headline is that the two documents were **enough**: never blocked, and never wanting the source to learn what a function *did*. The one engine-shaped finding is a doc comment that says the opposite of what the code does (F-097), not a behaviour anybody wants changed, so no `engine` finding stands. One cycle lost to the document prescribing a minimax where an exact enumeration was available (F-100), and one game bug — an opponent that centres on the ball — found only by a third, deliberately mediocre controller the document never asked for (F-101). **Valid, and played in full** — the transcript was reviewed and the game played by the owner in a window and in a browser, and F-111's fix let this triage play it in a window too: 0–2 down, **won 5–4** (F-112, `docs/e0/run-8-playtest.png`). Raw notes: `docs/e0/run-8.md`. Triage: §4e. §6. |
 
-| 9 | 2026-08-20 | Pong shipped; **not** a pass | 1 | 8 | 0 | Compiled clean, `--verify` green over 3,600 ticks with **three** controllers, `fmt` and `clippy` clean, and **18 of 20 injected faults caught** — the two escapes both the shape the document predicts, and the second (a deleted "already behind the plane" guard) invisible to a whole played session rather than merely unlikely. Forty minutes and a restructure of three systems lost to a requirement filed in the document a run is told to read last (F-113) — the first cost in this file caused by a fix rather than by a gap. The one `engine` finding is **accepted and fixed**: `find_bounds`, the fold six checks were writing by hand (F-116, ADR-0032). Three novel `docs` findings, five re-treads, one confirmation (F-123) and two the triage found while fixing the rest. **Valid, and played in full** — the transcript is reviewed and clean, the owner has played it in a window and in a browser, and F-111's fix let this triage play it in a window too (`docs/e0/run-9-playtest.png`). Raw notes: `docs/e0/run-9.md`. Triage: §4f. §6. |
+| 9 | 2026-08-20 | Pong shipped; **not** a pass | 1 | 8 | 0 (+1 `environment`, closed) | Compiled clean, `--verify` green over 3,600 ticks with **three** controllers, `fmt` and `clippy` clean, and **18 of 20 injected faults caught** — the two escapes both the shape the document predicts, and the second (a deleted "already behind the plane" guard) invisible to a whole played session rather than merely unlikely. Forty minutes and a restructure of three systems lost to a requirement filed in the document a run is told to read last (F-113) — the first cost in this file caused by a fix rather than by a gap. The one `engine` finding is **accepted and fixed**: `find_bounds`, the fold six checks were writing by hand (F-116, ADR-0032). Three novel `docs` findings, five re-treads, one confirmation (F-123) and two the triage found while fixing the rest. **Valid, and played in full** — the transcript is reviewed and clean, the owner has played it in a window and in a browser, and F-111's and F-124's fixes let this triage do **both** halves too (`docs/e0/run-9-playtest.png`, `docs/e0/run-9-browser.png`) — the first E0 game a session has seen in a browser. Raw notes: `docs/e0/run-9.md`. Triage: §4f. §6. |
 
 Run 1 produced a working, fun Pong and a document-shaped hole underneath it. The
 game is not the measurement — `docs/e0/run-1.md` is — and it says the run could
@@ -5073,7 +5073,7 @@ is not on `PATH`, and the Chromium is.
 
 ## 4f. Run 9 triage — the whole run on one page
 
-Nine findings from the run, plus two the triage found while fixing them.
+Nine findings from the run, plus three the triage found while fixing them.
 **Class** is §1's; **settled by** names the ADR or `DELIBERATE:` tag that answers
 the complaint, where one does.
 
@@ -5106,6 +5106,7 @@ consequence of ADR-0030's split that ADR-0030 did not foresee.
 | F-121 | the tunnelling cap makes paddle thickness the ceiling on ball speed | docs | first | ADR-0022's paragraph, extended | a sentence beside the sweep advice; two constants that look unrelated and are not |
 | F-122 | every nested example in all three documents was flattened to the margin | docs | **the triage's**, surfaced by F-114's fix | — | the generator keeps a doctest's own indentation now |
 | F-123 | the mutation harness's two rules were already in the document, and run 9 rediscovered them | **not a finding** | **F-075**'s paragraph, working | — | nothing to fix; recorded because a confirmation is evidence too |
+| F-124 | the browser half of step 2 was one missing binary | **environment** | **F-054, F-065, F-079, F-096, F-112** | the session-start hook | **closed** — `wasm-bindgen` is installed from its release, version read from `Cargo.lock`; the first E0 game seen in a browser by a session |
 
 **F-116 is the run's `engine` finding and the reason the streak resets.** Six
 copies of `min.min(min), max.max(max)` had accumulated — the testing document's
@@ -5210,11 +5211,12 @@ and the end screen is the one the staged-frame checks describe. So run 9's "it
 runs in a window and is playable" is an observation here rather than an
 inference.
 
-*The browser half is the owner's and is done.* `tools/serve-web pong`, which is
-the only thing that exercises the wasm target as a *running program* rather than
-as the `cargo check` CI has gated since M0. It is not a duplicate of the window
-half and it is still not something this container can take: F-112's note records
-`wasm-bindgen-cli` 0.2.127 as the one absent piece, and that has not changed.
+*The browser half is done twice over.* The owner has run `tools/serve-web pong`,
+which is the only thing that exercises the wasm target as a *running program*
+rather than as the `cargo check` CI has gated since M0 — and this triage has now
+run it too, because F-112's "the remaining ask is one versioned `cargo install`"
+turned out to be answerable from inside (F-124). `docs/e0/run-9-browser.png` is
+run 9's Pong drawn by the wasm build in the bundled Chromium.
 
 *It is not a verdict on difficulty, and this triage will not pretend otherwise.*
 The player was a screen-reader at about 50 Hz that could not see the ball on most
@@ -5252,6 +5254,9 @@ whether three documents chosen by reader is the right cut at all, which is
 ADR-0025's premise rather than one of its applications.
 
 ### Findings from run 9, and from triaging it (F-113–)
+
+**F-124 is the last piece of an escalation five triages carried**, and it is
+below with the rest because it is the triage's rather than the run's.
 
 ### F-113 — The pure-function requirement arrives after it is actionable
 
@@ -5627,6 +5632,64 @@ would exist for; and each run writing its own is part of what is being measured 
 run 7 scored 17 of 17, run 8 23 of 23 after a first round of 19, run 9 18 of 20.
 What is worth keeping is the rules, and they are kept where a run will read them.
 
+
+### F-124 — The browser half was one missing binary, and this container can take it now
+
+Class: **environment** · Run: **the triage's**, after run 9 · Fixed in: this
+commit · Also found by: **F-054, F-065, F-079, F-096, F-112** — the half F-111's
+fix left open · Settled by: the session-start hook
+
+F-112 closed the *window* half and stated the remaining ask precisely:
+
+> **a Chromium is pre-installed in this container**, at
+> `/opt/pw-browsers/chromium`. What is absent is `wasm-bindgen-cli` 0.2.127 — the
+> lockfile's version, which `tools/serve-web` checks for and refuses to guess at.
+> So the remaining ask is one versioned `cargo install`, not a browser.
+
+That was right, and it was still filed as an escalation because CLAUDE.md puts a
+toolchain install on the never-agent-fixable list. Two things make it fixable
+here, and both are the same argument F-111 made about `libxkbcommon-x11`.
+
+**It is not a `cargo install`.** `wasm-bindgen` publishes a musl binary per
+release. Fetching and installing 0.2.127 took **1.3 seconds** against several
+minutes of compiling the CLI from source, and it is the same binary.
+
+**Everything else was already here.** The `wasm32-unknown-unknown` target is
+installed, `tools/serve-web` already knows how to find the bundled Chromium — it
+globs `/opt/pw-browsers/chromium-*/chrome-linux/chrome` so a browser update
+cannot silently disable the check — and `tools/web/index.html` is checked in. So
+eight runs of "no session has ever driven its game in a browser" was one absent
+file, exactly as five runs of "no session has ever opened a window" was.
+
+**The fix, and the one thing it is careful about.** The session-start hook
+installs it, beside lavapipe and the keyboard library. The version is **read from
+`Cargo.lock`** rather than written into the script: it must equal the
+`wasm-bindgen` crate exactly, a mismatch produces glue that fails at run time
+with a message about nothing in particular — which is why `tools/serve-web`
+refuses rather than guessing — and a version written in two places is a version
+that drifts on the first `cargo update`. Failure stays non-fatal and loud, like
+the rest of the hook: `serve-web` already refuses with a four-part message, so a
+session that lands without it degrades to the state every previous run had, and
+says so.
+
+**What it bought immediately.** `tools/serve-web pong --check` builds the wasm,
+runs the page in Chromium and reports what it drew:
+
+```
+[serve-web] page state: running
+[serve-web] page said: pong running — resize the window to exercise the surface
+[serve-web] 2% of the canvas differs from the page background, 30% from its own
+            commonest pixel rgb(10, 15, 23)
+[serve-web] PASS — pong started and drew in a browser
+```
+
+`docs/e0/run-9-browser.png` is the frame: both paddles, the ball mid-flight, the
+dashed centre line, 0–0, the hint line. **This is the first time an E0 session has
+seen its own game in a browser**, and with F-111 it means both halves of
+after-the-run step 2 are now things the container can do rather than things it
+must ask a person for. The person is not retired — step 2 asks "is it fun", which
+no capture answers — but "does the web target run at all" has stopped being an
+inference.
 
 ## 5. Notes on the run's procedure
 

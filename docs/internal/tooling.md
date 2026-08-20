@@ -380,6 +380,17 @@ a row (stop rule printed, `failure-streak.json` count 2).
   rule. It is a hook rather than a note in this file because the one other thing
   the E0 checklist asks a maintainer to remember was missed twice.
 
+  **It installs `wasm-bindgen` too, since run 9's triage** (e0-findings.md
+  F-124). `tools/serve-web --check` needs the CLI at exactly the version
+  `Cargo.lock` pins and refuses rather than guessing; everything else it wants —
+  the wasm32 target, a Chromium under `/opt/pw-browsers` — was already in the
+  image, so eight runs of "no session has driven its game in a browser" was one
+  absent binary. It comes from the release page as a musl binary rather than from
+  `cargo install`, which is 1.3 seconds against several minutes for the same
+  program, and **the version is read out of `Cargo.lock`** rather than written
+  into the script: two copies of a version drift on the first `cargo update`, and
+  a mismatch here fails at run time with a message about nothing in particular.
+
   It is a **no-op outside a remote session** (`$CLAUDE_CODE_REMOTE`), idempotent
   (the container image is cached after it runs, so a warm start does nothing), and
   it **never fails the session**: an unreachable archive prints the four-part
