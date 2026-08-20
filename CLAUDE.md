@@ -20,7 +20,7 @@ cargo run -p jidousha --example <name>   # run a canonical example
 tools/verify <example>      # headless deterministic run + assertions + a captured PNG
 tools/check-assets          # every asset path in the code names a file that exists
 tools/serve-web <example>   # build for web, serve it; --check drives a browser
-tools/gen-api-doc           # regenerate docs/api/ — 2 docs (CI fails if stale)
+tools/gen-api-doc           # regenerate docs/api/ — 3 docs (CI fails if stale)
 tools/check-api-coverage    # every public item is shown in an example
 ```
 
@@ -50,7 +50,7 @@ failure. Delete it in the commit that resolves the blockage.
 | Modify any subsystem | `docs/internal/<subsystem>.md` |
 | Make or change a design decision | `docs/adr/` (search it — the decision may exist) |
 | Add/change public API | `docs/conventions.md`, then the matching `examples/` file |
-| Write a game with the engine | `docs/api/` (both files) and `examples/` ONLY — never `src/` |
+| Write a game with the engine | `docs/api/` (all three files) and `examples/` ONLY — never `src/` |
 | Wonder why code looks wrong | The `DELIBERATE:` tag near it → linked ADR |
 
 ## Top conventions (full list: docs/conventions.md)

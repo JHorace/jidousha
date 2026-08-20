@@ -92,18 +92,13 @@ For "the player is there and doing nothing" — not the same as inserting no
 yields the same thing from `first_tick_snapshot()`, so a controller that already
 has a builder keeps using it rather than reaching for a second spelling.
 
-**One controller cannot measure a game's difficulty, so write three.** All a
-controller says is whether the game is beatable *by that controller*. The good
-one clears the mechanics, the do-nothing one proves the game can be lost, and
-between them belongs the one that says whether it is worth playing: **a paddle
-that simply chases the ball**, which is what a person does on their first try.
-One game won 5–0 against a rollout controller and gave the chaser **one point in
-seven thousand ticks** — both sides centring on the ball, both returning it dead
-flat, a rally with nowhere to go. That is the degenerate groove below, except
-that here it was the *game*: an opponent that centres on the ball cannot be
-played against by anyone who also does, and the good controller's win hid it
-entirely. Wins 5–0, loses 4–5, loses 0–5 — three lines, and only the middle one
-can say the game is playable.
+**Making that player *good* is a document of its own**, and it is
+`docs/api/jidousha-controllers.md`: a blind script never returns the ball, a
+controller that plays safe measures its own caution rather than the game, and a
+mediocre one reports a plausible wrong number that costs six rounds of tuning the
+wrong half of the program. None of it is about this engine, which is why it is
+not here. Read it when the check needs a player that can win;
+`crates/jidousha/examples/slalom/` is the whole of it worked.
 
 **On the way into tick 1 there is nothing to look at.** `Startup` runs inside
 that first `tick()`, so the controller's read at the top of the loop happens
@@ -111,119 +106,6 @@ once against an empty world: `find_resource` rather than `resource`, and a query
 that yields nothing rather than a `[0]` into an empty `Vec`. It is one tick out
 of thousands and it is the first one, so a controller that gets this wrong
 panics before it has tested anything.
-
-**A controller that plays it safe is not a playability test.** A blind script
-never returns the ball; a controller that tracks the ball perfectly returns it
-*dead flat*, straight back down the middle, and if the opponent tracks too the
-rally has nowhere to go — both sides hold a groove neither can lose, and the run
-ends 0–0 with a 78-touch rally and a report that the game is unplayable. The game
-is fine; the controller made it degenerate. Play to **win**: meet the ball with
-the half of the paddle that sends it off-centre, take the shot a person would
-take. The trap wears other clothes too — a driver that brakes for every corner
-never finds the top speed, a fighter that blocks everything never tests a combo.
-
-**And the bill does not stop at one bad verdict.** A merely mediocre controller
-does not report "unplayable"; it reports a plausible wrong number, and then you
-tune the game to fix it — six rounds of constants, and the game byte-identical
-at the end of them. So when a number looks wrong, suspect the controller first:
-it is the newer and worse-tested of the two. And suspect it *once* — the three
-numbers below settle it in a single run, and without them "suspect the
-controller" is advice you cannot discharge.
-
-**Aim at where the opponent will be, not at where it is standing.** Carry that
-as the principle rather than as any of its reductions, because the reductions are
-not interchangeable and following the wrong one produces the degenerate rally
-above. **Against an opponent that drifts back to the middle** between shots it
-reduces to "try every return this paddle can produce, take the one that lands
-furthest from the middle", which is worth most of a minute a match. **Against an
-opponent that chases the ball** — at least as natural a first opponent to write —
-that same rule is close to the worst objective available: the returns landing
-furthest from the middle are the steep ones, and a steep shot gets there by
-rebounding off a wall into the path the chaser is already following. For a chaser
-there is no reduction: run the opponent's own rule forward beside the ball's, and
-score the landing against where that puts it.
-
-**Which is a requirement on the game, not only on the check.** A controller can
-only ask where the opponent will be if the opponent's decision is a **pure
-function** of the world — `fn opponent_push(&Ball, &Paddle) -> f32`, called by
-the system that moves it — rather than a branch inside that system. Same
-discipline as simulating the ball rather than solving for it, applied to the
-second moving thing, and worth doing to the game before the controller needs it.
-
-**And "take the best shot available" will lose you the match, because the best
-shot is on the edge of what the paddle can do.** Searching contact points across
-the paddle and taking the one landing furthest from the opponent is worth **0–5,
-six returns in a minute** — worse than not searching at all. The sharpest return
-is always the one struck at the very tip, where the bounce angle is widest, so
-"the best available" resolves every time to "stand so the ball hits your last
-millimetre". The optimum sits on the *boundary* of the feasible set, and there
-any error at all — half a tick of overshoot, a dead band — is a clean miss rather
-than a worse return.
-
-So **constrain first, then optimise**. Score only the positions that (a) really
-make contact, with margin — a fixed fraction of the paddle's half-length, so the
-tip is not on the menu — and (b) can be reached before the ball arrives. Optimise
-inside what survives both, and when nothing does, run at the ball.
-
-**Then optimise against the error you know you have, because a correct
-prediction can still be worthless.** Simulating forward answers exactly the aim
-it was asked about, and says nothing about whether that is the aim you will
-achieve. A paddle driven by a key moves in steps of `speed * fixed_dt` and cannot
-stand between them, so it arrives about a fifth of a unit from where it meant to;
-across a paddle's reach that is a twelfth of a contact offset, five degrees of
-bounce, four units of landing over a court's width — and the wall reflections
-fold that into something with no useful relationship to the aim. Measured, shots
-land **7.43 units from where they were planned on a court 17.1 units tall** — not
-approximately right, noise.
-
-**Score the positions the paddle can actually stand on.** The quantisation is
-not noise, it is a lattice — `current_y + k * speed * fixed_dt` — and a
-controller whose steering stops inside half a step can enumerate exactly where it
-may be when the ball arrives. A candidate off that lattice is a place it cannot
-stand, so the objective computed about it is a number about a future that will
-not happen. Scoring lattice points took a measured aim error from **4.59 units to
-0.00** in one edit.
-
-**Minimax is for when you cannot** — a controller steering through a rule it does
-not model, or whose reachable set is not a list. There, score each candidate by
-its **worst** outcome across the error it knows it has: three samples, plus and
-minus one step of quantisation, best of those worsts, worth 0–0 to 3–0. Over an
-exact enumeration it buys nothing and costs a cycle, because the worst of three
-fictions is still a fiction. Ask where the paddle can actually be first.
-
-**Three numbers, printed every run, and one of them is not the one you would
-write.** A controller is code with a contract like any other, so check the
-contract on the numbers it actually picked — reading this is not the same as it
-working, and an assertion is the only form of it that holds. One number is not
-the contract: `met 27 of 27 approaches` prints happily alongside a 0–0 match,
-because meeting a ball and threatening with it are different contracts and that
-line covers only the first.
-
-- `met N of M approaches` — did it reach the ball at all. Clears it as a
-  *returner*.
-- `planned returns aimed to land X from the opponent` — how good the shots it
-  chose were *believed* to be, against the opponent's reach. Clears its
-  *objective*.
-- `shots landed Y from where they were planned to` — whether the shots it plans
-  are the shots it produces. Clears its *aim*, and it is the one nobody writes
-  unprompted.
-
-Read together they say which half of the program to open, which no single number
-can do. N far below M: it cannot reach the ball. N healthy and Y large: it is
-aiming at noise — constrain, then minimax. N healthy, Y small and X small: it
-meets the ball and hits where it aimed, and its aims are not threats, so the
-objective is wrong. **All three healthy and still 0–0: the controller is fine and
-the game is not** — stop reading the driver and go do the arithmetic on the game.
-That is the half a run without these numbers cannot reach, because a correct
-controller and a broken one produce the same 0–0.
-
-**And the arithmetic is nearly always the same one.** An opponent nobody can
-score against is the commonest way a first game is broken, by many mechanisms
-that all reduce to `opponent_speed * crossing_time >= the interval it has to
-defend`. If that holds, the opponent reaches everything and no shot exists;
-whether it does is decided by the speeds a rally *actually* reaches rather than
-by the top speed, so check it at the slow end. Every first opponent is written by
-picking a speed that looks fair, and looking fair is not the test.
 
 Assets are scripted the same way: `MemorySource` lets a test say "this texture
 becomes ready at tick 30", so loading behaviour — placeholders, gates, the frame

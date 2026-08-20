@@ -103,6 +103,7 @@ WINDOWED_EXAMPLES = frozenset(
         "sprites",
         "prototype_kit",
         "pong",
+        "slalom",
         "input_echo",
         "quickstart",
     }
@@ -115,7 +116,7 @@ WINDOWED_EXAMPLES = frozenset(
 # name here must also be windowed (tested): an example that already runs
 # headless asserts in its normal mode, and a second mode would be a second way
 # to do one thing.
-VERIFIABLE_EXAMPLES = frozenset({"prototype_kit", "pong"})
+VERIFIABLE_EXAMPLES = frozenset({"prototype_kit", "pong", "slalom"})
 
 
 def example_phase(

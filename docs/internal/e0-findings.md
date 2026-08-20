@@ -2,9 +2,12 @@
 
 Status: **eight runs, a hundred and twelve findings, awaiting run 9.** The
 harness is `docs/internal/e0-prompt.md`; the milestone is implementation-plan.md
-§3. The bar is two consecutive runs with no new `engine` or `docs` findings.
-Run 8 found fourteen `docs` findings, so the count of consecutive clean runs is
-still zero. Run 1 found five `engine` findings, run 2 three, run 3 none, run 4
+§3. **The bar moved after run 8** (ADR-0029, §2): two consecutive runs with no
+`engine` finding and no *novel* `docs` finding, a re-tread of a recorded shape
+being fixed without resetting the streak. Run 8 found three novel `docs`
+findings, so the count of consecutive clean runs is zero — and it restarted at
+zero when the bar moved, which cost nothing because it had never been anything
+else. Run 1 found five `engine` findings, run 2 three, run 3 none, run 4
 three (all decided: ADRs 0021–0023), run 5 one, declined (ADR-0024), run 6 one,
 accepted and fixed (F-069), run 7 none, and **run 8 none** — the one engine-shaped
 finding, F-097, is a doc comment that says the opposite of what the code does
@@ -52,20 +55,17 @@ different contracts and that line covers only the first. A controller has three
 (F-081), and the third — whether the shots it plans are the shots it produces —
 is the one nobody writes unprompted and the one that broke run 7's case open.
 
-**Run 4's lever stays unspent, for a new reason.** A worked controller in a game
-unlike Pong was held against the day prose failed. Runs 1–5 failed by not doing
-what the prose said; run 7 did exactly what it said and the prose was wrong, so a
-second worked instance would have carried a false prescription into another genre
-rather than caught it. The condition for spending it is now sharper: run 8
-honouring the principle and still ending up in its game's constants (ADR-0027).
-
-**Run 8 met that condition from the other side, so the lever stays unspent.** It
-honoured the principle and ended up not in its game's constants but *past* the
-document, with an exact enumeration of its paddle's reachable positions that the
-prose did not name and that made the prescribed minimax unnecessary (F-100). A
-second worked controller written now would carry advice a run has already
-improved on. The condition sharpens again: a run that honours the principle,
-cannot enumerate, and still lands in its constants.
+**Run 4's lever is spent, at the seventh failure of the prose it was held
+against.** A worked controller in a game deliberately unlike Pong was kept in
+reserve from run 4 onward. Controller advice has now cost F-037, F-047, F-056,
+F-074, F-080, F-082 and F-100 across six runs, and each previous triage answered
+with another paragraph. The diagnosis the seventh failure supports is that the
+advice is genre-neutral while every worked instance of it was a paddle returning
+a ball, so a reader cannot tell the lesson from the Pong — and an eighth
+paragraph would not fix that. `crates/jidousha/examples/slalom/` is the second
+instance: the same four steps in a game with no opponent, no bounce and no rally,
+including a note on the one step that does not transfer. §6 has the reasoning and
+what spending it cost.
 
 **Run 4's triage is §4a, run 5's is §4b, run 6's is §4c, run 7's is §4d and run
 8's is §4e**, each the whole run on one page with the class, the cross-run corroboration and the
@@ -110,9 +110,32 @@ finding.
 
 ## 2. The bar
 
-E0 passes when **two consecutive runs produce no new `engine` or `docs`
-findings**. Not "no findings" — an `author` finding is allowed in a passing run,
-and the second clean run is what distinguishes a fixed engine from a lucky one.
+E0 passes when **two consecutive runs produce no `engine` finding and no *novel*
+`docs` finding** (ADR-0029). Not "no findings" — an `author` finding is allowed
+in a passing run, and the second clean run is what distinguishes a fixed engine
+from a lucky one.
+
+**A `docs` finding is novel unless its "Also found by" names a prior `F-` number
+or an already-recorded shape.** A re-tread is still recorded, still classified
+and still fixed; it no longer resets the streak. An `engine` finding resets it
+whatever its history, because a defect found twice is worse than one found once.
+
+**Why the bar moved, in one paragraph.** The old bar counted every blocking
+finding, and that series did not move in eight runs — 14, 13, 8, 14, 8, 10, 15,
+14 — while the novel half of it halved and reached 3. Two things kept it flat and
+neither is about the engine. `e0-prompt.md` tells every run that "a run that
+reports no friction and produces a working Pong is a less useful run than one
+that limps and says why", and §1 turns any friction into a `docs` finding until
+proven otherwise: the instrument is calibrated to produce findings and the bar
+required none. And a corpus of a hundred-odd findings makes relatives easy to
+spot where fifteen made them impossible, so the re-tread count rises with the
+file's size rather than with the engine's health. The prompt is right and does
+not change; the counting does. ADR-0029 has the data and the alternatives.
+
+**The streak restarted at zero when the bar moved**, as `e0-prompt.md`'s ledger
+requires of any change that makes a run easier. It cost nothing: the count has
+been zero since run 1, which is the argument for moving the bar now rather than
+after a run that would have had to give something up.
 
 A run whose transcript shows a read under `crates/*/src/`, `docs/internal/` or
 `docs/adr/` is void and does not count towards the two. Void runs are logged
@@ -4658,16 +4681,35 @@ budget is tight. §1.3's heading mentions descenders and is confusingly worded; 
 substance — that every glyph quad is the full `size` tall including a space — is
 F-076, already documented, and needs nothing.
 
-**The budget was the binding constraint, and it is worth recording what it cost.**
-`jidousha-testing.md` stood at 13,616 tokens of 15,000 when run 8 finished, and
-six of its findings land in that document. They were paid for rather than added:
-four passages that said their point twice were tightened, and every new paragraph
-was written twice, the second time shorter. The document ends at 14,522. **The
-next run's testing findings will not fit without cutting something a run asked
-for**, and the two candidates are the capture recipe's inline comments and the
-three-numbers block — both of which a run has explicitly credited. That is the
-next triage's problem and it should not be solved by trimming §7-style success
-notes, which are the cheapest lines in the file per finding they carry.
+**The budget was the binding constraint, and it is worth recording what it cost —
+and then what fixed it.** `jidousha-testing.md` stood at 13,616 tokens of 15,000
+when run 8 finished, and six of its findings land in that document. They were paid
+for rather than added: four passages that said their point twice were tightened,
+and every new paragraph was written twice, the second time shorter. The document
+reached 14,665 once the slalom pointer was added — 335 of headroom against a file
+taking six findings a run.
+
+**Curation was tried first, and measuring it is what settled the argument.** One
+pass over four passages recovered 143 tokens. A second pass over three more
+recovered **20**. The file is ten thousand tokens of prose and the reference is
+another four and a half; sentence-level economy is noise against that, and the
+number is what makes "split it" the answer rather than "tighten it".
+
+**ADR-0030 split it, on ADR-0025's own rule.** The controller material — a
+seventh of the file, seven findings across six runs, and not about this engine at
+all — is now `docs/api/jidousha-controllers.md`, prose only, with a 5,000 budget
+of its own. `jidousha-testing.md` is at **12,455 of 15,000** and the new document
+at 2,661 of 5,000. Between them there is room for several runs of findings for
+the first time since run 6, and the next controller finding lands somewhere that
+is not competing with the capture recipe.
+
+**public-api.md §4 predicted this in writing and both halves came true.** Its
+open-half paragraph said the prose was near its floor, that raising a budget was
+foreclosed, and that "a document full again *and* an E0 that still has not passed
+is evidence about the acceptance bar rather than about tokens". That is exactly
+the state run 8 produced. ADR-0029 answered the bar half and ADR-0030 the token
+half; the prediction is worth more than either fix, because it is the reason
+neither was argued from scratch.
 
 
 ### F-097 — `Depth::layer` is documented as the front of its band and returns the back
@@ -5318,6 +5360,104 @@ run 7 ran and is not edited.
   example that contradicts a stated rule beats the rule every time**, so the fix
   has to land in the example as well as in the prose, and this commit does both.
 
+### Where the exercise stands after eight runs, and what was done about it
+
+The standing assessment, written after run 8's triage and acted on in the same
+commit. It is here rather than in a run's own section because it is about the
+**series**, which no single run can see.
+
+**The bar's own series never moved.** Blocking findings — `engine` plus `docs`,
+the two §2 counted — by run: 14, 13, 8, 14, 8, 10, 15, 14. Eight runs, lowest
+ever 8, no trend. On the old bar we were no closer at run 8 than at run 1.
+
+**The composition inverted completely, and that is the real signal.**
+
+| run | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+|---|---|---|---|---|---|---|---|---|
+| novel | 14 | 13 | 8 | 14 | 6 | 8 | 7 | **3** |
+| a re-tread of a recorded shape | 0 | 0 | 0 | 0 | 2 | 2 | 8 | **11** |
+| `engine` | 5 | 3 | 0 | 3 | 1 | 1 | 0 | 0 |
+
+Novel findings averaged 12.2 a run over runs 1–4 and 6.0 over runs 5–8. Engine
+findings are gone. Author cost tracks the novel series and not the raw one: run 1
+reported that the document "did not survive it"; run 8 was never blocked, never
+opened the source, caught 23 of 23 injected faults, and lost one cycle.
+
+**One caveat on the split, stated because it changes how much weight it takes.**
+Run 8's triage annotated cross-run relatives aggressively, and it was written by
+the maintainer who then argued from the numbers. Run 7's triage — a different
+session — already showed 8 re-treads, so the direction is corroborated
+independently, but the exact 3/11 is soft. There is also an observer effect that
+runs the same way: with 112 findings on file almost anything has a relative,
+where with 15 nothing did. **That is an argument for the new bar rather than
+against it** — a count that rises with the corpus's size rather than with the
+engine's health is a bad thing to gate a milestone on.
+
+**Two structural facts explained the flat line better than the engine did.** The
+prompt tells every run that a run reporting no friction is *less useful*, and §1
+converts any friction into a `docs` finding; so the instrument was calibrated to
+produce findings and the bar required none. And the fix channel was closing
+independently: `jidousha-testing.md` stood at 14,522 tokens of 15,000.
+
+**What was done, in one commit.** The bar moved to novelty (ADR-0029, §2), the
+streak restarted at zero as the ledger requires, and **run 4's lever was spent**
+— `examples/slalom`, below. Under the new bar run 8 scores 3, which makes "one or
+two more runs" a defensible sentence rather than a hope.
+
+**What this assessment does not claim.** It does not say E0 has passed. Four runs
+with no engine finding is evidence about the engine, not about the documents, and
+§2's second-clean-run argument is as good now as it was at run 1. The honest
+summary is that the engine's part looks finished and the documents' part is
+converging, and that until run 8 nobody could tell those apart because the bar
+counted them together.
+
+### Run 4's lever, spent — `examples/slalom`
+
+Held since run 4 against the day prose failed on controllers. It has now failed
+seven times: F-037, F-047, F-056, F-074, F-080, F-082 and F-100, across six runs,
+plus F-064/F-087/F-101 on the balance arithmetic beside them. That is the densest
+cluster in this file by a distance, and every previous triage answered it with
+another paragraph.
+
+**The diagnosis the seventh failure supports.** The advice is genre-neutral and
+every worked instance of it was a paddle returning a ball, so a reader could not
+tell which sentences were *the lesson* and which were *Pong*. Run 7 followed a
+reduction meant for a different opponent and produced 0–0; run 8 followed the
+prescribed minimax and found the cheaper exact answer itself. Both are the same
+failure: a reader cannot separate a principle from its one instance, and adding
+an eighth paragraph would not have helped.
+
+`crates/jidousha/examples/slalom/` is the second instance. A glider descends at a
+fixed rate through gates that swing sideways **faster than it can fly**, so
+steering at where a gate *is* can never catch it and the only way through is to
+work out where it will be on arrival. No opponent, no bounce, no rally. It
+carries the same four steps — predict, constrain, optimise, enumerate — and
+`controller.rs` names each at the point it happens.
+
+**It also names the step that does not transfer**, which is the part a second
+instance buys that a second paragraph cannot: Pong's objective is "aim away from
+where the opponent will be", and a slalom has nobody to aim away from. A reader
+who assumed that step was universal now has it marked as the boundary between
+advice about driving a game and advice about games with an adversary.
+
+**The game's own checks are the other half.** `the_course_is_completable` is
+F-087's inequality in this genre, asserted before any controller is blamed;
+`the_gap_between_pilots_is_a_game` is F-101's three-player gradient, stated as a
+band on the ratio between a planner and a chaser rather than as a count. That
+second check earned its place immediately: the example's first tuning had gates
+drifting at 31 degrees a second, the glider outran them, and a chaser cleared all
+twenty-four gates — the game had no decision in it and the check said so.
+
+**What spending it cost.** `crates/jidousha/examples/` is on the E0 run's allowed
+list, so every future author can read this file — which is the cost F-020 named
+and the reason it was held back. The exercise can no longer measure whether prose
+alone teaches the controller lesson, because prose is no longer alone. After
+seven failures that is not much of a loss, and the alternative was an eighth
+paragraph. It cost the testing document **143 tokens net** (14,522 to 14,665)
+after the trims that paid for the pointer — and it buys a place for the *next*
+controller finding to land at no document cost at all, which is the only reason
+the budget arithmetic below is survivable.
+
 ### What run 8 should be watched for
 
 - **Whether the controller paragraph survives being a principle.** F-080's fix
@@ -5564,6 +5704,21 @@ above.*
   the thing it fixed.
 
 ## 7. What this file feeds
+
+**Since run 8, some of it feeds an example instead.** The `make-game` skill was
+always the destination for "a friction that recurs and cannot be designed away",
+and the controller cluster is the largest such thing in this file — seven
+findings across six runs. It did not go to the skill, because the skill is
+written after E0 passes and this could not wait that long. It went to
+`crates/jidousha/examples/slalom/`, which is a third destination the original
+plan did not have: **a worked instance, in the repository, that a run may read.**
+The test for that destination is the one §7 already applies — is it about
+writing a game rather than about this API — plus one more: does a *second*
+instance say something a second paragraph cannot? For the controller advice it
+does, because the failure was a reader unable to separate a principle from its
+one worked example. For most of this file it does not, and the argument below
+stands unchanged.
+
 
 The `make-game` skill (agent-practices §3) is written from E0's findings after
 it passes. A friction that recurs across runs and cannot be designed away is
