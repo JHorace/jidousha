@@ -92,6 +92,19 @@ For "the player is there and doing nothing" — not the same as inserting no
 yields the same thing from `first_tick_snapshot()`, so a controller that already
 has a builder keeps using it rather than reaching for a second spelling.
 
+**One controller cannot measure a game's difficulty, so write three.** All a
+controller says is whether the game is beatable *by that controller*. The good
+one clears the mechanics, the do-nothing one proves the game can be lost, and
+between them belongs the one that says whether it is worth playing: **a paddle
+that simply chases the ball**, which is what a person does on their first try.
+One game won 5–0 against a rollout controller and gave the chaser **one point in
+seven thousand ticks** — both sides centring on the ball, both returning it dead
+flat, a rally with nowhere to go. That is the degenerate groove below, except
+that here it was the *game*: an opponent that centres on the ball cannot be
+played against by anyone who also does, and the good controller's win hid it
+entirely. Wins 5–0, loses 4–5, loses 0–5 — three lines, and only the middle one
+can say the game is playable.
+
 **On the way into tick 1 there is nothing to look at.** `Startup` runs inside
 that first `tick()`, so the controller's read at the top of the loop happens
 once against an empty world: `find_resource` rather than `resource`, and a query
@@ -161,13 +174,22 @@ across a paddle's reach that is a twelfth of a contact offset, five degrees of
 bounce, four units of landing over a court's width — and the wall reflections
 fold that into something with no useful relationship to the aim. Measured, shots
 land **7.43 units from where they were planned on a court 17.1 units tall** — not
-approximately right, noise. What works is scoring each
-candidate by its **worst** outcome across the error the controller knows it has —
-three samples, plus and minus one step of quantisation, best of those worsts. It
-is worth 0–0 to 3–0 and halves the aim error, because it stops picking candidates
-whose apparent merit is a coincidence of where the folds landed. It is the
-boundary failure above, one level up: both are optimising against a noisy
-objective.
+approximately right, noise.
+
+**Score the positions the paddle can actually stand on.** The quantisation is
+not noise, it is a lattice — `current_y + k * speed * fixed_dt` — and a
+controller whose steering stops inside half a step can enumerate exactly where it
+may be when the ball arrives. A candidate off that lattice is a place it cannot
+stand, so the objective computed about it is a number about a future that will
+not happen. Scoring lattice points took a measured aim error from **4.59 units to
+0.00** in one edit.
+
+**Minimax is for when you cannot** — a controller steering through a rule it does
+not model, or whose reachable set is not a list. There, score each candidate by
+its **worst** outcome across the error it knows it has: three samples, plus and
+minus one step of quantisation, best of those worsts, worth 0–0 to 3–0. Over an
+exact enumeration it buys nothing and costs a cycle, because the worst of three
+fictions is still a fiction. Ask where the paddle can actually be first.
 
 **Three numbers, printed every run, and one of them is not the one you would
 write.** A controller is code with a contract like any other, so check the
@@ -230,11 +252,17 @@ recorder for as long as the reference lives, so anything taken out of it has to
 be `.clone()`d before the next `draw`. `recorder.font_texture()` borrows nothing
 and is free to call wherever you like.
 
-**Those two calls are the whole way in.** There is a longer road — draw the
-simulation yourself, build a texture table, plan the frame, hand it to a
-backend — and `draw` **is** that road, done for you and with the result kept:
-same submissions, same plan, same arithmetic, so there is nothing to gain by
-walking it, and nothing in this surface asks you to.
+**The frame a match ends on is not a picture of the game being played.** `last`
+out of that loop is the frame somebody won on, so it carries the end screen
+rather than the layout: 88 glyphs, 2 in the score band and 50 in the hint band,
+leaves 36 unaccounted and they are the banner. Carry out the last frame drawn
+while play was **live**, with the score and positions from that same tick, and
+assert the ordinary layout against that. End screens get staged frames instead.
+
+**Those two calls are the whole way in.** `draw` **is** the longer road — draw
+the simulation, build a texture table, plan the frame, hand it to a backend —
+walked for you and with the result kept: same submissions, same plan, same
+arithmetic, and nothing in this surface asks you to walk it yourself.
 
 The recorder keeps **every** frame, oldest first, with no way to forget them: a
 six-hundred-tick check holds six hundred frames. That is deliberate and it is
@@ -254,12 +282,20 @@ rotated-quad containment, and `frame.quads()` hands you every quad with its
 
 **Two things are called `transcript` and they are not the same size.**
 `frame.transcript()` — on a `FrameRecord` — renders **that one frame** as stable,
-diffable text, every quad's world-space extent one per line: the closest thing to
-a screenshot on a machine with no display, and good enough to check a layout by
-eye. `recorder.transcript()` renders **every frame the recorder holds**, each
-headed `frame N:` — the history, for a failure that needs the ticks before the
-one that broke. One run printed 1,263 of them as 121,465 lines without noticing.
-Print the frame; keep the recorder.
+diffable text, one line per quad's world-space extent: the closest thing to a
+screenshot on a machine with no display. `recorder.transcript()` renders **every
+frame it holds**, each headed `frame N:` — the history, for a failure that needs
+the ticks before the one that broke. One run printed 1,263 of them as 121,465
+lines without noticing. Print the frame; keep the recorder.
+
+**And the order your systems run in is assertable too.** Concepts asks a game
+with a swept collision to pick whether the collider counts as pre- or post-move,
+and to say so at the site; `sim.schedule_debug()` returns every phase and its
+systems in run order as a string, so a check can hold the game to the order it
+picked. Assert that the mover you decided goes first appears before the other in
+it. Nothing else in this surface sees a swap of two `add_system` calls — the
+world ends up in a legal state either way, one tick of a paddle's travel apart,
+and every assertion about where things ended up passes.
 
 **A recorded frame does show draw order, and that is how you check a layer.**
 `quads()` comes back in the depth sort — `layer`, then `z`, then submission order
@@ -398,6 +434,13 @@ assert!(
 Worth running over every literal a game draws, because the habit that produces
 one is typing prose. `—`, `’` and `·` are the three that arrive uninvited.
 
+**And count the expected quads in `chars()`, never `len()`.** `ctx.text` submits
+one per *character*; `str::len` is *bytes*. `drawn == HINT.len()` is right for
+pure ASCII and wrong for exactly the input the check above exists for — an em
+dash is one quad and three bytes — so the two contradict each other on the one
+string that matters, and the count fires first with a number unrelated to the
+fault.
+
 **Then check the screens your run never reaches.** The bounds assertion above
 only judges frames that were drawn, and a controller good enough to finish the
 game is a controller that never loses it: a run that wins 5–0 draws the winning
@@ -414,6 +457,15 @@ recorder.draw(&mut sim);                           // one frame of the screen no
 
 Three lines per screen, and it is the losing banner, the timeout banner and the
 paused overlay that need it.
+
+**And a staged frame is not staged until all of it is.** That recipe is additive
+— tick, insert, draw — while the frames a game needs are usually *corrective*:
+whatever the run left behind is still set. A check parked the ball on a
+centre-line dash and asked `covering(p)[0]` which quad won; the answer was a
+glyph of the **winning banner**, because the match had ended and the stage
+resource still said so. Twenty minutes went into re-reading correct paddle code.
+Set every piece of state the frame depends on, including the state you are not
+asking about.
 
 **Then check the contracts your run never exercises.** Those screens are the
 visible half of a general problem: **a run only tests the states it reaches, and
@@ -490,16 +542,14 @@ fn main() -> ExitCode {
 
 **Collect the failures; do not exit on the first one.** `verify::run` returning
 an `ExitCode` rather than calling `process::exit` on the first bad check is the
-whole of the difference, and it is worth the dozen lines: an instrument that
-stops at the first bad reading costs a cycle per fault, for exactly the reason a
-message that reports a conclusion instead of numbers does. Keep a `Vec` of
-failures, push into it, print all of them in the four-part shape at the end, and
-return `FAILURE` if it is not empty. A single deliberate break can produce six
-reported problems with the precisely diagnostic one **fourth**; exiting first
-shows only "no one won the match", which is the conclusion rather than the
-fault. The exception is a reading that makes the
-rest meaningless: a missing entity, a frame that was never recorded. Stop there,
-because there is nothing left to measure — not because something is wrong.
+whole difference, and it is worth the dozen lines: an instrument that stops at
+the first bad reading costs a cycle per fault. Keep a `Vec` of failures, push
+into it, print them all in the four-part shape at the end, and return `FAILURE`
+if it is not empty. One deliberate break can produce six reported problems with
+the diagnostic one **fourth**; exiting first shows only "no one won the match",
+the conclusion rather than the fault. The exception is a reading that makes the
+rest meaningless — a missing entity, a frame never recorded. Stop there because
+there is nothing left to measure, not because something is wrong.
 
 The verdict line must begin with `verified ` — that is the token the wrapper
 looks for, so an example that quietly ignored the flag and opened a window is
@@ -513,13 +563,11 @@ under a timeout, parses the verdict, writes a report, and lifts the path of any
 picture the run captured into a field of its own in that report.
 `cargo run -p <crate> --example <name> -- --verify` is the same thing by hand.
 
-**The picture is yours to take.** `tools/verify` renders nothing — it has no game
-and no renderer, and all it does about pictures is read one line out of what your
-`--verify` mode printed. A run that captures nothing is reported as capturing
-nothing, and passes. So if you want a frame you can *look* at rather than only
-assert on, your `--verify` mode has to draw one — and it is worth doing, because a
-picture answers what no assertion here can reach: whether it looks like the
-game.
+**The picture is yours to take.** `tools/verify` renders nothing: it reads one
+line out of what your `--verify` mode printed, and a run that captures nothing
+passes. So a frame you can *look* at is one your `--verify` mode drew — worth
+doing, because a picture answers what no assertion here reaches: whether it looks
+like the game.
 
 **And the frame you already recorded is the one to draw.** You do not replay the
 session, and you do not restructure your game to hand it a renderer.
@@ -564,11 +612,11 @@ same thing both times. Replaying the recorded plan is the cheaper road and the
 one that works whatever shape your game is.
 
 That "the ids mean the same thing" step is the load-bearing one, and it holds
-because both counters start empty and both are filled by the same call in the same
-fixed order. It holds for **a game that loads no assets** — every shape a colour,
-every string the built-in font. If yours loads art, the replay has to upload that
-art too, or the plan names a texture the new renderer does not have. Check the ids
-rather than assuming them; the example does.
+because both counters start empty and are filled by the same call in the same
+order. That is true of **a game that loads no assets** — every shape a colour,
+every string the built-in font. If yours loads art, the replay has to upload it
+too, or the plan names a texture the new renderer lacks. Check the ids; the
+example does.
 
 Three things are easy to get wrong here, and silent when you do:
 
@@ -637,6 +685,15 @@ shape — a size, a position, a speed cap, a colour. Pair it with one that names
 requirement rather than the constant, and the pair survives the constant
 changing. Written in the first form alone, the clear colour is exactly the fault
 that escapes a mutation round.
+
+**Colour is where the trap is easiest to see; layout is where it bites.** A score
+drawn at `SCORE_TOP` and checked with `quad.min.y < SCORE_TOP + margin` moves
+with its constant — put `SCORE_TOP` in the middle of the court and the check
+follows it down, passes, and leaves the score across the play. A game that had
+guarded its clear colour correctly walked into this anyway, reading the pairing
+as advice about colours. The requirement names no constant the game owns: the
+score sits in the **top third of `visible_bounds()`**, one number either side of
+the centre line, evenly set.
 
 **And state the requirement where the game actually operates, not at its most
 favourable point.** A requirement stated at a boundary is a requirement about a

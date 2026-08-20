@@ -81,6 +81,26 @@ fn main() {
     assert_eq!(position.max(size), Vec2::new(3.0, 4.0));
     assert_eq!(position.clamp(Vec2::ZERO, size), Vec2::new(2.0, 2.0));
 
+    // Capping a *magnitude* without turning the vector: a speed limit, a
+    // maximum push, a terminal velocity. `clamp` above is component-wise and is
+    // a different operation — it clips a diagonal into a box corner and changes
+    // the direction; these keep the direction and move only the length.
+    let fast = Vec2::new(3.0, 4.0); // length 5
+    assert_eq!(fast.clamp_length_max(2.5), Vec2::new(1.5, 2.0));
+    assert_eq!(
+        fast.clamp_length_max(10.0),
+        fast,
+        "under the cap, untouched"
+    );
+    assert_eq!(fast.clamp_length_min(10.0), Vec2::new(6.0, 8.0));
+    assert_eq!(fast.clamp_length(1.0, 2.5), Vec2::new(1.5, 2.0));
+
+    // The zero vector has no direction to keep, so the two that can *lengthen*
+    // it divide by zero and hand back NaN, silently, exactly as `normalize`
+    // does. `clamp_length_max` is safe on it — it only ever shortens.
+    assert_eq!(Vec2::ZERO.clamp_length_max(5.0), Vec2::ZERO);
+    assert!(Vec2::ZERO.clamp_length_min(5.0).is_nan());
+
     // Dot tells you whether two directions agree — positive means "the same
     // way", which is how a game asks whether a ball is heading at a paddle.
     assert_eq!(Vec2::X.dot(Vec2::X), 1.0);

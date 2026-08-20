@@ -75,6 +75,26 @@ that is a finding about the split, not about the run.
    `tools/serve-web pong` in a browser. "Playable" is not something a script can
    assert, which is why the milestone asks a person: a Pong whose ball passes
    through the paddle satisfies every assertion an agent would think to write.
+
+   **The window half is now doable from the container**, which it was not for
+   runs 1–8 (e0-findings.md F-111): the session-start hook installs
+   `libxkbcommon-x11-0`, `xvfb`, `xdotool` and `x11-apps`, so
+
+   ```
+   Xvfb :99 -screen 0 1280x720x24 &
+   DISPLAY=:99 cargo run -p jidousha --example pong &
+   DISPLAY=:99 xdotool windowfocus --sync "$(DISPLAY=:99 xdotool search --name pong | tail -1)"
+   DISPLAY=:99 xdotool key space; DISPLAY=:99 xwd -root -silent -out frame.xwd
+   ```
+
+   is a real playtest — real key events through `winit`, real frames back out of
+   `wgpu` on lavapipe. **The `windowfocus` line is not optional**: Xvfb has no
+   window manager, so without it every key goes to the root window and the game
+   looks deaf. A session that skips it will file an input bug that does not exist.
+
+   Doing it in the container does **not** retire the person. It answers "does the
+   window path work end to end", which is what F-079 and F-096 were about; it does
+   not answer "is this fun", and it cannot see the browser.
 3. Take the run's `docs/e0/run-N.md` and root-cause each entry into
    `docs/internal/e0-findings.md`. **Every friction is an engine or docs bug
    until proven otherwise** — that is the rule the milestone turns on.
