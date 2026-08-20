@@ -167,7 +167,7 @@ prompt.
 | 7 | 2026-08-19 | Pong shipped; **not** a pass | 0 | 14 | 1 (+2 `environment`) | Compiled clean, `--verify` green, 3,092 ticks, 5–0, and **seventeen of seventeen injected faults caught** — the first run to score full marks on its own mutation round. Two rounds and two wrong constant changes lost to the document's own controller prescription, which is a property of one opponent taught as the lesson (F-080) and the third false sentence in three runs. No `engine` finding: the one engine-shaped question is whether `jidousha::testing` should *ship* the controller self-check, and it is **declined** — ADR-0027. Two of the findings are the maintainer's rather than the run's, from the verification tasks: `tools/test` was red on `main` (F-094) and `prototype_kit`'s own `--verify` was missing five of the checks the document prescribes (F-095). **Valid, and played** — the transcript was reviewed and the game played before the decks were cleared. Raw notes: `docs/e0/run-7.md`. Triage: §4d. §6. |
 | 8 | 2026-08-20 | Pong shipped; **not** a pass | 0 | 14 | 0 (+2 `environment`) | Compiled clean, `--verify` green in 2.3 s, 713 tests, ten CI checks on Linux and Windows, and **23 of 23 injected faults caught** after a first round of 19 — the second run to reach full marks, and the first to fix all four misses with four different kinds of instrument. Its headline is that the two documents were **enough**: never blocked, and never wanting the source to learn what a function *did*. The one engine-shaped finding is a doc comment that says the opposite of what the code does (F-097), not a behaviour anybody wants changed, so no `engine` finding stands. One cycle lost to the document prescribing a minimax where an exact enumeration was available (F-100), and one game bug — an opponent that centres on the ball — found only by a third, deliberately mediocre controller the document never asked for (F-101). **Valid, and played in full** — the transcript was reviewed and the game played by the owner in a window and in a browser, and F-111's fix let this triage play it in a window too: 0–2 down, **won 5–4** (F-112, `docs/e0/run-8-playtest.png`). Raw notes: `docs/e0/run-8.md`. Triage: §4e. §6. |
 
-| 9 | 2026-08-20 | Pong shipped; **not** a pass | 1 | 8 | 0 | Compiled clean, `--verify` green over 3,600 ticks with **three** controllers, `fmt` and `clippy` clean, and **18 of 20 injected faults caught** — the two escapes both the shape the document predicts, and the second (a deleted "already behind the plane" guard) invisible to a whole played session rather than merely unlikely. Forty minutes and a restructure of three systems lost to a requirement filed in the document a run is told to read last (F-113) — the first cost in this file caused by a fix rather than by a gap. The one `engine` finding is **accepted and fixed**: `find_bounds`, the fold six checks were writing by hand (F-116, ADR-0032). Three novel `docs` findings, five re-treads, one confirmation (F-123) and two the triage found while fixing the rest. **Played in a window by this triage** (`docs/e0/run-9-playtest.png`); the transcript review is outstanding, so the run is **not yet valid**. Raw notes: `docs/e0/run-9.md`. Triage: §4f. §6. |
+| 9 | 2026-08-20 | Pong shipped; **not** a pass | 1 | 8 | 0 | Compiled clean, `--verify` green over 3,600 ticks with **three** controllers, `fmt` and `clippy` clean, and **18 of 20 injected faults caught** — the two escapes both the shape the document predicts, and the second (a deleted "already behind the plane" guard) invisible to a whole played session rather than merely unlikely. Forty minutes and a restructure of three systems lost to a requirement filed in the document a run is told to read last (F-113) — the first cost in this file caused by a fix rather than by a gap. The one `engine` finding is **accepted and fixed**: `find_bounds`, the fold six checks were writing by hand (F-116, ADR-0032). Three novel `docs` findings, five re-treads, one confirmation (F-123) and two the triage found while fixing the rest. **Valid, and played in a window by this triage** (`docs/e0/run-9-playtest.png`) — the transcript is reviewed and clean; the browser half of step 2 is the owner's. Raw notes: `docs/e0/run-9.md`. Triage: §4f. §6. |
 
 Run 1 produced a working, fun Pong and a document-shaped hole underneath it. The
 game is not the measurement — `docs/e0/run-1.md` is — and it says the run could
@@ -5190,9 +5190,8 @@ as verifiable-and-windowed for the run, so `tools/test` has been running
 `example-verify:pong`. The registration is bookkeeping, exactly as
 `e0-prompt.md` step 6 now says.
 
-**Run 9's game has been played in a window by this triage, and step 1 has not
-been taken.** Both halves, stated separately, because they are different kinds of
-claim.
+**Run 9 is valid, and its game has been played in a window by this triage.**
+Three claims, stated separately, because they are different kinds of claim.
 
 *The window path works end to end.* `Xvfb` on `:99`, `xdotool windowfocus --sync`
 as F-111's note insists, real `w`/`s` key events through `winit`, real frames out
@@ -5213,13 +5212,14 @@ and saying so is the point — a bad controller reporting a plausible number abo
 the wrong half of the program is F-047 and F-101, and it applies to a maintainer
 playing by hand exactly as it applies to a run's `--verify`.
 
-*Step 1 is outstanding.* Reading the run's transcript for reads under
-`crates/*/src/`, `docs/internal/` or `docs/adr/` needs the transcript, which this
-session does not have. **Run 9 is therefore not yet a valid measurement** — the
-findings above are recorded and fixed on the assumption the restriction held,
-which every previous run's has, and the run's own log lists five things it wanted
-the source for and did not open (§13). The check is still the owner's, and it has
-to happen before the decks are cleared for run 10.
+*Step 1 is taken, by the owner.* The transcript was reviewed and is clean — no
+reads under `crates/*/src/`, `docs/internal/` or `docs/adr/`. **Run 9 is a valid
+measurement**, which is what makes the nine findings above evidence about the
+documents rather than a log kept for the record (§2). It agrees with what the run
+said about itself: its §13 lists five things it wanted the source for and did not
+open, two of which it resolved by arranging an experiment instead — printing
+`schedule_debug`'s output, and trying `FrameRecorder::draw` against a world
+written between draws. That is F-077 and F-078's answer holding for a second run.
 
 **Two corrections to this file and its neighbours, which are not findings.**
 `conventions.md` §Math cited `F-081` for run 7's `PhysicalSize` spelling, which is
