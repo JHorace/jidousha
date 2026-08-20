@@ -396,7 +396,8 @@ the day anything moved. The same fold that walks the quads answers it:
 ```rust
 let clearance = frame
     .quads()
-    .map(|quad| {
+    .into_iter()                             // `quads()` builds a Vec, so this
+    .map(|quad| {                            // walks the one the check above made
         let bounds = quad.bounds();
         let gap = (bounds.min - view.min).min(view.max - bounds.max);
         gap.x.min(gap.y)
@@ -599,13 +600,25 @@ for _ in 0..10_000 {                    // the renderer is poll-based, and a
     }
 }
 // The built-in textures, in the order your recorder created them, so the ids
-// inside the plan mean the same thing here — and one assertion that they do,
-// which is what separates "a PNG was written" from "a PNG of this game".
+// inside the plan mean the same thing here — and one check that they do, which
+// is what separates "a PNG was written" from "a PNG of this game".
 let textures = create_builtin_textures(&mut gpu);
-assert_eq!(textures.resolve(FONT_TEXTURE), recorder.font_texture());
-gpu.render(&frame.plan).expect("the plan the recorder already accepted");
-let image = gpu.capture().expect("an offscreen renderer reads its own target");
-std::fs::write("target/verify/mygame.png", encode_png(&image))?;
+if textures.resolve(FONT_TEXTURE) != recorder.font_texture() {
+    return "skipped, this backend put the font on a different id".to_owned();
+}
+// Every step from here reports rather than panics, for the reason two sections
+// up: `expect` is denied in a game written here, and a capture that failed is a
+// line in the summary rather than the end of the run.
+if let Err(error) = gpu.render(&frame.plan) {
+    return format!("the GPU refused a plan the recorder accepted ({error})");
+}
+let Ok(image) = gpu.capture() else {
+    return "the GPU rendered the frame and would not hand it back".to_owned();
+};
+if std::fs::write("target/verify/mygame.png", encode_png(&image)).is_err() {
+    return "the frame rendered and could not be written".to_owned();
+}
+"target/verify/mygame.png".to_owned()
 ```
 
 `examples/prototype_kit/capture.rs` is that with its reasoning written down. It

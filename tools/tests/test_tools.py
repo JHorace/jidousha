@@ -43,6 +43,7 @@ dep_count = load_tool("dep-count")
 verify = load_tool("verify")
 check_assets = load_tool("check-assets")
 gen_api_doc = load_tool("gen-api-doc")
+check_api_prose = load_tool("check-api-prose")
 api_coverage = load_tool("check-api-coverage")
 
 
@@ -826,6 +827,71 @@ def scan_snippet(*texts):
     for item in items.values():
         gen_api_doc.order_members(item)
     return items
+
+
+class ApiProseTest(unittest.TestCase):
+    """The prose half of `docs/api/`, which nothing compiled until this tool.
+
+    Two halves have to agree or the mechanism is worse than none: what
+    `check-api-prose` compiles, and what `gen-api-doc` renders. A hidden line
+    that reached the page would put a fixture into the document; a hidden line
+    that did not compile would make the check a formality.
+    """
+
+    def test_a_rust_block_is_found_with_the_line_its_body_starts_on(self):
+        with tempfile.TemporaryDirectory() as directory:
+            prose = Path(directory) / "sample.md"
+            prose.write_text(
+                "intro\n\n```rust\nlet x = 1;\n```\n\nmore\n\n```text\nnot rust\n```\n",
+                encoding="utf-8",
+            )
+            found = check_api_prose.blocks_in(prose)
+        self.assertEqual(found, [(4, ["let x = 1;"])])
+
+    def test_a_block_that_is_not_rust_is_not_compiled(self):
+        with tempfile.TemporaryDirectory() as directory:
+            prose = Path(directory) / "sample.md"
+            prose.write_text("```\nverified pong over 5036 ticks\n```\n", encoding="utf-8")
+            self.assertEqual(check_api_prose.blocks_in(prose), [])
+
+    def test_hidden_lines_are_revealed_to_the_compiler(self):
+        revealed = check_api_prose.unhide(
+            ["# let frame = fixture();", "assert!(frame.quads().is_empty());", "## not hidden"]
+        )
+        self.assertEqual(
+            revealed,
+            ["let frame = fixture();", "assert!(frame.quads().is_empty());", "# not hidden"],
+        )
+
+    def test_hidden_lines_never_reach_the_generated_document(self):
+        rendered = gen_api_doc.visible_prose(
+            "```rust\n# let frame = fixture();\nassert!(true);\n## literal\n```\n"
+        )
+        self.assertEqual(rendered, "```rust\nassert!(true);\n# literal\n```")
+
+    def test_a_hash_outside_a_rust_block_is_left_alone(self):
+        # A `#` opening a line of shell or of transcript output is a comment or a
+        # prompt. Stripping it would silently edit the reader's instructions.
+        text = "```sh\n# run the check\ntools/verify pong\n```"
+        self.assertEqual(gen_api_doc.visible_prose(text), text)
+
+    def test_the_indentation_of_a_nested_block_survives_both_passes(self):
+        # Blocks inside a list item are indented, and F-122 is the finding that
+        # says what flattening them costs.
+        block = "  ```rust\n  # let a = 1;\n  let b = a + 1;\n  ```"
+        self.assertEqual(gen_api_doc.visible_prose(block), "  ```rust\n  let b = a + 1;\n  ```")
+        self.assertEqual(check_api_prose.unhide(["  # let a = 1;"]), ["  let a = 1;"])
+
+    def test_every_block_in_the_real_prose_is_wrapped_and_mapped_back(self):
+        sources = []
+        for path in sorted(check_api_prose.PROSE.glob("*.md")):
+            for start, lines in check_api_prose.blocks_in(path):
+                sources.append((path, start, lines))
+        self.assertTrue(sources, "the prose has code blocks and they should be found")
+        source, origins = check_api_prose.harness_source(sources)
+        self.assertEqual(len(origins), len(sources))
+        for index in range(len(sources)):
+            self.assertIn(f"fn block_{index}()", source)
 
 
 class ApiExtractionTest(unittest.TestCase):

@@ -599,6 +599,43 @@ def doc_example(block: "list[str]") -> "list[str]":
     return body if any(line.strip() for line in body) else []
 
 
+def visible_prose(text: str) -> str:
+    """Prose with each `rust` block's hidden setup lines dropped.
+
+    The same `# ` convention rustdoc uses, for the same reason and now in the
+    hand-written half of the surface too: `tools/check-api-prose` compiles every
+    block in `tools/api-doc/`, and a block that compiles needs context a reader
+    does not need to see — a `sim` to tick, a `frame` to measure, a `camera` to
+    ask. Hiding it keeps the block a *fragment* on the page, which is what the
+    surrounding sentence is written against, while making it a *program* to the
+    compiler.
+
+    Hidden lines cost the token budget nothing, because they never reach
+    `docs/api/`. That is the whole reason this is a rendering step rather than a
+    convention a reader is asked to skim past.
+
+    `##` is rustdoc's escape for a literal `#` and survives as one; `#[derive(…)]`
+    is an attribute rather than setup and stays. Only `rust` blocks are touched —
+    a `#` opening a line of shell or of transcript output is a comment or a
+    prompt, not hidden code.
+    """
+    out, in_rust = [], False
+    for line in text.splitlines():
+        stripped = line.lstrip()
+        if stripped.startswith("```"):
+            in_rust = stripped.startswith("```rust")
+            out.append(line)
+            continue
+        if in_rust:
+            if stripped.startswith("##"):
+                out.append(line.replace("##", "#", 1))
+                continue
+            if stripped == "#" or stripped.startswith("# "):
+                continue
+        out.append(line)
+    return "\n".join(out)
+
+
 def scan_sources(sources: "list[Path]") -> "dict[str, Item]":
     """Every public item the sources declare, by name.
 
@@ -1140,7 +1177,7 @@ def documents(repo: Path) -> "list[Document]":
 def render_game(repo: Path, facade: str, items: "dict[str, Item]") -> str:
     """The document a game is written from."""
     quickstart = (repo / "crates/jidousha/examples/quickstart.rs").read_text(encoding="utf-8")
-    concepts = (repo / "tools/api-doc/concepts.md").read_text(encoding="utf-8").strip()
+    concepts = visible_prose((repo / "tools/api-doc/concepts.md").read_text(encoding="utf-8")).strip()
     conventions = (repo / "docs/conventions.md").read_text(encoding="utf-8")
 
     out = [
@@ -1231,7 +1268,7 @@ def render_game(repo: Path, facade: str, items: "dict[str, Item]") -> str:
 
 def render_testing(repo: Path, facade: str, items: "dict[str, Item]") -> str:
     """The document a game's check is written from."""
-    testing = (repo / "tools/api-doc/testing.md").read_text(encoding="utf-8").strip()
+    testing = visible_prose((repo / "tools/api-doc/testing.md").read_text(encoding="utf-8")).strip()
 
     out = [
         "# Jidousha — checking a game you wrote",
@@ -1288,7 +1325,7 @@ def render_controllers(repo: Path) -> str:
     reference entries in the testing document. A second copy of them here would
     be a second place to keep them right.
     """
-    controllers = (repo / "tools/api-doc/controllers.md").read_text(encoding="utf-8").strip()
+    controllers = visible_prose((repo / "tools/api-doc/controllers.md").read_text(encoding="utf-8")).strip()
     return "\n".join(
         [
             "# Jidousha — driving a game you cannot watch",

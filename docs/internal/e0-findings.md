@@ -5724,8 +5724,9 @@ inference.
 
 ## 4g. Run 10 triage — the whole run on one page
 
-Nine findings from the run. **Class** is §1's; **settled by** names the ADR or
-`DELIBERATE:` tag that answers the complaint, where one does.
+Nine findings from the run, plus one the triage found while fixing them.
+**Class** is §1's; **settled by** names the ADR or `DELIBERATE:` tag that answers
+the complaint, where one does.
 
 **Run 10's headline is a number that has now happened three times.** Novel `docs`
 findings: 3 at run 8, 3 at run 9, 3 at run 10 — against 11, 5 and 6 re-treads.
@@ -5770,6 +5771,7 @@ what F-111 and F-124 bought.
 | F-131 | the off-screen check is binary, and 0.03 units of margin reads the same as 3.0 | docs | **F-053**'s neighbourhood, from the other side: this quad *is* on screen | — | **fixed**; the fold is in the document and `prototype_kit` prints the number (0.52 for its own frame) |
 | F-132 | `Rect::from_center_size` with a negative `size` is the half F-107's fix did not say | docs | **F-107**, whose wording carefully covers only non-negative | — | **fixed** in both constructors' doc comments, with a test pinning the inverted result |
 | F-133 | `Rng::next_f32`'s distribution at the endpoints is unstated | docs | first | — | **fixed**; half-open, `0.0` drawn and `1.0` never, with a test over 100,000 draws |
+| F-134 | the prose half of `docs/api/` was compiled by nothing, and contained code that does not compile | docs | **the triage's**, and **F-040**'s class — a snippet wrong in a way only a compiler sees | `tools/check-api-prose` | **fixed**; eighteen blocks now gated, three defects found on the first run |
 
 **Three of the nine are novel: F-128, F-131, F-133.** The other six each name a
 prior `F-` number, and five of those six are a *previous fix's boundary* rather
@@ -6034,6 +6036,58 @@ at the one door that could have enforced it — and the type's own paragraph now
 names negative `size` alongside the hand-assembled pair rather than stopping at
 it. `a_negative_size_inverts_a_constructed_rect_rather_than_being_refused` holds
 the documentation to the arithmetic.
+
+### F-134 — Nothing ever compiled the document's own code
+
+Class: docs · Run: **the triage's** · Also found by: **F-040**'s class · Settled by: `tools/check-api-prose`
+
+`docs/api/` is generated from two halves and only one of them was checked. The
+reference comes from the facade's doc comments, whose examples are doctests —
+`tools/test`'s `doc-test` phase compiles and runs forty-nine of them. The prose
+in `tools/api-doc/` is hand-written, and its eighteen code blocks were compiled
+by nothing at all. Every gate in the repository checked that document's
+formatting, its vocabulary, its example pointers and its token budget, and none
+of them checked whether its code was code.
+
+**The first run of the new check found three defects**, and they are worth
+separating because only the first is the kind anyone expected.
+
+1. **`std::fs::write(…)?` in a fragment that returns `String`.** The capture
+   recipe's own `return format!("skipped, …")` arms say what it returns; the `?`
+   cannot compile there under any surrounding function. A reader copying the
+   recipe gets an error rustc explains and the document does not.
+2. **Two `expect` calls, in a document that denies `expect_used` two sections
+   earlier.** *Concepts* lists `unwrap_used` and `expect_used` among the four the
+   repository denies, "including in the `--verify` mode, where they are the
+   natural spelling", and this recipe uses the natural spelling twice. The worked
+   example the recipe is drawn from — `prototype_kit/capture.rs` — uses neither:
+   `if let Err(error)`, `let Ok(image) else`, `is_err()`, and a message. So the
+   document contradicted both its own rule and its own worked example. This is
+   **F-045's shape for the fifth time**: a rule stated, an example disagreeing,
+   and the example is what gets copied.
+3. **`.map` on a `Vec`**, in the clearance fold added for F-131 an hour earlier
+   in the same triage. `FrameRecord::quads()` returns an owned `Vec<DrawnQuad>`,
+   so the fold needed `.into_iter()`. Written by someone who had just read the
+   surface, reviewed, committed, and wrong.
+
+The third is the argument. Two of the three were written by maintainers who knew
+the API, and one of them within the hour. **Prose about code is code that nobody
+compiles**, and the only reliable reader of it is a compiler.
+
+**Blocks are fragments, and stay fragments.** Context comes from rustdoc's `# `
+hidden-line convention — compiled, never rendered, and so free of the token
+budget: `gen-api-doc::visible_prose` drops hidden lines on the way to `docs/api/`
+and `check-api-prose::unhide` reveals them on the way to `rustc`. The two are
+tested against each other, because a hidden line that reached the page would put
+a test fixture into the document and one that did not compile would make the
+check a formality. Nothing is run — a fragment's value is the sentence beside it,
+and what a fragment can be wrong about is whether it compiles.
+
+**Why this was not found sooner.** F-040 is the same class, found by run 4 the
+expensive way, and its fix was to correct the two snippets. Nobody asked the
+next question, which is what else in that file has never been compiled. That is
+the neighbour defect this triage names in its headline, one level up: the fix
+answered the instance and not the class, for six runs.
 
 ### F-133 — `Rng::next_f32`'s distribution at the endpoints is unstated
 

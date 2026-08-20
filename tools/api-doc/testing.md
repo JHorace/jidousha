@@ -61,6 +61,10 @@ say.** `Startup` runs *inside* the first tick, and `world_mut()` is yours before
 you call it — so a candidate inserted there is what `Startup` finds:
 
 ```rust
+# #[derive(Clone, Copy, Debug)]
+# struct Tuning;
+# impl Resource for Tuning {}
+# let candidates = [Tuning];
 for candidate in candidates {
     let mut sim = headless(GameConfig::default(), build_game);
     sim.world_mut().insert_resource(candidate);   // before tick 1
@@ -97,6 +101,8 @@ Input comes from `jidousha::testing::InputScript`, which is a pure function of
 the tick — no cursor, so a test can seek, replay and bisect freely:
 
 ```rust
+# let mut sim = game::sim();
+# let tick = 1u64;
 let script = InputScript::new().hold(Key::D, 10..120).press(Key::Space, 30);
 sim.world_mut().insert_resource(Input::new(script.snapshot_at(tick)));
 ```
@@ -109,6 +115,7 @@ accumulator, so a controller written with it goes through the same edge rules a
 real keyboard does:
 
 ```rust
+# let mut sim = game::sim();
 let mut keyboard = SnapshotBuilder::new();
 let mut holding = false;
 for _tick in 1..=TICKS {
@@ -162,6 +169,8 @@ which records every frame as structured data. No GPU and no window is involved,
 so this runs anywhere:
 
 ```rust
+# let mut sim = game::sim();
+# let script = InputScript::new();
 let mut recorder = FrameRecorder::new(PhysicalSize::new(1280, 720));
 let mut last = None;
 for tick in 1..=600 {
@@ -210,6 +219,8 @@ the frame was *drawn* with rather than reading the resource raw. It is one line
 at the top of every check that measures against `visible_bounds()`:
 
 ```rust
+# let mut sim = game::sim();
+# sim.tick();
 const HEADLESS_VIEWPORT: PhysicalSize = PhysicalSize::new(1280, 720);
 // The recorder's viewport, the game's everything else. Read it back after the
 // ticks rather than before: a game may move or zoom its camera as it plays.
@@ -295,6 +306,8 @@ that "how big is the thing that was drawn" always comes down to, and `None` when
 nothing was drawn there at all:
 
 ```rust
+# let (sim, recorder, frame, camera) = game::played();
+# let (at, radius) = (Vec2::ZERO, 0.5_f32);
 let box_of_it = Rect::from_center_size(at, Vec2::splat(radius * 2.0));
 let disc = find_bounds(frame.covering(at).into_iter().filter(|quad| {
     // Inside the disc's box, a hair of slack for the rim's arithmetic. Written
@@ -338,6 +351,7 @@ this frame. A game of shapes and text never needs it.
 highest-value check a game of shapes and text can write, and it is three lines:
 
 ```rust
+# let (sim, recorder, frame, camera) = game::played();
 let view = camera.visible_bounds();          // a Rect: min top-left, max bottom-right
 for quad in frame.quads() {
     let bounds = quad.bounds();
@@ -367,9 +381,12 @@ the assertion was right, would have kept passing, and would have started failing
 the day anything moved. The same fold that walks the quads answers it:
 
 ```rust
+# let (sim, recorder, frame, camera) = game::played();
+# let view = camera.visible_bounds();
 let clearance = frame
     .quads()
-    .map(|quad| {
+    .into_iter()                             // `quads()` builds a Vec, so this
+    .map(|quad| {                            // walks the one the check above made
         let bounds = quad.bounds();
         let gap = (bounds.min - view.min).min(view.max - bounds.max);
         gap.x.min(gap.y)
@@ -425,6 +442,8 @@ tick so `Startup` has run, set the resource that selects the screen, draw one
 frame, and run the same check over it:
 
 ```rust
+# let mut sim = game::sim();
+# let mut recorder = FrameRecorder::new(PhysicalSize::new(1280, 720));
 sim.tick();                                        // Startup, so the world exists
 sim.world_mut().insert_resource(Scoreboard { left: 0, right: 5 });
 recorder.draw(&mut sim);                           // one frame of the screen nobody reached
@@ -501,6 +520,7 @@ transcript. Without it, `main` opens a window as usual. Nothing in the engine
 enforces this; it is the shape the tooling expects:
 
 ```rust
+# use std::process::ExitCode;
 fn main() -> ExitCode {
     if std::env::args().any(|arg| arg == "--verify") {
         return verify::run();          // ticks, asserts, prints "verified ...";
@@ -550,6 +570,8 @@ session, and you do not restructure your game to hand it a renderer.
 batching already done — and a renderer built for the purpose will execute it:
 
 ```rust
+# let (sim, mut recorder, frame, camera) = game::played();
+# fn capture_a_frame(recorder: &FrameRecorder, frame: &FrameRecord) -> String {
 // `PhysicalSize` is not in this list: it is in the prelude, which a game's
 // `--verify` file already globs, and taking it from `testing` as well is the
 // same item twice. Only the testing-only names belong here.
@@ -572,13 +594,26 @@ for _ in 0..10_000 {                    // the renderer is poll-based, and a
     }
 }
 // The built-in textures, in the order your recorder created them, so the ids
-// inside the plan mean the same thing here — and one assertion that they do,
-// which is what separates "a PNG was written" from "a PNG of this game".
+// inside the plan mean the same thing here — and one check that they do, which
+// is what separates "a PNG was written" from "a PNG of this game".
 let textures = create_builtin_textures(&mut gpu);
-assert_eq!(textures.resolve(FONT_TEXTURE), recorder.font_texture());
-gpu.render(&frame.plan).expect("the plan the recorder already accepted");
-let image = gpu.capture().expect("an offscreen renderer reads its own target");
-std::fs::write("target/verify/mygame.png", encode_png(&image))?;
+if textures.resolve(FONT_TEXTURE) != recorder.font_texture() {
+    return "skipped, this backend put the font on a different id".to_owned();
+}
+// Every step from here reports rather than panics, for the reason two sections
+// up: `expect` is denied in a game written here, and a capture that failed is a
+// line in the summary rather than the end of the run.
+if let Err(error) = gpu.render(&frame.plan) {
+    return format!("the GPU refused a plan the recorder accepted ({error})");
+}
+let Ok(image) = gpu.capture() else {
+    return "the GPU rendered the frame and would not hand it back".to_owned();
+};
+if std::fs::write("target/verify/mygame.png", encode_png(&image)).is_err() {
+    return "the frame rendered and could not be written".to_owned();
+}
+"target/verify/mygame.png".to_owned()
+# }
 ```
 
 `examples/prototype_kit/capture.rs` is that with its reasoning written down. It
@@ -632,6 +667,7 @@ under every check above, because none of them look at the background — but
 no GPU:
 
 ```rust
+# let (sim, recorder, frame, camera) = game::played();
 assert_eq!(frame.plan.clear_color, palette::COURT);
 ```
 
@@ -648,6 +684,7 @@ the constant cannot move: one that states the game's own requirement in numbers.
 Here that is "the court has to be dark enough for a white ball to read against":
 
 ```rust
+# let (sim, recorder, frame, camera) = game::played();
 let cleared = frame.plan.clear_color;
 let brightness = cleared.r.max(cleared.g).max(cleared.b);
 assert!(

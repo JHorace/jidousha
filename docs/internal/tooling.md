@@ -27,6 +27,7 @@ import, so they keep working when the package ecosystem is exactly what broke.
 | `tools/check-assets` | Does every asset path in the code name a file that exists? | 0 all resolve · 1 a reference is broken · 2 the check could not run |
 | `tools/gen-api-doc` | Is `docs/api/` what the facade actually says? | 0 both written/current · 1 either stale, over its budget, or leaking vocabulary · 2 could not run |
 | `tools/check-api-coverage` | Is every public item shown in an example, written against the facade? | 0 covered · 1 a gap or a breach · 2 could not run |
+| `tools/check-api-prose` | Does the hand-written half of `docs/api/` contain code that compiles? | 0 every block compiles · 1 one does not · 2 could not build the facade |
 
 Not built yet: `tools/check-tags`, `tools/check-headers`.
 
@@ -40,6 +41,7 @@ agent ──> tools/test ──> phase: tool-selftest  (python -m unittest, tool
                          phase: compile-fail   (tools/check-compile-fail)
                          phase: check-assets   (tools/check-assets)
                          phase: check-api-coverage (tools/check-api-coverage)
+                         phase: check-api-prose (tools/check-api-prose)
                          phase: api-doc        (tools/gen-api-doc --check)
                          phase: example:<name> (cargo run --example, one per example)
                               │
@@ -192,6 +194,30 @@ a row (stop rule printed, `failure-streak.json` count 2).
   only: its reader writes a controller with the other two documents' vocabulary,
   so a reference section here would be a second place to keep the same entries
   right.
+  **Both halves of that document are now compiled, and only one of them used to
+  be.** The reference comes from doc comments, whose examples are doctests —
+  `tools/test`'s `doc-test` phase runs forty-nine of them. The prose in
+  `tools/api-doc/` was hand-written and its code blocks were compiled by nothing:
+  every gate checked that document's formatting, vocabulary, example pointers and
+  token budget, and none checked whether its code was code. `tools/check-api-prose`
+  closes that, and found three defects in the eighteen blocks on its first run —
+  a `?` in a function returning `String`, two `expect` calls in a document that
+  denies `expect_used` two sections earlier, and a `.map` on a `Vec` in a snippet
+  added an hour before.
+
+  Blocks are *fragments*, so they take context from rustdoc's `# ` hidden-line
+  convention: compiled, never rendered, and therefore free of the token budget.
+  `gen-api-doc::visible_prose` drops them on the way to `docs/api/` and
+  `check-api-prose::unhide` reveals them on the way to `rustc`; the two are tested
+  against each other, because a hidden line that reached the page would put a test
+  fixture into the document and one that did not compile would make the check a
+  formality. The game-shaped half of the context — `Score`, `my_system`, a
+  `played()` fixture — lives in the tool rather than in eighteen copies, since it
+  is the same fiction each time and the prose already calls it the reader's own.
+
+  Nothing is *run*: a fragment's value is the sentence beside it, and what a
+  fragment can be wrong about is whether it compiles.
+
   Not rustdoc JSON, which needs nightly while `rust-toolchain.toml` pins stable;
   summaries are lifted from the `///` line above each definition, which is a
   bounded text problem with tests rather than a second toolchain.

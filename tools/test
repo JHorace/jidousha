@@ -406,6 +406,11 @@ def main(argv: "list[str]") -> int:
         # reaches past the facade, and docs/api is what the facade generates
         # (public-api.md §4, §5).
         Phase("check-api-coverage", [sys.executable, "tools/check-api-coverage"]),
+        # The other half of that surface. `doc-test` above compiles and runs
+        # every example in a doc comment; this compiles every code block in the
+        # hand-written prose, which until now nothing did — the one part of
+        # `docs/api/` no gate could see was whether its code was code.
+        Phase("check-api-prose", [sys.executable, "tools/check-api-prose"]),
         Phase("api-doc", [sys.executable, "tools/gen-api-doc", "--check"]),
     ]
     timeouts = {
@@ -416,6 +421,8 @@ def main(argv: "list[str]") -> int:
         "compile-fail": COMPILE_FAIL_TIMEOUT_S,
         "check-assets": SELFTEST_TIMEOUT_S,
         "check-api-coverage": SELFTEST_TIMEOUT_S,
+        # Builds the facade before it can compile anything against it.
+        "check-api-prose": COMPILE_FAIL_TIMEOUT_S,
         "api-doc": SELFTEST_TIMEOUT_S,
     }
 

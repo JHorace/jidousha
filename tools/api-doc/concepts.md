@@ -270,6 +270,7 @@ that accepts `&mut T`. **The iterator yields the entity first**, then one item
 per part, and the two filters yield `()` — they still occupy their position:
 
 ```rust
+# let world = &mut World::new();
 for (entity, transform) in world.query::<&Transform>() { }
 for (entity, transform, velocity) in world.query_mut::<(&mut Transform, &Velocity)>() { }
 for (entity, transform, _) in world.query::<(&Transform, With<Player>)>() { }
@@ -374,12 +375,14 @@ Stock clippy lints that games written here have tripped:
   one way, and it is clippy-clean because the `!` is no longer on a comparison:
 
   ```rust
+  # fn crossing(travel: f32, before: f32, after: f32) -> Option<f32> {
   let approaching = travel > 0.0;   // not standing still or going the other way
   let in_front = before >= 0.0;     // not already through it
   let reached = after <= 0.0;       // this tick's travel did not stop short
   if !(approaching && in_front && reached) {
       return None;   // a NaN fails every conjunct, so the answer is "no contact"
   }
+  # Some(before / travel) }
   ```
 
   `examples/prototype_kit/checks.rs` writes the NaN half out at length around its
