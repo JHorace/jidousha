@@ -5761,15 +5761,15 @@ what F-111 and F-124 bought.
 
 | # | Finding | Class | Also found by | Settled by | Verdict |
 |---|---|---|---|---|---|
-| F-125 | `f32::signum` answers `1.0` for zero, and the tour that says so is about `Vec2` | docs | **F-071**'s boundary — a hand-maintained tour cannot cover a scalar op | — | the note moves to where the scalar is used, not to a longer tour |
-| F-126 | `Time::fixed_dt` in a `Startup` system is two true sentences in two sections | docs | **F-106**, the same shape one type over | — | pending; the join is the fix, not either sentence |
+| F-125 | `f32::signum` answers `1.0` for zero, and the tour that says so is about `Vec2` | docs | **F-071**'s boundary — a hand-maintained tour cannot cover a scalar op | — | **fixed**; one clause beside the opponent's aim, where a game leans on it. Not a longer tour |
+| F-126 | `Time::fixed_dt` in a `Startup` system is two true sentences in two sections | docs | **F-106**, the same shape one type over | — | **fixed**; the join lands in the resource table's `Time` row, which is where the question is asked |
 | F-127 | `ctx.text`'s vertical metric was half-stated: the total without the spacing | docs | **F-043**, whose fix carried an explicit "these statements move together" | renderer.md §6 | **fixed**; Concepts states line `n` at `at.y + n * size`, `Submit::text` says the same, three sites named as one metric |
 | F-128 | the document offers a sweep and a game's constants cannot vary within a process | **docs (a sentence offering what the reader cannot act on)** | **F-115**'s class exactly — the offer sentence and the missing half | **ADR-0033** | **fixed, no API change**; the resource shape, the loop, and the recompile script blessed below a stated bar |
 | F-129 | two more clippy lints bite, and the list is incomplete by construction | docs | **F-072 → F-110**, third sighting of one list growing by one per run | — | **fixed by restructure**; the four denied rules named as enumerable, stock clippy named as not, the list labelled a sample |
-| F-130 | "state the requirement, not the constant" is still only worked for a colour | docs | **F-102**, and run 9's own mutation round — third sighting | — | pending; F-102's fix generalised the rule and no run has yet transferred it without paying first |
-| F-131 | the off-screen check is binary, and 0.03 units of margin reads the same as 3.0 | docs | **F-053**'s neighbourhood, from the other side: this quad *is* on screen | — | pending; the ask is a number in the summary, not a new assertion |
-| F-132 | `Rect::from_center_size` with a negative `size` is the half F-107's fix did not say | docs | **F-107**, whose wording carefully covers only non-negative | — | pending; one clause on the constructor |
-| F-133 | `Rng::next_f32`'s distribution at the endpoints is unstated | docs | first | — | pending; `0.0..1.0` half-open, one clause |
+| F-130 | the rule's **worked instances** are unreachable from the rule | docs | **F-102**, and run 9's own mutation round — third sighting | — | **fixed, and re-diagnosed**: `slalom/checks.rs` already carries three annotated non-colour instances; the rule's paragraph now points at them |
+| F-131 | the off-screen check is binary, and 0.03 units of margin reads the same as 3.0 | docs | **F-053**'s neighbourhood, from the other side: this quad *is* on screen | — | **fixed**; the fold is in the document and `prototype_kit` prints the number (0.52 for its own frame) |
+| F-132 | `Rect::from_center_size` with a negative `size` is the half F-107's fix did not say | docs | **F-107**, whose wording carefully covers only non-negative | — | **fixed** in both constructors' doc comments, with a test pinning the inverted result |
+| F-133 | `Rng::next_f32`'s distribution at the endpoints is unstated | docs | first | — | **fixed**; half-open, `0.0` drawn and `1.0` never, with a test over 100,000 draws |
 
 **Three of the nine are novel: F-128, F-131, F-133.** The other six each name a
 prior `F-` number, and five of those six are a *previous fix's boundary* rather
@@ -5826,9 +5826,11 @@ which the tour does not cover, because the tour is a tour of `Vec2`:
 This is F-071's fix meeting its own edge rather than failing. F-071 withdrew the
 tour's completeness claim and added six operations; neither move can make a file
 about `Vec2` cover a scalar method. **The answer is not a longer tour.** The note
-belongs where a game meets the question, which is the paragraph about writing an
-opponent's aim — a sign that never returns zero is why a lean does not judder, and
-that is a sentence about game design that happens to name a method.
+belongs where a game meets the question, and that is where it landed: three
+sentences at the end of the free-functions paragraph, where a reader is being
+told to write `opponent_target` and has not yet written it. A sign that never
+returns zero is why a lean does not judder, which is a sentence about game design
+that happens to name a method.
 
 ### F-126 — `Time::fixed_dt` in `Startup` is two true sentences in two sections
 
@@ -5848,6 +5850,12 @@ something else — and its fix added the generalising clause ("anything your own
 about resources the *engine* inserts, so the fix does not reach it. The cost here
 is a hesitation rather than a cycle, and it is recorded because it is the cheap
 instance of what F-128 is the expensive instance of.
+
+Fixed in the resource table's `Time` row rather than in either prose section,
+because the table is where a reader asks "can I have this here" and the answer
+column is where they read it. Both halves now sit in one cell: inserted before
+the first tick, and `Startup` runs inside that tick, so `Startup` runs after the
+insert.
 
 ### F-127 — Text's vertical metric was stated as a total, and a layout needs the spacing
 
@@ -5956,11 +5964,32 @@ mutation, run 10 caught it by iterating. **The pattern is that the rule is
 learnable and the transfer is not**, and F-102's fix — generalising the wording
 past colour — has not changed that in two runs.
 
-The next move is not a fourth wording. It is a second *worked* instance in a
-different shape, which is the lever ADR-0030 and `examples/slalom` established:
-`slalom/checks.rs` already asserts requirements rather than constants and could
-say so at the site. Deferred to run 11's evidence, because a third sighting that
-was self-caught every time is a rule half-working, not a rule failing.
+**This entry's first diagnosis was wrong and the correction is the fix.** It said
+the next move was a second *worked* instance in a non-colour shape, and that
+`slalom/checks.rs` "could say so at the site". It already does — three times, and
+has since run 8's triage spent the lever:
+
+> `/// A requirement that names no constant the game owns, paired with the walls
+> /// being drawn at `COURSE_HALF_WIDTH`. Written the other way round —
+> /// `assert_eq!(wall.min.x, -COURSE_HALF_WIDTH)` — the check moves with the
+> /// constant and a mutation walks straight through it.`
+
+plus the gate-post check ("The requirement, not the constant: a gate whose post
+is outside the wall is a course that cannot be flown") and the clear colour. So
+the second instance exists, is annotated with its own reasoning, and sits in a
+file every run may read.
+
+**That makes this a reachability failure rather than a missing instance**, which
+is a much cheaper thing to fix and a different thing to measure. The rule's
+paragraph worked one example — a colour — and named no other, so a reader who
+cannot see how to apply it to *their* shape has nowhere to look. The paragraph
+now points at slalom's three and says why: the transfer is the hard part, not the
+rule. One clause, no lever spent, and run 11 tests it directly — the pass is a
+run whose first drawing check names no layout constant.
+
+Recorded at length because the wrong diagnosis was the expensive one: it would
+have deferred a 25-token fix for a fourth sighting, on the grounds of a cost
+(spending a lever) that had already been paid two runs earlier.
 
 ### F-131 — The off-screen check is binary, and a 0.03-unit margin reads exactly like a safe one
 
@@ -5980,10 +6009,13 @@ passing until the day it does not.
 
 **Not an `author` finding**, by §1's test — there is no quote in `docs/api/`
 showing where the answer already was. The document teaches the binary check and
-never suggests reporting the margin. The fix is one line in the `--verify`
-skeleton's summary advice: alongside the counts a run prints, print the smallest
-distance from any drawn quad to the camera's edge. It costs a fold over quads a
-check already has, and it turns a cliff into a gradient.
+never suggests reporting the margin.
+
+Fixed as a fold printed beside the check that motivates it, and worked in
+`examples/prototype_kit`, which reports `closest quad to the edge: 0.52 world
+units` for its own frame. The number costs one more pass over quads the check has
+already walked, and it turns a cliff into a gradient: 0.52 and 0.03 are the same
+verdict and very different games.
 
 ### F-132 — `Rect::from_center_size` with a negative `size` is the half F-107's fix did not say
 
@@ -5996,9 +6028,12 @@ Class: docs · Run: 10 · Also found by: **F-107**, whose wording covers only th
 F-107 landed the well-formedness `CONTRACT:` and the constructors' guarantee, and
 the guarantee is stated with a precision that draws attention to its own boundary.
 A reader who notices the qualifier is a reader now asking a question the document
-raised and did not answer. One clause on the constructor closes it; the answer is
-that a negative component produces an inverted rect and nothing checks, which is
-the `CONTRACT:` restated at the one door that could have enforced it.
+raised and did not answer. Closed on both constructors — a negative component
+produces an inverted rect and nothing checks, which is the `CONTRACT:` restated
+at the one door that could have enforced it — and the type's own paragraph now
+names negative `size` alongside the hand-assembled pair rather than stopping at
+it. `a_negative_size_inverts_a_constructed_rect_rather_than_being_refused` holds
+the documentation to the arithmetic.
 
 ### F-133 — `Rng::next_f32`'s distribution at the endpoints is unstated
 
@@ -6010,7 +6045,13 @@ Class: docs · Run: 10 · Also found by: first · Settled by: —
 
 Harmless here and not in general: a roll used as an index, or as a divisor, or as
 a probability compared with `<`, each break differently at an inclusive endpoint.
-The entry says the range and not the closure. One clause.
+The entry said the range and left the closure to `..`.
+
+Now stated: half-open, `0.0` drawn and `1.0` never, because the top 24 bits give
+at most `2^24 - 1` twenty-fourths. `next_f32_draws_zero_and_never_draws_one`
+asserts it over 100,000 draws — the range on every one, the top bounded by the
+largest representable draw, and the low end actually reached, since "never 1.0"
+and "always 0.5" would both satisfy a range check alone.
 
 ## 5. Notes on the run's procedure
 

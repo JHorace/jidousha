@@ -98,6 +98,12 @@ impl Rng {
 
     /// A value in `0.0..1.0`.
     ///
+    /// **Half-open, and which end is which matters.** `0.0` is drawn; `1.0`
+    /// never is, because the top 24 bits give at most `2^24 - 1` twenty-fourths.
+    /// A roll used as a probability against `<`, as a divisor, or scaled into an
+    /// index each break at a different end, so the range is stated rather than
+    /// left to the `..` (E0 run 10 assumed it and was right).
+    ///
     /// Built from the top 24 bits, so every value is exactly representable and
     /// the result is bit-identical on every platform.
     pub fn next_f32(&mut self) -> f32 {
@@ -147,6 +153,24 @@ mod tests {
     fn below_one_is_always_zero() {
         let mut rng = Rng::from_seed(1);
         assert_eq!(rng.below(1), 0);
+    }
+
+    #[test]
+    fn next_f32_draws_zero_and_never_draws_one() {
+        // The range is half-open and the documentation now says which end is
+        // which; this is what holds it to that (e0-findings.md F-133).
+        let mut rng = Rng::from_seed(11);
+        let mut lowest = f32::MAX;
+        let mut highest = f32::MIN;
+        for _ in 0..100_000 {
+            let roll = rng.next_f32();
+            assert!((0.0..1.0).contains(&roll), "{roll} is outside 0.0..1.0");
+            lowest = lowest.min(roll);
+            highest = highest.max(roll);
+        }
+        // The largest representable draw, which is what "never 1.0" means here.
+        assert!(highest <= 1.0 - 1.0 / (1u32 << 24) as f32, "{highest}");
+        assert!(lowest < 0.001, "{lowest} — the low end should be reachable");
     }
 
     #[test]

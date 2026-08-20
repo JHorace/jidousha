@@ -596,6 +596,21 @@ pub fn run() -> ExitCode {
         ),
     );
 
+    // The check above is a cliff: it answers yes or no, so a layout 0.03 world
+    // units from the edge reads exactly like one 3.0 units clear. A game has
+    // shipped at 0.03 with the assertion right, still passing, and one nudge
+    // from failing. The margin costs one more pass over quads this check has
+    // already walked, and it turns the cliff into a gradient (e0-findings.md
+    // F-131).
+    let clearance = quads
+        .iter()
+        .map(|quad| {
+            let bounds = quad.bounds();
+            let gap = (bounds.min - view.min).min(view.max - bounds.max);
+            gap.x.min(gap.y)
+        })
+        .fold(f32::MAX, f32::min);
+
     // --- the background, which leaves no quad behind ----------------------
     //
     // Two checks rather than one. The first moves with the constant it compares
@@ -669,6 +684,7 @@ pub fn run() -> ExitCode {
         "  last frame: {} batches, {glyphs} glyphs",
         last.plan.batches.len()
     );
+    println!("  closest quad to the edge: {clearance:.2} world units");
     println!("  capture: {captured}");
     print!("{}", last.transcript());
     verdict

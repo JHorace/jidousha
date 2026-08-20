@@ -360,6 +360,27 @@ without a word from anything. A game that shipped exactly that had eight other
 assertions passing — glyphs existed, the score was placed, the world was
 correct — and only this one would have caught it.
 
+**Then print the margin it passed by, because the check itself is a cliff.** It
+answers yes or no, so a layout 0.03 world units from the edge reads exactly like
+one 3.0 units clear, and a game has shipped at 0.03 without anybody knowing —
+the assertion was right, would have kept passing, and would have started failing
+the day anything moved. The same fold that walks the quads answers it:
+
+```rust
+let clearance = frame
+    .quads()
+    .map(|quad| {
+        let bounds = quad.bounds();
+        let gap = (bounds.min - view.min).min(view.max - bounds.max);
+        gap.x.min(gap.y)
+    })
+    .fold(f32::MAX, f32::min);
+println!("closest quad to the edge: {clearance:.2} world units");
+```
+
+A number in the summary turns the cliff into a gradient, and it costs one line of
+a run a check already makes. `examples/prototype_kit` prints it.
+
 **And centring a multi-line block by `width_of` centres only its longest line.**
 `width_of` is the width of the widest line, and `ctx.text` lays a block out from
 one top-left corner — so subtracting half of it puts the longest line in the
@@ -651,6 +672,14 @@ guarded its clear colour correctly walked into this anyway, reading the pairing
 as advice about colours. The requirement names no constant the game owns: the
 score sits in the **top third of `visible_bounds()`**, one number either side of
 the centre line, evenly set.
+
+**Three worked non-colour instances are in `examples/slalom/checks.rs`**, and
+they are there because reading the rule has not been enough for three runs
+running: a course wide enough for the glider *plus a gate's gap* rather than
+`assert_eq!(wall.min.x, -COURSE_HALF_WIDTH)`, a gate whose posts must fall inside
+the drawn walls, and the clear colour in the form above. Each says at the site
+what the other spelling would have cost. If the pairing reads as advice about
+colours, read those three — the transfer is the part that is hard, not the rule.
 
 **And state the requirement where the game actually operates, not at its most
 favourable point.** A requirement stated at a boundary is a requirement about a

@@ -29,7 +29,7 @@ there:
 
 | Resource | Who inserts it | Can it be absent? |
 |---|---|---|
-| `Time` | `run` and `headless` both, before the first tick | no |
+| `Time` | `run` and `headless` both, before the first tick | no — including in `Startup`, which runs *inside* that tick and so runs after the insert |
 | `Rng` | the same, seeded from `GameConfig::seed` | no |
 | `Input` | `run`, before every Update tick | **yes** — `Startup` never sees one, because it runs inside the first tick before that tick's `Input` exists; and never under `headless` unless a test inserts it |
 | `Camera` | the game, in `Startup` | **yes** under `headless`; under `run`, a game that inserts none is given `Camera::default()` before the first frame |
@@ -161,6 +161,13 @@ written. Retrofitting is not: by the time the check needs the answer it is
 buried in a `&mut World`, and one run spent forty minutes and a restructure of
 its main loop moving it back out. `docs/api/jidousha-controllers.md` is what does
 the asking.
+
+One detail of that aim is worth knowing before you write it: **`signum` answers
+`1.0` for zero**, on `f32` as well as on `Vec2`, so a lean or a nudge written on
+the sign of a difference never stalls at exactly zero and never judders between
+two answers. `examples/vec2_tour.rs` says it of `Vec2::signum` and cannot say it
+of `f32::signum`, which is not a `Vec2` operation and is the one a target
+computed as a scalar reaches for.
 
 **Drawing is submission, not painting.** A `Draw` system hands the renderer
 quads — `ctx.sprite`, `ctx.rect`, `ctx.line`, `ctx.circle`, `ctx.text` — and
