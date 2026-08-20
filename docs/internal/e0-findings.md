@@ -1,19 +1,31 @@
 # E0 findings — what building a game with this engine actually cost
 
-Status: **eight runs, a hundred and twelve findings, awaiting run 9.** The
+Status: **nine runs, a hundred and twenty-four findings, awaiting run 10.** The
 harness is `docs/internal/e0-prompt.md`; the milestone is implementation-plan.md
 §3. **The bar moved after run 8** (ADR-0029, §2): two consecutive runs with no
 `engine` finding and no *novel* `docs` finding, a re-tread of a recorded shape
-being fixed without resetting the streak. Run 8 found three novel `docs`
-findings, so the count of consecutive clean runs is zero — and it restarted at
-zero when the bar moved, which cost nothing because it had never been anything
-else. Run 1 found five `engine` findings, run 2 three, run 3 none, run 4
-three (all decided: ADRs 0021–0023), run 5 one, declined (ADR-0024), run 6 one,
-accepted and fixed (F-069), run 7 none, and **run 8 none** — the one engine-shaped
-finding, F-097, is a doc comment that says the opposite of what the code does
-rather than a behaviour anybody wants changed. Fourteen of run 8's sixteen are
-sentences the documents do not carry, which is the seventh consecutive run whose
-findings are mostly that shape.
+being fixed without resetting the streak. **Run 9 is the first run counted under
+it, and it does not pass**: three novel `docs` findings — the same count as run 8
+— and one `engine` finding, F-116, which resets the streak outright whatever the
+docs column says. The count of consecutive clean runs is zero. Run 1 found five
+`engine` findings, run 2 three, run 3 none, run 4 three (all decided: ADRs
+0021–0023), run 5 one, declined (ADR-0024), run 6 one, accepted and fixed
+(F-069), run 7 none, run 8 none, and **run 9 one, accepted and fixed** —
+`jidousha::testing::find_bounds`, the fold six checks were writing out by hand
+(ADR-0032). Five of run 9's nine are re-treads, and all five are evidence about a
+*previous fix's reach* rather than about a gap nobody knew: F-017's rule across
+the document split, F-026's warning without its remedy, F-098's method without
+its format, F-045's example disagreeing with its own prose for the fourth time,
+and F-098/F-109's shape again in the most expensive form yet recorded.
+
+**Run 9's number is forty minutes**, and it is a restructure rather than a
+mystery. The requirement that a game's opponent decision and collision response
+be free functions is stated correctly, in the file ADR-0030 tells a run to read
+*third* — so the prescribed reading order guarantees it arrives after the point
+where it is cheap (F-113). Nothing was missing; the ordering was. That is the
+first cost this exercise has recorded that is caused by a fix rather than by a
+gap, and it is why §4f's open question is about ADR-0025's cut rather than about
+any of its applications.
 
 **Run 8 is the first run to say the documents were enough, and to mean something
 by it.** It was never blocked, and it never wanted the source to learn what a
@@ -154,6 +166,8 @@ prompt.
 | 6 | 2026-08-19 | Pong shipped; **not** a pass | 1 | 9 | 1 (+1 `environment`) | Compiled clean, `--verify` green, 2,013 ticks, and **the first run to see a frame of its own game** — the capture path landed and the PNG looks like Pong. Blocked once, on its own game design: an opponent unbeatable by arithmetic (F-074, the other side of F-064). The one `engine` finding is **accepted and fixed** — `Radians::from_degrees` is now a `const fn` (F-069). Its headline is a document sentence that was *false* rather than missing (F-068), the second run running. Every claim in its log held under checking. **Valid, and played** — both after-the-run steps taken before the decks were cleared. Raw notes: `docs/e0/run-6.md`. Triage: §4c. §6. |
 | 7 | 2026-08-19 | Pong shipped; **not** a pass | 0 | 14 | 1 (+2 `environment`) | Compiled clean, `--verify` green, 3,092 ticks, 5–0, and **seventeen of seventeen injected faults caught** — the first run to score full marks on its own mutation round. Two rounds and two wrong constant changes lost to the document's own controller prescription, which is a property of one opponent taught as the lesson (F-080) and the third false sentence in three runs. No `engine` finding: the one engine-shaped question is whether `jidousha::testing` should *ship* the controller self-check, and it is **declined** — ADR-0027. Two of the findings are the maintainer's rather than the run's, from the verification tasks: `tools/test` was red on `main` (F-094) and `prototype_kit`'s own `--verify` was missing five of the checks the document prescribes (F-095). **Valid, and played** — the transcript was reviewed and the game played before the decks were cleared. Raw notes: `docs/e0/run-7.md`. Triage: §4d. §6. |
 | 8 | 2026-08-20 | Pong shipped; **not** a pass | 0 | 14 | 0 (+2 `environment`) | Compiled clean, `--verify` green in 2.3 s, 713 tests, ten CI checks on Linux and Windows, and **23 of 23 injected faults caught** after a first round of 19 — the second run to reach full marks, and the first to fix all four misses with four different kinds of instrument. Its headline is that the two documents were **enough**: never blocked, and never wanting the source to learn what a function *did*. The one engine-shaped finding is a doc comment that says the opposite of what the code does (F-097), not a behaviour anybody wants changed, so no `engine` finding stands. One cycle lost to the document prescribing a minimax where an exact enumeration was available (F-100), and one game bug — an opponent that centres on the ball — found only by a third, deliberately mediocre controller the document never asked for (F-101). **Valid, and played in full** — the transcript was reviewed and the game played by the owner in a window and in a browser, and F-111's fix let this triage play it in a window too: 0–2 down, **won 5–4** (F-112, `docs/e0/run-8-playtest.png`). Raw notes: `docs/e0/run-8.md`. Triage: §4e. §6. |
+
+| 9 | 2026-08-20 | Pong shipped; **not** a pass | 1 | 8 | 0 (+1 `environment`, closed) | Compiled clean, `--verify` green over 3,600 ticks with **three** controllers, `fmt` and `clippy` clean, and **18 of 20 injected faults caught** — the two escapes both the shape the document predicts, and the second (a deleted "already behind the plane" guard) invisible to a whole played session rather than merely unlikely. Forty minutes and a restructure of three systems lost to a requirement filed in the document a run is told to read last (F-113) — the first cost in this file caused by a fix rather than by a gap. The one `engine` finding is **accepted and fixed**: `find_bounds`, the fold six checks were writing by hand (F-116, ADR-0032). Three novel `docs` findings, five re-treads, one confirmation (F-123) and two the triage found while fixing the rest. **Valid, and played in full** — the transcript is reviewed and clean, the owner has played it in a window and in a browser, and F-111's and F-124's fixes let this triage do **both** halves too (`docs/e0/run-9-playtest.png`, `docs/e0/run-9-browser.png`) — the first E0 game a session has seen in a browser. Raw notes: `docs/e0/run-9.md`. Triage: §4f. §6. |
 
 Run 1 produced a working, fun Pong and a document-shaped hole underneath it. The
 game is not the measurement — `docs/e0/run-1.md` is — and it says the run could
@@ -5057,6 +5071,626 @@ here rather than inferred, which is the whole of F-111's lesson: `wasm-bindgen`
 is not on `PATH`, and the Chromium is.
 
 
+## 4f. Run 9 triage — the whole run on one page
+
+Nine findings from the run, plus three the triage found while fixing them.
+**Class** is §1's; **settled by** names the ADR or `DELIBERATE:` tag that answers
+the complaint, where one does.
+
+**Run 9's headline is that the novelty split did not move, and one of its
+findings is an `engine` finding.** Under ADR-0029's bar the run scores **three
+novel `docs` findings** — the same three as run 8 — **and one `engine` finding**,
+which resets the streak outright whatever the docs column says. So the count of
+consecutive clean runs stays at zero, for the first time under a bar that
+distinguishes the two kinds. That is a cleaner failure than run 8's: the five
+re-treads are all evidence about a *previous fix's reach* rather than about
+anything nobody knew, and each one names the fix it is measuring.
+
+**What the run cost is one number: forty minutes.** Not a compile error, not a
+missing signature — a restructure of three working systems into free functions,
+paid at the point where the game already ran, because the requirement to write
+them that way is filed in the document a run is told to read *last* (F-113). That
+is the most expensive re-tread this exercise has recorded, and it is a
+consequence of ADR-0030's split that ADR-0030 did not foresee.
+
+| # | Finding | Class | Also found by | Settled by | Verdict |
+|---|---|---|---|---|---|
+| F-113 | the pure-function requirement arrives after it is actionable | docs | **F-098/F-109's shape** — a rule filed where its reader is not | **ADR-0031** §2; ADR-0030 stands | one paragraph into Concepts; nothing moved between documents |
+| F-114 | `InputSnapshot` is named in the game document and reachable only from the testing one | docs | **F-017's rule**, across the ADR-0025 split — F-088's half | facade `INVARIANT` | the signature's one-liner says who builds an `Input` and where the type lives; the entry's example stops constructing one |
+| F-115 | there is no way to fork a `HeadlessSim`, and the document says to run the game forward | **docs (a sentence offering what the surface does not have)** | first | **ADR-0031** | **declined by decision**; the boundary and the working shape are in the paragraph that made the offer |
+| F-116 | every check that measures a drawn thing rebuilds the same fold | **engine** | first | **ADR-0032** | **accepted**; `jidousha::testing::find_bounds`, and `Rect::union` declined with it |
+| F-117 | the camera-reconstruction recipe lives only in an example | docs | **F-026**, whose fix named the trap and withheld the remedy | — | the two lines are in the document, beside the assertion they are load-bearing for |
+| F-118 | `schedule_debug()`'s format is undocumented, so the assertion on it is a guess | docs | **F-098**, one layer in: reachable, still unspecified | — | a sample of the real output, plus the `None == None` trap in the obvious check |
+| F-119 | *Concepts* says `Draw` runs every tick; it runs once a frame, and not at all under `headless` | docs | **F-007**, the same sentence's other clause, and wrong for a different reason | core.md §5, which was right | one clause, plus what a `Draw` system may therefore not count on |
+| F-120 | the capture snippet hands you a discard, then tells you to check what you discarded | docs | **fourth sighting of F-045's class** — a rule stated, an example disagreeing, the example copied | — | the snippet keeps the table and asserts the id |
+| F-121 | the tunnelling cap makes paddle thickness the ceiling on ball speed | docs | first | ADR-0022's paragraph, extended | a sentence beside the sweep advice; two constants that look unrelated and are not |
+| F-122 | every nested example in all three documents was flattened to the margin | docs | **the triage's**, surfaced by F-114's fix | — | the generator keeps a doctest's own indentation now |
+| F-123 | the mutation harness's two rules were already in the document, and run 9 rediscovered them | **not a finding** | **F-075**'s paragraph, working | — | nothing to fix; recorded because a confirmation is evidence too |
+| F-124 | the browser half of step 2 was one missing binary | **environment** | **F-054, F-065, F-079, F-096, F-112** | the session-start hook | **closed** — `wasm-bindgen` is installed from its release, version read from `Cargo.lock`; the first E0 game seen in a browser by a session |
+
+**F-116 is the run's `engine` finding and the reason the streak resets.** Six
+copies of `min.min(min), max.max(max)` had accumulated — the testing document's
+own circle recipe, `prototype_kit/verify.rs` twice, `slalom/checks.rs`, and run
+9's Pong, which wrote a `union()` helper and called it three times. Run 9 could
+see five of those from outside and drew the line this decision needed anyway:
+"this is not a v1 boundary in the sense `Rect::sweep` is — there is no game model
+hiding behind it". That is exactly right, and it is why ADR-0032 accepts the fold
+into the *check* surface and declines `Rect::union` in the game's geometry
+vocabulary in the same breath. `find_bounds` takes quads rather than rectangles
+because `quads()` and `covering()` both hand back `Vec<DrawnQuad>`, and it is
+`find_` because it returns `Option` — conventions §Naming, which run 9's own
+`union() -> Option<Rect>` did not follow and had no way to know about.
+
+**F-113 is the most expensive re-tread on file, and the diagnosis is about
+ordering rather than content.** Every sentence run 9 needed existed. The
+controllers document says a controller can only ask where something will be if
+the answer is a pure function, says retrofitting is expensive, and says why —
+and the router that ADR-0030 wrote says to read that document "third or not at
+all", after the game works. So the reading order the split prescribes *guarantees*
+the requirement arrives after the moment it is cheap. Run 9 read it exactly as
+told and paid forty minutes and a restructure of `opponent_target`, `rebound`,
+`drift`, `paddle_step` and `paddle_towards`.
+
+**ADR-0030 is not superseded, and this is why.** The split's own rule is that the
+*strategy* moves and the *mechanism* stays. "Write your opponent's decision as a
+function rather than as a branch" is neither: it is a fact about how to structure
+a game, addressed to the reader who is writing one, which is the game document's
+reader by ADR-0025's test. So it goes into Concepts as a paragraph of its own and
+nothing moves between files — the controllers document keeps its sentence, where
+the reader who is *using* the requirement stands. The alternative, folding the
+controller advice back, would trade a 174-line file against 1,858 lines of game
+document to fix an ordering problem that one paragraph fixes.
+
+**F-115 and F-113 are the same fix seen from two sides**, which is why ADR-0031
+carries both. The document offered "run the game forward and looking is allowed"
+and meant *your game's functions*; run 9 read it as the simulation and found
+nothing that copies one. Both readings send you to the same place once the
+requirement is stated early — which is the argument for stating it early rather
+than for adding `fork`. What a fork would actually cost is in ADR-0031: a `Clone`
+bound on `Component` **and** `Resource`, whose storage is type-erased, plus a
+decision about whether a forked `Rng` shares its stream that would make a
+simulation's result depend on how many futures a controller explored.
+
+**F-119 is worse than run 9 could see, and that is the interesting part.** The
+run reported that `Draw` does not run under a headless `tick()`, which is true.
+From inside, the sentence is wrong about the *window* as well: `frame.rs` draws
+once per frame however many ticks ran, including none, and core.md §5 has said
+"runs once per rendered frame, after Update catches up" since M4. So the
+generated document contradicted the internal document, in a sentence a reader
+carries into their first `--verify`. It cost run 9 a minute; it would cost a
+game that counted frames in a `Draw` system rather more.
+
+**F-122 is the triage's, and it is about looking at the artifact.** Writing
+F-114's fix meant putting a nested `fn` into a doctest, and the generated
+document showed it flush against the margin — because every `///` line was
+stripped at both ends, which is right for wrapped prose and wrong for the code
+block inside it. **Every** nested example in all three documents had been
+flattened for as long as the generator has existed, and nine runs read them
+without a word. That is not a complaint about the runs: they copy an example and
+`cargo fmt` puts the indentation back, so the defect is invisible from where they
+stand and visible only to somebody reading the document as a document.
+
+**F-123 is a confirmation rather than a finding, and it is worth its line.** Run
+9 built a mutation harness with two rules — a search-and-replace matching nothing
+must be an error, and a mutation that fails to build must be counted apart from
+one that was caught — and reported them as what made the harness worth anything.
+Both are already in *Testing your game*, in the paragraph F-075 added. So a run
+independently derived the advice it had read, which is the strongest evidence a
+paragraph gets. **The harness itself stays out of the repository**: `tools/` is
+not on the run's may-read list, so a checked-in harness could not be used by the
+thing it would exist for, and each run writing its own is part of what is being
+measured.
+
+**Run 9's Pong is adopted, and it was already being verified.** Step 6's
+registration is taken — `pong` is back in `WINDOWED_EXAMPLES` and
+`VERIFIABLE_EXAMPLES`. It was **not** running bare in the meantime: F-094's fix
+reads each example's source for a `--verify` flag and treats anything unregistered
+as verifiable-and-windowed for the run, so `tools/test` has been running
+`tools/verify pong` since the game landed. Confirmed here rather than assumed —
+`unregistered_verify_modes` returns `['pong']` and the phase it yields is
+`example-verify:pong`. The registration is bookkeeping, exactly as
+`e0-prompt.md` step 6 now says.
+
+**Run 9 is valid, and its game has been played in full.** Both of
+`e0-prompt.md`'s after-the-run person-steps are taken — the transcript reviewed,
+and the game played by the owner in a window and in a browser — so nothing is
+outstanding against run 9 and the decks can be cleared for run 10. This triage
+played it in a window as well, which is the second run running that a session has
+done so rather than the claim being rescued afterwards (F-112's close holding).
+Three claims below, stated separately, because they are different kinds of
+claim.
+
+*The window path works end to end.* `Xvfb` on `:99`, `xdotool windowfocus --sync`
+as F-111's note insists, real `w`/`s` key events through `winit`, real frames out
+of `wgpu` on lavapipe. The left paddle moved from y 360 to 168 on a held `w` and
+to 550 on a held `s`, read off the screen rather than inferred, and
+`docs/e0/run-9-playtest.png` is a frame of a match in progress: two paddles, the
+yellow ball mid-flight, the dashed centre line, the score set either side of it,
+and the hint line at the bottom. A match played out to "the machine wins" at 0–5
+and the end screen is the one the staged-frame checks describe. So run 9's "it
+runs in a window and is playable" is an observation here rather than an
+inference.
+
+*The browser half is done twice over.* The owner has run `tools/serve-web pong`,
+which is the only thing that exercises the wasm target as a *running program*
+rather than as the `cargo check` CI has gated since M0 — and this triage has now
+run it too, because F-112's "the remaining ask is one versioned `cargo install`"
+turned out to be answerable from inside (F-124). `docs/e0/run-9-browser.png` is
+run 9's Pong drawn by the wasm build in the bundled Chromium.
+
+*It is not a verdict on difficulty, and this triage will not pretend otherwise.*
+The player was a screen-reader at about 50 Hz that could not see the ball on most
+frames, and it lost 0–5 and then 0–2. That measures the reader. Run 8's triage
+won 5–4 from 0–2 down and could say something about the game; this one cannot,
+and saying so is the point — a bad controller reporting a plausible number about
+the wrong half of the program is F-047 and F-101, and it applies to a maintainer
+playing by hand exactly as it applies to a run's `--verify`.
+
+*Step 1 is taken, by the owner.* The transcript was reviewed and is clean — no
+reads under `crates/*/src/`, `docs/internal/` or `docs/adr/`. **Run 9 is a valid
+measurement**, which is what makes the nine findings above evidence about the
+documents rather than a log kept for the record (§2). It agrees with what the run
+said about itself: its §13 lists five things it wanted the source for and did not
+open, two of which it resolved by arranging an experiment instead — printing
+`schedule_debug`'s output, and trying `FrameRecorder::draw` against a world
+written between draws. That is F-077 and F-078's answer holding for a second run.
+
+**Two corrections to this file and its neighbours, which are not findings.**
+`conventions.md` §Math cited `F-081` for run 7's `PhysicalSize` spelling, which is
+F-088; F-081 is the three-controller-contracts finding. And run 9's log §3 says
+`HeadlessSim` exposes "tick, draw, world, world_mut, schedule_debug" — correct,
+and worth recording that the list is complete, because the run inferred it from
+the reference rather than from the source and got it exactly right.
+
+**What this triage could not settle.** One thing.
+
+**Whether F-113's paragraph is the fix or merely the cheapest fix.** The
+diagnosis is that a requirement was filed where its reader is not, and the remedy
+is a paragraph in the other file. That is the same remedy F-098 and F-109 got, and
+it worked for both — but this is now the third time a cross-document pointer has
+been the answer to a split-surface problem, and three of anything is a shape. If
+run 10 pays for a fourth, the question stops being "which document" and becomes
+whether three documents chosen by reader is the right cut at all, which is
+ADR-0025's premise rather than one of its applications.
+
+### Findings from run 9, and from triaging it (F-113–)
+
+**F-124 is the last piece of an escalation five triages carried**, and it is
+below with the rest because it is the triage's rather than the run's.
+
+### F-113 — The pure-function requirement arrives after it is actionable
+
+Class: docs · Run: 9 · Fixed in: this commit · Also found by: **F-098 and
+F-109's shape** — a rule filed where the reader who must act on it is not ·
+Settled by: **ADR-0031** §2 (ADR-0030 stands unamended)
+
+**The single biggest cost of the run**, and nothing in it was missing. The
+controllers document says it plainly:
+
+> A controller can only ask where something will be if the answer is a **pure
+> function** of the world — `fn opponent_push(&Ball, &Paddle) -> f32` […] It
+> costs nothing while you are writing the game and is expensive to retrofit,
+> because by the time the controller needs it the answer is buried in a
+> `&mut World`.
+
+And the game document's router says to read that file "third or not at all — a
+check whose player is a blind `InputScript` never needs it". Run 9 did exactly
+as told, and the log's own summary of the result is the finding:
+
+> That is correct, and the reading order guarantees you meet it *after* the
+> answer is buried in a `&mut World`. […] It was about forty minutes and a
+> restructure of the main game loop, at the point where the game already worked.
+
+Three systems became `opponent_target`, `rebound` and `drift`, plus
+`paddle_step`/`paddle_towards`, after the game ran.
+
+**Root cause.** The requirement is written as controller advice, and it is not:
+it is a constraint on how the *game* is written, which happens to be discovered
+by the controller. ADR-0030 filed the controller material by its reader and got
+that right for everything in it except this sentence, whose reader is the person
+writing systems on day one. The API document is 1,858 lines and does not contain
+the words "pure function" anywhere near the systems it teaches you to write.
+
+**Fix, and what it deliberately is not.** One paragraph in *Concepts*, after the
+determinism sentence and beside the collision-ordering material it names: write
+the opponent's decision and the collision response as free functions the systems
+call, because a check will want to ask them and nothing copies a running
+simulation. It names the controllers document as what does the asking.
+
+Nothing moves between files and **ADR-0030 is not superseded**. Its rule is that
+the strategy moves and the mechanism stays; this sentence is neither, and by
+ADR-0025's own test — is this relevant to what the reader is doing — a fact about
+how to structure a game belongs to the reader writing one. The alternative, a
+paragraph in the third file saying "read this before you start", would be a
+pointer standing in for the thing it points at, which is the failure F-109
+already recorded.
+
+### F-114 — `InputSnapshot` is named in the game document and reachable only from the testing one
+
+Class: docs · Run: 9 · Fixed in: this commit · Also found by: **F-017's rule**,
+now across the ADR-0025 split rather than inside one document — F-088 is the
+same seam from the other side · Settled by: the facade's curation `INVARIANT`
+
+The `Input` reference entry in `jidousha-api.md` carried this example:
+
+```rust
+world.insert_resource(Input::new(InputSnapshot::new()));
+```
+
+and `InputSnapshot` is not in `jidousha::prelude`. Run 9 confirmed it by
+experiment rather than asserting it — deleted the name from its
+`use jidousha::testing::{…}` and rebuilt:
+
+```
+error[E0425]: cannot find type `InputSnapshot` in this scope
+```
+
+So the game document's own example does not compile against the game document's
+own import line, and the signature above it names a type that surface cannot
+obtain. The run only knew where to look because it had already read the second
+document.
+
+**Root cause.** F-017's rule — a type named by a signature must be defined in the
+surface that shows the signature — was written when there was one document, and
+`Input` is in the prelude while `Input::new` is testing vocabulary. The split
+made "the surface that shows the signature" ambiguous, and this is the first
+constructor to fall through it.
+
+**Fix, and the option not taken.** `InputSnapshot` **stays out of the prelude**.
+A game *reads* `Input`; only the driver and a check ever build one, and curating
+a snapshot type into every game's prelude would breach the facade's stated
+invariant that what reaches it is what a game has a reason to name. What changed
+is the two things that made the gap silent: `Input::new`'s one-liner now says it
+is built by the driver rather than by a game and names the document where its
+argument is defined, and the entry's example no longer constructs an `Input` at
+all — it shows a system reading one through `find_resource`, which is the only
+thing a game does with it and what the entry's own prose already recommended.
+
+This is the second answer available and the one that costs nothing. The other —
+export the type into the prelude — is F-088's `PhysicalSize` treatment, and it is
+right there because a game genuinely needs a window size. Nothing a game writes
+needs a snapshot.
+
+### F-115 — The document offers to run the game forward, and nothing can
+
+Class: docs · Run: 9 · Fixed in: this commit · Also found by: first · Settled by:
+**ADR-0031** — `HeadlessSim::fork` **declined**
+
+*Testing your game* said:
+
+> So simulate rather than solve: running the game forward and looking is
+> allowed, and it is usually both simpler and more honest than a closed form
+> kept in step by hand.
+
+A controller cannot do that. `HeadlessSim` exposes `tick`, `draw`, `world`,
+`world_mut` and `schedule_debug` — run 9's list, inferred from the reference and
+exactly complete — `World` is not `Clone`, `Recording` replays input rather than
+state, and rebuilding from `headless(..)` and replaying to the current tick is
+quadratic and useless at tick 2,000 with thirteen candidate futures per decision.
+
+> So "run the game forward" resolves in practice to "re-implement the game's step
+> in the controller and hope it stays in step" — which is the closed form the
+> sentence warns against.
+
+**Root cause.** The sentence is true of what its author meant and false as
+written. The measured numbers beside it — thirteen futures, four hundred ticks
+each — come from `examples/slalom`, whose controller rolls `gate_center_at`
+forward: a pure function the *game* owns. Every worked controller here does that
+and no document said so, so a reader holding a `&mut World` reads "forward" as
+"the simulation".
+
+**Fix.** The paragraph now says which forward it means, names the absence of a
+fork as a boundary, and points at the shape that works — which is F-113's
+paragraph, in the document where the game is being written. ADR-0031 records why
+`fork` is declined rather than deferred: a `Clone` bound on `Component` and
+`Resource`, whose storage is type-erased, plus an RNG-stream question with no
+guessable answer and one where the wrong choice makes a result depend on how many
+futures a controller happened to explore.
+
+**The third option run 9 found is the right one, and it says so itself**: extract
+the step into pure functions the game owns and have the controller call those.
+That is the answer, it is now stated twice, and one of the two statements is
+early enough to act on.
+
+### F-116 — Every check that measures a drawn thing rebuilds the same fold
+
+Class: **engine** · Run: 9 · Fixed in: this commit · Also found by: first ·
+Settled by: **ADR-0032** — accepted
+
+`Rect` has no union, merge or expand, and "how big is the thing that was drawn"
+has no single-quad answer: `ctx.circle` is sixteen wedges (ADR-0020) and
+`ctx.text` one quad per character, so the disc and the string are each a fold
+over `DrawnQuad::bounds()`. Six copies of that fold were on disk — the testing
+document's circle recipe, `prototype_kit/verify.rs` twice, `slalom/checks.rs`,
+and run 9's Pong, which wrote a `union()` helper and called it three times. Run 9
+could see five of them.
+
+**Root cause.** The vocabulary stops one question short of the question the
+verification story is built on. `ADR-0021` had already moved
+`Camera::visible_bounds` to `Rect` for the same reason one step earlier: the
+assertion `docs/api/` pushes hardest was being written by hand.
+
+**Fix.** `jidousha::testing::find_bounds(quads) -> Option<Rect>`, beside
+`DrawnQuad` in render-core. It takes quads rather than rectangles because that is
+what `quads()` and `covering()` hand back, and `find_` because it returns
+`Option` — `None` is "nothing was drawn there", which is an answer a check
+reports. The circle recipe drops from twenty lines to nine; the three worked
+examples lose their folds.
+
+**`Rect::union` in the game surface is declined in the same decision.** Run 9
+drew the line for it from outside — "there is no game model hiding behind it, it
+is `min.min(min), max.max(max)`" — and that is exactly the test ADR-0022 applies:
+a sweep is declined because the engine can answer an eighth of the question and
+the game owns the rest, and this has no rest. But the recurring question is asked
+about *recorded quads*, so the answer belongs in the surface that has them.
+
+**Run 9's Pong was updated as a consequence and not tuned.** Its `union()` helper
+is gone, `glyphs()` returns quads rather than rectangles, and `tools/verify pong`
+reports the same 3,600 ticks, the same 5–0/1–5/0–5, the same 16 of 16 approaches
+and the same 76% return rate as the run's own log. Not one constant moved.
+
+### F-117 — The camera-reconstruction recipe lives only in an example
+
+Class: docs · Run: 9 · Fixed in: this commit · Also found by: **F-026**, whose
+fix named the trap and withheld the remedy · Settled by: —
+
+Both documents flag the trap clearly and neither gives the fix. The recorder's
+viewport overrides the `Camera` resource's, nothing writes it back, and a check
+reading bounds from the world and quads from the recorder compares against the
+wrong rectangle and passes. Run 9 got the answer out of
+`prototype_kit/verify.rs`:
+
+```rust
+let camera = Camera { viewport: HEADLESS_VIEWPORT, ..*sim.world().resource::<Camera>() };
+```
+
+> It is three tokens and it is load-bearing for every `visible_bounds()`
+> assertion in the file — which the testing document itself calls "the
+> highest-value check a game of shapes and text can write".
+
+**Root cause.** F-026's fix was written as a warning, and a warning's job is
+finished when the reader knows to be careful. This one is not: the reader has to
+*do* something, and what to do is two lines of struct-update syntax that the
+document mentions the need for three times without ever writing.
+
+**Fix.** The trap paragraph now ends with the two ways out in order of
+preference — give the recorder the camera's own size, and when that is not
+available, rebuild the camera the frame was drawn with — with the line, a
+`const` for the viewport, and the reason to read the camera back *after* the
+ticks rather than before. Naming a trap without its remedy costs a run the same
+time as not naming it, plus the reading.
+
+### F-118 — `schedule_debug()`'s format is undocumented, so the assertion on it is a guess
+
+Class: docs · Run: 9 · Fixed in: this commit · Also found by: **F-098**, one
+layer in — that fix made the call reachable and left what it returns unspecified ·
+Settled by: —
+
+The document tells a game to assert on the string and never says what is in it.
+Run 9 bet that system names appear verbatim, printed it to check, and was right:
+
+```
+schedule:
+  Startup (1)
+    0. set_the_scene
+  Update (6)
+    0. restart_the_match
+    1. drive_the_player
+```
+
+> but that is a format nothing promises. […] the one assertion guarding the
+> engine's own "pick an order and hold the game to it" advice is coupled to an
+> undocumented string, and would go red for a reason that has nothing to do with
+> the game. (`Depth` gets a whole paragraph explaining what a recorded frame does
+> *not* carry; this gets none.)
+
+**Root cause.** F-098 cross-referenced the method from the four paragraphs that
+need it, which was the whole of what run 8's finding asked for. Making a call
+reachable and leaving its output shape unstated is half a fix when the call's
+entire purpose is to be matched against.
+
+**Fix, in two places.** The testing document shows a sample of the real output
+beside the assertion, and core.md §5 records that the format is now part of the
+published surface — so changing the layout breaks published checks, which is the
+point of writing it down rather than an argument against it. The document also
+names the trap in the obvious spelling: two renamed systems give two `None`s,
+`None < None` is false and `None == None` is true, so a check comparing the
+positions passes while seeing nothing unless it asserts both names were found.
+
+### F-119 — *Concepts* says `Draw` runs every tick, and it runs once a frame
+
+Class: docs · Run: 9 · Fixed in: this commit · Also found by: **F-007**, the
+same sentence's other clause and wrong for a different reason · Settled by:
+core.md §5, which was already right
+
+The sentence was:
+
+> Systems run in **phases**, in this order, every tick: `Startup` once at the
+> start of the first tick, then `Update` for logic, then `Draw`.
+
+Run 9 found the headless half: `HeadlessSim::tick()` runs Update only, and the
+reference entry says so explicitly, so the truth is recoverable.
+
+> This cost me a minute, not an hour, but it is the kind of thing that makes a
+> first `--verify` mode draw nothing and look broken.
+
+**It is wrong about the window as well, which run 9 could not see.** The driver
+draws **once per frame however many ticks ran, including none** — its own comment
+says so — and core.md §5 has said "runs once per rendered frame, after Update
+catches up" since M4. So the generated document contradicted the internal one in
+a sentence every reader carries into their first check.
+
+**Root cause.** The phases sentence is doing three jobs — naming the set, giving
+the order, and stating the cadence — and the cadence is the only one that differs
+per phase. F-007 corrected the `Startup` clause in run 2 and nobody looked at the
+`Draw` clause standing beside it.
+
+**Fix.** The order stays; the cadence is now per phase, with the consequence a
+game can act on: a `Draw` system sees the world the last Update left and must not
+count on being called a fixed number of times, and a check that wants a frame
+asks for one.
+
+### F-120 — The capture recipe hands you a discard, then asks you to check what you discarded
+
+Class: docs · Run: 9 · Fixed in: this commit · Also found by: **the fourth
+sighting of F-045's class** — after `sin_cos`, `FrameRecorder`-versus-the-long-way
+and `PhysicalSize` · Settled by: —
+
+The snippet said `let _ = create_builtin_textures(&mut gpu);` with a comment
+explaining that the table is not used, and two paragraphs later the prose said
+"Check the ids; the example does".
+
+> The second sentence is scoped to games with art, but the check is free for a
+> game without any, and it is the only thing standing between "a PNG was written"
+> and "a PNG of this game was written". `let _ =` in the copyable snippet is what
+> a reader copies.
+
+Run 9 kept the table and asserted `textures.resolve(FONT_TEXTURE) == font`
+anyway, which is what both worked examples do.
+
+**Root cause.** F-045's class exactly: a rule stated in prose, an example
+disagreeing with it, and the example being what gets copied. Here the two are
+forty lines apart in the same section, which is as close as this failure has ever
+been and it still happened.
+
+**Fix.** The snippet keeps the table and carries the assertion, `FONT_TEXTURE`
+joins its import list, and the prose after it stops scoping the check to games
+with art — it says what the assertion buys for a game without any: a plan whose
+ids drifted renders the wrong texture into a PNG that every other check in the
+`--verify` is happy with.
+
+### F-121 — The tunnelling cap makes paddle thickness the ceiling on ball speed
+
+Class: docs · Run: 9 · Fixed in: this commit · Also found by: first ·
+Settled by: ADR-0022's paragraph, extended
+
+Concepts says to keep `speed * fixed_dt` under the thinnest thing the ball must
+not miss, and asserts nothing else about it.
+
+> What it does not say — and what cost two balance passes to work out — is that
+> this makes **paddle thickness the ceiling on ball speed**, and paddle thickness
+> is otherwise a purely cosmetic number nobody would think to tune. My first Pong
+> was too slow to be fun and the fix was not "make the ball faster", it was "make
+> the paddle 0.9 wide instead of 0.7, then make the ball faster".
+
+**Root cause.** The advice is stated as a constraint to satisfy, and it is a
+*coupling*. A constraint tells you what you may not do; a coupling tells you
+which other number to reach for when you cannot do what you want, and that is the
+sentence a game author needs at the point where the prototype is dull.
+
+**Fix.** One paragraph beside the sweep advice, saying that the thinnest collider
+is the ceiling on speed, that a game too slow to be fun is fixed by thickening
+before accelerating, and that both constants belong in the assertion. Run 9's own
+numbers are the worked instance: `MAX_SPEED = 50.0` against `PADDLE_SIZE.x = 0.9`
+is 0.833 units of travel per tick, asserted against the `fixed_dt` the engine
+hands the game, exactly as the document asks.
+
+### F-122 — Every nested example in all three documents was flattened to the margin
+
+Class: docs · Run: **the triage's**, surfaced while fixing F-114 · Fixed in: this
+commit · Settled by: —
+
+`gen-api-doc` read each `///` line as `stripped[3:].strip()`, which is right for
+wrapped prose and wrong for the code block inside it. Every doctest with a nested
+block — an `if` inside an `fn`, a body inside a `for`, a closure inside a call —
+rendered flush against the left margin, in the three documents whose whole job is
+to be copied from. It has been true for as long as the generator has existed and
+no run has ever mentioned it.
+
+**Root cause.** One `.strip()` doing two jobs. Prose lines want both ends
+trimmed; example lines want only rustdoc's single leading space removed.
+
+**Why nine runs did not report it.** They copy an example, edit it into their
+game, and `cargo fmt` puts the indentation back before anything is compared. The
+defect is invisible from inside a run and visible only to somebody reading the
+document as a document — which is an argument for a triage looking at the
+artifact rather than only at the diff of the change it made.
+
+**Fix.** Only the one space rustdoc puts after the slashes comes off. The
+regeneration is 168 lines of the two documents and every one of them is
+indentation.
+
+### F-123 — The mutation harness's two rules were already documented, and a run derived them independently
+
+Class: **not a finding** · Run: 9 · Also found by: **F-075**'s paragraph, working
+
+Run 9 built a mutation harness in its scratch directory, injected twenty faults,
+caught eighteen first time, and reported that two rules were what made the
+harness worth anything: a search-and-replace matching nothing must be an error
+rather than a silent no-op, and a mutation that fails to build must be counted
+apart from one that was caught. Both are in *Testing your game*, in the paragraph
+F-075 added, in those words.
+
+So a run derived, from being burned, the two sentences it had already read. That
+is the strongest evidence a paragraph gets, and it is recorded here because this
+file has no other slot for "the document was right" and those entries are worth
+as much as the complaints (§4e says the same about run 8's three).
+
+**The harness itself stays out of the repository.** `tools/` is not on the run's
+may-read list, so a checked-in mutation harness could not be used by the thing it
+would exist for; and each run writing its own is part of what is being measured —
+run 7 scored 17 of 17, run 8 23 of 23 after a first round of 19, run 9 18 of 20.
+What is worth keeping is the rules, and they are kept where a run will read them.
+
+
+### F-124 — The browser half was one missing binary, and this container can take it now
+
+Class: **environment** · Run: **the triage's**, after run 9 · Fixed in: this
+commit · Also found by: **F-054, F-065, F-079, F-096, F-112** — the half F-111's
+fix left open · Settled by: the session-start hook
+
+F-112 closed the *window* half and stated the remaining ask precisely:
+
+> **a Chromium is pre-installed in this container**, at
+> `/opt/pw-browsers/chromium`. What is absent is `wasm-bindgen-cli` 0.2.127 — the
+> lockfile's version, which `tools/serve-web` checks for and refuses to guess at.
+> So the remaining ask is one versioned `cargo install`, not a browser.
+
+That was right, and it was still filed as an escalation because CLAUDE.md puts a
+toolchain install on the never-agent-fixable list. Two things make it fixable
+here, and both are the same argument F-111 made about `libxkbcommon-x11`.
+
+**It is not a `cargo install`.** `wasm-bindgen` publishes a musl binary per
+release. Fetching and installing 0.2.127 took **1.3 seconds** against several
+minutes of compiling the CLI from source, and it is the same binary.
+
+**Everything else was already here.** The `wasm32-unknown-unknown` target is
+installed, `tools/serve-web` already knows how to find the bundled Chromium — it
+globs `/opt/pw-browsers/chromium-*/chrome-linux/chrome` so a browser update
+cannot silently disable the check — and `tools/web/index.html` is checked in. So
+eight runs of "no session has ever driven its game in a browser" was one absent
+file, exactly as five runs of "no session has ever opened a window" was.
+
+**The fix, and the one thing it is careful about.** The session-start hook
+installs it, beside lavapipe and the keyboard library. The version is **read from
+`Cargo.lock`** rather than written into the script: it must equal the
+`wasm-bindgen` crate exactly, a mismatch produces glue that fails at run time
+with a message about nothing in particular — which is why `tools/serve-web`
+refuses rather than guessing — and a version written in two places is a version
+that drifts on the first `cargo update`. Failure stays non-fatal and loud, like
+the rest of the hook: `serve-web` already refuses with a four-part message, so a
+session that lands without it degrades to the state every previous run had, and
+says so.
+
+**What it bought immediately.** `tools/serve-web pong --check` builds the wasm,
+runs the page in Chromium and reports what it drew:
+
+```
+[serve-web] page state: running
+[serve-web] page said: pong running — resize the window to exercise the surface
+[serve-web] 2% of the canvas differs from the page background, 30% from its own
+            commonest pixel rgb(10, 15, 23)
+[serve-web] PASS — pong started and drew in a browser
+```
+
+`docs/e0/run-9-browser.png` is the frame: both paddles, the ball mid-flight, the
+dashed centre line, 0–0, the hint line. **This is the first time an E0 session has
+seen its own game in a browser**, and with F-111 it means both halves of
+after-the-run step 2 are now things the container can do rather than things it
+must ask a person for. The person is not retired — step 2 asks "is it fun", which
+no capture answers — but "does the web target run at all" has stopped being an
+inference.
+
 ## 5. Notes on the run's procedure
 
 Two things about run 1 that are not findings but would confuse a later reader.
@@ -5360,6 +5994,44 @@ run 7 ran and is not edited.
   example that contradicts a stated rule beats the rule every time**, so the fix
   has to land in the example as well as in the prose, and this commit does both.
 
+### What run 9 answered about run 8's fixes
+
+Run 9 is the first run to read run 8's twelve document fixes, ADR-0029's bar and
+ADR-0030's split. What its log says about each, where it says anything:
+
+- **The three-controller gradient was written unprompted and it worked.** F-101's
+  fix recommends a rollout player, a chaser and an idle one rather than a single
+  good controller. Run 9 wrote all three, and its §10 is the clearest evidence in
+  this file for why: pass 2 had the rollout winning 5–0 and the chaser winning
+  2–0, which says *a naive player never loses* — a game with no threat, invisible
+  to the rollout run alone. The fix landed and it changed the game.
+- **The three numbers were reported.** F-081 asks for `met N of M approaches`,
+  the planned landing distance and the achieved one. Run 9's verdict block
+  carries all three (`met 16 of 16`, `2.41`, `0.49`) without being asked again,
+  so ADR-0027's decision not to ship the instrument stays closed for a second
+  run.
+- **The layout re-tread that F-102 predicted happened anyway, and was caught.**
+  F-102 generalised "assert the requirement, not the constant" past colour into
+  layout. Run 9's own mutation round found it the hard way: doubling the paddle
+  length passed every drawing check because they all compared against
+  `PADDLE_SIZE`, and the fix was a check naming the requirement measured off the
+  *drawn* markings. So the rule was read, the instance was not transferred, and
+  the run's own harness closed it. That is the fix half-working, and the honest
+  reading is that a rule with two worked instances still lost to a third shape.
+- **F-104's end-screen frame was handled without comment**, which is what a
+  working fix looks like: run 9 carries out the last frame drawn while play was
+  live and stages the end screens separately, and its log does not mention doing
+  so.
+- **F-098's cross-reference worked and was not enough.** Run 9 found
+  `schedule_debug` from Concepts, used it, and then discovered nothing says what
+  it returns (F-118). A reachability fix that leaves the payload unspecified is
+  half a fix when the payload is what gets matched against.
+- **ADR-0030's split was navigated correctly and cost the run its largest
+  number.** Run 9 read all three documents, in the prescribed order, and the
+  order is what cost it (F-113). The prompt's own risk note asked whether a run
+  would *skip* the controllers file; it did not, and the failure came from the
+  opposite direction — reading it exactly when told to.
+
 ### Where the exercise stands after eight runs, and what was done about it
 
 The standing assessment, written after run 8's triage and acted on in the same
@@ -5372,11 +6044,20 @@ ever 8, no trend. On the old bar we were no closer at run 8 than at run 1.
 
 **The composition inverted completely, and that is the real signal.**
 
-| run | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
-|---|---|---|---|---|---|---|---|---|
-| novel | 14 | 13 | 8 | 14 | 6 | 8 | 7 | **3** |
-| a re-tread of a recorded shape | 0 | 0 | 0 | 0 | 2 | 2 | 8 | **11** |
-| `engine` | 5 | 3 | 0 | 3 | 1 | 1 | 0 | 0 |
+| run | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |
+|---|---|---|---|---|---|---|---|---|---|
+| novel | 14 | 13 | 8 | 14 | 6 | 8 | 7 | **3** | **3** |
+| a re-tread of a recorded shape | 0 | 0 | 0 | 0 | 2 | 2 | 8 | **11** | **5** |
+| `engine` | 5 | 3 | 0 | 3 | 1 | 1 | 0 | 0 | **1** |
+
+Run 9's column is added by the triage after it and is the first measured under
+the new bar rather than re-read into it. **The novel series did not fall**: 3
+again, against 11 re-treads becoming 5 — which is a smaller run overall (9
+findings against 16) rather than a document that answered more of them. One
+reading of the flat 3 is that novelty has a floor made of the fact that every run
+is a different author meeting a 15,000-token document for the first time. The
+other is that two runs is not a series. Run 10 is what tells them apart, and it
+is the first time this file has had a prediction worth making.
 
 Novel findings averaged 12.2 a run over runs 1–4 and 6.0 over runs 5–8. Engine
 findings are gone. Author cost tracks the novel series and not the raw one: run 1
@@ -5457,6 +6138,47 @@ paragraph. It cost the testing document **143 tokens net** (14,522 to 14,665)
 after the trims that paid for the pointer — and it buys a place for the *next*
 controller finding to land at no document cost at all, which is the only reason
 the budget arithmetic below is survivable.
+
+### What run 10 should be watched for
+
+*Written before run 10 runs, and not to be edited afterwards.*
+
+- **Whether F-113's paragraph is read as a requirement or as background.** The
+  pass is a run whose opponent decision and collision response are free functions
+  *before* it writes a controller, and whose log does not mention restructuring
+  anything. A run that writes branches inside systems anyway and pays the same
+  forty minutes means the paragraph is in the right document and the wrong
+  register — and the answer then is the Quickstart, which is what a run copies
+  rather than reads. A run that writes the functions and says it did not know why
+  means the paragraph needs its reason back.
+- **Whether `find_bounds` is found.** F-116's fix is one call in the testing
+  reference and one recipe in the prose. A run 10 that writes its own union fold
+  anyway means the recipe is not where a reader looks when they have a circle to
+  measure, which would be a finding about the reference's reachability rather
+  than about the fold.
+- **Whether the tunnelling coupling is used or merely read.** F-121 says the
+  thinnest collider is the ceiling on speed. The tell is a log that reports
+  thickening a paddle *before* raising the ball speed rather than after two
+  balance passes. A run that hits the same wall in the same order means the
+  sentence is beside the wrong advice — it is next to a constraint, and it may
+  need to be next to the paragraph about making the game fun.
+- **Whether the schedule format sample gets copied verbatim.** F-118 publishes
+  what `schedule_debug` returns. Watch for a run that asserts on the *shape* —
+  the `N.` numbering or the two-space indent — rather than on the names in it,
+  because that would make the sample a specification of more than it means to
+  promise.
+- **Whether the run notices the documents are formatted.** F-122 restored the
+  indentation of every nested example. Nobody has ever mentioned it either way,
+  so a mention would be evidence that runs read the examples as text rather than
+  only paste them.
+- **Whether a fourth cross-document pointer is needed.** §4f's open question. If
+  run 10 pays for a requirement filed in the wrong file for the fourth time, the
+  question stops being "which document" and becomes whether splitting by reader
+  is the right cut — which is ADR-0025's premise rather than one of its
+  applications.
+- **Whether anything in these fixes reads as an invitation to guess.** Same
+  standard as always: a fix is only real if the next run does not have to infer
+  the thing it fixed.
 
 ### What run 8 should be watched for
 

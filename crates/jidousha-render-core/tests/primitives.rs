@@ -11,7 +11,7 @@ use jidousha_core::math::Vec2;
 use jidousha_core::{Color, Depth, Draw, DrawCtx, GameConfig, Rect, Transform, headless};
 use jidousha_render_core::{
     Camera, FrameRecord, NullBackend, RenderBackend, Sprite, Submit, TextStyle,
-    create_builtin_textures, plan_frame,
+    create_builtin_textures, find_bounds, plan_frame,
 };
 
 /// Record one frame drawn by `draw`, with the real built-in textures.
@@ -85,6 +85,48 @@ fn a_circle_covers_a_disc_and_not_its_bounding_box() {
     assert!(
         frame.covering(Vec2::new(2.9, 2.9)).is_empty(),
         "inside the bounding box, outside the disc"
+    );
+}
+
+#[test]
+fn the_wedges_of_a_circle_and_the_glyphs_of_a_string_fold_back_to_one_box() {
+    // The question every check that measures a drawn thing asks, and the one
+    // "a quad the size of the thing is at the thing's position" cannot answer
+    // for either of these: sixteen wedges and one quad per character, and
+    // nothing the size of the disc or the width of the string drawn anywhere
+    // (e0-findings.md F-116).
+    fn draw(ctx: &mut DrawCtx) {
+        ctx.circle(Vec2::ZERO, 3.0, Color::GREEN, Depth::default());
+        ctx.text(Vec2::new(10.0, 10.0), "hi", TextStyle::default());
+    }
+    let (frame, _) = record(draw);
+
+    let disc_quads = frame.covering(Vec2::ZERO);
+    let disc = find_bounds(disc_quads.clone()).expect("the ball was drawn");
+    assert!(
+        (disc.size().x - 6.0).abs() < 1e-3 && (disc.size().y - 6.0).abs() < 1e-3,
+        "the sixteen wedges span the disc's own box, not one wedge: {disc:?}"
+    );
+
+    // Text is the quads that did not come from the shape batch: the font atlas
+    // is a texture and the wedges sample the flat white one.
+    let shapes = disc_quads[0].texture;
+    let text = find_bounds(
+        frame
+            .quads()
+            .into_iter()
+            .filter(|quad| quad.texture != shapes),
+    )
+    .expect("the string was drawn");
+    let style = TextStyle::default();
+    assert!(
+        (text.size().x - style.width_of("hi")).abs() < 1e-3,
+        "two glyphs span what the style says they measure: {text:?}"
+    );
+
+    assert!(
+        find_bounds(frame.covering(Vec2::new(-40.0, -40.0))).is_none(),
+        "nothing was drawn out there, and nothing is not an empty rectangle"
     );
 }
 

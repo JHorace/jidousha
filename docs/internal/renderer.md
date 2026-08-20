@@ -647,6 +647,18 @@ has none and writes the driver's measured size onto it before drawing. `resize`
 records the size and reconfigures the surface and no longer touches the camera:
 two ways to do one thing, and the one that had already been observed to miss.
 
+**The headless path has the same trap and no stamp, so the document carries the
+line that clears it** (e0-findings.md F-117, after F-026). `FrameRecorder::draw`
+builds `Camera { viewport: self.viewport, ..the game's camera }` and nothing
+writes that viewport back into the world, so a check reading bounds from
+`world.resource::<Camera>()` and quads from the recorder compares against the
+wrong rectangle and passes. Both documents have named the trap since run 2; what
+neither carried was the fix, and E0 run 9 got it out of `prototype_kit/verify.rs`
+after finding it named twice and worked nowhere. *Testing your game* now shows
+the struct-update that rebuilds the camera the frame was drawn with, next to the
+`visible_bounds()` assertion it is load-bearing for. Naming a trap without its
+remedy costs a run the same time as not naming it, plus the reading.
+
 **A failure below the game must not be reported as one.** The Wayland protocol
 error kills the connection, `run_app` returns `Err`, and the only mapping that
 catches it is `RunError::EventLoop` — whose text named a display-server fault
@@ -857,6 +869,18 @@ mergeable, tested, green CI on all three targets.
   the fan above: every wedge is inscribed, and all of them share the centre as a
   corner. Those three statements and this one move together, and moving the
   constant needs an ADR superseding ADR-0020.
+
+  **And the fold that assertion is built on is a call since E0 run 9**
+  (e0-findings.md F-116, ADR-0032). `find_bounds(quads) -> Option<Rect>` sits
+  beside `DrawnQuad` and is exported from `jidousha::testing`: sixteen wedges for
+  a disc and one quad per character for a string mean "how big is the thing that
+  was drawn" is always a fold over `DrawnQuad::bounds()`, and six hand-written
+  copies of it had accumulated — the document's own recipe, `prototype_kit`
+  twice, `slalom`, and run 9's Pong. It takes quads rather than rectangles
+  because `quads()` and `covering()` both hand back `Vec<DrawnQuad>`. The
+  question it answers is the check's, not the game's, which is why no
+  `Rect::union` went into `math` with it: ADR-0022's line is about a game's
+  model, and this side of it is `min.min(min), max.max(max)`.
 
   **Shapes and text are not a debug layer.** They expand into the same `Quad`
   and go through the same sort and batch, so a hitbox outline can be drawn

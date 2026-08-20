@@ -65,7 +65,7 @@ pub use golden::{Comparison, Tolerance, compare, decode_png, diff_image, encode_
 // on no other jidousha crate. Re-exported here so the renderer's vocabulary
 // still reads as one list — the same reasoning as ADR-0015 applied to pixels.
 pub use jidousha_core::PhysicalSize;
-pub use null::{DrawnQuad, FrameRecord, NullBackend};
+pub use null::{DrawnQuad, FrameRecord, NullBackend, find_bounds};
 pub use plan::{Batch, FramePlan, QuadVertex, TextureTable, plan_frame};
 pub use record::FrameRecorder;
 pub use sprite::Sprite;

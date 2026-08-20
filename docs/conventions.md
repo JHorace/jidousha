@@ -103,7 +103,7 @@ the enforcement. Every entry here is assumed by all subsystem docs.
   prelude, so it takes them from there and lists only the testing-*only* names
   in its `use jidousha::testing::{..}`. E0 run 7 copied the other spelling out of
   `prototype_kit`, which had it wrong, and the document said the class of thing
-  was settled (e0-findings.md F-081).
+  was settled (e0-findings.md F-088).
 
 ## Error messages
 

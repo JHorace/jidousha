@@ -195,6 +195,15 @@ a row (stop rule printed, `failure-streak.json` count 2).
   Not rustdoc JSON, which needs nightly while `rust-toolchain.toml` pins stable;
   summaries are lifted from the `///` line above each definition, which is a
   bounded text problem with tests rather than a second toolchain.
+- **A doctest keeps its indentation on the way into the document.** Every `///`
+  line used to be `.strip()`ped at both ends, which is right for wrapped prose
+  and wrong for the code block inside it: an `if` inside an `fn` came out flush
+  against the margin, in three documents whose whole purpose is to be copied
+  from. Only the one space rustdoc puts after the slashes comes off now. Nine E0
+  runs read the flattened form and none reported it — which is the argument for
+  the maintainer looking at the artifact rather than only at the diff, since the
+  runs that copy it write `cargo fmt`-shaped code anyway and never notice they
+  reformatted what they copied (e0-findings.md F-114's fix surfaced it).
 - **The sources are scanned twice: declarations, then `impl` blocks.** A type's
   blocks are not obliged to live in the file that declares it, and a single pass
   in path order attached members only to types it had already seen. That deleted
@@ -370,6 +379,17 @@ a row (stop rule printed, `failure-streak.json` count 2).
   installing system packages is a human decision under CLAUDE.md's escalation
   rule. It is a hook rather than a note in this file because the one other thing
   the E0 checklist asks a maintainer to remember was missed twice.
+
+  **It installs `wasm-bindgen` too, since run 9's triage** (e0-findings.md
+  F-124). `tools/serve-web --check` needs the CLI at exactly the version
+  `Cargo.lock` pins and refuses rather than guessing; everything else it wants —
+  the wasm32 target, a Chromium under `/opt/pw-browsers` — was already in the
+  image, so eight runs of "no session has driven its game in a browser" was one
+  absent binary. It comes from the release page as a musl binary rather than from
+  `cargo install`, which is 1.3 seconds against several minutes for the same
+  program, and **the version is read out of `Cargo.lock`** rather than written
+  into the script: two copies of a version drift on the first `cargo update`, and
+  a mismatch here fails at run time with a message about nothing in particular.
 
   It is a **no-op outside a remote session** (`$CLAUDE_CODE_REMOTE`), idempotent
   (the container image is cached after it runs, so a warm start does nothing), and

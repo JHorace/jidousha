@@ -1,34 +1,37 @@
 //! The picture: the frame the check already recorded, rendered on a GPU and
 //! written out as a PNG.
 //!
-//! No second session and no game to re-run. A `FrameRecord` carries the
-//! finished `FramePlan` — the depth sort and the batching already done — and a
-//! renderer built for the purpose executes it. This game loads no assets, so
-//! the built-in textures are the whole table and the ids inside the plan mean
-//! the same thing here because both counters started empty and both were
-//! filled by the same call.
+//! `verify.rs` asserts on what was *submitted*; this renders one of those
+//! frames for real and leaves something a person can look at, which is the half
+//! no assertion in that file reaches — whether it looks like Pong.
 //!
-//! A machine with no GPU is a fact about the machine rather than a failure, and
-//! every other handshake error is a fault: calling one of those "no GPU here"
-//! files a real problem as a property of the hardware, on every machine, for
-//! ever.
-
-use std::path::{Path, PathBuf};
+//! There is no second session and no game to re-run: a `FrameRecord` carries
+//! the finished `FramePlan`, with the depth sort and the batching already done,
+//! and a renderer built for the purpose executes it. This game loads no art at
+//! all, so the built-in textures are the whole table and the ids inside the
+//! plan mean the same thing here as they did in the recorder — both counters
+//! start empty and are filled by the same call.
+//!
+//! A machine with no GPU is not a failure. Every runner is headless and some
+//! have no graphics stack; the run says it skipped and stays green. Every
+//! *other* handshake error is a fault, and reporting one of those as "no GPU
+//! here" files a real problem as a property of the hardware, for ever.
 
 use jidousha::prelude::*;
 use jidousha::testing::{
     BackendTextureId, FONT_TEXTURE, FrameRecord, RenderBackend, RenderError, WgpuBackend,
     create_builtin_textures, encode_png,
 };
+use std::path::{Path, PathBuf};
 
 use crate::checks::{Checks, fail};
 
-/// How big the captured picture is.
+/// How big the captured artifact is.
 ///
-/// The **same 16:9 shape** the recorder's viewport has. The projection was
-/// computed from that viewport and is baked into every plan; nothing
-/// downstream can recompute it, so a capture of another shape stretches the
-/// picture while every assertion goes on passing.
+/// The **same 16:9 shape** the recorder drew at. The projection was computed
+/// from that viewport and is baked into every plan; nothing downstream can
+/// recompute it, so a capture of another shape stretches the picture while
+/// every assertion goes on passing, because none of them look at pixels.
 const CAPTURE_SIZE: PhysicalSize = PhysicalSize::new(480, 270);
 
 /// How many polls to give the GPU handshake before calling it absent.
@@ -36,25 +39,45 @@ const HANDSHAKE_POLLS: usize = 10_000;
 
 /// An engine message flattened onto one line.
 ///
-/// `RenderError`'s `Display` is the four-part shape, which is right on its own
-/// and wrong inside a `--verify` summary, where the convention is a verdict
-/// line and then one indented line per fact.
+/// `RenderError`'s `Display` is the four-part shape, which is right when it is
+/// the only thing on the screen and wrong inside a `--verify` summary, where
+/// the convention is one indented line per fact.
 fn one_line(message: &str) -> String {
     message.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// Render `frame` on a GPU and write it out, returning the line `tools/verify`
-/// reads.
-pub(crate) fn capture_a_frame(
+/// Render the recorded frame on a GPU and write it out as a PNG.
+///
+/// The line it returns is printed as `capture: ...`, and `tools/verify` lifts
+/// the path out of it by looking for a line starting `capture:` that contains
+/// ` written to `.
+pub(super) fn capture_a_frame(
     checks: &mut Checks,
     frame: &FrameRecord,
     font: BackendTextureId,
 ) -> String {
+    // Asserted rather than remembered: the plan's projection came from the
+    // recorder's viewport, so a capture of another shape is a picture of a
+    // different game.
+    let recorder_aspect = crate::verify::viewport().aspect();
+    if !(CAPTURE_SIZE.aspect() - recorder_aspect).abs().lt(&0.001) {
+        checks.require(
+            false,
+            "the capture is not the shape the frame was planned for",
+            format!(
+                "the recorder drew at {recorder_aspect:.4} and this captures at {:.4}; the \
+                 projection is baked into the plan and nothing downstream can recompute it",
+                CAPTURE_SIZE.aspect(),
+            ),
+        );
+    }
+
     let mut gpu = WgpuBackend::offscreen(CAPTURE_SIZE);
     for _ in 0..HANDSHAKE_POLLS {
         match gpu.poll() {
             Ok(()) if gpu.is_ready() => break,
             Ok(()) => {}
+            // A fact about the machine, not a failure.
             Err(error @ RenderError::NoAdapter { .. }) => {
                 return format!(
                     "skipped, no GPU on this machine ({})",
@@ -81,17 +104,17 @@ pub(crate) fn capture_a_frame(
         return "skipped, the GPU handshake never finished".to_owned();
     }
 
-    // The built-in textures, in the order the recorder created them. A game of
-    // shapes and text needs nothing else, and the table this returns is unused.
-    let textures = create_builtin_textures(&mut gpu);
-    // Checked rather than assumed. If the font is not where the recorder put
-    // it, every other id in the plan is wrong too and the picture is of
+    // The built-ins are the whole table for a game of shapes and text. Checked
+    // rather than assumed: if the font did not land on the id the recorder
+    // reported, every other id in the plan is wrong too and the picture is of
     // something else.
+    let textures = create_builtin_textures(&mut gpu);
     checks.require(
         textures.resolve(FONT_TEXTURE) == font,
         "the replay's texture ids do not mean what the recorded plan means",
         format!(
-            "the recorder put the font on {font:?} and this backend put it on {:?}",
+            "the recorder put the font on {font:?} and this backend put it on {:?}; the \
+             plan names ids, so a mismatch means the picture samples the wrong textures",
             textures.resolve(FONT_TEXTURE)
         ),
     );
@@ -108,17 +131,6 @@ pub(crate) fn capture_a_frame(
             "an offscreen backend can always read its own target",
         );
     };
-    checks.require(
-        image.size.width * CAPTURE_SIZE.height == image.size.height * CAPTURE_SIZE.width,
-        "the capture is not the aspect the plan was projected for",
-        format!(
-            "{}x{} against a recorder viewport of {}x{}; nothing downstream can recompute the \
-             projection, so a capture of another shape is a stretched picture that every \
-             assertion still passes",
-            image.size.width, image.size.height, CAPTURE_SIZE.width, CAPTURE_SIZE.height,
-        ),
-    );
-
     let path = artifact_path();
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
@@ -130,9 +142,6 @@ pub(crate) fn capture_a_frame(
         );
     }
     let shown = std::fs::canonicalize(&path).unwrap_or(path);
-    // `tools/verify` takes the first line starting `capture:` that contains
-    // " written to " and puts what follows into its report. Worded differently
-    // the run still passes and the report says no picture was taken.
     format!(
         "{}x{} written to {}",
         image.size.width,

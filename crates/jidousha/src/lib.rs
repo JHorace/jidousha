@@ -203,10 +203,14 @@ pub mod testing {
     // reporting it as "no GPU here" files an engine bug as a property of the
     // hardware. The distinction is `RenderError::NoAdapter`, and matching on it
     // needs the type. `examples/prototype_kit/capture.rs` is the worked case.
+    // `find_bounds` is the fold every check that measures a drawn thing was
+    // writing out by hand: a circle is sixteen wedges and a string is one quad
+    // per character, so "how big is the thing that was drawn" is never a quad
+    // anybody drew (e0-findings.md F-116, ADR-0032).
     pub use jidousha_render_core::{
         BackendTextureId, Batch, DrawnQuad, FONT_TEXTURE, FramePlan, FrameRecord, FrameRecorder,
         PhysicalSize, QuadVertex, RawImage, RenderBackend, RenderError, TextureTable,
-        create_builtin_textures, encode_png, upload_ready_textures,
+        create_builtin_textures, encode_png, find_bounds, upload_ready_textures,
     };
 
     /// The renderer a golden image comes from.

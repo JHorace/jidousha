@@ -118,11 +118,15 @@ impl InputSnapshot {
 /// ```
 /// # use jidousha_input::{Input, InputSnapshot, Key};
 /// # use jidousha_core::World;
+/// fn jump(world: &mut World) {
+///     let Some(input) = world.find_resource::<Input>() else { return };
+///     if input.just_pressed(Key::Space) {
+///         // ... and the rest of the game.
+///     }
+/// }
 /// # let mut world = World::new();
-/// world.insert_resource(Input::new(InputSnapshot::new()));
-///
-/// let input = world.resource::<Input>();
-/// assert!(!input.held(Key::Space));
+/// # world.insert_resource(Input::new(InputSnapshot::new()));
+/// # jump(&mut world);
 /// ```
 ///
 /// CONTRACT: read-only for games. There is no method here that changes what the
@@ -136,7 +140,14 @@ pub struct Input {
 impl Resource for Input {}
 
 impl Input {
-    /// The input resource for one tick.
+    /// The input resource for one tick — built by the driver, not by a game.
+    ///
+    /// A game reads `Input`; only the windowed driver and a headless check ever
+    /// construct one, which is why the `InputSnapshot` this takes is defined in
+    /// the checking surface (`docs/api/jidousha-testing.md`) rather than beside
+    /// this signature. A `--verify` mode gets one from `InputScript`,
+    /// `SnapshotBuilder`, or `InputSnapshot::new()` for a player who is present
+    /// and doing nothing (e0-findings.md F-114).
     #[must_use]
     pub fn new(snapshot: InputSnapshot) -> Self {
         Self { snapshot }

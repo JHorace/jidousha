@@ -20,6 +20,16 @@ rather than solve: running the game forward and looking is allowed, and it is
 usually both simpler and more honest than a closed form kept in step by hand.
 Design for a slow tick and you will design around a cost that is not there.
 
+**"Forward" means your game's own step functions, not a copy of the
+simulation.** There is no way to fork a `HeadlessSim` — `World` is not
+cloneable, `Recording` replays input rather than state, and rebuilding from
+`headless(..)` and replaying to the current tick is quadratic. That is a
+boundary rather than something you have missed, and the shape that works instead
+is the one *Concepts* asks for while the game is still being written: the ball's
+step and the opponent's decision as free functions the game owns, which a check
+calls as often as it likes. `examples/slalom`'s controller is thirteen futures
+deep and ticks nothing.
+
 Input comes from `jidousha::testing::InputScript`, which is a pure function of
 the tick — no cursor, so a test can seek, replay and bisect freely:
 
@@ -128,8 +138,20 @@ The recorder's viewport **overrides** the `Camera` resource's; everything else �
 centre, height, clear color — is the game's own. Nothing writes the recorder's
 viewport back into the world, so a check that reads bounds from
 `world.resource::<Camera>()` and quads from the recorder is comparing against
-the wrong rectangle unless the two viewports agree. Give the recorder the size
-the game's camera already has, and the question stops existing.
+the wrong rectangle unless the two viewports agree.
+
+Two ways out, and take the first: give the recorder the size the game's camera
+already has, and the question stops existing. When it cannot — a headless
+viewport smaller than the window's, so a capture is cheap — rebuild the camera
+the frame was *drawn* with rather than reading the resource raw. It is one line
+at the top of every check that measures against `visible_bounds()`:
+
+```rust
+const HEADLESS_VIEWPORT: PhysicalSize = PhysicalSize::new(1280, 720);
+// The recorder's viewport, the game's everything else. Read it back after the
+// ticks rather than before: a game may move or zoom its camera as it plays.
+let camera = Camera { viewport: HEADLESS_VIEWPORT, ..*sim.world().resource::<Camera>() };
+```
 
 `frame.covering(point)` answers "what is at this world position?" with exact
 rotated-quad containment, and `frame.quads()` hands you every quad with its
@@ -148,7 +170,21 @@ with a swept collision to pick whether the collider counts as pre- or post-move,
 and to say so at the site; `sim.schedule_debug()` returns every phase and its
 systems in run order as a string, so a check can hold the game to the order it
 picked. Assert that the mover you decided goes first appears before the other in
-it. Nothing else in this surface sees a swap of two `add_system` calls — the
+it — system names appear verbatim, one per line, numbered within their phase:
+
+```text
+schedule:
+  Startup (1)
+    0. set_the_scene
+  Update (6)
+    0. restart_the_match
+    1. drive_the_player
+```
+
+so `order.find("drive_the_player") < order.find("move_the_ball")` is the check.
+Assert that both names were *found* as well: two renamed systems give two
+`None`s, which compare equal, and the check then passes while seeing nothing.
+Nothing else in this surface sees a swap of two `add_system` calls — the
 world ends up in a legal state either way, one tick of a paddle's travel apart,
 and every assertion about where things ended up passes.
 
@@ -190,30 +226,25 @@ that is checked and a layer that is merely spelled.
 rectangle, and it is wrong for a circle.** `ctx.circle` submits sixteen wedge
 quads, not one square, so nothing the size of the ball is drawn anywhere. What is
 true is that all sixteen share the centre as a corner and all sixteen fit inside
-the circle's bounding box, so the union of the quads covering the centre is
-exactly `2r × 2r`. Ask about the union:
+the circle's bounding box, so the box around the quads covering the centre is
+exactly `2r × 2r`. `find_bounds` is that box — the fold over `quad.bounds()`
+that "how big is the thing that was drawn" always comes down to, and `None` when
+nothing was drawn there at all:
 
 ```rust
 let box_of_it = Rect::from_center_size(at, Vec2::splat(radius * 2.0));
-let mut union: Option<Rect> = None;
-for quad in frame.covering(at) {
-    let drawn = quad.bounds();
+let disc = find_bounds(frame.covering(at).into_iter().filter(|quad| {
     // Inside the disc's box, a hair of slack for the rim's arithmetic. Written
     // out rather than as `Rect::contains`, which is half-open and would throw
-    // away the one wedge that reaches the far edge.
-    let inside = drawn.min.x >= box_of_it.min.x - 1e-3
+    // away the one wedge that reaches the far edge. A filter, because a centre
+    // line running under the ball covers the same point and is not the ball.
+    let drawn = quad.bounds();
+    drawn.min.x >= box_of_it.min.x - 1e-3
         && drawn.min.y >= box_of_it.min.y - 1e-3
         && drawn.max.x <= box_of_it.max.x + 1e-3
-        && drawn.max.y <= box_of_it.max.y + 1e-3;
-    if !inside {
-        continue;                       // the field behind the ball, not the ball
-    }
-    union = Some(match union {
-        None => drawn,
-        Some(so_far) => Rect { min: so_far.min.min(drawn.min), max: so_far.max.max(drawn.max) },
-    });
-}
-let size = union.expect("nothing at all was drawn where the ball is").size();
+        && drawn.max.y <= box_of_it.max.y + 1e-3
+}));
+let size = disc.expect("nothing at all was drawn where the ball is").size();
 assert!(
     (size.x - radius * 2.0).abs() < 1e-3 && (size.y - radius * 2.0).abs() < 1e-3,
     "no ball-sized disc at ({at:?}): the quads covering it span {size:?}, want \
@@ -221,6 +252,11 @@ assert!(
     radius * 2.0,
 );
 ```
+
+The same call answers the same question for a string — `ctx.text` is one quad
+per character, so `find_bounds(quads sampling the font)` is where the score
+actually sits and how wide it actually is — and for anything else a game draws
+out of several primitives.
 
 `covering` counts a quad whose edge or corner passes exactly through the point,
 which is what makes asking about the centre work at all — every wedge touches it.
@@ -434,7 +470,7 @@ batching already done — and a renderer built for the purpose will execute it:
 // `--verify` file already globs, and taking it from `testing` as well is the
 // same item twice. Only the testing-only names belong here.
 use jidousha::testing::{
-    RenderBackend, RenderError, WgpuBackend, create_builtin_textures, encode_png,
+    FONT_TEXTURE, RenderBackend, RenderError, WgpuBackend, create_builtin_textures, encode_png,
 };
 
 // Same 16:9 shape as the recorder's viewport — see the first trap below.
@@ -452,9 +488,10 @@ for _ in 0..10_000 {                    // the renderer is poll-based, and a
     }
 }
 // The built-in textures, in the order your recorder created them, so the ids
-// inside the plan mean the same thing here. A game of shapes and text needs
-// nothing else; the table it returns is not used.
-let _ = create_builtin_textures(&mut gpu);
+// inside the plan mean the same thing here — and one assertion that they do,
+// which is what separates "a PNG was written" from "a PNG of this game".
+let textures = create_builtin_textures(&mut gpu);
+assert_eq!(textures.resolve(FONT_TEXTURE), recorder.font_texture());
 gpu.render(&frame.plan).expect("the plan the recorder already accepted");
 let image = gpu.capture().expect("an offscreen renderer reads its own target");
 std::fs::write("target/verify/mygame.png", encode_png(&image))?;
@@ -470,8 +507,10 @@ That "the ids mean the same thing" step is the load-bearing one, and it holds
 because both counters start empty and are filled by the same call in the same
 order. That is true of **a game that loads no assets** — every shape a colour,
 every string the built-in font. If yours loads art, the replay has to upload it
-too, or the plan names a texture the new renderer lacks. Check the ids; the
-example does.
+too, or the plan names a texture the new renderer lacks. The assertion above is
+that step, and it costs one line whether or not you have art: without it, a plan
+whose ids drifted renders the wrong texture into a PNG that every other check in
+your `--verify` is happy with.
 
 Three things are easy to get wrong here, and silent when you do:
 
