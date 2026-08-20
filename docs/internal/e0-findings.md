@@ -27,7 +27,9 @@ nobody looked for: the container could not open a window because
 lavapipe went into, not the `DISPLAY`-shaped hole four triages recorded it as.
 With that fixed, F-112 closes the escalation F-079 and F-096 kept re-filing —
 **run 8's Pong has now been played in a window by a session rather than by the
-owner afterwards**, and it won 5–4 from 0–2 down.
+owner afterwards**, and it won 5–4 from 0–2 down. The owner has played it as
+well, and run 8's transcript is reviewed and clean, so both of `e0-prompt.md`'s
+after-the-run person-steps are taken and the run is **valid**.
 
 **Run 7's headline is a sentence that was false for the third run running, and it
 is a different kind of false.** F-055 and F-068 were claims about the *engine*
@@ -127,6 +129,7 @@ prompt.
 | 5 | 2026-08-19 | Pong shipped; **not** a pass | 1 | 7 | 2 (+1 `environment`) | Compiled clean, `--verify` green, 1,263 frames recorded. Two cycles lost to a controller that optimised onto the boundary of what its paddle could reach (F-056) — the fourth run to be sent into its game's constants by its own driver, and the first that had *read* the warning. The one `engine` finding is **declined**: ADR-0024 says draw order was always observable and a `Depth` on `DrawnQuad` would not have caught the bug it was wanted for. Raw notes: `docs/e0/run-5.md`. Triage: §4b. §6. |
 | 6 | 2026-08-19 | Pong shipped; **not** a pass | 1 | 9 | 1 (+1 `environment`) | Compiled clean, `--verify` green, 2,013 ticks, and **the first run to see a frame of its own game** — the capture path landed and the PNG looks like Pong. Blocked once, on its own game design: an opponent unbeatable by arithmetic (F-074, the other side of F-064). The one `engine` finding is **accepted and fixed** — `Radians::from_degrees` is now a `const fn` (F-069). Its headline is a document sentence that was *false* rather than missing (F-068), the second run running. Every claim in its log held under checking. **Valid, and played** — both after-the-run steps taken before the decks were cleared. Raw notes: `docs/e0/run-6.md`. Triage: §4c. §6. |
 | 7 | 2026-08-19 | Pong shipped; **not** a pass | 0 | 14 | 1 (+2 `environment`) | Compiled clean, `--verify` green, 3,092 ticks, 5–0, and **seventeen of seventeen injected faults caught** — the first run to score full marks on its own mutation round. Two rounds and two wrong constant changes lost to the document's own controller prescription, which is a property of one opponent taught as the lesson (F-080) and the third false sentence in three runs. No `engine` finding: the one engine-shaped question is whether `jidousha::testing` should *ship* the controller self-check, and it is **declined** — ADR-0027. Two of the findings are the maintainer's rather than the run's, from the verification tasks: `tools/test` was red on `main` (F-094) and `prototype_kit`'s own `--verify` was missing five of the checks the document prescribes (F-095). **Valid, and played** — the transcript was reviewed and the game played before the decks were cleared. Raw notes: `docs/e0/run-7.md`. Triage: §4d. §6. |
+| 8 | 2026-08-20 | Pong shipped; **not** a pass | 0 | 14 | 0 (+2 `environment`) | Compiled clean, `--verify` green in 2.3 s, 713 tests, ten CI checks on Linux and Windows, and **23 of 23 injected faults caught** after a first round of 19 — the second run to reach full marks, and the first to fix all four misses with four different kinds of instrument. Its headline is that the two documents were **enough**: never blocked, and never wanting the source to learn what a function *did*. The one engine-shaped finding is a doc comment that says the opposite of what the code does (F-097), not a behaviour anybody wants changed, so no `engine` finding stands. One cycle lost to the document prescribing a minimax where an exact enumeration was available (F-100), and one game bug — an opponent that centres on the ball — found only by a third, deliberately mediocre controller the document never asked for (F-101). **Valid, and played** — the transcript was reviewed and the game played by the owner, and F-111's fix let this triage play it in a window too: 0–2 down, **won 5–4** (F-112, `docs/e0/run-8-playtest.png`). Raw notes: `docs/e0/run-8.md`. Triage: §4e. §6. |
 
 Run 1 produced a working, fun Pong and a document-shaped hole underneath it. The
 game is not the measurement — `docs/e0/run-1.md` is — and it says the run could
@@ -3948,6 +3951,13 @@ thing that only shows up when somebody runs the tools rather than reads them.
    the `winit`→`Input` plumbing. Not an agent's to take — and the two steps that
    *are* a person's were both taken for this run before the decks were cleared:
    the transcript reviewed, and the game played (§3, F-096).
+
+   **Superseded by F-111, and the way it was wrong is the lesson.** "Not an
+   agent's to take" was inferred from `RunError::NoDisplay` and never checked
+   against what actually failed under `xvfb-run`, which is one missing library
+   and squarely an agent's to take. Four triages repeated the inference. A
+   `DISPLAY`-shaped diagnosis reached without running the thing is exactly the
+   conclusion-instead-of-numbers failure this file tells game authors to avoid.
 2. ~~**The testing document is at 97% of its budget.**~~ **Settled in a
    follow-up commit, and the settlement is half structural and half not.**
    *Testing your game* hit ~14,700 tokens of 15,000 on this triage's fixes and is
@@ -4496,6 +4506,11 @@ use, so what is unexercised is window creation and the `winit`→`Input` plumbin
 That is engine code rather than a run's, it is a `DISPLAY`-shaped hole rather than
 a graphics-stack one, and it is on CLAUDE.md's never-agent-fixable list.
 
+**That last sentence was wrong, and F-111 says how.** It was not a `DISPLAY`
+hole: `xvfb-run` worked, and a single missing library made the game panic before
+it could ask for one. Read F-111 and F-112 rather than this paragraph — the
+finding is closed.
+
 **The owner has since played it**, which is the third run running (5, 6, 7) where
 the game was seen by a person and not by its author. That is what keeps
 "playable" an observation rather than an inference, and it is why the deletion in
@@ -4614,6 +4629,17 @@ the owner. F-079 and F-096 said the hole was that no session had run its own
 game. It is not a hole any more. What is still owed to run 8 specifically, and is
 not this triage's to take, is the browser half of `e0-prompt.md`'s step 2
 (`tools/serve-web pong`).
+
+**The run is valid, and it has been played.** The transcript was reviewed and
+shows no read under `crates/*/src/`, `docs/internal/` or `docs/adr/`, which is
+what makes the sixteen findings evidence about the documents rather than a log
+kept for the record (§2). The owner has played the game as well, so
+`e0-prompt.md`'s two after-the-run person-steps are both taken before the decks
+are cleared — the deadline that matters, because before-the-run step 2 deletes
+`crates/jidousha/examples/pong/` and the artifact goes with it. What is different
+about run 8 is that this is no longer the *only* playtest: F-111's fix let this
+triage play it in a window too, so the owner's run confirms a session's rather
+than standing in for one.
 
 **Three entries in run 8's log are recorded as successes and must not be
 streamlined away.** §2.1, §2.2 and §2.3 are the "this does not exist, and here is
@@ -4949,6 +4975,13 @@ events, the engine's `Input` snapshot, the game's own systems, `wgpu` on lavapip
 and the pixels back out — by reading the framebuffer at 36 frames a second and
 steering the left paddle with `W`/`S`. It went 0–2 down and **won 5–4** in about
 fifty-three seconds of play. `docs/e0/run-8-playtest.png` is the winning frame.
+
+**The owner has played it too**, which is the fourth run running (5, 6, 7, 8) —
+and for the first time that is corroboration rather than the whole of the
+evidence. The distinction matters for what this finding was ever about: F-079 and
+F-096 did not say the game was unplayed, they said *no session had run its own
+game*, with a person playing it afterwards as the workaround. Two independent
+playtests now agree, one of them from inside the container that wrote the game.
 
 That verdict is not available from any of run 8's own numbers. Its rollout
 controller wins 5–0 and its chaser loses 4–5, and neither says whether a person
