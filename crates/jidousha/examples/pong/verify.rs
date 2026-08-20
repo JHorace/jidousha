@@ -43,6 +43,14 @@ const TICKS: u64 = 3000;
 /// camera agree and every assertion about *where* a quad is means something.
 const HEADLESS_VIEWPORT: PhysicalSize = crate::WINDOW;
 
+/// How long the ball must sit at the centre spot before a serve, in ticks.
+///
+/// A third of a second, which is about what it takes to look at a score and
+/// read it. Not `SERVE_PAUSE`: a check written against the game's own constant
+/// follows it to zero and passes for a game that re-serves on the tick the
+/// point lands.
+const READABLE_PAUSE: u64 = 20;
+
 /// The shortest a won match may be, in ticks.
 ///
 /// Fifteen seconds. Below it the game is not something anybody plays, it is
@@ -67,6 +75,9 @@ pub(super) struct Session {
     longest_step: f32,
     /// The furthest from the centre line the ball's centre ever got, vertically.
     highest: f32,
+    /// The shortest run of ticks the ball spent parked at the centre spot
+    /// before a serve, over the whole match.
+    shortest_pause: u64,
     /// The last frame drawn while the ball was live.
     live: Option<FrameRecord>,
     /// Where the ball was on that frame.
@@ -103,6 +114,7 @@ fn play(mode: Mode, record: bool) -> (Session, HeadlessSim, FrameRecorder) {
         frames: 0,
         longest_step: 0.0,
         highest: 0.0,
+        shortest_pause: u64::MAX,
         live: None,
         live_ball: Vec2::ZERO,
         live_paddles: [Vec2::ZERO; 2],
@@ -110,6 +122,7 @@ fn play(mode: Mode, record: bool) -> (Session, HeadlessSim, FrameRecorder) {
         live_tally: Tally::default(),
     };
     let mut previous = Vec2::ZERO;
+    let mut parked = 0u64;
 
     for tick in 1..=TICKS {
         // On the way into tick 1 there is nothing to look at: `Startup` runs
@@ -143,6 +156,18 @@ fn play(mode: Mode, record: bool) -> (Session, HeadlessSim, FrameRecorder) {
         session.points = round.points;
         session.stage = round.stage;
         session.tally = tally;
+
+        // How long the ball sat still at the centre before this serve. Counted
+        // rather than read off the constant, so it is about what the match did.
+        match round.stage {
+            Stage::Serving { .. } => parked += 1,
+            _ => {
+                if parked > 0 {
+                    session.shortest_pause = session.shortest_pause.min(parked);
+                    parked = 0;
+                }
+            }
+        }
 
         let ball = ball_at(&sim);
         if round.stage == Stage::Rally {
@@ -375,6 +400,21 @@ pub(crate) fn run() -> ExitCode {
              is scenery, and one that sends back all of them cannot be scored against",
             reached,
             good.tally.returns[Side::Right.index()]
+        ),
+    );
+    // A point has to be readable. The score changes on the tick the ball goes
+    // past a paddle, and if the next serve leaves on that same tick nobody can
+    // see what happened — the requirement is a person's eye, not the game's own
+    // `SERVE_PAUSE`, which a check comparing against it would follow to zero.
+    checks.require(
+        good.shortest_pause >= READABLE_PAUSE && good.shortest_pause < u64::MAX,
+        "a point goes by too fast to see",
+        format!(
+            "the shortest pause between a point and the serve after it was {} ticks ({:.2}s at \
+             {dt:.5}s a tick); the score changes on that boundary and a person has to be able to \
+             read it, which takes about a third of a second",
+            good.shortest_pause,
+            good.shortest_pause as f32 * dt,
         ),
     );
     checks.require(
@@ -909,8 +949,9 @@ pub(crate) fn run() -> ExitCode {
         approached(&good, Side::Right),
     );
     println!(
-        "  ball: longest tick {:.3} against a paddle {:.2} thick",
-        good.longest_step, PADDLE_SIZE.x
+        "  ball: longest tick {:.3} against a paddle {:.2} thick, shortest pause between points \
+         {} ticks",
+        good.longest_step, PADDLE_SIZE.x, good.shortest_pause,
     );
     println!("  capture: {captured}");
     println!("  capture: {end_screen}");

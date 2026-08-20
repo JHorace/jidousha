@@ -388,6 +388,14 @@ pub(crate) fn crossing(from: Vec2, to: Vec2, face: Face) -> Option<f32> {
     // every conjunct and the answer is "no contact", which is the safe one.
     // (Clippy also rejects `!(a > b)` outright, which is how this got written
     // twice.)
+    //
+    // `approaching` is the one of the three that is *not* load-bearing, which a
+    // mutation round found: the only way to pass the other two while travelling
+    // the wrong way is `from.x == to.x == plane`, a step of zero length, and
+    // that divides to NaN and fails the reach test below anyway. It is kept
+    // because it is the first question a reader asks, and stated as redundant
+    // rather than deleted because deleting it would leave the zero-length case
+    // resting on a NaN.
     let approaching = travel > 0.0; // not standing still or going the other way
     let in_front = before >= 0.0; // not already through, leaving as it came
     let reached = after <= 0.0; // this tick's travel did not stop short
