@@ -17,6 +17,11 @@ reach for. If something you want is not here, it is not part of v1.
 the `--verify` convention, and capturing a picture. Write the game from this
 one; write the check from that one.
 
+**And a third, for one job:** `docs/api/jidousha-controllers.md` is how to write
+the *player* inside that check — the thing that presses the keys — so that what
+it reports is about the game rather than about itself. Read it last, and only
+once a `--verify` mode needs a player that can win.
+
 ## Quickstart
 
 A whole game. Copy it, run it, start changing things.
@@ -1845,3 +1850,9 @@ ask what it drew, how to script or drive its input, the `--verify` convention
 It is a separate document because it is read at a different time. This one is
 read while the game is being written; that one is read once there is a game to
 check, and nothing in it helps you write the game itself.
+
+**Driving that check is a third document**, `docs/api/jidousha-controllers.md`:
+how to write the player it plays with, why one controller cannot measure a
+game's difficulty, and the three numbers a controller has to report about
+itself. `crates/jidousha/examples/slalom/` is all of it worked. Read it third
+or not at all — a check whose player is a blind `InputScript` never needs it.

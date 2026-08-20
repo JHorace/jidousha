@@ -181,12 +181,17 @@ a row (stop rule printed, `failure-streak.json` count 2).
   cannot be forgotten. CI runs `--check`, which fails when a committed file
   differs — stale documentation is worse than none, because an agent believes it.
 
-  **Two documents since ADR-0025**, split by what the reader is doing:
-  `jidousha-api.md` (writing a game) and `jidousha-testing.md` (checking one),
-  each with its own token budget and its own vocabulary rule. `Document` carries
-  path, budget and vocabulary exception, so the budget, vocabulary and staleness
-  checks are each written once and applied to a list — two copies of the
-  staleness check is the drift F-016 was.
+  **Three documents**, split by what the reader is doing: `jidousha-api.md`
+  (writing a game, 25k) since ADR-0025, `jidousha-testing.md` (checking one, 15k)
+  since the same, and `jidousha-controllers.md` (driving the check's player, 5k)
+  since ADR-0030 — each with its own token budget and its own vocabulary rule.
+  `Document` carries path, budget and vocabulary exception, so the budget,
+  vocabulary and staleness checks are each written once and applied to a list;
+  two copies of the staleness check is the drift F-016 was, and a third document
+  costs those checks nothing because of it. The controllers document is prose
+  only: its reader writes a controller with the other two documents' vocabulary,
+  so a reference section here would be a second place to keep the same entries
+  right.
   Not rustdoc JSON, which needs nightly while `rust-toolchain.toml` pins stable;
   summaries are lifted from the `///` line above each definition, which is a
   bounded text problem with tests rather than a second toolchain.

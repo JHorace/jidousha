@@ -130,6 +130,15 @@ game-writing agent's documentation budget spent on verification material — is 
 general lesson: a budget protects relevance, not size, so the fix for a full one is
 usually a seam rather than a bigger number.
 
+**ADR-0030 applied that lesson a second time**, to the testing document, and the
+second application is the one that shows the rule is a rule rather than a story
+about one file. `jidousha-controllers.md` is how the *player* inside a check is
+written — advice that would be as true of a driving game, and was therefore
+spending a seventh of a checking-a-game budget on something that is not checking a
+game. Worth knowing before reaching for a bigger number: curation was tried first
+and measured, and it recovered 143 tokens on one pass and 20 on the next. At ten
+thousand tokens of prose, tightening sentences is noise; the seam is the move.
+
 `docs/api/` is a **product surface** — arguably the most important one. Its quality metric:
 can a fresh agent, given only `docs/api/` and `examples/`, produce a working prototype?
 It gets evaluated like a product, not proofread like a doc.

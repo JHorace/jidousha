@@ -21,6 +21,7 @@ were asked the same question.
 | 3 | Friction log moves from `E0-NOTES.md` at the root to `docs/e0/run-N.md`, chosen by the author; `docs/e0/` added to the may-not-read list. | Run 2 was pointed at run 1's file and read it, so it knew the timestep and three key names before opening the API document (F-020). |
 | 3 | *Before starting a run* deletes the previous run's `pong/` and its `tools/test` registrations; step 6 puts the registrations back. | The previous run's finished game sat inside `crates/jidousha/examples/`, which is on the **allowed** list — a complete worked solution the next author could read without breaking a rule (F-020). |
 | 6 | The may-read list names two API documents instead of one: `docs/api/jidousha-api.md` and `docs/api/jidousha-testing.md`. | The surface split by what the reader is doing (ADR-0025). The material is unchanged and both files were always inside the `docs/api/` the list already allowed; naming them is so a run does not have to guess that the second exists. |
+| 9 | The may-read list names a **third**, `docs/api/jidousha-controllers.md`, and says when to read it. | The same split one level down (ADR-0030): the controller advice was a seventh of the testing document, is not about this engine, and had taken seven findings across six runs without the file being able to afford an eighth. Same reasoning as run 6's row — the material is unchanged, the file was always inside the allowed `docs/api/`, and naming it is so a run does not have to guess it exists. |
 
 No change alters what the run is asked to *build* or what it may read of
 the engine, so runs 1–2 and 3+ remain comparable on the thing being measured:
@@ -29,7 +30,7 @@ information the earlier runs had and should not have had, which makes later runs
 strictly harder — the safe direction for a bar to move. **Any future change that
 makes a run *easier* invalidates the streak and restarts the count.**
 
-**The split does not make a run easier, and the reasoning is worth writing down
+**Neither split makes a run easier, and the reasoning is worth writing down
 rather than asserting.** Not one sentence of guidance was added, removed or
 softened by it — the same prose and the same reference entries, in two files
 chosen by task. What changed is that a run must now find a second file, which is
@@ -38,6 +39,16 @@ without the testing reference, which is *harder* than run 5 had it. So the strea
 stands. The honest risk runs the other way, and §6 should watch for it — if run 6
 never opens `jidousha-testing.md`, the three pointers into it are not enough and
 that is a finding about the split, not about the run.
+
+**The second split (ADR-0030) inherits that argument whole**, and one risk in it
+is worth watching specifically. `jidousha-controllers.md` is the file a run
+reaches *last* — it already has a working game and a `--verify` mode that runs —
+and it is the one a run under pressure is most likely to skip. If run 9 writes a
+blind or naive controller and reports a number about *it* as though it were a
+number about the game, which is the failure five runs have now had, check first
+whether it opened the file at all. A run that read it and still fell in is a
+finding about the prose; a run that never found it is a finding about the split,
+and the answer to that one is more pointers rather than more paragraphs.
 
 ---
 
@@ -170,6 +181,10 @@ that is a finding about the split, not about the run.
 > - `docs/api/jidousha-testing.md` — its other half: how to check the game you
 >   wrote. Headless runs, asserting on what was drawn, the `--verify` convention,
 >   and capturing a picture of a frame.
+> - `docs/api/jidousha-controllers.md` — the third: how to write the *player*
+>   inside that check, so what it reports is about the game rather than about
+>   itself. Read it last, and only once your `--verify` mode needs a player that
+>   can win.
 > - `crates/jidousha/examples/` — worked examples, including `quickstart.rs`.
 >
 > **What you may not read**, at all, for any reason:

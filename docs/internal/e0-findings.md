@@ -4681,16 +4681,35 @@ budget is tight. §1.3's heading mentions descenders and is confusingly worded; 
 substance — that every glyph quad is the full `size` tall including a space — is
 F-076, already documented, and needs nothing.
 
-**The budget was the binding constraint, and it is worth recording what it cost.**
-`jidousha-testing.md` stood at 13,616 tokens of 15,000 when run 8 finished, and
-six of its findings land in that document. They were paid for rather than added:
-four passages that said their point twice were tightened, and every new paragraph
-was written twice, the second time shorter. The document ends at 14,522. **The
-next run's testing findings will not fit without cutting something a run asked
-for**, and the two candidates are the capture recipe's inline comments and the
-three-numbers block — both of which a run has explicitly credited. That is the
-next triage's problem and it should not be solved by trimming §7-style success
-notes, which are the cheapest lines in the file per finding they carry.
+**The budget was the binding constraint, and it is worth recording what it cost —
+and then what fixed it.** `jidousha-testing.md` stood at 13,616 tokens of 15,000
+when run 8 finished, and six of its findings land in that document. They were paid
+for rather than added: four passages that said their point twice were tightened,
+and every new paragraph was written twice, the second time shorter. The document
+reached 14,665 once the slalom pointer was added — 335 of headroom against a file
+taking six findings a run.
+
+**Curation was tried first, and measuring it is what settled the argument.** One
+pass over four passages recovered 143 tokens. A second pass over three more
+recovered **20**. The file is ten thousand tokens of prose and the reference is
+another four and a half; sentence-level economy is noise against that, and the
+number is what makes "split it" the answer rather than "tighten it".
+
+**ADR-0030 split it, on ADR-0025's own rule.** The controller material — a
+seventh of the file, seven findings across six runs, and not about this engine at
+all — is now `docs/api/jidousha-controllers.md`, prose only, with a 5,000 budget
+of its own. `jidousha-testing.md` is at **12,455 of 15,000** and the new document
+at 2,661 of 5,000. Between them there is room for several runs of findings for
+the first time since run 6, and the next controller finding lands somewhere that
+is not competing with the capture recipe.
+
+**public-api.md §4 predicted this in writing and both halves came true.** Its
+open-half paragraph said the prose was near its floor, that raising a budget was
+foreclosed, and that "a document full again *and* an E0 that still has not passed
+is evidence about the acceptance bar rather than about tokens". That is exactly
+the state run 8 produced. ADR-0029 answered the bar half and ADR-0030 the token
+half; the prediction is worth more than either fix, because it is the reason
+neither was argued from scratch.
 
 
 ### F-097 — `Depth::layer` is documented as the front of its band and returns the back

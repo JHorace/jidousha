@@ -569,7 +569,7 @@ class GenApiDocTest(unittest.TestCase):
 
     def test_the_committed_documents_cut_no_summary_short(self):
         root = Path(__file__).resolve().parents[2]
-        for name in ("jidousha-api.md", "jidousha-testing.md"):
+        for name in ("jidousha-api.md", "jidousha-testing.md", "jidousha-controllers.md"):
             with self.subTest(document=name):
                 text = (root / "docs/api" / name).read_text(encoding="utf-8")
                 self.assertEqual(gen_api_doc.cut_summaries(text), [])
@@ -639,6 +639,10 @@ class GenApiDocTest(unittest.TestCase):
         # What is specific to an entry carrying an example is the *shape*: a
         # declaration block closed and a second block opened immediately after.
         root = Path(__file__).resolve().parents[2]
+        # `jidousha-controllers.md` is absent on purpose: it carries no reference
+        # section, because a controller is written with the other two documents'
+        # vocabulary and a second copy of it here would be a second place to keep
+        # right (ADR-0030).
         for name, floor in (("jidousha-api.md", 20), ("jidousha-testing.md", 5)):
             with self.subTest(document=name):
                 text = (root / "docs/api" / name).read_text(encoding="utf-8")
@@ -703,7 +707,7 @@ class GenApiDocTest(unittest.TestCase):
 
     def test_the_committed_documents_point_only_at_examples_that_outlive_a_run(self):
         root = Path(__file__).resolve().parents[2]
-        for name in ("jidousha-api.md", "jidousha-testing.md"):
+        for name in ("jidousha-api.md", "jidousha-testing.md", "jidousha-controllers.md"):
             with self.subTest(document=name):
                 text = (root / "docs/api" / name).read_text(encoding="utf-8")
                 self.assertEqual(gen_api_doc.dangling_examples(text, root), [])
@@ -762,6 +766,38 @@ class GenApiDocTest(unittest.TestCase):
                     self.assertIn("over the 1 budget", err.getvalue())
                 finally:
                     setattr(gen_api_doc, attribute, original)
+
+    def test_every_document_is_reachable_from_the_game_document(self):
+        # The cost a split surface pays, now paid twice. An agent that does not
+        # know the third file exists will not find it, and it is the one a run
+        # reaches last and is least likely to go looking for.
+        root = Path(__file__).resolve().parents[2]
+        game = (root / "docs/api/jidousha-api.md").read_text(encoding="utf-8")
+        testing = (root / "docs/api/jidousha-testing.md").read_text(encoding="utf-8")
+        controllers = (root / "docs/api/jidousha-controllers.md").read_text(encoding="utf-8")
+        self.assertGreaterEqual(game.count("docs/api/jidousha-controllers.md"), 2)
+        self.assertGreaterEqual(testing.count("docs/api/jidousha-controllers.md"), 1)
+        # And back the other way, so a reader who lands on it first can leave.
+        self.assertIn("docs/api/jidousha-api.md", controllers)
+        self.assertIn("docs/api/jidousha-testing.md", controllers)
+
+    def test_the_controllers_document_holds_the_controller_material(self):
+        # The split is only worth its discoverability cost if the material moved
+        # rather than being copied. These are the load-bearing sentences from
+        # seven findings' worth of prose (e0-findings.md §6); they belong in one
+        # file and it is not the testing one.
+        root = Path(__file__).resolve().parents[2]
+        testing = (root / "docs/api/jidousha-testing.md").read_text(encoding="utf-8")
+        controllers = (root / "docs/api/jidousha-controllers.md").read_text(encoding="utf-8")
+        for phrase in (
+            "not a playability test",
+            "Three numbers, printed every run",
+            "constrain first, then optimise",
+            "cannot measure a game's difficulty",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, controllers)
+                self.assertNotIn(phrase, testing)
 
     def test_the_game_document_points_at_the_testing_document(self):
         # The one cost a split surface has to pay: an agent that does not know

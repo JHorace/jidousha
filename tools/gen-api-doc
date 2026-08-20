@@ -1,13 +1,20 @@
 #!/usr/bin/env python3
 """tools/gen-api-doc — regenerate `docs/api/` from the facade.
 
-**Two documents, split by what the reader is doing** (ADR-0025, public-api.md
-§4). `jidousha-api.md` is how a game is written — Quickstart, Concepts,
-Reference, Conventions digest — and is read while the game does not exist yet.
-`jidousha-testing.md` is how a game is checked — the *Testing your game* prose
-and the `jidousha::testing` reference — and is read once there is a game to
-check. They were one file until the testing half reached 46% of it, which is 46%
-of a game-writing agent's budget spent on a job it is not doing.
+**Three documents, split by what the reader is doing** (ADR-0025, extended by
+ADR-0030; public-api.md §4). `jidousha-api.md` is how a game is written —
+Quickstart, Concepts, Reference, Conventions digest — and is read while the game
+does not exist yet. `jidousha-testing.md` is how a game is checked — the
+*Testing your game* prose and the `jidousha::testing` reference — and is read
+once there is a game to check. `jidousha-controllers.md` is how the player
+inside that check is written, and is read last and by the fewest readers.
+
+The first split happened when the testing half reached 46% of one file, which is
+46% of a game-writing agent's budget spent on a job it is not doing. The second
+happened for the same reason one level down: the controller material was 14% of
+the testing document, is not about this engine at all, and had absorbed seven
+findings across six acceptance runs without the file being able to afford an
+eighth (e0-findings.md §6).
 
 Each has its own budget and its own vocabulary rule; `Document` carries both, so
 the budget, vocabulary and staleness checks are one piece of code each rather
@@ -79,6 +86,7 @@ PROSE = REPO_ROOT / "tools" / "api-doc"
 CONVENTIONS = REPO_ROOT / "docs" / "conventions.md"
 GAME_OUTPUT = REPO_ROOT / "docs" / "api" / "jidousha-api.md"
 TESTING_OUTPUT = REPO_ROOT / "docs" / "api" / "jidousha-testing.md"
+CONTROLLERS_OUTPUT = REPO_ROOT / "docs" / "api" / "jidousha-controllers.md"
 
 # The budgets from public-api.md §4, one per document (ADR-0025). The point was
 # never the number: it is that everything in a document is relevant to what its
@@ -93,6 +101,12 @@ TESTING_OUTPUT = REPO_ROOT / "docs" / "api" / "jidousha-testing.md"
 # a later and much cheaper moment.
 GAME_BUDGET = 25_000
 TESTING_BUDGET = 15_000
+# The third reader is the narrowest and the latest: a `--verify` mode exists and
+# the question is only whether its player is good enough to measure the game. The
+# number is smaller than the room the material had inside the testing document on
+# purpose — this file is where controller findings land now, and a budget that
+# started generous would not be a budget.
+CONTROLLERS_BUDGET = 5_000
 
 # No tokenizer in the standard library, so this is the usual approximation:
 # English prose and code average close to four characters a token. Deliberately
@@ -1081,12 +1095,13 @@ class Document:
 
 
 def documents(repo: Path) -> "list[Document]":
-    """Both generated documents, from one scan of the sources.
+    """Every generated document, from one scan of the sources.
 
-    **Two documents, split by what the reader is doing** (ADR-0025): the game
-    document is how a game is written, the testing document is how it is
-    checked. They were one file until the testing half reached 46% of it, which
-    is 46% of a game-writing agent's budget spent on a job it is not doing.
+    **Three documents, split by what the reader is doing** (ADR-0025, ADR-0030):
+    the game document is how a game is written, the testing document is how it is
+    checked, and the controllers document is how the player inside that check is
+    written. Each split happened when one part crowded another out of a budget
+    that belongs to a different reader.
     """
     facade = (repo / "crates/jidousha/src/lib.rs").read_text(encoding="utf-8")
     items = scan_sources(crate_sources(repo))
@@ -1102,6 +1117,15 @@ def documents(repo: Path) -> "list[Document]":
             budget=TESTING_BUDGET,
             allowed=TESTING_VOCABULARY,
             text=render_testing(repo, facade, items),
+        ),
+        Document(
+            path=CONTROLLERS_OUTPUT,
+            budget=CONTROLLERS_BUDGET,
+            # No renderer is named here: a controller decides what to press and
+            # never draws, so this one is held to the game document's vocabulary
+            # rather than the testing document's.
+            allowed=(),
+            text=render_controllers(repo),
         ),
     ]
 
@@ -1131,6 +1155,11 @@ def render_game(repo: Path, facade: str, items: "dict[str, Item]") -> str:
         "`docs/api/jidousha-testing.md` — headless runs, asserting on what was drawn,",
         "the `--verify` convention, and capturing a picture. Write the game from this",
         "one; write the check from that one.",
+        "",
+        "**And a third, for one job:** `docs/api/jidousha-controllers.md` is how to write",
+        "the *player* inside that check — the thing that presses the keys — so that what",
+        "it reports is about the game rather than about itself. Read it last, and only",
+        "once a `--verify` mode needs a player that can win.",
         "",
         "## Quickstart",
         "",
@@ -1182,6 +1211,12 @@ def render_game(repo: Path, facade: str, items: "dict[str, Item]") -> str:
         "It is a separate document because it is read at a different time. This one is",
         "read while the game is being written; that one is read once there is a game to",
         "check, and nothing in it helps you write the game itself.",
+        "",
+        "**Driving that check is a third document**, `docs/api/jidousha-controllers.md`:",
+        "how to write the player it plays with, why one controller cannot measure a",
+        "game's difficulty, and the three numbers a controller has to report about",
+        "itself. `crates/jidousha/examples/slalom/` is all of it worked. Read it third",
+        "or not at all — a check whose player is a blind `InputScript` never needs it.",
         "",
     ]
     return "\n".join(out)
@@ -1236,6 +1271,42 @@ def render_testing(repo: Path, facade: str, items: "dict[str, Item]") -> str:
         for name in testing_names:
             out += render_item(items.get(name, Item(name=name)))
     return "\n".join(out)
+
+
+def render_controllers(repo: Path) -> str:
+    """The document the player inside a check is written from.
+
+    Prose only, and deliberately: a controller is written with the game's own
+    vocabulary plus `InputScript` and `SnapshotBuilder`, and both of those have
+    reference entries in the testing document. A second copy of them here would
+    be a second place to keep them right.
+    """
+    controllers = (repo / "tools/api-doc/controllers.md").read_text(encoding="utf-8").strip()
+    return "\n".join(
+        [
+            "# Jidousha — driving a game you cannot watch",
+            "",
+            "GENERATED by `tools/gen-api-doc`. Do not edit; edit `tools/api-doc/` and",
+            "regenerate.",
+            "",
+            "The third of three, and the last one you need. `docs/api/jidousha-api.md` is",
+            "how a game is written; `docs/api/jidousha-testing.md` is how it is checked;",
+            "this one is how the *player* inside that check is written. It assumes both —",
+            "the game exists, its `--verify` mode runs, and the only question left is",
+            "whether the thing pressing the keys is good enough for its report to mean",
+            "anything.",
+            "",
+            "**Nothing here is about this engine**, which is why it is a file rather than a",
+            "section. Every claim in it would be true of a driving game or a fighting game,",
+            "and it is separate so that the document about *checking* a game does not spend",
+            "a seventh of itself on advice that is not about checking.",
+            "",
+            "## Driving a game you cannot watch",
+            "",
+            controllers,
+            "",
+        ]
+    )
 
 
 def token_estimate(text: str) -> int:

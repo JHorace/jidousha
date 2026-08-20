@@ -405,6 +405,27 @@ that's exactly what acceptance milestone E0 tests (implementation plan).
   rather than about tokens. Raising a budget stays the one answer ADR-0025
   forecloses.
 
+  **Closed after run 8, and the paragraph above called it exactly.** The document
+  filled again — 14,665 of 15,000 — and E0 still had not passed, which is the
+  condition that paragraph named as evidence about the bar rather than about
+  tokens. Both halves were acted on in one commit series. **ADR-0029** re-cut the
+  acceptance bar onto novel findings, because the blocking-finding series had not
+  moved in eight runs while its novel half had halved. **ADR-0030** split the
+  document a second time on ADR-0025's own rule: `jidousha-controllers.md`, the
+  material about driving a game you cannot watch, which is a seventh of the file,
+  is not about this engine at all, and had taken seven findings across six runs.
+  `jidousha-testing.md` is at **~12.5k of 15k** and the new document at ~2.7k of
+  5k. Raising a budget stayed foreclosed, and curation was tried first and
+  measured: one pass recovered 143 tokens, a second recovered 20. At ten thousand
+  tokens of prose, sentence-level economy is noise — which is the number that
+  makes "split it" the answer rather than "tighten it".
+
+  **Three documents now, and the third has no reference section.** A controller is
+  written with the game's vocabulary plus `InputScript` and `SnapshotBuilder`,
+  both of which have entries in the testing document; a second copy would be a
+  second place to keep right. `crates/jidousha/examples/slalom/` is the worked
+  instance the prose points at (run 4's lever, spent — e0-findings.md §6).
+
   Implemented (impl): not rustdoc JSON — that needs a nightly toolchain and
   `rust-toolchain.toml` pins stable (ADR-0005) — but a text extractor over the
   crate sources, with tests. Blocks close on indentation rather than brace
