@@ -1,83 +1,82 @@
-//! The picture: the frame the check already recorded, rendered on a GPU and
-//! written out as a PNG.
+//! The captured frame: one frame the check already recorded, rendered on a GPU
+//! and written out as a PNG.
 //!
-//! `verify.rs` asserts on what was *submitted*; this renders one of those
-//! frames for real and leaves something a person can look at, which is the half
-//! no assertion in that file reaches — whether it looks like Pong.
+//! The half a person can look at. `verify.rs` asserts on what was *submitted*;
+//! this executes one of those frames for real, which is the only thing that
+//! would catch a backend drawing nothing at all — and the only thing that
+//! answers "does it look like Pong", which no assertion in that file reaches.
 //!
-//! There is no second session and no game to re-run: a `FrameRecord` carries
-//! the finished `FramePlan`, with the depth sort and the batching already done,
-//! and a renderer built for the purpose executes it. This game loads no art at
-//! all, so the built-in textures are the whole table and the ids inside the
-//! plan mean the same thing here as they did in the recorder — both counters
-//! start empty and are filled by the same call.
+//! There is no second session and no game to re-run: a `FrameRecord` carries the
+//! finished `FramePlan`, with the depth sort and the batching already done, and
+//! a renderer built for the purpose executes it.
 //!
-//! A machine with no GPU is not a failure. Every runner is headless and some
-//! have no graphics stack; the run says it skipped and stays green. Every
-//! *other* handshake error is a fault, and reporting one of those as "no GPU
-//! here" files a real problem as a property of the hardware, for ever.
+//! This game loads no assets — every shape is a colour and every string is the
+//! built-in font — so the built-in textures are the whole texture table, and the
+//! ids inside the plan mean the same thing here because both counters started
+//! empty and were filled by the same call. That is checked rather than assumed.
+
+use std::path::{Path, PathBuf};
 
 use jidousha::prelude::*;
 use jidousha::testing::{
     BackendTextureId, FONT_TEXTURE, FrameRecord, RenderBackend, RenderError, WgpuBackend,
     create_builtin_textures, encode_png,
 };
-use std::path::{Path, PathBuf};
 
 use crate::checks::{Checks, fail};
 
 /// How big the captured artifact is.
 ///
-/// The **same 16:9 shape** the recorder drew at. The projection was computed
-/// from that viewport and is baked into every plan; nothing downstream can
-/// recompute it, so a capture of another shape stretches the picture while
+/// The **same 16:9 shape** the recorder's viewport has. The projection was
+/// computed from that viewport and is baked into the plan; nothing downstream
+/// can recompute it, so a capture of another shape stretches the picture while
 /// every assertion goes on passing, because none of them look at pixels.
-const CAPTURE_SIZE: PhysicalSize = PhysicalSize::new(480, 270);
+const CAPTURE_SIZE: PhysicalSize = PhysicalSize::new(640, 360);
 
 /// How many polls to give the GPU handshake before calling it absent.
 const HANDSHAKE_POLLS: usize = 10_000;
 
 /// An engine message flattened onto one line.
 ///
-/// `RenderError`'s `Display` is the four-part shape, which is right when it is
-/// the only thing on the screen and wrong inside a `--verify` summary, where
-/// the convention is one indented line per fact.
+/// `RenderError`'s `Display` is the four-part shape, which is right on its own
+/// and wrong inside a `--verify` summary, where the convention is one indented
+/// line per fact.
 fn one_line(message: &str) -> String {
     message.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// Render the recorded frame on a GPU and write it out as a PNG.
+/// Render `frame` on a GPU and write it out, returning the line the summary
+/// prints.
 ///
-/// The line it returns is printed as `capture: ...`, and `tools/verify` lifts
-/// the path out of it by looking for a line starting `capture:` that contains
-/// ` written to `.
+/// A machine with no GPU is a fact about the machine, not a failure: say the
+/// capture was skipped and keep the run green. Every *other* handshake error is
+/// a fault, and reporting one of those as "no GPU here" files a real problem as
+/// a property of the hardware for ever.
 pub(super) fn capture_a_frame(
     checks: &mut Checks,
     frame: &FrameRecord,
     font: BackendTextureId,
+    name: &str,
 ) -> String {
-    // Asserted rather than remembered: the plan's projection came from the
-    // recorder's viewport, so a capture of another shape is a picture of a
-    // different game.
-    let recorder_aspect = crate::verify::viewport().aspect();
-    if !(CAPTURE_SIZE.aspect() - recorder_aspect).abs().lt(&0.001) {
-        checks.require(
-            false,
-            "the capture is not the shape the frame was planned for",
-            format!(
-                "the recorder drew at {recorder_aspect:.4} and this captures at {:.4}; the \
-                 projection is baked into the plan and nothing downstream can recompute it",
-                CAPTURE_SIZE.aspect(),
-            ),
-        );
-    }
+    checks.require(
+        CAPTURE_SIZE.aspect() == crate::WINDOW.aspect(),
+        "the capture is not the shape the frame was planned for",
+        format!(
+            "capturing {}x{} from a plan projected for {}x{}; the projection is baked in and \
+             nothing downstream can recompute it, so the picture would be stretched while \
+             every other check passed",
+            CAPTURE_SIZE.width,
+            CAPTURE_SIZE.height,
+            crate::WINDOW.width,
+            crate::WINDOW.height,
+        ),
+    );
 
     let mut gpu = WgpuBackend::offscreen(CAPTURE_SIZE);
     for _ in 0..HANDSHAKE_POLLS {
         match gpu.poll() {
             Ok(()) if gpu.is_ready() => break,
             Ok(()) => {}
-            // A fact about the machine, not a failure.
             Err(error @ RenderError::NoAdapter { .. }) => {
                 return format!(
                     "skipped, no GPU on this machine ({})",
@@ -104,17 +103,16 @@ pub(super) fn capture_a_frame(
         return "skipped, the GPU handshake never finished".to_owned();
     }
 
-    // The built-ins are the whole table for a game of shapes and text. Checked
-    // rather than assumed: if the font did not land on the id the recorder
-    // reported, every other id in the plan is wrong too and the picture is of
-    // something else.
     let textures = create_builtin_textures(&mut gpu);
+    // The load-bearing line. The plan names texture ids, and an id only means
+    // anything to a backend that created its textures in the same order. Without
+    // this, a plan whose ids drifted renders the wrong texture into a PNG that
+    // every other check in this run is happy with.
     checks.require(
         textures.resolve(FONT_TEXTURE) == font,
         "the replay's texture ids do not mean what the recorded plan means",
         format!(
-            "the recorder put the font on {font:?} and this backend put it on {:?}; the \
-             plan names ids, so a mismatch means the picture samples the wrong textures",
+            "the recorder put the font on {font:?} and this backend put it on {:?}",
             textures.resolve(FONT_TEXTURE)
         ),
     );
@@ -131,7 +129,7 @@ pub(super) fn capture_a_frame(
             "an offscreen backend can always read its own target",
         );
     };
-    let path = artifact_path();
+    let path = artifact_path(name);
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
@@ -150,12 +148,12 @@ pub(super) fn capture_a_frame(
     )
 }
 
-/// Where the captured frame is written.
-fn artifact_path() -> PathBuf {
+/// Where a captured frame is written.
+fn artifact_path(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("..")
         .join("..")
         .join("target")
         .join("verify")
-        .join("pong.png")
+        .join(format!("{name}.png"))
 }

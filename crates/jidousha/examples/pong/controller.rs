@@ -1,483 +1,425 @@
-//! The player inside the check: three of them, and the three numbers they
-//! report about themselves.
+//! The players inside the check: one that can win, one that plays like a person
+//! on their first try, and one that does nothing.
 //!
-//! One controller cannot measure a game's difficulty, so there are three.
-//! [`Brain::Rollout`] clears the mechanics — it can win. [`Brain::Idle`] proves
-//! the game can be lost. [`Brain::Chaser`] is the one in between and the one
-//! that says whether the game is worth playing: it steers at the ball, which is
-//! what a person does on their first try, and it is the run that would catch an
-//! opponent nobody can score against or a rally with nowhere to go.
+//! Three rather than one, because one controller only ever says whether the game
+//! is beatable *by that controller*. `Mode::Rollout` clears the mechanics,
+//! `Mode::Idle` proves the game can be lost, and `Mode::Chaser` — a paddle that
+//! simply follows the ball — is the only one of the three that can say whether
+//! the game is worth playing.
 //!
-//! Every one of them presses W and S through a [`SnapshotBuilder`], so the
-//! edges they produce are the ones a real keyboard produces: events, not
-//! states, which is what makes a key held for a hundred ticks press once.
-//!
-//! # What the rollout controller does, in the order it does it
-//!
-//! 1. **Aim at where the ball will be.** [`roll_to`] runs the game's own
-//!    [`crate::drift`] forward a tick at a time until the ball crosses a
-//!    paddle's plane — the same arithmetic the game steps with, so the answer
-//!    is the game's answer and not a second model of it. When the ball is
-//!    heading the other way it rolls through the opponent's return first,
-//!    carrying the opponent's paddle along with
-//!    [`crate::opponent_target`], because this opponent *chases* and "take the
-//!    return landing furthest from the middle" is close to the worst objective
-//!    against one of those.
-//! 2. **Constrain, then optimise.** Candidates that would strike with the last
-//!    [`CONTACT_MARGIN`] of the paddle are dropped before anything is scored:
-//!    the sharpest return is always the one struck at the very tip, and "the
-//!    best available" resolves every time to standing so the ball hits your
-//!    last millimetre — where half a tick of overshoot is a clean miss rather
-//!    than a worse result.
-//! 3. **Score only positions the paddle can stand on.** A paddle driven by a
-//!    key moves in steps of `speed * fixed_dt` and cannot stop between them, so
-//!    the candidates are the lattice `current + k * step` and nothing else. A
-//!    candidate off that lattice is a place it cannot be, and the shot computed
-//!    about it is a number about a future that will not happen.
-//! 4. **Steer, and stop inside half a step**, so the paddle settles on a
-//!    lattice point rather than dithering across the one it wanted.
+//! Nothing here ticks the simulation. There is no way to fork a running world,
+//! so this file rolls the game forward through the game's own `step_ball`,
+//! `opponent_target` and `chase` — which is why those are free functions in
+//! `main.rs` rather than branches inside the systems that call them.
 
 use jidousha::prelude::*;
-use jidousha::testing::{InputEvent, InputSnapshot, SnapshotBuilder};
 
 use crate::{
-    BALL_RADIUS, Ball, COURT_HALF_Y, Face, OPPONENT_SPEED, PADDLE_SIZE, PADDLE_TRAVEL, PADDLE_X,
-    PLAYER_SPEED, Paddle, Side, Velocity, drift, face_crossing, face_of, opponent_target,
-    paddle_step, paddle_towards, rebound,
+    BALL_RADIUS, Ball, MAX_BALL_SPEED, OPPONENT_SPEED, PADDLE_LIMIT, PADDLE_SIZE, PLAYER_SPEED,
+    Paddle, Round, SPEEDUP, Side, Stage, Tally, chase, face_of, opponent_target, paddle_home,
+    rebound, step_ball,
 };
 
-/// How far ahead the ball is ever rolled, in ticks.
+/// How far in from a paddle's tip a planned contact must land, as a fraction of
+/// its reach.
 ///
-/// A serve crosses the court in about a hundred and forty ticks at its slowest,
-/// so this is generous. A roll that runs out returns `None` rather than a
-/// guess.
-const LOOKAHEAD: u32 = 400;
+/// "Take the best available" loses matches: the sharpest return is always the
+/// one struck at the very last millimetre, so an unconstrained search resolves
+/// every time to standing on the boundary of what is possible, where half a tick
+/// of overshoot is a clean miss rather than a worse result. Constrain first,
+/// optimise inside what survives.
+const EDGE_MARGIN: f32 = 0.25;
 
-/// How much of the paddle's half-length is off the menu, at each end.
+/// How many futures a decision looks at.
 ///
-/// The optimum sits on the boundary of what is reachable, and on a boundary any
-/// error at all is a miss rather than a worse result. Scoring only the inner
-/// 80% is the constraint that keeps the aim off the tip.
-const CONTACT_MARGIN: f32 = 0.8;
+/// Every one of them is a lattice point — a place the paddle can actually stand
+/// — so the arithmetic is about a future that can happen.
+const CANDIDATES: usize = 13;
 
-/// How far past the paddle's plane the prediction still counts as a contact.
-///
-/// The prediction asks *where* the ball crosses, not whether this paddle
-/// catches it, so its face is given a reach that no ball can be outside.
-const PREDICTION_REACH: f32 = COURT_HALF_Y * 4.0;
+/// How many ticks a rollout will run before giving up on the ball arriving.
+const ROLLOUT_CAP: u32 = 400;
 
-/// Which of the three players is at the keyboard.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) enum Brain {
-    /// Plans the shot: rolls the ball forward, scores the positions it can
-    /// actually stand on, and takes the return the opponent is furthest from.
+/// Which player is at the keyboard.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Mode {
+    /// Rolls the game forward and plays the shot that lands furthest from the
+    /// opponent's paddle. The one that clears the mechanics.
     Rollout,
-    /// Steers at the ball. What a person does on their first try.
+    /// Puts the middle of the paddle on the ball. What a person does first try,
+    /// and the only one of the three that can say the game is playable.
     Chaser,
-    /// Does nothing at all, so the game can be seen to be losable.
+    /// Never touches a key. Proves the game can be lost.
     Idle,
 }
 
-impl Brain {
-    /// What this player is called in a verdict line.
-    pub(crate) const fn name(self) -> &'static str {
-        match self {
-            Brain::Rollout => "rollout",
-            Brain::Chaser => "chaser",
-            Brain::Idle => "idle",
-        }
-    }
-}
-
-/// What a controller says about itself, and the only thing that says which half
-/// of the program to open when a match comes out wrong.
-#[derive(Default)]
+/// What a controller says about itself, printed every run.
+///
+/// One number is not the contract: `met 27 of 27` prints happily beside a 0-0
+/// match, because reaching a ball and threatening with it are different claims.
+#[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct Report {
-    /// How many times the ball started coming at the player's paddle.
+    /// Balls that started travelling towards this paddle.
     pub(crate) approaches: u32,
-    /// How many of those the paddle actually touched.
+    /// How many of them it returned.
     pub(crate) met: u32,
-    /// For every planned shot, how far from the opponent it was meant to land.
-    planned_gaps: Vec<f32>,
-    /// For every planned shot, how far from that plan it actually landed.
-    aim_errors: Vec<f32>,
+    /// Shots planned, and how far from the opponent they were believed to land.
+    pub(crate) planned: u32,
+    /// The sum of those distances, in world units.
+    pub(crate) threat_total: f32,
+    /// Shots whose landing was measured against the plan that produced them.
+    pub(crate) aimed: u32,
+    /// The sum of |planned landing - actual landing|, in world units.
+    pub(crate) error_total: f32,
 }
 
 impl Report {
-    /// The mean of a list of readings, or zero when there are none.
-    fn mean(values: &[f32]) -> f32 {
-        if values.is_empty() {
-            return 0.0;
+    /// How far the shots it chose were believed to land from the opponent.
+    pub(crate) fn threat(&self) -> f32 {
+        if self.planned == 0 {
+            0.0
+        } else {
+            self.threat_total / self.planned as f32
         }
-        values.iter().sum::<f32>() / values.len() as f32
     }
 
-    /// How far from the opponent this controller's shots were *meant* to land.
-    ///
-    /// Clears its objective: shots it hits exactly where it aimed are worth
-    /// nothing if the aims were never threats.
-    pub(crate) fn planned_gap(&self) -> f32 {
-        Self::mean(&self.planned_gaps)
-    }
-
-    /// How far from its own plan this controller's shots actually landed.
-    ///
-    /// Clears its aim, and it is the number nobody writes unprompted: a correct
-    /// prediction about a position the paddle cannot stand on is noise.
+    /// How far its shots landed from where it planned them to.
     pub(crate) fn aim_error(&self) -> f32 {
-        Self::mean(&self.aim_errors)
-    }
-
-    /// How many shots the two numbers above are the mean of.
-    pub(crate) fn shots(&self) -> usize {
-        self.aim_errors.len()
-    }
-
-    /// The three numbers, as the lines a verdict prints.
-    pub(crate) fn lines(&self) -> String {
-        format!(
-            "met {} of {} approaches; planned returns aimed to land {:.2} from the \
-             opponent; shots landed {:.2} from where they were planned to ({} shots)",
-            self.met,
-            self.approaches,
-            self.planned_gap(),
-            self.aim_error(),
-            self.shots(),
-        )
-    }
-}
-
-/// W and S, pressed and released the way a keyboard does it.
-///
-/// Events, not states: the controller remembers what it is holding so that a
-/// key held for a hundred ticks produces one press edge rather than a hundred.
-struct Keyboard {
-    /// The driver's own accumulator, so this goes through the same edge rules a
-    /// real keyboard does.
-    builder: SnapshotBuilder,
-    /// What is currently held down, if anything.
-    holding: Option<Key>,
-}
-
-impl Keyboard {
-    /// A keyboard with nothing held.
-    fn new() -> Self {
-        Keyboard {
-            builder: SnapshotBuilder::new(),
-            holding: None,
+        if self.aimed == 0 {
+            0.0
+        } else {
+            self.error_total / self.aimed as f32
         }
     }
 
-    /// Hold `want` and nothing else, sending only the edges that changed.
-    fn press(&mut self, want: Option<Key>) -> InputSnapshot {
-        if want != self.holding {
-            if let Some(held) = self.holding {
-                self.builder.record(InputEvent::KeyReleased(held));
-            }
-            if let Some(key) = want {
-                self.builder.record(InputEvent::KeyPressed(key));
-            }
-            self.holding = want;
-        }
-        self.builder.first_tick_snapshot()
+    /// The three numbers, as the three lines a verdict prints.
+    pub(crate) fn lines(&self, who: &str) -> [String; 3] {
+        [
+            format!(
+                "  {who}: met {} of {} approaches",
+                self.met, self.approaches
+            ),
+            format!(
+                "  {who}: planned {} returns aimed to land {:.2} from the opponent",
+                self.planned,
+                self.threat()
+            ),
+            format!(
+                "  {who}: shots landed {:.2} from where they were planned to",
+                self.aim_error()
+            ),
+        ]
     }
 }
 
-/// Where the ball is when it reaches a plane, and where the opponent is then.
+/// A shot this controller decided to play.
 #[derive(Clone, Copy, Debug)]
-struct Rolled {
-    /// How many ticks it took to get there.
-    ticks: u32,
-    /// Where the ball's centre was when it crossed.
-    contact_y: f32,
-    /// How fast the ball was going, in world units per second.
-    speed: f32,
-    /// Where the opponent's paddle had got to by then.
-    opponent_y: f32,
+struct Plan {
+    /// The paddle centre it chose to stand at — a lattice point.
+    stand: f32,
+    /// Where it believed the return would cross the opponent's plane.
+    landing: f32,
+    /// How far that was from where the opponent would be standing.
+    threat: f32,
 }
 
-/// Roll the ball forward to `plane`, carrying the opponent's paddle with it.
-///
-/// The game's own [`crate::drift`] and [`crate::face_crossing`], stepped the
-/// same way the same number of times, so this is the game's answer rather than
-/// a model of it. `player_y` is where this controller intends to be standing,
-/// which is what the opponent's rule reads.
-fn roll_to(
-    ball: Vec2,
-    velocity: Vec2,
-    opponent_y: f32,
-    player_y: f32,
-    plane: Face,
-    dt: f32,
-) -> Option<Rolled> {
-    let mut pos = ball;
-    let mut vel = velocity;
-    let mut opponent = opponent_y;
-    let step = paddle_step(OPPONENT_SPEED, dt);
-    for tick in 1..=LOOKAHEAD {
-        // The opponent moves before the ball does, which is the order the game
-        // registers its systems in.
-        opponent = paddle_towards(opponent, opponent_target(pos, vel, player_y), step);
-        let to = pos + vel * dt;
-        if let Some(at) = face_crossing(pos, to, BALL_RADIUS, plane) {
-            return Some(Rolled {
-                ticks: tick,
-                contact_y: pos.lerp(to, at).y,
-                speed: vel.length(),
-                opponent_y: opponent,
-            });
-        }
-        let (next, next_velocity) = drift(pos, vel, dt);
-        pos = next;
-        vel = next_velocity;
-    }
-    None
-}
-
-/// A plane at a paddle's face that catches any ball crossing it, wherever it
-/// is — for asking *where* the ball arrives rather than whether it is caught.
-fn prediction_plane(side: Side) -> Face {
-    Face {
-        reach: PREDICTION_REACH,
-        centre_y: 0.0,
-        ..face_of(side, Vec2::new(side.sign() * PADDLE_X, 0.0))
-    }
-}
-
-/// One tick of a controller: what it can see, and what it decided.
-pub(crate) struct Controller {
+/// One player, driving the left paddle.
+pub(crate) struct Player {
     /// Which of the three this is.
-    brain: Brain,
-    /// The keyboard it presses.
-    keyboard: Keyboard,
-    /// Which way the ball was going last tick, so an approach is an edge.
-    was_coming: bool,
-    /// Where the shot in flight was planned to land, if one is.
-    planned_landing: Option<f32>,
+    mode: Mode,
+    /// The plan the most recent decision made.
+    plan: Option<Plan>,
+    /// The plan that was standing when the ball was last struck.
+    struck: Option<Plan>,
+    /// Whether the ball was coming this way on the previous tick.
+    was_approaching: bool,
+    /// Whether the current approach has been returned yet.
+    pending: bool,
+    /// Returns this paddle had made as of the previous tick.
+    returns_seen: u32,
     /// What it has to say about itself.
-    pub(crate) report: Report,
+    report: Report,
 }
 
-impl Controller {
-    /// A controller that has seen nothing yet.
-    pub(crate) fn new(brain: Brain) -> Self {
-        Controller {
-            brain,
-            keyboard: Keyboard::new(),
-            was_coming: false,
-            planned_landing: None,
+impl Player {
+    /// A player of the given kind, having done nothing yet.
+    pub(crate) fn new(mode: Mode) -> Player {
+        Player {
+            mode,
+            plan: None,
+            struck: None,
+            was_approaching: false,
+            pending: false,
+            returns_seen: 0,
             report: Report::default(),
         }
     }
 
-    /// Look at the world, decide, and hand back the snapshot for this tick.
+    /// The three numbers.
+    pub(crate) fn report(&self) -> Report {
+        self.report
+    }
+
+    /// Which key this player wants held this tick, having looked at the world.
     ///
-    /// On the way into tick 1 there is nothing to look at: `Startup` runs
-    /// inside that tick, so the world is still empty and every read here is a
-    /// `find`/`next` that copes with nothing being there.
-    pub(crate) fn decide(&mut self, world: &World) -> InputSnapshot {
-        let seen = look(world);
-        let Some(seen) = seen else {
-            return self.keyboard.press(None);
+    /// `None` on the way into tick 1, where `Startup` has not run and there is
+    /// nothing at all to look at.
+    pub(crate) fn decide(&mut self, world: &World) -> Option<Key> {
+        if self.mode == Mode::Idle {
+            return None;
+        }
+        // On the way into tick 1 there is nothing to look at: `Startup` runs
+        // inside that first `tick()`, so this read happens once against an
+        // empty world and has to answer rather than index into it.
+        let view = View::of(world)?;
+        self.book_keeping(&view);
+        if view.stage != Stage::Rally {
+            return None;
+        }
+        let target = match self.mode {
+            Mode::Idle => return None,
+            Mode::Chaser => view.ball_pos.y,
+            Mode::Rollout => self.plan_a_shot(&view),
         };
-        self.account(&seen);
-        let target = match self.brain {
-            Brain::Idle => None,
-            Brain::Chaser => Some(seen.ball.y),
-            Brain::Rollout => self.plan(&seen),
-        };
-        let want = match target {
-            // Stop inside half a step, so the paddle settles on a lattice point
-            // rather than dithering across the one it wanted.
-            Some(target) if (target - seen.player_y).abs() > seen.step * 0.5 => {
-                if target > seen.player_y {
-                    Some(Key::S) // Y is down
-                } else {
-                    Some(Key::W)
-                }
-            }
-            _ => None,
-        };
-        self.keyboard.press(want)
+        steer(view.mine, target, view.dt)
     }
 
-    /// Count approaches and touches, and close out any shot in flight.
-    fn account(&mut self, seen: &Seen) {
-        let coming = seen.velocity.x < 0.0;
-        if coming && !self.was_coming {
+    /// Count approaches and returns, and measure the last shot against its plan.
+    fn book_keeping(&mut self, view: &View) {
+        let approaching = view.stage == Stage::Rally && view.ball_vel.x < 0.0;
+        if approaching && !self.was_approaching {
             self.report.approaches += 1;
+            self.pending = true;
+            self.struck = None;
         }
-        // The ball turning round on the player's side of the court is this
-        // paddle striking it: nothing else reverses it there.
-        if self.was_coming && seen.velocity.x > 0.0 && seen.ball.x < 0.0 {
-            self.report.met += 1;
-            if let Some(planned) = self.planned_landing.take() {
-                // Where the shot it actually produced is going to land, rolled
-                // forward from the ball as it now is.
-                if let Some(actual) = roll_to(
-                    seen.ball,
-                    seen.velocity,
-                    seen.opponent_y,
-                    seen.player_y,
-                    prediction_plane(Side::Right),
-                    seen.dt,
-                ) {
-                    self.report
-                        .aim_errors
-                        .push((actual.contact_y - planned).abs());
+        // A point ended without the ball coming back: the approach was missed.
+        if self.pending && view.stage != Stage::Rally {
+            self.pending = false;
+        }
+        self.was_approaching = approaching;
+
+        let returns = view.returns;
+        if returns > self.returns_seen {
+            self.returns_seen = returns;
+            if self.pending {
+                self.report.met += 1;
+                self.pending = false;
+            }
+            // The ball has just left the paddle, so this tick's velocity is the
+            // shot that was actually produced. Roll it out and compare it with
+            // the plan that was standing when it was struck — the number nobody
+            // writes unprompted, and the one that says whether a controller's
+            // aims are worth anything.
+            if let Some(plan) = self.struck.take() {
+                let landed =
+                    land_against_opponent(view.ball_pos, view.ball_vel, view.theirs, view.dt);
+                if let Some((landing, _)) = landed {
+                    self.report.aimed += 1;
+                    self.report.error_total += (landing - plan.landing).abs();
                 }
             }
         }
-        self.was_coming = coming;
     }
 
-    /// Choose where to stand, out of the positions the paddle can be in.
-    fn plan(&mut self, seen: &Seen) -> Option<f32> {
-        let arrival = self.arrival(seen)?;
-        let half = PADDLE_SIZE.y * 0.5;
-        let usable = half * CONTACT_MARGIN;
-
-        let mut best: Option<(f32, f32, f32)> = None; // score, position, landing
-        let reach = i32::try_from(arrival.ticks).unwrap_or(i32::MAX);
-        // Only the lattice points that could touch the ball are worth scoring;
-        // the rest are constrained out before anything is computed about them.
-        let span = (usable / seen.step).ceil() as i32 + 2;
-        for k in -span..=span {
-            if k.abs() > reach {
+    /// Choose where to stand, and remember why.
+    fn plan_a_shot(&mut self, view: &View) -> f32 {
+        // A ball going the other way is not a shot to plan. Sit where the next
+        // one is most likely to need us, which is the middle.
+        if view.ball_vel.x >= 0.0 {
+            self.plan = None;
+            return 0.0;
+        }
+        let plane = face_of(Vec2::new(paddle_home(Side::Left), view.mine), Side::Left).plane;
+        let Some(arrival) = roll_to_plane(view.ball_pos, view.ball_vel, plane, -1.0, view.dt)
+        else {
+            self.plan = None;
+            return view.ball_pos.y;
+        };
+        let reach = PADDLE_SIZE.y * 0.5 + BALL_RADIUS;
+        let step = PLAYER_SPEED * view.dt;
+        // Where the paddle can actually stand when the ball gets here: its own
+        // position plus a whole number of steps. A candidate off this lattice is
+        // a place it cannot be, so an objective computed about it is a number
+        // about a future that will not happen.
+        let reachable = arrival.ticks as i32;
+        let mut best: Option<Plan> = None;
+        for index in 0..CANDIDATES {
+            let spread = (index as f32 / (CANDIDATES - 1) as f32) * 2.0 - 1.0;
+            let steps = (spread * reachable as f32).round();
+            let stand = (view.mine + steps * step).clamp(-PADDLE_LIMIT, PADDLE_LIMIT);
+            // Constrain: it has to make contact, with the tip off the menu.
+            let offset = (arrival.pos.y - stand) / reach;
+            if offset.abs() > 1.0 - EDGE_MARGIN {
                 continue;
             }
-            let stand = (seen.player_y + k as f32 * seen.step).clamp(-PADDLE_TRAVEL, PADDLE_TRAVEL);
-            if (arrival.contact_y - stand).abs() > usable {
-                continue;
-            }
-            let leaving = rebound(Side::Left, arrival.contact_y, stand, arrival.speed);
-            let contact = Vec2::new(
-                prediction_plane(Side::Left).plane_x - BALL_RADIUS,
-                arrival.contact_y,
-            );
-            let Some(landing) = roll_to(
-                contact,
-                leaving,
-                arrival.opponent_y,
-                stand,
-                prediction_plane(Side::Right),
-                seen.dt,
-            ) else {
+            // Optimise: run the opponent's own rule forward beside the ball's,
+            // and score the landing against where that puts it. Against an
+            // opponent that chases, "furthest from the middle" is close to the
+            // worst objective available.
+            let face = face_of(Vec2::new(paddle_home(Side::Left), stand), Side::Left);
+            let speed = (arrival.vel.length() * SPEEDUP).min(MAX_BALL_SPEED);
+            let away = rebound(arrival.pos.y, face, speed);
+            let Some((landing, foe)) =
+                land_against_opponent(arrival.pos, away, view.theirs, view.dt)
+            else {
                 continue;
             };
-            let score = (landing.contact_y - landing.opponent_y).abs();
-            if best.is_none_or(|(so_far, _, _)| score > so_far) {
-                best = Some((score, stand, landing.contact_y));
+            let threat = (landing - foe).abs();
+            if best.is_none_or(|other: Plan| threat > other.threat) {
+                best = Some(Plan {
+                    stand,
+                    landing,
+                    threat,
+                });
             }
         }
-
         match best {
-            Some((score, stand, landing)) => {
-                // Recorded once per shot: the plan is set while the ball is
-                // still coming and read back when the paddle strikes.
-                if self.planned_landing.is_none() {
-                    self.report.planned_gaps.push(score);
-                }
-                self.planned_landing = Some(landing);
-                Some(stand)
+            Some(plan) => {
+                self.report.planned += 1;
+                self.report.threat_total += plan.threat;
+                self.plan = Some(plan);
+                self.struck = Some(plan);
+                plan.stand
             }
-            // Nothing survived both constraints: run at the ball, which is at
-            // least a chance of touching it.
-            None => Some(arrival.contact_y),
+            // Nothing survived both constraints: run at the ball.
+            None => {
+                self.plan = None;
+                self.struck = None;
+                arrival.pos.y
+            }
         }
     }
+}
 
-    /// Where the ball will next reach this paddle's plane.
-    ///
-    /// When it is heading the other way that means rolling through the
-    /// opponent's return first — which is only answerable because the
-    /// opponent's rule is a function the game hands out rather than a branch
-    /// buried in a system.
-    fn arrival(&self, seen: &Seen) -> Option<Rolled> {
-        let mine = prediction_plane(Side::Left);
-        if seen.velocity.x < 0.0 {
-            return roll_to(
-                seen.ball,
-                seen.velocity,
-                seen.opponent_y,
-                seen.player_y,
-                mine,
-                seen.dt,
-            );
+/// Everything a decision reads, pulled out of the world once.
+struct View {
+    /// Where the ball is.
+    ball_pos: Vec2,
+    /// How it is travelling.
+    ball_vel: Vec2,
+    /// Our paddle's centre.
+    mine: f32,
+    /// The opponent's paddle's centre.
+    theirs: f32,
+    /// What the match is doing.
+    stage: Stage,
+    /// Returns our paddle has made this match.
+    returns: u32,
+    /// One tick, in seconds.
+    dt: f32,
+}
+
+impl View {
+    /// The world as a decision sees it, or `None` before `Startup` has run.
+    fn of(world: &World) -> Option<View> {
+        let round = world.find_resource::<Round>()?;
+        let tally = world.find_resource::<Tally>()?;
+        let (_, ball_transform, ball) = world.query::<(&Transform, &Ball)>().next()?;
+        let mut mine = None;
+        let mut theirs = None;
+        for (_, transform, paddle) in world.query::<(&Transform, &Paddle)>() {
+            match paddle.side {
+                Side::Left => mine = Some(transform.pos.y),
+                Side::Right => theirs = Some(transform.pos.y),
+            }
         }
-        if seen.velocity.x <= 0.0 {
-            return None; // parked at the centre, waiting for a serve
-        }
-        let theirs = roll_to(
-            seen.ball,
-            seen.velocity,
-            seen.opponent_y,
-            seen.player_y,
-            prediction_plane(Side::Right),
-            seen.dt,
-        )?;
-        let leaving = rebound(
-            Side::Right,
-            theirs.contact_y,
-            theirs.opponent_y,
-            theirs.speed,
-        );
-        let contact = Vec2::new(
-            prediction_plane(Side::Right).plane_x + BALL_RADIUS,
-            theirs.contact_y,
-        );
-        let back = roll_to(
-            contact,
-            leaving,
-            theirs.opponent_y,
-            seen.player_y,
-            mine,
-            seen.dt,
-        )?;
-        Some(Rolled {
-            ticks: theirs.ticks + back.ticks,
-            ..back
+        Some(View {
+            ball_pos: ball_transform.pos,
+            ball_vel: ball.vel,
+            mine: mine?,
+            theirs: theirs?,
+            stage: round.stage,
+            returns: tally.returns[Side::Left.index()],
+            dt: world.resource::<Time>().fixed_dt.as_f32(),
         })
     }
 }
 
-/// Everything a controller reads out of the world in one tick.
-struct Seen {
-    /// Where the ball is.
-    ball: Vec2,
-    /// How fast it is going, in world units per second.
-    velocity: Vec2,
-    /// Where the player's paddle is.
-    player_y: f32,
-    /// Where the opponent's paddle is.
-    opponent_y: f32,
-    /// How far the player's paddle moves in one tick.
-    step: f32,
-    /// How long one tick is, in seconds.
-    dt: f32,
+/// Where a rolled-forward ball reached a plane, and when.
+struct Arrival {
+    /// Ticks from now.
+    ticks: u32,
+    /// Where it was.
+    pos: Vec2,
+    /// How it was travelling.
+    vel: Vec2,
 }
 
-/// Read the world, or `None` on the way into tick 1 when there is nothing yet.
-fn look(world: &World) -> Option<Seen> {
-    let (ball, velocity) = world
-        .query::<(&Transform, &Velocity, With<Ball>)>()
-        .map(|(_, transform, velocity, _)| (transform.pos, velocity.0))
-        .next()?;
-    let dt = world.find_resource::<Time>()?.fixed_dt.as_f32();
-    let mut player_y = None;
-    let mut opponent_y = None;
-    for (_, transform, paddle) in world.query::<(&Transform, &Paddle)>() {
-        match paddle.side {
-            Side::Left => player_y = Some(transform.pos.y),
-            Side::Right => opponent_y = Some(transform.pos.y),
+/// Roll the ball forward with nothing in its way until it crosses `plane`.
+///
+/// Nothing in its way is right: a ball travelling towards one paddle cannot
+/// reach the other, and this game's only other collider is the walls, which
+/// `step_ball` handles on its own.
+fn roll_to_plane(pos: Vec2, vel: Vec2, plane: f32, approach: f32, dt: f32) -> Option<Arrival> {
+    let (mut pos, mut vel) = (pos, vel);
+    for tick in 1..=ROLLOUT_CAP {
+        let step = step_ball(pos, vel, &[], dt);
+        let crossed = (plane - step.pos.x) * approach <= 0.0;
+        if crossed {
+            // Where along this tick's travel it actually crossed, so the aim is
+            // about the contact point rather than about the tick after it.
+            let span = step.pos.x - pos.x;
+            let at = if span.abs() > f32::EPSILON {
+                ((plane - pos.x) / span).clamp(0.0, 1.0)
+            } else {
+                1.0
+            };
+            return Some(Arrival {
+                ticks: tick,
+                pos: pos.lerp(step.pos, at),
+                vel: step.vel,
+            });
         }
+        pos = step.pos;
+        vel = step.vel;
     }
-    Some(Seen {
-        ball,
-        velocity,
-        player_y: player_y?,
-        opponent_y: opponent_y?,
-        step: paddle_step(PLAYER_SPEED, dt),
-        dt,
-    })
+    None
+}
+
+/// Where a shot crosses the opponent's plane, and where the opponent will be.
+///
+/// The opponent's own rule, run forward beside the ball's, one tick at a time
+/// and in the order the game runs them: the paddle moves, then the ball does.
+fn land_against_opponent(pos: Vec2, vel: Vec2, foe: f32, dt: f32) -> Option<(f32, f32)> {
+    let (mut pos, mut vel, mut foe) = (pos, vel, foe);
+    let plane = face_of(Vec2::new(paddle_home(Side::Right), foe), Side::Right).plane;
+    for _ in 0..ROLLOUT_CAP {
+        foe = chase(
+            foe,
+            opponent_target(pos, vel, Side::Right),
+            OPPONENT_SPEED,
+            dt,
+        );
+        let step = step_ball(pos, vel, &[], dt);
+        if (plane - step.pos.x) * 1.0 <= 0.0 {
+            let span = step.pos.x - pos.x;
+            let at = if span.abs() > f32::EPSILON {
+                ((plane - pos.x) / span).clamp(0.0, 1.0)
+            } else {
+                1.0
+            };
+            return Some((pos.lerp(step.pos, at).y, foe));
+        }
+        pos = step.pos;
+        vel = step.vel;
+    }
+    None
+}
+
+/// Which key moves the paddle from `at` towards `target`, or none if it is close
+/// enough that a whole step would overshoot.
+///
+/// Stopping inside half a step is what keeps the paddle on the lattice the
+/// candidates above were chosen from.
+fn steer(at: f32, target: f32, dt: f32) -> Option<Key> {
+    let step = PLAYER_SPEED * dt;
+    let gap = target - at;
+    if gap.abs() < step * 0.5 {
+        return None;
+    }
+    // Y is down, so S is the larger number.
+    if gap > 0.0 {
+        Some(Key::S)
+    } else {
+        Some(Key::W)
+    }
 }
