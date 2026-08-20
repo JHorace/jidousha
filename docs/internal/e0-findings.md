@@ -28,8 +28,9 @@ lavapipe went into, not the `DISPLAY`-shaped hole four triages recorded it as.
 With that fixed, F-112 closes the escalation F-079 and F-096 kept re-filing —
 **run 8's Pong has now been played in a window by a session rather than by the
 owner afterwards**, and it won 5–4 from 0–2 down. The owner has played it as
-well, and run 8's transcript is reviewed and clean, so both of `e0-prompt.md`'s
-after-the-run person-steps are taken and the run is **valid**.
+well, in a window and in a browser, and run 8's transcript is reviewed and clean,
+so both of `e0-prompt.md`'s after-the-run person-steps are taken **in full** and
+the run is **valid**.
 
 **Run 7's headline is a sentence that was false for the third run running, and it
 is a different kind of false.** F-055 and F-068 were claims about the *engine*
@@ -129,7 +130,7 @@ prompt.
 | 5 | 2026-08-19 | Pong shipped; **not** a pass | 1 | 7 | 2 (+1 `environment`) | Compiled clean, `--verify` green, 1,263 frames recorded. Two cycles lost to a controller that optimised onto the boundary of what its paddle could reach (F-056) — the fourth run to be sent into its game's constants by its own driver, and the first that had *read* the warning. The one `engine` finding is **declined**: ADR-0024 says draw order was always observable and a `Depth` on `DrawnQuad` would not have caught the bug it was wanted for. Raw notes: `docs/e0/run-5.md`. Triage: §4b. §6. |
 | 6 | 2026-08-19 | Pong shipped; **not** a pass | 1 | 9 | 1 (+1 `environment`) | Compiled clean, `--verify` green, 2,013 ticks, and **the first run to see a frame of its own game** — the capture path landed and the PNG looks like Pong. Blocked once, on its own game design: an opponent unbeatable by arithmetic (F-074, the other side of F-064). The one `engine` finding is **accepted and fixed** — `Radians::from_degrees` is now a `const fn` (F-069). Its headline is a document sentence that was *false* rather than missing (F-068), the second run running. Every claim in its log held under checking. **Valid, and played** — both after-the-run steps taken before the decks were cleared. Raw notes: `docs/e0/run-6.md`. Triage: §4c. §6. |
 | 7 | 2026-08-19 | Pong shipped; **not** a pass | 0 | 14 | 1 (+2 `environment`) | Compiled clean, `--verify` green, 3,092 ticks, 5–0, and **seventeen of seventeen injected faults caught** — the first run to score full marks on its own mutation round. Two rounds and two wrong constant changes lost to the document's own controller prescription, which is a property of one opponent taught as the lesson (F-080) and the third false sentence in three runs. No `engine` finding: the one engine-shaped question is whether `jidousha::testing` should *ship* the controller self-check, and it is **declined** — ADR-0027. Two of the findings are the maintainer's rather than the run's, from the verification tasks: `tools/test` was red on `main` (F-094) and `prototype_kit`'s own `--verify` was missing five of the checks the document prescribes (F-095). **Valid, and played** — the transcript was reviewed and the game played before the decks were cleared. Raw notes: `docs/e0/run-7.md`. Triage: §4d. §6. |
-| 8 | 2026-08-20 | Pong shipped; **not** a pass | 0 | 14 | 0 (+2 `environment`) | Compiled clean, `--verify` green in 2.3 s, 713 tests, ten CI checks on Linux and Windows, and **23 of 23 injected faults caught** after a first round of 19 — the second run to reach full marks, and the first to fix all four misses with four different kinds of instrument. Its headline is that the two documents were **enough**: never blocked, and never wanting the source to learn what a function *did*. The one engine-shaped finding is a doc comment that says the opposite of what the code does (F-097), not a behaviour anybody wants changed, so no `engine` finding stands. One cycle lost to the document prescribing a minimax where an exact enumeration was available (F-100), and one game bug — an opponent that centres on the ball — found only by a third, deliberately mediocre controller the document never asked for (F-101). **Valid, and played** — the transcript was reviewed and the game played by the owner, and F-111's fix let this triage play it in a window too: 0–2 down, **won 5–4** (F-112, `docs/e0/run-8-playtest.png`). Raw notes: `docs/e0/run-8.md`. Triage: §4e. §6. |
+| 8 | 2026-08-20 | Pong shipped; **not** a pass | 0 | 14 | 0 (+2 `environment`) | Compiled clean, `--verify` green in 2.3 s, 713 tests, ten CI checks on Linux and Windows, and **23 of 23 injected faults caught** after a first round of 19 — the second run to reach full marks, and the first to fix all four misses with four different kinds of instrument. Its headline is that the two documents were **enough**: never blocked, and never wanting the source to learn what a function *did*. The one engine-shaped finding is a doc comment that says the opposite of what the code does (F-097), not a behaviour anybody wants changed, so no `engine` finding stands. One cycle lost to the document prescribing a minimax where an exact enumeration was available (F-100), and one game bug — an opponent that centres on the ball — found only by a third, deliberately mediocre controller the document never asked for (F-101). **Valid, and played in full** — the transcript was reviewed and the game played by the owner in a window and in a browser, and F-111's fix let this triage play it in a window too: 0–2 down, **won 5–4** (F-112, `docs/e0/run-8-playtest.png`). Raw notes: `docs/e0/run-8.md`. Triage: §4e. §6. |
 
 Run 1 produced a working, fun Pong and a document-shaped hole underneath it. The
 game is not the measurement — `docs/e0/run-1.md` is — and it says the run could
@@ -3829,6 +3830,11 @@ Pong. That is a genuine change in what E0 can measure.
 installed in this container, so no run has driven its game in a browser. The
 maintainer has, once, for run 5.
 
+> **Since run 8**: the owner has now done it twice (runs 5 and 8), and the
+> container's side of this is narrower than the sentence above suggests — a
+> browser *is* installed here, and only the versioned `wasm-bindgen-cli` is
+> missing. See F-112.
+
 **Escalated, and it is a smaller ask than F-054 was.** A `DISPLAY` in the session
 (Xvfb, or a hosted browser for the wasm half) is the whole of it. Verified in this
 triage: `tools/doctor` reports `ENV_OK` with `graphics: no DISPLAY/WAYLAND_DISPLAY
@@ -4626,16 +4632,16 @@ its chaser loses 4–5, and neither of those says whether a *person* has a match
 and it is the first time the claim "it runs in a window and is playable" has been
 an observation made by a session rather than an inference rescued afterwards by
 the owner. F-079 and F-096 said the hole was that no session had run its own
-game. It is not a hole any more. What is still owed to run 8 specifically, and is
-not this triage's to take, is the browser half of `e0-prompt.md`'s step 2
-(`tools/serve-web pong`).
+game. It is not a hole any more. Step 2's browser half is taken too, by the owner
+(`tools/serve-web pong`), so nothing is outstanding against run 8 — F-112 has
+what is left, and it is about the *container* rather than about this run.
 
 **The run is valid, and it has been played.** The transcript was reviewed and
 shows no read under `crates/*/src/`, `docs/internal/` or `docs/adr/`, which is
 what makes the sixteen findings evidence about the documents rather than a log
-kept for the record (§2). The owner has played the game as well, so
-`e0-prompt.md`'s two after-the-run person-steps are both taken before the decks
-are cleared — the deadline that matters, because before-the-run step 2 deletes
+kept for the record (§2). The owner has played the game as well, **both halves of
+step 2 — in a window and in a browser** — so `e0-prompt.md`'s two after-the-run
+person-steps are taken in full before the decks are cleared — the deadline that matters, because before-the-run step 2 deletes
 `crates/jidousha/examples/pong/` and the artifact goes with it. What is different
 about run 8 is that this is no longer the *only* playtest: F-111's fix let this
 triage play it in a window too, so the owner's run confirms a session's rather
@@ -4992,10 +4998,21 @@ asked for — a dark navy court, a cyan player paddle, a salmon opponent, a crea
 ball — which nothing in `--verify` can see, because the checks read the plan and
 the plan is right either way.
 
-**What is still owed to run 8 and is not this triage's to take** is the browser
-half of `e0-prompt.md`'s after-the-run step 2, `tools/serve-web pong`. The step's
-own note stands: the artifact goes with the directory when the decks are cleared,
-so a playtest not taken before then cannot be taken afterwards.
+**The browser half is done too.** The owner has run `tools/serve-web pong` and
+played it there, so nothing is outstanding against run 8 and the decks can be
+cleared for run 9. That half is not a duplicate of the window one: it is the only
+thing that exercises the wasm target as a *running program* rather than as a
+`cargo check`, which CI has gated since M0 without ever loading the result.
+
+**What remains is a session gap, and it is narrower than F-079 assumed.** F-079
+put the ask as "a `DISPLAY` (Xvfb, or a hosted browser for the wasm half)". Half
+of that was already wrong (F-111), and the other half is wrong in the same
+direction: **a Chromium is pre-installed in this container**, at
+`/opt/pw-browsers/chromium`. What is absent is `wasm-bindgen-cli` 0.2.127 — the
+lockfile's version, which `tools/serve-web` checks for and refuses to guess at.
+So the remaining ask is one versioned `cargo install`, not a browser. Checked
+here rather than inferred, which is the whole of F-111's lesson: `wasm-bindgen`
+is not on `PATH`, and the Chromium is.
 
 
 ## 5. Notes on the run's procedure
