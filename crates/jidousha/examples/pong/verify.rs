@@ -646,6 +646,27 @@ pub fn run() -> ExitCode {
         );
     }
 
+    // And each paddle on its own end, which the check above cannot see: it
+    // takes the position from `Side::sign` and so moves with it. The colours
+    // are what say *whose* paddle is where.
+    for (name, color, want_left) in [
+        ("the player's", crate::PLAYER_COLOR, true),
+        ("the opponent's", crate::OPPONENT_COLOR, false),
+    ] {
+        let found = quads
+            .iter()
+            .find(|quad| quad.tint == color)
+            .map(|quad| quad.bounds().center().x);
+        checks.require(
+            found.is_some_and(|x| greater(0.0, x) == want_left),
+            "a paddle is drawn at the wrong end of the court",
+            format!(
+                "{name} paddle is drawn at x={found:?}; it belongs on the {} half",
+                if want_left { "left" } else { "right" }
+            ),
+        );
+    }
+
     // The ball, which is sixteen wedges and not one quad.
     let disc = disc_bounds(frame, live.look.ball, BALL_RADIUS, font);
     let disc_size = disc.map_or(Vec2::ZERO, |rect| rect.size());
@@ -898,6 +919,24 @@ pub fn run() -> ExitCode {
             ),
         );
     }
+
+    // The two end screens have to be two different screens. Every check above
+    // judges each one on its own — on screen, centred, printable — and all of
+    // them pass just as happily for a banner that congratulates the loser.
+    let sizes: Vec<usize> = staged
+        .iter()
+        .map(|(_, screen)| screen.quad_count())
+        .collect();
+    checks.require(
+        staged.len() == 2 && sizes[0] != sizes[1],
+        "the winning and losing screens are the same screen",
+        format!(
+            "they drew {sizes:?} quads; the banners are {:?} and {:?}, and a game that \
+             congratulates the loser passes every other assertion in this file",
+            banner_lines(Side::Player),
+            banner_lines(Side::Opponent),
+        ),
+    );
 
     // And one overlap a played session does produce but never at rest: the
     // ball on a centre-line dash. `covering(p)[0]` is the depth sort read
