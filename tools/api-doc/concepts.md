@@ -17,6 +17,7 @@ phase systems run in the order you added them, always, on every machine. There i
 no scheduler deciding for you. Startup running *inside* that first tick is worth
 knowing if you drive the sim by hand: `headless(..)` hands back a world that is
 still empty, and it is populated once the first `tick()` returns.
+<!-- asserted-by: update_systems_run_in_registration_order, headless_runs_startup_then_update_like_the_windowed_driver_will, a_resource_inserted_before_the_first_tick_is_what_startup_finds -->
 
 **A resource is a thing there is exactly one of** — the score, the round state,
 the camera. `world.insert_resource(Score::default())` puts one in,
@@ -29,7 +30,7 @@ there:
 
 | Resource | Who inserts it | Can it be absent? |
 |---|---|---|
-| `Time` | `run` and `headless` both, before the first tick | no |
+| `Time` | `run` and `headless` both, before the first tick | no — including in `Startup`, which runs *inside* that tick and so runs after the insert |
 | `Rng` | the same, seeded from `GameConfig::seed` | no |
 | `Input` | `run`, before every Update tick | **yes** — `Startup` never sees one, because it runs inside the first tick before that tick's `Input` exists; and never under `headless` unless a test inserts it |
 | `Camera` | the game, in `Startup` | **yes** under `headless`; under `run`, a game that inserts none is given `Camera::default()` before the first frame |
@@ -93,6 +94,7 @@ advances the clock and then runs Update — so a game timing something absolute,
 is the number to count in when a game wants to say "about three quarters of a
 second" as a number of ticks — a serve pause, a coyote-time window, an
 invulnerability period.
+<!-- asserted-by: the_first_update_system_sees_tick_one, a_tick_advances_the_clock_by_exactly_one_step -->
 
 A fixed timestep also means **collisions are only ever tested at tick
 boundaries**. Nothing in v1 sweeps, so a body that moves further in one tick
@@ -162,6 +164,13 @@ buried in a `&mut World`, and one run spent forty minutes and a restructure of
 its main loop moving it back out. `docs/api/jidousha-controllers.md` is what does
 the asking.
 
+One detail of that aim is worth knowing before you write it: **`signum` answers
+`1.0` for zero**, on `f32` as well as on `Vec2`, so a lean or a nudge written on
+the sign of a difference never stalls at exactly zero and never judders between
+two answers. `examples/vec2_tour.rs` says it of `Vec2::signum` and cannot say it
+of `f32::signum`, which is not a `Vec2` operation and is the one a target
+computed as a scalar reaches for.
+
 **Drawing is submission, not painting.** A `Draw` system hands the renderer
 quads — `ctx.sprite`, `ctx.rect`, `ctx.line`, `ctx.circle`, `ctx.text` — and
 cannot change the world; the type system enforces that. Order comes from
@@ -183,12 +192,25 @@ a `z`, and a game with a stack of UI inside one band writes
 wedges around the centre, and that count is fixed rather than scaled by radius.
 `ctx.text` submits one quad per character, **spaces included** — each exactly
 `size` tall and `size * 7 / 9` wide, laid out from its top-left corner, with `\n`
-the only exception, counting as a line break and submitting nothing, which is the
-whole of text's vertical metric: an N-line block occupies `N * size`. So a
+the only exception, counting as a line break and submitting nothing. So a
 26-character line with six spaces in it is 26 quads, and that is a contract you
 can assert an exact count against rather than a coincidence: a space is one of
 the ninety-five printable ASCII characters the font covers, with a blank cell of
 its own.
+<!-- asserted-by: a_circle_covers_a_disc_and_not_its_bounding_box, text_becomes_one_quad_per_character_from_the_font_atlas, text_advances_by_one_cell_per_character -->
+
+**Text's vertical metric, exactly, because every vertical number in a game's
+layout rests on it.** `at` is the top-left of the first character's *cell*, not
+of its ink: a glyph's quad is `size` tall whatever the character draws inside it,
+so a line drawn at `y` occupies `y .. y + size` whether it is all capitals or all
+commas. `\n` moves the pen down by exactly `size` and there is **no leading**, so
+— counting the first line as zero — line `n` of a block starts at `at.y + n * size`
+and an `N`-line block occupies `at.y .. at.y + N * size`. That is the spacing as
+well as the total; the total alone would not tell you where line two begins. Y is
+down, so later lines are at larger `y`, and the number to solve for when you want
+a line's *bottom* to clear something is `at.y = bottom - size` — the whole of
+`size`, not half of it and not the height of a capital.
+<!-- asserted-by: a_second_line_starts_exactly_one_size_below_the_first_with_no_leading, text_sits_where_it_says_it_does_and_measures_what_it_occupies -->
 
 So a circle costs sixteen rectangles and a score line costs one per digit — worth
 knowing before a frame has three hundred of them, and worth knowing when you
@@ -252,6 +274,7 @@ that accepts `&mut T`. **The iterator yields the entity first**, then one item
 per part, and the two filters yield `()` — they still occupy their position:
 
 ```rust
+# let world = &mut World::new();
 for (entity, transform) in world.query::<&Transform>() { }
 for (entity, transform, velocity) in world.query_mut::<(&mut Transform, &Velocity)>() { }
 for (entity, transform, _) in world.query::<(&Transform, With<Player>)>() { }
@@ -307,22 +330,71 @@ lints.** `crates/jidousha/Cargo.toml` has `[lints] workspace = true`, and that
 applies to example targets as much as to the crate — so
 `cargo clippy --all-targets -- -D warnings` holds your game to the maintainers'
 rules, and it is the last step of "done" rather than the first, which is a bad
-place to meet a rule for the first time. Five bite in practice:
+place to meet a rule for the first time.
 
-- `missing_docs`, denied — the file needs a `//!` header, and any `pub` item in
-  it needs a doc comment. This one is a compile error before clippy is reached.
-- `unwrap_used` and `expect_used`, denied — including in the `--verify` mode,
-  where they are the natural spelling. Say what went wrong instead: a `let else`
-  that reports the missing thing is better evidence than a panic, and every
-  example here is written that way.
-- `collapsible_if` — the fix is a let-chain, `if let Some(t) = hit && t > 0.0`.
+**Two things set those rules and only one of them is a list you can read to the
+end.** The repository's own choices live in `[workspace.lints]` in the root
+`Cargo.toml`, and there are four of them: `missing_docs`, `unsafe_code`,
+`clippy::unwrap_used`, `clippy::expect_used`. Everything else is stock clippy —
+`-D warnings` promotes clippy's whole default set, several hundred lints written
+for Rust in general rather than for games, to errors. **So the list below is a
+sample rather than a specification**, and the next game will meet something that
+is not on it: it is what runs have actually tripped over, and it is incomplete by
+construction. The tool is the authority. Run it after your first hundred lines
+and again as you go, rather than at the end, and none of this costs anything.
+
+The four this repository denies:
+
+- `missing_docs` — the file needs a `//!` header, and any `pub` item in it needs
+  a doc comment. This one is a compile error before clippy is reached.
+- `unsafe_code` — nothing in a game written against this surface needs it; listed
+  so the four are the whole table rather than the three you might meet.
+- `unwrap_used` and `expect_used` — including in the `--verify` mode, where they
+  are the natural spelling. Say what went wrong instead: a `let else` that reports
+  the missing thing is better evidence than a panic, and every example here is
+  written that way.
+
+Stock clippy lints that games written here have tripped:
+
 - `approx_constant` — a float literal close to π or one of its fractions is
   rejected, which is what a hand-typed angle in radians looks like. Write the
   angle in degrees; `Radians::from_degrees` is a `const fn` for this.
+- `collapsible_if` — the fix is a let-chain, `if let Some(t) = hit && t > 0.0`.
 - `manual_range_contains` — `y < -LIMIT || y > LIMIT` wants
   `!(-LIMIT..=LIMIT).contains(&y)`. A clamp against a symmetric pair is the
   shape that trips it, and the same test written against two separately named
   bounds does not, so it arrives once you tidy the constants rather than when
   you write the check.
+- `neg_cmp_op_on_partial_ord` — rejects `!(a > b)`, and it is worth reading
+  before you write a collision test rather than after, because **the obvious way
+  to satisfy it is a behaviour change**. `a > b` is already false when either
+  side is NaN, so `!(a > b)` is *true* for NaN — and `a <= b`, which is what the
+  lint's name invites you to type, is *false* for it. In a guard that returns
+  "no contact", the first rejects a velocity that has gone to NaN and the second
+  lets it through: the ball takes a contact at a NaN fraction of the tick, leaves
+  at a NaN position, and stays there, silently, for the rest of the run.
 
-Run it while you write rather than at the end, and none of them costs anything.
+  Lift the negation off the comparison rather than flipping the operator. Name
+  each condition the positive way round and negate the whole conjunction once —
+  one way, and it is clippy-clean because the `!` is no longer on a comparison:
+
+  ```rust
+  # fn crossing(travel: f32, before: f32, after: f32) -> Option<f32> {
+  let approaching = travel > 0.0;   // not standing still or going the other way
+  let in_front = before >= 0.0;     // not already through it
+  let reached = after <= 0.0;       // this tick's travel did not stop short
+  if !(approaching && in_front && reached) {
+      return None;   // a NaN fails every conjunct, so the answer is "no contact"
+  }
+  # Some(before / travel) }
+  ```
+
+  `examples/prototype_kit/checks.rs` writes the NaN half out at length around its
+  own comparisons, for the same reason. Written this way, obeying the lint and
+  being right about NaN are the same edit — which is the part that is not
+  guessable from the lint's message.
+- `question_mark` — rejects `let Some(x) = f() else { return None; };`, which is
+  the one place the `let else` that replaces `unwrap` above is the wrong idiom:
+  in a function that itself returns `Option`, write `f()?`. It fires on that
+  exact shape and no other, so a `let else` whose body *says something* before
+  returning — which is the one this document asks for — is untouched.

@@ -166,8 +166,8 @@ prompt.
 | 6 | 2026-08-19 | Pong shipped; **not** a pass | 1 | 9 | 1 (+1 `environment`) | Compiled clean, `--verify` green, 2,013 ticks, and **the first run to see a frame of its own game** — the capture path landed and the PNG looks like Pong. Blocked once, on its own game design: an opponent unbeatable by arithmetic (F-074, the other side of F-064). The one `engine` finding is **accepted and fixed** — `Radians::from_degrees` is now a `const fn` (F-069). Its headline is a document sentence that was *false* rather than missing (F-068), the second run running. Every claim in its log held under checking. **Valid, and played** — both after-the-run steps taken before the decks were cleared. Raw notes: `docs/e0/run-6.md`. Triage: §4c. §6. |
 | 7 | 2026-08-19 | Pong shipped; **not** a pass | 0 | 14 | 1 (+2 `environment`) | Compiled clean, `--verify` green, 3,092 ticks, 5–0, and **seventeen of seventeen injected faults caught** — the first run to score full marks on its own mutation round. Two rounds and two wrong constant changes lost to the document's own controller prescription, which is a property of one opponent taught as the lesson (F-080) and the third false sentence in three runs. No `engine` finding: the one engine-shaped question is whether `jidousha::testing` should *ship* the controller self-check, and it is **declined** — ADR-0027. Two of the findings are the maintainer's rather than the run's, from the verification tasks: `tools/test` was red on `main` (F-094) and `prototype_kit`'s own `--verify` was missing five of the checks the document prescribes (F-095). **Valid, and played** — the transcript was reviewed and the game played before the decks were cleared. Raw notes: `docs/e0/run-7.md`. Triage: §4d. §6. |
 | 8 | 2026-08-20 | Pong shipped; **not** a pass | 0 | 14 | 0 (+2 `environment`) | Compiled clean, `--verify` green in 2.3 s, 713 tests, ten CI checks on Linux and Windows, and **23 of 23 injected faults caught** after a first round of 19 — the second run to reach full marks, and the first to fix all four misses with four different kinds of instrument. Its headline is that the two documents were **enough**: never blocked, and never wanting the source to learn what a function *did*. The one engine-shaped finding is a doc comment that says the opposite of what the code does (F-097), not a behaviour anybody wants changed, so no `engine` finding stands. One cycle lost to the document prescribing a minimax where an exact enumeration was available (F-100), and one game bug — an opponent that centres on the ball — found only by a third, deliberately mediocre controller the document never asked for (F-101). **Valid, and played in full** — the transcript was reviewed and the game played by the owner in a window and in a browser, and F-111's fix let this triage play it in a window too: 0–2 down, **won 5–4** (F-112, `docs/e0/run-8-playtest.png`). Raw notes: `docs/e0/run-8.md`. Triage: §4e. §6. |
-
 | 9 | 2026-08-20 | Pong shipped; **not** a pass | 1 | 8 | 0 (+1 `environment`, closed) | Compiled clean, `--verify` green over 3,600 ticks with **three** controllers, `fmt` and `clippy` clean, and **18 of 20 injected faults caught** — the two escapes both the shape the document predicts, and the second (a deleted "already behind the plane" guard) invisible to a whole played session rather than merely unlikely. Forty minutes and a restructure of three systems lost to a requirement filed in the document a run is told to read last (F-113) — the first cost in this file caused by a fix rather than by a gap. The one `engine` finding is **accepted and fixed**: `find_bounds`, the fold six checks were writing by hand (F-116, ADR-0032). Three novel `docs` findings, five re-treads, one confirmation (F-123) and two the triage found while fixing the rest. **Valid, and played in full** — the transcript is reviewed and clean, the owner has played it in a window and in a browser, and F-111's and F-124's fixes let this triage do **both** halves too (`docs/e0/run-9-playtest.png`, `docs/e0/run-9-browser.png`) — the first E0 game a session has seen in a browser. Raw notes: `docs/e0/run-9.md`. Triage: §4f. §6. |
+| 10 | 2026-08-20 | Pong shipped; **not** a pass | **0** | 9 | 0 | Compiled clean, `--verify` green over 5,036 ticks with three controllers, and **22 of 23 injected faults caught** — the one escape a guard the run had already reasoned was redundant, kept and labelled rather than deleted. **No `engine` finding, and the third consecutive run to score exactly three novel `docs` findings**, which is the number §6's after-eight-runs assessment said run 10 would adjudicate: three in a row reads as a floor rather than as a trend that has not started. Never blocked; never wanted `src/` to learn what a function *did*. The run's own headline is a caveat about the instrument rather than a finding — the three documents are *visibly* aimed at Pong, so friction this run did not hit is not evidence about a different game (§5). Its most expensive hour was tuning, which is not the engine's, and the one piece of engine-shaped friction in it is that a game's constants cannot vary within a process (F-128, **ADR-0033**). **Valid, and played in full** — the run played it in a window under Xvfb, and this triage ran the browser half (`docs/e0/run-10-browser.png`: both paddles, the ball, the dashed centre line, the hint row, and 0–1 because the opponent had already scored while the page ran). Raw notes: `docs/e0/run-10.md`. Triage: §4g. §6. |
 
 Run 1 produced a working, fun Pong and a document-shaped hole underneath it. The
 game is not the measurement — `docs/e0/run-1.md` is — and it says the run could
@@ -4989,6 +4989,37 @@ lint fires on a symmetric pair and not on the same test written against two
 separately named bounds, so it arrives when you tidy the constants rather than
 when you write the check.
 
+**Run 10 found a sixth and a seventh, and the list's shape was the finding.**
+`neg_cmp_op_on_partial_ord` and `question_mark`, both met as build errors after
+the game was written — the bad place the passage exists to prevent. Four, then
+five, then seven: the list is an accumulation of what past runs happened to trip
+over, so it is incomplete by construction and appending to it once a run has paid
+is the fix that does not converge. What landed instead names the two sources of
+truth and says which of them is enumerable. `[workspace.lints]` holds four rules
+and that is the whole of the repository's own choices; everything else is stock
+clippy promoted by `-D warnings`, several hundred lints written for Rust rather
+than for games. The passage now says the list below it is a **sample rather than
+a specification** and that the tool is the authority, and then gives the seven.
+The class is closed even though the list will keep growing.
+
+The first of the two is worth its own paragraph, because the lint's obvious fix
+is a behaviour change and nothing said so. `!(a > b)` and `a <= b` differ exactly
+at NaN — the first is true for it, the second false — so flipping the operator to
+satisfy `neg_cmp_op_on_partial_ord` turns a guard that rejects a poisoned
+velocity into one that admits it, silently. `prototype_kit/checks.rs` already
+spends a paragraph on that difference, which is why run 10 met a contradiction
+rather than a gap: the repository teaches the hazard and clippy bans one of the
+two spellings of it. The document now gives one sanctioned form, and it is the
+form that resolves the contradiction rather than picking a side — lift the `!`
+off the comparison instead of flipping the operator, by naming each condition
+the positive way round and negating the conjunction once. Obeying the lint and
+being right about NaN then become the same edit, which is the sentence that was
+missing.
+
+Recorded as **F-129** in §4g, which classifies run 10's log in full; this note
+stays here because it is F-110's own ending and a reader who reaches the fifth
+lint should not have to find §4g to learn that the list stopped growing.
+
 ### F-111 — The container could not open a window, and the reason was one missing library
 
 Class: environment · Run: 8 · Also found by: **the unlooked-for half of F-054 /
@@ -5691,6 +5722,486 @@ must ask a person for. The person is not retired — step 2 asks "is it fun", wh
 no capture answers — but "does the web target run at all" has stopped being an
 inference.
 
+## 4g. Run 10 triage — the whole run on one page
+
+Nine findings from the run, plus three the triage found while fixing them.
+**Class** is §1's; **settled by** names the ADR or `DELIBERATE:` tag that answers
+the complaint, where one does.
+
+**Run 10's headline is a number that has now happened three times.** Novel `docs`
+findings: 3 at run 8, 3 at run 9, 3 at run 10 — against 11, 5 and 6 re-treads.
+§6's after-eight-runs assessment named exactly this fork and said run 10 would
+tell the two readings apart: either novelty has a floor made of the fact that
+every run is a different author meeting a 15,000-token document for the first
+time, or two runs is not a series. **Three consecutive threes is the floor.** The
+series is not going to walk to zero on more doc fixes, and §6 below says what
+follows from that.
+
+**And there is no `engine` finding**, for the second time in three runs and with
+nothing declined to get there. Run 10 asked for nothing the engine does not have;
+its one piece of engine-shaped friction (F-128) turned out to be two documented
+facts nobody had joined, which is a `docs` finding wearing an engine's hat and is
+recorded as such.
+
+**What the run cost is one number: four rounds of measured constants**, every one
+a recompile, and none of it the engine's fault in the way the previous nine runs'
+big numbers were. Run 9 lost forty minutes to a requirement filed in the wrong
+document. Run 10 lost its largest block of time to *tuning a game*, which is the
+job. That is a different shape of expensive and it is the shape a passing run has.
+
+**The caveat the run opens with is more important than any finding in it**, and it
+is not a finding — it is about the instrument. §5 carries it.
+
+**Both halves of after-the-run step 2 are done.** The run played it in a window
+under Xvfb itself — keyboard through `winit`, a match to a winner, `space` for a
+new one — and this triage ran `tools/serve-web pong --check`, which built the
+wasm, drove Chromium at it and caught a frame with the score already at 0–1
+(`docs/e0/run-10-browser.png`). That is the second E0 game seen in a browser and
+the first run to have had both paths available to it from the start, which is
+what F-111 and F-124 bought.
+
+| # | Finding | Class | Also found by | Settled by | Verdict |
+|---|---|---|---|---|---|
+| F-125 | `f32::signum` answers `1.0` for zero, and the tour that says so is about `Vec2` | docs | **F-071**'s boundary — a hand-maintained tour cannot cover a scalar op | — | **fixed**; one clause beside the opponent's aim, where a game leans on it. Not a longer tour |
+| F-126 | `Time::fixed_dt` in a `Startup` system is two true sentences in two sections | docs | **F-106**, the same shape one type over | — | **fixed**; the join lands in the resource table's `Time` row, which is where the question is asked |
+| F-127 | `ctx.text`'s vertical metric was half-stated: the total without the spacing | docs | **F-043**, whose fix carried an explicit "these statements move together" | renderer.md §6 | **fixed**; Concepts states line `n` at `at.y + n * size`, `Submit::text` says the same, three sites named as one metric |
+| F-128 | the document offers a sweep and a game's constants cannot vary within a process | **docs (a sentence offering what the reader cannot act on)** | **F-115**'s class exactly — the offer sentence and the missing half | **ADR-0033** | **fixed, no API change**; the resource shape, the loop, and the recompile script blessed below a stated bar |
+| F-129 | two more clippy lints bite, and the list is incomplete by construction | docs | **F-072 → F-110**, third sighting of one list growing by one per run | — | **fixed by restructure**; the four denied rules named as enumerable, stock clippy named as not, the list labelled a sample |
+| F-130 | the rule's **worked instances** are unreachable from the rule | docs | **F-102**, and run 9's own mutation round — third sighting | — | **fixed, and re-diagnosed**: `slalom/checks.rs` already carries three annotated non-colour instances; the rule's paragraph now points at them |
+| F-131 | the off-screen check is binary, and 0.03 units of margin reads the same as 3.0 | docs | **F-053**'s neighbourhood, from the other side: this quad *is* on screen | — | **fixed**; the fold is in the document and `prototype_kit` prints the number (0.52 for its own frame) |
+| F-132 | `Rect::from_center_size` with a negative `size` is the half F-107's fix did not say | docs | **F-107**, whose wording carefully covers only non-negative | — | **fixed** in both constructors' doc comments, with a test pinning the inverted result |
+| F-133 | `Rng::next_f32`'s distribution at the endpoints is unstated | docs | first | — | **fixed**; half-open, `0.0` drawn and `1.0` never, with a test over 100,000 draws |
+| F-134 | the prose half of `docs/api/` was compiled by nothing, and contained code that does not compile | docs | **the triage's**, and **F-040**'s class — a snippet wrong in a way only a compiler sees | `tools/check-api-prose` | **fixed**; eighteen blocks now gated, three defects found on the first run |
+| F-136 | the reference documented the `encode_png` the facade does not export | docs | **F-055's class**, in the generated half for the first time | `resolve_ambiguous` | **fixed**; the crate on the `pub use` line decides, and the run says when it had to |
+| F-135 | three false sentences in ten runs, and the guard was still one test at a time | docs | **the triage's**, closing §4c's open question over **F-055, F-068, F-097** | `gen-api-doc`'s `asserted-by:` check | **half fixed, and scoped**; nine check-load-bearing claims now name their proof, and the two unassertable classes are named as staying a reader's job |
+
+**Three of the nine are novel: F-128, F-131, F-133.** The other six each name a
+prior `F-` number, and five of those six are a *previous fix's boundary* rather
+than a previous fix failing — F-043 stated the total and not the spacing, F-107
+covered non-negative and not negative, F-071 covered `Vec2` and not `f32`. That is
+a different failure from run 8's re-treads, which were mostly rules read and not
+transferred. A fix that answers the question asked and not the one beside it is
+the most common defect in this file, and it is now nameable.
+
+**F-128 is the run's most interesting finding and it is not what the run thought
+it was.** Run 10 reported "no `GameConfig` passthrough, no way for `--verify` to
+take a parameter" and concluded the surface offers no knob. It offers one, out of
+two facts the run had already read separately: `headless(..)` builds a fresh
+simulation on every call and keeps nothing between them, and `Startup` runs
+*inside* the first tick, so `world_mut()` before that tick is a window a harness
+can insert into. Neither is new; neither had ever been put next to the other. That
+is F-126's disease at a larger scale, and the two should be read together — the
+`Time::fixed_dt` join and the sweep join are the same defect, one costing a
+hesitation and one costing a design conclusion.
+
+**F-129 is where the triage changed method rather than content.** Four lints, then
+five, then seven: appending to the list after a run has already paid is a fix that
+cannot converge, because the list is an accumulation of what past runs happened to
+trip over. What landed names the two sources of truth and says which is
+enumerable — `[workspace.lints]` holds four rules and that is all of the
+repository's own choices; everything else is stock clippy promoted by
+`-D warnings`. The list is now labelled a sample rather than a specification. The
+class is closed even though the list will keep growing, which is the only sense in
+which it can be.
+
+The `neg_cmp_op_on_partial_ord` half is worth separating because it is a
+*contradiction*, not an omission. `!(a > b)` and `a <= b` differ exactly at NaN —
+the first is true for it, the second false — so flipping the operator to satisfy
+the lint turns a guard that rejects a poisoned velocity into one that admits it,
+silently. `prototype_kit/checks.rs` already spends a paragraph on that difference,
+so the repository teaches the hazard and clippy bans one of its two spellings. The
+resolution sanctioned is neither spelling: lift the `!` off the comparison, name
+each condition the positive way round, negate the conjunction once.
+
+### Findings from run 10, and from triaging it (F-125–)
+
+### F-125 — `signum` answers 1.0 for zero, and the file that says so is about the wrong type
+
+Class: docs · Run: 10 · Also found by: **F-071**'s boundary · Settled by: —
+
+`examples/vec2_tour.rs` says of `Vec2::signum` that it "answers 1.0 for zero".
+Run 10's opponent lean is written on `f32::signum`, which behaves identically and
+which the tour does not cover, because the tour is a tour of `Vec2`:
+
+> It behaves the same way; I confirmed that from Rust's own docs, not from
+> anything here. Small, but it is load-bearing: the whole reason the opponent's
+> lean does not judder is that `signum` never returns 0.
+
+This is F-071's fix meeting its own edge rather than failing. F-071 withdrew the
+tour's completeness claim and added six operations; neither move can make a file
+about `Vec2` cover a scalar method. **The answer is not a longer tour.** The note
+belongs where a game meets the question, and that is where it landed: three
+sentences at the end of the free-functions paragraph, where a reader is being
+told to write `opponent_target` and has not yet written it. A sign that never
+returns zero is why a lean does not judder, which is a sentence about game design
+that happens to name a method.
+
+### F-126 — `Time::fixed_dt` in `Startup` is two true sentences in two sections
+
+Class: docs · Run: 10 · Also found by: **F-106**, the same shape one type over · Settled by: —
+
+The resource table says `Time` is inserted by `run` and `headless` both, before
+the first tick, and cannot be absent. Concepts says `Startup` runs *inside* the
+first tick. Together those settle it. Separately they did not:
+
+> I still hesitated, because "runs inside the first tick" and "inserted before the
+> first tick" are two sentences in different sections and I had to put them
+> together myself. Nothing went wrong.
+
+F-106 was the same defect about `Camera` — a fact stated in a paragraph about
+something else — and its fix added the generalising clause ("anything your own
+`Startup` inserts"). That clause is about resources the *game* inserts and this is
+about resources the *engine* inserts, so the fix does not reach it. The cost here
+is a hesitation rather than a cycle, and it is recorded because it is the cheap
+instance of what F-128 is the expensive instance of.
+
+Fixed in the resource table's `Time` row rather than in either prose section,
+because the table is where a reader asks "can I have this here" and the answer
+column is where they read it. Both halves now sit in one cell: inserted before
+the first tick, and `Startup` runs inside that tick, so `Startup` runs after the
+insert.
+
+### F-127 — Text's vertical metric was stated as a total, and a layout needs the spacing
+
+Class: docs · Run: 10 · Also found by: **F-043**, whose fix said these statements move together · Settled by: renderer.md §6
+
+Concepts said "an N-line block occupies `N * size`", which constrains the total
+and says nothing about where line two starts. `renderer.md` §6 has carried the
+other half since F-043 — "`\n` moves the pen down by a full `size`" — together
+with an explicit note that the public and internal statements move together. Only
+one of them moved.
+
+> I bet on that for every vertical layout number in the game and it held — the
+> recorded quad bounds agree exactly. It would have cost a cycle if it had not,
+> and one sentence would settle it.
+
+**Checked against the code rather than against the run's inference**, because a
+run's guess confirmed by its own output is not a reading of the layout function:
+`font::layout` moves the pen by `pen.y + style.size` on `\n` and `glyph_quad`
+makes every cell exactly `size` tall. The inference is exact and run 10's Pong has
+no latent layout bug.
+
+Landed in Concepts as the spacing *and* the total, with the consequence a game
+actually solves against — `at.y = bottom - size` for a line whose bottom must
+clear something. Also in `Submit::text`'s doc comment, for a reader in the source;
+note that the generated reference carries only a doc comment's **first line**, so
+the doc comment was never going to reach a game author on its own and the prose is
+the load-bearing site. renderer.md §6 now names three sites for one metric.
+
+### F-128 — The document offers a sweep, and a game's constants cannot vary within a process
+
+Class: docs (a sentence offering what the reader cannot act on) · Run: 10 · Also found by: **F-115**'s class · Settled by: **ADR-0033**
+
+*Testing your game*'s best-received paragraph — "a tick is cheap … so simulate
+rather than solve" — ends where tuning begins:
+
+> every one of those rounds is a recompile, because the constants are `const`s in
+> the game. That is correct Rust and the right thing for determinism, and it still
+> means a tuning sweep is a shell script that rewrites the source file with a
+> regex between runs, which is what I did. Nothing in the surface offers a knob —
+> no `GameConfig` passthrough, no way for `--verify` to take a parameter.
+
+This is F-115 exactly: an offer sentence whose second half the surface appears not
+to support. F-115's resolution was to name the boundary and give the shape to
+write instead. **This one resolves the other way — the surface does support it**,
+out of two facts already in the documents that nobody had joined (§4g headline).
+
+ADR-0033 adds nothing to the API. A game that expects to be swept declares its
+numbers as one `Copy` resource with the shipped set as an associated constant and
+a `Startup` system that takes what it finds or falls back; a sweep is then a loop
+over `headless(..)` inside the game's own `--verify`. The recompile script is
+blessed below a stated bar — a sweep run more than twice — rather than deprecated,
+because a game with two numbers should keep them `const`. `GameConfig` passthrough
+and a parameterised `tools/verify` are declined in the ADR with reasons.
+
+Three tests in `crates/jidousha-core/tests/app.rs` pin the two facts the shape
+rests on, so the document cannot rot silently against the engine.
+
+### F-129 — Two more lints bite, one contradicts the repository's own advice, and the list cannot converge
+
+Class: docs · Run: 10 · Also found by: **F-072 → F-110**, third sighting · Settled by: —
+
+Both met as build errors after the game was written, which is the bad place the
+passage exists to prevent:
+
+> `clippy::neg_cmp_op_on_partial_ord`, denied, rejects `!(travel > 0.0)`. That
+> spelling is *deliberate* NaN safety … `clippy::question_mark` rejects
+> `let Some(x) = f() else { return None; }`. The API document teaches `let else`
+> as the idiom that replaces `unwrap`, and this is a case where it is wrong.
+
+The instance fix is two bullets. **The class fix is that the list stops pretending
+to be complete**, which it never could be: `[workspace.lints]` denies four things
+and that is the whole of the repository's own choices, while everything else is
+clippy's default set promoted by `-D warnings`, several hundred lints written for
+Rust rather than for games. The passage now names both sources, says which is
+enumerable, labels the list a sample, and names the tool as the authority.
+
+The `neg_cmp_op_on_partial_ord` half is a contradiction rather than an omission —
+see the headline above. The sanctioned form is the one that needs no helper: name
+each condition the positive way round, negate the conjunction once. Not
+`checks.rs`'s `matches!(a.partial_cmp(&b), Some(Ordering::Greater))`, which is
+equivalent to a bare `a > b` and exists there to give a predicate a name; offering
+both would be a second way to do one thing.
+
+`question_mark` gets one line saying where the `let else` that replaces `unwrap`
+stops being right: in a function returning `Option`, write `f()?`. It fires on
+that exact shape and no other, so a `let else` whose body *reports* something —
+the one the document asks for — is untouched.
+
+### F-130 — The requirement-not-the-constant rule is still worked only for a colour
+
+Class: docs · Run: 10 · Also found by: **F-102**, and run 9's mutation round — third sighting · Settled by: —
+
+Run 10's end-screen centring check took three attempts, and the second failure is
+the interesting one:
+
+> Second version filtered bands by height to drop the score, and then broke the
+> moment I nudged the banner up the court: the filter was a statement about where
+> the banner *was*, so the check was about itself. Third version finds each line
+> by its glyph count against the string the game says it draws … That is the shape
+> the document argues for in the colour section and I had to arrive at it twice by
+> hand before applying it here.
+
+Three runs have now met this rule, read it, and failed to transfer it to a shape
+that is not a colour: run 8 caught it with a mutation, run 9 caught it with a
+mutation, run 10 caught it by iterating. **The pattern is that the rule is
+learnable and the transfer is not**, and F-102's fix — generalising the wording
+past colour — has not changed that in two runs.
+
+**This entry's first diagnosis was wrong and the correction is the fix.** It said
+the next move was a second *worked* instance in a non-colour shape, and that
+`slalom/checks.rs` "could say so at the site". It already does — three times, and
+has since run 8's triage spent the lever:
+
+> `/// A requirement that names no constant the game owns, paired with the walls
+> /// being drawn at `COURSE_HALF_WIDTH`. Written the other way round —
+> /// `assert_eq!(wall.min.x, -COURSE_HALF_WIDTH)` — the check moves with the
+> /// constant and a mutation walks straight through it.`
+
+plus the gate-post check ("The requirement, not the constant: a gate whose post
+is outside the wall is a course that cannot be flown") and the clear colour. So
+the second instance exists, is annotated with its own reasoning, and sits in a
+file every run may read.
+
+**That makes this a reachability failure rather than a missing instance**, which
+is a much cheaper thing to fix and a different thing to measure. The rule's
+paragraph worked one example — a colour — and named no other, so a reader who
+cannot see how to apply it to *their* shape has nowhere to look. The paragraph
+now points at slalom's three and says why: the transfer is the hard part, not the
+rule. One clause, no lever spent, and run 11 tests it directly — the pass is a
+run whose first drawing check names no layout constant.
+
+Recorded at length because the wrong diagnosis was the expensive one: it would
+have deferred a 25-token fix for a fourth sighting, on the grounds of a cost
+(spending a lever) that had already been paid two runs earlier.
+
+### F-131 — The off-screen check is binary, and a 0.03-unit margin reads exactly like a safe one
+
+Class: docs · Run: 10 · Also found by: **F-053**'s neighbourhood, from the other side · Settled by: —
+
+> The hint line was 0.03 world units from running off the bottom of the screen. It
+> passed. It would have passed for a long time. … The off-screen check would have
+> caught it the day anything moved, which is the check working — but I only
+> noticed the margin because I read the transcript, not because anything said so.
+> A "how close was the nearest quad to the edge" number in the summary would have
+> made it visible; I did not add one and probably should have.
+
+F-053 established that "on screen" and "in the right place" are different
+questions and that a picture answers the second. This is a third question neither
+covers: *how much room is left*. The assertion is correct, passes, and will keep
+passing until the day it does not.
+
+**Not an `author` finding**, by §1's test — there is no quote in `docs/api/`
+showing where the answer already was. The document teaches the binary check and
+never suggests reporting the margin.
+
+Fixed as a fold printed beside the check that motivates it, and worked in
+`examples/prototype_kit`, which reports `closest quad to the edge: 0.52 world
+units` for its own frame. The number costs one more pass over quads the check has
+already walked, and it turns a cliff into a gradient: 0.52 and 0.03 are the same
+verdict and very different games.
+
+### F-132 — `Rect::from_center_size` with a negative `size` is the half F-107's fix did not say
+
+Class: docs · Run: 10 · Also found by: **F-107**, whose wording covers only the non-negative case · Settled by: —
+
+> The document says `from_min_size` and `from_center_size` "cannot produce" an
+> inverted rect "from a non-negative `size`", which carefully does not say what a
+> negative one does. I never passed one, so it never mattered.
+
+F-107 landed the well-formedness `CONTRACT:` and the constructors' guarantee, and
+the guarantee is stated with a precision that draws attention to its own boundary.
+A reader who notices the qualifier is a reader now asking a question the document
+raised and did not answer. Closed on both constructors — a negative component
+produces an inverted rect and nothing checks, which is the `CONTRACT:` restated
+at the one door that could have enforced it — and the type's own paragraph now
+names negative `size` alongside the hand-assembled pair rather than stopping at
+it. `a_negative_size_inverts_a_constructed_rect_rather_than_being_refused` holds
+the documentation to the arithmetic.
+
+### F-134 — Nothing ever compiled the document's own code
+
+Class: docs · Run: **the triage's** · Also found by: **F-040**'s class · Settled by: `tools/check-api-prose`
+
+`docs/api/` is generated from two halves and only one of them was checked. The
+reference comes from the facade's doc comments, whose examples are doctests —
+`tools/test`'s `doc-test` phase compiles and runs forty-nine of them. The prose
+in `tools/api-doc/` is hand-written, and its eighteen code blocks were compiled
+by nothing at all. Every gate in the repository checked that document's
+formatting, its vocabulary, its example pointers and its token budget, and none
+of them checked whether its code was code.
+
+**The first run of the new check found three defects**, and they are worth
+separating because only the first is the kind anyone expected.
+
+1. **`std::fs::write(…)?` in a fragment that returns `String`.** The capture
+   recipe's own `return format!("skipped, …")` arms say what it returns; the `?`
+   cannot compile there under any surrounding function. A reader copying the
+   recipe gets an error rustc explains and the document does not.
+2. **Two `expect` calls, in a document that denies `expect_used` two sections
+   earlier.** *Concepts* lists `unwrap_used` and `expect_used` among the four the
+   repository denies, "including in the `--verify` mode, where they are the
+   natural spelling", and this recipe uses the natural spelling twice. The worked
+   example the recipe is drawn from — `prototype_kit/capture.rs` — uses neither:
+   `if let Err(error)`, `let Ok(image) else`, `is_err()`, and a message. So the
+   document contradicted both its own rule and its own worked example. This is
+   **F-045's shape for the fifth time**: a rule stated, an example disagreeing,
+   and the example is what gets copied.
+3. **`.map` on a `Vec`**, in the clearance fold added for F-131 an hour earlier
+   in the same triage. `FrameRecord::quads()` returns an owned `Vec<DrawnQuad>`,
+   so the fold needed `.into_iter()`. Written by someone who had just read the
+   surface, reviewed, committed, and wrong.
+
+The third is the argument. Two of the three were written by maintainers who knew
+the API, and one of them within the hour. **Prose about code is code that nobody
+compiles**, and the only reliable reader of it is a compiler.
+
+**Blocks are fragments, and stay fragments.** Context comes from rustdoc's `# `
+hidden-line convention — compiled, never rendered, and so free of the token
+budget: `gen-api-doc::visible_prose` drops hidden lines on the way to `docs/api/`
+and `check-api-prose::unhide` reveals them on the way to `rustc`. The two are
+tested against each other, because a hidden line that reached the page would put
+a test fixture into the document and one that did not compile would make the
+check a formality. Nothing is run — a fragment's value is the sentence beside it,
+and what a fragment can be wrong about is whether it compiles.
+
+**Why this was not found sooner.** F-040 is the same class, found by run 4 the
+expensive way, and its fix was to correct the two snippets. Nobody asked the
+next question, which is what else in that file has never been compiled. That is
+the neighbour defect this triage names in its headline, one level up: the fix
+answered the instance and not the class, for six runs.
+
+### F-135 — Three false sentences, and the guard was still one test at a time
+
+Class: docs · Run: **the triage's** · Also found by: **F-055, F-068, F-097**, and §4c's open question · Settled by: `gen-api-doc`'s `asserted-by:` check
+
+§4c filed this as the open question it was:
+
+> Two false sentences in two runs, and the guard is still one test at a time.
+> F-055 and F-068 are the same failure: a document sentence that contradicts the
+> code it describes, surviving every gate. … Nobody has proposed a way to
+> *enumerate* the sentences that need one, and this triage does not have one
+> either.
+
+F-097 made it three. Run 7's watch list proposed a pass over *Testing your game*
+asking of each load-bearing claim "what test asserts this?", and run 7's own
+triage corrected the proposal: F-080 is a claim about *controllers* and no test
+can assert it. **Two classes, one testable** — and nothing was done about the
+testable one for three runs, because the proposal had been shown to be incomplete
+and incomplete read as wrong.
+
+**What landed is the incomplete half, scoped and named as such.** A claim may
+carry `<!-- asserted-by: some_test -->`, and `gen-api-doc` refuses a marker whose
+test does not exist. It does **not** check that a claim is true — nothing
+mechanical can, and a mechanism that implied otherwise would be worse than none.
+It checks that a claim which names its proof still has one, so a test renamed or
+deleted under a sentence is a build failure rather than a silence. The same
+bargain as `dangling_examples`, one level up: there a pointer at a worked
+example, here a pointer at a proof.
+
+**Scoped to claims a game's `--verify` leans on**, which is where the ceremony
+pays: draw order and its submission-order tie-break, `covering`'s boundary rule,
+quads per primitive, the text metrics, tick numbering, registration order,
+`contains_rect` versus `contains`. A falsehood in one of those makes every game's
+check quietly wrong. Run 8 said as much about two of them without knowing it was
+describing this mechanism:
+
+> Both documents assert it, in the same words, in two places. My band checks
+> depend on it and so does my "the ball is drawn after the paddles" reasoning.
+> Again: documented, and I wanted the source only to *believe* it.
+
+Nine claims are marked. One of them needed a test written —
+`a_second_line_starts_exactly_one_size_below_the_first_with_no_leading`, for
+F-127's metric, which this triage documented an hour earlier and which nothing
+held. The other eight already had one, which is the encouraging half: the
+repository mostly *had* the proofs and had never linked them.
+
+**Markers cost the token budget nothing** — dropped on the way to `docs/api/`
+like the hidden code lines, since a reader cannot open a test anyway. So the
+scope can widen whenever a claim earns it, without the widening being a budget
+conversation (ADR-0034).
+
+**What stays a reader's job, said plainly rather than left implied.** Claims
+about game design (F-080) and claims about the document's own coverage (F-068 —
+"nothing else in this document can see it", of a field the same document's
+reference lists) are assertable by nothing here. Two of the four false sentences
+on file are in that class. This mechanism halves the exposure; it does not close
+it, and a note claiming otherwise would be the fourth false sentence.
+
+### F-136 — The reference documented a function the facade does not export
+
+Class: docs · Run: **the triage's** · Also found by: **F-055's class**, in the generated half for the first time · Settled by: `resolve_ambiguous`
+
+Two crates define `encode_png`. `jidousha-assets` has one taking a `&TextureData`
+— texels on their way to a file — and `jidousha-render-core` has one taking a
+`&RawImage`, which is what comes back off a GPU. **The facade re-exports the
+render-core one and the reference documented the other**, because
+`scan_sources` takes the first definition it meets and `crates/jidousha-assets/`
+sorts first.
+
+The docstring said why that was safe:
+
+> First definition wins, as before — the facade re-exports one of each and there
+> are no duplicate public type names across the crates.
+
+The second clause stopped being true and nothing checked it. So a game author
+copying `encode_png(&texels)` out of the reference got a type error, while the
+same document's capture recipe called it on a captured frame — the two halves of
+one document contradicting each other, which is F-055's shape in the generated
+half rather than in the prose. Every gate passed: the signature was extracted
+faithfully, from the wrong function.
+
+**Found while splitting the capture material out**, by asking which document
+`encode_png` belongs in and reading its signature to decide.
+
+The facade already says which crate it means, on the `pub use` line, and nothing
+was reading it: `PUB_USE_RE` has captured the crate since it was written and both
+call sites discarded it. `resolve_ambiguous` re-scans the named crate's files for
+any colliding exported name and re-keys the entry, and the run **says** it did —
+a silent right answer and a silent wrong one look identical from outside, which
+is how this survived.
+
+It found a second: `decode_png`, also defined twice, where first-wins happened to
+pick the crate the facade exports. Right by luck, and now right by construction.
+
+### F-133 — `Rng::next_f32`'s distribution at the endpoints is unstated
+
+Class: docs · Run: 10 · Also found by: first · Settled by: —
+
+> `0.0..1.0` — half open, I assumed. My serve angle is `roll * 2.0 - 1.0`, so an
+> inclusive 1.0 would just mean an occasional exactly-maximum angle. Harmless
+> either way, so I did not look.
+
+Harmless here and not in general: a roll used as an index, or as a divisor, or as
+a probability compared with `<`, each break differently at an inclusive endpoint.
+The entry said the range and left the closure to `..`.
+
+Now stated: half-open, `0.0` drawn and `1.0` never, because the top 24 bits give
+at most `2^24 - 1` twenty-fourths. `next_f32_draws_zero_and_never_draws_one`
+asserts it over 100,000 draws — the range on every one, the top bounded by the
+largest representable draw, and the low end actually reached, since "never 1.0"
+and "always 0.5" would both satisfy a range check alone.
+
 ## 5. Notes on the run's procedure
 
 Two things about run 1 that are not findings but would confuse a later reader.
@@ -5722,6 +6233,34 @@ world-space extent by eye.
 The human playtest, when it happened, changed no constant: controls good,
 opponent hard but fair at roughly a one-in-four win rate, first-to-five the right
 match length.
+
+**Run 10 opened its log with a caveat about the instrument, and it is the most
+important sentence any run has written about this exercise.**
+
+> The API document is *visibly* aimed at this exercise. Sweeping collision, the
+> paddle-thickness-caps-speed coupling, the pre/post-move ordering decision, the
+> "write `opponent_target` and `rebound` as free functions now" paragraph, the
+> worked circle-bounds assertion, `prototype_kit`'s doc comment saying in so many
+> words "after this, can an agent make Pong?" — all of it is pre-aimed. So this
+> run starts from a much better place than a general game would, and that is
+> worth stating plainly, because it means friction I *don't* hit here is not
+> evidence the document would carry a different game.
+
+That is correct and it is a cost of the method rather than a defect in it. E0
+asks one question — is `docs/api/` enough to write *this* game — and ten runs of
+answering it have shaped the document around the answer. **What the caveat means
+is that the falling novel-finding count is partly the document learning Pong**,
+and no amount of further Pong runs can separate the two.
+
+It also means the bar's two-clean-runs rule is measuring convergence on one
+genre. `examples/slalom` exists for a related reason (§6, "Run 4's lever, spent")
+and is a *worked example* rather than a measurement. Nothing here proposes
+changing the prompt — the ledger in `e0-prompt.md` is right that a changed prompt
+makes runs incomparable, and a second genre would be a different milestone, not a
+different E0. It is recorded so that a reader of a passing E0 knows exactly what
+was passed: **the document is sufficient for Pong, demonstrated twice, by authors
+who had not seen it before.** That is the claim, and it is a real one. It is not
+"the document is sufficient for a game".
 
 ## 6. Where the runs stand
 
@@ -5994,6 +6533,69 @@ run 7 ran and is not edited.
   example that contradicts a stated rule beats the rule every time**, so the fix
   has to land in the example as well as in the prose, and this commit does both.
 
+### What run 8 answered about run 7's fixes
+
+Scored against "What run 8 should be watched for" below, which was written before
+run 8 ran and is not edited. **This section was written late** — during run 10's
+triage, from `docs/e0/run-8.md` and the run-8 commits, because run 8's triage
+(§4e) went straight to its findings and never came back to its own predictions.
+It is reconstruction from the record rather than a contemporaneous reading, and
+it is marked so because the difference matters: a verdict written after two more
+runs knows things run 8's triage did not.
+
+- **The controller paragraph survived being a principle, and a different sentence
+  in it did not.** The predicted failure was a run that reads the objective,
+  cannot apply it, and falls back to the labelled reduction ("furthest from the
+  middle"). That did not happen — run 8 held the objective and reduced it its own
+  way. What cost it a cycle was the *neighbouring* prescription: the document
+  presents minimax over ±1 quantisation step as **the** answer, run 8 applied it
+  first, and it did not help because the candidates were positions its paddle
+  could not occupy. Enumerating the reachable lattice took the aim error from 4.59
+  to 0.00 in one edit and made the minimax removable (F-100). So F-080's fix held
+  and the watch item was aimed one sentence away from the live round.
+- **The three numbers were written, unprompted.** `met 16 of 16`, `planned … 0.70
+  from the opponent`, `shots landed 4.59 from where they were planned to` — all
+  three in the verdict block, which is what the item asked for. This triage can
+  read run 8's controller from the block alone, so ADR-0027's decision not to ship
+  the instrument stayed closed. It has now stayed closed for runs 8, 9 and 10.
+- **Bands were asserted, and the staging half broke instead.** Run 8 wrote a score
+  band, a hint band and a whole-frame glyph accounting, so F-083's fix landed
+  where it aimed. The failure came from the other side: the staged frame inherited
+  `Stage::Over` and answered with a banner glyph (F-103), and the glyph accounting
+  read a frame the match had ended on (F-104). Twenty minutes, and the diagnosis
+  is that the staging recipe reads as *additive* when it has to be *corrective*.
+  The watch item was satisfied and the neighbouring gap was the expensive one —
+  the same pattern as the first item.
+- **The viewport answer was used rather than merely available.** Run 8 set
+  `center`, `height` and `clear_color`, left the rest to `..Camera::default()`,
+  gave the recorder the camera's own size, and said it "worked first time" — the
+  exact pass the item described. Neither predicted failure occurred: it did not
+  set `viewport` in `Startup` and it did not compute a layout from
+  `visible_bounds()` on tick 1. What it asked for instead is what a *player*
+  resizing the window should do to a constant layout (F-108), which the fix had
+  never claimed to cover.
+- **The budget was not quietly raised, and that is the item this list got most
+  right.** The prediction named the one answer ADR-0025 forecloses and watched for
+  it. The document did fill — 14,665 of 15,000 — and the triage did not raise the
+  number. It re-cut the acceptance bar onto novel findings (**ADR-0029**) and
+  split a third document off on ADR-0025's own rule (**ADR-0030**), taking
+  `jidousha-testing.md` back to ~12.5k. Curation was tried first and worked, which
+  is what the foreclosure is for.
+- **Mutation testing is the run's habit.** Twenty-three mutations, unprompted, 19
+  caught then 23 of 23 after four fixes of four different kinds — the third
+  consecutive run to do it without being told and the first to reach full marks
+  after a first round that did not. Runs 9 and 10 did it too, at 20 and 23. The
+  paragraph recommending it survives its "commit first" clause and its two harness
+  traps.
+- **Five things read as an invitation to guess**, and run 8's log names them in a
+  section titled exactly that: `Depth`'s front-versus-back contradiction (F-097),
+  `Rect` well-formedness (F-107), whether a glyph's cell is full height for every
+  character, the resize question (F-108), and whether a `Draw` system may read a
+  `Startup`-inserted resource (F-106). The standard was not met, and the shape of
+  the miss is worth naming with hindsight: four of the five are a documented fact
+  whose *neighbour* is undocumented. That is the same defect run 10's triage names
+  as the file's most common one (§4g), two runs before it was nameable.
+
 ### What run 9 answered about run 8's fixes
 
 Run 9 is the first run to read run 8's twelve document fixes, ADR-0029's bar and
@@ -6032,6 +6634,76 @@ ADR-0030's split. What its log says about each, where it says anything:
   would *skip* the controllers file; it did not, and the failure came from the
   opposite direction — reading it exactly when told to.
 
+### What run 10 answered about run 9's fixes
+
+Scored against "What run 10 was watched for" below, which was written before run
+10 ran and is not edited. Two of the seven were checked against
+`crates/jidousha/examples/pong/` rather than against the log, because a run's
+silence about a fix is not evidence that the fix worked.
+
+- **F-113's paragraph was read as a requirement.** Run 10 wrote `opponent_target`,
+  `rebound` and `crossing` as free functions before it wrote a controller, and its
+  log never mentions restructuring anything. The pass condition was exactly that.
+  Run 9's forty minutes do not recur, and the paragraph is in the right document
+  and the right register — so the alternatives the item named (move it to the
+  Quickstart; give the reason back) are both unnecessary.
+- **`find_bounds` was found, and this was checked in the source.** It appears four
+  times in `verify.rs` — the ball's disc, the two halves of the score, the hint
+  box. F-116's fix reached a fresh author through one reference entry and one
+  recipe, which is the reachability question the item asked. One hand-rolled
+  `min.min`/`max.max` survives at `verify.rs:982`, and it is a row accumulator
+  over several bands rather than the fold `find_bounds` replaces.
+- **The tunnelling coupling was used, in the order it prescribes.** The tell the
+  item named was a log reporting a thickened paddle *before* a raised ball speed.
+  Run 10's fourth tuning round is "paddle 0.9 → 1.1 thick, ball 34 → 42", and it
+  says why in as many words: "the API document's coupling paragraph is what made
+  that safe to do: **thicken the paddle first, raise the speed second.** I would
+  have raised the speed alone." F-121's sentence is beside the right advice.
+- **The schedule sample was not over-read, and its documented trap was used.**
+  `verify.rs:259` asserts on system *names* and their relative order, not on the
+  `N.` numbering or the indent — which is the failure the item watched for. It
+  also carries a guard against comparing two `None`s, in the same words F-118's
+  fix documented: "two renamed systems give two `None`s, which compare equal, and
+  the check then passes while seeing nothing at all." Publishing the format did
+  not turn the sample into a specification of more than it promises.
+- **The formatting question is now two runs of silence, and should be retired.**
+  F-122 restored every nested example's indentation and no run has mentioned it
+  either way. The item was always a hope rather than a test — there is no
+  behaviour that distinguishes "read as text" from "pasted" in a log — and a third
+  run of silence would say nothing a second one did not. Dropped from run 11's
+  list.
+- **No fourth cross-document pointer was paid for, but the mechanism was not
+  exercised.** Run 10 read all three documents end to end before writing a line
+  ("3,268 lines, read end to end before the first line of code"), which routes
+  around the reading-order hazard rather than testing it. ADR-0025's premise is
+  not challenged and not confirmed. Carried to run 11 unchanged.
+- **Four things read as an invitation to guess**, and the run enumerated them
+  itself: `f32::signum` at zero (F-125), text's vertical metric (F-127),
+  `Rect::from_center_size` with a negative size (F-132), and `Rng::next_f32`'s
+  endpoints (F-133). Two are now fixed. The standard was not met — but the shape
+  changed: three of the four are a documented fact whose *neighbour* is
+  undocumented, rather than a fact nobody stated at all. That is a narrower defect
+  than run 8's five, and it is the one §4g names as this file's most common.
+
+### Run 9 had no watch list, and this is the note instead of one
+
+Every run from 4 onward has a "What run N should be watched for" written before it
+ran — except run 9. The stack goes 4, 5, 6, 7, 8, then 10. Run 9's triage (§4f)
+scored run 8's *fixes* and never wrote the forward half, so run 9 ran unpredicted
+and "What run 9 answered about run 8's fixes" below is a reading of its log rather
+than a scoring against anything.
+
+**This gap is not fillable and must not be filled.** Every watch list in this file
+carries "kept exactly as written before run N ran, because a prediction is only
+worth anything if it is not edited afterwards", and a list composed now — after
+run 9's log, its triage and two later runs — would be a forgery of the one
+property that makes the lists worth keeping. It is recorded as missing.
+
+What it cost is small and real: run 9's largest number (forty minutes to F-113)
+is exactly the kind of thing a watch list is for, and nobody had written down what
+to look for. Whether run 8's list would have caught it is unknowable, which is the
+point.
+
 ### Where the exercise stands after eight runs, and what was done about it
 
 The standing assessment, written after run 8's triage and acted on in the same
@@ -6044,11 +6716,11 @@ ever 8, no trend. On the old bar we were no closer at run 8 than at run 1.
 
 **The composition inverted completely, and that is the real signal.**
 
-| run | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |
-|---|---|---|---|---|---|---|---|---|---|
-| novel | 14 | 13 | 8 | 14 | 6 | 8 | 7 | **3** | **3** |
-| a re-tread of a recorded shape | 0 | 0 | 0 | 0 | 2 | 2 | 8 | **11** | **5** |
-| `engine` | 5 | 3 | 0 | 3 | 1 | 1 | 0 | 0 | **1** |
+| run | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| novel | 14 | 13 | 8 | 14 | 6 | 8 | 7 | **3** | **3** | **3** |
+| a re-tread of a recorded shape | 0 | 0 | 0 | 0 | 2 | 2 | 8 | **11** | **5** | **6** |
+| `engine` | 5 | 3 | 0 | 3 | 1 | 1 | 0 | 0 | **1** | **0** |
 
 Run 9's column is added by the triage after it and is the first measured under
 the new bar rather than re-read into it. **The novel series did not fall**: 3
@@ -6058,6 +6730,38 @@ reading of the flat 3 is that novelty has a floor made of the fact that every ru
 is a different author meeting a 15,000-token document for the first time. The
 other is that two runs is not a series. Run 10 is what tells them apart, and it
 is the first time this file has had a prediction worth making.
+
+**Run 10 answered it: 3 again, and the floor reading wins.** Three consecutive
+runs at exactly three novel findings — across two document splits, an ADR, twelve
+fixes and a change to the bar itself — with the re-tread count wandering (11, 5,
+6) and `engine` at 0 for two of the three. Nothing moved the novel number, and
+the things that were supposed to move it were the largest structural changes this
+document has ever had. The honest conclusion is that **three is roughly what a
+fresh author meeting fifteen thousand tokens of prose produces**, and that it is
+not a measurement of this document's remaining gaps.
+
+Two consequences, and neither is a reason to move the bar a second time.
+
+- **The bar is still reachable, because it counts novel `docs` *and* `engine`,
+  and a run can produce zero novel by chance.** Runs 8 and 10 both scored 0
+  `engine`; a run whose three findings all name prior `F-` numbers is clean under
+  ADR-0029, and run 10 missed that by three findings rather than by a category.
+  So the bar can still be passed — but it is now visibly a bar about *which three
+  things a given author happens to notice*, which is worth knowing before a
+  streak is celebrated as convergence.
+- **The remaining lever is the shape of the fixes, not their count.** §4g's
+  neighbour diagnosis is the first structural claim anyone has made about the
+  residue: five of run 10's six re-treads are a previous fix answering the
+  question asked and not the one beside it, and four of run 8's five guesses were
+  the same. If that holds for run 11, the cheapest intervention left is a review
+  step at fix time — "what did this sentence just make a reader wonder" — which
+  costs nothing per fix and is the only proposal in this file aimed at the residue
+  rather than at an instance. It is on run 11's list as a hypothesis, not yet as
+  a practice.
+
+**And §5's caveat bounds all of it.** Ten runs have shaped this document around
+one game, so a falling novel count is partly the document learning Pong and the
+floor is partly the part of Pong it cannot learn. Neither number separates them.
 
 Novel findings averaged 12.2 a run over runs 1–4 and 6.0 over runs 5–8. Engine
 findings are gone. Author cost tracks the novel series and not the raw one: run 1
@@ -6139,9 +6843,74 @@ after the trims that paid for the pointer — and it buys a place for the *next*
 controller finding to land at no document cost at all, which is the only reason
 the budget arithmetic below is survivable.
 
-### What run 10 should be watched for
+### What run 11 should be watched for
 
-*Written before run 10 runs, and not to be edited afterwards.*
+*Written before run 11 runs, and not to be edited afterwards.*
+
+- **Whether the lint passage stops costing anything.** F-129's fix does not add
+  two bullets, it changes what the list claims to be: a sample, with the tool named
+  as the authority and the four enumerable rules separated from the several hundred
+  that are not. The pass is a run whose log mentions clippy while writing rather
+  than at the end, or does not mention it at all. **The failure that matters is not
+  an eighth lint** — there will be an eighth — it is a run that meets one at the
+  end and says the list should have had it, because that would mean the "sample
+  rather than specification" framing did not land and the reader is still treating
+  the list as a contract.
+- **Whether the NaN spelling is written the sanctioned way the first time.** The
+  passage now gives one form: name each condition the positive way round and
+  negate the conjunction once. A run whose sweep contains `!(a > b)` and meets the
+  lint as a build error means the paragraph is in the right document and the wrong
+  place — it is filed under lints, and it may need to be next to the sweep the
+  Concepts collision paragraph asks the reader to write. A run that writes
+  `a <= b` to satisfy the lint and ships a NaN hole is the expensive version, and
+  nothing would catch it.
+- **Whether text's vertical metric is used without being measured.** F-127 states
+  line `n` at `at.y + n * size`. The pass is a run that lays out a multi-line
+  banner from the number and never mentions checking it against recorded bounds.
+  A run that measures it off a transcript anyway means the sentence is present and
+  not trusted, which would be a finding about where it sits rather than about what
+  it says.
+- **Whether the tuning shape is reached for, or reinvented.** ADR-0033's worked
+  shape is in the paragraph that makes the offer. Three outcomes worth telling
+  apart: a run that puts its numbers in a resource and sweeps in a loop (the fix
+  landed); a run that writes the regex script and says so (the bar is stated and
+  the run was under it — fine, and the log should say the bar was read); a run that
+  writes the regex script and complains there is no knob (F-128 again, and the
+  paragraph is in the wrong document).
+- **Whether the margin gets reported.** F-131 is *not* fixed — the ask is a number
+  in the `--verify` summary and no fix has landed. A run 11 that ships a layout
+  0.03 units from the edge and never knows is the second sighting, and the fix
+  then writes itself. A run that prints a margin unprompted says the class is
+  learnable from the checks already prescribed.
+- **Whether the requirement-not-the-constant rule transfers without being paid
+  for.** F-130 is the third sighting and every one has been self-caught — twice by
+  a mutation round, once by iterating. The pass is a run whose first drawing check
+  names no layout constant. A fourth sighting licenses the second worked instance
+  in `examples/slalom/checks.rs`, which §4g names as the next move; a fourth
+  wording is not on the table.
+- **Whether the neighbour defect shows up again.** §4g names it: five of run 10's
+  six re-treads are a previous fix answering the question asked and not the one
+  beside it. This is now a hypothesis about the file rather than about any one
+  finding, and run 11 is its first test. Watch for a finding whose "also found by"
+  column names a prior `F-` and whose complaint is one clause away from that
+  finding's fix. Three of those would say the review step after a fix should be
+  "what did this sentence just make a reader wonder", which is not a step anyone
+  currently takes.
+- **Whether the novel count is three again.** Runs 8, 9 and 10 scored 3, 3, 3.
+  §6's after-eight-runs assessment read two threes as ambiguous and three as a
+  floor; a fourth would make it a fact about the method rather than about the
+  document, and the honest consequence is stated below rather than left for a
+  fifth. A run at 0 or 1 would be the first evidence in ten runs that the count
+  can move at all.
+- **Whether anything in these fixes reads as an invitation to guess.** Same
+  standard as always: a fix is only real if the next run does not have to infer
+  the thing it fixed.
+
+### What run 10 was watched for
+
+*Kept exactly as written before run 10 ran, because a prediction is only worth
+anything if it is not edited afterwards. The verdicts are in "What run 10
+answered" above.*
 
 - **Whether F-113's paragraph is read as a requirement or as background.** The
   pass is a run whose opponent decision and collision response are free functions
@@ -6180,7 +6949,11 @@ the budget arithmetic below is survivable.
   standard as always: a fix is only real if the next run does not have to infer
   the thing it fixed.
 
-### What run 8 should be watched for
+### What run 8 was watched for
+
+*Kept exactly as written before run 8 ran. The verdicts are in "What run 8
+answered" above — written late, during run 10's triage, and marked as such
+there.*
 
 - **Whether the controller paragraph survives being a principle.** F-080's fix
   states the objective and labels "furthest from the middle" as one reduction of
@@ -6441,6 +7214,45 @@ does, because the failure was a reader unable to separate a principle from its
 one worked example. For most of this file it does not, and the argument below
 stands unchanged.
 
+
+**And since run 10, where a fix goes is a decision with a rule (ADR-0034).** A
+finding does not default to a paragraph. A fact about one API item goes in that
+item's doc comment, where it costs a summary line; a shape or a technique goes in
+a worked example with a pointer; prose is for a rule that spans the surface, and
+a rule that lands in prose displaces something. The test between the middle two
+is §7's own, plus: would a second worked instance say what a second paragraph
+cannot?
+
+The trigger was arithmetic rather than taste. Novel findings have a floor of
+three a run (§6), a novel finding cost roughly a 200-token paragraph, and
+`jidousha-testing.md` had 548 tokens left — so the prose grew for ever unless the
+per-finding cost changed. F-134 is the case against the alternative, measured:
+the capture path existed in the document *and* in `prototype_kit/capture.rs`, the
+two drifted, and the document's copy was the wrong one for six runs.
+
+The rule changes the rate rather than the level, which ADR-0034 records with the
+numbers its own applications recovered: 63 tokens from the capture *code block*
+against ~200 projected, then 546 from the capture *passage* against ~1,050
+projected. **Both projections ran about half high, and that is the finding.**
+What looks like duplication of a worked example keeps turning out to be the
+sentence a reader cannot derive from code — the trap, the reason, the tooling
+contract — so the recoverable half is smaller than an inventory of "things that
+appear twice" suggests. Run 7's triage said the prose was near its floor and the
+measurements agree with it.
+
+So the level still has to be bought down another way, and the fourth split is that
+way. **ADR-0035 did it one run before its trigger**, and the reason is the trigger
+itself: at 13,843 the crossing was one run away, and the run in question would
+have hit it *during* a triage — when the budget is a CI gate and the prompt change
+the split needs would have invalidated a run in flight. It recovered 1,487
+tokens, six times what the destination rule reached, because two thirds of what
+the capture material cost was **reference entries**, and no destination rule
+touches those: an entry exists because the facade exports the item, not because a
+paragraph chose to include it. `jidousha-testing.md` is at ~12.4k of 15k.
+
+What the destination rule stops is the next finding costing a paragraph by
+default. What a split buys is room; the two are not substitutes, and the ordering
+matters — the rule was applied first and made the split smaller.
 
 The `make-game` skill (agent-practices §3) is written from E0's findings after
 it passes. A friction that recurs across runs and cannot be designed away is

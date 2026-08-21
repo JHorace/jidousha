@@ -32,6 +32,7 @@ CRATE = "jidousha-core"
 CRATE_LIB = "jidousha_core"
 BUILD_TIMEOUT_S = 600
 COMPILE_TIMEOUT_S = 120
+METADATA_SINK = REPO_ROOT / "target" / "compile-fail.rmeta"
 
 
 def find_rlib(build_output: str, crate_name: str) -> "str | None":
@@ -98,7 +99,13 @@ def compile_snippet(snippet: Path, rlib: str) -> "tuple[int, str]":
             "bin",
             "--emit=metadata",
             "-o",
-            "/dev/null" if sys.platform != "win32" else "NUL",
+            # A real path under `target/`, not `/dev/null`: rustc creates its
+            # temp directory beside whatever `-o` names, so `-o /dev/null` asks
+            # it to write into `/dev` and fails for any non-root user. Nothing
+            # here has ever hit it — every snippet is meant to fail and rustc
+            # aborts before emitting — but a snippet that *started* compiling
+            # would report the temp-dir error as drifted expectation text.
+            str(METADATA_SINK),
             "-L",
             f"dependency={Path(rlib).parent}",
             "-L",

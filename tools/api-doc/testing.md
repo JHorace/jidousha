@@ -20,6 +20,73 @@ rather than solve: running the game forward and looking is allowed, and it is
 usually both simpler and more honest than a closed form kept in step by hand.
 Design for a slow tick and you will design around a cost that is not there.
 
+**A whole *game* is cheap to build too, which is what makes a tuning sweep a loop
+rather than a shell script.** `headless(config, setup)` builds a fresh simulation
+on every call and keeps nothing between them, so forty candidate settings are
+forty sims in one process. The thing that stops a game taking that offer is where
+its numbers live: a `const` is fixed when the binary is, so a game whose speeds
+and sizes are constants can only be swept by rewriting its own source between
+runs. That script is a reasonable thing to write and it does work; it is worth
+knowing before you write it that you do not have to.
+
+**A game that expects to be tuned puts the numbers a sweep would vary in a
+resource.** One `Copy` struct, an associated constant for the set the game ships
+with, and a `Startup` system that takes what it finds in the world or falls back
+to that set:
+
+```rust
+#[derive(Clone, Copy)]
+struct Tuning {
+    paddle_speed: f32,
+    ball_speed: f32,
+    ramp: f32,
+}
+impl Resource for Tuning {}
+
+impl Tuning {
+    /// What the game ships with — the row the sweep chose.
+    const SHIPPED: Self = Self { paddle_speed: 20.0, ball_speed: 42.0, ramp: 1.12 };
+}
+
+fn spawn_court(world: &mut World) {
+    // Whatever a harness put here before the first tick, or the shipped set.
+    let tuning = world.find_resource::<Tuning>().copied().unwrap_or(Tuning::SHIPPED);
+    world.insert_resource(tuning);
+    // ... spawn the paddles and the ball from `tuning`
+}
+```
+
+**The window between building a game and running it is where a check gets its
+say.** `Startup` runs *inside* the first tick, and `world_mut()` is yours before
+you call it — so a candidate inserted there is what `Startup` finds:
+
+```rust
+# #[derive(Clone, Copy, Debug)]
+# struct Tuning;
+# impl Resource for Tuning {}
+# let candidates = [Tuning];
+for candidate in candidates {
+    let mut sim = headless(GameConfig::default(), build_game);
+    sim.world_mut().insert_resource(candidate);   // before tick 1
+    for _ in 0..TICKS {
+        sim.tick();
+    }
+    println!("{candidate:?}: {}", score_of(&sim));
+}
+```
+
+The windowed `run` inserts nothing and gets `SHIPPED`, so the game a person plays
+is the game the sweep's best row describes — and after `Startup` every system
+reads `world.resource::<Tuning>()` and cannot miss, because `Startup` pinned it.
+
+**It is a trade, and a game with two numbers should not take it.** A constant is
+checked at compile time, reads with no indirection and can appear in a `const fn`;
+a resource is none of those. What buys the change is a sweep you expect to run
+more than twice. Below that bar, rewrite the source between runs and do not
+apologise for it — just keep the winning row in the source rather than in the
+script, because the script's last write is whatever the last candidate happened
+to be.
+
 **"Forward" means your game's own step functions, not a copy of the
 simulation.** There is no way to fork a `HeadlessSim` — `World` is not
 cloneable, `Recording` replays input rather than state, and rebuilding from
@@ -34,6 +101,8 @@ Input comes from `jidousha::testing::InputScript`, which is a pure function of
 the tick — no cursor, so a test can seek, replay and bisect freely:
 
 ```rust
+# let mut sim = game::sim();
+# let tick = 1u64;
 let script = InputScript::new().hold(Key::D, 10..120).press(Key::Space, 30);
 sim.world_mut().insert_resource(Input::new(script.snapshot_at(tick)));
 ```
@@ -46,6 +115,7 @@ accumulator, so a controller written with it goes through the same edge rules a
 real keyboard does:
 
 ```rust
+# let mut sim = game::sim();
 let mut keyboard = SnapshotBuilder::new();
 let mut holding = false;
 for _tick in 1..=TICKS {
@@ -99,6 +169,8 @@ which records every frame as structured data. No GPU and no window is involved,
 so this runs anywhere:
 
 ```rust
+# let mut sim = game::sim();
+# let script = InputScript::new();
 let mut recorder = FrameRecorder::new(PhysicalSize::new(1280, 720));
 let mut last = None;
 for tick in 1..=600 {
@@ -116,6 +188,7 @@ run's last frame **and** build the screens the run never reached.
 recorder for as long as the reference lives, so anything taken out of it has to
 be `.clone()`d before the next `draw`. `recorder.font_texture()` borrows nothing
 and is free to call wherever you like.
+<!-- asserted-by: the_recorders_transcript_carries_every_frame_and_a_records_carries_one -->
 
 **The frame a match ends on is not a picture of the game being played.** `last`
 out of that loop is the frame somebody won on, so it carries the end screen
@@ -147,6 +220,8 @@ the frame was *drawn* with rather than reading the resource raw. It is one line
 at the top of every check that measures against `visible_bounds()`:
 
 ```rust
+# let mut sim = game::sim();
+# sim.tick();
 const HEADLESS_VIEWPORT: PhysicalSize = PhysicalSize::new(1280, 720);
 // The recorder's viewport, the game's everything else. Read it back after the
 // ticks rather than before: a game may move or zoom its camera as it plays.
@@ -200,6 +275,7 @@ the right size, with every geometric assertion still passing. What a frame does
 *not* carry is the `Depth` that produced the order, deliberately — a `layer`
 number read back only says the game submitted what the game submitted, and would
 pass just as happily for a `mod layers` whose constants are in the wrong order.
+<!-- asserted-by: quads_sort_by_layer_then_z_then_submission_order, equal_depths_keep_their_submission_order -->
 
 **Which has a consequence about your own frames that is easy to miss: a band is
 only visible where it changes the order.** The sort is `(layer, z, submission
@@ -230,8 +306,11 @@ the circle's bounding box, so the box around the quads covering the centre is
 exactly `2r × 2r`. `find_bounds` is that box — the fold over `quad.bounds()`
 that "how big is the thing that was drawn" always comes down to, and `None` when
 nothing was drawn there at all:
+<!-- asserted-by: the_wedges_of_a_circle_and_the_glyphs_of_a_string_fold_back_to_one_box -->
 
 ```rust
+# let (sim, recorder, frame, camera) = game::played();
+# let (at, radius) = (Vec2::ZERO, 0.5_f32);
 let box_of_it = Rect::from_center_size(at, Vec2::splat(radius * 2.0));
 let disc = find_bounds(frame.covering(at).into_iter().filter(|quad| {
     // Inside the disc's box, a hair of slack for the rim's arithmetic. Written
@@ -262,6 +341,7 @@ out of several primitives.
 which is what makes asking about the centre work at all — every wedge touches it.
 `Rect::contains` is the other way round, half-open so that adjacent rectangles
 never both claim a point, which is why the box test above is spelled out.
+<!-- asserted-by: a_circle_covers_a_disc_and_not_its_bounding_box -->
 
 To ask whether any of it was *text*, compare a quad's texture against
 `recorder.font_texture()`: the font atlas is a texture like any other, so a quad
@@ -275,6 +355,7 @@ this frame. A game of shapes and text never needs it.
 highest-value check a game of shapes and text can write, and it is three lines:
 
 ```rust
+# let (sim, recorder, frame, camera) = game::played();
 let view = camera.visible_bounds();          // a Rect: min top-left, max bottom-right
 for quad in frame.quads() {
     let bounds = quad.bounds();
@@ -290,12 +371,37 @@ for quad in frame.quads() {
 camera's edge is on screen. `Rect::contains`, which takes a point, is half-open
 instead — it partitions space so adjacent rectangles never both claim a point,
 which is a different question and the wrong rule here.
+<!-- asserted-by: adjacent_rectangles_never_both_claim_a_point -->
 
 `TextStyle::width_of` is exact and completely silent: centring by it is the
 documented idiom, and a banner one character too long runs off both edges
 without a word from anything. A game that shipped exactly that had eight other
 assertions passing — glyphs existed, the score was placed, the world was
 correct — and only this one would have caught it.
+
+**Then print the margin it passed by, because the check itself is a cliff.** It
+answers yes or no, so a layout 0.03 world units from the edge reads exactly like
+one 3.0 units clear, and a game has shipped at 0.03 without anybody knowing —
+the assertion was right, would have kept passing, and would have started failing
+the day anything moved. The same fold that walks the quads answers it:
+
+```rust
+# let (sim, recorder, frame, camera) = game::played();
+# let view = camera.visible_bounds();
+let clearance = frame
+    .quads()
+    .into_iter()                             // `quads()` builds a Vec, so this
+    .map(|quad| {                            // walks the one the check above made
+        let bounds = quad.bounds();
+        let gap = (bounds.min - view.min).min(view.max - bounds.max);
+        gap.x.min(gap.y)
+    })
+    .fold(f32::MAX, f32::min);
+println!("closest quad to the edge: {clearance:.2} world units");
+```
+
+A number in the summary turns the cliff into a gradient, and it costs one line of
+a run a check already makes. `examples/prototype_kit` prints it.
 
 **And centring a multi-line block by `width_of` centres only its longest line.**
 `width_of` is the width of the widest line, and `ctx.text` lays a block out from
@@ -341,6 +447,8 @@ tick so `Startup` has run, set the resource that selects the screen, draw one
 frame, and run the same check over it:
 
 ```rust
+# let mut sim = game::sim();
+# let mut recorder = FrameRecorder::new(PhysicalSize::new(1280, 720));
 sim.tick();                                        // Startup, so the world exists
 sim.world_mut().insert_resource(Scoreboard { left: 0, right: 5 });
 recorder.draw(&mut sim);                           // one frame of the screen nobody reached
@@ -417,6 +525,7 @@ transcript. Without it, `main` opens a window as usual. Nothing in the engine
 enforces this; it is the shape the tooling expects:
 
 ```rust
+# use std::process::ExitCode;
 fn main() -> ExitCode {
     if std::env::args().any(|arg| arg == "--verify") {
         return verify::run();          // ticks, asserts, prints "verified ...";
@@ -454,106 +563,27 @@ under a timeout, parses the verdict, writes a report, and lifts the path of any
 picture the run captured into a field of its own in that report.
 `cargo run -p <crate> --example <name> -- --verify` is the same thing by hand.
 
-**The picture is yours to take.** `tools/verify` renders nothing: it reads one
-line out of what your `--verify` mode printed, and a run that captures nothing
-passes. So a frame you can *look* at is one your `--verify` mode drew — worth
-doing, because a picture answers what no assertion here reaches: whether it looks
-like the game.
+**Taking a picture of a frame is a fourth document**,
+`docs/api/jidousha-capture.md`: rendering one recorded frame for real, writing it
+out as a PNG, and the four things about that path which are silent when you get
+them wrong. It is worth doing — a picture answers what no assertion here reaches,
+and it has twice caught a fault every check in a game was happy with. Read it
+last, once this document's checks run.
 
-**And the frame you already recorded is the one to draw.** You do not replay the
-session, and you do not restructure your game to hand it a renderer.
-`FrameRecord` carries a `plan` — the finished frame, with the depth sort and the
-batching already done — and a renderer built for the purpose will execute it:
-
-```rust
-// `PhysicalSize` is not in this list: it is in the prelude, which a game's
-// `--verify` file already globs, and taking it from `testing` as well is the
-// same item twice. Only the testing-only names belong here.
-use jidousha::testing::{
-    FONT_TEXTURE, RenderBackend, RenderError, WgpuBackend, create_builtin_textures, encode_png,
-};
-
-// Same 16:9 shape as the recorder's viewport — see the first trap below.
-let mut gpu = WgpuBackend::offscreen(PhysicalSize::new(480, 270));
-for _ in 0..10_000 {                    // the renderer is poll-based, and a
-    match gpu.poll() {                  // `--verify` run has no frame loop
-        Ok(()) if gpu.is_ready() => break,
-        Ok(()) => {}
-        // No adapter is a fact about the machine, not a failure. Every other
-        // error here is a fault — see the third trap below.
-        Err(error @ RenderError::NoAdapter { .. }) => {
-            return format!("skipped, no GPU on this machine ({error})");
-        }
-        Err(error) => return format!("skipped, the handshake failed ({error})"),
-    }
-}
-// The built-in textures, in the order your recorder created them, so the ids
-// inside the plan mean the same thing here — and one assertion that they do,
-// which is what separates "a PNG was written" from "a PNG of this game".
-let textures = create_builtin_textures(&mut gpu);
-assert_eq!(textures.resolve(FONT_TEXTURE), recorder.font_texture());
-gpu.render(&frame.plan).expect("the plan the recorder already accepted");
-let image = gpu.capture().expect("an offscreen renderer reads its own target");
-std::fs::write("target/verify/mygame.png", encode_png(&image))?;
-```
-
-`examples/prototype_kit/capture.rs` is that with its reasoning written down. It
-also shows the other shape available to you: because its own `play` is handed the
-renderer, it can run the whole session twice and check that the world did the
-same thing both times. Replaying the recorded plan is the cheaper road and the
-one that works whatever shape your game is.
-
-That "the ids mean the same thing" step is the load-bearing one, and it holds
-because both counters start empty and are filled by the same call in the same
-order. That is true of **a game that loads no assets** — every shape a colour,
-every string the built-in font. If yours loads art, the replay has to upload it
-too, or the plan names a texture the new renderer lacks. The assertion above is
-that step, and it costs one line whether or not you have art: without it, a plan
-whose ids drifted renders the wrong texture into a PNG that every other check in
-your `--verify` is happy with.
-
-Three things are easy to get wrong here, and silent when you do:
-
-- **Capture at the recorder's aspect ratio.** The projection was computed from the
-  viewport you handed `FrameRecorder::new` and is baked into every plan; nothing
-  downstream can recompute it. A capture of another shape stretches the picture
-  while every assertion you wrote goes on passing, because none of them look at
-  pixels. 480x270 for a 1280x720 recorder — and assert the ratio rather than
-  remembering it.
-- **Print the path in the line the tool reads.** `tools/verify` takes the first
-  line whose text starts with `capture:` and contains ` written to `, and puts
-  what follows into the report. Word it differently and the run still passes while
-  the report says no picture was taken.
-- **A machine with no GPU must still pass, and a broken one must not.** Every
-  runner is headless and some have no graphics stack at all, so
-  `RenderError::NoAdapter` is a fact about the machine: say the capture was
-  skipped, put that in the summary, keep the run green — and do not skip in
-  silence either. Every *other* handshake error is a fault, and reporting one of
-  those as "no GPU here" files a real problem as a property of the hardware, on
-  every machine, for ever. Match on the variant; it is in the Testing reference
-  with the rest.
-
-**Then open the file and look at it.** A capture path that writes a PNG is worth
-nothing on its own; the question is whether it writes *your game's* PNG, and a
-path wired to the wrong frame or to a stale plan passes every check that does not
-ask. So look — name what you see — then break the game on purpose and look again:
-move a paddle, stop drawing the score, change the clear colour, and confirm the
-picture follows.
-
-**The clear colour is the one part of the picture that leaves no quad behind, and
-it is still assertable.** A frame drawn on the wrong background is byte-identical
-under every check above, because none of them look at the background — but
-`FrameRecord` carries the `plan` it was drawn into, and a `FramePlan` carries the
-`clear_color` the camera asked for. So it is one line, and it needs no capture and
-no GPU:
+**The background leaves no quad behind, and is still assertable here.** A frame
+drawn on the wrong colour is byte-identical under every check above, because none
+of them look at the background — but `FrameRecord` carries the `plan` it was drawn
+into, and a `FramePlan` carries the `clear_color` the camera asked for. So it is
+one line, and it needs no capture and no GPU:
 
 ```rust
+# let (sim, recorder, frame, camera) = game::played();
 assert_eq!(frame.plan.clear_color, palette::COURT);
 ```
 
-The capture and that assertion answer different questions and both are cheap: the
-picture says whether the frame *looks* right, and the plan says whether it cleared
-to the colour the camera asked for.
+That assertion and a capture answer different questions and both are cheap: the
+plan says whether the frame cleared to the colour the camera asked for, and a
+picture says whether it *looks* right.
 
 **That assertion in its naive form is a trap, and the shape of the trap is
 general.** Comparing what was drawn against the game's own constant does not
@@ -564,6 +594,7 @@ the constant cannot move: one that states the game's own requirement in numbers.
 Here that is "the court has to be dark enough for a white ball to read against":
 
 ```rust
+# let (sim, recorder, frame, camera) = game::played();
 let cleared = frame.plan.clear_color;
 let brightness = cleared.r.max(cleared.g).max(cleared.b);
 assert!(
@@ -588,6 +619,14 @@ guarded its clear colour correctly walked into this anyway, reading the pairing
 as advice about colours. The requirement names no constant the game owns: the
 score sits in the **top third of `visible_bounds()`**, one number either side of
 the centre line, evenly set.
+
+**Three worked non-colour instances are in `examples/slalom/checks.rs`**, and
+they are there because reading the rule has not been enough for three runs
+running: a course wide enough for the glider *plus a gate's gap* rather than
+`assert_eq!(wall.min.x, -COURSE_HALF_WIDTH)`, a gate whose posts must fall inside
+the drawn walls, and the clear colour in the form above. Each says at the site
+what the other spelling would have cost. If the pairing reads as advice about
+colours, read those three — the transfer is the part that is hard, not the rule.
 
 **And state the requirement where the game actually operates, not at its most
 favourable point.** A requirement stated at a boundary is a requirement about a

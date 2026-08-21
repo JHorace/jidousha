@@ -87,6 +87,7 @@ CONVENTIONS = REPO_ROOT / "docs" / "conventions.md"
 GAME_OUTPUT = REPO_ROOT / "docs" / "api" / "jidousha-api.md"
 TESTING_OUTPUT = REPO_ROOT / "docs" / "api" / "jidousha-testing.md"
 CONTROLLERS_OUTPUT = REPO_ROOT / "docs" / "api" / "jidousha-controllers.md"
+CAPTURE_OUTPUT = REPO_ROOT / "docs" / "api" / "jidousha-capture.md"
 
 # The budgets from public-api.md §4, one per document (ADR-0025). The point was
 # never the number: it is that everything in a document is relevant to what its
@@ -107,6 +108,36 @@ TESTING_BUDGET = 15_000
 # purpose — this file is where controller findings land now, and a budget that
 # started generous would not be a budget.
 CONTROLLERS_BUDGET = 5_000
+# The fourth reader is later still and narrower again: the `--verify` mode runs
+# and asserts, and the only question left is whether anybody can *look* at the
+# game. Sized like the controllers document and for the same reason — this is
+# where capture findings land now, and a budget that started generous would not
+# be a budget (ADR-0035).
+CAPTURE_BUDGET = 4_000
+
+# The reference entries that go with the capture document rather than with the
+# testing one. An item belongs here when **no entry outside this set names it**:
+# `RawImage` is what `capture()` returns, `TextureTable` what
+# `create_builtin_textures` hands back, and neither is reachable from anything a
+# check that never renders would call.
+#
+# `BackendTextureId`, `FramePlan` and `PhysicalSize` are deliberately *not* here.
+# Each is named by an entry that stays — `FrameRecorder::font_texture`,
+# `FrameRecord::plan`, `FrameRecorder::new` — so moving it would leave the testing
+# document naming a type it does not define, which is F-017 exactly. The capture
+# document borrows them and says so, the way the controllers document borrows
+# `InputScript` and `SnapshotBuilder` (ADR-0030).
+CAPTURE_ITEMS = (
+    "FONT_TEXTURE",
+    "RawImage",
+    "RenderBackend",
+    "RenderError",
+    "TextureTable",
+    "WgpuBackend",
+    "create_builtin_textures",
+    "encode_png",
+    "upload_ready_textures",
+)
 
 # No tokenizer in the standard library, so this is the usual approximation:
 # English prose and code average close to four characters a token. Deliberately
@@ -155,7 +186,13 @@ FORBIDDEN = (
 # used to be cut out of the check, which meant an internal crate name or a
 # pointer into `docs/internal/` could reach it unnoticed. Three words in one
 # document is strictly tighter than one whole section in another.
-TESTING_VOCABULARY = ("wgpu", "RenderBackend", "FramePlan")
+# After ADR-0035 the testing document does not name a renderer at all: the
+# capture recipe took `wgpu` and `RenderBackend` with it, and what is left is
+# `FramePlan`, which a check reads for `clear_color` without rendering anything.
+TESTING_VOCABULARY = ("FramePlan",)
+# The capture document is the one that has to name a renderer, because a picture
+# has to be drawn by something. Same three words, now spent where they are used.
+CAPTURE_VOCABULARY = ("wgpu", "RenderBackend", "FramePlan")
 
 # `(ADR-0010)`, `(core.md §9)`, `(assets.md §6)`, `(e0-findings.md F-069)`,
 # `(I2)`, `(R4)` — a citation of a maintainers' document, hanging off the end of
@@ -599,11 +636,199 @@ def doc_example(block: "list[str]") -> "list[str]":
     return body if any(line.strip() for line in body) else []
 
 
+# `<!-- asserted-by: the_first_update_system_sees_tick_one -->` — the test that
+# holds a claim true. On its own line, or at the end of the line it belongs to.
+ASSERTED_BY_RE = re.compile(r"[ \t]*<!--\s*asserted-by:\s*([A-Za-z0-9_, ]+?)\s*-->")
+ASSERTED_BY_LINE_RE = re.compile(r"^[ \t]*<!--\s*asserted-by:[^>]*-->[ \t]*\n", re.M)
+
+# A test's definition, wherever it lives: an integration test, a unit test beside
+# the code, or a check inside a worked example.
+TEST_FN_RE = re.compile(r"\bfn\s+([a-z_][a-z0-9_]*)\s*\(")
+
+
+def known_test_names(repo: Path) -> "set[str]":
+    """Every function name defined under `crates/`.
+
+    Function rather than `#[test]` function: a claim can be held by a named
+    helper an example's `--verify` calls, and `slalom/checks.rs` is full of
+    those. What this is guarding against is a name that resolves to *nothing* —
+    a test renamed or deleted while the sentence it backs stayed — and for that,
+    "is there something called this" is the whole question.
+    """
+    names = set()
+    for path in repo.glob("crates/**/*.rs"):
+        names.update(TEST_FN_RE.findall(path.read_text(encoding="utf-8")))
+    return names
+
+
+def unasserted_claims(text: str, repo: Path) -> "list[str]":
+    """`asserted-by:` markers naming a test that does not exist.
+
+    Three sentences in ten E0 runs have been **false** — a document claim
+    contradicting the code it described (F-055, F-068, F-097). Each was found by a
+    run leaning on it, and each fix wrote a test afterwards. That is a guard that
+    arrives one sentence at a time, after the expensive part.
+
+    This is the cheap half of a mechanism, and it is worth being exact about which
+    half. It does **not** check that a claim is true; nothing mechanical can. It
+    checks that a claim which *names* its test still has one, so the linkage rots
+    loudly instead of silently — the same bargain as `dangling_examples`, one
+    level up: there a pointer at a worked example, here a pointer at a proof.
+
+    Scoped on purpose to claims a game's `--verify` leans on — draw order,
+    `covering`'s boundary, quads per primitive, text metrics, tick numbering. A
+    falsehood there makes every game's check quietly wrong, which is the case that
+    justifies the ceremony. Claims about game design (F-080) and about the
+    document's own coverage (F-068) are not assertable by anything and are not
+    asked to be: those stay a reader's job, and saying so is part of the
+    mechanism rather than an apology for it.
+    """
+    known = known_test_names(repo)
+    missing = []
+    for match in ASSERTED_BY_RE.finditer(text):
+        for name in match.group(1).split(","):
+            name = name.strip()
+            if name and name not in known and name not in missing:
+                missing.append(name)
+    return missing
+
+
+def visible_prose(text: str) -> str:
+    """Prose with each `rust` block's hidden setup lines dropped.
+
+    The same `# ` convention rustdoc uses, for the same reason and now in the
+    hand-written half of the surface too: `tools/check-api-prose` compiles every
+    block in `tools/api-doc/`, and a block that compiles needs context a reader
+    does not need to see — a `sim` to tick, a `frame` to measure, a `camera` to
+    ask. Hiding it keeps the block a *fragment* on the page, which is what the
+    surrounding sentence is written against, while making it a *program* to the
+    compiler.
+
+    Hidden lines cost the token budget nothing, because they never reach
+    `docs/api/`. That is the whole reason this is a rendering step rather than a
+    convention a reader is asked to skim past.
+
+    `##` is rustdoc's escape for a literal `#` and survives as one; `#[derive(…)]`
+    is an attribute rather than setup and stays. Only `rust` blocks are touched —
+    a `#` opening a line of shell or of transcript output is a comment or a
+    prompt, not hidden code.
+
+    **`<!-- asserted-by: … -->` markers go too.** They name the test that holds a
+    claim true (`unasserted_claims`), which is a fact about the repository rather
+    than about the game being written, and the reader of `docs/api/` cannot open
+    the test anyway. Dropping them keeps the marker free: a maintainer can put one
+    on every claim that deserves it without spending a token.
+    """
+    text = ASSERTED_BY_LINE_RE.sub("", text)
+    text = ASSERTED_BY_RE.sub("", text)
+    out, in_rust = [], False
+    for line in text.splitlines():
+        stripped = line.lstrip()
+        if stripped.startswith("```"):
+            in_rust = stripped.startswith("```rust")
+            out.append(line)
+            continue
+        if in_rust:
+            if stripped.startswith("##"):
+                out.append(line.replace("##", "#", 1))
+                continue
+            if stripped == "#" or stripped.startswith("# "):
+                continue
+        out.append(line)
+    return "\n".join(out)
+
+
+def crate_of(source: str) -> str:
+    """The crate a source path belongs to, spelled as the facade imports it."""
+    parts = Path(source).parts
+    if "crates" in parts:
+        return parts[parts.index("crates") + 1].replace("-", "_")
+    return ""
+
+
+def defining_crates(sources: "list[Path]") -> "dict[str, set[str]]":
+    """Every top-level public item name, and the crates that define one.
+
+    Only top-level declarations: a member of an `impl` block is scoped by its
+    type and cannot collide across crates the way a free function can.
+    """
+    found: "dict[str, set[str]]" = {}
+    for source in sources:
+        crate = crate_of(str(source))
+        try:
+            lines = source.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            match = DEFINITION_RE.match(line)
+            if match and match.group(1) == "":
+                found.setdefault(match.group(3), set()).add(crate)
+    return found
+
+
+def exporting_crate(facade: str) -> "dict[str, str]":
+    """Which crate the facade re-exports each name from."""
+    out: "dict[str, str]" = {}
+    for crate, _, items in PUB_USE_RE.findall(facade):
+        for item in items.split(","):
+            item = item.strip()
+            if item:
+                out[item] = crate
+    for crate, item in PUB_USE_ONE_RE.findall(facade):
+        out[item] = crate
+    return out
+
+
+def resolve_ambiguous(
+    items: "dict[str, Item]", sources: "list[Path]", facade: str
+) -> "list[str]":
+    """Re-key any exported name two crates define, to the one the facade means.
+
+    `scan_sources` takes the first definition of a name it meets and its docstring
+    used to say why that was safe: "the facade re-exports one of each and there
+    are no duplicate public type names across the crates". **That stopped being
+    true and nothing noticed.** `encode_png` is defined in `jidousha-assets`
+    (taking a `TextureData`) and in `jidousha-render-core` (taking a `RawImage`);
+    the facade re-exports the render-core one, and the reference documented the
+    other because `crates/jidousha-assets/` sorts first. A game author copying
+    `encode_png(&texels)` out of the document got a type error, and the
+    document's own worked example — which calls it on a captured frame — was the
+    contradiction nobody read (e0-findings.md F-136).
+
+    The facade already says which crate it means, on the `pub use` line. This
+    honours it: for every colliding name, the crate's own files are rescanned and
+    that definition replaces whichever one sorted first. Returns the names it had
+    to disambiguate, so the run says so rather than resolving in silence — a
+    silent right answer and a silent wrong one look identical from outside.
+    """
+    collisions = {
+        name: crates for name, crates in defining_crates(sources).items() if len(crates) > 1
+    }
+    if not collisions:
+        return []
+    exported = exporting_crate(facade)
+    resolved = []
+    for name, crates in sorted(collisions.items()):
+        crate = exported.get(name)
+        if crate is None or crate not in crates:
+            continue
+        wanted = [source for source in sources if crate_of(str(source)) == crate]
+        fresh = scan_sources(wanted)
+        if name in fresh:
+            items[name] = fresh[name]
+            resolved.append(f"{name} (from {crate})")
+    return resolved
+
+
 def scan_sources(sources: "list[Path]") -> "dict[str, Item]":
     """Every public item the sources declare, by name.
 
-    First definition wins, as before — the facade re-exports one of each and
-    there are no duplicate public type names across the crates.
+    First definition wins *within* this scan, which is not the same as being
+    right: two crates may define one public name, and which of them sorts first
+    is a fact about the file system. `resolve_ambiguous` re-keys those to the
+    crate the facade actually re-exports from, and this function is deliberately
+    left simple so that it can be called again on one crate's files to get the
+    other answer.
 
     Every file is read for declarations before any file is read for `impl`
     blocks. Attaching a member needs its type to exist already, and a type's
@@ -1111,7 +1336,10 @@ def documents(repo: Path) -> "list[Document]":
     that belongs to a different reader.
     """
     facade = (repo / "crates/jidousha/src/lib.rs").read_text(encoding="utf-8")
-    items = scan_sources(crate_sources(repo))
+    sources = crate_sources(repo)
+    items = scan_sources(sources)
+    for name in resolve_ambiguous(items, sources, facade):
+        print(f"[gen-api-doc] two crates define {name}; the facade's is the one documented")
     return [
         Document(
             path=GAME_OUTPUT,
@@ -1124,6 +1352,12 @@ def documents(repo: Path) -> "list[Document]":
             budget=TESTING_BUDGET,
             allowed=TESTING_VOCABULARY,
             text=render_testing(repo, facade, items),
+        ),
+        Document(
+            path=CAPTURE_OUTPUT,
+            budget=CAPTURE_BUDGET,
+            allowed=CAPTURE_VOCABULARY,
+            text=render_capture(repo, facade, items),
         ),
         Document(
             path=CONTROLLERS_OUTPUT,
@@ -1140,7 +1374,7 @@ def documents(repo: Path) -> "list[Document]":
 def render_game(repo: Path, facade: str, items: "dict[str, Item]") -> str:
     """The document a game is written from."""
     quickstart = (repo / "crates/jidousha/examples/quickstart.rs").read_text(encoding="utf-8")
-    concepts = (repo / "tools/api-doc/concepts.md").read_text(encoding="utf-8").strip()
+    concepts = visible_prose((repo / "tools/api-doc/concepts.md").read_text(encoding="utf-8")).strip()
     conventions = (repo / "docs/conventions.md").read_text(encoding="utf-8")
 
     out = [
@@ -1225,13 +1459,18 @@ def render_game(repo: Path, facade: str, items: "dict[str, Item]") -> str:
         "itself. `crates/jidousha/examples/slalom/` is all of it worked. Read it third",
         "or not at all — a check whose player is a blind `InputScript` never needs it.",
         "",
+        "**And a fourth, read last:** `docs/api/jidousha-capture.md` is how one recorded",
+        "frame is rendered for real and written out as a PNG. A picture answers what no",
+        "assertion reaches — whether it *looks* like the game — and it is the instrument",
+        "that catches a frame every check was happy with.",
+        "",
     ]
     return "\n".join(out)
 
 
 def render_testing(repo: Path, facade: str, items: "dict[str, Item]") -> str:
     """The document a game's check is written from."""
-    testing = (repo / "tools/api-doc/testing.md").read_text(encoding="utf-8").strip()
+    testing = visible_prose((repo / "tools/api-doc/testing.md").read_text(encoding="utf-8")).strip()
 
     out = [
         "# Jidousha — checking a game you wrote",
@@ -1254,10 +1493,11 @@ def render_testing(repo: Path, facade: str, items: "dict[str, Item]") -> str:
         "`GameConfig`, `Vec2` and the rest come from `jidousha::prelude` and are",
         "documented in the other file. A check imports both.",
         "",
-        "**This document names a renderer and the other one does not**, and that is",
-        "deliberate rather than an oversight: a picture has to be drawn by something,",
-        "so the capture recipe cannot be written without it. A shipped game still never",
-        "names a backend — only a check does.",
+        "**Nothing here names a renderer.** A check asserts on what was *submitted*,",
+        "which needs no GPU and no window: `FramePlan` appears because a recorded frame",
+        "carries the colour the camera cleared to, and that is the whole of it. Drawing",
+        "a frame for real is `docs/api/jidousha-capture.md`, which is the one document",
+        "that names a backend, and the one to read after this.",
         "",
         "## Testing your game",
         "",
@@ -1266,7 +1506,7 @@ def render_testing(repo: Path, facade: str, items: "dict[str, Item]") -> str:
         "## Reference",
         "",
     ]
-    testing_names = testing_exports(facade)
+    testing_names = [name for name in testing_exports(facade) if name not in CAPTURE_ITEMS]
     if testing_names:
         out += [
             "### `jidousha::testing`",
@@ -1280,6 +1520,56 @@ def render_testing(repo: Path, facade: str, items: "dict[str, Item]") -> str:
     return "\n".join(out)
 
 
+def render_capture(repo: Path, facade: str, items: "dict[str, Item]") -> str:
+    """The document a game's capture path is written from.
+
+    The fourth split (ADR-0035), on ADR-0025's rule: taking a picture is a
+    distinct task, done last, by a reader whose `--verify` mode already runs. It
+    is the first split to move *reference* entries as well as prose, which is why
+    `CAPTURE_ITEMS` exists and why the borrowed vocabulary is named below rather
+    than duplicated.
+    """
+    capture = visible_prose((repo / "tools/api-doc/capture.md").read_text(encoding="utf-8")).strip()
+
+    out = [
+        "# Jidousha — taking a picture of a frame",
+        "",
+        "GENERATED by `tools/gen-api-doc`. Do not edit; edit the facade crate or",
+        "`tools/api-doc/` and regenerate.",
+        "",
+        "The fourth of four, and the last one to read. `docs/api/jidousha-api.md` is how",
+        "a game is written, `docs/api/jidousha-testing.md` is how it is checked, and this",
+        "is how one frame of it is rendered for real and written out as a PNG.",
+        "",
+        "**It assumes the checking document.** `FrameRecord`, `FrameRecorder`,",
+        "`FramePlan`, `BackendTextureId` and `PhysicalSize` are defined there and are not",
+        "repeated here — a capture path is written beside a `--verify` mode that already",
+        "has them. The Reference at the end is the rest, and the same one import:",
+        "",
+        "```rust",
+        "use jidousha::testing::*;",
+        "```",
+        "",
+        "**This document names a renderer and the other three do not.** A picture has to",
+        "be drawn by something, so `WgpuBackend` is here and nowhere else. A shipped game",
+        "still never names a backend — only a capture path does.",
+        "",
+        "## Taking a picture",
+        "",
+        capture,
+        "",
+        "## Reference",
+        "",
+        "### `jidousha::testing`, the rendering half",
+        "",
+        "What a capture path calls and a check that never renders does not.",
+        "",
+    ]
+    for name in [item for item in testing_exports(facade) if item in CAPTURE_ITEMS]:
+        out += render_item(items.get(name, Item(name=name)))
+    return "\n".join(out)
+
+
 def render_controllers(repo: Path) -> str:
     """The document the player inside a check is written from.
 
@@ -1288,7 +1578,7 @@ def render_controllers(repo: Path) -> str:
     reference entries in the testing document. A second copy of them here would
     be a second place to keep them right.
     """
-    controllers = (repo / "tools/api-doc/controllers.md").read_text(encoding="utf-8").strip()
+    controllers = visible_prose((repo / "tools/api-doc/controllers.md").read_text(encoding="utf-8")).strip()
     return "\n".join(
         [
             "# Jidousha — driving a game you cannot watch",
@@ -1588,6 +1878,25 @@ def main(argv: "list[str]") -> int:
                     "reword the doc comment at the definition; docs/api never mentions "
                     "internals (public-api.md §4). Only the testing document may name a "
                     "renderer, and only the three words in TESTING_VOCABULARY",
+                )
+            )
+
+    # The `asserted-by:` markers are checked against the *source* prose rather
+    # than the generated document, because rendering drops them: they are the
+    # maintainer's linkage between a claim and its proof, and a reader of
+    # `docs/api/` neither sees them nor could open what they name.
+    for source in sorted(PROSE.glob("*.md")):
+        missing = unasserted_claims(source.read_text(encoding="utf-8"), REPO_ROOT)
+        if missing:
+            failures.append(
+                problem(
+                    f"{source.relative_to(REPO_ROOT)} names a test that does not exist",
+                    f"missing: {', '.join(missing)}",
+                    "the test was renamed or deleted while the claim it backs stayed — "
+                    "which is how a document sentence outlives the thing that made it true",
+                    "point the marker at the test that holds the claim now, or write one. "
+                    "If the claim has stopped being true, the sentence goes rather than "
+                    "the marker",
                 )
             )
 

@@ -18,10 +18,11 @@ The prose before it also uses the game's own vocabulary — `headless`,
 `GameConfig`, `Vec2` and the rest come from `jidousha::prelude` and are
 documented in the other file. A check imports both.
 
-**This document names a renderer and the other one does not**, and that is
-deliberate rather than an oversight: a picture has to be drawn by something,
-so the capture recipe cannot be written without it. A shipped game still never
-names a backend — only a check does.
+**Nothing here names a renderer.** A check asserts on what was *submitted*,
+which needs no GPU and no window: `FramePlan` appears because a recorded frame
+carries the colour the camera cleared to, and that is the whole of it. Drawing
+a frame for real is `docs/api/jidousha-capture.md`, which is the one document
+that names a backend, and the one to read after this.
 
 ## Testing your game
 
@@ -46,6 +47,69 @@ futures deep, up to four hundred ticks each, on every decision. So simulate
 rather than solve: running the game forward and looking is allowed, and it is
 usually both simpler and more honest than a closed form kept in step by hand.
 Design for a slow tick and you will design around a cost that is not there.
+
+**A whole *game* is cheap to build too, which is what makes a tuning sweep a loop
+rather than a shell script.** `headless(config, setup)` builds a fresh simulation
+on every call and keeps nothing between them, so forty candidate settings are
+forty sims in one process. The thing that stops a game taking that offer is where
+its numbers live: a `const` is fixed when the binary is, so a game whose speeds
+and sizes are constants can only be swept by rewriting its own source between
+runs. That script is a reasonable thing to write and it does work; it is worth
+knowing before you write it that you do not have to.
+
+**A game that expects to be tuned puts the numbers a sweep would vary in a
+resource.** One `Copy` struct, an associated constant for the set the game ships
+with, and a `Startup` system that takes what it finds in the world or falls back
+to that set:
+
+```rust
+#[derive(Clone, Copy)]
+struct Tuning {
+    paddle_speed: f32,
+    ball_speed: f32,
+    ramp: f32,
+}
+impl Resource for Tuning {}
+
+impl Tuning {
+    /// What the game ships with — the row the sweep chose.
+    const SHIPPED: Self = Self { paddle_speed: 20.0, ball_speed: 42.0, ramp: 1.12 };
+}
+
+fn spawn_court(world: &mut World) {
+    // Whatever a harness put here before the first tick, or the shipped set.
+    let tuning = world.find_resource::<Tuning>().copied().unwrap_or(Tuning::SHIPPED);
+    world.insert_resource(tuning);
+    // ... spawn the paddles and the ball from `tuning`
+}
+```
+
+**The window between building a game and running it is where a check gets its
+say.** `Startup` runs *inside* the first tick, and `world_mut()` is yours before
+you call it — so a candidate inserted there is what `Startup` finds:
+
+```rust
+for candidate in candidates {
+    let mut sim = headless(GameConfig::default(), build_game);
+    sim.world_mut().insert_resource(candidate);   // before tick 1
+    for _ in 0..TICKS {
+        sim.tick();
+    }
+    println!("{candidate:?}: {}", score_of(&sim));
+}
+```
+
+The windowed `run` inserts nothing and gets `SHIPPED`, so the game a person plays
+is the game the sweep's best row describes — and after `Startup` every system
+reads `world.resource::<Tuning>()` and cannot miss, because `Startup` pinned it.
+
+**It is a trade, and a game with two numbers should not take it.** A constant is
+checked at compile time, reads with no indirection and can appear in a `const fn`;
+a resource is none of those. What buys the change is a sweep you expect to run
+more than twice. Below that bar, rewrite the source between runs and do not
+apologise for it — just keep the winning row in the source rather than in the
+script, because the script's last write is whatever the last candidate happened
+to be.
 
 **"Forward" means your game's own step functions, not a copy of the
 simulation.** There is no way to fork a `HeadlessSim` — `World` is not
@@ -324,6 +388,28 @@ without a word from anything. A game that shipped exactly that had eight other
 assertions passing — glyphs existed, the score was placed, the world was
 correct — and only this one would have caught it.
 
+**Then print the margin it passed by, because the check itself is a cliff.** It
+answers yes or no, so a layout 0.03 world units from the edge reads exactly like
+one 3.0 units clear, and a game has shipped at 0.03 without anybody knowing —
+the assertion was right, would have kept passing, and would have started failing
+the day anything moved. The same fold that walks the quads answers it:
+
+```rust
+let clearance = frame
+    .quads()
+    .into_iter()                             // `quads()` builds a Vec, so this
+    .map(|quad| {                            // walks the one the check above made
+        let bounds = quad.bounds();
+        let gap = (bounds.min - view.min).min(view.max - bounds.max);
+        gap.x.min(gap.y)
+    })
+    .fold(f32::MAX, f32::min);
+println!("closest quad to the edge: {clearance:.2} world units");
+```
+
+A number in the summary turns the cliff into a gradient, and it costs one line of
+a run a check already makes. `examples/prototype_kit` prints it.
+
 **And centring a multi-line block by `width_of` centres only its longest line.**
 `width_of` is the width of the widest line, and `ctx.text` lays a block out from
 one top-left corner — so subtracting half of it puts the longest line in the
@@ -481,106 +567,26 @@ under a timeout, parses the verdict, writes a report, and lifts the path of any
 picture the run captured into a field of its own in that report.
 `cargo run -p <crate> --example <name> -- --verify` is the same thing by hand.
 
-**The picture is yours to take.** `tools/verify` renders nothing: it reads one
-line out of what your `--verify` mode printed, and a run that captures nothing
-passes. So a frame you can *look* at is one your `--verify` mode drew — worth
-doing, because a picture answers what no assertion here reaches: whether it looks
-like the game.
+**Taking a picture of a frame is a fourth document**,
+`docs/api/jidousha-capture.md`: rendering one recorded frame for real, writing it
+out as a PNG, and the four things about that path which are silent when you get
+them wrong. It is worth doing — a picture answers what no assertion here reaches,
+and it has twice caught a fault every check in a game was happy with. Read it
+last, once this document's checks run.
 
-**And the frame you already recorded is the one to draw.** You do not replay the
-session, and you do not restructure your game to hand it a renderer.
-`FrameRecord` carries a `plan` — the finished frame, with the depth sort and the
-batching already done — and a renderer built for the purpose will execute it:
-
-```rust
-// `PhysicalSize` is not in this list: it is in the prelude, which a game's
-// `--verify` file already globs, and taking it from `testing` as well is the
-// same item twice. Only the testing-only names belong here.
-use jidousha::testing::{
-    FONT_TEXTURE, RenderBackend, RenderError, WgpuBackend, create_builtin_textures, encode_png,
-};
-
-// Same 16:9 shape as the recorder's viewport — see the first trap below.
-let mut gpu = WgpuBackend::offscreen(PhysicalSize::new(480, 270));
-for _ in 0..10_000 {                    // the renderer is poll-based, and a
-    match gpu.poll() {                  // `--verify` run has no frame loop
-        Ok(()) if gpu.is_ready() => break,
-        Ok(()) => {}
-        // No adapter is a fact about the machine, not a failure. Every other
-        // error here is a fault — see the third trap below.
-        Err(error @ RenderError::NoAdapter { .. }) => {
-            return format!("skipped, no GPU on this machine ({error})");
-        }
-        Err(error) => return format!("skipped, the handshake failed ({error})"),
-    }
-}
-// The built-in textures, in the order your recorder created them, so the ids
-// inside the plan mean the same thing here — and one assertion that they do,
-// which is what separates "a PNG was written" from "a PNG of this game".
-let textures = create_builtin_textures(&mut gpu);
-assert_eq!(textures.resolve(FONT_TEXTURE), recorder.font_texture());
-gpu.render(&frame.plan).expect("the plan the recorder already accepted");
-let image = gpu.capture().expect("an offscreen renderer reads its own target");
-std::fs::write("target/verify/mygame.png", encode_png(&image))?;
-```
-
-`examples/prototype_kit/capture.rs` is that with its reasoning written down. It
-also shows the other shape available to you: because its own `play` is handed the
-renderer, it can run the whole session twice and check that the world did the
-same thing both times. Replaying the recorded plan is the cheaper road and the
-one that works whatever shape your game is.
-
-That "the ids mean the same thing" step is the load-bearing one, and it holds
-because both counters start empty and are filled by the same call in the same
-order. That is true of **a game that loads no assets** — every shape a colour,
-every string the built-in font. If yours loads art, the replay has to upload it
-too, or the plan names a texture the new renderer lacks. The assertion above is
-that step, and it costs one line whether or not you have art: without it, a plan
-whose ids drifted renders the wrong texture into a PNG that every other check in
-your `--verify` is happy with.
-
-Three things are easy to get wrong here, and silent when you do:
-
-- **Capture at the recorder's aspect ratio.** The projection was computed from the
-  viewport you handed `FrameRecorder::new` and is baked into every plan; nothing
-  downstream can recompute it. A capture of another shape stretches the picture
-  while every assertion you wrote goes on passing, because none of them look at
-  pixels. 480x270 for a 1280x720 recorder — and assert the ratio rather than
-  remembering it.
-- **Print the path in the line the tool reads.** `tools/verify` takes the first
-  line whose text starts with `capture:` and contains ` written to `, and puts
-  what follows into the report. Word it differently and the run still passes while
-  the report says no picture was taken.
-- **A machine with no GPU must still pass, and a broken one must not.** Every
-  runner is headless and some have no graphics stack at all, so
-  `RenderError::NoAdapter` is a fact about the machine: say the capture was
-  skipped, put that in the summary, keep the run green — and do not skip in
-  silence either. Every *other* handshake error is a fault, and reporting one of
-  those as "no GPU here" files a real problem as a property of the hardware, on
-  every machine, for ever. Match on the variant; it is in the Testing reference
-  with the rest.
-
-**Then open the file and look at it.** A capture path that writes a PNG is worth
-nothing on its own; the question is whether it writes *your game's* PNG, and a
-path wired to the wrong frame or to a stale plan passes every check that does not
-ask. So look — name what you see — then break the game on purpose and look again:
-move a paddle, stop drawing the score, change the clear colour, and confirm the
-picture follows.
-
-**The clear colour is the one part of the picture that leaves no quad behind, and
-it is still assertable.** A frame drawn on the wrong background is byte-identical
-under every check above, because none of them look at the background — but
-`FrameRecord` carries the `plan` it was drawn into, and a `FramePlan` carries the
-`clear_color` the camera asked for. So it is one line, and it needs no capture and
-no GPU:
+**The background leaves no quad behind, and is still assertable here.** A frame
+drawn on the wrong colour is byte-identical under every check above, because none
+of them look at the background — but `FrameRecord` carries the `plan` it was drawn
+into, and a `FramePlan` carries the `clear_color` the camera asked for. So it is
+one line, and it needs no capture and no GPU:
 
 ```rust
 assert_eq!(frame.plan.clear_color, palette::COURT);
 ```
 
-The capture and that assertion answer different questions and both are cheap: the
-picture says whether the frame *looks* right, and the plan says whether it cleared
-to the colour the camera asked for.
+That assertion and a capture answer different questions and both are cheap: the
+plan says whether the frame cleared to the colour the camera asked for, and a
+picture says whether it *looks* right.
 
 **That assertion in its naive form is a trap, and the shape of the trap is
 general.** Comparing what was drawn against the game's own constant does not
@@ -615,6 +621,14 @@ guarded its clear colour correctly walked into this anyway, reading the pairing
 as advice about colours. The requirement names no constant the game owns: the
 score sits in the **top third of `visible_bounds()`**, one number either side of
 the centre line, evenly set.
+
+**Three worked non-colour instances are in `examples/slalom/checks.rs`**, and
+they are there because reading the rule has not been enough for three runs
+running: a course wide enough for the glider *plus a gate's gap* rather than
+`assert_eq!(wall.min.x, -COURSE_HALF_WIDTH)`, a gate whose posts must fall inside
+the drawn walls, and the clear colour in the form above. Each says at the site
+what the other spelling would have cost. If the pairing reads as advice about
+colours, read those three — the transfer is the part that is hard, not the rule.
 
 **And state the requirement where the game actually operates, not at its most
 favourable point.** A requirement stated at a boundary is a requirement about a
@@ -672,14 +686,6 @@ impl Batch {
 }
 ```
 
-#### `create_builtin_textures`
-
-Upload the three textures the renderer always has, and name them.
-
-```rust
-pub fn create_builtin_textures(backend: &mut dyn RenderBackend) -> TextureTable;
-```
-
 #### `decode_png`
 
 Decode a PNG into RGBA8 texels.
@@ -727,14 +733,6 @@ impl DrawnQuad {
 }
 ```
 
-#### `encode_png`
-
-Encode RGBA8 texels as a PNG.
-
-```rust
-pub fn encode_png(image: &TextureData) -> Vec<u8>;
-```
-
 #### `find_bounds`
 
 The box around everything in `quads`, or `None` if there is nothing.
@@ -747,14 +745,6 @@ pub fn find_bounds(quads: impl IntoIterator<Item = DrawnQuad>) -> Option<Rect>;
 let all_of_it = find_bounds(covering_the_ball).expect("something was drawn");
 assert_eq!(all_of_it, Rect { min: Vec2::new(-1.0, -1.0), max: Vec2::new(2.0, 1.0) });
 assert!(find_bounds(Vec::new()).is_none());
-```
-
-#### `FONT_TEXTURE`
-
-The id every glyph quad samples.
-
-```rust
-pub const FONT_TEXTURE: TextureId = TextureId::from_bits(1);
 ```
 
 #### `FramePlan`
@@ -1000,18 +990,6 @@ pub struct QuadVertex {
 // Clone Copy Debug PartialEq
 ```
 
-#### `RawImage`
-
-Pixels read back off the GPU, for golden-image tests.
-
-```rust
-pub struct RawImage {
-    pub size: PhysicalSize,  // Size in pixels
-    pub rgba: Vec<u8>,  // RGBA8, row-major, top row first
-}
-// Clone Debug PartialEq Eq
-```
-
 #### `Recording`
 
 A whole session: what it was seeded with, and what happened on every tick.
@@ -1056,34 +1034,6 @@ pub enum RecordingError {
     Version { found: u16 },  // A recording, from a version this build does not read
     Snapshot(DecodeError),  // A complete record inside it did not decode
     OutOfOrder { found: u64, after: u64 },  // The timeline runs backwards
-}
-// Clone Debug PartialEq Eq Display
-```
-
-#### `RenderBackend`
-
-What every render backend implements.
-
-```rust
-pub trait RenderBackend {
-    fn create_texture(&mut self, desc: &TextureDesc, texels: &[u8]) -> BackendTextureId;  // Upload a texture and name it
-    fn destroy_texture(&mut self, id: BackendTextureId);  // Release a texture
-    fn resize_surface(&mut self, size: PhysicalSize);  // The surface changed size
-    fn render(&mut self, plan: &FramePlan) -> Result<(), RenderError>;  // Draw one frame
-    fn capture(&mut self) -> Result<RawImage, RenderError>;  // Read the last rendered frame back as pixels, for golden-image tests
-}
-```
-
-#### `RenderError`
-
-What can go wrong in a backend.
-
-```rust
-pub enum RenderError {
-    NoAdapter { detail: String },  // The machine will not give the engine a GPU to draw with
-    SurfaceLost { detail: String },  // The surface could not be acquired this frame
-    DeviceLost { detail: String },  // The device is gone; v1 does not recreate it
-    Unsupported { detail: String },  // The backend cannot do something the plan asked for
 }
 // Clone Debug PartialEq Eq Display
 ```
@@ -1147,23 +1097,6 @@ pub struct TextureData {
 // Clone Debug PartialEq Eq
 ```
 
-#### `TextureTable`
-
-Which backend texture each `TextureId` currently maps to.
-
-```rust
-pub struct TextureTable;
-
-impl TextureTable {
-    pub fn new(white: BackendTextureId, placeholder: BackendTextureId) -> Self;  // A table with the two built-in textures the renderer always has
-    pub fn register(&mut self, id: TextureId, backend: BackendTextureId);  // Record that `id`'s texels are on the GPU as `backend`
-    pub fn forget(&mut self, id: TextureId);  // Forget `id`, so it draws the placeholder again
-    pub fn is_ready(&self, id: TextureId) -> bool;  // Whether `id` has real texels behind it
-    pub fn resolve(&self, id: TextureId) -> BackendTextureId;  // What to actually sample for `id`
-    pub fn placeholder(&self) -> BackendTextureId;  // The placeholder's backend id
-}
-```
-
 #### `TickRecord`
 
 One tick of the timeline.
@@ -1178,29 +1111,5 @@ pub struct TickRecord {
 
 impl TickRecord {
     pub fn encode(&self) -> Vec<u8>;  // This record's bytes, self-delimiting
-}
-```
-
-#### `upload_ready_textures`
-
-Hand every newly loaded texture to the backend, and record where it landed.
-
-```rust
-pub fn upload_ready_textures(assets: &mut Assets, backend: &mut dyn RenderBackend, textures: &mut TextureTable);
-```
-
-#### `WgpuBackend`
-
-A renderer backed by wgpu.
-
-```rust
-pub struct WgpuBackend;
-// RenderBackend
-
-impl WgpuBackend {
-    pub fn new<W>(window: W, size: PhysicalSize) -> Result<Self, RenderError> where W: wgpu::DisplayAndWindowHandle + 'static;  // Ask for a GPU that can draw to `window`
-    pub fn offscreen(size: PhysicalSize) -> Self;  // Ask for a GPU that draws into a texture nobody sees
-    pub fn is_ready(&self) -> bool;  // Whether the GPU has arrived
-    pub fn poll(&mut self) -> Result<(), RenderError>;  // Move the GPU handshake along, if it is still going
 }
 ```

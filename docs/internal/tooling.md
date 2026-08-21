@@ -25,8 +25,9 @@ import, so they keep working when the package ecosystem is exactly what broke.
 | `tools/check-compile-fail` | Do the errors that must be compile errors still say the right thing? | 0 ok · 1 drifted · 2 harness broke |
 | `tools/verify` | What did the game actually do, with nobody watching? | 0 verified · 1 the example's assertions failed · 2 tooling/env fault |
 | `tools/check-assets` | Does every asset path in the code name a file that exists? | 0 all resolve · 1 a reference is broken · 2 the check could not run |
-| `tools/gen-api-doc` | Is `docs/api/` what the facade actually says? | 0 both written/current · 1 either stale, over its budget, or leaking vocabulary · 2 could not run |
-| `tools/check-api-coverage` | Is every public item shown in an example, written against the facade? | 0 covered · 1 a gap or a breach · 2 could not run |
+| `tools/gen-api-doc` | Is `docs/api/` what the facade actually says? | 0 written/current · 1 stale, over budget, leaking vocabulary, or naming a test or example that is not there · 2 could not run |
+| `tools/check-api-coverage` | Is every public item shown in an example — and can anything reach each `testing` export? | 0 covered · 1 a gap, an unreachable entry, or a breach · 2 could not run |
+| `tools/check-api-prose` | Does the hand-written half of `docs/api/` contain code that compiles? | 0 every block compiles · 1 one does not · 2 could not build the facade |
 
 Not built yet: `tools/check-tags`, `tools/check-headers`.
 
@@ -40,6 +41,7 @@ agent ──> tools/test ──> phase: tool-selftest  (python -m unittest, tool
                          phase: compile-fail   (tools/check-compile-fail)
                          phase: check-assets   (tools/check-assets)
                          phase: check-api-coverage (tools/check-api-coverage)
+                         phase: check-api-prose (tools/check-api-prose)
                          phase: api-doc        (tools/gen-api-doc --check)
                          phase: example:<name> (cargo run --example, one per example)
                               │
@@ -181,10 +183,23 @@ a row (stop rule printed, `failure-streak.json` count 2).
   cannot be forgotten. CI runs `--check`, which fails when a committed file
   differs — stale documentation is worse than none, because an agent believes it.
 
-  **Three documents**, split by what the reader is doing: `jidousha-api.md`
+  **Four documents**, split by what the reader is doing: `jidousha-api.md`
   (writing a game, 25k) since ADR-0025, `jidousha-testing.md` (checking one, 15k)
-  since the same, and `jidousha-controllers.md` (driving the check's player, 5k)
-  since ADR-0030 — each with its own token budget and its own vocabulary rule.
+  since the same, `jidousha-capture.md` (rendering one frame of it, 4k) since
+  ADR-0035, and `jidousha-controllers.md` (driving the check's player, 5k) since
+  ADR-0030 — each with its own token budget and its own vocabulary rule.
+
+  **The capture split is the first to move reference entries rather than only
+  prose**, which is a shape the checks had never been asked for: an item can now
+  be in two documents or in none, and both look fine in a diff. `CAPTURE_ITEMS`
+  is the routed set and the rule for it is stated — an item goes there when *no
+  entry outside the set names it*. `BackendTextureId`, `FramePlan` and
+  `PhysicalSize` stay behind for exactly that reason: each is named by an entry
+  that stays, so moving one would leave the testing document naming a type it
+  does not define (F-017). The vocabulary exemption moved with the recipe, so the
+  testing document no longer names a renderer at all — leaving the exemption
+  behind is the half of a split that is easy to land without noticing, and a
+  self-test refuses it.
   `Document` carries path, budget and vocabulary exception, so the budget,
   vocabulary and staleness checks are each written once and applied to a list;
   two copies of the staleness check is the drift F-016 was, and a third document
@@ -192,6 +207,71 @@ a row (stop rule printed, `failure-streak.json` count 2).
   only: its reader writes a controller with the other two documents' vocabulary,
   so a reference section here would be a second place to keep the same entries
   right.
+  **Both halves of that document are now compiled, and only one of them used to
+  be.** The reference comes from doc comments, whose examples are doctests —
+  `tools/test`'s `doc-test` phase runs forty-nine of them. The prose in
+  `tools/api-doc/` was hand-written and its code blocks were compiled by nothing:
+  every gate checked that document's formatting, vocabulary, example pointers and
+  token budget, and none checked whether its code was code. `tools/check-api-prose`
+  closes that, and found three defects in the eighteen blocks on its first run —
+  a `?` in a function returning `String`, two `expect` calls in a document that
+  denies `expect_used` two sections earlier, and a `.map` on a `Vec` in a snippet
+  added an hour before.
+
+  Blocks are *fragments*, so they take context from rustdoc's `# ` hidden-line
+  convention: compiled, never rendered, and therefore free of the token budget.
+  `gen-api-doc::visible_prose` drops them on the way to `docs/api/` and
+  `check-api-prose::unhide` reveals them on the way to `rustc`; the two are tested
+  against each other, because a hidden line that reached the page would put a test
+  fixture into the document and one that did not compile would make the check a
+  formality. The game-shaped half of the context — `Score`, `my_system`, a
+  `played()` fixture — lives in the tool rather than in eighteen copies, since it
+  is the same fiction each time and the prose already calls it the reader's own.
+
+  Nothing is *run*: a fragment's value is the sentence beside it, and what a
+  fragment can be wrong about is whether it compiles.
+
+  **`<!-- asserted-by: … -->` links a claim to the test that holds it true**, and
+  `gen-api-doc` refuses a marker naming a test that does not exist. Three
+  sentences in ten E0 runs have been *false* — a document claim contradicting the
+  code it described (F-055, F-068, F-097) — each found by a run leaning on it and
+  each fixed with a test written afterwards. Be exact about which half this is:
+  it does **not** check that a claim is true, because nothing mechanical can. It
+  checks that a claim which names its proof still has one, so the linkage rots
+  loudly. Same bargain as `dangling_examples` one level up — there a pointer at a
+  worked example, here a pointer at a proof.
+
+  Scoped to claims a game's `--verify` leans on: draw order and its
+  submission-order tie-break, `covering`'s boundary rule, quads per primitive,
+  the text metrics, tick numbering, registration order, `contains_rect` versus
+  `contains`. A falsehood there makes every game's check quietly wrong, which is
+  what justifies the ceremony. Claims about game design (F-080) and about the
+  document's own coverage (F-068) are assertable by nothing and are not asked to
+  be — saying so is part of the mechanism rather than an apology for it. Markers
+  are dropped on the way to `docs/api/` like hidden lines, so one costs no
+  tokens and can go on every claim that deserves it.
+
+- **`check-api-coverage` reads `jidousha::testing` too, and did not until run
+  10's triage.** `facade_items` stops at the prelude, so the verification
+  vocabulary — a third of the testing document's budget — was checked by nothing:
+  ADR-0028 found six items exported for a road only `prototype_kit` walked and
+  removed them, and nothing would have said so a second time. **Reachability has
+  two forms and a naive check gets the second wrong.** An item may be *used* by
+  an example, or *named in another entry's signature* — which is why it has an
+  entry at all, F-017 being the finding that a type named in a signature and
+  defined nowhere is a hole. `Batch` (F-036), `RawImage` and `DecodeError` are
+  all in the second class and none is written by a game. An entry does not make
+  itself reachable: the heading carries the item's own name, so it is removed
+  with the entry or every entry looks reachable from itself and the check reports
+  nothing, ever.
+
+  What is left is an item nobody uses and nothing mentions, in a document with a
+  hard token budget. It found one, `ReplaySource`, and the answer was to keep it
+  — it is the asset half of the replay story that `TickRecord::readiness` is the
+  other half of, and removing it would document a timeline with no way to replay
+  it. The exemption carries that reasoning, which is the point of the gate: the
+  question gets asked and the answer gets written down.
+
   Not rustdoc JSON, which needs nightly while `rust-toolchain.toml` pins stable;
   summaries are lifted from the `///` line above each definition, which is a
   bounded text problem with tests rather than a second toolchain.

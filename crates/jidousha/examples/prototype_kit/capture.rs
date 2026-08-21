@@ -20,6 +20,16 @@
 //! headless and some have no graphics stack at all; the run says so and the
 //! rest of the verification stands, exactly as the golden tests do
 //! (renderer.md §9).
+//!
+//! **This file is load-bearing documentation, not only an example.**
+//! `docs/api/jidousha-capture.md` names the four things about capture that are
+//! its own — the `capture:` line `tools/verify` parses, the aspect ratio, the
+//! texture-id check, and the no-GPU case — and sends the reader here for the
+//! path itself (ADR-0034). It used to carry the path as well, the two copies
+//! drifted, and the document's was the wrong one for six runs (e0-findings.md
+//! F-134). So the reasoning at each step below is what a game author reads
+//! instead of a second transcription: keep it written out, and if this path
+//! changes, the document's four bullets are what to check against it.
 
 use jidousha::prelude::*;
 use jidousha::testing::{

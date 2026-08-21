@@ -81,6 +81,14 @@ pub trait Submit {
     /// new line; nothing wraps (renderer.md §6). Use
     /// [`TextStyle::width_of`] to center it.
     ///
+    /// `at` is the top-left of the first character's *cell* rather than of its
+    /// ink: every glyph's quad is [`TextStyle::size`] tall whatever it draws
+    /// inside, and `\n` moves the pen down by exactly that with no leading. So
+    /// line `n` of a block, counting the first as zero, starts at
+    /// `at.y + n * size`, and an `N`-line block occupies
+    /// `at.y .. at.y + N * size` — the spacing as well as the total, which is
+    /// what a game's vertical layout is solved against.
+    ///
     /// The depth goes in the [`TextStyle`], not after it.
     ///
     /// DELIBERATE: the one verb here that takes no trailing `Depth`, and it

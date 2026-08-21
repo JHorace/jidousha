@@ -43,6 +43,9 @@ dep_count = load_tool("dep-count")
 verify = load_tool("verify")
 check_assets = load_tool("check-assets")
 gen_api_doc = load_tool("gen-api-doc")
+check_api_prose = load_tool("check-api-prose")
+check_api_coverage = load_tool("check-api-coverage")
+check_compile_fail = load_tool("check-compile-fail")
 api_coverage = load_tool("check-api-coverage")
 
 
@@ -448,16 +451,26 @@ class GenApiDocTest(unittest.TestCase):
     def test_only_the_document_given_the_exception_may_use_it(self):
         # The exception used to be a *section* cut out of the check, which meant
         # everything else forbidden could sit inside that section unnoticed. It
-        # is a per-document parameter now (ADR-0025): the testing document may
-        # name a renderer, and nothing else is excused anywhere.
+        # is a per-document parameter now (ADR-0025), and after ADR-0035 the
+        # document holding it is the **capture** one: a picture has to be drawn
+        # by something, and nothing else in the surface names a backend.
         text = "the capture goes through wgpu"
         self.assertIn("wgpu", gen_api_doc.forbidden_words(text))
-        self.assertEqual(gen_api_doc.forbidden_words(text, gen_api_doc.TESTING_VOCABULARY), [])
-        # The exception is three words wide and covers nothing else, so a
-        # document holding the exception is still held to all the rest.
+        self.assertEqual(gen_api_doc.forbidden_words(text, gen_api_doc.CAPTURE_VOCABULARY), [])
+        # And the testing document no longer holds it. This is the half of the
+        # split that is easy to land without noticing: moving the recipe out and
+        # leaving the exemption behind would let a renderer drift back in.
+        self.assertIn("wgpu", gen_api_doc.forbidden_words(text, gen_api_doc.TESTING_VOCABULARY))
+        self.assertEqual(
+            gen_api_doc.forbidden_words("the plan carries FramePlan", gen_api_doc.TESTING_VOCABULARY),
+            [],
+            "a check reads clear_color off a plan without rendering anything",
+        )
+        # The exception covers nothing else, so a document holding it is still
+        # held to all the rest.
         for refused in ("see jidousha_render_core", "stored in an Archetype", "see ADR-0010"):
             self.assertNotEqual(
-                gen_api_doc.forbidden_words(refused, gen_api_doc.TESTING_VOCABULARY),
+                gen_api_doc.forbidden_words(refused, gen_api_doc.CAPTURE_VOCABULARY),
                 [],
                 refused,
             )
@@ -826,6 +839,297 @@ def scan_snippet(*texts):
     for item in items.values():
         gen_api_doc.order_members(item)
     return items
+
+
+class CaptureSplitTest(unittest.TestCase):
+    """The fourth split (ADR-0035), and the ways it can be landed half-done.
+
+    It is the first split to move *reference* entries rather than only prose, so
+    an item can now be in two documents or in none, and both look fine in a diff.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        root = REPO_ROOT
+        cls.testing = (root / "docs/api/jidousha-testing.md").read_text(encoding="utf-8")
+        cls.capture = (root / "docs/api/jidousha-capture.md").read_text(encoding="utf-8")
+        cls.facade = (root / "crates/jidousha/src/lib.rs").read_text(encoding="utf-8")
+
+    def test_every_testing_export_has_exactly_one_entry(self):
+        # Not "at least one": an item rendered into both documents is paid for
+        # twice, and the budget is the reason the split happened.
+        for name in gen_api_doc.testing_exports(self.facade):
+            heading = f"#### `{name}`"
+            homes = [
+                document
+                for document, text in (("testing", self.testing), ("capture", self.capture))
+                if heading in text
+            ]
+            self.assertEqual(len(homes), 1, f"{name} has entries in {homes or 'neither'}")
+
+    def test_the_capture_document_holds_exactly_the_capture_items(self):
+        for name in gen_api_doc.CAPTURE_ITEMS:
+            self.assertIn(f"#### `{name}`", self.capture, name)
+            self.assertNotIn(f"#### `{name}`", self.testing, name)
+
+    def test_a_borrowed_type_is_defined_where_it_is_named_by_a_staying_entry(self):
+        # F-017: a type named in a signature and defined nowhere is a hole. These
+        # three are named by entries that stay, so moving them would open one —
+        # the capture document borrows them and says so instead.
+        for borrowed in ("BackendTextureId", "FramePlan", "PhysicalSize"):
+            self.assertNotIn(borrowed, gen_api_doc.CAPTURE_ITEMS, borrowed)
+            self.assertIn(f"#### `{borrowed}`", self.testing, borrowed)
+        for borrowed in ("BackendTextureId", "FramePlan", "PhysicalSize"):
+            self.assertIn(borrowed, self.capture, "the capture document names what it borrows")
+
+    def test_the_testing_document_stops_naming_a_renderer(self):
+        # The half that is easy to leave behind: move the recipe out, keep the
+        # vocabulary exemption, and a backend drifts back in unnoticed.
+        # Stronger than "it holds no exemption for a renderer": the word is not in
+        # the document at all, so the exemption it does hold is exactly the one
+        # thing a check reads without rendering — a plan's `clear_color`.
+        self.assertEqual(gen_api_doc.forbidden_words(self.testing), ["FramePlan"])
+        self.assertEqual(gen_api_doc.forbidden_words(self.testing, gen_api_doc.TESTING_VOCABULARY), [])
+        self.assertNotIn("wgpu", gen_api_doc.TESTING_VOCABULARY)
+        self.assertIn("wgpu", gen_api_doc.CAPTURE_VOCABULARY)
+        self.assertIn("wgpu", gen_api_doc.forbidden_words(self.capture))
+
+    def test_each_document_points_at_the_next_one(self):
+        game = (REPO_ROOT / "docs/api/jidousha-api.md").read_text(encoding="utf-8")
+        self.assertIn("docs/api/jidousha-capture.md", game, "the reader has to learn it exists")
+        self.assertIn("docs/api/jidousha-capture.md", self.testing)
+        self.assertIn("docs/api/jidousha-testing.md", self.capture)
+
+
+class MetadataSinkTest(unittest.TestCase):
+    """Where a compile check throws its output away.
+
+    `-o /dev/null` looks like the obvious way to say "compile but keep nothing",
+    and it is wrong: rustc creates its temporary output directory *beside* the
+    path `-o` names, so it asks to write into `/dev`. That succeeds for a root
+    user and fails on every CI runner with `couldn't create a temp dir:
+    Permission denied`, in a message that never mentions `-o`. Both compile
+    checks had the line; only the one that expects snippets to *succeed* ever
+    reached the emit step.
+    """
+
+    def test_the_sink_is_a_writable_path_under_target(self):
+        for tool in (check_api_prose, check_compile_fail):
+            sink = tool.METADATA_SINK
+            self.assertEqual(
+                sink.parent,
+                REPO_ROOT / "target",
+                f"{sink} must be somewhere the runner can write",
+            )
+            self.assertNotIn("null", sink.name.lower())
+
+    def test_neither_tool_still_names_a_device_file(self):
+        for name in ("check-api-prose", "check-compile-fail"):
+            text = (REPO_ROOT / "tools" / name).read_text(encoding="utf-8")
+            code = "\n".join(
+                line for line in text.splitlines() if not line.lstrip().startswith("#")
+            )
+            self.assertNotIn('"/dev/null"', code, name)
+            self.assertNotIn('"NUL"', code, name)
+
+
+class AmbiguousExportTest(unittest.TestCase):
+    """Two crates, one public name, and the facade says which it means.
+
+    `scan_sources` took the first definition it met and the docstring said that
+    was safe because "there are no duplicate public type names across the
+    crates". `encode_png` is defined in two, and the reference documented the one
+    the facade does not export (e0-findings.md F-136).
+    """
+
+    def _crate(self, root, crate, name, body):
+        path = root / "crates" / crate / "src"
+        path.mkdir(parents=True, exist_ok=True)
+        (path / f"{name}.rs").write_text(body, encoding="utf-8")
+        return path / f"{name}.rs"
+
+    def test_the_crate_the_facade_exports_from_is_the_one_documented(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            a = self._crate(
+                root, "jidousha-assets", "encode", "pub fn encode_png(image: &TextureData) -> Vec<u8> {}"
+            )
+            b = self._crate(
+                root, "jidousha-render-core", "golden", "pub fn encode_png(image: &RawImage) -> Vec<u8> {}"
+            )
+            sources = [a, b]
+            facade = "pub mod testing { pub use jidousha_render_core::{encode_png}; }"
+            items = gen_api_doc.scan_sources(sources)
+            self.assertIn("TextureData", items["encode_png"].decl, "first-wins takes the wrong one")
+            resolved = gen_api_doc.resolve_ambiguous(items, sources, facade)
+        self.assertEqual(resolved, ["encode_png (from jidousha_render_core)"])
+        self.assertIn("RawImage", items["encode_png"].decl)
+
+    def test_a_name_only_one_crate_defines_is_left_alone(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            only = self._crate(root, "jidousha-core", "visual", "pub struct Rect {}")
+            resolved = gen_api_doc.resolve_ambiguous(
+                gen_api_doc.scan_sources([only]), [only], "pub use jidousha_core::{Rect};"
+            )
+        self.assertEqual(resolved, [])
+
+    def test_a_collision_the_facade_exports_neither_of_is_not_touched(self):
+        # Two internal helpers sharing a name is not this tool's business: the
+        # document only ever shows what the facade re-exports.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            a = self._crate(root, "jidousha-assets", "one", "pub fn helper() {}")
+            b = self._crate(root, "jidousha-input", "two", "pub fn helper() {}")
+            resolved = gen_api_doc.resolve_ambiguous(
+                gen_api_doc.scan_sources([a, b]), [a, b], "pub use jidousha_core::{Rect};"
+            )
+        self.assertEqual(resolved, [])
+
+    def test_the_crate_is_read_off_the_path_the_way_the_facade_spells_it(self):
+        self.assertEqual(
+            gen_api_doc.crate_of("/x/crates/jidousha-render-core/src/golden.rs"),
+            "jidousha_render_core",
+        )
+
+    def test_the_real_surface_has_its_collisions_resolved(self):
+        sources = gen_api_doc.crate_sources(REPO_ROOT)
+        facade = (REPO_ROOT / "crates/jidousha/src/lib.rs").read_text(encoding="utf-8")
+        items = gen_api_doc.scan_sources(sources)
+        gen_api_doc.resolve_ambiguous(items, sources, facade)
+        # The one that was wrong, and the one that was right by luck.
+        self.assertIn("RawImage", items["encode_png"].decl)
+        self.assertIn("TextureData", items["decode_png"].decl)
+
+
+class ApiProseTest(unittest.TestCase):
+    """The prose half of `docs/api/`, which nothing compiled until this tool.
+
+    Two halves have to agree or the mechanism is worse than none: what
+    `check-api-prose` compiles, and what `gen-api-doc` renders. A hidden line
+    that reached the page would put a fixture into the document; a hidden line
+    that did not compile would make the check a formality.
+    """
+
+    def test_a_rust_block_is_found_with_the_line_its_body_starts_on(self):
+        with tempfile.TemporaryDirectory() as directory:
+            prose = Path(directory) / "sample.md"
+            prose.write_text(
+                "intro\n\n```rust\nlet x = 1;\n```\n\nmore\n\n```text\nnot rust\n```\n",
+                encoding="utf-8",
+            )
+            found = check_api_prose.blocks_in(prose)
+        self.assertEqual(found, [(4, ["let x = 1;"])])
+
+    def test_a_block_that_is_not_rust_is_not_compiled(self):
+        with tempfile.TemporaryDirectory() as directory:
+            prose = Path(directory) / "sample.md"
+            prose.write_text("```\nverified pong over 5036 ticks\n```\n", encoding="utf-8")
+            self.assertEqual(check_api_prose.blocks_in(prose), [])
+
+    def test_hidden_lines_are_revealed_to_the_compiler(self):
+        revealed = check_api_prose.unhide(
+            ["# let frame = fixture();", "assert!(frame.quads().is_empty());", "## not hidden"]
+        )
+        self.assertEqual(
+            revealed,
+            ["let frame = fixture();", "assert!(frame.quads().is_empty());", "# not hidden"],
+        )
+
+    def test_hidden_lines_never_reach_the_generated_document(self):
+        rendered = gen_api_doc.visible_prose(
+            "```rust\n# let frame = fixture();\nassert!(true);\n## literal\n```\n"
+        )
+        self.assertEqual(rendered, "```rust\nassert!(true);\n# literal\n```")
+
+    def test_a_hash_outside_a_rust_block_is_left_alone(self):
+        # A `#` opening a line of shell or of transcript output is a comment or a
+        # prompt. Stripping it would silently edit the reader's instructions.
+        text = "```sh\n# run the check\ntools/verify pong\n```"
+        self.assertEqual(gen_api_doc.visible_prose(text), text)
+
+    def test_the_indentation_of_a_nested_block_survives_both_passes(self):
+        # Blocks inside a list item are indented, and F-122 is the finding that
+        # says what flattening them costs.
+        block = "  ```rust\n  # let a = 1;\n  let b = a + 1;\n  ```"
+        self.assertEqual(gen_api_doc.visible_prose(block), "  ```rust\n  let b = a + 1;\n  ```")
+        self.assertEqual(check_api_prose.unhide(["  # let a = 1;"]), ["  let a = 1;"])
+
+    def test_every_block_in_the_real_prose_is_wrapped_and_mapped_back(self):
+        sources = []
+        for path in sorted(check_api_prose.PROSE.glob("*.md")):
+            for start, lines in check_api_prose.blocks_in(path):
+                sources.append((path, start, lines))
+        self.assertTrue(sources, "the prose has code blocks and they should be found")
+        source, origins = check_api_prose.harness_source(sources)
+        self.assertEqual(len(origins), len(sources))
+        for index in range(len(sources)):
+            self.assertIn(f"fn block_{index}()", source)
+
+
+class AssertedByTest(unittest.TestCase):
+    """The linkage between a claim and the test that holds it true.
+
+    Three sentences in ten E0 runs have been false. This does not check that a
+    claim is true — nothing mechanical can — it checks that a claim naming its
+    proof still has one, so the linkage rots loudly rather than silently.
+    """
+
+    def test_a_marker_naming_a_missing_test_is_reported(self):
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            (repo / "crates").mkdir()
+            (repo / "crates" / "a.rs").write_text("fn the_real_one() {}", encoding="utf-8")
+            missing = gen_api_doc.unasserted_claims(
+                "a claim\n<!-- asserted-by: the_real_one, the_deleted_one -->\n", repo
+            )
+        self.assertEqual(missing, ["the_deleted_one"])
+
+    def test_a_marker_naming_a_test_that_exists_is_accepted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            (repo / "crates" / "deep").mkdir(parents=True)
+            (repo / "crates" / "deep" / "b.rs").write_text(
+                "#[test]\nfn a_named_proof() { assert!(true); }", encoding="utf-8"
+            )
+            self.assertEqual(
+                gen_api_doc.unasserted_claims("<!-- asserted-by: a_named_proof -->", repo), []
+            )
+
+    def test_a_marker_never_reaches_the_reader(self):
+        rendered = gen_api_doc.visible_prose(
+            "The first Update sees tick == 1.\n<!-- asserted-by: the_first_update_system_sees_tick_one -->\nnext\n"
+        )
+        self.assertEqual(rendered, "The first Update sees tick == 1.\nnext")
+
+    def test_a_trailing_marker_leaves_the_sentence_it_marks(self):
+        rendered = gen_api_doc.visible_prose("sixteen quads. <!-- asserted-by: a_proof -->\n")
+        self.assertEqual(rendered, "sixteen quads.")
+
+    def test_every_marker_in_the_real_prose_resolves(self):
+        # The check `gen-api-doc` runs, asserted here too so a breakage is a named
+        # test rather than a tool exit code.
+        for source in sorted(gen_api_doc.PROSE.glob("*.md")):
+            missing = gen_api_doc.unasserted_claims(
+                source.read_text(encoding="utf-8"), REPO_ROOT
+            )
+            self.assertEqual(missing, [], f"{source.name} names tests that do not exist")
+
+    def test_the_claims_that_a_verify_leans_on_are_marked(self):
+        # The mechanism is scoped to claims a game's `--verify` is built on, and
+        # a scope nobody checks is a scope that drifts. These are the ones.
+        marked = "".join(
+            source.read_text(encoding="utf-8") for source in gen_api_doc.PROSE.glob("*.md")
+        )
+        for proof in (
+            "quads_sort_by_layer_then_z_then_submission_order",
+            "a_circle_covers_a_disc_and_not_its_bounding_box",
+            "a_second_line_starts_exactly_one_size_below_the_first_with_no_leading",
+            "adjacent_rectangles_never_both_claim_a_point",
+            "the_first_update_system_sees_tick_one",
+            "update_systems_run_in_registration_order",
+        ):
+            self.assertIn(proof, marked, f"{proof} backs a claim and should be named by one")
 
 
 class ApiExtractionTest(unittest.TestCase):
@@ -1244,7 +1548,8 @@ class ApiReferenceContentTest(unittest.TestCase):
     a generator that extracts correctly and renders nothing is still a document
     that cannot be written from.
 
-    `reference` is the game document and `testing` its other half; assertions
+    `reference` is the game document, `testing` its other half and `capture` the
+    rendering half of that (ADR-0035); assertions
     about a *game's* vocabulary read the first, and anything about the size of
     the surface reads both (ADR-0025).
     """
@@ -1254,6 +1559,7 @@ class ApiReferenceContentTest(unittest.TestCase):
         root = Path(__file__).resolve().parents[2]
         cls.reference = (root / "docs/api/jidousha-api.md").read_text(encoding="utf-8")
         cls.testing = (root / "docs/api/jidousha-testing.md").read_text(encoding="utf-8")
+        cls.capture = (root / "docs/api/jidousha-capture.md").read_text(encoding="utf-8")
         cls.root = root
 
     def test_the_reference_names_the_rectangle_overlap_helpers(self):
@@ -1378,11 +1684,12 @@ class ApiReferenceContentTest(unittest.TestCase):
         # but a parser regression that halves the output has to fail loudly —
         # and it would be invisible in the diff of a document this size.
         #
-        # Counted over **both** documents, because the surface is what must not
-        # shrink and it now lives in two files. A floor on the game document
-        # alone would be satisfied by a bug that emitted the testing reference
-        # nowhere at all.
-        whole = self.reference + self.testing
+        # Counted over **every** document that carries reference entries, because
+        # the surface is what must not shrink and it now lives in three files. A
+        # floor on one of them would be satisfied by a bug that emitted another
+        # nowhere at all — and ADR-0035's split is exactly the change that moves
+        # entries between files without changing the total.
+        whole = self.reference + self.testing + self.capture
         self.assertGreater(whole.count("pub fn "), 150)
         self.assertGreater(whole.count("#### `"), 80)
 
@@ -1472,6 +1779,82 @@ class ApiCoverageTest(unittest.TestCase):
                 code = api_coverage.main(["check-api-coverage", "--root", directory])
             self.assertEqual(code, 2)
             self.assertIn("found nothing to check", err.getvalue())
+
+
+class TestingCoverageTest(unittest.TestCase):
+    """`jidousha::testing` was skipped by the coverage check entirely.
+
+    ADR-0028 found six items exported for a road only `prototype_kit` walked and
+    removed them. Nothing would have said so a second time, because
+    `facade_items` stops at the prelude and the testing module was never read.
+    """
+
+    DOC = (
+        "## Reference\n"
+        "#### `Used`\n```rust\npub struct Used;\n```\n"
+        "#### `NamedBySomethingElse`\n```rust\npub struct NamedBySomethingElse;\n```\n"
+        "#### `Orphan`\n```rust\npub struct Orphan;\n```\n"
+        "#### `Namer`\n```rust\nimpl Namer {\n"
+        "    pub fn get(&self) -> NamedBySomethingElse;\n}\n```\n"
+    )
+
+    def _sources(self, directory, text):
+        path = Path(directory) / "an_example.rs"
+        path.write_text(text, encoding="utf-8")
+        return [path]
+
+    def test_an_item_no_example_uses_and_nothing_names_is_reported(self):
+        with tempfile.TemporaryDirectory() as directory:
+            sources = self._sources(directory, "let x = Used; Namer::get(&x);")
+            orphans = check_api_coverage.unreachable_testing(
+                ["Used", "NamedBySomethingElse", "Orphan", "Namer"], sources, self.DOC
+            )
+        self.assertEqual(orphans, ["Orphan"])
+
+    def test_an_item_named_in_another_entrys_signature_is_reachable(self):
+        # F-017: a type named in a signature and defined nowhere is a hole, which
+        # is why `Batch` and `RawImage` have entries nobody writes by hand.
+        with tempfile.TemporaryDirectory() as directory:
+            sources = self._sources(directory, "// names nothing")
+            orphans = check_api_coverage.unreachable_testing(
+                ["NamedBySomethingElse"], sources, self.DOC
+            )
+        self.assertEqual(orphans, [])
+
+    def test_an_entry_does_not_make_itself_reachable(self):
+        # The heading carries the item's own name. Left in, every entry looks
+        # reachable from itself and the check reports nothing, ever.
+        entry = check_api_coverage.entry_of("Orphan", self.DOC)
+        self.assertIn("#### `Orphan`", entry)
+
+    def test_the_testing_module_is_read_and_the_prelude_is_not(self):
+        facade = (
+            "pub use jidousha_core::{Camera, World};\n"
+            "pub mod prelude { pub use crate::{Camera, World}; }\n"
+            "pub mod testing { pub use jidousha_input::{InputScript, Recording}; }\n"
+        )
+        self.assertEqual(
+            check_api_coverage.testing_items(facade), ["InputScript", "Recording"]
+        )
+        self.assertNotIn("InputScript", check_api_coverage.facade_items(facade))
+
+    def test_the_real_testing_surface_is_reachable(self):
+        repo = REPO_ROOT
+        items = check_api_coverage.testing_items(
+            (repo / "crates/jidousha/src/lib.rs").read_text(encoding="utf-8")
+        )
+        self.assertTrue(items, "the testing module exports something")
+        # Every generated document, not the testing one. ADR-0035 moved the
+        # rendering half into `jidousha-capture.md`, and a check reading one file
+        # called every moved item unreachable the moment the split landed.
+        reference = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in sorted((repo / "docs/api").glob("*.md"))
+        )
+        orphans = check_api_coverage.unreachable_testing(
+            items, check_api_coverage.example_sources(repo), reference
+        )
+        self.assertEqual(orphans, [], "an entry nobody can reach spends the budget on nothing")
 
 
 class DoctorAssetsTest(unittest.TestCase):

@@ -234,6 +234,54 @@ fn text_sits_where_it_says_it_does_and_measures_what_it_occupies() {
 }
 
 #[test]
+fn a_second_line_starts_exactly_one_size_below_the_first_with_no_leading() {
+    // Every vertical number in a game's layout is solved against this, and until
+    // E0 run 10 the document stated only the total an N-line block occupies —
+    // which constrains the height and says nothing about where line two begins.
+    // The run inferred the spacing from recorded bounds and was right; this is
+    // what keeps the sentence and the pen in step (e0-findings.md F-127).
+    const STYLE: TextStyle = TextStyle {
+        size: 2.0,
+        color: Color::WHITE,
+        depth: Depth { layer: 0, z: 0.0 },
+    };
+    fn draw(ctx: &mut DrawCtx) {
+        ctx.text(Vec2::new(-3.0, 1.0), "ab\ncd\nef", STYLE);
+    }
+    let (frame, _) = record(draw);
+    let quads = frame.quads();
+    assert_eq!(
+        quads.len(),
+        6,
+        "two glyphs a line, and `\n` submits nothing"
+    );
+
+    for line in 0..3u32 {
+        let first_of_line = quads[line as usize * 2].bounds();
+        let want = 1.0 + f32::from(line as u16) * STYLE.size;
+        assert!(
+            (first_of_line.min.y - want).abs() < 1e-5,
+            "line {line} starts at {} and should start at {want}",
+            first_of_line.min.y,
+        );
+        assert!(
+            (first_of_line.max.y - (want + STYLE.size)).abs() < 1e-5,
+            "line {line} is {} tall and every cell is exactly `size`",
+            first_of_line.max.y - first_of_line.min.y,
+        );
+    }
+
+    // No leading: the block is exactly `N * size` tall, and the lines tile it
+    // with no gap, which is the half a total alone cannot say.
+    let top = quads[0].bounds().min.y;
+    let bottom = quads[5].bounds().max.y;
+    assert!(
+        (bottom - top - 3.0 * STYLE.size).abs() < 1e-5,
+        "{top} .. {bottom}"
+    );
+}
+
+#[test]
 fn text_is_tinted_by_its_style() {
     // The glyphs are white in the atlas and the colour arrives as a tint, which
     // is the same mechanism a tinted sprite uses.

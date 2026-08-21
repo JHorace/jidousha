@@ -96,7 +96,9 @@ impl Default for Color {
 /// rect returns negative components rather than complaining, and `overlaps` and
 /// `contains` answer about a rectangle that does not exist. The two
 /// constructors cannot produce one from a non-negative `size`; a rect assembled
-/// from two corners by hand can, which is what E0 run 8 asked to be told.
+/// from two corners by hand can, which is what E0 run 8 asked to be told — and
+/// so can either constructor from a **negative** one, which is the half that
+/// wording carefully did not say and E0 run 10 noticed it not saying.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Rect {
     /// Top-left.
@@ -107,6 +109,11 @@ pub struct Rect {
 
 impl Rect {
     /// The rectangle covering `size` from its top-left corner.
+    ///
+    /// A negative component in `size` puts `max` above or left of `min` and
+    /// returns the inverted rect the type's CONTRACT says is not well-formed.
+    /// Nothing checks here either: this is the contract restated at the one
+    /// door that could have enforced it.
     #[must_use]
     pub fn from_min_size(min: Vec2, size: Vec2) -> Self {
         Self {
@@ -116,6 +123,9 @@ impl Rect {
     }
 
     /// The rectangle of `size` centered on `center`.
+    ///
+    /// A negative component in `size` inverts the rect about `center`, exactly
+    /// as in [`Rect::from_min_size`], and nothing checks.
     #[must_use]
     pub fn from_center_size(center: Vec2, size: Vec2) -> Self {
         let half = size * 0.5;
@@ -361,6 +371,22 @@ mod tests {
         assert_eq!(from_size, from_center);
         assert_eq!(from_size.size(), Vec2::new(4.0, 6.0));
         assert_eq!(from_size.center(), Vec2::new(3.0, 5.0));
+    }
+
+    #[test]
+    fn a_negative_size_inverts_a_constructed_rect_rather_than_being_refused() {
+        // The type's CONTRACT says a `Rect` is well-formed only with
+        // `min <= max` and that nothing checks. Both constructors are doors it
+        // can be pushed through, and the documentation now says so; this is the
+        // assertion that keeps the two in step (e0-findings.md F-132).
+        let inverted = Rect::from_min_size(Vec2::new(1.0, 2.0), Vec2::new(-4.0, -6.0));
+        assert_eq!(inverted.max, Vec2::new(-3.0, -4.0));
+        assert!(inverted.max.x < inverted.min.x && inverted.max.y < inverted.min.y);
+        assert_eq!(inverted.size(), Vec2::new(-4.0, -6.0));
+
+        let about_center = Rect::from_center_size(Vec2::ZERO, Vec2::new(-2.0, -2.0));
+        assert_eq!(about_center.min, Vec2::new(1.0, 1.0));
+        assert_eq!(about_center.max, Vec2::new(-1.0, -1.0));
     }
 
     #[test]
