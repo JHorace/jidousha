@@ -45,6 +45,7 @@ check_assets = load_tool("check-assets")
 gen_api_doc = load_tool("gen-api-doc")
 check_api_prose = load_tool("check-api-prose")
 check_api_coverage = load_tool("check-api-coverage")
+check_compile_fail = load_tool("check-compile-fail")
 api_coverage = load_tool("check-api-coverage")
 
 
@@ -898,6 +899,38 @@ class CaptureSplitTest(unittest.TestCase):
         self.assertIn("docs/api/jidousha-capture.md", game, "the reader has to learn it exists")
         self.assertIn("docs/api/jidousha-capture.md", self.testing)
         self.assertIn("docs/api/jidousha-testing.md", self.capture)
+
+
+class MetadataSinkTest(unittest.TestCase):
+    """Where a compile check throws its output away.
+
+    `-o /dev/null` looks like the obvious way to say "compile but keep nothing",
+    and it is wrong: rustc creates its temporary output directory *beside* the
+    path `-o` names, so it asks to write into `/dev`. That succeeds for a root
+    user and fails on every CI runner with `couldn't create a temp dir:
+    Permission denied`, in a message that never mentions `-o`. Both compile
+    checks had the line; only the one that expects snippets to *succeed* ever
+    reached the emit step.
+    """
+
+    def test_the_sink_is_a_writable_path_under_target(self):
+        for tool in (check_api_prose, check_compile_fail):
+            sink = tool.METADATA_SINK
+            self.assertEqual(
+                sink.parent,
+                REPO_ROOT / "target",
+                f"{sink} must be somewhere the runner can write",
+            )
+            self.assertNotIn("null", sink.name.lower())
+
+    def test_neither_tool_still_names_a_device_file(self):
+        for name in ("check-api-prose", "check-compile-fail"):
+            text = (REPO_ROOT / "tools" / name).read_text(encoding="utf-8")
+            code = "\n".join(
+                line for line in text.splitlines() if not line.lstrip().startswith("#")
+            )
+            self.assertNotIn('"/dev/null"', code, name)
+            self.assertNotIn('"NUL"', code, name)
 
 
 class AmbiguousExportTest(unittest.TestCase):

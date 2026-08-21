@@ -48,6 +48,10 @@ CRATE = "jidousha"
 CRATE_LIB = "jidousha"
 BUILD_TIMEOUT_S = 900
 COMPILE_TIMEOUT_S = 180
+# Where the compiled metadata is discarded. A real path under `target/` rather
+# than `/dev/null`, because rustc puts its temp directory beside `-o` — see
+# `compile_harness`.
+METADATA_SINK = REPO_ROOT / "target" / "api-prose.rmeta"
 
 FENCE_RE = re.compile(r"^\s*```(\w*)\s*$")
 
@@ -235,6 +239,21 @@ def build_facade() -> "str | None":
 
 
 def compile_harness(source: Path, rlib: str) -> "tuple[int, str]":
+    """Compile the harness, discarding the metadata into `target/`.
+
+    **Not `-o /dev/null`.** rustc creates its temporary output directory beside
+    the path `-o` names, so `-o /dev/null` asks it to write into `/dev` — which
+    works for a root user and fails on any CI runner with
+
+        couldn't create a temp dir: Permission denied (os error 13)
+            at path "/dev/rmetaZ1us3X"
+
+    and no mention of `-o` anywhere in the message. This is where the metadata
+    goes instead: a real, writable, git-ignored path beside the generated
+    harness. `tools/check-compile-fail` had the same line and never hit it,
+    because every snippet it compiles is *meant* to fail and rustc aborts before
+    it emits anything.
+    """
     deps = Path(rlib).parent
     proc = subprocess.run(
         [
@@ -245,7 +264,7 @@ def compile_harness(source: Path, rlib: str) -> "tuple[int, str]":
             "lib",
             "--emit=metadata",
             "-o",
-            "/dev/null" if sys.platform != "win32" else "NUL",
+            str(METADATA_SINK),
             "-L",
             f"dependency={deps}",
             "-L",
