@@ -5724,7 +5724,7 @@ inference.
 
 ## 4g. Run 10 triage — the whole run on one page
 
-Nine findings from the run, plus two the triage found while fixing them.
+Nine findings from the run, plus three the triage found while fixing them.
 **Class** is §1's; **settled by** names the ADR or `DELIBERATE:` tag that answers
 the complaint, where one does.
 
@@ -5772,6 +5772,7 @@ what F-111 and F-124 bought.
 | F-132 | `Rect::from_center_size` with a negative `size` is the half F-107's fix did not say | docs | **F-107**, whose wording carefully covers only non-negative | — | **fixed** in both constructors' doc comments, with a test pinning the inverted result |
 | F-133 | `Rng::next_f32`'s distribution at the endpoints is unstated | docs | first | — | **fixed**; half-open, `0.0` drawn and `1.0` never, with a test over 100,000 draws |
 | F-134 | the prose half of `docs/api/` was compiled by nothing, and contained code that does not compile | docs | **the triage's**, and **F-040**'s class — a snippet wrong in a way only a compiler sees | `tools/check-api-prose` | **fixed**; eighteen blocks now gated, three defects found on the first run |
+| F-136 | the reference documented the `encode_png` the facade does not export | docs | **F-055's class**, in the generated half for the first time | `resolve_ambiguous` | **fixed**; the crate on the `pub use` line decides, and the run says when it had to |
 | F-135 | three false sentences in ten runs, and the guard was still one test at a time | docs | **the triage's**, closing §4c's open question over **F-055, F-068, F-097** | `gen-api-doc`'s `asserted-by:` check | **half fixed, and scoped**; nine check-load-bearing claims now name their proof, and the two unassertable classes are named as staying a reader's job |
 
 **Three of the nine are novel: F-128, F-131, F-133.** The other six each name a
@@ -6146,6 +6147,42 @@ about game design (F-080) and claims about the document's own coverage (F-068 �
 reference lists) are assertable by nothing here. Two of the four false sentences
 on file are in that class. This mechanism halves the exposure; it does not close
 it, and a note claiming otherwise would be the fourth false sentence.
+
+### F-136 — The reference documented a function the facade does not export
+
+Class: docs · Run: **the triage's** · Also found by: **F-055's class**, in the generated half for the first time · Settled by: `resolve_ambiguous`
+
+Two crates define `encode_png`. `jidousha-assets` has one taking a `&TextureData`
+— texels on their way to a file — and `jidousha-render-core` has one taking a
+`&RawImage`, which is what comes back off a GPU. **The facade re-exports the
+render-core one and the reference documented the other**, because
+`scan_sources` takes the first definition it meets and `crates/jidousha-assets/`
+sorts first.
+
+The docstring said why that was safe:
+
+> First definition wins, as before — the facade re-exports one of each and there
+> are no duplicate public type names across the crates.
+
+The second clause stopped being true and nothing checked it. So a game author
+copying `encode_png(&texels)` out of the reference got a type error, while the
+same document's capture recipe called it on a captured frame — the two halves of
+one document contradicting each other, which is F-055's shape in the generated
+half rather than in the prose. Every gate passed: the signature was extracted
+faithfully, from the wrong function.
+
+**Found while splitting the capture material out**, by asking which document
+`encode_png` belongs in and reading its signature to decide.
+
+The facade already says which crate it means, on the `pub use` line, and nothing
+was reading it: `PUB_USE_RE` has captured the crate since it was written and both
+call sites discarded it. `resolve_ambiguous` re-scans the named crate's files for
+any colliding exported name and re-keys the entry, and the run **says** it did —
+a silent right answer and a silent wrong one look identical from outside, which
+is how this survived.
+
+It found a second: `decode_png`, also defined twice, where first-wins happened to
+pick the crate the facade exports. Right by luck, and now right by construction.
 
 ### F-133 — `Rng::next_f32`'s distribution at the endpoints is unstated
 

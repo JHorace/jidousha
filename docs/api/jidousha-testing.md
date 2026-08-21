@@ -783,10 +783,10 @@ impl DrawnQuad {
 
 #### `encode_png`
 
-Encode RGBA8 texels as a PNG.
+A captured frame as PNG bytes.
 
 ```rust
-pub fn encode_png(image: &TextureData) -> Vec<u8>;
+pub fn encode_png(image: &RawImage) -> Vec<u8>;
 ```
 
 #### `find_bounds`

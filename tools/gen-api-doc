@@ -701,11 +701,97 @@ def visible_prose(text: str) -> str:
     return "\n".join(out)
 
 
+def crate_of(source: str) -> str:
+    """The crate a source path belongs to, spelled as the facade imports it."""
+    parts = Path(source).parts
+    if "crates" in parts:
+        return parts[parts.index("crates") + 1].replace("-", "_")
+    return ""
+
+
+def defining_crates(sources: "list[Path]") -> "dict[str, set[str]]":
+    """Every top-level public item name, and the crates that define one.
+
+    Only top-level declarations: a member of an `impl` block is scoped by its
+    type and cannot collide across crates the way a free function can.
+    """
+    found: "dict[str, set[str]]" = {}
+    for source in sources:
+        crate = crate_of(str(source))
+        try:
+            lines = source.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            match = DEFINITION_RE.match(line)
+            if match and match.group(1) == "":
+                found.setdefault(match.group(3), set()).add(crate)
+    return found
+
+
+def exporting_crate(facade: str) -> "dict[str, str]":
+    """Which crate the facade re-exports each name from."""
+    out: "dict[str, str]" = {}
+    for crate, _, items in PUB_USE_RE.findall(facade):
+        for item in items.split(","):
+            item = item.strip()
+            if item:
+                out[item] = crate
+    for crate, item in PUB_USE_ONE_RE.findall(facade):
+        out[item] = crate
+    return out
+
+
+def resolve_ambiguous(
+    items: "dict[str, Item]", sources: "list[Path]", facade: str
+) -> "list[str]":
+    """Re-key any exported name two crates define, to the one the facade means.
+
+    `scan_sources` takes the first definition of a name it meets and its docstring
+    used to say why that was safe: "the facade re-exports one of each and there
+    are no duplicate public type names across the crates". **That stopped being
+    true and nothing noticed.** `encode_png` is defined in `jidousha-assets`
+    (taking a `TextureData`) and in `jidousha-render-core` (taking a `RawImage`);
+    the facade re-exports the render-core one, and the reference documented the
+    other because `crates/jidousha-assets/` sorts first. A game author copying
+    `encode_png(&texels)` out of the document got a type error, and the
+    document's own worked example — which calls it on a captured frame — was the
+    contradiction nobody read (e0-findings.md F-136).
+
+    The facade already says which crate it means, on the `pub use` line. This
+    honours it: for every colliding name, the crate's own files are rescanned and
+    that definition replaces whichever one sorted first. Returns the names it had
+    to disambiguate, so the run says so rather than resolving in silence — a
+    silent right answer and a silent wrong one look identical from outside.
+    """
+    collisions = {
+        name: crates for name, crates in defining_crates(sources).items() if len(crates) > 1
+    }
+    if not collisions:
+        return []
+    exported = exporting_crate(facade)
+    resolved = []
+    for name, crates in sorted(collisions.items()):
+        crate = exported.get(name)
+        if crate is None or crate not in crates:
+            continue
+        wanted = [source for source in sources if crate_of(str(source)) == crate]
+        fresh = scan_sources(wanted)
+        if name in fresh:
+            items[name] = fresh[name]
+            resolved.append(f"{name} (from {crate})")
+    return resolved
+
+
 def scan_sources(sources: "list[Path]") -> "dict[str, Item]":
     """Every public item the sources declare, by name.
 
-    First definition wins, as before — the facade re-exports one of each and
-    there are no duplicate public type names across the crates.
+    First definition wins *within* this scan, which is not the same as being
+    right: two crates may define one public name, and which of them sorts first
+    is a fact about the file system. `resolve_ambiguous` re-keys those to the
+    crate the facade actually re-exports from, and this function is deliberately
+    left simple so that it can be called again on one crate's files to get the
+    other answer.
 
     Every file is read for declarations before any file is read for `impl`
     blocks. Attaching a member needs its type to exist already, and a type's
@@ -1213,7 +1299,10 @@ def documents(repo: Path) -> "list[Document]":
     that belongs to a different reader.
     """
     facade = (repo / "crates/jidousha/src/lib.rs").read_text(encoding="utf-8")
-    items = scan_sources(crate_sources(repo))
+    sources = crate_sources(repo)
+    items = scan_sources(sources)
+    for name in resolve_ambiguous(items, sources, facade):
+        print(f"[gen-api-doc] two crates define {name}; the facade's is the one documented")
     return [
         Document(
             path=GAME_OUTPUT,

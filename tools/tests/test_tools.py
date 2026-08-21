@@ -830,6 +830,75 @@ def scan_snippet(*texts):
     return items
 
 
+class AmbiguousExportTest(unittest.TestCase):
+    """Two crates, one public name, and the facade says which it means.
+
+    `scan_sources` took the first definition it met and the docstring said that
+    was safe because "there are no duplicate public type names across the
+    crates". `encode_png` is defined in two, and the reference documented the one
+    the facade does not export (e0-findings.md F-136).
+    """
+
+    def _crate(self, root, crate, name, body):
+        path = root / "crates" / crate / "src"
+        path.mkdir(parents=True, exist_ok=True)
+        (path / f"{name}.rs").write_text(body, encoding="utf-8")
+        return path / f"{name}.rs"
+
+    def test_the_crate_the_facade_exports_from_is_the_one_documented(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            a = self._crate(
+                root, "jidousha-assets", "encode", "pub fn encode_png(image: &TextureData) -> Vec<u8> {}"
+            )
+            b = self._crate(
+                root, "jidousha-render-core", "golden", "pub fn encode_png(image: &RawImage) -> Vec<u8> {}"
+            )
+            sources = [a, b]
+            facade = "pub mod testing { pub use jidousha_render_core::{encode_png}; }"
+            items = gen_api_doc.scan_sources(sources)
+            self.assertIn("TextureData", items["encode_png"].decl, "first-wins takes the wrong one")
+            resolved = gen_api_doc.resolve_ambiguous(items, sources, facade)
+        self.assertEqual(resolved, ["encode_png (from jidousha_render_core)"])
+        self.assertIn("RawImage", items["encode_png"].decl)
+
+    def test_a_name_only_one_crate_defines_is_left_alone(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            only = self._crate(root, "jidousha-core", "visual", "pub struct Rect {}")
+            resolved = gen_api_doc.resolve_ambiguous(
+                gen_api_doc.scan_sources([only]), [only], "pub use jidousha_core::{Rect};"
+            )
+        self.assertEqual(resolved, [])
+
+    def test_a_collision_the_facade_exports_neither_of_is_not_touched(self):
+        # Two internal helpers sharing a name is not this tool's business: the
+        # document only ever shows what the facade re-exports.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            a = self._crate(root, "jidousha-assets", "one", "pub fn helper() {}")
+            b = self._crate(root, "jidousha-input", "two", "pub fn helper() {}")
+            resolved = gen_api_doc.resolve_ambiguous(
+                gen_api_doc.scan_sources([a, b]), [a, b], "pub use jidousha_core::{Rect};"
+            )
+        self.assertEqual(resolved, [])
+
+    def test_the_crate_is_read_off_the_path_the_way_the_facade_spells_it(self):
+        self.assertEqual(
+            gen_api_doc.crate_of("/x/crates/jidousha-render-core/src/golden.rs"),
+            "jidousha_render_core",
+        )
+
+    def test_the_real_surface_has_its_collisions_resolved(self):
+        sources = gen_api_doc.crate_sources(REPO_ROOT)
+        facade = (REPO_ROOT / "crates/jidousha/src/lib.rs").read_text(encoding="utf-8")
+        items = gen_api_doc.scan_sources(sources)
+        gen_api_doc.resolve_ambiguous(items, sources, facade)
+        # The one that was wrong, and the one that was right by luck.
+        self.assertIn("RawImage", items["encode_png"].decl)
+        self.assertIn("TextureData", items["decode_png"].decl)
+
+
 class ApiProseTest(unittest.TestCase):
     """The prose half of `docs/api/`, which nothing compiled until this tool.
 
