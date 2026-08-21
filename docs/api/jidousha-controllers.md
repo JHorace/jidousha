@@ -46,8 +46,9 @@ seven thousand ticks** — both sides centring on the ball, both returning it de
 flat, a rally with nowhere to go. That is the degenerate groove below, except
 that here it was the *game*: an opponent that centres on the ball cannot be
 played against by anyone who also does, and the good controller's win hid it
-entirely. Wins 5–0, loses 4–5, loses 0–5 — three lines, and only the middle one
-can say the game is playable.
+entirely. What to do about it is the last section, and it is not a speed.
+Wins 5–0, loses 4–5, loses 0–5 — three lines, and only the middle one can say
+the game is playable.
 
 ## Play to win
 
@@ -172,3 +173,34 @@ defend`. If that holds, the opponent reaches everything and no shot exists;
 whether it does is decided by the speeds a rally *actually* reaches rather than
 by the top speed, so check it at the slow end. Every first opponent is written by
 picking a speed that looks fair, and looking fair is not the test.
+
+**Against an opponent that follows the ball, that inequality has a closed form,
+and both of its numbers are constants you have already named.** The interval such
+an opponent has to defend is how far the ball moves across while it crosses,
+which is its vertical speed times the crossing time — so the crossing time is on
+both sides and cancels, the court's width with it, and what is left is
+
+```text
+ball_top_speed * sin(steepest_bounce)    versus    paddle_speed
+```
+
+Below that line, following the ball wins: a paddle aimed at the ball's current
+height never falls behind it, neither side has to predict anything, the rally is
+flat and the match is nil-nil — and no amount of speed tuning gets out of it,
+because the side that is losing can always just track. Above it, a steep return
+outruns a paddle, both sides have to guess where the ball is going, and the game
+is a game. This is the same inequality, reduced for the opponent whose rule is
+"be where the ball is"; it is worth having in this form because nothing in it is
+measured. Both numbers are stated in the game's own constants, so the comparison
+can be made before the game is ever run.
+
+**And the paddle both of these are about is your game's opponent, not only your
+controller.** "A controller that tracks the ball perfectly returns it dead flat"
+is a fact about paddles; your game has one, it is written in a different file,
+and it was written before any controller existed. An opponent that aims at the
+ball's exact height sends every return straight back down the middle, and that
+decides the shape of the rally no matter what the check does. **The remedy is the
+same edit on the other side**: the opponent meets the ball a fixed distance *off*
+its own centre, so every return it makes carries an angle. If the chaser is the
+run that comes back nil-nil, look at that constant before looking at any speed —
+five runs have tuned speeds for a round first.

@@ -1,22 +1,30 @@
 # E0 findings — what building a game with this engine actually cost
 
-Status: **nine runs, a hundred and twenty-four findings, awaiting run 10.** The
+Status: **eleven runs, a hundred and forty-one findings, awaiting run 12.** The
 harness is `docs/internal/e0-prompt.md`; the milestone is implementation-plan.md
 §3. **The bar moved after run 8** (ADR-0029, §2): two consecutive runs with no
 `engine` finding and no *novel* `docs` finding, a re-tread of a recorded shape
-being fixed without resetting the streak. **Run 9 is the first run counted under
-it, and it does not pass**: three novel `docs` findings — the same count as run 8
-— and one `engine` finding, F-116, which resets the streak outright whatever the
-docs column says. The count of consecutive clean runs is zero. Run 1 found five
-`engine` findings, run 2 three, run 3 none, run 4 three (all decided: ADRs
-0021–0023), run 5 one, declined (ADR-0024), run 6 one, accepted and fixed
-(F-069), run 7 none, run 8 none, and **run 9 one, accepted and fixed** —
-`jidousha::testing::find_bounds`, the fold six checks were writing out by hand
-(ADR-0032). Five of run 9's nine are re-treads, and all five are evidence about a
-*previous fix's reach* rather than about a gap nobody knew: F-017's rule across
-the document split, F-026's warning without its remedy, F-098's method without
-its format, F-045's example disagreeing with its own prose for the fourth time,
-and F-098/F-109's shape again in the most expensive form yet recorded.
+being fixed without resetting the streak. **Run 11 does not pass**, and the
+reason is one `engine` finding — F-137, `PhysicalSize::aspect` not being a
+`const fn` — which resets the streak outright whatever the docs column says. The
+count of consecutive clean runs is zero. Run 1 found five `engine` findings, run
+2 three, run 3 none, run 4 three (all decided: ADRs 0021–0023), run 5 one,
+declined (ADR-0024), run 6 one, accepted and fixed (F-069), run 7 none, run 8
+none, run 9 one, accepted and fixed (F-116, ADR-0032), run 10 none, and **run 11
+one, accepted and fixed**.
+
+**Run 11's novel `docs` count is one**, after three consecutive runs at three,
+and that is the first movement in the number in four runs. It should be read with
+its cause: three of its four `docs` findings are *boundaries of previous fixes*
+rather than gaps nobody knew — F-101's property stated without its remedy
+(F-138), the balance inequality given in the form that has to be measured rather
+than the form that decides it (F-139), and the constant-moves-with-the-check rule
+failing to transfer for a fourth run (F-140). Its `engine` finding is the same
+shape one level over: F-069 wrote the const-fn rule down and did not apply it to
+the list the rule itself created. That is the pattern §4g first named and run 11
+is its confirmation. A count that falls because the corpus is dense with relatives is
+not the same as a count that falls because the document got better, and run 12 is
+what tells them apart.
 
 **Run 9's number is forty minutes**, and it is a restructure rather than a
 mystery. The requirement that a game's opponent decision and collision response
@@ -168,6 +176,7 @@ prompt.
 | 8 | 2026-08-20 | Pong shipped; **not** a pass | 0 | 14 | 0 (+2 `environment`) | Compiled clean, `--verify` green in 2.3 s, 713 tests, ten CI checks on Linux and Windows, and **23 of 23 injected faults caught** after a first round of 19 — the second run to reach full marks, and the first to fix all four misses with four different kinds of instrument. Its headline is that the two documents were **enough**: never blocked, and never wanting the source to learn what a function *did*. The one engine-shaped finding is a doc comment that says the opposite of what the code does (F-097), not a behaviour anybody wants changed, so no `engine` finding stands. One cycle lost to the document prescribing a minimax where an exact enumeration was available (F-100), and one game bug — an opponent that centres on the ball — found only by a third, deliberately mediocre controller the document never asked for (F-101). **Valid, and played in full** — the transcript was reviewed and the game played by the owner in a window and in a browser, and F-111's fix let this triage play it in a window too: 0–2 down, **won 5–4** (F-112, `docs/e0/run-8-playtest.png`). Raw notes: `docs/e0/run-8.md`. Triage: §4e. §6. |
 | 9 | 2026-08-20 | Pong shipped; **not** a pass | 1 | 8 | 0 (+1 `environment`, closed) | Compiled clean, `--verify` green over 3,600 ticks with **three** controllers, `fmt` and `clippy` clean, and **18 of 20 injected faults caught** — the two escapes both the shape the document predicts, and the second (a deleted "already behind the plane" guard) invisible to a whole played session rather than merely unlikely. Forty minutes and a restructure of three systems lost to a requirement filed in the document a run is told to read last (F-113) — the first cost in this file caused by a fix rather than by a gap. The one `engine` finding is **accepted and fixed**: `find_bounds`, the fold six checks were writing by hand (F-116, ADR-0032). Three novel `docs` findings, five re-treads, one confirmation (F-123) and two the triage found while fixing the rest. **Valid, and played in full** — the transcript is reviewed and clean, the owner has played it in a window and in a browser, and F-111's and F-124's fixes let this triage do **both** halves too (`docs/e0/run-9-playtest.png`, `docs/e0/run-9-browser.png`) — the first E0 game a session has seen in a browser. Raw notes: `docs/e0/run-9.md`. Triage: §4f. §6. |
 | 10 | 2026-08-20 | Pong shipped; **not** a pass | **0** | 9 | 0 | Compiled clean, `--verify` green over 5,036 ticks with three controllers, and **22 of 23 injected faults caught** — the one escape a guard the run had already reasoned was redundant, kept and labelled rather than deleted. **No `engine` finding, and the third consecutive run to score exactly three novel `docs` findings**, which is the number §6's after-eight-runs assessment said run 10 would adjudicate: three in a row reads as a floor rather than as a trend that has not started. Never blocked; never wanted `src/` to learn what a function *did*. The run's own headline is a caveat about the instrument rather than a finding — the three documents are *visibly* aimed at Pong, so friction this run did not hit is not evidence about a different game (§5). Its most expensive hour was tuning, which is not the engine's, and the one piece of engine-shaped friction in it is that a game's constants cannot vary within a process (F-128, **ADR-0033**). **Valid, and played in full** — the run played it in a window under Xvfb, and this triage ran the browser half (`docs/e0/run-10-browser.png`: both paddles, the ball, the dashed centre line, the hint row, and 0–1 because the opponent had already scored while the page ran). Raw notes: `docs/e0/run-10.md`. Triage: §4g. §6. |
+| 11 | 2026-08-21 | Pong shipped; **not** a pass | 1 | 4 | 0 | Compiled clean, `--verify` green over 4,000 ticks with three players, `chaser: 1-1`, a capture, `fmt` and `clippy` clean, never blocked, and **19 of 19 injected faults caught** — the third run to score full marks, and the first whose round reported the *shape* of what escaped rather than only the count. Its own headline is that the four documents were enough: it never wanted `src/` to learn what a function did, and the twice it wanted to look something up the document had it and the run had misread. The one `engine` finding is **accepted and fixed** — `PhysicalSize::aspect` is now a `const fn`, which is **F-069's rule applied to the list F-069 itself wrote** (F-137), five runs later, found the identical way: by trying to write the constant. **One novel `docs` finding** (F-141, the capture recipe worked only for a game with art), after three runs at three. The other three are boundaries of earlier fixes, and one of them — the constant-moves-with-the-check rule, fourth sighting — is **re-diagnosed rather than re-instanced**: the round is named as the mechanism and the rule as the vocabulary for reading its result (F-140). **Valid, and played in full** — the run played it in a window under Xvfb itself (`docs/e0/run-11-playtest.png`) and this triage ran the browser half (`docs/e0/run-11-browser.png`: both paddles, the ball, the dashed centre line, the walls, the hint row, and 0–1 because the opponent had already scored while the page ran). Raw notes: `docs/e0/run-11.md`. Triage: §4h. §6. |
 
 Run 1 produced a working, fun Pong and a document-shaped hole underneath it. The
 game is not the measurement — `docs/e0/run-1.md` is — and it says the run could
@@ -6202,6 +6211,387 @@ asserts it over 100,000 draws — the range on every one, the top bounded by the
 largest representable draw, and the low end actually reached, since "never 1.0"
 and "always 0.5" would both satisfy a range check alone.
 
+## 4h. Run 11 triage — the whole run on one page
+
+**Run 11 is not a pass, and the reason is one line of engine code.** `--verify`
+green over 4,000 ticks with three players, `chaser: 1-1`, a capture, `fmt` and
+`clippy` clean, never blocked, and **19 of 19 injected faults caught**. Its own
+headline is that the four documents were enough. But it found an `engine`
+finding — `PhysicalSize::aspect` is not a `const fn` — and an `engine` finding
+resets the streak whatever the docs column says (§2). The count of consecutive
+clean runs is zero.
+
+**One novel `docs` finding, and the other three are boundaries of previous
+fixes**, which is the class §4g named and is now the dominant shape in this file.
+F-138 and F-139 are the balance material answering the question it was asked and
+not the one beside it; F-140 is the fourth sighting of a rule that has never
+transferred by being read.
+
+**The run's most valuable output is not in its findings list.** Three of the
+checks in the shipped game exist only because the mutation round demanded them,
+and none of the three is a constant: a *method* the check and the game both call,
+an *enum arm* the check asks for the words it then judges, and a *pair* of
+screens each individually correct. That is F-140's re-diagnosis, and it is the
+first evidence in eleven runs about *why* the rule does not transfer rather than
+about how often it does not.
+
+| # | Finding | Class | Also found by | Settled by | Verdict |
+|---|---|---|---|---|---|
+| F-137 | `PhysicalSize::aspect` is not a `const fn`, so a layout in constants cannot take its shape from the window | **engine** | **F-069** exactly — same rule, second listed type, same discovery method | nothing; no ADR governs it | **accepted and fixed**; `const fn`, with the degenerate guard intact and asserted in a `const` |
+| F-138 | "a paddle that centres on the ball returns it flat" is filed under *your controller*, and the game's opponent is different code in a different file | docs | **F-101**, whose fix stated the property and not the remedy | — | **fixed**; the remedy — meet the ball off centre — lands in the section a nil-nil chaser sends you to, named as a fact about paddles |
+| F-139 | the balance inequality is given in a form that has to be measured, and the form that decides it is two constants | docs | **F-064/F-074**'s arithmetic, from the gameplay side | — | **fixed**; the closed form, shown to be the same inequality reduced rather than a second rule |
+| F-140 | the constant-moves-with-the-check rule has failed to transfer for a **fourth** run, and three of the run's own escapes were not constants | docs | **F-102 → F-130**, fourth sighting | — | **re-diagnosed, not re-instanced**: the rule restated at the altitude that covers a method, an enum arm and a pair; the mutation round named as the mechanism and the rule as the vocabulary for reading its result |
+| F-141 | the capture recipe's worked path is the one for a game with art, and a game of shapes cannot tell what to delete | docs | first | — | **fixed**; one paragraph naming `create_builtin_textures` as the whole table and the four lines a shapes-only game leaves out |
+
+**F-141 is the only novel one.** It is also the cheapest thing in this triage to
+have missed for a run: ADR-0035 split the capture material into its own document
+one run ago, and the split moved the recipe without asking which reader it was
+worked for.
+
+### F-137 — `PhysicalSize::aspect` is not a `const fn`
+
+Class: engine · Run: 11 · Fixed in: this commit · Settled by: nothing — no ADR
+governs `PhysicalSize` or the degenerate-surface guard
+
+**What run 11 hit.** *Concepts* tells a prototype to state its layout in
+constants and says which aspect it is stating them for: "`GameConfig::
+window_size` is the size `run` opens at and `PhysicalSize::aspect` is the number
+it implies, so pick the shape there." So the run wrote
+
+```rust
+const WINDOW: PhysicalSize = PhysicalSize::new(1280, 720);
+const HALF_W: f32 = HALF_H * WINDOW.aspect();   // does not compile
+```
+
+`new` is `const fn` and `aspect` is not, so the half-width — the number every
+horizontal position in the game is stated against — could not be derived from the
+window the game opens at. The run wrote `HALF_H * (16.0 / 9.0)` and added a check
+coupling it back to `Camera::visible_bounds()`, which was the only thing holding
+the two numbers together.
+
+**This is F-069 with the type changed, and that is the finding.** Run 6 could not
+write `const MAX_BOUNCE: Radians = Radians::from_degrees(60.0);`. F-069's fix
+made three `Radians` accessors and one `Seconds` accessor `const fn` **and**
+wrote the rule down in `conventions.md` §Math so the next newtype would be
+covered: "Constructors and accessors of the plain-data types — `Radians`,
+`Seconds`, `Color`, `Depth`, `PhysicalSize`, the typed handles — are `const fn`
+for this reason, and a new one follows the same rule." `PhysicalSize` is on that
+list by name. The rule was written, the type was named in it, and the one
+accessor it had was still not `const fn`, because the fix was applied to the
+types the finding was *about* rather than to the list the fix itself wrote. Five
+runs separate the two, and the discovery method is identical both times: by
+trying to write the constant.
+
+**Verified before acting.** `docs/adr/` has no decision about `const`-ness and
+none about the degenerate-surface guard; `grep` over the accepted set returns
+`ADR-0033` only, and that is about tunable numbers living in a resource. The
+guard is `if self.width == 0 || self.height == 0 { return 1.0; }` followed by two
+`as f32` casts and a divide — every part of it const-evaluable on this toolchain,
+which pins 1.94 and has had const float arithmetic since 1.82. So this is a gap,
+not a decision, and it is fixed rather than argued.
+
+**Checked against "one way to do everything".** Making an existing function
+`const` adds no second way to do anything: the same function, callable in one
+more position. The check that would have failed is the opposite one — a
+`PhysicalSize::SIXTEEN_NINE`, or an `aspect_const` beside `aspect` — and neither
+was considered.
+
+**Fix.**
+
+- `PhysicalSize::aspect` is a `const fn`, with the degenerate guard unchanged and
+  its doc comment saying why the const-ness is load-bearing.
+- `a_layout_can_state_its_half_width_in_a_const` is the behavioural test, named
+  after the thing run 11 could not do, and it asserts the guard in a `const` too
+  — `PhysicalSize::new(1280, 0).aspect()` is `1.0` at compile time.
+- `examples/vec2_tour.rs` — the file `docs/api/jidousha-api.md` embeds verbatim,
+  and the file F-069 put `MAX_BOUNCE` in for the same reason — states a whole
+  court in constants from the window it opens at, and asserts that nine units of
+  half-height at sixteen by nine gives sixteen of half-width without that number
+  being typed anywhere.
+- *Concepts* carries the three-line spelling in the paragraph that sends a
+  prototype to `aspect`, and says what the hand-written ratio costs. The block is
+  compiled by `tools/check-api-prose` (F-134), so the claim that it works is
+  checked rather than asserted.
+- `examples/pong/main.rs` derives `HALF_W` from `WINDOW`; the run's verify output
+  is byte-identical, which is the confirmation that the derivation and the
+  hand-written ratio were the same number.
+
+**What this says about F-069's fix, and about fixes in this file generally.**
+F-069 did the thing this file usually asks for — it generalised, and wrote the
+general rule down. The generalisation still did not reach the one type it names
+that was not already compliant. **Writing the rule is not applying it**, and the
+cheap step nobody took was to check the list the new rule had just created. That
+step is taken now: `Color`, `Depth`, `TextureId`, `PhysicalSize`, `Radians` and
+`Seconds` have no remaining non-`const` constructor or accessor. `Rect`'s
+accessors cannot be `const` — they are glam `Vec2` arithmetic, which is not
+`const fn` upstream — and `Rect` is deliberately not on the conventions list for
+that reason. `Color::modulate` is left alone: it is a combinator rather than a
+constructor or an accessor, so the rule does not reach it, and inventing a
+reading of the rule that does would be the second time this finding was caused by
+guessing at a list's edges.
+
+### F-138 — The flat-return property is about paddles, and the game has one too
+
+Class: docs · Run: 11 · Also found by: **F-101** · Settled by: —
+
+`jidousha-controllers.md` says, under *Play to win*: "a controller that tracks
+the ball perfectly returns it *dead flat*". Under *Write three players* it
+already says the game-side version too — "an opponent that centres on the ball
+cannot be played against by anyone who also does" — and names F-101's game as
+where that was found.
+
+Run 11 read both, and then wrote a game opponent that centres exactly on the
+ball. The first `--verify` came back with the opponent returning 96% and the
+chaser run at 0–0: the named failure, reproduced by a run that had read the
+passage naming it.
+
+> The document says this about *controllers* and the same sentence is true of
+> the **game's own opponent**, which is a different piece of code in a different
+> file. I had to make that transfer myself, and I nearly tuned speeds for a round
+> first.
+
+**What was missing is the remedy, not the property.** For a controller the
+document gives both: the property, and "meet the ball with the half of the paddle
+that sends it off-centre". For the game's opponent it gives only the property,
+in a section about choosing three controllers, four sections before the one a
+nil-nil chaser actually sends you to. So a run that has read it correctly still
+arrives at the balance section holding a diagnosis and no edit, and the edit that
+is *available* there is a speed. Run 11 nearly spent a round on one.
+
+**Fix.** The last section — the one a run reaches when all three controller
+numbers are healthy and the game still will not play — states it as a fact about
+paddles, says the game's opponent is one, and gives the same remedy on that side:
+the opponent meets the ball a fixed distance off its own centre so its returns
+carry an angle. The *Write three players* sentence gains a clause pointing there
+and saying the answer is not a speed. `examples/pong/main.rs`'s `OPPONENT_BIAS`
+is the worked constant, with the reasoning at the site — for the two commits
+before the decks are cleared for run 12, after which the surviving worked
+opponent is the document's own paragraph.
+
+### F-139 — The balance inequality has a closed form, and the document gives only the form that must be measured
+
+Class: docs · Run: 11 · Also found by: **F-064/F-074**'s arithmetic, from the
+gameplay side · Settled by: —
+
+The document closes with `opponent_speed * crossing_time >= the interval it has
+to defend`, and says to check it at the speeds a rally actually reaches. Run 11
+reports that the quantity which decided its game was a different pair of numbers:
+**`MAX_SPEED * sin(MAX_BOUNCE)` versus paddle speed** — whether the ball's
+vertical speed at the steepest bounce exceeds what a paddle can do.
+
+**Checked, because the handoff asked whether this is a second inequality or the
+first one in different clothes.** It is the first one, reduced. For an opponent
+whose rule is "be where the ball is", the interval it has to defend is how far
+the ball moves vertically while it crosses — `ball_vy * crossing_time`. Put that
+into the document's inequality and the crossing time is on both sides and
+cancels, and the court's width with it:
+
+```text
+paddle_speed * crossing_time >= ball_vy * crossing_time
+paddle_speed                 >= ball_speed * sin(bounce)
+```
+
+So it is the same inequality and there is no second rule to add. **The reduction
+is still worth having**, and for a reason the general form does not carry:
+nothing in it is measured. `opponent_speed * crossing_time >= the interval it has
+to defend` needs a crossing time and an interval, neither of which a game states
+— which is why the document has to tell you to go and find them at the slow end.
+The reduced form is two constants the game has already written down, comparable
+before the game is run once. That is the difference between a check you perform
+and a check you read.
+
+It also names the direction the general form leaves ambiguous. Run 11's log calls
+the fast end the dangerous one and the document says check the slow end; both are
+right and they are about different failures — slow is where the opponent reaches
+everything, fast is where the ball outruns a paddle — and the reduced form makes
+that visible because the speed appears on one side only.
+
+**Fix.** The closed form is in the balance section, derived in two lines so it is
+plainly the same inequality, with what each side of the line means for the
+rally. `examples/pong/main.rs`'s `MAX_SPEED` doc comment already carried the
+game-side version of it, written by run 11; nothing there needed changing.
+
+### F-140 — The constant-moves-with-the-check rule has now failed to transfer four times, and three of the run's escapes were not constants
+
+Class: docs · Run: 11 · Also found by: **F-102 → F-130**, fourth sighting ·
+Settled by: —
+
+Run 11 read the rule, applied it correctly to the clear colour on the first pass,
+and applied it wrongly to the score's position on the first pass —
+`quad.min.y < SCORE_TOP + margin`, which is the exact failure the document names,
+in the paragraph that exists because the same thing happened in runs 8, 9 and 10.
+Rewritten as "the score sits in the top third of `visible_bounds()`" it caught an
+injected `SCORE_TOP = -1.0` immediately; the original would have passed.
+
+**The existing remedy is "add worked instances", and a fifth instance is not what
+changes this.** F-130's fix, one run ago, was to point the rule at the three
+annotated non-colour instances in `slalom/checks.rs`. Run 11 had them and still
+wrote the layout check the wrong way round. So this triage treats it as a
+question about the mechanism.
+
+**The input run 11 supplies is the one worth having**, and it comes from its
+mutation round rather than from its reading. Three of the nineteen faults were
+caught only by checks the round forced it to write, and **not one of the three is
+a constant**:
+
+- **A method.** The paddle-position check took the side it expected from the
+  game's own `Side::sign()`, so flipping `sign()` moved the check with the game:
+  both paddles change ends, every assertion green.
+- **An enum arm.** `banner_lines` is asked for the words the check then judges,
+  so a banner congratulating the loser passes every per-screen assertion — on
+  screen, printable, centred.
+- **A pair judged one at a time.** Every end screen was individually correct, and
+  "the winning and the losing screen are the same screen" has no per-screen
+  assertion to fail.
+
+Run 11's own generalisation: **a check that reads the game's own answer back
+cannot see that answer change**, of which "do not compare against the constant
+that drew it" is one case.
+
+**Judgement, made deliberately rather than by adding a paragraph.** Restating at
+that altitude is a real gain and not a vaguening, for one reason: the current
+wording provably does not cover three faults that a careful run's first-draft
+checks let through, and each of the three is a distinct shape a reader can
+recognise. Vagueness would be restating the rule *instead of* the instance; the
+fix keeps the instance, keeps the three worked slalom checks, and adds the general
+form with its three named cases underneath. A fifth worked instance was
+considered and rejected — four runs of evidence say instances are not the binding
+constraint.
+
+**And the honest sentence about the mechanism goes in too.** In all four runs the
+mutation round found the loose check, immediately, including run 11's. The
+document already asks for the round, already tells the reader to commit first,
+and already names the two ways a hand-rolled harness lies about its own results —
+a search-and-replace that matches nothing, and a mutation that does not compile —
+both of which run 11 reports implementing. So the round is the thing that works
+and the rule is not, and the document now says so: **the round is the mechanism,
+the rule is the vocabulary for reading its result.** Telling a reader to expect to
+get this wrong is a stronger instruction than telling them to get it right, and
+it is the first thing this file has been able to say about the rule that is
+supported by four runs rather than by one.
+
+**A `tools/mutate` command is not built, and the reasoning is recorded rather
+than left implicit.** Run 11's harness — 19 one-line faults injected into
+`main.rs` one at a time, a miss treated as a harness error, a failed build told
+apart from a failed check — lived in a scratch directory and is gone, and that is
+now the fourth run to build and discard the same thing. The shape is
+game-independent; only the fault list is the game's. Two arguments against
+building it now, and neither is "it would not work":
+
+1. **It changes what the harness gives an author mid-count.** `e0-prompt.md`'s
+   ledger requires that any change making a run easier restart the streak, and
+   handing an author the instrument they currently write is unambiguously easier.
+   The streak is zero anyway after F-137, so the cost is nil *this* time and
+   would not be next; the decision should be taken between runs and on purpose,
+   which is what this paragraph is preserving the option for.
+2. **The evidence for the failure mode it would remove is one run's word.** The
+   silent-harness hazard is real and is exactly why the document names both
+   traps — but no run has yet *reported* a harness that lied. Building a tool to
+   prevent a failure nobody has recorded is the shape this file usually files as
+   a finding.
+
+What lands instead is the cheap half, which is already in the document: both
+traps named, at the point the round is described.
+
+### F-141 — The capture recipe is worked for a game with art, and a game of shapes cannot tell what to leave out
+
+Class: docs · Run: 11 · Also found by: first · Settled by: —
+
+`jidousha-capture.md` sends the reader to `examples/prototype_kit/capture.rs` for
+the path and says so emphatically — read it rather than reconstructing it, because
+the one time the document carried the path too, the copies drifted. That is the
+right call and it stays. What the document does not say is which reader that file
+is worked for: `prototype_kit` has art, so its capture path builds an `Assets`
+store, replays a `load_texture`, commits past the tick the store resolves on, and
+calls `upload_ready_textures`.
+
+A game of pure shapes and text has none of that, and run 11 established it by
+deleting lines until the picture stopped coming out right:
+
+> `create_builtin_textures` covers "the three textures the renderer always has"
+> and `FONT_TEXTURE` is one of them, so a game of pure shapes and text needs no
+> `Assets`, no `MemorySource`, and no `upload_ready_textures` — the whole texture
+> table is one call. One sentence in the capture document would have saved that.
+
+**Verified against the source before writing it.** `create_builtin_textures`
+creates the 1×1 white, the magenta placeholder and the font atlas, and registers
+the atlas under `font::FONT_TEXTURE` in the table it returns. Those are the only
+ids a plan built from `ctx.quad` and `ctx.text` can name. The run's own
+`pong/capture.rs` is the confirmation: one `create_builtin_textures` call, no
+store, no upload, and the id check after it unchanged.
+
+**Why this was reachable only now.** ADR-0035 moved the capture material into its
+own document one run before this, and the move carried the pointer to the worked
+example without asking which game it was worked *for*. `jidousha-api.md` already
+has the parallel sentence on the game side — "a game of pure shapes needs no
+asset story at all" — so the missing one is the twin of a sentence the surface
+already knew it needed.
+
+**Fix.** One paragraph in the capture document: `create_builtin_textures` is the
+whole texture table for such a game, those are the only ids such a plan can name,
+and the store / the `load_texture` / the `commit` / the upload are the lines to
+leave out — with the id check that follows them still applying, because that is
+the one step in the recipe whose value does not depend on having art.
+
+### What the maintainer's own checks found
+
+**`tools/test`'s adoption step, and F-094's fix working.** Run 11's brief forbade
+touching the tooling, so `pong` was in neither `WINDOWED_EXAMPLES` nor
+`VERIFIABLE_EXAMPLES` when PR #53 merged. This is the fourth time that step has
+been outstanding after a run — and the first time it cost nothing, because
+F-094's fix is exactly the mechanism for it: `tools/test` detected the
+unregistered `--verify` mode, ran it through `tools/verify` rather than opening a
+window at a headless runner, and printed the note addressed to the maintainer.
+**Not a finding.** It is the confirmation that a name list stopped being the
+mechanism. The bookkeeping is now done and `examples verified headless: pong,
+prototype_kit, slalom`.
+
+### Confirmations — paragraphs earning their keep
+
+No action on any of these; recorded so the next round knows which prose is
+load-bearing rather than merely present.
+
+- **The clearance `println!` (F-131, one run old).** Run 11's first layout passed
+  the off-screen check by **0.06 world units** and nothing but the printed number
+  said so; a `GOAL_MARGIN` took it to 0.20. F-131's fold found a real cliff on
+  the first run after it landed.
+- **`neg_cmp_op_on_partial_ord` and NaN as one edit (F-129's neighbourhood).**
+  The run wrote the sweep's guard in the document's exact shape, clippy-clean and
+  NaN-correct first time.
+- **"A band is only visible where it changes the order" (F-083, seven runs
+  old).** Run 11 calls it "the single most useful thing in the testing
+  document" and says it changed the game's draw order *before* any check was
+  written — which is the point of it: it is a fact about what a recorded frame
+  can see, not about `Depth`.
+- **`signum` answers 1.0 for zero (F-125, one run old).** Load-bearing for the
+  opponent's aim bias; without it the run says it would have written a three-way
+  match and got a judder at exactly `y = 0`.
+- **`Rect::contains` half-open, `contains_rect` closed (F-107/F-132).** Copied
+  rather than derived, which is what those fixes were for.
+- **The `capture:` line's exact wording.** Run 11 says it would have written
+  `capture: wrote target/verify/pong.png` and been silently unreported. The
+  contract paragraph in `jidousha-capture.md` is doing its job.
+
+### Two things run 11 wanted to read and had to measure
+
+Neither is wrong in the document and neither is fixed here; recorded because a
+third sighting would make them findings.
+
+- **What a `--verify` run costs.** The testing document's one worked figure is
+  accurate; what the run wanted was the reminder that `cargo run` prints nothing
+  while it compiles, which is what made its first run feel like a minute. Three
+  headless 4,000-tick matches with a rollout controller come out at 0.8 s.
+- **How many quads a played frame is.** 73 for this game. Useful for sizing
+  assertions and only obtainable by printing it.
+
+And one that is an `author` finding rather than a `docs` one: run 11 asked
+whether `Startup` runs before or inside the first `tick()` three separate times,
+and got the answer three separate times — in *Concepts*, in the resource table
+and in the testing document's controller section. Three statements is the
+redundancy working. The run says it kept re-reading rather than trusting, "because
+it is the one fact in the surface that contradicts the name of the thing", which
+is a property of the name and not of the prose.
+
 ## 5. Notes on the run's procedure
 
 Two things about run 1 that are not findings but would confuse a later reader.
@@ -6685,6 +7075,88 @@ silence about a fix is not evidence that the fix worked.
   undocumented, rather than a fact nobody stated at all. That is a narrower defect
   than run 8's five, and it is the one §4g names as this file's most common.
 
+### What run 11 answered about run 10's fixes
+
+Scored against "What run 11 should be watched for" below, which was written
+before run 11 ran and is not edited. Where the log is silent the answer is
+checked against `crates/jidousha/examples/pong/` instead, because a run's silence
+about a fix is not evidence that the fix worked.
+
+- **The lint passage cost nothing, and the NaN spelling landed first time.** Both
+  items pass, and the second passes in the strong form the item asked for: run 11
+  wrote the sweep's guard "in the document's exact shape and it was clippy-clean
+  first time", and names the reason the passage exists — "the observation that
+  `a <= b` is the *behaviour change* the lint's name invites is not guessable and
+  saved a real bug." So the paragraph does **not** need moving next to the
+  collision sweep; filed under lints, it was found and used from there. No run has
+  now met an eighth lint at the end and asked for it to be listed, which was the
+  failure that mattered.
+- **The margin got reported, and it found something on the first run after the
+  fix.** F-131 asked for a number in the `--verify` summary. Run 11 printed it
+  unprompted, its first layout cleared the camera by **0.06 world units**, and a
+  `GOAL_MARGIN` took that to 0.20. The run's own verdict — "that paragraph earned
+  its place; it is one `println!` and it found a real thing" — is the answer to
+  the item's second half: the class is learnable from the checks already
+  prescribed.
+- **Text's vertical metric was used from the number, and the run went back to the
+  paragraph once.** The pass condition was a multi-line banner laid out from
+  `at.y + n * size` without being measured off a transcript, and that is what
+  happened. What the run then wanted was a *horizontal* fact — is a glyph's quad
+  the ink or the whole cell — and it reports finding it in the vertical-metric
+  paragraph, having first read that paragraph as being about `\n` spacing. Both
+  halves are in fact stated, in adjacent paragraphs: the one before gives "each
+  exactly `size` tall and `size * 7 / 9` wide". **No fix.** A fact stated twice
+  that a reader found on the second look does not want a third wording — F-140 is
+  the finding about what a third wording is worth.
+- **The tuning shape was neither reached for nor complained about.** ADR-0033's
+  resource-and-loop is not mentioned in run 11's log and its game does not use it;
+  the run tuned by editing constants and re-running, and never says there is no
+  knob. That is the third of the item's three outcomes minus its tell — under the
+  bar the paragraph states, and silent about having read it. **Untested, carried
+  to run 12 unchanged**, because the failure the item cares about (a run that
+  writes the sweep script and says there is no knob) did not occur and neither did
+  the pass.
+- **The requirement-not-the-constant rule failed for a fourth time, and the
+  licence the item granted is deliberately not taken.** The item said a fourth
+  sighting licenses a second worked instance in `slalom/checks.rs` and that a
+  fourth wording is not on the table. F-140 takes neither: four runs of evidence
+  say worked instances are not the binding constraint, and what run 11 supplied
+  instead — three escapes that were a method, an enum arm and a pair of screens —
+  is the first evidence about *why* rather than about how often. The rule is
+  restated at the altitude that covers all four shapes, and the mutation round is
+  named as the mechanism that has actually caught it every time.
+- **The neighbour defect showed up three times, which is the threshold the item
+  set.** F-137 is F-069's rule written down and not applied to the list the rule
+  itself created. F-138 is F-101's property stated without its remedy. F-139 is
+  the balance inequality given in the form that must be measured and not in the
+  form that decides it. The item said three of these "would say the review step
+  after a fix should be *what did this sentence just make a reader wonder*, which
+  is not a step anyone currently takes." Three landed. **The consequence is
+  adopted here rather than left for run 12**: F-137's fix ends by walking the list
+  `conventions.md` §Math names and reporting each type's state, including the two
+  that are deliberately out of scope. That is the step, done once, on the fix most
+  likely to have a neighbour.
+- **The novel count moved, for the first time in four runs.** Runs 8, 9 and 10
+  scored 3, 3, 3; run 11 scores **1**. The item said a run at 0 or 1 would be the
+  first evidence in ten runs that the count can move at all, and it is — with the
+  caveat that the run is not a pass and the reason the novel count is low is that
+  three of its four `docs` findings are boundaries of earlier fixes. A count that
+  falls because the corpus is dense with relatives is not the same as one that
+  falls because the document got better, and §6's after-eight-runs assessment
+  already names that hazard. Run 12 is what tells them apart.
+- **Nothing in the fixes read as an invitation to guess.** Run 11 wanted the
+  source twice and went to it neither time, and reports that both times the
+  document had the answer and it had misread. Zero inferred facts, which is the
+  standard.
+
+**And one thing the watch list could not have asked for.** Run 11 is the first
+run whose most valuable output is a *diagnosis* rather than a gap: the three
+faults its mutation round forced it to write checks for are the evidence F-140
+needed and that four previous rounds did not produce, because previous rounds
+reported their scores and this one reported the shape of what escaped. If run 12's
+log is asked for one thing it is that — not the count of faults caught, but what
+the checks that had to be added had in common.
+
 ### Run 9 had no watch list, and this is the note instead of one
 
 Every run from 4 onward has a "What run N should be watched for" written before it
@@ -6842,6 +7314,72 @@ paragraph. It cost the testing document **143 tokens net** (14,522 to 14,665)
 after the trims that paid for the pointer — and it buys a place for the *next*
 controller finding to land at no document cost at all, which is the only reason
 the budget arithmetic below is survivable.
+
+### What run 12 should be watched for
+
+*Written before run 12 runs, and not to be edited afterwards.*
+
+- **Whether a layout takes its shape from its window.** F-137's fix is only real
+  if the next run writes `const HALF_W: f32 = HALF_H * WINDOW.aspect();` without
+  being told twice. The pass is a log that does not mention the aspect ratio at
+  all — the derivation is meant to be boring. The failure worth catching is a run
+  that writes the hand ratio anyway and never tries the `const`, because that
+  would mean *Concepts*' new three-line block is being read past rather than
+  copied, and the fix would belong in the Quickstart instead.
+- **Whether the opponent gets a bias before it gets a speed.** F-138's remedy now
+  sits in the section a nil-nil chaser sends a reader to. Three outcomes to tell
+  apart: a run whose opponent meets the ball off-centre from the first draft (the
+  fix landed early); a run that arrives at 0–0, reads the balance section and puts
+  the bias in without a tuning round (the fix landed where it was aimed, which is
+  what it was written for); and a run that tunes speeds for a round first anyway
+  (F-138 again, and the property needs to be in *Play to win* beside the
+  controller version rather than four sections later).
+- **Whether the closed form gets used, or re-derived.** F-139 puts
+  `ball_top_speed * sin(steepest_bounce)` versus paddle speed in the document.
+  The pass is a run whose log states that comparison as a reason for a constant
+  before the game has been run — that is the whole value of a form with nothing
+  measured in it. A run that derives the same relation from its own play, as run
+  11 did, means the reduction is present and not trusted, and the answer to that
+  is a worked constant rather than another sentence.
+- **Whether the shapes-only capture path is written without deleting lines to
+  find it.** F-141's paragraph names `create_builtin_textures` as the whole table
+  and the four lines to leave out. The pass is a capture path that never builds an
+  `Assets` store. A run that copies `prototype_kit/capture.rs` whole, including the
+  store and the upload, and still gets a picture would be the interesting failure:
+  it works, so nothing would say the paragraph was not read, and the tell is a
+  `load_texture` for a file the game has no art in.
+- **Whether the round is treated as the mechanism.** This is F-140's real test and
+  it is about *when*, not whether. The document now says to expect to get the
+  constant-moves-with-the-check rule wrong and to let the mutation round find it.
+  The pass is a run that mutates earlier than the end — a round run against a
+  half-written check file rather than after committing a finished one. A run that
+  writes all its checks, runs one round at the end, and finds a loose one is the
+  status quo working; a run that reports no loose checks at all would be the first
+  in five and should be checked against its own `checks.rs` before it is believed.
+- **What the escaped checks had in common, if the log will say.** Four rounds have
+  reported scores; run 11 is the only one that reported *shapes*, and that single
+  paragraph is what F-140's re-diagnosis rests on. `jidousha-testing.md` does not
+  ask for it and this list is not a licence to add the ask — the question is
+  whether a second run volunteers it, which would say the reporting is a property
+  of the round rather than of run 11.
+- **Whether `tools/mutate` gets wanted.** F-140 records the decision not to build
+  it and the two arguments for waiting. The evidence that would change it is a run
+  that reports a harness which lied — a search-and-replace that matched nothing
+  counted as a caught fault, or a failed build counted as a caught fault — or a
+  second run that says building the harness was a meaningful part of what the run
+  cost. Either one makes it a finding rather than an option.
+- **Whether the neighbour-defect step holds.** F-137's fix walked the list its own
+  rule created and reported every member's state. If run 12 finds a finding whose
+  complaint is one clause from a run-11 fix, the step did not generalise and the
+  answer is to make it part of the definition of done rather than a thing one
+  triage did once.
+- **Whether the novel count stays at one.** Run 11 scored 1 after three runs at 3.
+  Two low counts in a row would be the first real evidence that the document is
+  converging rather than that the corpus has become dense enough to make
+  everything a relative. A run back at 3 says run 11's 1 was about run 11.
+- **Whether anything in these fixes reads as an invitation to guess.** Same
+  standard as always: a fix is only real if the next run does not have to infer
+  the thing it fixed.
 
 ### What run 11 should be watched for
 

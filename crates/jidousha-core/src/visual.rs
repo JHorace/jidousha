@@ -345,8 +345,12 @@ impl PhysicalSize {
     ///
     /// A minimized window reports zero height, and a camera that divided by it
     /// would put NaN into every vertex of the frame.
+    ///
+    /// `const` because a game states its layout in constants and derives the
+    /// half-width from the window it opens at, which is this number
+    /// (conventions.md §Math; e0-findings.md F-137).
     #[must_use]
-    pub fn aspect(self) -> f32 {
+    pub const fn aspect(self) -> f32 {
         if self.width == 0 || self.height == 0 {
             return 1.0;
         }
@@ -455,6 +459,22 @@ mod tests {
         assert_eq!(PhysicalSize::new(0, 0).aspect(), 1.0);
         assert_eq!(PhysicalSize::new(800, 0).aspect(), 1.0);
         assert_eq!(PhysicalSize::new(1600, 900).aspect(), 16.0 / 9.0);
+    }
+
+    #[test]
+    fn a_layout_can_state_its_half_width_in_a_const() {
+        // The thing E0 run 11 could not write: a game states its layout in
+        // constants and takes the shape from the window it opens at, so
+        // `aspect` has to be answerable at compile time or the ratio is typed
+        // by hand and only a runtime assertion couples the two
+        // (e0-findings.md F-137).
+        const WINDOW: PhysicalSize = PhysicalSize::new(1280, 720);
+        const HALF_H: f32 = 9.0;
+        const HALF_W: f32 = HALF_H * WINDOW.aspect();
+        const MINIMIZED: f32 = PhysicalSize::new(1280, 0).aspect();
+
+        assert_eq!(HALF_W, 16.0);
+        assert_eq!(MINIMIZED, 1.0, "the degenerate guard holds in const too");
     }
 
     #[test]

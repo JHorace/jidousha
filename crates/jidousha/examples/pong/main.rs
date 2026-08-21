@@ -53,10 +53,12 @@ const HALF_H: f32 = VIEW_HEIGHT / 2.0;
 
 /// Half the camera's width, in world units.
 ///
-/// `PhysicalSize::aspect` is the number this is, but it is not a `const fn`, so
-/// `WINDOW`'s ratio is written out here instead. The check asserts the two
-/// agree with what the camera actually reports, because nothing else would.
-const HALF_W: f32 = HALF_H * (16.0 / 9.0);
+/// `PhysicalSize::aspect` is the number this is, and it is a `const fn`, so
+/// this is derived from `WINDOW` rather than from a hand-typed ratio. The check
+/// still asserts it against what the camera actually reports: the derivation
+/// says the two constants agree with each other, not that the camera agrees
+/// with either.
+const HALF_W: f32 = HALF_H * WINDOW.aspect();
 
 /// Where the top and bottom walls are, as a distance from the centre line.
 const WALL_Y: f32 = 6.8;
