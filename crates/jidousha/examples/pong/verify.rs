@@ -26,8 +26,8 @@ use crate::controller::{Chaser, Report, Rollout};
 use crate::{
     BALL_COLOR, BALL_RADIUS, DASH_COUNT, DASH_FILL, DASH_WIDTH, GOAL_X, HALF_W, HINT, MARKING,
     MAX_SPEED, Match, OPPONENT_BIAS, PADDLE_SIZE, PADDLE_X, Paddle, SCORE_GAP, SCORE_SIZE,
-    SERVE_SPEED, Side, WALL_Y, WIN_SCORE, banner_lines, config, contact_span, face_contact,
-    face_gap, opponent_target, rebound, register, score_text,
+    SERVE_SPEED, Side, WALL_Y, WIN_SCORE, ball_limit, banner_lines, bounce_off_walls, config,
+    contact_span, face_contact, face_gap, opponent_target, rebound, register, score_text,
 };
 
 /// How long each headless match runs.
@@ -390,6 +390,38 @@ pub fn run() -> ExitCode {
             "off the player's paddle a flat hit went {flat:?} and off the opponent's {far:?}; \
              a hit above centre went {high:?} and below centre {low:?}. Y is down, so a hit \
              above centre must leave with a negative Y"
+        ),
+    );
+
+    // The walls, asked the same way. A ball folded back inside the court with
+    // its velocity *unchanged* sits inside every extent check and inside every
+    // drawn frame, so removing one reflection is caught only by nobody winning
+    // the match — the conclusion, four checks downstream of the fault.
+    let limit = ball_limit();
+    let (below, below_velocity) =
+        bounce_off_walls(Vec2::new(0.0, limit + 0.2), Vec2::new(1.0, 5.0));
+    let (above, above_velocity) =
+        bounce_off_walls(Vec2::new(0.0, -limit - 0.2), Vec2::new(1.0, -5.0));
+    let (clear, clear_velocity) = bounce_off_walls(Vec2::new(0.0, 0.0), Vec2::new(1.0, 5.0));
+    checks.require(
+        near(below.y, limit - 0.2)
+            && near(below_velocity.y, -5.0)
+            && near(above.y, -limit + 0.2)
+            && near(above_velocity.y, 5.0),
+        "a wall does not turn the ball round",
+        format!(
+            "0.20 past the bottom wall came back to y={:.3} travelling {:.2}, and 0.20 past \
+             the top wall to y={:.3} travelling {:.2}; the walls are at +/-{limit:.2} and a \
+             reflection has to move the position *and* the velocity",
+            below.y, below_velocity.y, above.y, above_velocity.y,
+        ),
+    );
+    checks.require(
+        near(clear.y, 0.0) && near(clear_velocity.y, 5.0),
+        "a ball nowhere near a wall was reflected anyway",
+        format!(
+            "it came back at y={:.3} travelling {:.2}",
+            clear.y, clear_velocity.y
         ),
     );
 
