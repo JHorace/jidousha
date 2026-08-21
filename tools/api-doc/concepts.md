@@ -74,8 +74,19 @@ and read the real one back. Two consequences worth having:
 **A layout in constants is the prototype answer, and it is an answer about one
 aspect.** You already know which: `GameConfig::window_size` is the size `run`
 opens at and `PhysicalSize::aspect` is the number it implies, so pick the shape
-there, lay the game out for it, and give the recorder the same size. What that
-buys is checkable — a headless run has exactly one viewport, so every bounds
+there, lay the game out for it, and give the recorder the same size. Both are
+`const fn`, so the shape is derived rather than typed and one number states it:
+
+```rust
+const WINDOW: PhysicalSize = PhysicalSize::new(1280, 720);
+const HALF_H: f32 = 9.0;
+const HALF_W: f32 = HALF_H * WINDOW.aspect();
+```
+
+Written `HALF_H * (16.0 / 9.0)` instead, that is two facts about one window and
+nothing keeps them together: change `WINDOW` and the ratio is silently stale,
+and the earliest anything says so is a runtime assertion against
+`Camera::visible_bounds()`. What that buys is checkable — a headless run has exactly one viewport, so every bounds
 assertion is about the aspect you chose. What it costs is not: a player dragging
 the window narrower than that moves the edges in, and anything placed against
 them goes off the sides with no check able to see it, because there is no second

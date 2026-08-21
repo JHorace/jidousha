@@ -24,7 +24,22 @@
 use jidousha::prelude::*;
 
 /// A position that can be worked out at compile time — `new` is a `const fn`.
-const CORNER: Vec2 = Vec2::new(-16.0, -9.0);
+const CORNER: Vec2 = Vec2::new(-HALF_W, -HALF_H);
+
+/// The window the game asks `run` for, and the shape every extent is stated in.
+const WINDOW: PhysicalSize = PhysicalSize::new(1280, 720);
+
+/// Half the world height the camera spans — the one number a layout picks.
+const HALF_H: f32 = 9.0;
+
+/// And half the width, which is the height times the shape of the window.
+///
+/// `PhysicalSize::new` and `PhysicalSize::aspect` are both `const fn`, so a
+/// layout stated in constants derives this rather than typing a ratio. The
+/// alternative is `HALF_H * (16.0 / 9.0)`, which is two facts about one window:
+/// change `WINDOW` and the ratio is silently stale, and only a runtime
+/// assertion against `Camera::visible_bounds()` would ever say so.
+const HALF_W: f32 = HALF_H * WINDOW.aspect();
 
 /// An angle a game states once, in the units a person can check.
 ///
@@ -150,6 +165,16 @@ fn main() {
     assert!(bounds.contains(position));
     assert_eq!(bounds.size(), size);
     assert_eq!(Rect::from_min_size(CORNER, size).min, CORNER);
+
+    // And a whole court, in constants, from the window the game opens at. The
+    // camera spans `HALF_H` either side of its centre and as wide as the
+    // window's shape makes it, so this is the rectangle `visible_bounds()`
+    // reports back at that size — computed at compile time, from one number.
+    let court = Rect::from_center_size(Vec2::ZERO, Vec2::new(HALF_W, HALF_H) * 2.0);
+    assert_eq!(court.min, CORNER);
+    // Nine units of half-height at sixteen by nine is sixteen of half-width,
+    // and nothing typed that number: `WINDOW` did.
+    assert_eq!(court.min, Vec2::new(-16.0, -9.0));
 
     println!("verified: every Vec2 operation above holds");
 }

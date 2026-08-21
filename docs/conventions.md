@@ -88,6 +88,13 @@ the enforcement. Every entry here is assumed by all subsystem docs.
   typed handles — are `const fn` for this reason, and a new one follows the same
   rule. `from_degrees` was the one that was not, and E0 run 6 found it the only
   way this is findable: by trying to write the constant (e0-findings.md F-069).
+  **Then `PhysicalSize::aspect` was the one that was not**, five runs later and
+  by the identical method — a game deriving its half-width from the window it
+  opens at (e0-findings.md F-137), so a layout's
+  `const HALF_W: f32 = HALF_H * WINDOW.aspect();` compiles too. `Rect` is
+  deliberately absent from that list: its accessors are glam `Vec2` arithmetic,
+  which is not `const fn` upstream, so a layout in constants states its extents
+  as numbers and builds the `Rect` where it is used.
 - **A game spells them from the prelude and nowhere else.** `jidousha::prelude`
   re-exports every name in `math`, so `use jidousha::prelude::*;` is the whole
   import and a second `use jidousha::math::sin_cos;` beside it is the same item

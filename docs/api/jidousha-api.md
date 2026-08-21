@@ -229,8 +229,19 @@ and read the real one back. Two consequences worth having:
 **A layout in constants is the prototype answer, and it is an answer about one
 aspect.** You already know which: `GameConfig::window_size` is the size `run`
 opens at and `PhysicalSize::aspect` is the number it implies, so pick the shape
-there, lay the game out for it, and give the recorder the same size. What that
-buys is checkable — a headless run has exactly one viewport, so every bounds
+there, lay the game out for it, and give the recorder the same size. Both are
+`const fn`, so the shape is derived rather than typed and one number states it:
+
+```rust
+const WINDOW: PhysicalSize = PhysicalSize::new(1280, 720);
+const HALF_H: f32 = 9.0;
+const HALF_W: f32 = HALF_H * WINDOW.aspect();
+```
+
+Written `HALF_H * (16.0 / 9.0)` instead, that is two facts about one window and
+nothing keeps them together: change `WINDOW` and the ratio is silently stale,
+and the earliest anything says so is a runtime assertion against
+`Camera::visible_bounds()`. What that buys is checkable — a headless run has exactly one viewport, so every bounds
 assertion is about the aspect you chose. What it costs is not: a player dragging
 the window narrower than that moves the edges in, and anything placed against
 them goes off the sides with no check able to see it, because there is no second
@@ -1116,7 +1127,22 @@ Also in `math`, re-exported from `glam`: `Vec2`, `Vec3`. This repository does no
 use jidousha::prelude::*;
 
 /// A position that can be worked out at compile time — `new` is a `const fn`.
-const CORNER: Vec2 = Vec2::new(-16.0, -9.0);
+const CORNER: Vec2 = Vec2::new(-HALF_W, -HALF_H);
+
+/// The window the game asks `run` for, and the shape every extent is stated in.
+const WINDOW: PhysicalSize = PhysicalSize::new(1280, 720);
+
+/// Half the world height the camera spans — the one number a layout picks.
+const HALF_H: f32 = 9.0;
+
+/// And half the width, which is the height times the shape of the window.
+///
+/// `PhysicalSize::new` and `PhysicalSize::aspect` are both `const fn`, so a
+/// layout stated in constants derives this rather than typing a ratio. The
+/// alternative is `HALF_H * (16.0 / 9.0)`, which is two facts about one window:
+/// change `WINDOW` and the ratio is silently stale, and only a runtime
+/// assertion against `Camera::visible_bounds()` would ever say so.
+const HALF_W: f32 = HALF_H * WINDOW.aspect();
 
 /// An angle a game states once, in the units a person can check.
 ///
@@ -1242,6 +1268,16 @@ fn main() {
     assert!(bounds.contains(position));
     assert_eq!(bounds.size(), size);
     assert_eq!(Rect::from_min_size(CORNER, size).min, CORNER);
+
+    // And a whole court, in constants, from the window the game opens at. The
+    // camera spans `HALF_H` either side of its centre and as wide as the
+    // window's shape makes it, so this is the rectangle `visible_bounds()`
+    // reports back at that size — computed at compile time, from one number.
+    let court = Rect::from_center_size(Vec2::ZERO, Vec2::new(HALF_W, HALF_H) * 2.0);
+    assert_eq!(court.min, CORNER);
+    // Nine units of half-height at sixteen by nine is sixteen of half-width,
+    // and nothing typed that number: `WINDOW` did.
+    assert_eq!(court.min, Vec2::new(-16.0, -9.0));
 
     println!("verified: every Vec2 operation above holds");
 }
@@ -1450,7 +1486,7 @@ pub struct PhysicalSize {
 
 impl PhysicalSize {
     pub const fn new(width: u32, height: u32) -> Self;  // A size in pixels
-    pub fn aspect(self) -> f32;  // Width divided by height, or 1.0 for a degenerate surface
+    pub const fn aspect(self) -> f32;  // Width divided by height, or 1.0 for a degenerate surface
 }
 ```
 
@@ -1920,6 +1956,13 @@ in `docs/api/jidousha-testing.md`.
   typed handles — are `const fn` for this reason, and a new one follows the same
   rule. `from_degrees` was the one that was not, and E0 run 6 found it the only
   way this is findable: by trying to write the constant.
+  **Then `PhysicalSize::aspect` was the one that was not**, five runs later and
+  by the identical method — a game deriving its half-width from the window it
+  opens at, so a layout's
+  `const HALF_W: f32 = HALF_H * WINDOW.aspect();` compiles too. `Rect` is
+  deliberately absent from that list: its accessors are glam `Vec2` arithmetic,
+  which is not `const fn` upstream, so a layout in constants states its extents
+  as numbers and builds the `Rect` where it is used.
 - **A game spells them from the prelude and nowhere else.** `jidousha::prelude`
   re-exports every name in `math`, so `use jidousha::prelude::*;` is the whole
   import and a second `use jidousha::math::sin_cos;` beside it is the same item
