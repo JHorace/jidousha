@@ -311,6 +311,23 @@ pub(crate) fn the_swept_contact_answers_its_contract() -> Result<(), String> {
             missed.at
         ));
     }
+    // Already behind the paddle and still going: the case a rally cannot reach,
+    // because a ball that gets there has scored. Without the `in_front` test the
+    // sweep reports a contact at a *negative* fraction of the tick and the ball
+    // is batted back out of the goal.
+    if let Some(behind) = rules::paddle_contact(
+        Vec2::new(face + 0.1, 0.0),
+        Vec2::new(face + 0.5, 0.0),
+        side,
+        0.0,
+    ) {
+        return Err(format!(
+            "a ball already {:.2} past the paddle face and still travelling away was \
+             reported as a contact at fraction {:.3} — a shot that beat the paddle would \
+             be batted back out of the goal",
+            0.1, behind.fraction
+        ));
+    }
     // Leaving through the same face: already past it, going the other way.
     if let Some(leaving) = rules::paddle_contact(
         Vec2::new(face + 0.1, 0.0),
@@ -330,6 +347,91 @@ pub(crate) fn the_swept_contact_answers_its_contract() -> Result<(), String> {
         return Err("a NaN destination was reported as a contact".to_owned());
     }
     Ok(())
+}
+
+/// A paddle taken above its own centre sends the ball up, and below it down.
+///
+/// Stated in numbers this file holds rather than by calling
+/// [`rules::rebound`] and comparing the answer to itself. A check that reads the
+/// game's own answer back cannot see that answer change: flip the sign on the
+/// bounce and every rally is still a rally, both paddles are still wrong the same
+/// way, and the controller — which calls the same function to plan its shots —
+/// is still right about where the ball will go. The whole session passes. What
+/// says otherwise is the requirement, which is that Pong's paddle is an aiming
+/// device: where you meet the ball is which way it leaves.
+pub(crate) fn a_paddle_aims_the_ball_the_way_it_was_struck() -> Result<(), String> {
+    let speed = 20.0;
+    let paddle_y = 2.0;
+    for (side, outward) in [(Side::Left, 1.0_f32), (Side::Right, -1.0_f32)] {
+        let name = if side == Side::Left { "left" } else { "right" };
+        // Y is down, so a contact *above* the paddle's centre is at a smaller y
+        // and has to leave with a negative y — going up the screen.
+        let high = rules::rebound(paddle_y - CONTACT_REACH, paddle_y, side, speed);
+        let low = rules::rebound(paddle_y + CONTACT_REACH, paddle_y, side, speed);
+        let flat = rules::rebound(paddle_y, paddle_y, side, speed);
+        if high.y >= 0.0 || low.y <= 0.0 {
+            return Err(format!(
+                "the {name} paddle does not aim: a ball struck above its centre leaves at \
+                 {high:?} and one struck below leaves at {low:?}, wanting the first to go \
+                 up (negative y) and the second down"
+            ));
+        }
+        if flat.y.abs() > SLACK {
+            return Err(format!(
+                "the {name} paddle does not send a centred ball back flat: {flat:?}"
+            ));
+        }
+        if flat.x * outward <= 0.0 || high.x * outward <= 0.0 {
+            return Err(format!(
+                "the {name} paddle sends the ball back into its own end: centred {flat:?}, \
+                 high {high:?}"
+            ));
+        }
+        for (what, out) in [("centred", flat), ("high", high), ("low", low)] {
+            if (out.length() - speed).abs() > 1e-2 {
+                return Err(format!(
+                    "the {name} paddle's {what} return leaves at {:.3} units a second, not \
+                     the {speed:.1} it was given",
+                    out.length()
+                ));
+            }
+        }
+        // And the steepest strike is exactly the angle the game says it allows.
+        let (steepest, _) = sin_cos(MAX_BOUNCE);
+        if (low.y - speed * steepest).abs() > 1e-2 {
+            return Err(format!(
+                "the {name} paddle's tip strike climbs {:.3} units a second, not the \
+                 {:.3} that {:.0} degrees of bounce at {speed:.1} asks for",
+                low.y,
+                speed * steepest,
+                MAX_BOUNCE.to_degrees()
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// A paddle covers less than a quarter of the court it defends.
+///
+/// The requirement rather than the constant. `each_paddle_is_drawn_where_it_stands`
+/// builds its expected rectangle out of `PADDLE_HALF_Y`, so it moves when that
+/// constant moves and a paddle grown half again as tall walks straight through
+/// it. What cannot move with the constant is the game's own demand: a paddle
+/// covering a quarter of the court saves one shot in four by standing still, and
+/// at that point being in the right place has stopped being the game.
+pub(crate) fn a_paddle_covers_less_than_a_quarter_of_the_court() -> Result<(), String> {
+    let covered = (PADDLE_HALF_Y * 2.0) / (HALF_H * 2.0);
+    if covered < 0.25 {
+        return Ok(());
+    }
+    Err(format!(
+        "a paddle {:.2} units tall covers {:.0}% of a court {:.2} tall — a quarter of every \
+         shot is saved by standing still, and being in the right place has stopped being \
+         the game",
+        PADDLE_HALF_Y * 2.0,
+        covered * 100.0,
+        HALF_H * 2.0
+    ))
 }
 
 /// The ball cannot travel further in one tick than the thinnest thing it must

@@ -227,6 +227,14 @@ pub(crate) fn run() -> ExitCode {
             checks::a_steep_return_outruns_the_opponent(),
         ),
         (
+            "a paddle aims the ball the way it was struck",
+            checks::a_paddle_aims_the_ball_the_way_it_was_struck(),
+        ),
+        (
+            "a paddle covers less than a quarter of the court",
+            checks::a_paddle_covers_less_than_a_quarter_of_the_court(),
+        ),
+        (
             "every drawn string is printable",
             checks::every_drawn_string_is_printable(&BANNERS),
         ),
@@ -492,6 +500,18 @@ pub(crate) fn run() -> ExitCode {
             chaser.report.met,
             chaser.report.approaches,
             chaser.longest_rally,
+        ));
+    }
+    // An unfinished match is the shape a groove takes: both sides tracking the
+    // ball, neither able to lose, the rally going nowhere. The chaser is the
+    // player it happens to, so this is the line that sees it — and the opponent's
+    // placement constant is what to open, not any speed.
+    if chaser.round.winner().is_none() {
+        failures.push(format!(
+            "the chaser's match never finished: {}-{} after {} ticks, with a longest rally \
+             of {} touches — a rally neither side can lose is a groove, and the opponent's \
+             placement constant is what to look at before any speed",
+            chaser.round.left, chaser.round.right, chaser.ticks, chaser.longest_rally,
         ));
     }
     if chaser.round.winner() == Some(Side::Left) {
