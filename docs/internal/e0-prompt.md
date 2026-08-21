@@ -8,6 +8,15 @@ prompt: if the wording changes between runs, the runs are not comparable and
 This file lives in `docs/internal/` deliberately — it is maintainers' harness,
 and the E0 session must never read it. Paste the block, do not point at the file.
 
+**No run is scheduled: E0 closed after run 11 (ADR-0036).** Nothing below is
+changed or deleted, and that is deliberate — the prompt and its revision ledger
+are what make a future run comparable with the eleven on file. If E0 is ever
+re-run as a regression check, run it exactly as written, take both
+before-the-run steps (delete the game in `crates/jidousha/examples/` and
+un-register it), and score the result against `e0-findings.md` §6's run 12 watch
+list, which was written before the closure and never used. Step 5's pass
+condition is retired; the rest of the procedure is not.
+
 ## Prompt revisions
 
 The paragraph above says the prompt is checked in so that repeats are
@@ -147,7 +156,11 @@ testing reference has been failed by the pointer rather than by the surface.
    document — but "the run guessed at nothing" is weaker evidence when the run
    was handed the answers (e0-findings.md F-020).
 4. Fix what the findings say to fix. Then run E0 again, fresh.
-5. E0 passes when two consecutive runs produce **no `engine` finding and no
+5. **Retired — E0 closed after run 11 without meeting this (ADR-0036).** Kept as
+   written, because "not met" only means something if the condition is still
+   legible.
+
+   E0 passed when two consecutive runs produced **no `engine` finding and no
    *novel* `docs` finding** (ADR-0029, e0-findings.md §2). A `docs` finding whose
    cross-run column names a prior `F-` number is a re-tread: record it, fix it,
    and do not reset the streak for it. An `engine` finding resets the streak
@@ -155,8 +168,9 @@ testing reference has been failed by the pointer rather than by the surface.
 
    **This changed after run 8 and the ledger above applies to it**, so the streak
    restarted at zero — which cost nothing, because it had been zero since run 1.
-   The prompt itself is deliberately unchanged: it is right to ask a run for
-   every friction, and the conflict between "do not soften these" and a bar that
+   It was still zero eleven runs later, which is what ADR-0036 acts on. The
+   prompt itself is deliberately unchanged: it is right to ask a run for every
+   friction, and the conflict between "do not soften these" and a bar that
    required silence is resolved on the counting side rather than by asking runs
    to report less.
 6. Adopt the game: put `pong` back into `WINDOWED_EXAMPLES` and

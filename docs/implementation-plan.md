@@ -69,11 +69,21 @@ parallel work if multiple sessions ever run concurrently (worktrees).
 trust + checked by reviewing its transcript), builds a playable Pong with score
 text, verified via `tools/verify` script + a human web playtest. Failures are
 treated as engine/docs bugs first, not prompt bugs: each E0 failure gets a
-root-cause note in `docs/internal/e0-findings.md` and a fix. E0 repeats until
-it passes clean twice in a row — **clean meaning no `engine` finding and no
+root-cause note in `docs/internal/e0-findings.md` and a fix. E0 repeated until
+it passed clean twice in a row — **clean meaning no `engine` finding and no
 *novel* `docs` finding** (ADR-0029; a re-tread of an already-recorded shape is
-fixed but does not reset the streak). This is the project's definition of
+fixed but does not reset the streak). That was the project's definition of
 working.
+
+**It never happened, and E0 is closed anyway (ADR-0036).** Eleven runs, a hundred
+and forty-one findings, zero consecutive clean runs. The exercise ends because
+its own instrumentation stopped measuring the document — `e0-findings.md` §6
+establishes that the novel count tracks the author rather than the prose — and
+because no run since run 4 has found the engine doing the wrong thing. What is
+recorded is that `docs/api/` is sufficient for an author who cannot read the
+source to build, check, capture and ship a working **Pong**; that is narrower
+than "sufficient for a game", and ADR-0036 says so at length. The harness stays
+runnable as a regression check.
 
 **Harness ready** (see `docs/internal/e0-prompt.md` for the prompt and the
 before/after procedure, and `e0-findings.md` for the classification rule and the
@@ -98,6 +108,12 @@ the milestone's honesty depends on:
   the harness must not depend on an author choosing to (e0-findings.md F-020).
   It is step 2 of `e0-prompt.md`'s before-the-run checklist.
 
+  **With E0 closed there is no next run, so run 11's `pong` stays** — in
+  `crates/jidousha/examples/` and registered in `tools/test`, a permanent worked
+  example beside `slalom/` and `prototype_kit/`. The step protects the next
+  author's reading list, and there is no next author (ADR-0036). It applies again
+  the moment E0 is re-run.
+
 After E0: write the `make-game` skill (practices §3) from what E0 taught, then
 v1 is done and the deferred lists become the roadmap conversation.
 
@@ -108,7 +124,12 @@ Tick in the completing commit. (All unticked at handoff.)
 - [x] session-zero  - [x] M0  - [x] M1  - [x] M2  - [x] M3  - [x] M4
 - [x] A0  - [x] I0  - [x] R0  - [x] M5  - [x] R1  - [x] A1  - [x] R2
 - [x] R3  - [x] I1  - [x] A2  - [x] I2  - [x] R4  - [x] A3  - [x] F0
-- [ ] E0  - [ ] make-game skill
+- [x] E0  - [ ] make-game skill
+
+E0 is ticked as **closed after eleven runs, not as passed** (ADR-0036). The
+condition §3 states was never met — the streak at closure is zero — and it is
+retired rather than lowered. `e0-findings.md` §2 and §6 carry the reasoning and
+what the closure does not establish.
 
 ## 5. Document map
 

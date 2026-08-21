@@ -1,17 +1,29 @@
 # E0 findings — what building a game with this engine actually cost
 
-Status: **eleven runs, a hundred and forty-one findings, awaiting run 12.** The
-harness is `docs/internal/e0-prompt.md`; the milestone is implementation-plan.md
-§3. **The bar moved after run 8** (ADR-0029, §2): two consecutive runs with no
+Status: **closed after eleven runs and a hundred and forty-one findings
+(ADR-0036).** There is no run 12. The milestone is ticked; the bar in §2 was
+never met and is retired rather than lowered, and the streak at closure is zero.
+This file stops being a ledger and becomes a source — for the `make-game` skill
+first, which practices §3 says is written from what E0 taught. The harness is
+`docs/internal/e0-prompt.md` and is kept intact: E0 remains runnable as a
+deliberate regression check, and §6's run 12 watch list is the list to score it
+against. What ended is the repeat-until-clean loop, not the ability to run it.
+
+**The bar moved after run 8** (ADR-0029, §2): two consecutive runs with no
 `engine` finding and no *novel* `docs` finding, a re-tread of a recorded shape
-being fixed without resetting the streak. **Run 11 does not pass**, and the
-reason is one `engine` finding — F-137, `PhysicalSize::aspect` not being a
-`const fn` — which resets the streak outright whatever the docs column says. The
-count of consecutive clean runs is zero. Run 1 found five `engine` findings, run
+being fixed without resetting the streak. **Run 11 did not pass it either**, and
+the reason is one `engine` finding — F-137, `PhysicalSize::aspect` not being a
+`const fn` — which resets the streak outright whatever the docs column says. So
+the count of consecutive clean runs finished where it started: zero.
+
+Run 1 found five `engine` findings, run
 2 three, run 3 none, run 4 three (all decided: ADRs 0021–0023), run 5 one,
 declined (ADR-0024), run 6 one, accepted and fixed (F-069), run 7 none, run 8
 none, run 9 one, accepted and fixed (F-116, ADR-0032), run 10 none, and **run 11
-one, accepted and fixed**.
+one, accepted and fixed**. **No run since run 4 found the engine doing the wrong
+thing** — the two since are both a missing affordance found by trying to write
+one line (F-116's fold, F-137's `const`), and that seven-run quiet is what
+ADR-0036 closes on.
 
 **Run 11's novel `docs` count is one**, after three consecutive runs at three,
 and that is the first movement in the number in four runs. It should be read with
@@ -128,12 +140,25 @@ A finding classified `author` needs a quote from `docs/api/jidousha-api.md`
 showing where the answer already was. Without that quote it is not an `author`
 finding.
 
-## 2. The bar
+## 2. The bar — retired, and E0 closed without meeting it (ADR-0036)
 
-E0 passes when **two consecutive runs produce no `engine` finding and no *novel*
-`docs` finding** (ADR-0029). Not "no findings" — an `author` finding is allowed
-in a passing run, and the second clean run is what distinguishes a fixed engine
-from a lucky one.
+**E0 is complete after eleven runs, and the bar below was never met.** The count
+of consecutive clean runs at closure is **zero**. ADR-0036 retires the condition
+rather than lowering it, on the grounds §6 established after run 10: the novel
+count measures the author, not the document. What is recorded is that
+`docs/api/` is sufficient for an author who cannot read the source to build,
+check, capture and ship a working Pong — eleven times, four of them consecutively
+without a blocker. What is *not* recorded is a pass. Those are different claims
+and this file spent eleven runs counting carefully enough not to blur them in the
+last entry.
+
+The rest of this section is kept as written, because a retired bar still has to
+say what it required in order for "not met" to mean anything.
+
+E0 passed when **two consecutive runs produced no `engine` finding and no *novel*
+`docs` finding** (ADR-0029). Not "no findings" — an `author` finding was allowed
+in a passing run, and the second clean run is what would have distinguished a
+fixed engine from a lucky one.
 
 **A `docs` finding is novel unless its "Also found by" names a prior `F-` number
 or an already-recorded shape.** A re-tread is still recorded, still classified
@@ -7268,6 +7293,73 @@ summary is that the engine's part looks finished and the documents' part is
 converging, and that until run 8 nobody could tell those apart because the bar
 counted them together.
 
+### Where the exercise stands at closure, after eleven runs — the last assessment
+
+Written when E0 was closed (ADR-0036), and the counterpart to the after-eight-runs
+assessment above. That one asked whether the bar was reachable. This one records
+that it was not reached, and why stopping is the answer rather than continuing.
+
+| run | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| novel | 14 | 13 | 8 | 14 | 6 | 8 | 7 | **3** | **3** | **3** | **1** |
+| a re-tread of a recorded shape | 0 | 0 | 0 | 0 | 2 | 2 | 8 | 11 | 5 | 6 | 3 |
+| `engine` | 5 | 3 | 0 | 3 | 1 | 1 | 0 | 0 | **1** | **0** | **1** |
+
+**The prediction above held, and then broke in the direction that ends the
+exercise rather than extending it.** The after-eight-runs assessment said three
+is roughly what a fresh author meeting fifteen thousand tokens produces, and that
+it is not a measurement of this document's remaining gaps. Run 11 scored **1** —
+below the floor — and did it in a run that also produced an `engine` finding. So
+the one movement the series has shown does not read as convergence either: the
+number went down while the category that resets the streak came back. A number
+that falls when the document did not change much, and holds at 3 through the two
+largest structural changes the document ever had, is not measuring the document.
+
+**The engine's part is finished on the evidence available, and the evidence is
+seven runs long.** No run since run 4 has reported the engine doing the wrong
+thing. The two `engine` findings since are both a missing affordance rather than
+a defect — F-116's fold and F-137's `const fn` — each found by trying to write
+one line, each fixed in the session that triaged it. Runs 3, 7, 8 and 10 found
+none at all, and run 5's was declined on the merits (ADR-0024).
+
+**What the last four runs did is the substance the question was about.** Each
+shipped a playable Pong that compiled clean, ran `--verify` green, and was played
+in a window and in a browser. None was blocked. None wanted `src/` to learn what
+a function *did*. Their mutation rounds scored 23 of 23, 18 of 20, 22 of 23 and
+19 of 19. Run 11 wanted to look something up twice, went neither time, and
+reports both times that the document had it and the run had misread.
+
+**The residue is named and it is not an engine question.** §4g and §4h call it
+the neighbour defect: a previous fix answering the question asked and not the one
+beside it. Three of run 11's four `docs` findings are that shape, and so is its
+`engine` finding — F-069 wrote the const-fn rule down and did not apply it to the
+list the rule itself created. §4h adopts the remedy once, at F-137, by walking
+that list and reporting every member's state. Whether it generalises is the
+question run 12 would have answered, and it is now a documentation review
+practice to be argued on its own rather than a thing a fresh Pong is needed to
+observe.
+
+**What this assessment does not claim**, in the same words as its predecessor
+because nothing has changed about them:
+
+- **It does not say E0 passed.** The streak at closure is zero and §2's
+  second-clean-run argument is not refuted here — it is knowingly given up.
+- **It is a claim about Pong.** §5's caveat is the most important sentence in
+  this section: eleven runs have shaped these documents around one game, so a
+  falling novel count is partly the document learning Pong and the floor is
+  partly the part of Pong it cannot learn. Neither number separates them, and no
+  twelfth Pong would have.
+- **A run 12 would probably have found something.** Roughly three `docs`
+  findings, one novel, and possibly an affordance gap on a type nobody has tried
+  to write a constant of yet. Stopping says those are worth less than what the
+  same session spends on `make-game` — not that they do not exist.
+
+**What happens to the apparatus.** The harness stays: `e0-prompt.md` unchanged,
+the run 12 watch list kept and marked unrun, `pong` kept in the tree and
+registered in `tools/test` because the delete-before-the-next-run step now
+protects nobody. This file stops growing at F-141 and becomes the source
+`make-game` is written from.
+
 ### Run 4's lever, spent — `examples/slalom`
 
 Held since run 4 against the day prose failed on controllers. It has now failed
@@ -7315,9 +7407,13 @@ after the trims that paid for the pointer — and it buys a place for the *next*
 controller finding to land at no document cost at all, which is the only reason
 the budget arithmetic below is survivable.
 
-### What run 12 should be watched for
+### What run 12 should be watched for — **unrun** (ADR-0036)
 
-*Written before run 12 runs, and not to be edited afterwards.*
+*Written before run 12 was cancelled, and kept unedited.* E0 closed after run 11,
+so nothing below was ever scored. It is kept rather than deleted because it is
+the only record of what run 11's fixes were expected to buy, and because it is
+the list to score against if E0 is ever re-run as a regression check. Read every
+item as an open question, not as a result.
 
 - **Whether a layout takes its shape from its window.** F-137's fix is only real
   if the next run writes `const HALF_W: f32 = HALF_H * WINDOW.aspect();` without
