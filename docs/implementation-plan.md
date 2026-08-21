@@ -114,8 +114,10 @@ the milestone's honesty depends on:
   author's reading list, and there is no next author (ADR-0036). It applies again
   the moment E0 is re-run.
 
-After E0: write the `make-game` skill (practices §3) from what E0 taught, then
-v1 is done and the deferred lists become the roadmap conversation.
+After E0: the `make-game` skill (practices §3) was written from what E0 taught
+— `.claude/skills/make-game/SKILL.md`, a checklist that orders the four
+`docs/api/` documents and points into them. With it, v1 is done and the
+deferred lists become the roadmap conversation.
 
 ## 4. Progress checklist
 
@@ -124,12 +126,15 @@ Tick in the completing commit. (All unticked at handoff.)
 - [x] session-zero  - [x] M0  - [x] M1  - [x] M2  - [x] M3  - [x] M4
 - [x] A0  - [x] I0  - [x] R0  - [x] M5  - [x] R1  - [x] A1  - [x] R2
 - [x] R3  - [x] I1  - [x] A2  - [x] I2  - [x] R4  - [x] A3  - [x] F0
-- [x] E0  - [ ] make-game skill
+- [x] E0  - [x] make-game skill
 
 E0 is ticked as **closed after eleven runs, not as passed** (ADR-0036). The
 condition §3 states was never met — the streak at closure is zero — and it is
 retired rather than lowered. `e0-findings.md` §2 and §6 carry the reasoning and
 what the closure does not establish.
+
+`make-game` was the last box: v1 is complete, and per §3 the deferred lists
+are now the roadmap conversation rather than pending work.
 
 ## 5. Document map
 
