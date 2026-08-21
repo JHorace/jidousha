@@ -1,499 +1,662 @@
-//! The check: three players, a headless match each, assertions about what the
-//! world did and what was drawn, three staged screens the run never reaches, one
-//! contract the run cannot exercise, and a picture.
+//! `--verify`: three matches with nobody watching, then every assertion this
+//! game can make about what its world did and what it drew.
 //!
-//! `cargo run -p jidousha --example pong -- --verify`.
+//! Run it: `cargo run -p jidousha --example pong -- --verify`
 //!
-//! It runs the *same* systems and the same config the window does. What differs
-//! is only what a person would otherwise supply: the keys come from
-//! `controller.rs` instead of a keyboard, so the run is the same on every
-//! machine and on every day.
+//! The shape is the convention's: script or drive the input, tick a fixed
+//! number of times, assert, print a verdict beginning with `verified `, and
+//! then the transcript of one frame as evidence. Failures are collected rather
+//! than exited on, because an instrument that stops at the first bad reading
+//! costs a whole cycle per fault.
 //!
-//! Nothing here exits on the first bad reading. An instrument that stops at the
-//! first fault costs a whole cycle per fault, and one broken constant in this
-//! game produces half a dozen readings whose *diagnostic* one is rarely first.
+//! Three matches, because one controller cannot measure a game's difficulty:
+//! the rollout player says the game can be won, the do-nothing player says it
+//! can be lost, and the chaser — the paddle a person plays on their first try —
+//! is the only one of the three that says whether it is worth playing.
 
 use std::process::ExitCode;
 
 use jidousha::prelude::*;
 use jidousha::testing::{
-    BackendTextureId, DrawnQuad, FrameRecord, FrameRecorder, InputEvent, SnapshotBuilder,
-    find_bounds,
+    BackendTextureId, DrawnQuad, FrameRecord, FrameRecorder, InputSnapshot, find_bounds,
 };
 
-use crate::checks::{Checks, fail, greater, near, sizes_covering};
-use crate::controller::{Mode, Player, Report};
+use crate::checks::{Checks, fail, greater, near, near_within, sizes_covering};
+use crate::controller::{Chaser, Report, Rollout};
 use crate::{
-    BALL_COLOR, BALL_RADIUS, Ball, COURT, COURT_COLOR, FIELD_LINE, MATCH_POINT, MAX_BALL_SPEED,
-    OPPONENT_COLOR, PADDLE_SIZE, PLAYER_COLOR, Paddle, Round, Side, Stage, Tally, banner_lines,
-    config, crossing, face_of, hint_text, paddle_home, register,
+    BALL_COLOR, BALL_RADIUS, DASH_COUNT, DASH_FILL, DASH_WIDTH, GOAL_X, HALF_W, HINT, MARKING,
+    MAX_SPEED, Match, OPPONENT_BIAS, PADDLE_SIZE, PADDLE_X, Paddle, SCORE_GAP, SCORE_SIZE,
+    SERVE_SPEED, Side, WALL_Y, WIN_SCORE, ball_limit, banner_lines, bounce_off_walls, config,
+    contact_span, face_contact, face_gap, opponent_target, rebound, register, score_text,
 };
 
-/// How many ticks a session runs before it is called a draw.
+/// How long each headless match runs.
 ///
-/// Fifty seconds of play at the engine's default timestep. A rollout match ends
-/// in about two thousand; the extra thousand is headroom for the chaser, which
-/// plays longer rallies and needs the room to finish rather than be cut off
-/// mid-match with a score nothing can conclude from.
-const TICKS: u64 = 3000;
+/// About sixty-six seconds of game at the engine's default timestep — long
+/// enough for a match to seven to finish with its serve pauses, and the run
+/// reports how many ticks it actually took so a shortfall reads as a number
+/// rather than as a timeout.
+const TICKS: u64 = 4000;
 
-/// The viewport the headless run draws at.
+/// The surface the headless runs draw to.
 ///
-/// The same size the window opens at, so the recorder's viewport and the game's
-/// camera agree and every assertion about *where* a quad is means something.
-const HEADLESS_VIEWPORT: PhysicalSize = crate::WINDOW;
+/// The same size the window opens at, which is what makes every bounds
+/// assertion below about the aspect the layout was stated for. The recorder's
+/// viewport overrides the `Camera` resource's, so giving it the one the game
+/// already has is what stops the question existing.
+const HEADLESS_VIEWPORT: PhysicalSize = PhysicalSize::new(1280, 720);
 
-/// How long the ball must sit at the centre spot before a serve, in ticks.
-///
-/// A third of a second, which is about what it takes to look at a score and
-/// read it. Not `SERVE_PAUSE`: a check written against the game's own constant
-/// follows it to zero and passes for a game that re-serves on the tick the
-/// point lands.
-const READABLE_PAUSE: u64 = 20;
-
-/// The shortest a won match may be, in ticks.
-///
-/// Fifteen seconds. Below it the game is not something anybody plays, it is
-/// something that happens to them.
-const SHORTEST_MATCH: u64 = 900;
-
-/// What one session did.
-pub(super) struct Session {
-    /// Points, by `Side::index`.
-    points: [u32; 2],
-    /// What the match was doing when the session ended.
-    stage: Stage,
-    /// The rally figures at the end.
-    tally: Tally,
-    /// What the player had to say about itself.
-    report: Report,
-    /// How many ticks it took to reach `stage`.
-    ticks: u64,
-    /// How many frames were recorded.
-    frames: usize,
-    /// The furthest the ball moved in any one tick, in world units.
-    longest_step: f32,
-    /// The furthest from the centre line the ball's centre ever got, vertically.
-    highest: f32,
-    /// The shortest run of ticks the ball spent parked at the centre spot
-    /// before a serve, over the whole match.
-    shortest_pause: u64,
-    /// The last frame drawn while the ball was live.
-    live: Option<FrameRecord>,
-    /// Where the ball was on that frame.
-    live_ball: Vec2,
-    /// Where each paddle was on that frame, by `Side::index`.
-    live_paddles: [Vec2; 2],
-    /// The score on that frame.
-    live_points: [u32; 2],
-    /// The rally figures on that frame.
-    live_tally: Tally,
+/// Which of the three players is at the keyboard.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Player {
+    /// Predicts, constrains, optimises and enumerates.
+    Rollout,
+    /// Follows the ball's current height.
+    Chaser,
+    /// Does nothing at all.
+    Idle,
 }
 
-/// Play one headless match with `mode` at the keyboard.
+/// Everything the world was doing on one tick.
+#[derive(Clone, Copy)]
+struct Look {
+    ball: Vec2,
+    velocity: Vec2,
+    speed: f32,
+    player: f32,
+    opponent: f32,
+    state: Match,
+}
+
+/// The last frame drawn while play was live, and the world that produced it.
 ///
-/// The sim and the recorder come back with it: the staged screens below are
-/// drawn from the same world the session left, which is the only way to build a
-/// frame of a state a played session never reaches.
-fn play(mode: Mode, record: bool) -> (Session, HeadlessSim, FrameRecorder) {
+/// The frame a match *ends* on carries a banner rather than a picture of the
+/// game being played, so the ordinary-layout assertions read this instead.
+struct Live {
+    frame: FrameRecord,
+    look: Look,
+    tick: u64,
+}
+
+/// What one headless match did.
+struct Session {
+    /// The score and the state at the end.
+    outcome: Match,
+    /// What the controller learned about itself.
+    report: Report,
+    /// The last frame drawn while play was live, if any was.
+    live: Option<Live>,
+    /// How many frames were recorded.
+    frames: usize,
+    /// The tick the match was decided on, if it was.
+    decided_at: Option<u64>,
+    /// The box the ball's centre stayed inside all match.
+    ball_extent: Option<Rect>,
+    /// How many times the ball arrived at the opponent's face.
+    opponent_approaches: u32,
+    /// How many of those the opponent returned.
+    opponent_returns: u32,
+    /// The camera the frames were drawn with.
+    camera: Camera,
+    /// The timestep the engine actually ran, rather than the one assumed.
+    fixed_dt: f32,
+    /// Every phase and its systems, in run order.
+    schedule: String,
+}
+
+/// Read the world, or `None` on the way into tick 1 when it is still empty.
+fn look(sim: &HeadlessSim) -> Option<Look> {
+    let world = sim.world();
+    let state = *world.find_resource::<Match>()?;
+    let (_, ball_at, ball) = world.query::<(&Transform, &crate::Ball)>().next()?;
+    let mut player = 0.0;
+    let mut opponent = 0.0;
+    for (_, transform, paddle) in world.query::<(&Transform, &Paddle)>() {
+        match paddle.side {
+            Side::Player => player = transform.pos.y,
+            Side::Opponent => opponent = transform.pos.y,
+        }
+    }
+    Some(Look {
+        ball: ball_at.pos,
+        velocity: ball.velocity,
+        speed: ball.speed,
+        player,
+        opponent,
+        state,
+    })
+}
+
+/// Play one headless match, with `player` at the keyboard.
+///
+/// The recorder is fed only for the run that is going to be looked at: a match
+/// of four thousand ticks holds four thousand frames, which is affordable once
+/// and not three times.
+fn play(player: Player, record: bool) -> (Session, HeadlessSim, FrameRecorder) {
     let mut sim = headless(config(), register);
     let mut recorder = FrameRecorder::new(HEADLESS_VIEWPORT);
-    let mut player = Player::new(mode);
-    // The driver's own accumulator, so a controller goes through the same edge
-    // rules a real keyboard does. Events, not states: a key held for a hundred
-    // ticks presses exactly once.
-    let mut keyboard = SnapshotBuilder::new();
-    let mut holding: Option<Key> = None;
+    let mut rollout = Rollout::default();
+    let mut chaser = Chaser::default();
+    let fixed_dt = sim.world().resource::<Time>().fixed_dt.as_f32();
 
-    let mut session = Session {
-        points: [0, 0],
-        stage: Stage::Rally,
-        tally: Tally::default(),
-        report: Report::default(),
-        ticks: 0,
-        frames: 0,
-        longest_step: 0.0,
-        highest: 0.0,
-        shortest_pause: u64::MAX,
-        live: None,
-        live_ball: Vec2::ZERO,
-        live_paddles: [Vec2::ZERO; 2],
-        live_points: [0, 0],
-        live_tally: Tally::default(),
-    };
-    let mut previous = Vec2::ZERO;
-    let mut parked = 0u64;
+    let mut live: Option<Live> = None;
+    let mut frames = 0;
+    let mut decided_at = None;
+    let mut ball_extent: Option<Rect> = None;
+    let mut opponent_approaches = 0;
+    let mut opponent_returns = 0;
+    let mut previous: Option<Look> = None;
 
     for tick in 1..=TICKS {
         // On the way into tick 1 there is nothing to look at: `Startup` runs
-        // inside this call, so the world is still empty when the player reads
-        // it. `Player::decide` answers `None` there rather than indexing into
-        // an empty query.
-        let want = player.decide(sim.world());
-        if want != holding {
-            if let Some(key) = holding {
-                keyboard.record(InputEvent::KeyReleased(key));
-            }
-            if let Some(key) = want {
-                keyboard.record(InputEvent::KeyPressed(key));
-            }
-            holding = want;
-        }
-        sim.world_mut()
-            .insert_resource(Input::new(keyboard.first_tick_snapshot()));
+        // *inside* that tick, so this read happens once against an empty world.
+        let seen = look(&sim);
+        let snapshot = match (player, seen) {
+            (Player::Idle, _) | (_, None) => InputSnapshot::new(),
+            (Player::Rollout, Some(now)) => rollout.decide(
+                now.ball,
+                now.velocity,
+                now.speed,
+                now.player,
+                now.opponent,
+                fixed_dt,
+            ),
+            (Player::Chaser, Some(now)) => chaser.decide(now.ball, now.player, fixed_dt),
+        };
+        sim.world_mut().insert_resource(Input::new(snapshot));
         sim.tick();
-        session.ticks = tick;
 
-        let Some(round) = sim.world().find_resource::<Round>().copied() else {
+        let Some(now) = look(&sim) else {
             fail(
-                "the match state is gone",
-                "Startup inserts exactly one Round",
+                "the world is empty after a tick",
+                "Startup spawns two paddles, one ball and a Match resource",
             );
         };
-        let Some(tally) = sim.world().find_resource::<Tally>().copied() else {
-            fail("the tally is gone", "Startup inserts exactly one Tally");
-        };
-        session.points = round.points;
-        session.stage = round.stage;
-        session.tally = tally;
-
-        // How long the ball sat still at the centre before this serve. Counted
-        // rather than read off the constant, so it is about what the match did.
-        match round.stage {
-            Stage::Serving { .. } => parked += 1,
-            _ => {
-                if parked > 0 {
-                    session.shortest_pause = session.shortest_pause.min(parked);
-                    parked = 0;
-                }
+        // The ball turning round at the far end: an approach the opponent met.
+        if let Some(was) = previous {
+            if was.velocity.x > 0.0 && now.velocity.x < 0.0 && greater(now.ball.x, 0.0) {
+                opponent_approaches += 1;
+                opponent_returns += 1;
+            }
+            // A point for the player: the ball reached the far end and was not
+            // returned.
+            if now.state.left > was.state.left {
+                opponent_approaches += 1;
             }
         }
+        previous = Some(now);
 
-        let ball = ball_at(&sim);
-        if round.stage == Stage::Rally {
-            session.longest_step = session.longest_step.max((ball - previous).length());
-            session.highest = session.highest.max(ball.y.abs());
+        if now.state.winner.is_some() && decided_at.is_none() {
+            decided_at = Some(tick);
         }
-        previous = ball;
-
+        let playing = now.state.winner.is_none() && now.state.countdown == 0;
+        if playing {
+            let point = Rect::from_center_size(now.ball, Vec2::ZERO);
+            ball_extent = Some(match ball_extent {
+                None => point,
+                Some(seen) => Rect {
+                    min: seen.min.min(point.min),
+                    max: seen.max.max(point.max),
+                },
+            });
+        }
         if record {
             let frame = recorder.draw(&mut sim);
-            session.frames += 1;
-            // The frame a match *ends* on carries the banner rather than the
-            // game, so the ordinary layout is asserted against the last frame
-            // drawn while play was live, with the positions from that same tick.
-            if round.stage == Stage::Rally {
-                session.live_ball = ball;
-                session.live_paddles = paddles_at(&sim);
-                session.live_points = round.points;
-                session.live_tally = tally;
-                session.live = Some(frame);
+            frames += 1;
+            if playing {
+                live = Some(Live {
+                    frame,
+                    look: now,
+                    tick,
+                });
             }
         }
-        if let Stage::Over { .. } = round.stage {
-            break;
-        }
     }
-    session.report = player.report();
-    (session, sim, recorder)
-}
 
-/// Where the ball is.
-fn ball_at(sim: &HeadlessSim) -> Vec2 {
-    match sim.world().query::<(&Transform, &Ball)>().next() {
-        Some((_, transform, _)) => transform.pos,
-        None => fail("the ball is gone", "Startup spawns exactly one"),
-    }
-}
-
-/// Where both paddles are, by `Side::index`.
-///
-/// Sorted by the side they play rather than by the order the query yielded them
-/// in: iteration order is deterministic, which is not the same as being the
-/// order they were spawned in.
-fn paddles_at(sim: &HeadlessSim) -> [Vec2; 2] {
-    let mut found = [None, None];
-    for (_, transform, paddle) in sim.world().query::<(&Transform, &Paddle)>() {
-        found[paddle.side.index()] = Some(transform.pos);
-    }
-    match (found[0], found[1]) {
-        (Some(left), Some(right)) => [left, right],
-        _ => fail("a paddle is gone", "Startup spawns exactly two, one a side"),
-    }
-}
-
-/// How many balls reached `side`'s paddle at all: the ones it sent back, plus
-/// the ones that went past it for a point.
-fn approached(session: &Session, side: Side) -> u32 {
-    session.tally.returns[side.index()] + session.points[side.other().index()]
-}
-
-pub(crate) fn run() -> ExitCode {
-    let mut checks = Checks::default();
-
-    // One recorded session and two more for the scoreline. Recording every frame
-    // of one match is thousands of frames, which the recorder is built to hold.
-    let (good, mut sim, mut recorder) = play(Mode::Rollout, true);
-    let (chaser, _, _) = play(Mode::Chaser, false);
-    let (idle, _, _) = play(Mode::Idle, false);
-
-    let font = recorder.font_texture();
-    // The game's camera with this run's viewport stamped on, read back *after*
-    // the ticks. The pair has to agree before any assertion about where a quad
-    // is means anything.
+    let outcome = *sim.world().resource::<Match>();
     let camera = Camera {
         viewport: HEADLESS_VIEWPORT,
         ..*sim.world().resource::<Camera>()
     };
-    let view = camera.visible_bounds();
-    let dt = sim.world().resource::<Time>().fixed_dt.as_f32();
+    let schedule = sim.schedule_debug();
+    let session = Session {
+        outcome,
+        report: rollout.report,
+        live,
+        frames,
+        decided_at,
+        ball_extent,
+        opponent_approaches,
+        opponent_returns,
+        camera,
+        fixed_dt,
+        schedule,
+    };
+    (session, sim, recorder)
+}
 
-    // --- the order the systems run in ---------------------------------------
+/// The quads a disc of `radius` at `at` is made of, as one box.
+///
+/// `ctx.circle` submits sixteen wedges rather than one square, so nothing the
+/// size of the ball is drawn anywhere — what is true is that all sixteen share
+/// the centre as a corner and all sixteen fit inside the circle's bounding box,
+/// so the box around the ones covering the centre is exactly `2r` square.
+fn disc_bounds(frame: &FrameRecord, at: Vec2, radius: f32, font: BackendTextureId) -> Option<Rect> {
+    let box_of_it = Rect::from_center_size(at, Vec2::splat(radius * 2.0));
+    find_bounds(frame.covering(at).into_iter().filter(|quad| {
+        // Written out rather than as `Rect::contains`, which is half-open and
+        // would throw away the wedge reaching the far edge. A filter, because
+        // a centre-line dash covers the same point and is not the ball.
+        let drawn = quad.bounds();
+        quad.texture != font
+            && quad.tint == BALL_COLOR
+            && greater(drawn.min.x, box_of_it.min.x - 0.001)
+            && greater(drawn.min.y, box_of_it.min.y - 0.001)
+            && greater(box_of_it.max.x + 0.001, drawn.max.x)
+            && greater(box_of_it.max.y + 0.001, drawn.max.y)
+    }))
+}
+
+/// Whether a quad is one of the centre marking's dashes.
+///
+/// By size: the walls carry the same tint and are the width of the court.
+fn is_dash(quad: &DrawnQuad) -> bool {
+    let size = quad.bounds().size();
+    let pitch = WALL_Y * 2.0 / DASH_COUNT as f32;
+    quad.tint == MARKING && near(size.x, DASH_WIDTH) && near(size.y, pitch * DASH_FILL)
+}
+
+/// Put the world into a state a played session never reaches, completely.
+///
+/// A staged frame is not staged until all of it is: this recipe is corrective
+/// rather than additive, because whatever the run left behind is still set.
+fn stage(sim: &mut HeadlessSim, state: Match, ball: Vec2, paddles: (f32, f32)) {
+    sim.world_mut().insert_resource(state);
+    let balls: Vec<Entity> = sim
+        .world()
+        .query::<(&Transform, &crate::Ball)>()
+        .map(|(entity, _, _)| entity)
+        .collect();
+    for entity in balls {
+        if let Some(transform) = sim.world_mut().find_component_mut::<Transform>(entity) {
+            transform.pos = ball;
+        }
+    }
+    for (_, transform, paddle) in sim.world_mut().query_mut::<(&mut Transform, &Paddle)>() {
+        transform.pos.y = match paddle.side {
+            Side::Player => paddles.0,
+            Side::Opponent => paddles.1,
+        };
+    }
+}
+
+/// Every string the game can draw, and where it comes from.
+fn every_string() -> Vec<(&'static str, String)> {
+    let mut out = vec![
+        ("the hint line", HINT.to_owned()),
+        ("a score digit", score_text(WIN_SCORE)),
+    ];
+    for side in [Side::Player, Side::Opponent] {
+        for line in banner_lines(side) {
+            out.push(("a banner line", line.to_owned()));
+        }
+    }
+    out
+}
+
+pub fn run() -> ExitCode {
+    let mut checks = Checks::default();
+    let (session, mut sim, mut recorder) = play(Player::Rollout, true);
+    let (chased, _, _) = play(Player::Chaser, false);
+    let (idle, _, _) = play(Player::Idle, false);
+    let font = recorder.font_texture();
+    let view = session.camera.visible_bounds();
+
+    // --- the contracts a played session never exercises --------------------
     //
-    // The one instrument that can see it. The game decided that a collider is
-    // stationary at its *post-move* position, and the whole of that decision is
-    // the sequence of `add_system` calls in `register`: a tidy-up that moves one
-    // of them reverses it silently, the ball starts passing through a paddle
-    // closing on it, and every assertion about where things ended up still
-    // passes.
-    let order = sim.schedule_debug();
-    for mover in ["drive_the_player", "drive_the_opponent"] {
-        let (at_mover, at_ball) = (order.find(mover), order.find("move_the_ball"));
+    // A run only tests the states it reaches, and the safety margins a game is
+    // built on are exactly the states a correct game never reaches: capped at
+    // half a paddle's thickness of travel per tick, the ball *cannot* tunnel,
+    // so replacing the sweep with a position test would pass the entire match.
+    // Ask the function its contract directly instead.
+    let span = contact_span();
+    let plane = -PADDLE_X;
+    let gap = |x: f32| face_gap(x, plane, Side::Player);
+    // One tick of travel eight units long, straight across a paddle 0.7 thick.
+    let across = face_contact(gap(plane + 4.0), gap(plane - 4.0));
+    let contact_x = across.map(|fraction| (plane + 4.0) + (-8.0) * fraction);
+    checks.require(
+        contact_x.is_some_and(|x| near(x - BALL_RADIUS, plane + PADDLE_SIZE.x / 2.0)),
+        "the sweep does not find a contact for travel that crosses a whole paddle",
+        format!(
+            "eight units of travel from {:.2} to {:.2} across a face at {:.2} reported \
+             {across:?}, putting the ball's leading edge at {:?}; a position test would \
+             have missed this entirely and the match would still be 7-0",
+            plane + 4.0,
+            plane - 4.0,
+            plane + PADDLE_SIZE.x / 2.0,
+            contact_x.map(|x| x - BALL_RADIUS),
+        ),
+    );
+    // The three negatives, which is where a naive sweep goes wrong.
+    let short = face_contact(gap(plane + 4.0), gap(plane + 3.0));
+    let behind = face_contact(gap(plane), gap(plane - 4.0));
+    let away = face_contact(gap(plane - 4.0), gap(plane + 4.0));
+    checks.require(
+        short.is_none() && behind.is_none() && away.is_none(),
+        "the sweep reports contact for travel that never touches the face",
+        format!(
+            "stopping short gave {short:?}, leaving through the same face gave {behind:?}, \
+             and travelling away gave {away:?}; all three must be None"
+        ),
+    );
+    // NaN, which is the half of this that clippy's `neg_cmp_op_on_partial_ord`
+    // invites you to get wrong: `a <= b` is false for NaN where `!(a > b)` is
+    // true, and the ball then sits at a NaN position for the rest of the run.
+    let nan_before = face_contact(f32::NAN, -1.0);
+    let nan_after = face_contact(1.0, f32::NAN);
+    checks.require(
+        nan_before.is_none() && nan_after.is_none(),
+        "the sweep takes a contact at a NaN fraction of the tick",
+        format!(
+            "a NaN gap before gave {nan_before:?} and a NaN gap after gave {nan_after:?}; a \
+             ball that takes one leaves at a NaN position and stays there, silently"
+        ),
+    );
+
+    // The rebound: speed is conserved, the ball leaves away from the paddle it
+    // struck, and it leaves towards the side of the paddle it struck.
+    let flat = rebound(0.0, SERVE_SPEED, Side::Player);
+    let high = rebound(-span, SERVE_SPEED, Side::Player);
+    let low = rebound(span, SERVE_SPEED, Side::Player);
+    let far = rebound(0.0, SERVE_SPEED, Side::Opponent);
+    checks.require(
+        near(flat.length(), SERVE_SPEED)
+            && near(high.length(), SERVE_SPEED)
+            && near(low.length(), SERVE_SPEED),
+        "a rebound does not conserve the ball's speed",
+        format!(
+            "a {SERVE_SPEED:.1} ball came off at {:.3} flat, {:.3} off the top and {:.3} off \
+             the bottom",
+            flat.length(),
+            high.length(),
+            low.length()
+        ),
+    );
+    checks.require(
+        greater(flat.x, 0.0) && greater(0.0, far.x) && greater(0.0, high.y) && greater(low.y, 0.0),
+        "a rebound sends the ball the wrong way",
+        format!(
+            "off the player's paddle a flat hit went {flat:?} and off the opponent's {far:?}; \
+             a hit above centre went {high:?} and below centre {low:?}. Y is down, so a hit \
+             above centre must leave with a negative Y"
+        ),
+    );
+
+    // The walls, asked the same way. A ball folded back inside the court with
+    // its velocity *unchanged* sits inside every extent check and inside every
+    // drawn frame, so removing one reflection is caught only by nobody winning
+    // the match — the conclusion, four checks downstream of the fault.
+    let limit = ball_limit();
+    let (below, below_velocity) =
+        bounce_off_walls(Vec2::new(0.0, limit + 0.2), Vec2::new(1.0, 5.0));
+    let (above, above_velocity) =
+        bounce_off_walls(Vec2::new(0.0, -limit - 0.2), Vec2::new(1.0, -5.0));
+    let (clear, clear_velocity) = bounce_off_walls(Vec2::new(0.0, 0.0), Vec2::new(1.0, 5.0));
+    checks.require(
+        near(below.y, limit - 0.2)
+            && near(below_velocity.y, -5.0)
+            && near(above.y, -limit + 0.2)
+            && near(above_velocity.y, 5.0),
+        "a wall does not turn the ball round",
+        format!(
+            "0.20 past the bottom wall came back to y={:.3} travelling {:.2}, and 0.20 past \
+             the top wall to y={:.3} travelling {:.2}; the walls are at +/-{limit:.2} and a \
+             reflection has to move the position *and* the velocity",
+            below.y, below_velocity.y, above.y, above_velocity.y,
+        ),
+    );
+    checks.require(
+        near(clear.y, 0.0) && near(clear_velocity.y, 5.0),
+        "a ball nowhere near a wall was reflected anyway",
+        format!(
+            "it came back at y={:.3} travelling {:.2}",
+            clear.y, clear_velocity.y
+        ),
+    );
+
+    // The opponent's rule, asked directly rather than inferred from a rally.
+    let asleep = opponent_target(Vec2::new(10.0, 4.0), Vec2::new(-20.0, 0.0));
+    let waiting = opponent_target(Vec2::new(-9.0, 4.0), Vec2::new(20.0, 0.0));
+    let low = opponent_target(Vec2::new(9.0, 4.0), Vec2::new(20.0, 0.0));
+    let high = opponent_target(Vec2::new(9.0, -4.0), Vec2::new(20.0, 0.0));
+    checks.require(
+        near(asleep, 0.0)
+            && near(waiting, 0.0)
+            && near(low, 4.0 + OPPONENT_BIAS)
+            && near(high, -4.0 - OPPONENT_BIAS),
+        "the opponent does not follow the handicap the game is balanced around",
+        format!(
+            "with the ball going away it aimed at {asleep:.2}, with the ball coming but \
+             still behind the handicap line at {waiting:.2}, and with the ball at heights \
+             4.00 and -4.00 past it at {low:.2} and {high:.2}"
+        ),
+    );
+    // And the requirement that constant exists to meet, which it cannot move:
+    // an opponent that meets the ball on its own centre line returns it dead
+    // flat, and against anyone who does the same the rally has nowhere to go.
+    // Stated as "off-centre enough to matter" rather than as the constant.
+    let bias = (low - 4.0).abs();
+    checks.require(
+        greater(bias, span * 0.25) && greater(span, bias),
+        "the opponent meets the ball too near its own centre to put an angle on it",
+        format!(
+            "it aims {bias:.2} off centre on a paddle that can return the ball from \
+             {span:.2} either side, which is {:.0}% of its reach. Too little and every \
+             return goes straight back down the middle; more than the reach and it misses \
+             on purpose",
+            bias / span * 100.0
+        ),
+    );
+
+    // --- the two constants that are secretly one -------------------------
+    //
+    // A paddle's thickness reads as cosmetic and is not: it is the largest
+    // `speed * fixed_dt` the game may reach. Asserted against the timestep the
+    // engine actually handed this run rather than against the 1/60 assumed
+    // when the constants were picked.
+    let travel = MAX_SPEED * session.fixed_dt;
+    checks.require(
+        greater(PADDLE_SIZE.x, travel),
+        "the ball can travel further in one tick than a paddle is thick",
+        format!(
+            "{MAX_SPEED:.1} units a second at a {:.5}s timestep is {travel:.3} units of \
+             travel against a paddle {:.2} thick; nothing in v1 sweeps for you, so raise \
+             the paddle's thickness before the speed",
+            session.fixed_dt, PADDLE_SIZE.x
+        ),
+    );
+
+    // The layout is stated for one aspect, and this is the assertion that says
+    // the aspect it was stated for is the one the camera actually has.
+    checks.require(
+        near_within(view.max.x, HALF_W, 0.01) && near_within(view.max.y, crate::HALF_H, 0.01),
+        "the camera does not show the court this layout was written for",
+        format!(
+            "the camera shows {view:?}; the constants say half-width {HALF_W:.4} and \
+             half-height {:.4}, and every position in the game is stated against those",
+            crate::HALF_H
+        ),
+    );
+
+    // --- the order the systems run in --------------------------------------
+    //
+    // The game decides that a paddle counts as standing still at its post-move
+    // position, which is only true while both paddles move before the ball.
+    // Nothing else in this surface sees a swap of two `add_system` calls: the
+    // world ends up legal either way, one tick of paddle travel apart, and
+    // every assertion about where things ended up passes.
+    let order = &session.schedule;
+    let at = |name: &str| order.find(name);
+    let (player_at, opponent_at, ball_at) = (
+        at("drive_the_player"),
+        at("drive_the_opponent"),
+        at("move_the_ball"),
+    );
+    checks.require(
+        player_at.is_some() && opponent_at.is_some() && ball_at.is_some(),
+        "a system the schedule assertion names is not in the schedule",
+        format!(
+            "drive_the_player {player_at:?}, drive_the_opponent {opponent_at:?}, \
+             move_the_ball {ball_at:?}; two renamed systems give two Nones, which compare \
+             equal, and the order check below would then pass while seeing nothing"
+        ),
+    );
+    if let (Some(one), Some(two), Some(ball)) = (player_at, opponent_at, ball_at) {
         checks.require(
-            // Both have to be *found*: two renamed systems give two `None`s,
-            // which compare equal, and the check then passes while seeing
-            // nothing at all.
-            matches!((at_mover, at_ball), (Some(a), Some(b)) if a < b),
-            "a paddle is moved after the ball sweeps against it, not before",
+            one < ball && two < ball,
+            "the ball moves before the paddles do",
             format!(
-                "in the schedule, {mover} is at {at_mover:?} and move_the_ball at {at_ball:?}; \
-                 the game treats a paddle as stationary at its post-move position, which is \
-                 only true if it has already moved. None means the system was renamed and this \
-                 check is looking at nothing.\n{order}"
+                "in run order: drive_the_player at {one}, drive_the_opponent at {two}, \
+                 move_the_ball at {ball}. The sweep treats a paddle as a plane that stands \
+                 still, so a paddle that has not moved yet is a plane in last tick's place \
+                 and a ball passes through a paddle closing on it"
             ),
         );
     }
 
-    // --- the margin the game is built on, which no played session can see ----
-    //
-    // A fixed timestep only tests collisions at tick boundaries, so a ball that
-    // travels further in one tick than its target is thick steps clean through
-    // it. The cap is real and correct play never reaches it, so ask the numbers
-    // directly — and against the `fixed_dt` the engine actually handed over
-    // rather than the sixtieth of a second the constants were picked against.
-    let per_tick = MAX_BALL_SPEED * dt;
-    checks.require(
-        greater(PADDLE_SIZE.x, per_tick),
-        "the ball can cross a paddle inside one tick",
-        format!(
-            "at its top speed of {MAX_BALL_SPEED} units a second and a timestep of {dt:.5}s the \
-             ball moves {per_tick:.3} per tick, against a paddle {:.2} thick; nothing sweeps \
-             between ticks, so it would pass straight through",
-            PADDLE_SIZE.x
-        ),
-    );
-    // And what the session actually did, which is a different claim: the cap
-    // above is about the constants, this is about the code that applies them.
-    checks.require(
-        greater(PADDLE_SIZE.x, good.longest_step) && greater(good.longest_step, 0.0),
-        "the ball moved further in one tick than a paddle is thick",
-        format!(
-            "its longest single tick was {:.3} against a paddle {:.2} thick",
-            good.longest_step, PADDLE_SIZE.x
-        ),
-    );
+    // --- three players, three verdicts -------------------------------------
+    let Session {
+        outcome,
+        ref report,
+        ref live,
+        frames,
+        decided_at,
+        ball_extent,
+        opponent_approaches,
+        opponent_returns,
+        ..
+    } = session;
 
-    // --- the swept contact test, asked its contract rather than played into ---
-    //
-    // Three calls and no match at all. A correct game never produces a tick of
-    // travel eight units long, so replacing the sweep with a position test
-    // passes an entire session — every assertion, the same 5-0, every frame.
-    let stationary = Vec2::new(paddle_home(Side::Left), 0.0);
-    let face = face_of(stationary, Side::Left);
-    let across = crossing(
-        Vec2::new(face.plane + 4.0, 0.0),
-        Vec2::new(face.plane - 4.0, 0.0),
-        face,
-    );
     checks.require(
-        across.is_some_and(|at| near(at, 0.5)),
-        "a tick of travel straight across a paddle was not seen as a contact",
+        outcome.winner == Some(Side::Player) && outcome.left >= WIN_SCORE,
+        "the rollout player did not win the match",
         format!(
-            "eight units of travel through the plane at x={:.2}, crossing it exactly halfway, \
-             reported {across:?}",
-            face.plane
-        ),
-    );
-    let past_the_end = crossing(
-        Vec2::new(face.plane + 4.0, COURT.y),
-        Vec2::new(face.plane - 4.0, COURT.y),
-        face,
-    );
-    checks.require(
-        past_the_end.is_none(),
-        "a ball crossing the plane past the end of the paddle was called a contact",
-        format!(
-            "the same travel at y={:.1}, {:.1} beyond a reach of {:.2}, reported {past_the_end:?}",
-            COURT.y,
-            COURT.y - face.reach,
-            face.reach
-        ),
-    );
-    let leaving = crossing(
-        Vec2::new(face.plane - 0.1, 0.0),
-        Vec2::new(face.plane + 4.0, 0.0),
-        face,
-    );
-    checks.require(
-        leaving.is_none(),
-        "a ball leaving through the face it came in by was called a contact",
-        format!("travel from behind the plane back out through it reported {leaving:?}"),
-    );
-
-    // --- what the world did -------------------------------------------------
-    checks.require(
-        good.stage == Stage::Over { winner: Side::Left } && good.points[0] == MATCH_POINT,
-        "the game cannot be won",
-        format!(
-            "a controller that rolls the game forward and plays the shot landing furthest from \
-             the opponent finished {} - {} after {} ticks, in stage {:?}",
-            good.points[0], good.points[1], good.ticks, good.stage
+            "it finished {}-{} after {TICKS} ticks, met {} of {} approaches, aimed its \
+             returns {:.2} units from the opponent and landed them {:.2} from where it \
+             planned. All three healthy and still not winning means the game is the half to \
+             open, not the controller",
+            outcome.left,
+            outcome.right,
+            report.met,
+            report.approaches,
+            report.mean_planned_gap(),
+            report.mean_aim_error(),
         ),
     );
     checks.require(
-        idle.stage
-            == Stage::Over {
-                winner: Side::Right,
-            }
-            && idle.points[1] == MATCH_POINT,
-        "the game cannot be lost",
+        idle.outcome.winner == Some(Side::Opponent) && idle.outcome.left == 0,
+        "a player who does nothing at all is not beaten nil",
         format!(
-            "a player that never touches a key finished {} - {} after {} ticks, in stage {:?}",
-            idle.points[0], idle.points[1], idle.ticks, idle.stage
+            "the do-nothing run finished {}-{}; a game that cannot be lost by standing \
+             still is not being defended by anything",
+            idle.outcome.left, idle.outcome.right
         ),
     );
-    // The one that says whether the game is worth playing. A rollout controller
-    // winning proves the mechanics work and says nothing about that: a game
-    // whose two sides both centre on the ball holds one rally for the whole
-    // session, and only a paddle that simply chases the ball can see it.
+    // The one that measures the *game* rather than a controller. A Pong only a
+    // rollout player can win is a Pong nobody will enjoy, and a Pong the first
+    // thing anyone writes wins 7-0 has no opponent in it.
+    let chaser_won = chased.outcome.left;
+    let chaser_lost = chased.outcome.right;
     checks.require(
-        matches!(chaser.stage, Stage::Over { .. })
-            && chaser.points[0] >= 1
-            && chaser.points[1] >= 1,
-        "a player who simply chases the ball cannot play this game",
+        chaser_won >= 1 && chaser_lost >= 1,
+        "chasing the ball is not a way to play this game",
         format!(
-            "chasing finished {} - {} after {} ticks in stage {:?}, with a longest rally of {} \
-             touches; a match that neither side can score in is a game with a groove in it, not \
-             a hard game",
-            chaser.points[0], chaser.points[1], chaser.ticks, chaser.stage, chaser.tally.longest
+            "a paddle that simply follows the ball finished {chaser_won}-{chaser_lost}. \
+             Both sides centring on the ball is the degenerate groove: nobody can score and \
+             the rally has nowhere to go. A person's first try has to be able to win a \
+             point and lose one"
         ),
     );
-    // Stated where the game operates rather than at its most favourable point:
-    // measured over the match as played, not derived at the top speed a rally
-    // touches only at its very end.
-    let reached = approached(&good, Side::Right);
-    checks.require(
-        reached > 0 && good.tally.returns[Side::Right.index()] * 2 >= reached,
-        "the opponent is not really playing",
-        format!(
-            "{} balls reached it and it returned {}; an opponent that sends back fewer than half \
-             is scenery, and one that sends back all of them cannot be scored against",
-            reached,
-            good.tally.returns[Side::Right.index()]
-        ),
-    );
-    // A point has to be readable. The score changes on the tick the ball goes
-    // past a paddle, and if the next serve leaves on that same tick nobody can
-    // see what happened — the requirement is a person's eye, not the game's own
-    // `SERVE_PAUSE`, which a check comparing against it would follow to zero.
-    checks.require(
-        good.shortest_pause >= READABLE_PAUSE && good.shortest_pause < u64::MAX,
-        "a point goes by too fast to see",
-        format!(
-            "the shortest pause between a point and the serve after it was {} ticks ({:.2}s at \
-             {dt:.5}s a tick); the score changes on that boundary and a person has to be able to \
-             read it, which takes about a third of a second",
-            good.shortest_pause,
-            good.shortest_pause as f32 * dt,
-        ),
-    );
-    checks.require(
-        good.ticks >= SHORTEST_MATCH && good.ticks <= TICKS,
-        "a won match is not the length of a game somebody plays",
-        format!(
-            "it took {} ticks, which is {:.1} seconds at {dt:.5}s a tick; the game is written to \
-             be worth about half a minute",
-            good.ticks,
-            good.ticks as f32 * dt
-        ),
-    );
-    // The controller's own contract, checked on the numbers it actually picked.
-    // Read together these say which half of the program to open; no one of them
-    // can. All three healthy and still 0-0 would mean the game is wrong.
-    checks.require(
-        good.report.approaches > 0 && good.report.met == good.report.approaches,
-        "the rollout controller did not return every ball that came to it",
-        format!(
-            "met {} of {} approaches, so what the rest of this run measures is partly the \
-             controller rather than the game",
-            good.report.met, good.report.approaches
-        ),
-    );
-    checks.require(
-        greater(0.5, good.report.aim_error()) && good.report.aimed > 0,
-        "the rollout controller's shots are not the shots it planned",
-        format!(
-            "{} shots landed {:.2} from where they were planned to, on a court {:.1} tall; a \
-             controller aiming at noise reports a plausible wrong number about the game",
-            good.report.aimed,
-            good.report.aim_error(),
-            view.size().y
-        ),
-    );
-    checks.require(
-        greater(good.report.threat(), 0.5) && good.report.planned > 0,
-        "the rollout controller's shots are not threats",
-        format!(
-            "{} planned returns aimed to land {:.2} from the opponent's paddle centre, and its \
-             reach is {:.2}; shots aimed inside that are shots aimed at the opponent",
-            good.report.planned,
-            good.report.threat(),
-            PADDLE_SIZE.y * 0.5 + BALL_RADIUS
-        ),
-    );
-    // The ball stayed in the court while it was live.
-    checks.require(
-        greater(COURT.y - BALL_RADIUS + 0.01, good.highest),
-        "the ball went through a wall",
-        format!(
-            "its centre reached {:.3} from the centre line; the wall is at {:.2} and the ball's \
-             radius is {BALL_RADIUS}, so {:.3} is as far as its centre may go",
-            good.highest,
-            COURT.y,
-            COURT.y - BALL_RADIUS
-        ),
-    );
-
-    // --- what was drawn -----------------------------------------------------
-    let Some(live) = good.live.clone() else {
-        fail(
-            "no frame was recorded while the ball was live",
-            "the recorded session draws one frame a tick and plays for thousands",
-        );
+    // And the requirement stated where the game actually operates rather than
+    // at its most favourable point: the opponent has to be scoreable at the
+    // speeds a rally really reaches, which is a number this run already has.
+    let returned = if opponent_approaches == 0 {
+        0.0
+    } else {
+        opponent_returns as f32 / opponent_approaches as f32
     };
     checks.require(
-        good.frames == good.ticks as usize,
-        "one frame per tick was expected",
-        format!("{} frames for {} ticks", good.frames, good.ticks),
+        greater(returned, 0.15) && greater(0.95, returned),
+        "the opponent is either a wall or a sieve",
+        format!(
+            "it returned {opponent_returns} of {opponent_approaches} balls that reached it, \
+             {:.0}%. Under 15% it is not defending; over 95% no shot exists and the match is \
+             decided by how long anyone is willing to wait",
+            returned * 100.0
+        ),
+    );
+    checks.require(
+        decided_at.is_some(),
+        "no one won the match",
+        format!(
+            "after {TICKS} ticks it was {}-{}, longest rally {} touches, top ball speed \
+             {:.1} units a second; the rollout player met {} of {} approaches",
+            outcome.left,
+            outcome.right,
+            outcome.longest_rally,
+            outcome.top_speed,
+            report.met,
+            report.approaches,
+        ),
     );
 
-    // Both paddles, by bounds rather than by "something is drawn there". A
+    // --- the ball stayed in the court --------------------------------------
+    let Some(extent) = ball_extent else {
+        fail(
+            "the ball was never in play",
+            "every tick of the match was a serve pause or an ended match",
+        );
+    };
+    let ball_limit = WALL_Y - BALL_RADIUS;
+    checks.require(
+        greater(ball_limit + 0.001, extent.max.y)
+            && greater(extent.min.y, -ball_limit - 0.001)
+            && greater(GOAL_X + 0.001, extent.max.x)
+            && greater(extent.min.x, -GOAL_X - 0.001),
+        "the ball left the court",
+        format!(
+            "over the match its centre ranged {extent:?}; the walls hold it to +/-\
+             {ball_limit:.2} vertically and a goal is scored at +/-{GOAL_X:.2}, so anything \
+             outside that is a ball drawn off the side of the screen"
+        ),
+    );
+
+    // --- what was drawn, on the last frame play was live on ----------------
+    let Some(live) = live.as_ref() else {
+        fail(
+            "no frame was recorded while play was live",
+            "the loop draws every tick and the match is live for most of them",
+        );
+    };
+    let frame = &live.frame;
+    let quads = frame.quads();
+    checks.require(
+        frames == TICKS as usize,
+        "one frame per tick was expected",
+        format!("{frames} frames for {TICKS} ticks"),
+    );
+
+    // Both paddles, by bounds rather than by "something is there". A
     // paddle-sized quad covers its own centre even when it is drawn a long way
     // out of position, so covering a point says a quad is nearby and only its
     // bounds say where it is.
-    for side in [Side::Left, Side::Right] {
-        let at = good.live_paddles[side.index()];
-        let found = live.covering(at).into_iter().any(|quad| {
+    for (name, side, y) in [
+        ("the player's", Side::Player, live.look.player),
+        ("the opponent's", Side::Opponent, live.look.opponent),
+    ] {
+        let at = Vec2::new(side.sign() * PADDLE_X, y);
+        let placed = frame.covering(at).into_iter().any(|quad| {
             let bounds = quad.bounds();
             near(bounds.size().x, PADDLE_SIZE.x)
                 && near(bounds.size().y, PADDLE_SIZE.y)
@@ -501,219 +664,200 @@ pub(crate) fn run() -> ExitCode {
                 && near(bounds.center().y, at.y)
         });
         checks.require(
-            found,
-            "no paddle-shaped quad was drawn where a paddle is",
+            placed,
+            "a paddle is not drawn where the world puts it",
             format!(
-                "the {side:?} paddle is at ({:.2}, {:.2}) and is {:.2} by {:.2}; what covers that \
-                 point is {}",
+                "{name} paddle is at ({:.2}, {:.2}) and is {}x{}; what covers that point is \
+                 {}",
                 at.x,
                 at.y,
                 PADDLE_SIZE.x,
                 PADDLE_SIZE.y,
-                sizes_covering(&live, at)
+                sizes_covering(frame, at)
             ),
         );
     }
 
-    // The ball is a circle, so "a quad the size of the thing is at the thing's
-    // position" is the wrong question: sixteen wedges are submitted and nothing
-    // the size of the disc is drawn anywhere. What is true is that all sixteen
-    // share the centre as a corner and all sixteen fit inside its bounding box.
-    let at = good.live_ball;
-    let box_of_it = Rect::from_center_size(at, Vec2::splat(BALL_RADIUS * 2.0));
-    let disc = find_bounds(live.covering(at).into_iter().filter(|quad| {
-        // Spelled out rather than as `Rect::contains`, which is half-open and
-        // would throw away the wedges reaching the far edge. Filtered, because a
-        // centre-line dash under the ball covers the same point and is not the
-        // ball.
-        let drawn = quad.bounds();
-        greater(drawn.min.x, box_of_it.min.x - 0.001)
-            && greater(drawn.min.y, box_of_it.min.y - 0.001)
-            && greater(box_of_it.max.x + 0.001, drawn.max.x)
-            && greater(box_of_it.max.y + 0.001, drawn.max.y)
-    }));
-    let disc_size = disc.map(|rect| rect.size()).unwrap_or(Vec2::ZERO);
+    // And each paddle on its own end, which the check above cannot see: it
+    // takes the position from `Side::sign` and so moves with it. The colours
+    // are what say *whose* paddle is where.
+    for (name, color, want_left) in [
+        ("the player's", crate::PLAYER_COLOR, true),
+        ("the opponent's", crate::OPPONENT_COLOR, false),
+    ] {
+        let found = quads
+            .iter()
+            .find(|quad| quad.tint == color)
+            .map(|quad| quad.bounds().center().x);
+        checks.require(
+            found.is_some_and(|x| greater(0.0, x) == want_left),
+            "a paddle is drawn at the wrong end of the court",
+            format!(
+                "{name} paddle is drawn at x={found:?}; it belongs on the {} half",
+                if want_left { "left" } else { "right" }
+            ),
+        );
+    }
+
+    // The ball, which is sixteen wedges and not one quad.
+    let disc = disc_bounds(frame, live.look.ball, BALL_RADIUS, font);
+    let disc_size = disc.map_or(Vec2::ZERO, |rect| rect.size());
     checks.require(
         near(disc_size.x, BALL_RADIUS * 2.0) && near(disc_size.y, BALL_RADIUS * 2.0),
-        "no ball-sized disc is drawn where the ball is",
+        "there is no ball-sized disc where the ball is",
         format!(
-            "the world has it at ({:.2}, {:.2}); the wedges covering that point span \
-             {:.3}x{:.3}, and a radius of {BALL_RADIUS} is {:.3} square. Everything covering it \
-             is {}",
-            at.x,
-            at.y,
+            "the world has it at ({:.2}, {:.2}) with radius {BALL_RADIUS:.2}; the wedges \
+             covering that point span {:.3}x{:.3} and want {:.2} square. What covers it is {}",
+            live.look.ball.x,
+            live.look.ball.y,
             disc_size.x,
             disc_size.y,
             BALL_RADIUS * 2.0,
-            sizes_covering(&live, at)
-        ),
-    );
-    // And a second one the constant cannot move with: a ball has to be small
-    // against the paddle it gets past and big enough to see.
-    checks.require(
-        greater(PADDLE_SIZE.y * 0.5, disc_size.y) && greater(disc_size.y, view.size().y * 0.01),
-        "the ball is not a readable size against the court",
-        format!(
-            "it is {:.2} across on a court {:.1} tall, against paddles {:.2} long",
-            disc_size.y,
-            view.size().y,
-            PADDLE_SIZE.y
+            sizes_covering(frame, live.look.ball),
         ),
     );
 
-    // --- the score, against the requirement rather than against its constant --
+    // --- the score: where it is, stated as the requirement -----------------
     //
-    // A score drawn at SCORE_TOP and checked against SCORE_TOP moves with its
-    // constant: put that constant in the middle of the court and the check
-    // follows it down, passes, and leaves the score across the play. The
-    // requirement names nothing the game owns.
-    let glyphs: Vec<DrawnQuad> = live
-        .quads()
-        .into_iter()
+    // Not `quad.min.y < SCORE_TOP + margin`, which moves with its constant —
+    // put SCORE_TOP in the middle of the court and that check follows it down,
+    // passes, and leaves the score across the play. The requirement names no
+    // constant the game owns: the score sits in the top third of what the
+    // camera shows, one number either side of the centre line, evenly set.
+    let top_third = view.min.y + view.size().y / 3.0;
+    let glyphs: Vec<DrawnQuad> = quads
+        .iter()
+        .copied()
         .filter(|quad| quad.texture == font)
         .collect();
-    let top_third = view.min.y + view.size().y / 3.0;
-    let score: Vec<DrawnQuad> = glyphs
+    let score_glyphs: Vec<DrawnQuad> = glyphs
         .iter()
         .copied()
         .filter(|quad| greater(top_third, quad.bounds().max.y))
         .collect();
-    let (left_half, right_half): (Vec<DrawnQuad>, Vec<DrawnQuad>) = score
-        .iter()
-        .copied()
-        .partition(|quad| greater(0.0, quad.bounds().center().x));
-    let placed =
-        find_bounds(left_half.iter().copied()).zip(find_bounds(right_half.iter().copied()));
-    match placed {
-        None => checks.require(
-            false,
-            "the score is not one number either side of the centre line, in the top third",
-            format!(
-                "of {} glyphs drawn, {} are in the top third of a view spanning {:.1} to {:.1} \
-                 vertically; {} of those are left of the centre line and {} right of it",
-                glyphs.len(),
-                score.len(),
-                view.min.y,
-                view.max.y,
-                left_half.len(),
-                right_half.len()
-            ),
-        ),
-        Some((left_box, right_box)) => {
-            let gap_left = -left_box.max.x;
-            let gap_right = right_box.min.x;
-            checks.require(
-                greater(gap_left, 0.0) && greater(gap_right, 0.0),
-                "a score number is on the wrong side of the centre line",
-                format!(
-                    "the left number ends at x={:.2} and the right one starts at x={:.2}",
-                    left_box.max.x, right_box.min.x
-                ),
-            );
-            checks.require(
-                greater(0.05, (gap_left - gap_right).abs()),
-                "the two score numbers are not evenly set about the centre line",
-                format!(
-                    "the left one stands {gap_left:.3} from it and the right one {gap_right:.3}"
-                ),
-            );
-            checks.require(
-                greater(left_box.size().y, 0.0) && near(left_box.size().y, right_box.size().y),
-                "the two score numbers are not the same size",
-                format!(
-                    "the left one is {:.3} tall and the right one {:.3}",
-                    left_box.size().y,
-                    right_box.size().y
-                ),
-            );
-        }
-    }
-    // One quad per *character*, spaces included, and counted in `chars` rather
-    // than `len`: `str::len` is bytes, which is right for pure ASCII and wrong
-    // for exactly the input the printable check below exists for.
-    let hint = hint_text(&good.live_tally);
-    let expected: usize = hint.chars().filter(|glyph| *glyph != '\n').count()
-        + good.live_points[0].to_string().chars().count()
-        + good.live_points[1].to_string().chars().count();
     checks.require(
-        glyphs.len() == expected,
-        "the frame does not hold one quad per character the game draws",
+        score_glyphs.len() == 2,
+        "the score is not two digits in the top third of the court",
         format!(
-            "{} glyph quads for a hint of {} characters and a score of {} - {}, which is {expected}",
+            "{} glyphs sit above y={top_third:.2}, out of {} drawn in all; the score is \
+             {}-{} and each side is one digit",
+            score_glyphs.len(),
             glyphs.len(),
-            hint.chars().count(),
-            good.live_points[0],
-            good.live_points[1],
+            live.look.state.left,
+            live.look.state.right,
+        ),
+    );
+    let left_edge = score_glyphs
+        .iter()
+        .filter(|quad| greater(0.0, quad.bounds().max.x))
+        .map(|quad| quad.bounds().max.x)
+        .fold(f32::MIN, f32::max);
+    let right_edge = score_glyphs
+        .iter()
+        .filter(|quad| greater(quad.bounds().min.x, 0.0))
+        .map(|quad| quad.bounds().min.x)
+        .fold(f32::MAX, f32::min);
+    checks.require(
+        near_within(-left_edge, right_edge, 0.01) && greater(right_edge, 0.0),
+        "the score is not set evenly either side of the centre line",
+        format!(
+            "the left number ends {:.3} before the line and the right one starts {right_edge:.3} \
+             after it",
+            -left_edge
+        ),
+    );
+    // And that the digits say what the world says. No assertion over drawn
+    // quads can read a digit, so this asks the *width* — which catches a score
+    // drawn from the wrong number only when the digit count changes, and is
+    // the honest limit of what a frame can be asked here.
+    checks.require(
+        near(right_edge, SCORE_GAP) && near(-left_edge, SCORE_GAP),
+        "the score is not set against the gap the layout states",
+        format!(
+            "it is set {:.3} and {right_edge:.3} either side; the layout says {SCORE_GAP:.2}",
+            -left_edge
         ),
     );
 
-    // --- the bands, where the sort disagrees with the submission order -------
+    // --- the bands ---------------------------------------------------------
     //
     // A frame carries the order quads were drawn in, not the `Depth` that
     // produced it, so a band is only visible where it *changes* that order.
-    // `register` submits the court *after* the play for exactly this reason:
-    // where a game's submission order already agrees with its bands, no
-    // assertion over drawn quads can see a layer at all.
-    let quads = live.quads();
-    let last_field = quads.iter().rposition(|quad| quad.tint == FIELD_LINE);
-    let first_play = quads.iter().position(|quad| {
-        quad.tint == BALL_COLOR || quad.tint == PLAYER_COLOR || quad.tint == OPPONENT_COLOR
+    // `register` submits the play before the court for exactly this reason:
+    // both come back sorted the other way round, so swapping two constants in
+    // `mod layers` moves them and a check can say so.
+    let dash_at = quads.iter().position(is_dash);
+    let ball_at = quads.iter().position(|quad| {
+        quad.texture != font
+            && quad.tint == BALL_COLOR
+            && quad.bounds().size().x < BALL_RADIUS * 2.1
     });
+    let hint_at = glyphs
+        .iter()
+        .position(|quad| greater(quad.bounds().min.y, 0.0));
     checks.require(
-        matches!((last_field, first_play), (Some(field), Some(play)) if field < play),
-        "the court is drawn over the play instead of behind it",
+        dash_at.is_some() && ball_at.is_some() && hint_at.is_some(),
+        "one of the three bands drew nothing in the last live frame",
         format!(
-            "as indices into the draw order: the last court marking is at {last_field:?} and the \
-             first paddle or ball quad at {first_play:?}. The game submits the court *after* the \
-             play, so only FIELD sorting under PLAY can put it first — None means that band drew \
-             nothing and the comparison is about nothing"
+            "as indices into the draw order: a centre dash {dash_at:?}, a ball wedge \
+             {ball_at:?}, a hint glyph {hint_at:?}; None means that band drew nothing where \
+             it was looked for"
         ),
     );
-
-    // --- nothing off screen, in every frame ---------------------------------
-    //
-    // The highest-value check a game of shapes and text can write. Over every
-    // recorded frame rather than only the last: the hint line grows a digit
-    // when a rally passes nine, and the frame that first ran off the edge would
-    // otherwise be one nothing looked at.
-    let mut strays: Vec<(usize, Rect)> = Vec::new();
-    for (index, frame) in recorder.frames().iter().enumerate() {
-        for quad in frame.quads() {
-            let bounds = quad.bounds();
-            // `contains_rect` is closed on all four sides, because a quad flush
-            // against the camera's edge is on screen. `Rect::contains` takes a
-            // point and is half-open, which is a different question.
-            if !view.contains_rect(bounds) {
-                strays.push((index, bounds));
-            }
-        }
+    if let (Some(dash), Some(ball)) = (dash_at, ball_at) {
+        checks.require(
+            dash < ball,
+            "the centre marking is drawn over the ball instead of under it",
+            format!(
+                "the dash is at index {dash} in the draw order and a ball wedge at {ball}; \
+                 the game submits the court *after* the play, so only FIELD sorting under \
+                 PLAY can put the dash first"
+            ),
+        );
     }
+
+    // --- nothing off screen, and by how much -------------------------------
+    let off_screen: Vec<Rect> = quads
+        .iter()
+        .map(|quad| quad.bounds())
+        .filter(|bounds| !view.contains_rect(*bounds))
+        .collect();
     checks.require(
-        strays.is_empty(),
+        off_screen.is_empty(),
         "something was drawn outside what the camera shows",
         format!(
-            "{} quads across {} frames fall outside {view:?}; the first is in frame {:?} — text \
-             centred by TextStyle::width_of is the usual culprit",
-            strays.len(),
-            recorder.frames().len(),
-            strays.first(),
+            "{} of {} quads fall outside {view:?}; the first is {:?} — text centred by \
+             TextStyle::width_of is the usual culprit",
+            off_screen.len(),
+            quads.len(),
+            off_screen.first(),
         ),
     );
+    let clearance = quads
+        .iter()
+        .map(|quad| {
+            let bounds = quad.bounds();
+            let closest = (bounds.min - view.min).min(view.max - bounds.max);
+            closest.x.min(closest.y)
+        })
+        .fold(f32::MAX, f32::min);
 
     // --- the background, which leaves no quad behind ------------------------
-    let cleared = live.plan.clear_color;
+    let cleared = frame.plan.clear_color;
     checks.require(
-        cleared == COURT_COLOR,
+        cleared == crate::COURT,
         "the court was cleared to a colour the game does not name",
-        format!("the frame cleared to {cleared:?}; the game's constant is {COURT_COLOR:?}"),
+        format!(
+            "the frame cleared to {cleared:?}; the game's constant is {:?}",
+            crate::COURT
+        ),
     );
-    // And the requirement, which that constant cannot move: a white ball has to
-    // read against it. Written the first way alone, the clear colour is exactly
-    // the fault a mutation walks straight through.
+    // And the requirement the colour exists to meet, which the constant cannot
+    // move: the ball is white and has to read against the court.
     let brightness = cleared.r.max(cleared.g).max(cleared.b);
     checks.require(
         greater(0.25, brightness) && greater(cleared.a, 0.99),
-        "the court is not dark enough to see a white ball on",
+        "the court is not dark enough for a white ball to read against",
         format!(
             "its brightest channel is {brightness:.3} at alpha {:.2}",
             cleared.a
@@ -722,269 +866,229 @@ pub(crate) fn run() -> ExitCode {
 
     // --- the strings themselves ---------------------------------------------
     //
-    // No assertion over drawn quads can see a wrong character: the font draws an
-    // unknown one as a box at exactly a letter's advance, so a stray em dash or
-    // curly quote passes the glyph count, the centring and the bounds check
-    // alike. The string is the only instrument, which is why the game hands its
-    // hint and its banner back as strings rather than formatting them inside the
-    // draw system where nothing could reach them.
-    let banners = [
-        banner_lines(Side::Left, [MATCH_POINT, 2]),
-        banner_lines(Side::Right, [1, MATCH_POINT]),
-    ];
-    let mut drawn_strings: Vec<(String, String)> = vec![("the hint".to_owned(), hint.clone())];
-    for (side, lines) in [Side::Left, Side::Right].iter().zip(banners.iter()) {
-        for (index, line) in lines.iter().enumerate() {
-            drawn_strings.push((
-                format!("the {side:?} banner, line {}", index + 1),
-                line.clone(),
-            ));
-        }
-    }
-    for (name, text) in &drawn_strings {
-        let stray = text
-            .chars()
-            .find(|glyph| *glyph != '\n' && !(' '..='~').contains(glyph));
+    // No assertion over drawn quads can see a wrong character: the font draws
+    // an unknown one as a box at exactly a letter's advance, so a stray em
+    // dash, curly quote or middle dot passes the glyph count, the centring and
+    // the bounds check alike.
+    for (name, text) in every_string() {
+        let stray = text.chars().find(|glyph| !(' '..='~').contains(glyph));
         checks.require(
             stray.is_none(),
             "a string the game draws has a character the font cannot draw",
             format!(
-                "{name} is {text:?} and contains {stray:?}, which draws as a box at exactly a \
-                 letter's width — no assertion over what was drawn can tell the difference"
+                "{name}, {text:?}, contains {stray:?}, which draws as a box at exactly a \
+                 letter's width - no assertion over what was drawn can tell the difference"
             ),
         );
     }
 
     // --- the screens this run never reached ---------------------------------
     //
-    // A controller good enough to finish the game is a controller that never
-    // loses it, so the losing banner is drawn zero times in a session that ends
-    // 5-0 and the longest string in the game is the one nothing measured. Build
-    // them by hand, and set *every* piece of state the frame depends on: this
-    // recipe is additive while the frames are corrective, and whatever the run
-    // left behind is still set.
-    let mut staged: Vec<(String, FrameRecord)> = Vec::new();
-    for (winner, points) in [
-        (Side::Left, [MATCH_POINT, 2]),
-        (Side::Right, [1, MATCH_POINT]),
+    // The bounds assertion above only judges frames that were drawn, and a
+    // controller good enough to win is a controller that never loses: the
+    // losing banner is the longest string in the game and nothing has measured
+    // it. Build it by hand — and correctively, setting every piece of state the
+    // frame depends on, including the state nothing is being asked about.
+    let mut staged: Vec<(&str, FrameRecord)> = Vec::new();
+    for (name, winner, score) in [
+        ("the winning screen", Side::Player, (WIN_SCORE, 3)),
+        ("the losing screen", Side::Opponent, (2, WIN_SCORE)),
     ] {
-        sim.world_mut().insert_resource(Round {
-            points,
-            stage: Stage::Over { winner },
-        });
-        staged.push((format!("{winner:?} wins"), recorder.draw(&mut sim)));
+        stage(
+            &mut sim,
+            Match {
+                left: score.0,
+                right: score.1,
+                countdown: 0,
+                serve_towards: Side::Player,
+                winner: Some(winner),
+                rally: 0,
+                longest_rally: 9,
+                top_speed: MAX_SPEED,
+            },
+            Vec2::ZERO,
+            (0.0, 0.0),
+        );
+        staged.push((name, recorder.draw(&mut sim)));
     }
-    for ((name, frame), points) in staged.iter().zip([[MATCH_POINT, 2], [1, MATCH_POINT]]) {
-        let outside: Vec<Rect> = frame
+    for (name, screen) in &staged {
+        let strays: Vec<Rect> = screen
             .quads()
             .iter()
             .map(|quad| quad.bounds())
             .filter(|bounds| !view.contains_rect(*bounds))
             .collect();
         checks.require(
-            outside.is_empty(),
-            "an end screen draws outside what the camera shows",
+            strays.is_empty(),
+            "a screen the match never reached draws outside the camera",
             format!(
-                "on the '{name}' screen, {} quads fall outside {view:?}; the first is {:?}",
-                outside.len(),
-                outside.first()
+                "{name} puts {} of {} quads outside {view:?}; the first is {:?}. Each banner \
+                 line is centred by its own width_of, and a line one character too long runs \
+                 off both edges in silence",
+                strays.len(),
+                screen.quad_count(),
+                strays.first(),
             ),
         );
-        // Two lines, each centred by its own width. `width_of` measures the
-        // widest line only, so one call for the block would hang the shorter
-        // line off to the left — on screen, right size, visibly crooked, and
-        // indistinguishable from a layout that meant it by any check over
-        // drawn quads except this one.
-        // Each banner line found by the number of glyphs it drew rather than by
-        // where it sits, so the check survives the layout moving — an earlier
-        // spelling picked the bands out by height and started failing the
-        // moment the banner was nudged up the court, which is a check about
-        // itself rather than about the game.
-        //
-        // Three bands: the score, still drawn on an end screen, and the two
-        // lines of the banner. Counting only "at least two" would pass for a
-        // block drawn in one `ctx.text` call, which is the fault this exists to
-        // catch: `width_of` measures the widest line only, so one call for the
-        // block centres the long line and hangs the short one off to the left,
-        // on screen, at the right size, and visibly crooked.
-        let bands = banner_glyph_lines(frame, font);
+        // Each line centred by *its own* width, not the block's: centring a
+        // two-line block by one width_of centres the longer line and hangs the
+        // shorter one off to the left, visibly crooked, at the right size,
+        // with every other assertion passing.
+        let lines = banner_line_bounds(screen, font);
+        let crooked: Vec<f32> = lines
+            .iter()
+            .map(|bounds| bounds.center().x)
+            .filter(|middle| !near_within(*middle, 0.0, 0.05))
+            .collect();
         checks.require(
-            bands.len() == 3,
-            "the end screen does not draw a score and two banner lines",
+            lines.len() == 2 && crooked.is_empty(),
+            "a banner line is not centred on the court",
             format!(
-                "the '{name}' screen drew {} bands of glyphs, at {:?}",
-                bands.len(),
-                bands
-                    .iter()
-                    .map(|(row, count)| (row.min.y, *count))
-                    .collect::<Vec<_>>()
+                "{name} drew {} banner lines with off-centre middles at {crooked:?}; a block \
+                 centred by one width_of centres its longest line and hangs the rest to the \
+                 left",
+                lines.len()
             ),
         );
-        let winner = if points[0] > points[1] {
-            Side::Left
-        } else {
-            Side::Right
-        };
-        for line in banner_lines(winner, points) {
-            let glyphs = line.chars().count();
-            let matching: Vec<Rect> = bands
-                .iter()
-                .filter(|(_, count)| *count == glyphs)
-                .map(|(row, _)| *row)
-                .collect();
-            checks.require(
-                matching.len() == 1
-                    && matching
-                        .iter()
-                        .all(|row| greater(0.05, row.center().x.abs())),
-                "a line of the end screen was not drawn centred, on its own",
-                format!(
-                    "on the '{name}' screen, {line:?} is {glyphs} characters and {} band(s) of \
-                     that many glyphs were drawn, centred at {:?}",
-                    matching.len(),
-                    matching
-                        .iter()
-                        .map(|row| row.center().x)
-                        .collect::<Vec<_>>()
-                ),
-            );
-        }
     }
 
-    // --- the band boundary a played session never produces ------------------
-    //
-    // FIELD under PLAY is checked above by index, because the game submits them
-    // the other way round. PLAY under UI is not: the hint line is submitted last
-    // *and* sorts last, so no comparison over a played frame can see that band
-    // at all. Arrange the disagreement instead — park the ball under the hint
-    // and ask what a player looking at that point actually sees.
-    let hint_box = find_bounds(
-        live.quads()
-            .into_iter()
-            .filter(|quad| quad.texture == font && greater(quad.bounds().min.y, 0.0)),
-    );
-    match hint_box {
-        None => checks.require(
-            false,
-            "the hint line was not drawn",
-            "no glyph was drawn below the centre line in a live frame".to_owned(),
+    // The two end screens have to be two different screens. Every check above
+    // judges each one on its own — on screen, centred, printable — and all of
+    // them pass just as happily for a banner that congratulates the loser.
+    let sizes: Vec<usize> = staged
+        .iter()
+        .map(|(_, screen)| screen.quad_count())
+        .collect();
+    checks.require(
+        staged.len() == 2 && sizes[0] != sizes[1],
+        "the winning and losing screens are the same screen",
+        format!(
+            "they drew {sizes:?} quads; the banners are {:?} and {:?}, and a game that \
+             congratulates the loser passes every other assertion in this file",
+            banner_lines(Side::Player),
+            banner_lines(Side::Opponent),
         ),
-        Some(hint_box) => {
-            let under = hint_box.center();
-            // Corrective, not additive: the staged end screen above is still
-            // set, and a frame drawn now would carry the banner rather than the
-            // hint. Put the match back into play before asking.
-            sim.world_mut().insert_resource(Round {
-                points: [1, 1],
-                stage: Stage::Rally,
-            });
-            let ball = sim
-                .world()
-                .query::<(&Transform, &Ball)>()
-                .map(|(entity, _, _)| entity)
-                .next();
-            match ball {
-                None => fail("the ball is gone", "Startup spawns exactly one"),
-                Some(ball) => sim.world_mut().component_mut::<Transform>(ball).pos = under,
-            }
-            let overlap = recorder.draw(&mut sim);
-            let front = overlap.covering(under).into_iter().next();
-            checks.require(
-                front.is_some_and(|quad| quad.texture == font),
-                "the hint line is not drawn over the ball",
-                format!(
-                    "with the ball parked at ({:.2}, {:.2}), under the middle of the hint, the \
-                     front-most quad there is {:?} rather than a glyph; {} quads cover the point",
-                    under.x,
-                    under.y,
-                    front.map(|quad| quad.tint),
-                    overlap.covering(under).len()
-                ),
-            );
-        }
-    }
+    );
 
-    // --- a picture ----------------------------------------------------------
-    let captured = crate::capture::capture_a_frame(&mut checks, &live, font, "pong");
-    let end_screen = staged
-        .first()
-        .map(|(_, frame)| crate::capture::capture_a_frame(&mut checks, frame, font, "pong-over"))
-        .unwrap_or_else(|| "skipped, no end screen was staged".to_owned());
+    // And one overlap a played session does produce but never at rest: the
+    // ball on a centre-line dash. `covering(p)[0]` is the depth sort read
+    // backwards, so its first entry is what a player actually sees.
+    stage(
+        &mut sim,
+        Match {
+            countdown: 30,
+            ..Match::new()
+        },
+        Vec2::ZERO,
+        (0.0, 0.0),
+    );
+    let parked = recorder.draw(&mut sim);
+    let front = parked.covering(Vec2::ZERO).into_iter().next();
+    checks.require(
+        front.is_some_and(|quad| quad.texture != font && quad.tint == BALL_COLOR),
+        "the centre marking is painted over the ball on the centre spot",
+        format!(
+            "the front-most quad at the centre spot, where a dash and the parked ball both \
+             sit, is {:?} rather than a ball wedge",
+            front.map(|quad| (quad.tint, quad.bounds().size())),
+        ),
+    );
+    // And the other way round: the score has to be in front of a ball that
+    // reaches it, which a match never produces because the ball is confined
+    // below the walls.
+    let in_the_score = Vec2::new(-SCORE_GAP - SCORE_SIZE * 7.0 / 18.0, crate::SCORE_TOP + 1.0);
+    stage(
+        &mut sim,
+        Match {
+            countdown: 30,
+            ..Match::new()
+        },
+        in_the_score,
+        (0.0, 0.0),
+    );
+    let behind = recorder.draw(&mut sim);
+    let front = behind.covering(in_the_score).into_iter().next();
+    checks.require(
+        front.is_some_and(|quad| quad.texture == font),
+        "the ball is painted over the score",
+        format!(
+            "the front-most quad at ({:.2}, {:.2}), inside the left score digit with the \
+             ball parked on it, is {:?} rather than a glyph",
+            in_the_score.x,
+            in_the_score.y,
+            front.map(|quad| (quad.tint, quad.bounds().size())),
+        ),
+    );
 
-    let failures = checks.failures();
+    let captured = crate::capture::capture_a_frame(&mut checks, frame, font);
     let verdict = checks.verdict();
 
+    println!("verified pong over {TICKS} ticks, three players");
     println!(
-        "verified pong over {} ticks of play and {} recorded frames, {failures} problems",
-        good.ticks + chaser.ticks + idle.ticks,
-        recorder.frames().len(),
+        "  rollout: {}-{} won on tick {}; longest rally {} touches, top speed {:.1} u/s",
+        outcome.left,
+        outcome.right,
+        decided_at.map_or("never".to_owned(), |tick| tick.to_string()),
+        outcome.longest_rally,
+        outcome.top_speed,
     );
     println!(
-        "  rollout: {} - {} in {} ticks ({:.1}s), longest rally {}, top speed {:.1}",
-        good.points[0],
-        good.points[1],
-        good.ticks,
-        good.ticks as f32 * dt,
-        good.tally.longest,
-        good.tally.fastest,
-    );
-    for line in good.report.lines("rollout") {
-        println!("{line}");
-    }
-    println!(
-        "  chaser: {} - {} in {} ticks, longest rally {} — the one that says it is playable",
-        chaser.points[0], chaser.points[1], chaser.ticks, chaser.tally.longest,
+        "  controller: met {} of {} approaches; planned returns aimed to land {:.2} from the \
+         opponent; shots landed {:.2} from where they were planned to",
+        report.met,
+        report.approaches,
+        report.mean_planned_gap(),
+        report.mean_aim_error(),
     );
     println!(
-        "  chaser: met {} of {} approaches",
-        chaser.report.met, chaser.report.approaches
+        "  chaser: {}-{}   do-nothing: {}-{}",
+        chased.outcome.left, chased.outcome.right, idle.outcome.left, idle.outcome.right,
     );
     println!(
-        "  idle: {} - {} in {} ticks — the game can be lost",
-        idle.points[0], idle.points[1], idle.ticks,
+        "  opponent returned {opponent_returns} of {opponent_approaches} balls ({:.0}%)",
+        returned * 100.0
     );
     println!(
-        "  opponent: returned {} of the {} balls that reached it",
-        good.tally.returns[Side::Right.index()],
-        approached(&good, Side::Right),
+        "  last live frame: tick {}, {} quads, {} glyphs, {} batches",
+        live.tick,
+        quads.len(),
+        glyphs.len(),
+        frame.plan.batches.len(),
     );
-    println!(
-        "  ball: longest tick {:.3} against a paddle {:.2} thick, shortest pause between points \
-         {} ticks",
-        good.longest_step, PADDLE_SIZE.x, good.shortest_pause,
-    );
+    println!("  closest quad to the edge: {clearance:.2} world units");
+    println!("  ball stayed inside {extent:?}");
     println!("  capture: {captured}");
-    println!("  capture: {end_screen}");
-    print!("{}", live.transcript());
+    println!("  {} checks failed", checks.failures());
+    print!("{}", frame.transcript());
     verdict
 }
 
-/// The bounding box of each horizontal band of glyphs in `frame`.
+/// The bounds of each line of the banner, top line first.
 ///
-/// One band per `ctx.text` call that drew a line, found by grouping glyph quads
-/// on the row they sit in — which is how a check asks whether two lines of a
-/// banner were each centred, rather than whether the block was.
-fn banner_glyph_lines(frame: &FrameRecord, font: BackendTextureId) -> Vec<(Rect, usize)> {
-    let mut rows: Vec<(Rect, usize)> = Vec::new();
+/// Grouped by row: `ctx.text` lays a line out from one top-left corner, and no
+/// two lines of this banner share a row.
+fn banner_line_bounds(frame: &FrameRecord, font: BackendTextureId) -> Vec<Rect> {
+    let mut rows: Vec<Rect> = Vec::new();
     for quad in frame.quads() {
         if quad.texture != font {
             continue;
         }
         let bounds = quad.bounds();
-        // Grouped on the top of the glyph cell, which `ctx.text` puts at exactly
-        // the `at` it was given: two lines of different sizes are two rows even
-        // where they nearly touch, and one line is never split.
-        let row = rows
+        // The score and the hint sit outside the banner's band.
+        if !near_within(bounds.center().y, crate::BANNER_TOP + 1.5, 1.6) {
+            continue;
+        }
+        match rows
             .iter_mut()
-            .find(|(row, _)| greater(0.001, (row.min.y - bounds.min.y).abs()));
-        match row {
-            Some((row, count)) => {
+            .find(|row| near_within(row.min.y, bounds.min.y, 0.01))
+        {
+            Some(row) => {
                 row.min = row.min.min(bounds.min);
                 row.max = row.max.max(bounds.max);
-                *count += 1;
             }
-            None => rows.push((bounds, 1)),
+            None => rows.push(bounds),
         }
     }
+    rows.sort_by(|a, b| a.min.y.total_cmp(&b.min.y));
     rows
 }

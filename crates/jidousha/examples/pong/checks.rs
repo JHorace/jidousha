@@ -1,9 +1,11 @@
 //! The instrument: an accumulator for failed checks, and the float comparisons
-//! every reading in this game's verification is spelled with.
+//! every reading in this game's check is spelled with.
 //!
 //! Nobody running `--verify` can look at the game, so these messages are the
-//! only instrument there is. A check reports the numbers it judged rather than
-//! the conclusion it reached, and a failed check does not stop the run.
+//! only instrument there is. Two rules follow: a check reports the numbers it
+//! judged rather than the conclusion it reached, and a failed check does not
+//! stop the run — an instrument that halts at the first bad reading costs a
+//! whole cycle per fault.
 
 use std::cmp::Ordering;
 use std::process::ExitCode;
@@ -18,10 +20,10 @@ pub(crate) struct Checks {
 }
 
 impl Checks {
-    /// Record a reading, and what it looked at if it was wrong.
+    /// Record a claim about the game, and what to say if it does not hold.
     pub(crate) fn require(&mut self, ok: bool, what: &str, specifics: String) {
         if !ok {
-            self.problems.push((what.to_string(), specifics));
+            self.problems.push((what.to_owned(), specifics));
         }
     }
 
@@ -44,8 +46,9 @@ impl Checks {
 
 /// Stop the run, for a reading that makes every later one meaningless.
 ///
-/// A paddle in the wrong place is one fault among several worth reporting
-/// together; a paddle that is *gone* leaves nothing after it to measure.
+/// Not the same thing as a failed check: a paddle in the wrong place is one
+/// fault among several worth reporting together, while a paddle that is *gone*
+/// leaves nothing after it to measure. Only the second kind belongs here.
 pub(crate) fn fail(what: &str, specifics: &str) -> ! {
     eprintln!("{}", complaint(what, specifics));
     std::process::exit(1);
@@ -64,9 +67,9 @@ fn complaint(what: &str, specifics: &str) -> String {
 
 /// `a > b`, and false when either is NaN.
 ///
-/// Spelled out rather than as `!(a <= b)`, because the negation of a float
-/// comparison quietly means something else: a NaN that crept into a position
-/// satisfies every negated test and passes the whole verification.
+/// Spelled out rather than written `!(a <= b)`: the negation of a float
+/// comparison silently means something else, and a NaN that crept into a
+/// position would satisfy every plain `<=` check and pass this verification.
 pub(crate) fn greater(a: f32, b: f32) -> bool {
     matches!(a.partial_cmp(&b), Some(Ordering::Greater))
 }
@@ -74,6 +77,11 @@ pub(crate) fn greater(a: f32, b: f32) -> bool {
 /// Within a thousandth, and false when either is NaN.
 pub(crate) fn near(a: f32, b: f32) -> bool {
     greater(0.001, (a - b).abs())
+}
+
+/// Within `slack`, and false when either is NaN.
+pub(crate) fn near_within(a: f32, b: f32, slack: f32) -> bool {
+    greater(slack, (a - b).abs())
 }
 
 /// The sizes of every quad covering a point, for a message that has to say what
