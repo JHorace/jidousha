@@ -24,6 +24,18 @@ the two copies drifted and the one here was the wrong one. It also covers the
 harder case — a game that loads art, whose texture ids mean something only to a
 backend that created its textures in the same order.
 
+**A game of pure shapes and text does not have that half, and its path is
+shorter than the example by exactly it.** `create_builtin_textures` *is* the
+whole texture table for such a game: the flat white every untextured quad is
+tinted out of, the magenta placeholder, and the font atlas, registered under
+`FONT_TEXTURE` by that same call. Those are the only ids a plan drawn from
+`ctx.quad` and `ctx.text` can name, so there is no `Assets` store to build, no
+load to replay and no `upload_ready_textures` to call — the store, the
+`load_texture`, the `commit` and the upload in the example are the lines you
+leave out, and the id check that follows them still applies. *How a game is
+written* says the same thing from the other side: a game of pure shapes needs no
+asset story at all.
+
 Four things about it belong here rather than there, because each is either a
 contract with the tooling or a mistake that is silent when you make it:
 

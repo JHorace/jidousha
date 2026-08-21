@@ -620,13 +620,37 @@ as advice about colours. The requirement names no constant the game owns: the
 score sits in the **top third of `visible_bounds()`**, one number either side of
 the centre line, evenly set.
 
-**Three worked non-colour instances are in `examples/slalom/checks.rs`**, and
-they are there because reading the rule has not been enough for three runs
-running: a course wide enough for the glider *plus a gate's gap* rather than
+**Three worked non-colour instances are in `examples/slalom/checks.rs`**: a
+course wide enough for the glider *plus a gate's gap* rather than
 `assert_eq!(wall.min.x, -COURSE_HALF_WIDTH)`, a gate whose posts must fall inside
 the drawn walls, and the clear colour in the form above. Each says at the site
-what the other spelling would have cost. If the pairing reads as advice about
-colours, read those three — the transfer is the part that is hard, not the rule.
+what the other spelling would have cost.
+
+**And the rule is about constants only because that is where it is easiest to
+name.** The general form is **a check that reads the game's own answer back
+cannot see that answer change**; the constant that drew the thing is one way to
+read the answer back, and these are three more, each of which escaped a check
+written carefully and believed thorough:
+
+- **A method.** A paddle-position check that takes the side it expects from the
+  game's own `Side::sign()` moves when `sign()` is flipped: both paddles change
+  ends and every assertion stays green. What says *whose* paddle is where is the
+  colour — a fact the check holds and the geometry cannot supply.
+- **An enum arm.** A banner built by the game's `banner_lines(winner)` and judged
+  line by line passes for a banner congratulating the loser. Every line is on
+  screen, printable and centred; the arm that chose the words is the arm the
+  check asked.
+- **A pair judged one at a time.** Every end screen individually correct does not
+  make the winning screen and the losing screen *different* screens. A property
+  that lives between two states has no per-state assertion, so name the pair.
+
+**Do not expect to get this right by reading it.** Four runs have now read the
+paragraphs above; three of them wrote the `SCORE_TOP` check in the wrong form on
+the first pass anyway, having written the colour pair correctly on the same pass.
+Every time, the mutation round found it in one round. So this rule is what tells
+you where to look when a fault escapes — not something you can reliably apply
+while writing the check. **The round is the mechanism; this is the vocabulary for
+reading its result.**
 
 **And state the requirement where the game actually operates, not at its most
 favourable point.** A requirement stated at a boundary is a requirement about a
