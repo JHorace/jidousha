@@ -183,10 +183,23 @@ a row (stop rule printed, `failure-streak.json` count 2).
   cannot be forgotten. CI runs `--check`, which fails when a committed file
   differs — stale documentation is worse than none, because an agent believes it.
 
-  **Three documents**, split by what the reader is doing: `jidousha-api.md`
+  **Four documents**, split by what the reader is doing: `jidousha-api.md`
   (writing a game, 25k) since ADR-0025, `jidousha-testing.md` (checking one, 15k)
-  since the same, and `jidousha-controllers.md` (driving the check's player, 5k)
-  since ADR-0030 — each with its own token budget and its own vocabulary rule.
+  since the same, `jidousha-capture.md` (rendering one frame of it, 4k) since
+  ADR-0035, and `jidousha-controllers.md` (driving the check's player, 5k) since
+  ADR-0030 — each with its own token budget and its own vocabulary rule.
+
+  **The capture split is the first to move reference entries rather than only
+  prose**, which is a shape the checks had never been asked for: an item can now
+  be in two documents or in none, and both look fine in a diff. `CAPTURE_ITEMS`
+  is the routed set and the rule for it is stated — an item goes there when *no
+  entry outside the set names it*. `BackendTextureId`, `FramePlan` and
+  `PhysicalSize` stay behind for exactly that reason: each is named by an entry
+  that stays, so moving one would leave the testing document naming a type it
+  does not define (F-017). The vocabulary exemption moved with the recipe, so the
+  testing document no longer names a renderer at all — leaving the exemption
+  behind is the half of a split that is easy to land without noticing, and a
+  self-test refuses it.
   `Document` carries path, budget and vocabulary exception, so the budget,
   vocabulary and staleness checks are each written once and applied to a list;
   two copies of the staleness check is the drift F-016 was, and a third document

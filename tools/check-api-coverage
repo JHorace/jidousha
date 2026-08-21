@@ -175,9 +175,14 @@ def unreachable_testing(
     mentions, carried in a document with a hard token budget. `ReplaySource` was
     the one this found.
 
-    Reads the generated document rather than the doc comments, because the
-    document is what the budget is spent on and what a reader sees. It is checked
-    in, so a stale one is the `api-doc` phase's problem rather than this one's.
+    Reads the generated documents rather than the doc comments, because a document
+    is what the budget is spent on and what a reader sees. They are checked in, so
+    a stale one is the `api-doc` phase's problem rather than this one's.
+
+    **All of them, not the testing one.** ADR-0035 moved the rendering half of
+    `jidousha::testing` into `docs/api/jidousha-capture.md`, and a check reading
+    one file called every moved item unreachable the moment the split landed. The
+    surface is what the reader can reach across the four documents.
     """
     corpus = "\n".join(source.read_text(encoding="utf-8") for source in sources)
     orphans = []
@@ -234,12 +239,10 @@ def main(argv: "list[str]") -> int:
 
     # The other half of the surface, which nothing checked until now.
     testing = testing_items(facade_text)
-    reference = repo / "docs/api/jidousha-testing.md"
-    orphans = (
-        unreachable_testing(testing, sources, reference.read_text(encoding="utf-8"))
-        if reference.is_file()
-        else []
+    reference = "\n".join(
+        path.read_text(encoding="utf-8") for path in sorted((repo / "docs/api").glob("*.md"))
     )
+    orphans = unreachable_testing(testing, sources, reference) if reference else []
     print(
         f"[check-api-coverage] {len(items)} public item(s), {len(testing)} testing item(s), "
         f"{len(sources)} example file(s), {len(EXEMPT) + len(TESTING_EXEMPT)} exempt"

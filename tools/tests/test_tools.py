@@ -450,16 +450,26 @@ class GenApiDocTest(unittest.TestCase):
     def test_only_the_document_given_the_exception_may_use_it(self):
         # The exception used to be a *section* cut out of the check, which meant
         # everything else forbidden could sit inside that section unnoticed. It
-        # is a per-document parameter now (ADR-0025): the testing document may
-        # name a renderer, and nothing else is excused anywhere.
+        # is a per-document parameter now (ADR-0025), and after ADR-0035 the
+        # document holding it is the **capture** one: a picture has to be drawn
+        # by something, and nothing else in the surface names a backend.
         text = "the capture goes through wgpu"
         self.assertIn("wgpu", gen_api_doc.forbidden_words(text))
-        self.assertEqual(gen_api_doc.forbidden_words(text, gen_api_doc.TESTING_VOCABULARY), [])
-        # The exception is three words wide and covers nothing else, so a
-        # document holding the exception is still held to all the rest.
+        self.assertEqual(gen_api_doc.forbidden_words(text, gen_api_doc.CAPTURE_VOCABULARY), [])
+        # And the testing document no longer holds it. This is the half of the
+        # split that is easy to land without noticing: moving the recipe out and
+        # leaving the exemption behind would let a renderer drift back in.
+        self.assertIn("wgpu", gen_api_doc.forbidden_words(text, gen_api_doc.TESTING_VOCABULARY))
+        self.assertEqual(
+            gen_api_doc.forbidden_words("the plan carries FramePlan", gen_api_doc.TESTING_VOCABULARY),
+            [],
+            "a check reads clear_color off a plan without rendering anything",
+        )
+        # The exception covers nothing else, so a document holding it is still
+        # held to all the rest.
         for refused in ("see jidousha_render_core", "stored in an Archetype", "see ADR-0010"):
             self.assertNotEqual(
-                gen_api_doc.forbidden_words(refused, gen_api_doc.TESTING_VOCABULARY),
+                gen_api_doc.forbidden_words(refused, gen_api_doc.CAPTURE_VOCABULARY),
                 [],
                 refused,
             )
@@ -828,6 +838,66 @@ def scan_snippet(*texts):
     for item in items.values():
         gen_api_doc.order_members(item)
     return items
+
+
+class CaptureSplitTest(unittest.TestCase):
+    """The fourth split (ADR-0035), and the ways it can be landed half-done.
+
+    It is the first split to move *reference* entries rather than only prose, so
+    an item can now be in two documents or in none, and both look fine in a diff.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        root = REPO_ROOT
+        cls.testing = (root / "docs/api/jidousha-testing.md").read_text(encoding="utf-8")
+        cls.capture = (root / "docs/api/jidousha-capture.md").read_text(encoding="utf-8")
+        cls.facade = (root / "crates/jidousha/src/lib.rs").read_text(encoding="utf-8")
+
+    def test_every_testing_export_has_exactly_one_entry(self):
+        # Not "at least one": an item rendered into both documents is paid for
+        # twice, and the budget is the reason the split happened.
+        for name in gen_api_doc.testing_exports(self.facade):
+            heading = f"#### `{name}`"
+            homes = [
+                document
+                for document, text in (("testing", self.testing), ("capture", self.capture))
+                if heading in text
+            ]
+            self.assertEqual(len(homes), 1, f"{name} has entries in {homes or 'neither'}")
+
+    def test_the_capture_document_holds_exactly_the_capture_items(self):
+        for name in gen_api_doc.CAPTURE_ITEMS:
+            self.assertIn(f"#### `{name}`", self.capture, name)
+            self.assertNotIn(f"#### `{name}`", self.testing, name)
+
+    def test_a_borrowed_type_is_defined_where_it_is_named_by_a_staying_entry(self):
+        # F-017: a type named in a signature and defined nowhere is a hole. These
+        # three are named by entries that stay, so moving them would open one —
+        # the capture document borrows them and says so instead.
+        for borrowed in ("BackendTextureId", "FramePlan", "PhysicalSize"):
+            self.assertNotIn(borrowed, gen_api_doc.CAPTURE_ITEMS, borrowed)
+            self.assertIn(f"#### `{borrowed}`", self.testing, borrowed)
+        for borrowed in ("BackendTextureId", "FramePlan", "PhysicalSize"):
+            self.assertIn(borrowed, self.capture, "the capture document names what it borrows")
+
+    def test_the_testing_document_stops_naming_a_renderer(self):
+        # The half that is easy to leave behind: move the recipe out, keep the
+        # vocabulary exemption, and a backend drifts back in unnoticed.
+        # Stronger than "it holds no exemption for a renderer": the word is not in
+        # the document at all, so the exemption it does hold is exactly the one
+        # thing a check reads without rendering — a plan's `clear_color`.
+        self.assertEqual(gen_api_doc.forbidden_words(self.testing), ["FramePlan"])
+        self.assertEqual(gen_api_doc.forbidden_words(self.testing, gen_api_doc.TESTING_VOCABULARY), [])
+        self.assertNotIn("wgpu", gen_api_doc.TESTING_VOCABULARY)
+        self.assertIn("wgpu", gen_api_doc.CAPTURE_VOCABULARY)
+        self.assertIn("wgpu", gen_api_doc.forbidden_words(self.capture))
+
+    def test_each_document_points_at_the_next_one(self):
+        game = (REPO_ROOT / "docs/api/jidousha-api.md").read_text(encoding="utf-8")
+        self.assertIn("docs/api/jidousha-capture.md", game, "the reader has to learn it exists")
+        self.assertIn("docs/api/jidousha-capture.md", self.testing)
+        self.assertIn("docs/api/jidousha-testing.md", self.capture)
 
 
 class AmbiguousExportTest(unittest.TestCase):
@@ -1445,7 +1515,8 @@ class ApiReferenceContentTest(unittest.TestCase):
     a generator that extracts correctly and renders nothing is still a document
     that cannot be written from.
 
-    `reference` is the game document and `testing` its other half; assertions
+    `reference` is the game document, `testing` its other half and `capture` the
+    rendering half of that (ADR-0035); assertions
     about a *game's* vocabulary read the first, and anything about the size of
     the surface reads both (ADR-0025).
     """
@@ -1455,6 +1526,7 @@ class ApiReferenceContentTest(unittest.TestCase):
         root = Path(__file__).resolve().parents[2]
         cls.reference = (root / "docs/api/jidousha-api.md").read_text(encoding="utf-8")
         cls.testing = (root / "docs/api/jidousha-testing.md").read_text(encoding="utf-8")
+        cls.capture = (root / "docs/api/jidousha-capture.md").read_text(encoding="utf-8")
         cls.root = root
 
     def test_the_reference_names_the_rectangle_overlap_helpers(self):
@@ -1579,11 +1651,12 @@ class ApiReferenceContentTest(unittest.TestCase):
         # but a parser regression that halves the output has to fail loudly —
         # and it would be invisible in the diff of a document this size.
         #
-        # Counted over **both** documents, because the surface is what must not
-        # shrink and it now lives in two files. A floor on the game document
-        # alone would be satisfied by a bug that emitted the testing reference
-        # nowhere at all.
-        whole = self.reference + self.testing
+        # Counted over **every** document that carries reference entries, because
+        # the surface is what must not shrink and it now lives in three files. A
+        # floor on one of them would be satisfied by a bug that emitted another
+        # nowhere at all — and ADR-0035's split is exactly the change that moves
+        # entries between files without changing the total.
+        whole = self.reference + self.testing + self.capture
         self.assertGreater(whole.count("pub fn "), 150)
         self.assertGreater(whole.count("#### `"), 80)
 
@@ -1738,10 +1811,15 @@ class TestingCoverageTest(unittest.TestCase):
             (repo / "crates/jidousha/src/lib.rs").read_text(encoding="utf-8")
         )
         self.assertTrue(items, "the testing module exports something")
+        # Every generated document, not the testing one. ADR-0035 moved the
+        # rendering half into `jidousha-capture.md`, and a check reading one file
+        # called every moved item unreachable the moment the split landed.
+        reference = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in sorted((repo / "docs/api").glob("*.md"))
+        )
         orphans = check_api_coverage.unreachable_testing(
-            items,
-            check_api_coverage.example_sources(repo),
-            (repo / "docs/api/jidousha-testing.md").read_text(encoding="utf-8"),
+            items, check_api_coverage.example_sources(repo), reference
         )
         self.assertEqual(orphans, [], "an entry nobody can reach spends the budget on nothing")
 

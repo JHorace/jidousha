@@ -11,7 +11,7 @@ and the E0 session must never read it. Paste the block, do not point at the file
 ## Prompt revisions
 
 The paragraph above says the prompt is checked in so that repeats are
-comparable. It has changed twice, so the claim needs a ledger rather than
+comparable. It has changed five times, so the claim needs a ledger rather than
 assertion — "passed clean twice in a row" only means something if the two runs
 were asked the same question.
 
@@ -22,6 +22,7 @@ were asked the same question.
 | 3 | *Before starting a run* deletes the previous run's `pong/` and its `tools/test` registrations; step 6 puts the registrations back. | The previous run's finished game sat inside `crates/jidousha/examples/`, which is on the **allowed** list — a complete worked solution the next author could read without breaking a rule (F-020). |
 | 6 | The may-read list names two API documents instead of one: `docs/api/jidousha-api.md` and `docs/api/jidousha-testing.md`. | The surface split by what the reader is doing (ADR-0025). The material is unchanged and both files were always inside the `docs/api/` the list already allowed; naming them is so a run does not have to guess that the second exists. |
 | 9 | The may-read list names a **third**, `docs/api/jidousha-controllers.md`, and says when to read it. | The same split one level down (ADR-0030): the controller advice was a seventh of the testing document, is not about this engine, and had taken seven findings across six runs without the file being able to afford an eighth. Same reasoning as run 6's row — the material is unchanged, the file was always inside the allowed `docs/api/`, and naming it is so a run does not have to guess it exists. |
+| 11 | The may-read list names a **fourth**, `docs/api/jidousha-capture.md`, and the testing document's line stops promising the capture material it no longer carries. | **ADR-0035**, the same split one level down again: the capture recipe and the nine reference entries only it reaches are a distinct task done last, and they were two thirds of what capture cost a document whose budget belongs to a different reader. The material is unchanged — the same prose and the same entries, in a file chosen by task — and the previous rows' argument carries: a run must now find a fourth file, which is a hazard rather than a help. Landed **between** runs, with no run in flight, because a prompt change made during one invalidates it. |
 
 No change alters what the run is asked to *build* or what it may read of
 the engine, so runs 1–2 and 3+ remain comparable on the thing being measured:
@@ -30,10 +31,10 @@ information the earlier runs had and should not have had, which makes later runs
 strictly harder — the safe direction for a bar to move. **Any future change that
 makes a run *easier* invalidates the streak and restarts the count.**
 
-**Neither split makes a run easier, and the reasoning is worth writing down
-rather than asserting.** Not one sentence of guidance was added, removed or
-softened by it — the same prose and the same reference entries, in two files
-chosen by task. What changed is that a run must now find a second file, which is
+**No split makes a run easier, and the reasoning is worth writing down rather
+than asserting.** Not one sentence of guidance was added, removed or softened by
+any of the three — the same prose and the same reference entries, in files chosen
+by task. What changed is that a run must now find a second file, which is
 a hazard rather than a help: a run that misses it writes its `--verify` mode
 without the testing reference, which is *harder* than run 5 had it. So the streak
 stands. The honest risk runs the other way, and §6 should watch for it — if run 6
@@ -49,6 +50,19 @@ number about the game, which is the failure five runs have now had, check first
 whether it opened the file at all. A run that read it and still fell in is a
 finding about the prose; a run that never found it is a finding about the split,
 and the answer to that one is more pointers rather than more paragraphs.
+
+**The third split (ADR-0035) inherits both arguments and adds one risk of its
+own.** `jidousha-capture.md` is the file a run reaches last of all, later even
+than the controllers document, and it is the only one whose absence costs
+something a check cannot recover: the capture is the instrument that found a
+banner reading `YOU WINS 5 - 2` and a second line drawn through both paddles, and
+every assertion in both games was happy with each. **If run 11 writes no capture
+path, check first whether it opened the file at all.** A run that read it and
+skipped anyway is a finding about the prose; a run that never found it is a
+finding about the split, and the answer to that one is more pointers rather than
+fewer documents. It is also the first split to move *reference entries* rather
+than only prose, so a run that reaches for `WgpuBackend` and cannot find it in the
+testing reference has been failed by the pointer rather than by the surface.
 
 ---
 
@@ -192,12 +206,14 @@ and the answer to that one is more pointers rather than more paragraphs.
 > **What you may read:**
 > - `docs/api/jidousha-api.md` — the engine's API. This is the document.
 > - `docs/api/jidousha-testing.md` — its other half: how to check the game you
->   wrote. Headless runs, asserting on what was drawn, the `--verify` convention,
->   and capturing a picture of a frame.
+>   wrote. Headless runs, asserting on what was drawn, and the `--verify`
+>   convention.
 > - `docs/api/jidousha-controllers.md` — the third: how to write the *player*
 >   inside that check, so what it reports is about the game rather than about
->   itself. Read it last, and only once your `--verify` mode needs a player that
->   can win.
+>   itself. Read it once your `--verify` mode needs a player that can win.
+> - `docs/api/jidousha-capture.md` — the fourth: how to render one recorded frame
+>   for real and write it out as a PNG, so there is something to *look* at. Read
+>   it last, once your check runs and asserts.
 > - `crates/jidousha/examples/` — worked examples, including `quickstart.rs`.
 >
 > **What you may not read**, at all, for any reason:

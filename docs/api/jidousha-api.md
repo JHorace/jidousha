@@ -1951,3 +1951,8 @@ how to write the player it plays with, why one controller cannot measure a
 game's difficulty, and the three numbers a controller has to report about
 itself. `crates/jidousha/examples/slalom/` is all of it worked. Read it third
 or not at all — a check whose player is a blind `InputScript` never needs it.
+
+**And a fourth, read last:** `docs/api/jidousha-capture.md` is how one recorded
+frame is rendered for real and written out as a PNG. A picture answers what no
+assertion reaches — whether it *looks* like the game — and it is the instrument
+that catches a frame every check was happy with.

@@ -456,6 +456,31 @@ that's exactly what acceptance milestone E0 tests (implementation plan).
   second place to keep right. `crates/jidousha/examples/slalom/` is the worked
   instance the prose points at (run 4's lever, spent — e0-findings.md §6).
 
+  **Four, after run 10's triage, and the fourth carries a reference (ADR-0035).**
+  `jidousha-capture.md` takes the capture recipe and the nine entries only it
+  reaches — `WgpuBackend`, `RenderBackend`, `RenderError`, `RawImage`,
+  `TextureTable`, `FONT_TEXTURE`, `create_builtin_textures`,
+  `upload_ready_textures`, `encode_png` — leaving `jidousha-testing.md` at
+  **~12.4k of 15k**, its lowest since ADR-0030, and the new document at ~2.0k of
+  4k.
+
+  Two things this split established that the first two did not have to. **A rule
+  for which entries move**: an item goes when no entry outside the moving set
+  names it, which is why `BackendTextureId`, `FramePlan` and `PhysicalSize` stay
+  — each is named by an entry that stays, and moving one opens an F-017 hole in
+  the document that keeps the namer. And **the vocabulary exemption moves with
+  the material**: the testing document's was `("wgpu", "RenderBackend",
+  "FramePlan")` and is now `("FramePlan",)`, so nothing but the capture document
+  names a backend. Leaving that behind is the half of a split that lands
+  unnoticed, and a self-test refuses it.
+
+  **The trigger this was done against is worth recording, because it was not
+  reached.** ADR-0034 set it at 14,000 and the document sat at 13,843 — one run
+  away, and the run in question would have crossed it mid-triage, when the budget
+  is a CI gate and the prompt change would have invalidated a run in flight.
+  Doing it a run early cost nothing that doing it late would not have, and spent
+  the one property that made it cheap: that no run was in flight.
+
   Implemented (impl): not rustdoc JSON — that needs a nightly toolchain and
   `rust-toolchain.toml` pins stable (ADR-0005) — but a text extractor over the
   crate sources, with tests. Blocks close on indentation rather than brace

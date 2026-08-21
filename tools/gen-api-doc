@@ -87,6 +87,7 @@ CONVENTIONS = REPO_ROOT / "docs" / "conventions.md"
 GAME_OUTPUT = REPO_ROOT / "docs" / "api" / "jidousha-api.md"
 TESTING_OUTPUT = REPO_ROOT / "docs" / "api" / "jidousha-testing.md"
 CONTROLLERS_OUTPUT = REPO_ROOT / "docs" / "api" / "jidousha-controllers.md"
+CAPTURE_OUTPUT = REPO_ROOT / "docs" / "api" / "jidousha-capture.md"
 
 # The budgets from public-api.md §4, one per document (ADR-0025). The point was
 # never the number: it is that everything in a document is relevant to what its
@@ -107,6 +108,36 @@ TESTING_BUDGET = 15_000
 # purpose — this file is where controller findings land now, and a budget that
 # started generous would not be a budget.
 CONTROLLERS_BUDGET = 5_000
+# The fourth reader is later still and narrower again: the `--verify` mode runs
+# and asserts, and the only question left is whether anybody can *look* at the
+# game. Sized like the controllers document and for the same reason — this is
+# where capture findings land now, and a budget that started generous would not
+# be a budget (ADR-0035).
+CAPTURE_BUDGET = 4_000
+
+# The reference entries that go with the capture document rather than with the
+# testing one. An item belongs here when **no entry outside this set names it**:
+# `RawImage` is what `capture()` returns, `TextureTable` what
+# `create_builtin_textures` hands back, and neither is reachable from anything a
+# check that never renders would call.
+#
+# `BackendTextureId`, `FramePlan` and `PhysicalSize` are deliberately *not* here.
+# Each is named by an entry that stays — `FrameRecorder::font_texture`,
+# `FrameRecord::plan`, `FrameRecorder::new` — so moving it would leave the testing
+# document naming a type it does not define, which is F-017 exactly. The capture
+# document borrows them and says so, the way the controllers document borrows
+# `InputScript` and `SnapshotBuilder` (ADR-0030).
+CAPTURE_ITEMS = (
+    "FONT_TEXTURE",
+    "RawImage",
+    "RenderBackend",
+    "RenderError",
+    "TextureTable",
+    "WgpuBackend",
+    "create_builtin_textures",
+    "encode_png",
+    "upload_ready_textures",
+)
 
 # No tokenizer in the standard library, so this is the usual approximation:
 # English prose and code average close to four characters a token. Deliberately
@@ -155,7 +186,13 @@ FORBIDDEN = (
 # used to be cut out of the check, which meant an internal crate name or a
 # pointer into `docs/internal/` could reach it unnoticed. Three words in one
 # document is strictly tighter than one whole section in another.
-TESTING_VOCABULARY = ("wgpu", "RenderBackend", "FramePlan")
+# After ADR-0035 the testing document does not name a renderer at all: the
+# capture recipe took `wgpu` and `RenderBackend` with it, and what is left is
+# `FramePlan`, which a check reads for `clear_color` without rendering anything.
+TESTING_VOCABULARY = ("FramePlan",)
+# The capture document is the one that has to name a renderer, because a picture
+# has to be drawn by something. Same three words, now spent where they are used.
+CAPTURE_VOCABULARY = ("wgpu", "RenderBackend", "FramePlan")
 
 # `(ADR-0010)`, `(core.md §9)`, `(assets.md §6)`, `(e0-findings.md F-069)`,
 # `(I2)`, `(R4)` — a citation of a maintainers' document, hanging off the end of
@@ -1317,6 +1354,12 @@ def documents(repo: Path) -> "list[Document]":
             text=render_testing(repo, facade, items),
         ),
         Document(
+            path=CAPTURE_OUTPUT,
+            budget=CAPTURE_BUDGET,
+            allowed=CAPTURE_VOCABULARY,
+            text=render_capture(repo, facade, items),
+        ),
+        Document(
             path=CONTROLLERS_OUTPUT,
             budget=CONTROLLERS_BUDGET,
             # No renderer is named here: a controller decides what to press and
@@ -1416,6 +1459,11 @@ def render_game(repo: Path, facade: str, items: "dict[str, Item]") -> str:
         "itself. `crates/jidousha/examples/slalom/` is all of it worked. Read it third",
         "or not at all — a check whose player is a blind `InputScript` never needs it.",
         "",
+        "**And a fourth, read last:** `docs/api/jidousha-capture.md` is how one recorded",
+        "frame is rendered for real and written out as a PNG. A picture answers what no",
+        "assertion reaches — whether it *looks* like the game — and it is the instrument",
+        "that catches a frame every check was happy with.",
+        "",
     ]
     return "\n".join(out)
 
@@ -1445,10 +1493,11 @@ def render_testing(repo: Path, facade: str, items: "dict[str, Item]") -> str:
         "`GameConfig`, `Vec2` and the rest come from `jidousha::prelude` and are",
         "documented in the other file. A check imports both.",
         "",
-        "**This document names a renderer and the other one does not**, and that is",
-        "deliberate rather than an oversight: a picture has to be drawn by something,",
-        "so the capture recipe cannot be written without it. A shipped game still never",
-        "names a backend — only a check does.",
+        "**Nothing here names a renderer.** A check asserts on what was *submitted*,",
+        "which needs no GPU and no window: `FramePlan` appears because a recorded frame",
+        "carries the colour the camera cleared to, and that is the whole of it. Drawing",
+        "a frame for real is `docs/api/jidousha-capture.md`, which is the one document",
+        "that names a backend, and the one to read after this.",
         "",
         "## Testing your game",
         "",
@@ -1457,7 +1506,7 @@ def render_testing(repo: Path, facade: str, items: "dict[str, Item]") -> str:
         "## Reference",
         "",
     ]
-    testing_names = testing_exports(facade)
+    testing_names = [name for name in testing_exports(facade) if name not in CAPTURE_ITEMS]
     if testing_names:
         out += [
             "### `jidousha::testing`",
@@ -1468,6 +1517,56 @@ def render_testing(repo: Path, facade: str, items: "dict[str, Item]") -> str:
         ]
         for name in testing_names:
             out += render_item(items.get(name, Item(name=name)))
+    return "\n".join(out)
+
+
+def render_capture(repo: Path, facade: str, items: "dict[str, Item]") -> str:
+    """The document a game's capture path is written from.
+
+    The fourth split (ADR-0035), on ADR-0025's rule: taking a picture is a
+    distinct task, done last, by a reader whose `--verify` mode already runs. It
+    is the first split to move *reference* entries as well as prose, which is why
+    `CAPTURE_ITEMS` exists and why the borrowed vocabulary is named below rather
+    than duplicated.
+    """
+    capture = visible_prose((repo / "tools/api-doc/capture.md").read_text(encoding="utf-8")).strip()
+
+    out = [
+        "# Jidousha — taking a picture of a frame",
+        "",
+        "GENERATED by `tools/gen-api-doc`. Do not edit; edit the facade crate or",
+        "`tools/api-doc/` and regenerate.",
+        "",
+        "The fourth of four, and the last one to read. `docs/api/jidousha-api.md` is how",
+        "a game is written, `docs/api/jidousha-testing.md` is how it is checked, and this",
+        "is how one frame of it is rendered for real and written out as a PNG.",
+        "",
+        "**It assumes the checking document.** `FrameRecord`, `FrameRecorder`,",
+        "`FramePlan`, `BackendTextureId` and `PhysicalSize` are defined there and are not",
+        "repeated here — a capture path is written beside a `--verify` mode that already",
+        "has them. The Reference at the end is the rest, and the same one import:",
+        "",
+        "```rust",
+        "use jidousha::testing::*;",
+        "```",
+        "",
+        "**This document names a renderer and the other three do not.** A picture has to",
+        "be drawn by something, so `WgpuBackend` is here and nowhere else. A shipped game",
+        "still never names a backend — only a capture path does.",
+        "",
+        "## Taking a picture",
+        "",
+        capture,
+        "",
+        "## Reference",
+        "",
+        "### `jidousha::testing`, the rendering half",
+        "",
+        "What a capture path calls and a check that never renders does not.",
+        "",
+    ]
+    for name in [item for item in testing_exports(facade) if item in CAPTURE_ITEMS]:
+        out += render_item(items.get(name, Item(name=name)))
     return "\n".join(out)
 
 

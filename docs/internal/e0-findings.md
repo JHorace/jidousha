@@ -7240,10 +7240,19 @@ contract — so the recoverable half is smaller than an inventory of "things tha
 appear twice" suggests. Run 7's triage said the prose was near its floor and the
 measurements agree with it.
 
-So the level still has to be bought down another way, and ADR-0034 names the
-fourth split as that way, with a trigger (`jidousha-testing.md` crossing 14,000
-again) rather than a date. What this rule stops is the next finding costing a
-paragraph by default.
+So the level still has to be bought down another way, and the fourth split is that
+way. **ADR-0035 did it one run before its trigger**, and the reason is the trigger
+itself: at 13,843 the crossing was one run away, and the run in question would
+have hit it *during* a triage — when the budget is a CI gate and the prompt change
+the split needs would have invalidated a run in flight. It recovered 1,487
+tokens, six times what the destination rule reached, because two thirds of what
+the capture material cost was **reference entries**, and no destination rule
+touches those: an entry exists because the facade exports the item, not because a
+paragraph chose to include it. `jidousha-testing.md` is at ~12.4k of 15k.
+
+What the destination rule stops is the next finding costing a paragraph by
+default. What a split buys is room; the two are not substitutes, and the ordering
+matters — the rule was applied first and made the split smaller.
 
 The `make-game` skill (agent-practices §3) is written from E0's findings after
 it passes. A friction that recurs across runs and cannot be designed away is

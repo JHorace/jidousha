@@ -139,6 +139,18 @@ game. Worth knowing before reaching for a bigger number: curation was tried firs
 and measured, and it recovered 143 tokens on one pass and 20 on the next. At ten
 thousand tokens of prose, tightening sentences is noise; the seam is the move.
 
+**ADR-0035 applied it a third time and showed where the rule's edge is.**
+`jidousha-capture.md` is how one recorded frame is rendered for real — a distinct
+task, done last, by a reader whose check already runs. Two things about the third
+application are worth carrying to whatever the fourth one is. It is the first to
+move **reference entries** as well as prose, so it needed a rule for which move
+(an item goes when no entry outside the moving set names it) and left three
+behind that a tidier cluster would have taken, because each is named by an entry
+that stays. And it moved the **vocabulary exemption** with the material: the
+testing document may no longer name a renderer. Leaving that behind is the half of
+a seam that lands unnoticed — the material is gone, the licence to talk about it
+is not, and the next paragraph written drifts back into the wrong file.
+
 `docs/api/` is a **product surface** — arguably the most important one. Its quality metric:
 can a fresh agent, given only `docs/api/` and `examples/`, produce a working prototype?
 It gets evaluated like a product, not proofread like a doc.

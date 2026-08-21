@@ -117,7 +117,7 @@ CLAUDE.md                        router — always read first
 docs/agent-practices.md          why every rule exists; enforcement map
 docs/conventions.md              coordinates, units, color, naming
 docs/implementation-plan.md      this file
-docs/adr/0001..0034              decisions; DELIBERATE tags point here
+docs/adr/0001..0035              decisions; DELIBERATE tags point here
 docs/internal/core.md            ECS, schedule, time, app (M-milestones)
 docs/internal/renderer.md        submissions, backend seam (R-milestones)
 docs/internal/assets.md          handles, readiness determinism (A-milestones)

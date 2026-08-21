@@ -22,7 +22,7 @@
 //! (renderer.md §9).
 //!
 //! **This file is load-bearing documentation, not only an example.**
-//! `docs/api/jidousha-testing.md` names the four things about capture that are
+//! `docs/api/jidousha-capture.md` names the four things about capture that are
 //! its own — the `capture:` line `tools/verify` parses, the aspect ratio, the
 //! texture-id check, and the no-GPU case — and sends the reader here for the
 //! path itself (ADR-0034). It used to carry the path as well, the two copies

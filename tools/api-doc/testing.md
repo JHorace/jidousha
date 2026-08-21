@@ -563,68 +563,27 @@ under a timeout, parses the verdict, writes a report, and lifts the path of any
 picture the run captured into a field of its own in that report.
 `cargo run -p <crate> --example <name> -- --verify` is the same thing by hand.
 
-**The picture is yours to take.** `tools/verify` renders nothing: it reads one
-line out of what your `--verify` mode printed, and a run that captures nothing
-passes. So a frame you can *look* at is one your `--verify` mode drew — worth
-doing, because a picture answers what no assertion here reaches: whether it looks
-like the game.
+**Taking a picture of a frame is a fourth document**,
+`docs/api/jidousha-capture.md`: rendering one recorded frame for real, writing it
+out as a PNG, and the four things about that path which are silent when you get
+them wrong. It is worth doing — a picture answers what no assertion here reaches,
+and it has twice caught a fault every check in a game was happy with. Read it
+last, once this document's checks run.
 
-**And the frame you already recorded is the one to draw.** You do not replay the
-session and you do not restructure your game to hand it a renderer: `FrameRecord`
-carries a `plan` — the finished frame, with the depth sort and the batching
-already done — and `WgpuBackend::offscreen` will execute it. The whole path is
-about thirty lines, and **`examples/prototype_kit/capture.rs` is those thirty
-lines with the reasoning written at each step.** Read it rather than
-reconstructing it from here: the one time this document carried the path as well,
-the two copies drifted and the one here was the wrong one. It also covers the
-harder case — a game that loads art, whose texture ids mean something only to a
-backend that created its textures in the same order.
-
-Four things about it belong here rather than there, because each is either a
-contract with the tooling or a mistake that is silent when you make it:
-
-- **`tools/verify` reads exactly one line.** It takes the first whose text starts
-  with `capture:` and contains ` written to `, and puts what follows into the
-  report. Word it differently and the run still passes while the report says no
-  picture was taken.
-- **Capture at the recorder's aspect ratio.** A capture of another shape
-  stretches the picture while every assertion you wrote goes on passing, because
-  none of them look at pixels. 480x270 for a 1280x720 recorder, and assert the
-  ratio rather than remembering it; `CAPTURE_SIZE` in the example says why
-  nothing downstream can recompute it for you.
-- **Check that the texture ids still mean the same thing**, in one line, before
-  you believe the PNG. A plan whose ids drifted renders the wrong texture into an
-  image every other check in your `--verify` is happy with.
-- **A machine with no GPU must still pass, and a broken one must not.**
-  `RenderError::NoAdapter` is a fact about the machine — every runner is headless
-  and some have no graphics stack at all — so say the capture was skipped, put
-  that in the summary, keep the run green, and do not skip in silence either.
-  Every *other* handshake error is a fault, and reporting one of those as "no GPU
-  here" files a real problem as a property of the hardware, on every machine, for
-  ever. Match on the variant; the example's poll loop is the shape.
-
-**Then open the file and look at it.** A capture path that writes a PNG is worth
-nothing on its own; the question is whether it writes *your game's* PNG, and a
-path wired to the wrong frame or to a stale plan passes every check that does not
-ask. So look — name what you see — then break the game on purpose and look again:
-move a paddle, stop drawing the score, change the clear colour, and confirm the
-picture follows.
-
-**The clear colour is the one part of the picture that leaves no quad behind, and
-it is still assertable.** A frame drawn on the wrong background is byte-identical
-under every check above, because none of them look at the background — but
-`FrameRecord` carries the `plan` it was drawn into, and a `FramePlan` carries the
-`clear_color` the camera asked for. So it is one line, and it needs no capture and
-no GPU:
+**The background leaves no quad behind, and is still assertable here.** A frame
+drawn on the wrong colour is byte-identical under every check above, because none
+of them look at the background — but `FrameRecord` carries the `plan` it was drawn
+into, and a `FramePlan` carries the `clear_color` the camera asked for. So it is
+one line, and it needs no capture and no GPU:
 
 ```rust
 # let (sim, recorder, frame, camera) = game::played();
 assert_eq!(frame.plan.clear_color, palette::COURT);
 ```
 
-The capture and that assertion answer different questions and both are cheap: the
-picture says whether the frame *looks* right, and the plan says whether it cleared
-to the colour the camera asked for.
+That assertion and a capture answer different questions and both are cheap: the
+plan says whether the frame cleared to the colour the camera asked for, and a
+picture says whether it *looks* right.
 
 **That assertion in its naive form is a trap, and the shape of the trap is
 general.** Comparing what was drawn against the game's own constant does not
