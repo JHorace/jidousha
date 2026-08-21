@@ -30,12 +30,23 @@ const HEADLESS_VIEWPORT: PhysicalSize = rules::WINDOW;
 /// this is about a second of wall clock, not a budget to husband.
 const TICK_LIMIT: u64 = 5_400;
 
-/// Every string the game draws that is not a number.
-const BANNERS: [&str; 3] = [
-    "YOU WIN  -  PRESS R",
-    "OPPONENT WINS  -  PRESS R",
-    "W AND S TO MOVE",
-];
+/// Every string the game draws that is not a number, asked of the game itself.
+///
+/// Not a second copy of the literals: a check holding its own array inspects the
+/// text it was written against rather than the text being drawn, which is how an
+/// em dash typed into `main.rs` walks past a printable-character check that
+/// looks entirely correct.
+fn banners() -> Vec<&'static str> {
+    [
+        (Screen::Over, Some(Side::Left)),
+        (Screen::Over, Some(Side::Right)),
+        (Screen::Serving, None),
+        (Screen::Rally, None),
+    ]
+    .into_iter()
+    .filter_map(|(screen, winner)| crate::banner_for(screen, winner))
+    .collect()
+}
 
 /// What one played match came back with.
 struct Session {
@@ -236,7 +247,7 @@ pub(crate) fn run() -> ExitCode {
         ),
         (
             "every drawn string is printable",
-            checks::every_drawn_string_is_printable(&BANNERS),
+            checks::every_drawn_string_is_printable(&banners()),
         ),
         (
             "there is room behind each paddle",
@@ -466,14 +477,15 @@ pub(crate) fn run() -> ExitCode {
         .into_iter()
         .filter(|quad| quad.texture == font)
         .count();
-    let expected = BANNERS[0].chars().count()
+    let winning_banner = crate::banner_for(Screen::Over, Some(Side::Left)).unwrap_or("");
+    let expected = winning_banner.chars().count()
         + format!("{}", winning.left).chars().count()
         + format!("{}", winning.right).chars().count();
     if glyphs != expected {
         failures.push(format!(
-            "the winning screen drew {glyphs} glyphs, wanting {expected}: {:?} plus a \
-             {}-{} score",
-            BANNERS[0], winning.left, winning.right
+            "the winning screen drew {glyphs} glyphs, wanting {expected}: {winning_banner:?} \
+             plus a {}-{} score",
+            winning.left, winning.right
         ));
     }
 
@@ -537,8 +549,8 @@ pub(crate) fn run() -> ExitCode {
 
     // --- the picture ------------------------------------------------------
 
-    match crate::capture::write_the_picture(&live.frame, &camera) {
-        Ok(path) => summary.push(format!("    capture: {path}")),
+    match crate::capture::write_the_picture(&live.frame, played.recorder.font_texture()) {
+        Ok(line) => summary.push(format!("    capture: {line}")),
         Err(why) => failures.push(format!("no picture was taken: {why}")),
     }
 

@@ -107,3 +107,45 @@ neither points at the other for this purpose.
 Final row: `rollout 5-0, chaser 4-5, idle 0-5` — which is, exactly, the
 signature `jidousha-controllers.md` opens with. That was reassuring enough to be
 worth saying: the target was legible before I had a game that hit it.
+
+### F7 — the mutation round found four holes, and the testing document predicted all four
+Seventeen one-line faults, first round: **13 caught, 4 missed, 0 failed to
+compile**. The four escapes:
+
+1. **`rebound` flipped in y.** Ball leaves *down* when struck high. Every check
+   passed and the match was byte-identical in shape, because my controller
+   *calls* `rules::rebound` to plan its shots — so a wrong rebound is
+   consistently wrong on both sides of the court and in the check as well. This
+   is precisely the document's "a check that reads the game's own answer back
+   cannot see that answer change", and I had read that passage and still wrote
+   it. Fixed with a contract check stating the requirement in literal numbers.
+2. **Paddle 62% taller.** `each_paddle_is_drawn_where_it_stands` builds its
+   expected rectangle from `PADDLE_HALF_Y`, so it moved with the constant. The
+   `SCORE_TOP` failure the document says three of four runs make, in a different
+   costume. Fixed with "a paddle covers less than a quarter of the court".
+3. **`OPPONENT_PLACEMENT` to 0.0** — the exact degenerate groove the controllers
+   document is about. My chaser check asked "did it score" and "did it win", and
+   the groove answers 4–0 to both: it scored, it did not win. What actually
+   distinguishes a groove is that the **match never finished** — 4–0 after 5400
+   ticks with a 60-touch rally. Neither document names "the match must end" as
+   the check, and it is the one that sees this.
+4. **`in_front` in the sweep replaced by `true`.** My three contract cases were
+   the document's three — through, past the end, leaving through the same face —
+   and none of them covers a ball *already behind the paddle and still going
+   away*, which is the only case `in_front` guards. The document lists its three
+   cases as though they were the set; they are a set.
+
+Second round after fixing: **17 of 17.** The round is worth every minute the
+document claims. Making a missed search-and-replace a hard error caught nothing
+this time but cost four lines, and a mutation that failed to compile would have
+been scored as a catch without the check.
+
+### F8 — the printable-string check could not reach the strings the game draws
+The em-dash mutation was caught, but by the *glyph count*, not by
+`every_drawn_string_is_printable`. That check reads a `BANNERS` array in
+`verify.rs` — a second copy of the literals — so mutating the literal in
+`main.rs` left the check inspecting the old text. The testing document says to
+run the check "over every literal a game draws" and does not say how a check
+reaches them; `prototype_kit` solves it by exposing `readout_text` as a function
+so a check can ask the game for its exact string, and that solution is in the
+example rather than in the document. Fixed the same way.

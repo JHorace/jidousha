@@ -453,6 +453,22 @@ fn draw_the_play(ctx: &mut DrawCtx) {
     }
 }
 
+/// What the screen has to say, or nothing while the ball is in play.
+///
+/// A function rather than a `match` inside the draw system so that a check can
+/// ask the game for the exact text it draws. No assertion over drawn quads can
+/// see a wrong *character* — the font draws an identically sized box for one —
+/// so the only instrument is the string itself, and a check holding its own copy
+/// of the literals is inspecting a string the game may no longer draw.
+pub(crate) fn banner_for(screen: Screen, winner: Option<Side>) -> Option<&'static str> {
+    match (screen, winner) {
+        (Screen::Over, Some(Side::Left)) => Some("YOU WIN  -  PRESS R"),
+        (Screen::Over, _) => Some("OPPONENT WINS  -  PRESS R"),
+        (Screen::Serving, _) => Some("W AND S TO MOVE"),
+        (Screen::Rally, _) => None,
+    }
+}
+
 /// The score at the top, and whatever the screen has to say.
 fn draw_the_score(ctx: &mut DrawCtx) {
     let round = ctx.world.resource::<Round>();
@@ -468,11 +484,8 @@ fn draw_the_score(ctx: &mut DrawCtx) {
     ctx.text(Vec2::new(-2.0 - score.width_of(&left), top), &left, score);
     ctx.text(Vec2::new(2.0, top), &format!("{}", round.right), score);
 
-    let message = match (round.screen, round.winner()) {
-        (Screen::Over, Some(Side::Left)) => "YOU WIN  -  PRESS R",
-        (Screen::Over, _) => "OPPONENT WINS  -  PRESS R",
-        (Screen::Serving, _) => "W AND S TO MOVE",
-        (Screen::Rally, _) => return,
+    let Some(message) = banner_for(round.screen, round.winner()) else {
+        return;
     };
     let banner = TextStyle {
         size: 1.0,
