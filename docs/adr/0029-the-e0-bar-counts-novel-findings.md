@@ -1,6 +1,6 @@
 # ADR-0029: E0's bar counts *novel* findings; a re-tread does not reset the streak
 
-Status: accepted · 2026-08-20
+Status: **superseded by ADR-0036** · 2026-08-20
 
 > **The bar moves from "no new `engine` or `docs` findings" to "no `engine`
 > finding and no *novel* `docs` finding".** A finding whose cross-run column
