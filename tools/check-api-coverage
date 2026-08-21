@@ -107,6 +107,92 @@ def uncovered(items: "list[str]", sources: "list[Path]") -> "list[str]":
     return missing
 
 
+# The verification vocabulary, which the coverage rule above cannot judge the
+# same way. `jidousha::testing` is not what a *game* is written against, so an
+# item here is demonstrated by a `--verify` run rather than by gameplay — and it
+# was skipped entirely until ADR-0028's finding turned out to be able to recur
+# unseen: six items were once exported for a road only `prototype_kit` walked,
+# and nothing would have said so a second time.
+TESTING_EXEMPT = {
+    "PhysicalSize": "in the prelude too, and demonstrated there",
+    "Input": "in the prelude too, and demonstrated there",
+    "MemorySource": "in the prelude too, and demonstrated there",
+    # The first thing this check found, and the answer is "keep it", which is
+    # why the reason is written out. `ReplaySource` is the *asset* half of the
+    # replay story: `Recording` carries a `TickRecord` per tick, a `TickRecord`
+    # carries `Vec<AssetReady>` saying which loads committed when, and this is
+    # what feeds that timing back in. `pong`'s `--verify` uses `Recording` and
+    # has no art, so it never reaches the second half — but taking the second
+    # half out would leave the reference documenting a timeline with no way to
+    # replay it, which is a worse hole than an unused entry. Unlike ADR-0028's
+    # six, this is not a road only one example walked; it is the far end of a
+    # road the document describes.
+    "ReplaySource": "the asset half of the replay story; AssetReady is reachable and this is "
+    "what consumes it",
+}
+
+
+def testing_items(text: str) -> "list[str]":
+    """Every name `jidousha::testing` re-exports."""
+    block = text.split("pub mod testing")
+    if len(block) < 2:
+        return []
+    names: "list[str]" = []
+    for items in PUB_USE_RE.findall(block[1]):
+        names += [item.strip() for item in items.split(",") if item.strip()]
+    names += PUB_USE_ONE_RE.findall(block[1])
+    return sorted(set(names), key=str.lower)
+
+
+def entry_of(item: str, document: str) -> str:
+    """One item's own section of the generated testing reference."""
+    heading = f"#### `{item}`"
+    if heading not in document:
+        return ""
+    # The heading is part of the entry. Left out, it survives the removal and
+    # matches the item's own name — every entry would look reachable from itself.
+    start = document.index(heading)
+    rest = document[start + len(heading) :]
+    nxt = rest.find("\n#### ")
+    return heading + (rest if nxt < 0 else rest[:nxt])
+
+
+def unreachable_testing(
+    items: "list[str]", sources: "list[Path]", document: str
+) -> "list[str]":
+    """Testing exports that no example uses and no other entry names.
+
+    Two ways to be reachable, and the second is the one a naive check gets wrong.
+    An item may be **used** by an example — the ordinary case — or **named in
+    another item's signature**, which is why it has an entry at all: F-017 is the
+    finding that a type named in a signature and defined nowhere in the document
+    is a hole, and F-036 is `Batch`, which exists here for exactly that reason.
+    `RawImage` is what `capture()` returns and `DecodeError` is what
+    `try_decode` can fail with; neither is written by a game and both have to be
+    documented.
+
+    What is left over is the real question: an item nobody uses and nothing
+    mentions, carried in a document with a hard token budget. `ReplaySource` was
+    the one this found.
+
+    Reads the generated document rather than the doc comments, because the
+    document is what the budget is spent on and what a reader sees. It is checked
+    in, so a stale one is the `api-doc` phase's problem rather than this one's.
+    """
+    corpus = "\n".join(source.read_text(encoding="utf-8") for source in sources)
+    orphans = []
+    for item in items:
+        if item in TESTING_EXEMPT:
+            continue
+        if re.search(rf"\b{re.escape(item)}\b", corpus):
+            continue
+        elsewhere = document.replace(entry_of(item, document), "", 1)
+        if re.search(rf"\b{re.escape(item)}\b", elsewhere):
+            continue
+        orphans.append(item)
+    return orphans
+
+
 def facade_breaches(sources: "list[Path]") -> "list[tuple[str, int, str]]":
     """Examples naming an internal crate, as (file, line, crate)."""
     found = []
@@ -141,12 +227,22 @@ def main(argv: "list[str]") -> int:
         )
         return 2
 
-    items = facade_items(facade.read_text(encoding="utf-8"))
+    facade_text = facade.read_text(encoding="utf-8")
+    items = facade_items(facade_text)
     missing = uncovered(items, sources)
     breaches = facade_breaches(sources)
+
+    # The other half of the surface, which nothing checked until now.
+    testing = testing_items(facade_text)
+    reference = repo / "docs/api/jidousha-testing.md"
+    orphans = (
+        unreachable_testing(testing, sources, reference.read_text(encoding="utf-8"))
+        if reference.is_file()
+        else []
+    )
     print(
-        f"[check-api-coverage] {len(items)} public item(s), {len(sources)} example file(s), "
-        f"{len(EXEMPT)} exempt"
+        f"[check-api-coverage] {len(items)} public item(s), {len(testing)} testing item(s), "
+        f"{len(sources)} example file(s), {len(EXEMPT) + len(TESTING_EXEMPT)} exempt"
     )
 
     failures = []
@@ -160,6 +256,19 @@ def main(argv: "list[str]") -> int:
                 "show it in an example — an item nobody can copy is an item nobody can use "
                 "(public-api.md §5). If it genuinely cannot appear by name, add it to "
                 "EXEMPT in this script with the reason",
+            )
+        )
+    for item in orphans:
+        failures.append(
+            problem(
+                f"nothing reaches `jidousha::testing::{item}`",
+                f"no example uses it and no other reference entry names it",
+                "it was exported for a road nobody walks — the shape ADR-0028 found once "
+                "already, when six items were carried for a path only prototype_kit took",
+                "use it in an example's `--verify`, or take it out of the facade. The "
+                "testing document has a hard token budget and an entry nobody can reach "
+                "spends it on nothing. If it must stay unused, add it to TESTING_EXEMPT "
+                "with the reason",
             )
         )
     for path, line, crate in breaches:

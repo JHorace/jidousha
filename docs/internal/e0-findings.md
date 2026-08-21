@@ -7194,9 +7194,19 @@ the capture path existed in the document *and* in `prototype_kit/capture.rs`, th
 two drifted, and the document's copy was the wrong one for six runs.
 
 The rule changes the rate rather than the level, which ADR-0034 records with the
-number its own pilot recovered (63 tokens, against ~200 projected). A document
-already near its budget still needs a curation pass or a fourth split; what this
-stops is the next finding costing a paragraph by default.
+numbers its own applications recovered: 63 tokens from the capture *code block*
+against ~200 projected, then 546 from the capture *passage* against ~1,050
+projected. **Both projections ran about half high, and that is the finding.**
+What looks like duplication of a worked example keeps turning out to be the
+sentence a reader cannot derive from code — the trap, the reason, the tooling
+contract — so the recoverable half is smaller than an inventory of "things that
+appear twice" suggests. Run 7's triage said the prose was near its floor and the
+measurements agree with it.
+
+So the level still has to be bought down another way, and ADR-0034 names the
+fourth split as that way, with a trigger (`jidousha-testing.md` crossing 14,000
+again) rather than a date. What this rule stops is the next finding costing a
+paragraph by default.
 
 The `make-game` skill (agent-practices §3) is written from E0's findings after
 it passes. A friction that recurs across runs and cannot be designed away is

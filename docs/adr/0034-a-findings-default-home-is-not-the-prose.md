@@ -138,9 +138,35 @@ leaves a pointer. F-134 is what the alternative looks like after six runs.
   triage decides where a fix goes.
 - The budgets are unchanged: 25k, 15k, 5k. Raising one stays foreclosed, and this
   is the third answer tried before it rather than the first argument for it.
-- **If the prose still fills after this**, the remaining lever is a fourth split
-  and the entry cost run 10 named is the thing to weigh against it. That
-  conversation starts here rather than from scratch.
+- **The fourth split is the named next step, and it has a trigger rather than a
+  date.** Applying this rule to the capture passage took `jidousha-testing.md`
+  from 14,389 to **13,843**, so the level is bought down by ~550 and the rate is
+  what changed. At the floor rate that is under two runs of relief.
+
+  **Trigger: when `jidousha-testing.md` crosses 14,000 again.** What moves is the
+  capture *reference* cluster — `WgpuBackend`, `RenderBackend`, `RenderError`,
+  `create_builtin_textures`, `upload_ready_textures`, `TextureTable`,
+  `BackendTextureId`, `FONT_TEXTURE`, `RawImage`, `encode_png`, measured at **~879
+  tokens** — with the capture prose that is left, into a fourth document on
+  ADR-0025's rule: split by what the reader is doing, and taking a picture is a
+  distinct, late, optional task.
+
+  Two things make it bigger than it looks, and both are reasons to do it
+  deliberately rather than under budget pressure:
+
+  - **It needs generator machinery `Document` does not have.** ADR-0030's
+    controllers document is prose only, so no reference items have ever been
+    routed. `Document` carries path, budget and vocabulary exception; it would
+    need a member list, and `render_testing` would need to render the complement.
+  - **It changes the prompt, so it needs an `e0-prompt.md` ledger row**, like
+    ADR-0025's and ADR-0030's. Directionally it is safe — a fourth file is one
+    more thing a run must find, which makes a run harder rather than easier, the
+    direction the ledger says a bar may move.
+
+  **Land it between runs, never during a triage.** The budget is a CI gate, so a
+  document that overflows mid-triage turns CI red at the moment somebody is
+  already fixing something else — and a prompt change made during a run is a
+  prompt change that invalidates the run.
 
 ## Alternatives rejected
 

@@ -570,84 +570,38 @@ doing, because a picture answers what no assertion here reaches: whether it look
 like the game.
 
 **And the frame you already recorded is the one to draw.** You do not replay the
-session, and you do not restructure your game to hand it a renderer.
-`FrameRecord` carries a `plan` — the finished frame, with the depth sort and the
-batching already done — and a renderer built for the purpose will execute it:
+session and you do not restructure your game to hand it a renderer: `FrameRecord`
+carries a `plan` — the finished frame, with the depth sort and the batching
+already done — and `WgpuBackend::offscreen` will execute it. The whole path is
+about thirty lines, and **`examples/prototype_kit/capture.rs` is those thirty
+lines with the reasoning written at each step.** Read it rather than
+reconstructing it from here: the one time this document carried the path as well,
+the two copies drifted and the one here was the wrong one. It also covers the
+harder case — a game that loads art, whose texture ids mean something only to a
+backend that created its textures in the same order.
 
-```rust
-# let (sim, mut recorder, frame, camera) = game::played();
-# fn capture_a_frame(recorder: &FrameRecorder, frame: &FrameRecord) -> String {
-// `PhysicalSize` is not in this list: it is in the prelude, which a game's
-// `--verify` file already globs. Only the testing-only names belong here.
-use jidousha::testing::{
-    FONT_TEXTURE, RenderBackend, RenderError, WgpuBackend, create_builtin_textures, encode_png,
-};
+Four things about it belong here rather than there, because each is either a
+contract with the tooling or a mistake that is silent when you make it:
 
-// Same 16:9 shape as the recorder's viewport — see the first trap below.
-let mut gpu = WgpuBackend::offscreen(PhysicalSize::new(480, 270));
-for _ in 0..10_000 {                    // the renderer is poll-based, and a
-    match gpu.poll() {                  // `--verify` run has no frame loop
-        Ok(()) if gpu.is_ready() => break,
-        Ok(()) => {}
-        // No adapter is a fact about the machine, not a failure — third trap.
-        Err(error @ RenderError::NoAdapter { .. }) => {
-            return format!("skipped, no GPU on this machine ({error})");
-        }
-        Err(error) => return format!("skipped, the handshake failed ({error})"),
-    }
-}
-// The built-in textures, in the order your recorder created them, so the ids
-// inside the plan mean the same thing here — and one check that they do, which
-// is what separates "a PNG was written" from "a PNG of this game".
-let textures = create_builtin_textures(&mut gpu);
-if textures.resolve(FONT_TEXTURE) != recorder.font_texture() {
-    return "skipped, this backend put the font on a different id".to_owned();
-}
-// Then render the plan, capture, and write `encode_png(&image)` — each step
-// reporting rather than panicking, because `expect_used` is denied in a game
-// written here and a failed capture is a line in the summary, not the end of
-// the run. `examples/prototype_kit/capture.rs` is those three steps in full.
-# "target/verify/mygame.png".to_owned() }
-```
-
-**Read `examples/prototype_kit/capture.rs` for the rest**, which is the whole
-path with its reasoning written at each step — and read it rather than expecting
-this to grow, because the one time this document carried the path twice the two
-copies drifted and the one here was the wrong one. It also shows the other shape
-available to you: because its own `play` is handed the renderer, it can run the
-whole session twice and check that the world did the same thing both times.
-Replaying the recorded plan is the cheaper road and the one that works whatever
-shape your game is.
-
-That "the ids mean the same thing" step is the load-bearing one, and it holds
-because both counters start empty and are filled by the same call in the same
-order. That is true of **a game that loads no assets** — every shape a colour,
-every string the built-in font. If yours loads art, the replay has to upload it
-too, or the plan names a texture the new renderer lacks. The check above is that
-step, and it costs one line whether or not you have art: without it, a plan whose
-ids drifted renders the wrong texture into a PNG that every other check in your
-`--verify` is happy with.
-
-Three things are easy to get wrong here, and silent when you do:
-
-- **Capture at the recorder's aspect ratio.** The projection was computed from the
-  viewport you handed `FrameRecorder::new` and is baked into every plan; nothing
-  downstream can recompute it. A capture of another shape stretches the picture
-  while every assertion you wrote goes on passing, because none of them look at
-  pixels. 480x270 for a 1280x720 recorder — and assert the ratio rather than
-  remembering it.
-- **Print the path in the line the tool reads.** `tools/verify` takes the first
-  line whose text starts with `capture:` and contains ` written to `, and puts
-  what follows into the report. Word it differently and the run still passes while
-  the report says no picture was taken.
-- **A machine with no GPU must still pass, and a broken one must not.** Every
-  runner is headless and some have no graphics stack at all, so
-  `RenderError::NoAdapter` is a fact about the machine: say the capture was
-  skipped, put that in the summary, keep the run green — and do not skip in
-  silence either. Every *other* handshake error is a fault, and reporting one of
-  those as "no GPU here" files a real problem as a property of the hardware, on
-  every machine, for ever. Match on the variant; it is in the Testing reference
-  with the rest.
+- **`tools/verify` reads exactly one line.** It takes the first whose text starts
+  with `capture:` and contains ` written to `, and puts what follows into the
+  report. Word it differently and the run still passes while the report says no
+  picture was taken.
+- **Capture at the recorder's aspect ratio.** A capture of another shape
+  stretches the picture while every assertion you wrote goes on passing, because
+  none of them look at pixels. 480x270 for a 1280x720 recorder, and assert the
+  ratio rather than remembering it; `CAPTURE_SIZE` in the example says why
+  nothing downstream can recompute it for you.
+- **Check that the texture ids still mean the same thing**, in one line, before
+  you believe the PNG. A plan whose ids drifted renders the wrong texture into an
+  image every other check in your `--verify` is happy with.
+- **A machine with no GPU must still pass, and a broken one must not.**
+  `RenderError::NoAdapter` is a fact about the machine — every runner is headless
+  and some have no graphics stack at all — so say the capture was skipped, put
+  that in the summary, keep the run green, and do not skip in silence either.
+  Every *other* handshake error is a fault, and reporting one of those as "no GPU
+  here" files a real problem as a property of the hardware, on every machine, for
+  ever. Match on the variant; the example's poll loop is the shape.
 
 **Then open the file and look at it.** A capture path that writes a PNG is worth
 nothing on its own; the question is whether it writes *your game's* PNG, and a

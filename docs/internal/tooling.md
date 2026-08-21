@@ -26,7 +26,7 @@ import, so they keep working when the package ecosystem is exactly what broke.
 | `tools/verify` | What did the game actually do, with nobody watching? | 0 verified · 1 the example's assertions failed · 2 tooling/env fault |
 | `tools/check-assets` | Does every asset path in the code name a file that exists? | 0 all resolve · 1 a reference is broken · 2 the check could not run |
 | `tools/gen-api-doc` | Is `docs/api/` what the facade actually says? | 0 written/current · 1 stale, over budget, leaking vocabulary, or naming a test or example that is not there · 2 could not run |
-| `tools/check-api-coverage` | Is every public item shown in an example, written against the facade? | 0 covered · 1 a gap or a breach · 2 could not run |
+| `tools/check-api-coverage` | Is every public item shown in an example — and can anything reach each `testing` export? | 0 covered · 1 a gap, an unreachable entry, or a breach · 2 could not run |
 | `tools/check-api-prose` | Does the hand-written half of `docs/api/` contain code that compiles? | 0 every block compiles · 1 one does not · 2 could not build the facade |
 
 Not built yet: `tools/check-tags`, `tools/check-headers`.
@@ -237,6 +237,27 @@ a row (stop rule printed, `failure-streak.json` count 2).
   be — saying so is part of the mechanism rather than an apology for it. Markers
   are dropped on the way to `docs/api/` like hidden lines, so one costs no
   tokens and can go on every claim that deserves it.
+
+- **`check-api-coverage` reads `jidousha::testing` too, and did not until run
+  10's triage.** `facade_items` stops at the prelude, so the verification
+  vocabulary — a third of the testing document's budget — was checked by nothing:
+  ADR-0028 found six items exported for a road only `prototype_kit` walked and
+  removed them, and nothing would have said so a second time. **Reachability has
+  two forms and a naive check gets the second wrong.** An item may be *used* by
+  an example, or *named in another entry's signature* — which is why it has an
+  entry at all, F-017 being the finding that a type named in a signature and
+  defined nowhere is a hole. `Batch` (F-036), `RawImage` and `DecodeError` are
+  all in the second class and none is written by a game. An entry does not make
+  itself reachable: the heading carries the item's own name, so it is removed
+  with the entry or every entry looks reachable from itself and the check reports
+  nothing, ever.
+
+  What is left is an item nobody uses and nothing mentions, in a document with a
+  hard token budget. It found one, `ReplaySource`, and the answer was to keep it
+  — it is the asset half of the replay story that `TickRecord::readiness` is the
+  other half of, and removing it would document a timeline with no way to replay
+  it. The exemption carries that reasoning, which is the point of the gate: the
+  question gets asked and the answer gets written down.
 
   Not rustdoc JSON, which needs nightly while `rust-toolchain.toml` pins stable;
   summaries are lifted from the `///` line above each definition, which is a

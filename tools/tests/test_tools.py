@@ -44,6 +44,7 @@ verify = load_tool("verify")
 check_assets = load_tool("check-assets")
 gen_api_doc = load_tool("gen-api-doc")
 check_api_prose = load_tool("check-api-prose")
+check_api_coverage = load_tool("check-api-coverage")
 api_coverage = load_tool("check-api-coverage")
 
 
@@ -1603,6 +1604,77 @@ class ApiCoverageTest(unittest.TestCase):
                 code = api_coverage.main(["check-api-coverage", "--root", directory])
             self.assertEqual(code, 2)
             self.assertIn("found nothing to check", err.getvalue())
+
+
+class TestingCoverageTest(unittest.TestCase):
+    """`jidousha::testing` was skipped by the coverage check entirely.
+
+    ADR-0028 found six items exported for a road only `prototype_kit` walked and
+    removed them. Nothing would have said so a second time, because
+    `facade_items` stops at the prelude and the testing module was never read.
+    """
+
+    DOC = (
+        "## Reference\n"
+        "#### `Used`\n```rust\npub struct Used;\n```\n"
+        "#### `NamedBySomethingElse`\n```rust\npub struct NamedBySomethingElse;\n```\n"
+        "#### `Orphan`\n```rust\npub struct Orphan;\n```\n"
+        "#### `Namer`\n```rust\nimpl Namer {\n"
+        "    pub fn get(&self) -> NamedBySomethingElse;\n}\n```\n"
+    )
+
+    def _sources(self, directory, text):
+        path = Path(directory) / "an_example.rs"
+        path.write_text(text, encoding="utf-8")
+        return [path]
+
+    def test_an_item_no_example_uses_and_nothing_names_is_reported(self):
+        with tempfile.TemporaryDirectory() as directory:
+            sources = self._sources(directory, "let x = Used; Namer::get(&x);")
+            orphans = check_api_coverage.unreachable_testing(
+                ["Used", "NamedBySomethingElse", "Orphan", "Namer"], sources, self.DOC
+            )
+        self.assertEqual(orphans, ["Orphan"])
+
+    def test_an_item_named_in_another_entrys_signature_is_reachable(self):
+        # F-017: a type named in a signature and defined nowhere is a hole, which
+        # is why `Batch` and `RawImage` have entries nobody writes by hand.
+        with tempfile.TemporaryDirectory() as directory:
+            sources = self._sources(directory, "// names nothing")
+            orphans = check_api_coverage.unreachable_testing(
+                ["NamedBySomethingElse"], sources, self.DOC
+            )
+        self.assertEqual(orphans, [])
+
+    def test_an_entry_does_not_make_itself_reachable(self):
+        # The heading carries the item's own name. Left in, every entry looks
+        # reachable from itself and the check reports nothing, ever.
+        entry = check_api_coverage.entry_of("Orphan", self.DOC)
+        self.assertIn("#### `Orphan`", entry)
+
+    def test_the_testing_module_is_read_and_the_prelude_is_not(self):
+        facade = (
+            "pub use jidousha_core::{Camera, World};\n"
+            "pub mod prelude { pub use crate::{Camera, World}; }\n"
+            "pub mod testing { pub use jidousha_input::{InputScript, Recording}; }\n"
+        )
+        self.assertEqual(
+            check_api_coverage.testing_items(facade), ["InputScript", "Recording"]
+        )
+        self.assertNotIn("InputScript", check_api_coverage.facade_items(facade))
+
+    def test_the_real_testing_surface_is_reachable(self):
+        repo = REPO_ROOT
+        items = check_api_coverage.testing_items(
+            (repo / "crates/jidousha/src/lib.rs").read_text(encoding="utf-8")
+        )
+        self.assertTrue(items, "the testing module exports something")
+        orphans = check_api_coverage.unreachable_testing(
+            items,
+            check_api_coverage.example_sources(repo),
+            (repo / "docs/api/jidousha-testing.md").read_text(encoding="utf-8"),
+        )
+        self.assertEqual(orphans, [], "an entry nobody can reach spends the budget on nothing")
 
 
 class DoctorAssetsTest(unittest.TestCase):
