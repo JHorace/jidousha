@@ -149,3 +149,87 @@ run the check "over every literal a game draws" and does not say how a check
 reaches them; `prototype_kit` solves it by exposing `readout_text` as a function
 so a check can ask the game for its exact string, and that solution is in the
 example rather than in the document. Fixed the same way.
+
+### F9 — I walked into the `git checkout` trap the testing document names, at step 7
+The document is explicit: "commit **every** file the harness touches, not just
+the one holding the checks: the revert eats an uncommitted fix in the *game*
+file just as happily." I did commit before the mutation round, exactly as told.
+Then step 7's closing procedure — "break the game on purpose and look again" —
+had me delete a `ctx.text` call from `main.rs`, re-capture, and `git checkout --
+main.rs`, which silently reverted an uncommitted `banner_for` refactor from F8.
+It surfaced as `cannot find function banner_for` inside `tools/verify`, in the
+report rather than the terminal.
+
+So the commit-first rule is attached to step 6 in both the skill and the
+document, and step 7 needs it just as much: the capture procedure is a mutation
+round too, with the same revert. Neither says so.
+
+The report file being ground truth was worth it here — the terminal printed
+`FAIL — pong` and one line; `target/verify/pong.json` had the compile error.
+
+### F10 — `HeadlessSim::draw()` is a dead end for a check, and the API document points at it
+`jidousha-api.md`, in Concepts: "a check that wants a frame asks for one, with
+`HeadlessSim::draw()`." I went looking for that and it returns `&Submissions`,
+whose `quads()` yields `Quad` — and `Quad` has no `bounds()`, no `contains()`,
+no `covering()`. Every instrument a check actually uses lives on `FrameRecord`,
+which only `FrameRecorder::draw` produces, and the testing document never
+mentions `HeadlessSim::draw` at all. So there are two ways to run the Draw
+phase, the API document recommends the one a check cannot use, and the two
+documents disagree by silence. I used `FrameRecorder` and never called
+`HeadlessSim::draw`.
+
+### F11 — small things I guessed at
+- **`ctx.line`'s thickness is centred on the segment.** Nothing says which side
+  it goes. `TextStyle` gets a whole paragraph on its vertical metric because
+  every vertical number rests on it; `line` gets nothing, and a border is the
+  first thing a Pong draws.
+- **`Vec2::move_towards` has no scalar twin.** `vec2_tour` names it as "a
+  chasing opponent in one line", and a paddle chases in *one axis*, so the one
+  line becomes `move_towards(pos, Vec2::new(pos.x, target), step).y` or a
+  hand-written scalar version. I wrote both, in different files, before
+  noticing. `f32` is not a `Vec2` operation and the document says so about
+  `signum`; it could say it here too.
+- **Nothing states whether `Round`-style resources survive `insert_resource`
+  during staging.** They do — `insert_resource` replaces — and the reference
+  says "replacing any of the same type", so this one was answerable. Noting it
+  only because staging is where I looked for it and Concepts is where it is.
+
+### F12 — what the skill's order got right, and the one thing it cannot ask for
+Three orderings paid for themselves and I would have got each wrong left to
+myself:
+
+- **Free functions before the first system.** `rules::paddle_contact`,
+  `rebound`, `predict_crossing` and `opponent_target` were free functions from
+  the first draft because the skill said so at step 2. The controller in
+  `verify.rs` calls all four, and `opponent_reach` is a forward model built out
+  of `opponent_target`. Retrofitting that would have been a rewrite of the main
+  loop, exactly as advertised.
+- **The controllers document before tuning any constant.** I had `OPPONENT_SPEED
+  = 12.0` chosen by feel and it looked fine; the document's closed form said it
+  cleared the slow end by six percent, and that is the number that decides
+  whether the game exists. I would have shipped 12.0.
+- **Clippy after the first hundred lines.** Two of the lints I hit
+  (`neg_cmp_op_on_partial_ord`, `too_many_arguments`) wanted structural changes,
+  not cosmetic ones.
+
+**The one thing neither the skill nor the documents can give an unattended run
+is the thirty-second bar.** "Play it when a display exists" assumes a person.
+I drove the windowed build under Xvfb with `xdotool` and screenshotted it, which
+proves it opens, takes keys and draws — and says nothing about whether it is
+fun. The closest available proxy is the controllers document's three verdict
+lines (`rollout 5-0, chaser 4-5, idle 0-5`), and that proxy is genuinely good:
+it is what caught the game being a groove. Neither file says "this is your
+substitute for playing it", and it should, because an agent will otherwise
+either skip the bar or claim to have met it.
+
+## Verdict
+
+Pong plays. `rollout 5-0, chaser 4-5, idle 0-5`; 17 of 17 injected faults
+caught on the second round; `tools/test` green at 755 passed;
+`tools/serve-web pong --check` green; the PNG is a picture of Pong and follows
+the game when the game is broken.
+
+Nothing in this run was blocked, and I read no engine source. The two documents
+gaps that cost the most were F2/F5 (the NaN comparison recipe, two clippy
+rounds) and F4 (the controllers diagnosis table pointing at the controller when
+the fault was in the game, one round).
