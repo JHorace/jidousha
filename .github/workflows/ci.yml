@@ -195,9 +195,12 @@ jobs:
       # Run the optimized bytes in a real browser before they can deploy — the
       # exact check that would have caught the binaryen-108 table damage.
       # sprites exercises rendering and assets; the ?panic=1 half checks the
-      # overlay contract too (web-publish.md §2).
+      # overlay contract too (web-publish.md §2). JIDOUSHA_CHROMIUM points at
+      # the runner's google-chrome: the `chromium` on its PATH is a snap shim
+      # that hangs headless (observed: 120s, no DOM), and the tool's env
+      # override exists for exactly this.
       - name: browser-check the optimized build
-        run: python tools/serve-web sprites --check
+        run: JIDOUSHA_CHROMIUM="$(command -v google-chrome)" python tools/serve-web sprites --check
       - uses: actions/upload-artifact@v4
         with:
           name: web-dist
