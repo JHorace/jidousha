@@ -19,7 +19,8 @@ cargo fmt                   # format (also runs via hook)
 cargo run -p jidousha --example <name>   # run a canonical example
 tools/verify <example>      # headless deterministic run + assertions + a captured PNG
 tools/check-assets          # every asset path in the code names a file that exists
-tools/serve-web <example>   # build for web, serve it; --check drives a browser
+tools/build-web <example>   # web build → dist/<name>/ (the ONLY web build path)
+tools/serve-web [<example>] # serve dist/; --check drives a browser (+ ?panic=1)
 tools/gen-api-doc           # regenerate docs/api/ — 3 docs (CI fails if stale)
 tools/check-api-coverage    # every public item is shown in an example
 ```

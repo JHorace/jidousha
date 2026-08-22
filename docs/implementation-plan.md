@@ -131,7 +131,7 @@ Tick in the completing commit. (All unticked at handoff.)
 - [x] A0  - [x] I0  - [x] R0  - [x] M5  - [x] R1  - [x] A1  - [x] R2
 - [x] R3  - [x] I1  - [x] A2  - [x] I2  - [x] R4  - [x] A3  - [x] F0
 - [x] E0  - [x] make-game skill
-- [ ] W0  - [ ] W1  - [ ] W2  - [ ] W3
+- [x] W0  - [ ] W1  - [ ] W2  - [ ] W3
 
 E0 is ticked as **closed after eleven runs, not as passed** (ADR-0036). The
 condition §3 states was never met — the streak at closure is zero — and it is

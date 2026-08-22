@@ -101,6 +101,27 @@ pub fn asset_source(root: &str) -> impl jidousha_assets::ByteSource {
 /// (ADR-0005's callback-shaped lifecycle, which is why the API takes a closure
 /// rather than handing back a loop to run).
 pub fn run(config: GameConfig, setup: impl FnOnce(&mut App)) -> Result<(), RunError> {
+    // On the web, panics must reach the page, not just the (invisible) stderr —
+    // the playtest overlay is built on this hook (web-publish.md §2 CONTRACT).
+    // Installed before anything that can panic, and before the forced test
+    // panic below, which exists so the overlay itself is checkable: loading any
+    // game with `?panic=1` proves the §9 text arrives where a playtester looks.
+    #[cfg(target_arch = "wasm32")]
+    {
+        web::panic::install();
+        if web::panic::forced_panic_requested() {
+            panic!(
+                "{}",
+                jidousha_core::message(
+                    "forced test panic",
+                    "the page URL asked for it with ?panic=1",
+                    "someone is checking the panic overlay (web-publish.md §2)",
+                    "remove ?panic=1 from the URL to run the game normally",
+                )
+            );
+        }
+    }
+
     let simulation = jidousha_core::build(config, setup);
     let driver = Driver::new(config, simulation);
 

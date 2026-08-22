@@ -1,7 +1,7 @@
 # Web publish — design and contracts
 
-Status: **design draft, pre-implementation.** Becomes the living internal doc
-for the web build/publish tooling. **CONTRACT** items binding as elsewhere.
+Status: **living — W0 implemented; W1+ still design.** The internal doc for
+the web build/publish tooling. **CONTRACT** items binding as elsewhere.
 
 Inherits: web as tier-1 + single-threaded/no-COOP-COEP (ADR-0005), Cloudflare
 Workers static assets decision (ADR-0037), error taxonomy (core §9), recording
@@ -17,15 +17,19 @@ server anything, asset CDN tricks, threads (would reopen COOP/COEP).
 ## 1. The pipeline
 
 ```
-tools/build-web <example-or-game> [--release]
-  cargo build --target wasm32-unknown-unknown (release profile by default)
+tools/build-web <example-or-game> [--debug]
+  cargo build --target wasm32-unknown-unknown (release profile by default;
+  --debug for fast iteration — what ships is what gets tested)
   wasm-bindgen --target web --out-dir dist/<name>/
   wasm-opt -Os if available (optional; skipped with a log line if absent)
   stage: index.html (from tools/web-template/), assets/, build stamp
-tools/serve-web [<name>]
+tools/serve-web [<name>] [--check]
   local static server for dist/; MUST serve application/wasm correctly
   (implementation free; doctor verifies by fetching a .wasm and checking the
-  Content-Type)
+  Content-Type). --check drives a headless browser at /<name>/: once
+  asserting the page ran and drew, once at ?panic=1 asserting the panic
+  overlay rendered the full §9 text. Check artifacts go to target/web-check/,
+  never into dist/ — dist is what deploys.
 ```
 
 - CONTRACT: `tools/build-web` is the ONLY web build path — CI, local dev, and
@@ -47,6 +51,18 @@ One `index.html` template, self-contained (no external CDN dependencies):
   message as a styled in-page overlay with a copy button — NOT console-only.
   Remote playtesters don't open devtools; "screenshot the red box" is the bug
   report. This is the §9 error discipline extended to its last mile.
+  Mechanics: the hook (jidousha-platform `web/panic.rs`, installed by `run`
+  before anything that can panic) writes the message to `console.error`
+  behind a first-line marker (`[jidousha panic]`); the page renders whatever
+  follows the marker. Engine panics pass through verbatim (their payload is
+  already the full §9 text); arbitrary game panics are wrapped in the §9
+  shape. The `[jidousha] `-prefixed handled reports stay on the status line —
+  a missing asset is not a panic.
+- **Forced test panic**: loading any game with `?panic=1` panics at startup
+  with a §9-formatted test message (checked in the platform's `run`, web
+  only). It exists so the overlay contract is verifiable — manually on any
+  deployed build, and by `serve-web --check`'s second pass — and it ships in
+  real games because a bug-reporting path nobody can test is a path that rots.
 - Build stamp footer (§1).
 - Reserved hook (deferred, do not build yet): "download recording" button
   wired to the input recording buffer (input §5) once I2 lands — turns remote

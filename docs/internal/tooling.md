@@ -12,9 +12,10 @@ subsystems (`docs/internal/<subsystem>.md`) or the decisions behind the rules
 
 ## 1. What it does
 
-Nine scripts, each answering one question (plus `tools/serve-web`, which drives a
-browser — §3). All are Python 3.8+, standard library only — no third-party
-import, so they keep working when the package ecosystem is exactly what broke.
+Nine scripts, each answering one question (plus the web pipeline pair,
+`tools/build-web` and `tools/serve-web` — §3 and web-publish.md). All are
+Python 3.8+, standard library only — no third-party import, so they keep
+working when the package ecosystem is exactly what broke.
 
 | Script | Question | Exit codes |
 |---|---|---|
@@ -354,12 +355,20 @@ a row (stop rule printed, `failure-streak.json` count 2).
   When a run captures a frame, the report carries its path in `artifact` — lifted
   out of the summary prose so an agent looking for the picture does not have to
   parse English to find it, and `null` on a machine that captured nothing.
-- **`tools/serve-web <example>` is the web target's other half.** `cargo check
-  --target wasm32-unknown-unknown` has gated every merge since M0 and proves the
-  engine compiles for the web; this builds an example, runs `wasm-bindgen`,
-  writes `tools/web/index.html` with the example's name substituted in, and
-  serves it. `--check` drives a headless Chromium at the page, screenshots it,
-  decodes the PNG, and asserts the canvas was drawn on.
+- **`tools/build-web` + `tools/serve-web` are the web target's other half**
+  (W0; design and contracts in web-publish.md). `cargo check --target
+  wasm32-unknown-unknown` has gated every merge since M0 and proves the engine
+  compiles for the web; `build-web <example>` turns that into something a
+  browser loads — cargo (release by default), `wasm-bindgen`, `wasm-opt -Os`
+  when installed, then the playtest page from `tools/web-template/` staged into
+  `dist/<example>/` with the name and build stamp substituted. CONTRACT
+  (web-publish.md §1): it is the ONLY web build path — CI, local dev, and game
+  repos all call it. `serve-web [<example>]` serves `dist/` and nothing else,
+  so what works locally is what works deployed. `--check` drives a headless
+  Chromium at the page twice: once to assert the module started and the canvas
+  was drawn on (screenshot → PNG decode), once with `?panic=1` to assert the
+  panic overlay rendered the full §9 text (web-publish.md §2). Its working
+  files go to `target/web-check/`, never into `dist/` — dist is what deploys.
   Stdlib only, including the PNG decoder — forty lines of `zlib` and
   un-filtering, for the same reason the input codec is hand-written (ADR-0014).
 - **"Was the canvas drawn on" takes two questions, not one.** The original check
@@ -372,11 +381,11 @@ a row (stop rule printed, `failure-streak.json` count 2).
   page background, uniformly. Both directions are tested, including the one that
   matters most: a page that merely cleared to something near the background and
   drew nothing must still fail.
-- **`serve-web` stages the asset root next to the page.** A2's web loader
+- **`build-web` stages the asset root next to the page.** A2's web loader
   fetches `assets/...` *relative to the page*, so the served directory has to
   contain them — which is exactly what deploying a web build involves. Copying
-  them into `target/web/` rather than teaching the server to reach back into the
-  repository keeps the served tree honest about what a deployment needs.
+  them into `dist/<example>/` rather than teaching the server to reach back into
+  the repository keeps the served tree honest about what a deployment needs.
 - **A page can start and then fail, and the check now notices.** The page styles
   its status line `failed` for a real failure and leaves it alone for the
   engine's own §9 reports, which are handled problems — a missing asset draws a
@@ -386,9 +395,13 @@ a row (stop rule printed, `failure-streak.json` count 2).
   load-bearing for something other than reading.
 - **The `wasm-bindgen` CLI must match the `wasm-bindgen` crate exactly.** They
   generate two halves of one interface, and a skew produces glue that fails at
-  run time with a message about nothing in particular. `serve-web` reads the
+  run time with a message about nothing in particular. `build-web` reads the
   version from Cargo.lock, compares it to the installed CLI, and prints the
-  exact `cargo install` line when they differ. This is the single most likely
+  exact `cargo install` line when they differ — and `tools/doctor` runs the
+  same comparison as an `ENV_FIXABLE` check, plus a MIME self-check against
+  serve-web's real handler and a wasm-opt presence line (info only), by loading
+  the tools as modules rather than re-implementing them (web-publish.md §5).
+  This is the single most likely
   thing to go wrong for someone running the web target for the first time.
 - **Two browser-flag traps, both found the hard way.** `--use-gl=swiftshader`
   is wrong for current Chromium — it reports "Requested GL implementation not
@@ -461,7 +474,7 @@ a row (stop rule printed, `failure-streak.json` count 2).
   the E0 checklist asks a maintainer to remember was missed twice.
 
   **It installs `wasm-bindgen` too, since run 9's triage** (e0-findings.md
-  F-124). `tools/serve-web --check` needs the CLI at exactly the version
+  F-124). `tools/build-web` needs the CLI at exactly the version
   `Cargo.lock` pins and refuses rather than guessing; everything else it wants —
   the wasm32 target, a Chromium under `/opt/pw-browsers` — was already in the
   image, so eight runs of "no session has driven its game in a browser" was one

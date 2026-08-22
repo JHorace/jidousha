@@ -1,0 +1,320 @@
+#!/usr/bin/env python3
+"""Build one Jidousha example for the web, into dist/<name>/.
+
+CONTRACT (web-publish.md §1): this is the ONLY web build path — CI, local dev,
+and game repos all run this same script. `tools/serve-web` serves what this
+builds; the deploy workflow (W1) uploads it verbatim.
+
+    tools/build-web sprites             # release build into dist/sprites/
+    tools/build-web sprites --debug     # unoptimized, for fast iteration
+
+The pipeline: cargo build for wasm32 (release by default — what ships is what
+gets tested), wasm-bindgen to generate the JS glue, wasm-opt -Os if installed
+(optional; skipped with a log line), then stage the playtest page from
+tools/web-template/ with the example name and build stamp substituted, and the
+asset root copied in beside it.
+
+Stdlib only, like every other tool here (tooling.md). The one external tool it
+needs that cargo cannot provide is the `wasm-bindgen` CLI, whose version must
+match the `wasm-bindgen` crate in Cargo.lock exactly — a mismatch produces glue
+that fails at run time with a message about nothing in particular. This checks
+for that before it can happen and says how to fix it.
+
+The build stamp (short git sha + date) is allowed to read git and the wall
+clock: the wall-clock ban covers engine and simulation code, not build scripts
+(web-publish.md §1).
+"""
+
+import argparse
+import json
+import re
+import shutil
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+TEMPLATE = REPO_ROOT / "tools" / "web-template" / "index.html"
+DIST = REPO_ROOT / "dist"
+TARGET = "wasm32-unknown-unknown"
+
+# Advisory, not a gate: the wasm size is logged on every build and warned about
+# past this, so drift is visible long before it is a problem (web-publish.md §1).
+WASM_WARN_BYTES = 5 * 1024 * 1024
+
+
+def fail(what: str, specifics: str, cause: str, fix: str) -> int:
+    """Report in the engine's message format (core.md §9)."""
+    print(f"[jidousha] {what}\n  {specifics}\n  likely cause: {cause}\n  fix: {fix}")
+    return 1
+
+
+def locked_wasm_bindgen_version() -> "str | None":
+    """The `wasm-bindgen` version Cargo.lock pins, which the CLI must match."""
+    lock = REPO_ROOT / "Cargo.lock"
+    if not lock.exists():
+        return None
+    text = lock.read_text(encoding="utf-8")
+    match = re.search(
+        r'^\[\[package\]\]\nname = "wasm-bindgen"\nversion = "([^"]+)"',
+        text,
+        re.MULTILINE,
+    )
+    return match.group(1) if match else None
+
+
+def installed_wasm_bindgen_version() -> "str | None":
+    """The CLI's version, or `None` if it is not on PATH."""
+    binary = shutil.which("wasm-bindgen")
+    if binary is None:
+        return None
+    proc = subprocess.run(
+        [binary, "--version"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+    )
+    match = re.search(r"(\d+\.\d+\.\d+)", proc.stdout)
+    return match.group(1) if match else None
+
+
+def check_toolchain(wanted: "str | None") -> int:
+    """Verify the `wasm-bindgen` CLI is present and matches the lockfile."""
+    if wanted is None:
+        return fail(
+            "cannot tell which wasm-bindgen version this workspace needs",
+            "Cargo.lock has no wasm-bindgen entry",
+            "the workspace does not depend on wasm-bindgen yet, or Cargo.lock is missing",
+            "run `cargo check --target wasm32-unknown-unknown` once to populate the lockfile",
+        )
+    found = installed_wasm_bindgen_version()
+    if found is None:
+        return fail(
+            "the wasm-bindgen CLI is not installed",
+            f"this workspace needs exactly {wanted}",
+            "it is a separate tool from the crate, and cargo does not install it for you",
+            f"cargo install wasm-bindgen-cli --version {wanted} --locked",
+        )
+    if found != wanted:
+        return fail(
+            f"the wasm-bindgen CLI is {found}, but this workspace needs {wanted}",
+            "the CLI and the crate generate two halves of one interface",
+            "a version skew, usually from a global install made for another project",
+            f"cargo install wasm-bindgen-cli --version {wanted} --locked",
+        )
+    return 0
+
+
+def run(command: "list[str]", what: str) -> int:
+    """Run a build step, echoing it first."""
+    print(f"[build-web] {' '.join(command)}")
+    proc = subprocess.run(command, cwd=REPO_ROOT)
+    if proc.returncode != 0:
+        return fail(
+            f"{what} failed",
+            f"`{' '.join(command)}` exited {proc.returncode}",
+            "the error above says which; this tool only orchestrates",
+            "fix the reported error and run this again",
+        )
+    return 0
+
+
+def find_example(name: str) -> "tuple[str, str] | None":
+    """The package owning `name`, and the name itself."""
+    proc = subprocess.run(
+        ["cargo", "metadata", "--format-version", "1", "--no-deps"],
+        cwd=REPO_ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if proc.returncode != 0:
+        return None
+    metadata = json.loads(proc.stdout)
+    members = set(metadata.get("workspace_members", []))
+    for package in metadata.get("packages", []):
+        if package["id"] not in members:
+            continue
+        for target in package.get("targets", []):
+            if "example" in target.get("kind", []) and target["name"] == name:
+                return (package["name"], name)
+    return None
+
+
+def build_stamp() -> str:
+    """Short git sha (+ `-dirty` when the tree is) and the UTC build date.
+
+    A playtester's bug report always identifies its build (web-publish.md §1).
+    `unknown` rather than a crash when git is absent: a game repo built from a
+    tarball still deserves a page.
+    """
+    date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    try:
+        sha = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=REPO_ROOT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).stdout.strip()
+        porcelain = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=REPO_ROOT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).stdout.strip()
+    except OSError:
+        sha, porcelain = "", ""
+    if not sha:
+        return f"unknown · {date}"
+    return f"{sha}{'-dirty' if porcelain else ''} · {date}"
+
+
+def stage_page(out_dir: Path, example: str, stamp: str, template: Path = TEMPLATE) -> None:
+    """Write the playtest page with its placeholders substituted.
+
+    Substitution beats keeping a copy of the page per example in the repo; the
+    template is the one source (web-publish.md §2).
+    """
+    page = template.read_text(encoding="utf-8")
+    page = page.replace("__EXAMPLE__", example).replace("__BUILD_STAMP__", stamp)
+    (out_dir / "index.html").write_text(page, encoding="utf-8")
+
+
+def stage_assets(out_dir: Path) -> None:
+    """Copy the asset root next to the page, the way a deploy does.
+
+    The web loader (A2) fetches `assets/...` *relative to the page*, so the
+    directory that serves the page has to contain them — which is exactly what
+    a deployment is. Copying rather than symlinking keeps dist/ honest: what is
+    in it is what ships.
+    """
+    source = REPO_ROOT / "assets"
+    if not source.is_dir():
+        # A repository with no asset root is fine; examples that load nothing
+        # still run.
+        return
+    destination = out_dir / "assets"
+    if destination.exists():
+        shutil.rmtree(destination)
+    shutil.copytree(source, destination)
+    count = sum(1 for path in destination.rglob("*") if path.is_file())
+    print(f"[build-web] staged {count} asset file(s)")
+
+
+def optimize(wasm: Path) -> None:
+    """Shrink the module with wasm-opt when it is installed.
+
+    Optional by design (web-publish.md §1): absence is a log line, never a
+    failure — the unoptimized module is correct, just larger.
+    """
+    binary = shutil.which("wasm-opt")
+    if binary is None:
+        print("[build-web] wasm-opt not found — skipping optimization (optional; binaryen provides it)")
+        return
+    optimized = wasm.with_suffix(".wasm.opt")
+    proc = subprocess.run([binary, "-Os", str(wasm), "-o", str(optimized)])
+    if proc.returncode != 0:
+        # Correct-but-larger beats broken: report and ship the unoptimized one.
+        print(f"[build-web] wasm-opt exited {proc.returncode} — shipping the unoptimized module")
+        if optimized.exists():
+            optimized.unlink()
+        return
+    before, after = wasm.stat().st_size, optimized.stat().st_size
+    optimized.replace(wasm)
+    print(f"[build-web] wasm-opt -Os: {before / 1e6:.2f} MB → {after / 1e6:.2f} MB")
+
+
+def report_size(wasm: Path) -> None:
+    """Log the shipped module size; warn past the drift line (never fail)."""
+    size = wasm.stat().st_size
+    print(f"[build-web] {wasm.relative_to(REPO_ROOT)} is {size / 1e6:.2f} MB")
+    if size > WASM_WARN_BYTES:
+        print(
+            f"[build-web] WARNING: over {WASM_WARN_BYTES // (1024 * 1024)} MB — "
+            "not a failure, but worth knowing what grew (web-publish.md §1)"
+        )
+
+
+def build(package: str, example: str, debug: bool) -> int:
+    """Compile, bind, optimize, and stage one example under dist/<name>/."""
+    profile = "debug" if debug else "release"
+    command = ["cargo", "build", "--target", TARGET, "-p", package, "--example", example]
+    if not debug:
+        command.append("--release")
+    step = run(command, "the wasm build")
+    if step != 0:
+        return step
+
+    wasm = REPO_ROOT / "target" / TARGET / profile / "examples" / f"{example}.wasm"
+    if not wasm.exists():
+        return fail(
+            "the wasm build produced no module",
+            f"expected {wasm.relative_to(REPO_ROOT)}",
+            "the example built for a different profile, or cargo changed its output layout",
+            "check the build output above for where the artifact went",
+        )
+
+    out_dir = DIST / example
+    out_dir.mkdir(parents=True, exist_ok=True)
+    step = run(
+        [
+            "wasm-bindgen",
+            "--target",
+            "web",
+            "--no-typescript",
+            "--out-dir",
+            str(out_dir),
+            "--out-name",
+            example,
+            str(wasm),
+        ],
+        "wasm-bindgen",
+    )
+    if step != 0:
+        return step
+
+    module = out_dir / f"{example}_bg.wasm"
+    optimize(module)
+    report_size(module)
+
+    if not TEMPLATE.exists():
+        return fail(
+            "the playtest page template is missing",
+            f"expected {TEMPLATE.relative_to(REPO_ROOT)}",
+            "the checkout is incomplete, or the template was moved without updating this tool",
+            "restore tools/web-template/index.html",
+        )
+    stage_page(out_dir, example, build_stamp())
+    stage_assets(out_dir)
+    print(f"[build-web] built {out_dir.relative_to(REPO_ROOT)}/ — serve it with `tools/serve-web {example}`")
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("example", help="the example to build, e.g. sprites")
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="build the debug profile (default is release: what ships is what gets tested)",
+    )
+    args = parser.parse_args()
+
+    step = check_toolchain(locked_wasm_bindgen_version())
+    if step != 0:
+        return step
+
+    found = find_example(args.example)
+    if found is None:
+        return fail(
+            f"no example named {args.example!r}",
+            "the workspace defines no example target with that name",
+            "a typo, or the example lives outside this workspace",
+            "run `cargo metadata` or look under crates/*/examples/ for the list",
+        )
+    package, example = found
+    return build(package, example, args.debug)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

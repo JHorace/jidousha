@@ -38,6 +38,7 @@ pub(crate) fn asset_url(root: &str, path: &str) -> String {
 
 #[cfg(target_arch = "wasm32")]
 mod fetch;
+pub(crate) mod panic;
 
 #[cfg(target_arch = "wasm32")]
 pub use fetch::WebSource;
