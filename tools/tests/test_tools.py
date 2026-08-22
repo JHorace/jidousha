@@ -38,6 +38,7 @@ def load_tool(script_name):
 doctor = load_tool("doctor")
 test_wrapper = load_tool("test")
 serve_web = load_tool("serve-web")
+build_web = load_tool("build-web")
 check_claude_md = load_tool("check-claude-md")
 dep_count = load_tool("dep-count")
 verify = load_tool("verify")
@@ -2352,9 +2353,183 @@ class ServeWebTest(unittest.TestCase):
         drawn, detail = serve_web.canvas_is_drawn(png_bytes(8, 8, rows))
         self.assertFalse(drawn, detail)
 
+    def test_a_dom_that_marked_itself_panicked_reads_as_panicked(self):
+        # The forced-panic pass keys off the page's own marker; regressing this
+        # would turn the overlay check into a check of nothing.
+        dom = '<body data-jidousha="panicked"><div id="status" class="failed">x</div></body>'
+        state, _message, _failed = serve_web.page_state(dom)
+        self.assertEqual(state, "panicked")
+
+    def test_a_dom_with_no_marker_reads_as_unknown(self):
+        state, message, failed = serve_web.page_state("<body></body>")
+        self.assertEqual(state, "unknown")
+        self.assertEqual(message, "")
+        self.assertFalse(failed)
+
+    def test_a_running_page_with_a_failed_status_line_is_told_apart(self):
+        # "Started and then failed" used to pass silently; the check needs both
+        # facts separately to refuse it.
+        dom = (
+            '<body data-jidousha="running">'
+            '<div id="status" class="failed">something threw</div></body>'
+        )
+        state, message, failed = serve_web.page_state(dom)
+        self.assertEqual(state, "running")
+        self.assertEqual(message, "something threw")
+        self.assertTrue(failed)
+
+    def test_the_handler_serves_wasm_with_its_own_mime_type(self):
+        # The whole reason serve-web exists rather than `python -m http.server`:
+        # a wrong Content-Type degrades instantiateStreaming on every load.
+        handler = serve_web.handler_for(Path("."))
+        self.assertEqual(handler.guess_type(None, "module_bg.wasm"), "application/wasm")
+
+
+class BuildWebTest(unittest.TestCase):
+    """The build half: the version gate, the stamp, and the page staging."""
+
     def test_the_wasm_bindgen_version_is_read_from_the_lockfile(self):
         # The CLI and the crate generate two halves of one interface, so this
         # is what stops a skew from becoming a runtime mystery.
-        version = serve_web.locked_wasm_bindgen_version()
+        version = build_web.locked_wasm_bindgen_version()
         self.assertIsNotNone(version, "Cargo.lock should pin wasm-bindgen")
         self.assertRegex(version, r"^\d+\.\d+\.\d+$")
+
+    def test_the_build_stamp_names_a_sha_and_a_date(self):
+        # A playtester's bug report always identifies its build
+        # (web-publish.md §1).
+        stamp = build_web.build_stamp()
+        self.assertRegex(stamp, r"^([0-9a-f]+(-dirty)?|unknown) · \d{4}-\d{2}-\d{2}$")
+
+    def test_staging_the_page_substitutes_every_placeholder(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            out = Path(scratch)
+            build_web.stage_page(out, "pong", "abc1234 · 2026-08-22")
+            page = (out / "index.html").read_text(encoding="utf-8")
+        self.assertNotIn("__EXAMPLE__", page)
+        self.assertNotIn("__BUILD_STAMP__", page)
+        self.assertIn("pong", page)
+        self.assertIn("abc1234 · 2026-08-22", page)
+
+    def test_the_root_index_leads_with_the_headline_example(self):
+        # prototype_kit is the headline (web-publish.md §3); the rest stay
+        # alphabetical so the list is stable across builds.
+        items = build_web.root_index_items(["sprites", "prototype_kit", "homing"])
+        first = items.splitlines()[0]
+        self.assertIn("prototype_kit", first)
+        self.assertIn('class="headline"', first)
+        self.assertLess(items.index("homing"), items.index('"sprites/"'))
+
+    def test_staging_the_root_index_writes_the_page_and_the_stamp_file(self):
+        # stamp.txt is what the deploy workflow reads for its PR comment —
+        # the same stamp the pages carry, not a re-derivation.
+        with tempfile.TemporaryDirectory() as scratch:
+            previous = build_web.DIST
+            build_web.DIST = Path(scratch)
+            try:
+                step = build_web.stage_root_index(
+                    ["pong", "prototype_kit"], "abc1234 · 2026-08-22"
+                )
+                page = (Path(scratch) / "index.html").read_text(encoding="utf-8")
+                stamp = (Path(scratch) / "stamp.txt").read_text(encoding="utf-8")
+            finally:
+                build_web.DIST = previous
+        self.assertEqual(step, 0)
+        self.assertNotIn("__ITEMS__", page)
+        self.assertNotIn("__BUILD_STAMP__", page)
+        self.assertIn('href="pong/"', page)
+        self.assertEqual(stamp, "abc1234 · 2026-08-22\n")
+
+    def test_every_native_only_exclusion_names_a_real_example(self):
+        # The list must rot loudly: an entry for a renamed or deleted example
+        # would silently exclude nothing while claiming to exclude something.
+        targets = build_web.example_targets()
+        self.assertIsNotNone(targets)
+        names = {example for _package, example in targets}
+        for name in build_web.NATIVE_ONLY_EXAMPLES:
+            self.assertIn(name, names)
+
+    def test_the_template_carries_the_overlay_the_panic_hook_writes_to(self):
+        # Template and hook are two halves of one contract (web-publish.md §2):
+        # the page must recognize the marker and own the overlay elements the
+        # check greps for. The marker string is asserted verbatim because the
+        # Rust side (web/panic.rs PANIC_MARKER) must emit exactly this.
+        template = build_web.TEMPLATE.read_text(encoding="utf-8")
+        self.assertIn('"[jidousha panic]\\n"', template)
+        self.assertIn('id="panic-text"', template)
+        self.assertIn('id="panic-copy"', template)
+        self.assertIn('dataset.jidousha = "panicked"', template)
+
+
+class DoctorWebChecksTest(unittest.TestCase):
+    """Doctor's web-toolchain probes (web-publish.md §5)."""
+
+    def test_the_mime_self_check_passes_against_the_real_handler(self):
+        # Verified by doing it: doctor stands up serve-web's handler and
+        # fetches a probe .wasm. This is the enforcing gate for the MIME
+        # contract; doctor's run of it is the on-machine proof.
+        check = doctor.check_serve_web_mime()
+        self.assertEqual(check.status, doctor.OK, check.detail)
+
+    def test_a_wasm_bindgen_fix_command_pins_the_locked_version(self):
+        # ENV_FIXABLE means "run exactly this" — an unpinned install would
+        # resolve to the newest CLI and recreate the skew it fixes.
+        wanted = build_web.locked_wasm_bindgen_version()
+        check = doctor.check_wasm_bindgen()
+        if check.status == doctor.FIXABLE:
+            self.assertIn(f"--version {wanted} --locked", check.fix)
+        else:
+            self.assertIn(check.status, (doctor.OK, doctor.INFO, doctor.BROKEN))
+
+    def test_a_missing_wasm_bindgen_cli_is_information_not_a_fault(self):
+        # A machine that never builds for the web is healthy without the CLI —
+        # the CI doctor job runs on one, and a healthy runner must produce
+        # ENV_OK (practices §6.1). build-web gates the actual build with the
+        # same install command, so absence cannot break anything silently.
+        previous = doctor.run
+        doctor.run = lambda cmd, timeout_s=doctor.COMMAND_TIMEOUT_S: (127, "not found")
+        try:
+            check = doctor.check_wasm_bindgen()
+        finally:
+            doctor.run = previous
+        self.assertEqual(check.status, doctor.INFO)
+        self.assertIn("cargo install wasm-bindgen-cli", check.detail)
+
+    def test_a_mismatched_wasm_bindgen_cli_is_fixable_with_the_pinned_command(self):
+        # Present-but-wrong is the classic silent runtime breakage
+        # (web-publish.md §5) — that one is an environment defect to fix.
+        previous = doctor.run
+        doctor.run = lambda cmd, timeout_s=doctor.COMMAND_TIMEOUT_S: (0, "wasm-bindgen 0.0.1")
+        try:
+            check = doctor.check_wasm_bindgen()
+        finally:
+            doctor.run = previous
+        wanted = build_web.locked_wasm_bindgen_version()
+        self.assertEqual(check.status, doctor.FIXABLE)
+        self.assertEqual(
+            check.fix, f"cargo install wasm-bindgen-cli --version {wanted} --locked"
+        )
+
+    def test_wasm_opt_absence_is_information_not_failure(self):
+        # Optional by design: the unoptimized module is correct, just larger.
+        check = doctor.check_wasm_opt()
+        self.assertEqual(check.status, doctor.INFO)
+
+    def test_an_old_wasm_opt_is_reported_as_one_build_web_will_refuse(self):
+        # binaryen 108 (Ubuntu 24.04's package) clamps the externref table and
+        # every optimized module dies at startup in every browser — found by
+        # playtesting PR #59's preview. "Installed but ignored" must not be a
+        # mystery, so doctor names the refusal.
+        previous = doctor.run
+        doctor.run = lambda cmd, timeout_s=doctor.COMMAND_TIMEOUT_S: (0, "wasm-opt version 108")
+        try:
+            check = doctor.check_wasm_opt()
+        finally:
+            doctor.run = previous
+        self.assertEqual(check.status, doctor.INFO)
+        self.assertIn("skip optimization", check.detail)
+
+    def test_the_wasm_opt_minimum_is_the_verified_good_version(self):
+        # The pin moves only with a browser check in hand (build-web's
+        # constant): 108 verified broken, 124 verified good on PR #59.
+        self.assertGreaterEqual(build_web.MIN_WASM_OPT_VERSION, 124)

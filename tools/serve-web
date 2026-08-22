@@ -1,40 +1,44 @@
 #!/usr/bin/env python3
-"""Build a Jidousha example for the web and serve it.
+"""Serve a web build from dist/, the way a deploy would.
 
-The third target's missing half. `cargo check --target wasm32-unknown-unknown`
-proves the engine compiles for the web and CI has gated it since M0; this turns
-that into something a browser can load, which is what "works on the web" has to
-mean before any milestone claims it.
+The local half of the publish pipeline (web-publish.md §1): `tools/build-web`
+writes dist/<name>/, this serves dist/ — a static server and nothing else, so
+what works here is what works deployed. It MUST serve `.wasm` as
+`application/wasm` (doctor verifies that by fetching one).
 
-    tools/serve-web window_clear            # build and serve on :8080
-    tools/serve-web window_clear --check    # build, serve, drive a headless
-                                            # browser at it, report, exit
+    tools/serve-web sprites             # serve dist/, open at /sprites/
+    tools/serve-web                     # serve dist/ as a whole
+    tools/serve-web sprites --check     # drive a headless browser at the page,
+                                        # then at the forced panic (?panic=1),
+                                        # report, exit
 
-Stdlib only, like every other tool here (tooling.md). The one thing it needs
-that pip and cargo cannot provide on demand is the `wasm-bindgen` CLI, whose
-version must match the `wasm-bindgen` crate in Cargo.lock exactly — a mismatch
-produces glue that fails at run time with a message about nothing in
-particular. This checks for that before it can happen and says how to fix it.
+`--check` is what makes the web target *checkable* rather than merely
+compilable: it loads the page in a real Chromium, asserts the module started
+and drew, then loads it again with `?panic=1` and asserts the panic overlay
+rendered the full §9 message (web-publish.md §2, §6 W0 exit criteria).
+
+Stdlib only, like every other tool here (tooling.md).
 """
 
 import argparse
 import http.server
 import os
-import struct
-import zlib
 import re
 import shutil
 import socketserver
+import struct
 import subprocess
 import sys
 import threading
 import time
+import zlib
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-PAGE = REPO_ROOT / "tools" / "web" / "index.html"
-OUT_DIR = REPO_ROOT / "target" / "web"
-TARGET = "wasm32-unknown-unknown"
+DIST = REPO_ROOT / "dist"
+# The check's working files (browser profile, log, screenshots) live outside
+# dist/ — dist/ is what deploys, and a deploy must not carry a browser log.
+CHECK_DIR = REPO_ROOT / "target" / "web-check"
 
 # How much *page* time the headless check lets run before dumping the DOM.
 # Small on purpose: the engine draws every frame, so virtual time is spent at
@@ -52,202 +56,43 @@ def fail(what: str, specifics: str, cause: str, fix: str) -> int:
     return 1
 
 
-def locked_wasm_bindgen_version() -> "str | None":
-    """The `wasm-bindgen` version Cargo.lock pins, which the CLI must match."""
-    lock = REPO_ROOT / "Cargo.lock"
-    if not lock.exists():
-        return None
-    text = lock.read_text(encoding="utf-8")
-    match = re.search(
-        r'^\[\[package\]\]\nname = "wasm-bindgen"\nversion = "([^"]+)"',
-        text,
-        re.MULTILINE,
-    )
-    return match.group(1) if match else None
+def handler_for(directory: Path):
+    """A request handler class serving `directory` with correct wasm MIME.
 
-
-def installed_wasm_bindgen_version() -> "str | None":
-    """The CLI's version, or `None` if it is not on PATH."""
-    binary = shutil.which("wasm-bindgen")
-    if binary is None:
-        return None
-    proc = subprocess.run(
-        [binary, "--version"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
-    )
-    match = re.search(r"(\d+\.\d+\.\d+)", proc.stdout)
-    return match.group(1) if match else None
-
-
-def check_toolchain(wanted: "str | None") -> int:
-    """Verify the `wasm-bindgen` CLI is present and matches the lockfile."""
-    if wanted is None:
-        return fail(
-            "cannot tell which wasm-bindgen version this workspace needs",
-            "Cargo.lock has no wasm-bindgen entry",
-            "the workspace does not depend on wasm-bindgen yet, or Cargo.lock is missing",
-            "run `cargo check --target wasm32-unknown-unknown` once to populate the lockfile",
-        )
-    found = installed_wasm_bindgen_version()
-    if found is None:
-        return fail(
-            "the wasm-bindgen CLI is not installed",
-            f"this workspace needs exactly {wanted}",
-            "it is a separate tool from the crate, and cargo does not install it for you",
-            f"cargo install wasm-bindgen-cli --version {wanted} --locked",
-        )
-    if found != wanted:
-        return fail(
-            f"the wasm-bindgen CLI is {found}, but this workspace needs {wanted}",
-            "the CLI and the crate generate two halves of one interface",
-            "a version skew, usually from a global install made for another project",
-            f"cargo install wasm-bindgen-cli --version {wanted} --locked",
-        )
-    return 0
-
-
-def run(command: "list[str]", what: str) -> int:
-    """Run a build step, echoing it first."""
-    print(f"[serve-web] {' '.join(command)}")
-    proc = subprocess.run(command, cwd=REPO_ROOT)
-    if proc.returncode != 0:
-        return fail(
-            f"{what} failed",
-            f"`{' '.join(command)}` exited {proc.returncode}",
-            "the error above says which; this tool only orchestrates",
-            "fix the reported error and run this again",
-        )
-    return 0
-
-
-def find_example(name: str) -> "tuple[str, str] | None":
-    """The package owning `name`, and the name itself."""
-    proc = subprocess.run(
-        ["cargo", "metadata", "--format-version", "1", "--no-deps"],
-        cwd=REPO_ROOT,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    if proc.returncode != 0:
-        return None
-    import json
-
-    metadata = json.loads(proc.stdout)
-    members = set(metadata.get("workspace_members", []))
-    for package in metadata.get("packages", []):
-        if package["id"] not in members:
-            continue
-        for target in package.get("targets", []):
-            if "example" in target.get("kind", []) and target["name"] == name:
-                return (package["name"], name)
-    return None
-
-
-def build(package: str, example: str) -> int:
-    """Compile the example to wasm and generate its JS glue."""
-    step = run(
-        [
-            "cargo",
-            "build",
-            "--target",
-            TARGET,
-            "-p",
-            package,
-            "--example",
-            example,
-        ],
-        "the wasm build",
-    )
-    if step != 0:
-        return step
-
-    wasm = REPO_ROOT / "target" / TARGET / "debug" / "examples" / f"{example}.wasm"
-    if not wasm.exists():
-        return fail(
-            "the wasm build produced no module",
-            f"expected {wasm.relative_to(REPO_ROOT)}",
-            "the example built for a different profile, or cargo changed its output layout",
-            "check the build output above for where the artifact went",
-        )
-
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    step = run(
-        [
-            "wasm-bindgen",
-            "--target",
-            "web",
-            "--no-typescript",
-            "--out-dir",
-            str(OUT_DIR),
-            "--out-name",
-            example,
-            str(wasm),
-        ],
-        "wasm-bindgen",
-    )
-    if step != 0:
-        return step
-
-    # The page names the example in three places; substituting beats keeping a
-    # copy per example in the repository.
-    page = PAGE.read_text(encoding="utf-8").replace("__EXAMPLE__", example)
-    (OUT_DIR / "index.html").write_text(page, encoding="utf-8")
-    print(f"[serve-web] wrote {(OUT_DIR / 'index.html').relative_to(REPO_ROOT)}")
-    return stage_assets()
-
-
-def stage_assets() -> int:
-    """Copy the asset root next to the page, the way a deploy would.
-
-    The web loader (A2) fetches `assets/...` *relative to the page*, so a game
-    served from a subdirectory works without knowing where it lives. That means
-    the served directory has to contain the assets, which is exactly what
-    shipping a web build involves — copying them here rather than teaching the
-    server to reach back into the repository keeps the served tree honest about
-    what a deployment needs.
+    A factory rather than a module-level class so doctor's MIME self-check can
+    stand one up over a scratch directory (web-publish.md §5).
     """
-    source = REPO_ROOT / "assets"
-    if not source.is_dir():
-        # A repository with no asset root is fine; examples that load nothing
-        # still run.
-        return 0
-    destination = OUT_DIR / "assets"
-    if destination.exists():
-        shutil.rmtree(destination)
-    shutil.copytree(source, destination)
-    count = sum(1 for path in destination.rglob("*") if path.is_file())
-    print(f"[serve-web] staged {count} asset file(s) into target/web/assets")
-    return 0
+
+    class Handler(http.server.SimpleHTTPRequestHandler):
+        """A static server that says as little as possible."""
+
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, directory=str(directory), **kwargs)
+
+        def log_message(self, format, *args):  # noqa: A002 - stdlib signature
+            # One line per request would bury the output; failures still show
+            # through the browser and through --check.
+            pass
+
+        def guess_type(self, path):
+            """Serve wasm as `application/wasm`.
+
+            Overriding the guess rather than adding a header in `end_headers`:
+            the base class has already sent a Content-Type by then, and a second
+            one is ignored. The symptom is a browser warning about falling back
+            from `instantiateStreaming` — mild, and a lie about what is wrong.
+            """
+            if str(path).endswith(".wasm"):
+                return "application/wasm"
+            return super().guess_type(path)
+
+    return Handler
 
 
-class Handler(http.server.SimpleHTTPRequestHandler):
-    """A static server that says as little as possible."""
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=str(OUT_DIR), **kwargs)
-
-    def log_message(self, format, *args):  # noqa: A002 - stdlib signature
-        # One line per request would bury the build output; failures still show
-        # through the browser and through --check.
-        pass
-
-    def guess_type(self, path):
-        """Serve wasm as `application/wasm`.
-
-        Overriding the guess rather than adding a header in `end_headers`:
-        the base class has already sent a Content-Type by then, and a second
-        one is ignored. The symptom is a browser warning about falling back
-        from `instantiateStreaming` — mild, and a lie about what is wrong.
-        """
-        if str(path).endswith(".wasm"):
-            return "application/wasm"
-        return super().guess_type(path)
-
-
-def serve(port: int) -> socketserver.TCPServer:
+def serve(port: int, directory: Path) -> socketserver.TCPServer:
     """Start the static server on a background thread."""
     socketserver.TCPServer.allow_reuse_address = True
-    server = socketserver.TCPServer(("127.0.0.1", port), Handler)
+    server = socketserver.TCPServer(("127.0.0.1", port), handler_for(directory))
     threading.Thread(target=server.serve_forever, daemon=True).start()
     return server
 
@@ -342,7 +187,7 @@ def canvas_is_drawn(png: bytes) -> "tuple[bool, str]":
     if decoded is None:
         return (False, "the screenshot could not be decoded")
     width, height, pixels = decoded
-    # The page background, from tools/web/index.html.
+    # The page background, from tools/web-template/index.html.
     background = (0x10, 0x10, 0x14)
     matched = 0
     total = 0
@@ -389,28 +234,12 @@ def chromium() -> "str | None":
     return None
 
 
-def check(port: int, example: str) -> int:
-    """Load the page in a headless browser and report what it said.
-
-    This is what makes the web target *checkable* rather than merely
-    compilable. It is not a golden-image test — it answers "did the module
-    load, start, and reach the engine" — and a machine with no GPU will still
-    fail to get an adapter, which the report says plainly rather than hiding.
-    """
-    browser = chromium()
-    if browser is None:
-        return fail(
-            "no headless browser to check with",
-            "looked for chromium on PATH and under /opt/pw-browsers",
-            "this machine has no browser installed",
-            "install Chromium, or set JIDOUSHA_CHROMIUM to one, or drop --check and look "
-            "at the page yourself",
-        )
-
-    profile = OUT_DIR / "browser-profile"
-    log = OUT_DIR / "browser.log"
-    shot = OUT_DIR / "check.png"
-    print(f"[serve-web] checking with {browser}")
+def load_page(browser: str, url: str, tag: str) -> "tuple[str, Path, Path] | int":
+    """Drive the headless browser at `url`; (dom, screenshot, log) or exit code."""
+    CHECK_DIR.mkdir(parents=True, exist_ok=True)
+    profile = CHECK_DIR / f"profile-{tag}"
+    log = CHECK_DIR / f"browser-{tag}.log"
+    shot = CHECK_DIR / f"check-{tag}.png"
     command = [
         browser,
         "--headless=new",
@@ -430,7 +259,7 @@ def check(port: int, example: str) -> int:
         "--window-size=640,480",
         f"--screenshot={shot}",
         "--dump-dom",
-        f"http://127.0.0.1:{port}/index.html",
+        url,
     ]
     started = time.monotonic()
     try:
@@ -450,16 +279,16 @@ def check(port: int, example: str) -> int:
         )
     elapsed = time.monotonic() - started
     log.write_text(proc.stderr, encoding="utf-8")
-    dom = proc.stdout
-
     print(f"[serve-web] browser finished in {elapsed:.1f}s; log: {log.relative_to(REPO_ROOT)}")
+    return (proc.stdout, shot, log)
 
-    # The page records what happened in a data attribute and a status line.
+
+def page_state(dom: str) -> "tuple[str, str, bool]":
+    """The page's own account of itself: (state, status text, status failed)."""
     state = "unknown"
-    if 'data-jidousha="running"' in dom:
-        state = "running"
-    elif 'data-jidousha="failed"' in dom:
-        state = "failed"
+    for candidate in ("running", "failed", "panicked"):
+        if f'data-jidousha="{candidate}"' in dom:
+            state = candidate
     status = re.search(r'<div id="status"([^>]*)>(.*?)</div>', dom, re.S)
     message = (status.group(2).strip() if status else "").replace("\n", " ")
     # The page styles its status line `failed` for a real failure and leaves it
@@ -467,7 +296,16 @@ def check(port: int, example: str) -> int:
     # missing asset draws a placeholder and the game carries on. A page that
     # started and *then* said it failed used to pass this check silently.
     page_failed = "failed" in (status.group(1) if status else "")
+    return (state, message, page_failed)
 
+
+def check_runs(browser: str, port: int, example: str) -> int:
+    """The page loads, the module starts, and the engine draws."""
+    loaded = load_page(browser, f"http://127.0.0.1:{port}/{example}/index.html", "run")
+    if isinstance(loaded, int):
+        return loaded
+    dom, shot, log = loaded
+    state, message, page_failed = page_state(dom)
     print(f"[serve-web] page state: {state}")
     if message:
         print(f"[serve-web] page said: {message}")
@@ -481,72 +319,140 @@ def check(port: int, example: str) -> int:
             f"read {log.relative_to(REPO_ROOT)} and the message above",
         )
 
-    if state == "running":
-        # Starting is not drawing. Checking the pixels is what makes this a
-        # verification rather than a smoke test — and it is not hypothetical:
-        # the WebGPU-with-no-fallback bug this tool found on its first run
-        # produced a page that started perfectly and drew nothing.
-        if not shot.exists():
-            return fail(
-                f"{example} started but produced no screenshot",
-                f"expected {shot.relative_to(REPO_ROOT)}",
-                "the browser exited before compositing a frame",
-                "raise CHECK_VIRTUAL_MS, or run without --check and look yourself",
-            )
-        drawn, detail = canvas_is_drawn(shot.read_bytes())
-        print(f"[serve-web] {detail}")
-        if not drawn:
-            return fail(
-                f"{example} started but drew nothing",
-                detail,
-                "the engine got no GPU adapter, or the surface is not the canvas on the page",
-                f"look at {shot.relative_to(REPO_ROOT)} and {log.relative_to(REPO_ROOT)}",
-            )
-        print(f"[serve-web] PASS — {example} started and drew in a browser")
-        return 0
-    return fail(
-        f"{example} did not start in the browser",
-        f"page state: {state}; page said: {message or '(nothing)'}",
-        "the wasm module failed to load or panicked on startup; the browser log has the detail",
-        f"read {log.relative_to(REPO_ROOT)}, then run without --check and open the page yourself",
+    if state != "running":
+        return fail(
+            f"{example} did not start in the browser",
+            f"page state: {state}; page said: {message or '(nothing)'}",
+            "the wasm module failed to load or panicked on startup; the browser log has the detail",
+            f"read {log.relative_to(REPO_ROOT)}, then run without --check and open the page yourself",
+        )
+
+    # Starting is not drawing. Checking the pixels is what makes this a
+    # verification rather than a smoke test — and it is not hypothetical:
+    # the WebGPU-with-no-fallback bug this tool found on its first run
+    # produced a page that started perfectly and drew nothing.
+    if not shot.exists():
+        return fail(
+            f"{example} started but produced no screenshot",
+            f"expected {shot.relative_to(REPO_ROOT)}",
+            "the browser exited before compositing a frame",
+            "raise CHECK_VIRTUAL_MS, or run without --check and look yourself",
+        )
+    drawn, detail = canvas_is_drawn(shot.read_bytes())
+    print(f"[serve-web] {detail}")
+    if not drawn:
+        return fail(
+            f"{example} started but drew nothing",
+            detail,
+            "the engine got no GPU adapter, or the surface is not the canvas on the page",
+            f"look at {shot.relative_to(REPO_ROOT)} and {log.relative_to(REPO_ROOT)}",
+        )
+    print(f"[serve-web] PASS — {example} started and drew in a browser")
+    return 0
+
+
+def check_panic_overlay(browser: str, port: int, example: str) -> int:
+    """The forced panic (?panic=1) renders the overlay with the §9 text.
+
+    The overlay is a CONTRACT (web-publish.md §2): remote playtesters do not
+    open devtools, so a panic that is console-only is a panic nobody reports.
+    This is the W0 exit criterion made repeatable — the same check a person
+    does by adding ?panic=1 to any deployed build's URL.
+    """
+    loaded = load_page(
+        browser, f"http://127.0.0.1:{port}/{example}/index.html?panic=1", "panic"
     )
+    if isinstance(loaded, int):
+        return loaded
+    dom, _shot, log = loaded
+    state, _message, _failed = page_state(dom)
+    print(f"[serve-web] page state with ?panic=1: {state}")
+    if state != "panicked":
+        return fail(
+            f"{example} with ?panic=1 did not reach the panic overlay",
+            f"page state: {state} (wanted: panicked)",
+            "the forced panic did not fire, or the panic hook's message never "
+            "reached the page (jidousha-platform web/panic.rs and the template "
+            "are two halves of one contract)",
+            f"read {log.relative_to(REPO_ROOT)}; check the [jidousha panic] marker "
+            "arrives on console.error",
+        )
+    overlay = re.search(r'<pre id="panic-text"[^>]*>(.*?)</pre>', dom, re.S)
+    text = overlay.group(1) if overlay else ""
+    for required in ("[jidousha] forced test panic", "likely cause:", "fix:"):
+        if required not in text:
+            return fail(
+                "the panic overlay is missing part of the §9 message",
+                f"wanted {required!r} in the overlay; overlay text: {text[:200]!r}",
+                "the hook truncated the payload, or the page rewrote it instead "
+                "of rendering it verbatim",
+                "compare the overlay against the §9 shape (core.md §9)",
+            )
+    print(f"[serve-web] PASS — the forced panic rendered the full §9 overlay")
+    return 0
+
+
+def check(port: int, example: str) -> int:
+    """Both halves: the page runs and draws; the panic overlay works."""
+    browser = chromium()
+    if browser is None:
+        return fail(
+            "no headless browser to check with",
+            "looked for chromium on PATH and under /opt/pw-browsers",
+            "this machine has no browser installed",
+            "install Chromium, or set JIDOUSHA_CHROMIUM to one, or drop --check and look "
+            "at the page yourself",
+        )
+    print(f"[serve-web] checking with {browser}")
+    step = check_runs(browser, port, example)
+    if step != 0:
+        return step
+    return check_panic_overlay(browser, port, example)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("example", help="the example to build, e.g. window_clear")
+    parser.add_argument(
+        "example",
+        nargs="?",
+        help="the built example to open, e.g. sprites (see tools/build-web)",
+    )
     parser.add_argument("--port", type=int, default=8080)
     parser.add_argument(
         "--check",
         action="store_true",
-        help="drive a headless browser at the page, report, and exit",
+        help="drive a headless browser at the page and the forced panic, report, exit",
     )
     args = parser.parse_args()
 
-    wanted = locked_wasm_bindgen_version()
-    step = check_toolchain(wanted)
-    if step != 0:
-        return step
-
-    found = find_example(args.example)
-    if found is None:
+    if not DIST.is_dir():
         return fail(
-            f"no example named {args.example!r}",
-            "the workspace defines no example target with that name",
-            "a typo, or the example lives outside this workspace",
-            "run `cargo metadata` or look under crates/*/examples/ for the list",
+            "there is nothing to serve",
+            f"{DIST.relative_to(REPO_ROOT)}/ does not exist",
+            "no web build has been made yet — this tool only serves",
+            f"run `tools/build-web {args.example or '<example>'}` first",
         )
-    package, example = found
+    if args.example and not (DIST / args.example / "index.html").exists():
+        return fail(
+            f"{args.example} is not built",
+            f"dist/{args.example}/index.html does not exist",
+            "the example was never built for the web, or was built under another name",
+            f"run `tools/build-web {args.example}` first",
+        )
+    if args.check and not args.example:
+        return fail(
+            "--check needs an example to check",
+            "no example name was given",
+            "the check drives a browser at one page, so it has to know which",
+            "run `tools/serve-web <example> --check`",
+        )
 
-    step = build(package, example)
-    if step != 0:
-        return step
-
-    server = serve(args.port)
+    server = serve(args.port, DIST)
     try:
         if args.check:
-            return check(args.port, example)
-        print(f"[serve-web] http://127.0.0.1:{args.port}/  —  Ctrl-C to stop")
+            return check(args.port, args.example)
+        where = f"/{args.example}/" if args.example else "/"
+        print(f"[serve-web] http://127.0.0.1:{args.port}{where}  —  Ctrl-C to stop")
         try:
             while True:
                 time.sleep(3600)

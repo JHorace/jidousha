@@ -1,0 +1,258 @@
+<!doctype html>
+<!--
+  The playtest page a Jidousha web build ships in (web-publish.md §2).
+
+  Staged by `tools/build-web`, which substitutes __EXAMPLE__ and
+  __BUILD_STAMP__; served by `tools/serve-web` locally and by the deploy
+  target remotely. Self-contained on purpose: no CDN, no framework — a canvas,
+  a module import, and the three things a remote playtester needs (a loading
+  state, a panic they can copy, a stamp that names the build).
+
+  The engine appends its own canvas to the body (winit's `with_append`), so
+  there is no canvas element here to get out of step with the one winit makes.
+
+  Reserved seam (deferred, do not build yet): the "download recording" button
+  lands here once the input recording buffer is reachable from the page
+  (input §5, web-publish.md §2) — remote playtesting becomes remote
+  deterministic repro. It will sit beside the copy button in #panic-overlay
+  and in the footer.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>__EXAMPLE__ — jidousha</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #101014;
+        color: #c8c8d0;
+        font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+      }
+      /* The canvas winit appends. Filling the body is what makes a resize a
+         real resize, which is the thing worth checking on this target. */
+      canvas {
+        flex: 1 1 auto;
+        display: block;
+        width: 100%;
+        min-height: 0;
+      }
+      #loading {
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+      }
+      #loading .spinner {
+        width: 28px;
+        height: 28px;
+        border: 3px solid #2a2a33;
+        border-top-color: #c8c8d0;
+        border-radius: 50%;
+        animation: jidousha-spin 0.9s linear infinite;
+      }
+      @keyframes jidousha-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      #status {
+        padding: 6px 10px;
+        border-top: 1px solid #2a2a33;
+        white-space: pre-wrap;
+      }
+      #status.failed {
+        color: #ff8080;
+      }
+      #stamp {
+        padding: 2px 10px 6px;
+        color: #6a6a75;
+      }
+      /* The panic overlay (web-publish.md §2 CONTRACT): a wasm panic renders
+         the full §9 message on the page, with a copy button. Remote
+         playtesters do not open devtools — "screenshot or copy the red box"
+         is the bug report. */
+      #panic-overlay {
+        position: fixed;
+        inset: 0;
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: rgba(16, 16, 20, 0.92);
+        z-index: 10;
+      }
+      #panic-overlay.shown {
+        display: flex;
+      }
+      #panic-box {
+        max-width: min(720px, 100%);
+        max-height: 80%;
+        overflow: auto;
+        border: 1px solid #a03030;
+        border-radius: 6px;
+        background: #1c1014;
+        padding: 16px;
+      }
+      #panic-box h1 {
+        margin: 0 0 8px;
+        font-size: 14px;
+        color: #ff8080;
+      }
+      #panic-text {
+        margin: 0 0 12px;
+        white-space: pre-wrap;
+        color: #f0d0d0;
+      }
+      #panic-copy {
+        font: inherit;
+        color: #c8c8d0;
+        background: #2a2a33;
+        border: 1px solid #3a3a45;
+        border-radius: 4px;
+        padding: 4px 12px;
+        cursor: pointer;
+      }
+      #panic-copy:hover {
+        background: #34343f;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="loading">
+      <div class="spinner"></div>
+      <div>loading __EXAMPLE__…</div>
+    </div>
+    <div id="panic-overlay">
+      <div id="panic-box">
+        <h1>__EXAMPLE__ panicked</h1>
+        <pre id="panic-text"></pre>
+        <button id="panic-copy">copy the message</button>
+      </div>
+    </div>
+    <div id="status">starting __EXAMPLE__…</div>
+    <div id="stamp">build __BUILD_STAMP__</div>
+    <script type="module">
+      // The status line exists so a failure is visible on the page rather than
+      // only in devtools — the same reason the engine's errors say what to do
+      // rather than only what happened.
+      const status = document.getElementById("status");
+      const loading = document.getElementById("loading");
+      const say = (text, failed = false) => {
+        status.textContent = text;
+        status.classList.toggle("failed", failed);
+      };
+      const doneLoading = () => loading.remove();
+
+      // A playtester's bug report always identifies its build (web-publish.md
+      // §1): visible in the footer, and logged so a copied console goes with it.
+      console.log("jidousha build __BUILD_STAMP__ — __EXAMPLE__");
+
+      // The panic overlay. The engine's wasm panic hook writes the full §9
+      // message to console.error behind this marker (its first line); the page
+      // renders everything after the marker as the red box. Marker and hook
+      // live in jidousha-platform's web/panic.rs — one contract, two halves.
+      const PANIC_MARKER = "[jidousha panic]\n";
+      let panicked = false;
+      const overlay = document.getElementById("panic-overlay");
+      const panicText = document.getElementById("panic-text");
+      const copyButton = document.getElementById("panic-copy");
+      const showPanic = (text) => {
+        panicked = true;
+        panicText.textContent = text;
+        overlay.classList.add("shown");
+        doneLoading();
+        say(text.split("\n")[0], true);
+        // The marker --check greps for: "the panic overlay rendered".
+        document.body.dataset.jidousha = "panicked";
+      };
+      copyButton.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(panicText.textContent);
+          copyButton.textContent = "copied";
+        } catch {
+          // No clipboard permission (an embedded browser, an old one): select
+          // the text instead, so a manual copy is one keystroke.
+          const range = document.createRange();
+          range.selectNodeContents(panicText);
+          const selection = getSelection();
+          selection.removeAllRanges();
+          selection.addRange(range);
+          copyButton.textContent = "press Ctrl/Cmd-C to copy";
+        }
+      });
+
+      // A wasm panic aborts, and the message goes to the console. Mirroring it
+      // onto the page means a person looking at the window sees it too.
+      //
+      // The engine's own §9 reports arrive the same way — a missing asset, a
+      // frame it had to skip — and those are *handled* problems: the game is
+      // still running, with a placeholder where the art should be. They are
+      // worth showing and are not worth calling a failure, so the `[jidousha] `
+      // prefix tells them apart. A real panic arrives behind PANIC_MARKER and
+      // becomes the overlay.
+      const consoleError = console.error.bind(console);
+      console.error = (...args) => {
+        consoleError(...args);
+        const text = args.map(String).join(" ");
+        if (text.startsWith(PANIC_MARKER)) {
+          showPanic(text.slice(PANIC_MARKER.length));
+          return;
+        }
+        say(text, !text.startsWith("[jidousha] "));
+      };
+      // The abort that follows a panic also surfaces as a RuntimeError through
+      // these listeners; the overlay is already up by then, so they only speak
+      // when something failed *without* going through the panic hook.
+      window.addEventListener("error", (event) => {
+        if (!panicked) say(String(event.message), true);
+      });
+      window.addEventListener("unhandledrejection", (event) => {
+        if (!panicked) say(String(event.reason), true);
+      });
+
+      try {
+        const module = await import("./__EXAMPLE__.js");
+        await module.default();
+        // Reaching here means the wasm module started. It does not mean a GPU
+        // was found — that is asked for asynchronously and reported by the
+        // engine itself (renderer.md §10).
+        doneLoading();
+        say("__EXAMPLE__ running — build __BUILD_STAMP__");
+        // A marker for `tools/serve-web --check`, which drives a headless
+        // browser and needs to know the difference between "still loading" and
+        // "started".
+        document.body.dataset.jidousha = "running";
+      } catch (error) {
+        if (!panicked) {
+          doneLoading();
+          // Instantiation failing outright has two ordinary causes, and
+          // neither is the game's code — name them (web-publish.md §2).
+          say(
+            "__EXAMPLE__ failed to load: " +
+              String(error) +
+              "\nlikely cause: a browser too old for WebAssembly modules; a " +
+              "server that does not send .wasm as application/wasm; or — if a " +
+              "current browser shows this on every page — a module damaged by " +
+              "the build toolchain (an old wasm-opt does exactly that)" +
+              "\nfix: try a current browser; if serving this yourself, use " +
+              "tools/serve-web, which sets the MIME type correctly; if every " +
+              "browser fails, rebuild with tools/build-web and read its " +
+              "wasm-opt line",
+            true,
+          );
+          document.body.dataset.jidousha = "failed";
+        }
+      }
+    </script>
+  </body>
+</html>

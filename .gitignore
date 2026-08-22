@@ -1,5 +1,7 @@
 /target
 # tools/test and tools/doctor write their reports under target/verify/.
+# tools/build-web stages web builds here; it is what deploys, never committed.
+/dist
 **/*.rs.bk
 __pycache__/
 *.pyc

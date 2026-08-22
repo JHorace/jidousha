@@ -38,10 +38,11 @@ readonly LAVAPIPE_ICD=/usr/share/vulkan/icd.d/lvp_icd.json
 # shipped a Pong nobody had seen in a window. One library closes it.
 readonly XKB_X11=/usr/lib/x86_64-linux-gnu/libxkbcommon-x11.so.0
 
-# e0-findings.md F-124: the other half of step 2. `tools/serve-web <example> --check`
-# builds for wasm and drives a headless browser at it, and it is the only thing that
-# runs the web target as a *program* rather than as the `cargo check` CI has gated
-# since M0. Everything it needs was already here — the wasm32 target, and a Chromium
+# e0-findings.md F-124: the other half of step 2. `tools/build-web <example>` then
+# `tools/serve-web <example> --check` builds for wasm and drives a headless browser
+# at it, and that check is the only thing that runs the web target as a *program*
+# rather than as the `cargo check` CI has gated since M0. Everything it needs
+# was already here — the wasm32 target, and a Chromium
 # at /opt/pw-browsers that the tool already knows how to find — except the CLI, so
 # eight runs' worth of "no session has driven its game in a browser" was one missing
 # binary. **Prebuilt, not `cargo install`**: the release tarball is a 1.3-second
@@ -49,7 +50,7 @@ readonly XKB_X11=/usr/lib/x86_64-linux-gnu/libxkbcommon-x11.so.0
 #
 # The version must equal the `wasm-bindgen` crate in Cargo.lock exactly — a mismatch
 # produces glue that fails at run time with a message about nothing in particular,
-# which is why `tools/serve-web` refuses to guess. So it is read from the lock rather
+# which is why `tools/build-web` refuses to guess. So it is read from the lock rather
 # than written here: a version in two places is a version that drifts on the first
 # `cargo update`.
 readonly REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -123,9 +124,9 @@ if [ -e "$LAVAPIPE_ICD" ] && [ -e "$XKB_X11" ] && wasm_bindgen_is_current; then
   echo "                Xvfb has no window manager, so nothing sets the input focus and every"
   echo "                key goes to the root window: 'xdotool windowfocus --sync \$(xdotool"
   echo "                search --name <name> | tail -1)' once, and the keyboard reaches the game."
-  echo "[session-start] wasm-bindgen $WANTED_WASM_BINDGEN installed — 'tools/serve-web <example>"
-  echo "                --check' now builds for the web and drives the bundled Chromium at it,"
-  echo "                which is the only check that runs the wasm target as a program."
+  echo "[session-start] wasm-bindgen $WANTED_WASM_BINDGEN installed — 'tools/build-web <example>"
+  echo "                && tools/serve-web <example> --check' now builds for the web and drives"
+  echo "                the bundled Chromium at it — the only check that runs wasm as a program."
   exit 0
 fi
 
@@ -135,7 +136,7 @@ fi
   echo "  what this costs: without lavapipe, golden-image tests skip and say so and tools/verify"
   echo "    reports 'capture: skipped, no GPU on this machine' (e0-findings.md F-054); without"
   echo "    libxkbcommon-x11 a windowed example panics under xvfb-run and cannot be played"
-  echo "    (F-111); without wasm-bindgen, 'tools/serve-web' refuses rather than guessing at a"
+  echo "    (F-111); without wasm-bindgen, 'tools/build-web' refuses rather than guessing at a"
   echo "    version and the web target goes unrun (F-124). Nothing fails — each degrades to the"
   echo "    state earlier E0 runs had."
   echo "  likely cause: the package index, the archive or github.com was unreachable from this"
