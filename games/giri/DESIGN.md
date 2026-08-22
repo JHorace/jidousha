@@ -133,6 +133,23 @@ suite: a constant change that breaks a beat's intended dilemma fails verify —
 the beats *are* the tuning harness. Runtime tuning is a first-class
 requirement; §8a owns it.
 
+Three points the first implementation had to settle, because the formulas above
+do not (prototype #1, 2026-08-22 — see §12):
+
+- **Bond drift is per run, not per pair.** "Shared success without betrayal" is
+  read as *this dungeon had no betrayal in it*: a job somebody was killed on
+  leaves no bonds behind at all, not even between two survivors who had nothing
+  to do with it.
+- **Desperation has a floor**, `desperation_floor`, a constant like the others
+  and 0 in the shipped set. Without it `desperation_fall` takes a character
+  below zero the first time they profit, and a character at −2 refuses a clean
+  job with nothing wrong with it. At the floor they still take clean work and
+  nothing that costs them.
+- **Betrayal is evaluated in roster order at both levels**: `c` walks the party
+  in roster order and, for each `c`, `t` walks it in roster order too, with each
+  kill taking effect immediately. A character killed before their own turn never
+  evaluates.
+
 ### 3.3 Bonds, mechanically (DECIDED 2026-08-22)
 
 A bond (positive regard) does four things — this is the mechanical
@@ -208,6 +225,15 @@ Authoring format: each beat = (initial roster state, dungeon(s), the
 intended dilemma stated in a sentence, expected-outcome assertions). The
 fourth field is the verify scenario (§8). Win = complete the chain.
 
+*Implementation (prototype #1):* the beats live in `src/beats.rs` as a `CHAIN`
+of `BeatSpec` values and are read by no code that names a beat number — beats 5+
+are added there and nowhere else. The verify scenario needs a fifth field beside
+the assertions, `send`: the party the scripted run assembles. Nothing in the
+game reads it and a player may send anything the gate allows; it is the
+scenario's "and then the player does this", which the assertions alone cannot
+say. Beats 1–4 are the owner's four, with rosters, pots and cuts authored to the
+formulas in §3.2 — beat 2's numbers are the ones §7's example line quotes.
+
 ## 7. Presentation (DECIDED unless marked)
 
 2D, sprites and quads, pointer input — nothing the engine lacks. No audio,
@@ -239,11 +265,34 @@ party assembly with **live willingness preview** — refusals shown with their
 arithmetic before commitment; resolution report; chain progress.
 
 **The resolution report is the story surface.** Every consequence is
-narrated mechanically, naming the rule inputs: "Bob killed Steve —
-desperation 8 ≥ 6, share 2→4, no regard." In v1 this is debugging output
-promoted to UI; it is also how players learn the heuristics that invariant
-2's endgame depends on. Flavor text can layer over it later; the arithmetic
-stays reachable (the game never hides).
+narrated mechanically, naming the rule inputs — as the game actually prints it,
+in the ASCII this section mandates:
+
+```text
+Bob killed Steve - desperation 8 >= 6, share 2->4, regard 0 < 2
+```
+
+*(Corrected 2026-08-22: this line was drafted as "Bob killed Steve — desperation
+8 ≥ 6, share 2→4, no regard", whose em dash, ≥ and → are three characters the
+5×7 atlas draws as boxes. The engine's font covers space through `~` and nothing
+else, and no assertion over drawn quads can see the difference — the string is
+the only instrument. Every line the game draws is ASCII, and `--verify` checks
+each one.)*
+
+In v1 this is debugging output promoted to UI; it is also how players learn the
+heuristics that invariant 2's endgame depends on. Flavor text can layer over it
+later; the arithmetic stays reachable (the game never hides).
+
+**Willingness is previewed; betrayal is not.** The preview shows each selected
+character's sum before commitment because refusal is *feedback* the player acts
+on (§5). Betrayal has no preview in v1: the player is shown every input to it —
+desperation and regard on the sheets, the pot and the cut on the job, and the
+constants themselves in a panel on screen — and does the arithmetic. That is
+what makes beat 2 a death the player *could foresee* rather than one the game
+warned them about, and it is inspectability rather than concealment (invariant
+2: nothing is hidden, and the game does not do the sum for you). A betrayal
+preview is a UI decision available any time, and would soften the second
+inversion.
 
 ## 8. Verification (DECIDED in approach)
 
@@ -325,3 +374,34 @@ system (characters do not yet remember what *the player* did — OPEN below).
   playtesting (see §8a instrumentation), and then to decide whether the
   chain's difficulty curve should reach it by the final beats or only in
   the sim.
+
+## 12. Implementation notes — prototype #1 (2026-08-22)
+
+Written when the first slice landed (`games/giri/`, the social model, beats
+1–4). Everything here is a place where implementing the document changed it;
+the changes are inline above and this is the index.
+
+- **§3.2** now states the desperation floor, the per-run reading of bond drift,
+  and the roster order at both levels of the betrayal loop. All three were
+  ambiguities rather than disagreements — the formulas do not decide them and an
+  implementation must.
+- **§6** now names the fifth beat field the verify scenario needs (`send`) and
+  says where the chain lives.
+- **§7**'s example narration line was not ASCII and the same section requires
+  ASCII; corrected, with the reason.
+- **§7** now says explicitly that betrayal is not previewed, which the section
+  left open and beat 2 depends on.
+- **§3.1**'s "wealth may stay implicit in v1" was taken the other way: wealth is
+  a component, it accumulates shares, and it is on every sheet. Implicit wealth
+  would have made the payout arithmetic unreadable to a player, and invariant 2
+  says a number that decides an outcome is a number on screen.
+- **§8a**'s tuning menu is not built (next session), but its two prerequisites
+  are: every constant is one `Tuning` resource, and the set in effect is stamped
+  into the UI and into every verify report. The menu bolts onto that, and the
+  beat-boundary rule §8a settles is already how the game restarts a beat.
+- **Not deviations, recorded because they are choices the document leaves open:**
+  the chain loops back to beat 1 from the completion screen rather than ending
+  (a playtest convenience); a beat's dungeons are a list with a selectable row
+  even though every beat here offers one, so a multi-dungeon beat needs no
+  systems work; and the tutorial's rosters and pots are authored numbers, chosen
+  to make each beat exactly computable from the sheets.

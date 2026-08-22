@@ -76,6 +76,17 @@ pub const BUTTON_LIVE: Color = Color::rgb(0.20, 0.55, 0.40);
 /// A button that cannot.
 pub const BUTTON_DEAD: Color = Color::rgba(1.0, 1.0, 1.0, 0.10);
 
+/// The bar the headline and the dilemma sit on.
+///
+/// A free function because the check asks where it ends: the roster below it
+/// has to clear it, and a card that drifts up into it is drawn over prose.
+pub fn header_bar() -> Rect {
+    Rect::from_min_size(
+        Vec2::new(-HALF_W + 0.2, -HALF_H + 0.2),
+        Vec2::new(HALF_W * 2.0 - 0.4, 2.1),
+    )
+}
+
 /// Where roster card `index` is.
 pub fn card_rect(index: usize) -> Rect {
     let top = CONTENT_TOP + index as f32 * (CARD_H + CARD_GAP);
@@ -203,14 +214,7 @@ pub fn headline(flow: &Flow) -> String {
 /// The bars and panels every screen sits on.
 pub fn draw_backdrop(ctx: &mut DrawCtx) {
     let depth = Depth::layer(layers::PANEL);
-    ctx.rect(
-        Rect::from_min_size(
-            Vec2::new(-HALF_W + 0.2, -HALF_H + 0.2),
-            Vec2::new(HALF_W * 2.0 - 0.4, 2.1),
-        ),
-        PANEL_FILL,
-        depth,
-    );
+    ctx.rect(header_bar(), PANEL_FILL, depth);
     ctx.rect(
         Rect::from_min_size(
             Vec2::new(MAIN_X - 0.2, CONTENT_TOP - 0.2),

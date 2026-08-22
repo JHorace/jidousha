@@ -342,6 +342,30 @@ pub fn run() -> ExitCode {
             ui::send_button().min.y
         ),
     );
+    // The roster sits between the headline and the first job row, and the two
+    // columns start level. Stated as a pair rather than against CONTENT_TOP,
+    // which is the constant that put both of them there: a check spelled
+    // `card_rect(0).min.y == CONTENT_TOP` moves with the cards and cannot see
+    // them drift. This pair caught exactly that, injected on purpose.
+    checks.require(
+        greater(ui::card_rect(0).min.y, ui::header_bar().max.y - 0.11),
+        "the roster is drawn up into the headline it sits under",
+        format!(
+            "the first card starts at y {:.2} and the headline bar ends at {:.2}",
+            ui::card_rect(0).min.y,
+            ui::header_bar().max.y
+        ),
+    );
+    checks.require(
+        !greater(ui::card_rect(0).min.y, ui::dungeon_row_rect(0).min.y),
+        "the roster column and the wide column do not start level",
+        format!(
+            "the first card starts at y {:.2} and the first job row at {:.2}; a column that \
+             starts lower than the one beside it is a column that has drifted",
+            ui::card_rect(0).min.y,
+            ui::dungeon_row_rect(0).min.y
+        ),
+    );
     checks.require(
         greater(ui::MAIN_X, ui::card_rect(0).max.x),
         "the wide column starts inside the roster column",

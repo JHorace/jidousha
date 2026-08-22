@@ -146,6 +146,31 @@ pub fn battery(checks: &mut Checks, tuning: &Tuning) {
         ),
     );
 
+    // A gap only ever costs the cleaner character. `incompat` is
+    // `max(0, .)`-clamped, so the known name standing next to a clean one gets
+    // nothing for it - drop the clamp and a reputation becomes a recruiting
+    // bonus, which no beat above would notice.
+    let (world, ids) = bench(&[("Clean", 0, 0), ("Known", 0, 5)], &[]);
+    let social = Social::read(&world);
+    let downhill = social.incompat(tuning, ids[1], ids[0]);
+    checks.require(
+        downhill == 0,
+        "standing next to a cleaner name pays an infamous character",
+        format!(
+            "incompat(Known, Clean) is {downhill} across a gap of -5; incompat is clamped at \
+             zero and only ever costs the cleaner of the two"
+        ),
+    );
+    checks.require(
+        social.incompat(tuning, ids[0], ids[1]) == tuning.k_inf * 5,
+        "the gap stopped costing the cleaner character",
+        format!(
+            "incompat(Clean, Known) is {} across a gap of 5 at a K_inf of {}",
+            social.incompat(tuning, ids[0], ids[1]),
+            tuning.k_inf
+        ),
+    );
+
     // --- betrayal: roster order decides who kills whom ------------------
     //
     // Two characters, identical numbers, both past `K_kill` and both better off

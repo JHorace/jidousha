@@ -476,6 +476,15 @@ pub const CHAIN: &[BeatSpec] = &[
                 party: &["Bob", "Tim"],
                 total: 0,
             },
+            // And the other way round, which is the half a beat forgets: Bob
+            // is the *more* infamous of the two, so standing next to Tim costs
+            // him nothing - and pays him nothing either. Without this the
+            // clamp in `incompat` can be dropped and every beat still passes.
+            Expect::WillingnessIs {
+                who: "Bob",
+                party: &["Bob", "Tim"],
+                total: 4,
+            },
             Expect::Survives { who: "Tim" },
             Expect::Survives { who: "Bob" },
             Expect::Wealth {

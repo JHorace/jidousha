@@ -194,6 +194,28 @@ pub fn judge_world(checks: &mut Checks, spec: &BeatSpec, run: &BeatRun, tuning: 
         }
     }
 
+    // The party the send verb saw is in roster order, which is the order
+    // betrayal is evaluated in - so a party left in click order is a party
+    // whose outcome depends on the order the player happened to click in.
+    let order: Vec<usize> = run
+        .ready
+        .entries
+        .iter()
+        .filter_map(|entry| {
+            run.at_assembly
+                .member(entry.who)
+                .map(|member| member.roster_index)
+        })
+        .collect();
+    checks.require(
+        order.len() == run.ready.entries.len() && order.is_sorted(),
+        "the assembled party is not in roster order",
+        format!(
+            "beat {beat}: the party came out as roster positions {order:?}, and betrayal is \
+             evaluated in roster order"
+        ),
+    );
+
     // The stage machine: sending reaches the report, continuing leaves it.
     checks.require(
         run.stage_after_send == Stage::Report,
