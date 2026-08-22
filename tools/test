@@ -206,6 +206,37 @@ def unregistered_verify_modes(examples: "list[tuple[str, str]]", repo: Path) -> 
     ]
 
 
+def parse_game_targets(metadata: dict, repo: Path) -> "list[tuple[str, str]]":
+    """Every prototype in the workspace, as (package, binary name).
+
+    A game is a workspace member under `games/` with a binary (ADR-0038). There
+    is no list to register it in and none to fall out of date: living there is
+    what makes it a game, and every game is verified — `tools/verify` reports an
+    absent `--verify` mode as `unverified`, which is a failure, so the mode is
+    required by the tooling rather than by a checklist.
+    """
+    members = set(metadata.get("workspace_members", []))
+    games_root = str(repo / "games")
+    found = [
+        (package["name"], target["name"])
+        for package in metadata.get("packages", [])
+        if package["id"] in members
+        and str(Path(package["manifest_path"]).parent).startswith(games_root)
+        for target in package.get("targets", [])
+        if "bin" in target.get("kind", [])
+    ]
+    return sorted(found)
+
+
+def game_phase(game: str) -> "tuple[str, list[str]]":
+    """The phase name and command for one game: its own headless check.
+
+    No branch and no lists, unlike `example_phase`: every game is windowed and
+    every game is verified, so there is nothing here to get wrong about one.
+    """
+    return (f"game-verify:{game}", [sys.executable, "tools/verify", game])
+
+
 def parse_example_targets(metadata: dict) -> "list[tuple[str, str]]":
     """Every example target in the workspace, as (package, example name).
 
@@ -223,8 +254,13 @@ def parse_example_targets(metadata: dict) -> "list[tuple[str, str]]":
     return sorted(examples)
 
 
-def discover_examples() -> "list[tuple[str, str]]":
-    """Ask cargo what examples exist. An empty list means none are defined."""
+def discover_targets() -> "tuple[list[tuple[str, str]], list[tuple[str, str]]]":
+    """Ask cargo what examples and games exist, in one metadata call.
+
+    Empty lists mean none are defined — a workspace with no prototypes is the
+    ordinary state of this one, and `games/` is empty until the first lands
+    (ADR-0038).
+    """
     try:
         proc = subprocess.run(
             ["cargo", "metadata", "--format-version", "1", "--no-deps"],
@@ -235,13 +271,14 @@ def discover_examples() -> "list[tuple[str, str]]":
             text=True,
         )
     except (OSError, subprocess.TimeoutExpired) as err:
-        print(f"[tools/test] could not list examples: {err}", file=sys.stderr)
-        return []
+        print(f"[tools/test] could not list examples and games: {err}", file=sys.stderr)
+        return [], []
     if proc.returncode != 0:
         # The build phase will report the same failure with better output.
-        print(f"[tools/test] could not list examples: {proc.stderr.strip()}", file=sys.stderr)
-        return []
-    return parse_example_targets(json.loads(proc.stdout))
+        print(f"[tools/test] could not list examples and games: {proc.stderr.strip()}", file=sys.stderr)
+        return [], []
+    metadata = json.loads(proc.stdout)
+    return parse_example_targets(metadata), parse_game_targets(metadata, REPO_ROOT)
 
 
 def parse_selftest_output(text: str) -> dict:
@@ -402,6 +439,11 @@ def main(argv: "list[str]") -> int:
         # (assets.md §2, §7). Cheap, and it turns a mistyped path from a
         # runtime placeholder hunt into a named line.
         Phase("check-assets", [sys.executable, "tools/check-assets"]),
+        # Every prototype reaches the engine through the facade and nothing
+        # else (ADR-0038). Here as well as in CI, from the same list: a check
+        # that runs in one place and not the other is a check whose result
+        # depends on where you stood.
+        Phase("check-game-deps", [sys.executable, "tools/check-game-deps"]),
         # The public surface: every item is shown in an example, no example
         # reaches past the facade, and docs/api is what the facade generates
         # (public-api.md §4, §5).
@@ -420,6 +462,8 @@ def main(argv: "list[str]") -> int:
         "doc-test": DOCTEST_TIMEOUT_S,
         "compile-fail": COMPILE_FAIL_TIMEOUT_S,
         "check-assets": SELFTEST_TIMEOUT_S,
+        # Resolves the whole dependency graph before it can walk it.
+        "check-game-deps": BUILD_TIMEOUT_S,
         "check-api-coverage": SELFTEST_TIMEOUT_S,
         # Builds the facade before it can compile anything against it.
         "check-api-prose": COMPILE_FAIL_TIMEOUT_S,
@@ -428,7 +472,7 @@ def main(argv: "list[str]") -> int:
 
     # Examples are run, not merely compiled: each one asserts its own behaviour,
     # so a broken example fails here rather than in a game agent's face.
-    examples = discover_examples()
+    examples, games = discover_targets()
     # An example that carries a `verify.rs` and is in neither list is a game
     # somebody added without the maintainer step that adopts it. Run it through
     # its own check anyway — running it bare opens a window and dies on a
@@ -478,6 +522,16 @@ def main(argv: "list[str]") -> int:
         # allowance rather than the run-it allowance.
         timeouts[name] = VERIFY_TIMEOUT_S if example in verifiable else EXAMPLE_TIMEOUT_S
 
+    # Prototypes (ADR-0038). Every one is verified, and none is registered
+    # anywhere: it is a game because of where it lives, which is the step that
+    # was missed after E0 runs 4, 5 and 7 and now cannot be.
+    if games:
+        print(f"[tools/test] games verified headless: {', '.join(game for _, game in games)}")
+    for _package, game in games:
+        name, command = game_phase(game)
+        phases.append(Phase(name, command))
+        timeouts[name] = VERIFY_TIMEOUT_S
+
     counts = {"passed": 0, "failed": 0, "ignored": 0}
     failed_tests: "list[str]" = []
     status = "pass"
@@ -514,6 +568,7 @@ def main(argv: "list[str]") -> int:
         "exit_code": exit_code,
         **counts,
         "examples": [f"{package}:{example}" for package, example in examples],
+        "games": [f"{package}:{game}" for package, game in games],
         "failed_tests": failed_tests,
         "phases": [asdict(phase) for phase in phases],
     }

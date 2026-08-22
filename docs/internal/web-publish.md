@@ -1,7 +1,8 @@
 # Web publish — design and contracts
 
-Status: **living — W0 and W2 done; W1 implemented, ticked at the first
-observed `main` deploy; W3 still design.** The internal doc for the web
+Status: **living — W0, W1 and W2 done (W1 ticked 2026-08-22 on the owner's
+observation of the production deploy); W3 deferred behind ADR-0038's trigger and
+still design.** The internal doc for the web
 build/publish tooling. **CONTRACT** items binding as elsewhere.
 
 Inherits: web as tier-1 + single-threaded/no-COOP-COEP (ADR-0005), Cloudflare
@@ -10,8 +11,8 @@ format (input §5), dependency budget (practices §5.8).
 
 In scope: `tools/build-web`, `tools/serve-web`, the playtest page shell, CI
 deploy (production + PR previews), the game-repo workflow template.
-Out of scope (deferred): itch.io release channel, analytics, multiplayer/
-server anything, asset CDN tricks, threads (would reopen COOP/COEP).
+Out of scope: itch.io (dropped — §8), analytics, multiplayer/server anything,
+asset CDN tricks, threads (would reopen COOP/COEP).
 
 ---
 
@@ -73,16 +74,20 @@ One `index.html` template, self-contained (no external CDN dependencies):
 ## 3. Deploy targets and layout
 
 - **Engine repo**: `dist/` root is a generated index page listing every built
-  example, each at `/<example>/`, plus `stamp.txt` (the build stamp, read by
+  example and game — games in their own section (ADR-0038) — each at
+  `/<name>/`, plus `stamp.txt` (the build stamp, read by
   the deploy workflow for its PR comment). Production URL serves latest
   `main`; dogfoods the whole pipeline. Examples built (`tools/build-web
   --all`): the **facade crate's** — what a game author sees — minus the
   native-only ones build-web names and skips aloud (`load_from_disk` reads a
   real disk; its wasm main is a printed stub, so wasm-bindgen has nothing to
   bind). Internal crates' examples are engine documentation, not playtest
-  material. `prototype_kit` is the headline and leads the index. Stale
+  material. `prototype_kit` is the headline and leads the examples. Every crate under
+  `games/` is built too, whole: a prototype exists to be played, and a playtest
+  URL on its first push is most of why it lives in this repo (ADR-0038). Stale
   `dist/` subdirectories are pruned on every `--all` build — dist deploys
-  verbatim, so a renamed example must not stay playable.
+  verbatim, so a renamed example, or a prototype moved to `attic/`, must not
+  stay playable.
 - **Game repos**: single game at site root. Same scripts, same template,
   simpler layout.
 - Wrangler config: `wrangler.toml` with `assets.directory = "dist"`, no worker
@@ -157,6 +162,13 @@ Sequencing within the master plan: W0 slots after R1; W1–W2 any time after
 (independent of R2+); W3 pairs with the post-E0 `make-game` skill work.
 Add W0–W3 to the implementation-plan checklist when landing this doc.
 
+**W3's trigger is ADR-0038**, which put prototypes in this workspace at
+`games/<name>/` instead of in repositories of their own: the entry above is the
+design, and it is built when the first prototype has to leave — one that ships
+under its own name, or one whose CI time or churn measurably slows the engine's
+own loop. Stated here, in `implementation-plan.md` §4 and in the ADR, and the
+three move together.
+
 ## 7. Owner setup (human-only; agents never do these)
 
 1. Cloudflare account; note the account ID.
@@ -169,6 +181,13 @@ naming which secret; do not attempt alternative hosts or token creation).
 
 ## 8. Deferred
 
-itch.io release channel (butler; revisit post-v1) · recording-download button
-(after I2; seam reserved in §2) · custom domain · analytics/telemetry ·
-password-gated playtests (Cloudflare Access would do it if ever needed).
+Recording-download button (after I2; seam reserved in §2) · custom domain ·
+analytics/telemetry · password-gated playtests (Cloudflare Access would do it if
+ever needed).
+
+**itch.io is dropped, not deferred** (owner decision, 2026-08-22): it is not a
+goal for this project, and the path this document builds already serves the
+purpose it was being kept for — a URL somebody can play. ADR-0037's rationale
+mentions it as a possible later release channel; that ADR is accepted and stays
+as written (ADRs are superseded, not edited), and this line is where the
+decision lives. Nothing in the tooling ever referenced it.

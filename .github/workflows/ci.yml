@@ -118,6 +118,20 @@ jobs:
       # still compiling.
       - run: python tools/check-assets
 
+  games:
+    name: game dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # A prototype reaches the engine through the `jidousha` facade and nothing
+      # else (ADR-0038). Its own job as well as a `tools/test` phase, from the
+      # same script either way: a check enforced in one place and skippable in
+      # the other is a check whose result depends on where you stood.
+      - run: python tools/check-game-deps
+
   api:
     name: public API surface
     runs-on: ubuntu-latest
@@ -210,7 +224,7 @@ jobs:
   deploy:
     name: deploy web (production on main, preview on PRs)
     # Only after every gate in this same run has passed (web-publish.md §4).
-    needs: [fmt, clippy, test, wasm, doctor, assets, api, claude-md, deps, web]
+    needs: [fmt, clippy, test, wasm, doctor, assets, games, api, claude-md, deps, web]
     # Fork PRs receive no secrets and get no preview: this job then skips —
     # a neutral notice, not a failure and not worked around (ADR-0037).
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
@@ -288,8 +302,8 @@ jobs:
               marker,
               `**Web preview**: ${url}`,
               "",
-              `Every example, playable at build \`${stamp}\`.`,
-              "Add `?panic=1` to any example URL to see its bug-report overlay.",
+              `Every example and game, playable at build \`${stamp}\`.`,
+              "Add `?panic=1` to any page URL to see its bug-report overlay.",
               "",
               "_Updated in place on each push._",
             ].join("\n");

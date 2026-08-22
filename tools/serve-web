@@ -415,7 +415,7 @@ def main() -> int:
     parser.add_argument(
         "example",
         nargs="?",
-        help="the built example to open, e.g. sprites (see tools/build-web)",
+        help="the built example or game to open, e.g. sprites (see tools/build-web)",
     )
     parser.add_argument("--port", type=int, default=8080)
     parser.add_argument(
@@ -436,13 +436,13 @@ def main() -> int:
         return fail(
             f"{args.example} is not built",
             f"dist/{args.example}/index.html does not exist",
-            "the example was never built for the web, or was built under another name",
+            "it was never built for the web, or was built under another name",
             f"run `tools/build-web {args.example}` first",
         )
     if args.check and not args.example:
         return fail(
-            "--check needs an example to check",
-            "no example name was given",
+            "--check needs an example or game to check",
+            "no name was given",
             "the check drives a browser at one page, so it has to know which",
             "run `tools/serve-web <example> --check`",
         )

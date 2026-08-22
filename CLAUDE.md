@@ -17,11 +17,12 @@ tools/doctor                # environment self-diagnosis
 cargo clippy -- -D warnings # lint; warnings are errors
 cargo fmt                   # format (also runs via hook)
 cargo run -p jidousha --example <name>   # run a canonical example
-tools/verify <example>      # headless deterministic run + assertions + a captured PNG
+tools/verify <name>         # headless deterministic run + assertions + a captured PNG
 tools/check-assets          # every asset path in the code names a file that exists
-tools/build-web <example>   # web build → dist/<name>/ (the ONLY web build path)
-tools/serve-web [<example>] # serve dist/; --check drives a browser (+ ?panic=1)
-tools/gen-api-doc           # regenerate docs/api/ — 3 docs (CI fails if stale)
+tools/check-game-deps       # every games/* crate reaches the engine via the facade only
+tools/build-web <name>      # web build → dist/<name>/ (the ONLY web build path)
+tools/serve-web [<name>]    # serve dist/; --check drives a browser (+ ?panic=1)
+tools/gen-api-doc           # regenerate docs/api/ — 4 docs (CI fails if stale)
 tools/check-api-coverage    # every public item is shown in an example
 ```
 
@@ -51,7 +52,8 @@ failure. Delete it in the commit that resolves the blockage.
 | Modify any subsystem | `docs/internal/<subsystem>.md` |
 | Make or change a design decision | `docs/adr/` (search it — the decision may exist) |
 | Add/change public API | `docs/conventions.md`, then the matching `examples/` file |
-| Write a game with the engine | `docs/api/` (all three files) and `examples/` ONLY — never `src/` |
+| Write a game with the engine | `docs/api/` (all four files) and `examples/` ONLY — never `src/` |
+| Add or change a prototype under `games/` | ADR-0038, then the `make-game` skill |
 | Touch web build/deploy | `docs/internal/web-publish.md` |
 | Wonder why code looks wrong | The `DELIBERATE:` tag near it → linked ADR |
 
@@ -97,3 +99,5 @@ Never "clean up" code carrying a `DELIBERATE:` tag without reading its ADR.
   frame clock only (ADR-0005).
 - Never add a dependency without recording justification + `cargo tree` delta in
   the commit (agent-practices §5.8).
+- Never let a crate under `games/` depend on an internal engine crate — the `jidousha`
+  facade is the whole API a game gets (ADR-0038).
