@@ -97,6 +97,12 @@ One `index.html` template, self-contained (no external CDN dependencies):
   `deploy` jobs) — same workflow run as the gates, per the next line.
 - Deploy job runs only after build+test jobs pass in the same workflow run.
   Concurrency group per-branch, cancel-in-progress (stale pushes don't race).
+- Bootstrap: previews are versions of the production Worker, so the first
+  preview in a fresh account has no Worker to attach to. The preview step
+  catches exactly that wrangler error, deploys once to create the Worker
+  (production serves nothing until the first `main` push, which replaces
+  it), and retries the aliased upload. Any other upload failure stays a
+  failure.
 - PR preview posts a **sticky comment** (created once, found again by an HTML
   marker and updated on subsequent pushes — never one comment per push) with
   the preview URL + build stamp (from `dist/stamp.txt`).

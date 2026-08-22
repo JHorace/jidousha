@@ -228,7 +228,23 @@ jobs:
         run: |
           set -euo pipefail
           alias="pr-${{ github.event.number }}"
-          npx wrangler@4 versions upload --preview-alias "${alias}" 2>&1 | tee upload.log
+          upload() { npx wrangler@4 versions upload --preview-alias "${alias}" 2>&1 | tee upload.log; }
+          if ! upload; then
+            # Previews are versions of the production Worker, so the very
+            # first preview in a fresh account has nothing to attach to —
+            # wrangler refuses with "does not yet exist". Bootstrap the Worker
+            # by deploying once (production serves nothing until the first
+            # main push, which replaces this), then retry the aliased upload.
+            # Only this one error is caught; anything else stays a failure.
+            if grep -q "does not yet exist" upload.log; then
+              echo "the Worker does not exist yet — bootstrapping it with this build"
+              npx wrangler@4 deploy
+              upload
+            else
+              echo "versions upload failed — read the log above" >&2
+              exit 1
+            fi
+          fi
           # Prefer the stable alias URL; fall back to the per-version preview URL.
           url="$(grep -Eo 'https://[A-Za-z0-9.-]+\.workers\.dev' upload.log | grep "^https://${alias}-" | tail -1 || true)"
           if [ -z "${url}" ]; then
