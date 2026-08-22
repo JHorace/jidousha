@@ -50,7 +50,7 @@ agent ──> tools/test ──> phase: tool-selftest  (python -m unittest, tool
                               └─> target/verify/report.json     (GROUND TRUTH)
                                   target/verify/failure-streak.json (circuit breaker)
 
-agent ──> tools/doctor ──> twelve checks ──> verdict line + target/verify/doctor.json
+agent ──> tools/doctor ──> fifteen checks ──> verdict line + target/verify/doctor.json
 
 agent ──> tools/verify <example> ──> cargo run --example <name> -- --verify
                               │
@@ -371,6 +371,18 @@ a row (stop rule printed, `failure-streak.json` count 2).
   files go to `target/web-check/`, never into `dist/` — dist is what deploys.
   Stdlib only, including the PNG decoder — forty lines of `zlib` and
   un-filtering, for the same reason the input codec is hand-written (ADR-0014).
+- **The deploy is two CI jobs and nothing local** (W1–W2, web-publish.md §4).
+  `web` runs `tools/build-web --all` — the fleet is the facade crate's
+  examples, minus the native-only ones build-web names and skips aloud — with
+  the `wasm-bindgen` CLI installed at the version Cargo.lock pins (the session
+  hook's recipe) and binaryen so the deploy ships optimized modules; it uploads
+  `dist/` as an artifact. `deploy` runs only after every other gate in the same
+  run: `wrangler deploy` on a `main` push (production), `wrangler versions
+  upload --preview-alias pr-<number>` on a PR (stable preview URL per PR), with
+  ONE sticky comment per PR updated in place on each push — never a comment per
+  push. Fork PRs have no secrets, so the job skips neutrally (ADR-0037). node
+  and wrangler are CI-only dependencies; they appear in the workflow and
+  nowhere else.
 - **"Was the canvas drawn on" takes two questions, not one.** The original check
   asked only whether the canvas differed from the page's own background, and I1
   found its blind spot: `input_echo` clears to rgb(15, 18, 26) against a page of

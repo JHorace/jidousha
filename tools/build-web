@@ -7,6 +7,8 @@ builds; the deploy workflow (W1) uploads it verbatim.
 
     tools/build-web sprites             # release build into dist/sprites/
     tools/build-web sprites --debug     # unoptimized, for fast iteration
+    tools/build-web --all               # every example + the root index page
+                                        # (the engine-repo deploy layout, §3)
 
 The pipeline: cargo build for wasm32 (release by default — what ships is what
 gets tested), wasm-bindgen to generate the JS glue, wasm-opt -Os if installed
@@ -36,12 +38,29 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = REPO_ROOT / "tools" / "web-template" / "index.html"
+ROOT_TEMPLATE = REPO_ROOT / "tools" / "web-template" / "root-index.html"
 DIST = REPO_ROOT / "dist"
 TARGET = "wasm32-unknown-unknown"
 
 # Advisory, not a gate: the wasm size is logged on every build and warned about
 # past this, so drift is visible long before it is a problem (web-publish.md §1).
 WASM_WARN_BYTES = 5 * 1024 * 1024
+
+# Examples that are native by design: their wasm `main` is a printed stub (the
+# example's own source says why, under its `cfg(target_arch = "wasm32")`), so
+# there is nothing for wasm-bindgen to bind and nothing for a page to run.
+# Excluded from the fleet rather than shipped as pages that cannot play; any
+# OTHER bindgen failure still fails the build loudly. Keyed by name → the
+# reason, printed when skipped — a silent exclusion list is how a web-runnable
+# example goes quietly missing from the site.
+# The crate whose examples are the playtest fleet (web-publish.md §3): the
+# facade is what a game author sees, so its examples are what the site shows.
+FACADE_PACKAGE = "jidousha"
+
+NATIVE_ONLY_EXAMPLES = {
+    "load_from_disk": "reads real files off a real disk (assets.md §5); "
+    "its wasm build is a printed stub by design",
+}
 
 
 def fail(what: str, specifics: str, cause: str, fix: str) -> int:
@@ -117,8 +136,8 @@ def run(command: "list[str]", what: str) -> int:
     return 0
 
 
-def find_example(name: str) -> "tuple[str, str] | None":
-    """The package owning `name`, and the name itself."""
+def example_targets() -> "list[tuple[str, str]] | None":
+    """Every (package, example) pair the workspace defines, sorted by name."""
     proc = subprocess.run(
         ["cargo", "metadata", "--format-version", "1", "--no-deps"],
         cwd=REPO_ROOT,
@@ -130,12 +149,24 @@ def find_example(name: str) -> "tuple[str, str] | None":
         return None
     metadata = json.loads(proc.stdout)
     members = set(metadata.get("workspace_members", []))
+    found = []
     for package in metadata.get("packages", []):
         if package["id"] not in members:
             continue
         for target in package.get("targets", []):
-            if "example" in target.get("kind", []) and target["name"] == name:
-                return (package["name"], name)
+            if "example" in target.get("kind", []):
+                found.append((package["name"], target["name"]))
+    return sorted(found, key=lambda pair: pair[1])
+
+
+def find_example(name: str) -> "tuple[str, str] | None":
+    """The package owning `name`, and the name itself."""
+    targets = example_targets()
+    if targets is None:
+        return None
+    for package, example in targets:
+        if example == name:
+            return (package, example)
     return None
 
 
@@ -235,16 +266,19 @@ def report_size(wasm: Path) -> None:
         )
 
 
-def build(package: str, example: str, debug: bool) -> int:
-    """Compile, bind, optimize, and stage one example under dist/<name>/."""
-    profile = "debug" if debug else "release"
-    command = ["cargo", "build", "--target", TARGET, "-p", package, "--example", example]
+def compile_examples(package: str, examples: "list[str]", debug: bool) -> int:
+    """One cargo invocation for every requested example of one package."""
+    command = ["cargo", "build", "--target", TARGET, "-p", package]
+    for example in examples:
+        command += ["--example", example]
     if not debug:
         command.append("--release")
-    step = run(command, "the wasm build")
-    if step != 0:
-        return step
+    return run(command, "the wasm build")
 
+
+def stage_example(example: str, debug: bool, stamp: str) -> int:
+    """Bind, optimize, and stage one already-compiled example under dist/<name>/."""
+    profile = "debug" if debug else "release"
     wasm = REPO_ROOT / "target" / TARGET / profile / "examples" / f"{example}.wasm"
     if not wasm.exists():
         return fail(
@@ -284,26 +318,144 @@ def build(package: str, example: str, debug: bool) -> int:
             "the checkout is incomplete, or the template was moved without updating this tool",
             "restore tools/web-template/index.html",
         )
-    stage_page(out_dir, example, build_stamp())
+    stage_page(out_dir, example, stamp)
     stage_assets(out_dir)
     print(f"[build-web] built {out_dir.relative_to(REPO_ROOT)}/ — serve it with `tools/serve-web {example}`")
     return 0
 
 
+def build(package: str, example: str, debug: bool) -> int:
+    """Compile, bind, optimize, and stage one example under dist/<name>/."""
+    step = compile_examples(package, [example], debug)
+    if step != 0:
+        return step
+    return stage_example(example, debug, build_stamp())
+
+
+def root_index_items(examples: "list[str]") -> str:
+    """The root page's list, `prototype_kit` first — it is the headline
+    (web-publish.md §3) — and the rest alphabetical."""
+    ordered = sorted(examples, key=lambda name: (name != "prototype_kit", name))
+    lines = []
+    for name in ordered:
+        headline = ' class="headline"' if name == "prototype_kit" else ""
+        lines.append(f'<li{headline}><a href="{name}/">{name}</a></li>')
+    return "\n        ".join(lines)
+
+
+def stage_root_index(examples: "list[str]", stamp: str) -> int:
+    """Write the dist/ root: the index page and the stamp file.
+
+    `stamp.txt` exists so the deploy workflow can put the exact stamp the pages
+    carry into its PR comment without re-deriving it (web-publish.md §4).
+    """
+    if not ROOT_TEMPLATE.exists():
+        return fail(
+            "the root index template is missing",
+            f"expected {ROOT_TEMPLATE.relative_to(REPO_ROOT)}",
+            "the checkout is incomplete, or the template was moved without updating this tool",
+            "restore tools/web-template/root-index.html",
+        )
+    page = ROOT_TEMPLATE.read_text(encoding="utf-8")
+    page = page.replace("__ITEMS__", root_index_items(examples))
+    page = page.replace("__BUILD_STAMP__", stamp)
+    (DIST / "index.html").write_text(page, encoding="utf-8")
+    (DIST / "stamp.txt").write_text(stamp + "\n", encoding="utf-8")
+    print(f"[build-web] wrote dist/index.html listing {len(examples)} example(s)")
+    return 0
+
+
+def prune_stale(examples: "list[str]") -> None:
+    """Remove dist/ subdirectories that no longer name an example.
+
+    dist/ is what deploys, verbatim — a renamed example must not leave its old
+    self playable on the site.
+    """
+    keep = set(examples)
+    for entry in DIST.iterdir():
+        if entry.is_dir() and entry.name not in keep:
+            shutil.rmtree(entry)
+            print(f"[build-web] pruned stale dist/{entry.name}/ (no such example)")
+
+
+def build_all(targets: "list[tuple[str, str]]", debug: bool) -> int:
+    """The engine-repo deploy layout: every web example, plus the root index.
+
+    The fleet is the facade crate's examples — what a game author sees and
+    what docs/api/ points at (`cargo run -p jidousha --example <name>`).
+    Internal crates' examples (render-core's headless demos, platform's
+    window_blank) are engine documentation, not playtest material, and some
+    never touch the JS boundary at all.
+    """
+    by_package: "dict[str, list[str]]" = {}
+    for package, example in targets:
+        if package != FACADE_PACKAGE:
+            print(f"[build-web] skipping {example}: an internal {package} example, not the facade's")
+            continue
+        if example in NATIVE_ONLY_EXAMPLES:
+            print(f"[build-web] skipping {example}: {NATIVE_ONLY_EXAMPLES[example]}")
+            continue
+        by_package.setdefault(package, []).append(example)
+    targets = [(package, example) for package, examples in by_package.items() for example in examples]
+    for package, examples in by_package.items():
+        step = compile_examples(package, examples, debug)
+        if step != 0:
+            return step
+    stamp = build_stamp()
+    names = [example for _package, example in targets]
+    for example in names:
+        step = stage_example(example, debug, stamp)
+        if step != 0:
+            return step
+    prune_stale(names)
+    return stage_root_index(names, stamp)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("example", help="the example to build, e.g. sprites")
+    parser.add_argument("example", nargs="?", help="the example to build, e.g. sprites")
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="build every example and the root index page (the engine-repo "
+        "deploy layout, web-publish.md §3)",
+    )
     parser.add_argument(
         "--debug",
         action="store_true",
         help="build the debug profile (default is release: what ships is what gets tested)",
     )
     args = parser.parse_args()
+    if args.all == bool(args.example):
+        return fail(
+            "this tool builds one named example, or --all — not both, not neither",
+            f"example={args.example!r}, all={args.all}",
+            "a missing argument, or a name given alongside --all",
+            "run `tools/build-web <example>` or `tools/build-web --all`",
+        )
 
     step = check_toolchain(locked_wasm_bindgen_version())
     if step != 0:
         return step
 
+    if args.all:
+        targets = example_targets()
+        if not targets:
+            return fail(
+                "no examples to build",
+                "cargo metadata listed no example targets in the workspace",
+                "cargo failed above, or the workspace really has no examples",
+                "run `cargo metadata` by hand and read its error",
+            )
+        return build_all(targets, args.debug)
+
+    if args.example in NATIVE_ONLY_EXAMPLES:
+        return fail(
+            f"{args.example} is native by design and has no web build",
+            NATIVE_ONLY_EXAMPLES[args.example],
+            "its wasm main is a printed stub, so wasm-bindgen has nothing to bind",
+            f"run it natively: cargo run -p jidousha --example {args.example}",
+        )
     found = find_example(args.example)
     if found is None:
         return fail(

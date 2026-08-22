@@ -2411,6 +2411,44 @@ class BuildWebTest(unittest.TestCase):
         self.assertIn("pong", page)
         self.assertIn("abc1234 · 2026-08-22", page)
 
+    def test_the_root_index_leads_with_the_headline_example(self):
+        # prototype_kit is the headline (web-publish.md §3); the rest stay
+        # alphabetical so the list is stable across builds.
+        items = build_web.root_index_items(["sprites", "prototype_kit", "homing"])
+        first = items.splitlines()[0]
+        self.assertIn("prototype_kit", first)
+        self.assertIn('class="headline"', first)
+        self.assertLess(items.index("homing"), items.index('"sprites/"'))
+
+    def test_staging_the_root_index_writes_the_page_and_the_stamp_file(self):
+        # stamp.txt is what the deploy workflow reads for its PR comment —
+        # the same stamp the pages carry, not a re-derivation.
+        with tempfile.TemporaryDirectory() as scratch:
+            previous = build_web.DIST
+            build_web.DIST = Path(scratch)
+            try:
+                step = build_web.stage_root_index(
+                    ["pong", "prototype_kit"], "abc1234 · 2026-08-22"
+                )
+                page = (Path(scratch) / "index.html").read_text(encoding="utf-8")
+                stamp = (Path(scratch) / "stamp.txt").read_text(encoding="utf-8")
+            finally:
+                build_web.DIST = previous
+        self.assertEqual(step, 0)
+        self.assertNotIn("__ITEMS__", page)
+        self.assertNotIn("__BUILD_STAMP__", page)
+        self.assertIn('href="pong/"', page)
+        self.assertEqual(stamp, "abc1234 · 2026-08-22\n")
+
+    def test_every_native_only_exclusion_names_a_real_example(self):
+        # The list must rot loudly: an entry for a renamed or deleted example
+        # would silently exclude nothing while claiming to exclude something.
+        targets = build_web.example_targets()
+        self.assertIsNotNone(targets)
+        names = {example for _package, example in targets}
+        for name in build_web.NATIVE_ONLY_EXAMPLES:
+            self.assertIn(name, names)
+
     def test_the_template_carries_the_overlay_the_panic_hook_writes_to(self):
         # Template and hook are two halves of one contract (web-publish.md §2):
         # the page must recognize the marker and own the overlay elements the

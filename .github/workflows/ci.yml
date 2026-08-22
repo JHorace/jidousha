@@ -153,3 +153,131 @@ jobs:
       # Reports only — the dependency budget is enforced by review of the
       # justification each new dependency records in its commit (practices §5.8).
       - run: python tools/dep-count
+
+  web:
+    name: web build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # The wasm-bindgen CLI must equal the crate version Cargo.lock pins
+      # (web-publish.md §5). Prebuilt release binary rather than `cargo
+      # install` — seconds against minutes for the same program — and the
+      # version is read from the lock, so there is nothing here to drift.
+      # Same recipe as .claude/hooks/session-start.sh.
+      - name: install wasm-bindgen at the version Cargo.lock pins
+        run: |
+          version="$(awk '/^name = "wasm-bindgen"$/{found=1; next}
+                          found && /^version = /{gsub(/[",]/, "", $3); print $3; exit}' Cargo.lock)"
+          name="wasm-bindgen-${version}-x86_64-unknown-linux-musl"
+          curl -sSfL --retry 3 "https://github.com/rustwasm/wasm-bindgen/releases/download/${version}/${name}.tar.gz" | tar xz
+          sudo install -m 755 "${name}/wasm-bindgen" /usr/local/bin/wasm-bindgen
+          rm -rf "${name}"
+      # Optional for build-web (it skips with a log line), but what deploys
+      # should be the smaller module, and here it is one package away.
+      - name: install binaryen (wasm-opt)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends binaryen
+      # CONTRACT (web-publish.md §1): tools/build-web is the ONLY web build
+      # path — no inline build steps here. What CI deploys is what a developer
+      # built locally with the same command.
+      - run: python tools/build-web --all
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: dist/
+          if-no-files-found: error
+
+  deploy:
+    name: deploy web (production on main, preview on PRs)
+    # Only after every gate in this same run has passed (web-publish.md §4).
+    needs: [fmt, clippy, test, wasm, doctor, assets, api, claude-md, deps, web]
+    # Fork PRs receive no secrets and get no preview: this job then skips —
+    # a neutral notice, not a failure and not worked around (ADR-0037).
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write # the sticky preview comment
+    steps:
+      - uses: actions/checkout@v4 # for wrangler.toml
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # `main` → the production URL (web-publish.md §3-§4). node + wrangler are
+      # CI-only dependencies: they live here, never in the local toolchain.
+      - name: deploy production
+        if: github.event_name == 'push'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler@4 deploy
+      # PR → a preview version aliased pr-<number>, so the URL is stable across
+      # pushes while the content tracks the branch head.
+      - name: upload preview version
+        if: github.event_name == 'pull_request'
+        id: preview
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          alias="pr-${{ github.event.number }}"
+          npx wrangler@4 versions upload --preview-alias "${alias}" 2>&1 | tee upload.log
+          # Prefer the stable alias URL; fall back to the per-version preview URL.
+          url="$(grep -Eo 'https://[A-Za-z0-9.-]+\.workers\.dev' upload.log | grep "^https://${alias}-" | tail -1 || true)"
+          if [ -z "${url}" ]; then
+            url="$(grep -Eo 'https://[A-Za-z0-9.-]+\.workers\.dev' upload.log | tail -1 || true)"
+          fi
+          if [ -z "${url}" ]; then
+            echo "the upload printed no preview URL — read upload.log above" >&2
+            exit 1
+          fi
+          echo "url=${url}" >> "$GITHUB_OUTPUT"
+          echo "stamp=$(cat dist/stamp.txt)" >> "$GITHUB_OUTPUT"
+      # One sticky comment per PR, updated in place on every push — never a
+      # new comment per push (web-publish.md §4).
+      - name: sticky preview comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker = "<!-- jidousha-web-preview -->";
+            const url = ${{ toJSON(steps.preview.outputs.url) }};
+            const stamp = ${{ toJSON(steps.preview.outputs.stamp) }};
+            const body = [
+              marker,
+              `**Web preview**: ${url}`,
+              "",
+              `Every example, playable at build \`${stamp}\`.`,
+              "Add `?panic=1` to any example URL to see its bug-report overlay.",
+              "",
+              "_Updated in place on each push._",
+            ].join("\n");
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const existing = comments.find((c) => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }

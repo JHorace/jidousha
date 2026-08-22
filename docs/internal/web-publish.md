@@ -1,7 +1,8 @@
 # Web publish — design and contracts
 
-Status: **living — W0 implemented; W1+ still design.** The internal doc for
-the web build/publish tooling. **CONTRACT** items binding as elsewhere.
+Status: **living — W0 done; W1–W2 implemented, ticked when their exits are
+observed live; W3 still design.** The internal doc for the web build/publish
+tooling. **CONTRACT** items binding as elsewhere.
 
 Inherits: web as tier-1 + single-threaded/no-COOP-COEP (ADR-0005), Cloudflare
 Workers static assets decision (ADR-0037), error taxonomy (core §9), recording
@@ -72,9 +73,16 @@ One `index.html` template, self-contained (no external CDN dependencies):
 ## 3. Deploy targets and layout
 
 - **Engine repo**: `dist/` root is a generated index page listing every built
-  example, each at `/<example>/`. Production URL serves latest `main`;
-  dogfoods the whole pipeline. Examples built: all of them; `prototype_kit`
-  is the headline.
+  example, each at `/<example>/`, plus `stamp.txt` (the build stamp, read by
+  the deploy workflow for its PR comment). Production URL serves latest
+  `main`; dogfoods the whole pipeline. Examples built (`tools/build-web
+  --all`): the **facade crate's** — what a game author sees — minus the
+  native-only ones build-web names and skips aloud (`load_from_disk` reads a
+  real disk; its wasm main is a printed stub, so wasm-bindgen has nothing to
+  bind). Internal crates' examples are engine documentation, not playtest
+  material. `prototype_kit` is the headline and leads the index. Stale
+  `dist/` subdirectories are pruned on every `--all` build — dist deploys
+  verbatim, so a renamed example must not stay playable.
 - **Game repos**: single game at site root. Same scripts, same template,
   simpler layout.
 - Wrangler config: `wrangler.toml` with `assets.directory = "dist"`, no worker
@@ -82,11 +90,16 @@ One `index.html` template, self-contained (no external CDN dependencies):
 
 ## 4. CI workflow (engine repo; template mirrors it)
 
-- Trigger: push to `main` → production deploy; `pull_request` → preview deploy.
+- Trigger: push to `main` → production deploy (`wrangler deploy`);
+  `pull_request` → preview deploy (`wrangler versions upload --preview-alias
+  pr-<number>`, so the preview URL is stable across pushes while its content
+  tracks the branch head). Both live in `.github/workflows/ci.yml` (`web` +
+  `deploy` jobs) — same workflow run as the gates, per the next line.
 - Deploy job runs only after build+test jobs pass in the same workflow run.
   Concurrency group per-branch, cancel-in-progress (stale pushes don't race).
-- PR preview posts a **sticky comment** (created once, updated on subsequent
-  pushes — never one comment per push) with the preview URL + build stamp.
+- PR preview posts a **sticky comment** (created once, found again by an HTML
+  marker and updated on subsequent pushes — never one comment per push) with
+  the preview URL + build stamp (from `dist/stamp.txt`).
 - Fork PRs: secrets absent → deploy job skips with a neutral notice. Not
   worked around (ADR-0037).
 - CI-only deps: node + wrangler live in the workflow, never in rust-toolchain

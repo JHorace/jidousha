@@ -1,0 +1,13 @@
+# The web publish target (ADR-0037, web-publish.md §3): Cloudflare Workers
+# static assets. Static only — no worker script, no bindings; `wrangler deploy`
+# uploads what `tools/build-web --all` wrote to dist/ and nothing else.
+#
+# Deploys run from CI (.github/workflows/ci.yml, the `deploy` job) with
+# CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID from repo secrets — owner
+# setup, never agent-created (web-publish.md §7). `main` deploys the production
+# URL; PRs upload preview versions with a `pr-<number>` alias.
+name = "jidousha"
+compatibility_date = "2026-08-01"
+
+[assets]
+directory = "dist"

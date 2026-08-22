@@ -142,6 +142,12 @@ what the closure does not establish.
 lists are now the roadmap conversation rather than pending work. W0–W3 are
 post-v1 — the web publish track (ADR-0037, web-publish.md §6).
 
+W1 and W2 are implemented (wrangler.toml + the `web` and `deploy` jobs in
+ci.yml) but tick only when their exit criteria are observed live, which no
+local run can do: W1 when a `main` push serves every example at the
+production URL, W2 when a test PR gets its sticky preview comment and a
+second push updates that same comment.
+
 ## 5. Document map
 
 ```
