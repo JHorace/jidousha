@@ -63,6 +63,15 @@ play it when a display exists; `tools/serve-web <name> --check` drives a
 browser at the web build headlessly either way. The honest bar for a prototype
 is fun for about thirty seconds.
 
+An unattended run cannot take that bar by playing — a windowed build driven
+under Xvfb proves the game opens, takes keys and draws, and says nothing about
+fun. The substitute is step 5's three verdict lines plus their tick counts: a
+planner that wins, a chaser that nearly does, an idle that loses, and every
+match *finishing*. That is what "fun for thirty seconds" looks like from
+headless — it is the instrument that has caught a game whose rallies had
+nowhere to go — so claim the bar on those lines, or on a person playing, and on
+nothing else.
+
 ## 4. Give it a `--verify` mode
 
 Read `docs/api/jidousha-testing.md` start to finish first — it is ordered the
@@ -123,7 +132,9 @@ Read `docs/api/jidousha-capture.md` last, once the check runs and asserts.
   as the document gives it, or the run passes while the report says no picture
   was taken.
 - [ ] Open the PNG and name what you see. Then break the game on purpose and
-  look again — the document's closing paragraph is the procedure.
+  look again — the document's closing paragraph is the procedure, and its
+  **commit first** applies with step 6's force: the way back from each break
+  is the same revert, and it eats uncommitted game-file work just as happily.
 
 ## 8. Ship it
 
