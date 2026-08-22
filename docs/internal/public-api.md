@@ -344,6 +344,23 @@ each has its ADR.
   and names the document where its argument lives. The entry's example was a
   construction a game never writes, and is now a game reading input in a system.
 
+**After E0 run 12 (the regression check, ADR-0036): no inventory change, two
+summaries clarified, one removal declined without an ADR.** `Submit::line`'s
+entry now states that the thickness is centred on the segment — the metric a
+border rests on, found as the run's first `--verify` failure (run-12 F4a;
+`TextStyle` has carried its vertical-metric paragraph since F-127 for the same
+reason). `HeadlessSim::draw`'s summary now says it returns the raw quads and
+that a check draws through `FrameRecorder` instead — the run found the
+Concepts sentence recommending it to checks, whose instruments are all on
+`FrameRecord` (run-12 F10). The question inside F10 — whether
+`HeadlessSim::draw` should exist at all, under "one way to do everything" — is
+answered no-change and needs no ADR, because no decision is open:
+`FrameRecorder::draw` is this method plus instruments, and render-core can
+reach core's Draw phase only through a public method on `HeadlessSim` (the
+ADR-0015 seam), so removing it removes the recorder. For a check there is one
+way, the recorder, and the three documents now all say so
+(e0-findings.md §4i).
+
 Rough count: ~46 types/functions. CONTRACT: the v1 prototype substrate
 ("agent Pong/asteroids/breakout") must be expressible with this list alone —
 that's exactly what acceptance milestone E0 tests (implementation plan).

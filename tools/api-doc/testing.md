@@ -79,6 +79,13 @@ The windowed `run` inserts nothing and gets `SHIPPED`, so the game a person play
 is the game the sweep's best row describes — and after `Startup` every system
 reads `world.resource::<Tuning>()` and cannot miss, because `Startup` pinned it.
 
+And whichever form the sweep takes, its objective function is not yours to
+invent: the number to read off each candidate is the verdict lines of
+`docs/api/jidousha-controllers.md`'s three players, because any single
+controller's score is a fact about that controller. The sweep that settled one
+game's opponent — its reaction gate and its placement offset — was eight rows
+read against exactly those three lines.
+
 **It is a trade, and a game with two numbers should not take it.** A constant is
 checked at compile time, reads with no indirection and can appear in a `const fn`;
 a resource is none of those. What buys the change is a sweep you expect to run
@@ -201,6 +208,9 @@ assert the ordinary layout against that. End screens get staged frames instead.
 the simulation, build a texture table, plan the frame, hand it to a backend —
 walked for you and with the result kept: same submissions, same plan, same
 arithmetic, and nothing in this surface asks you to walk it yourself.
+`HeadlessSim::draw()` is the first step of that road: it runs the Draw phase
+and returns the raw submissions, with none of the instruments below on them —
+the recorder calls it for you, and a check has no reason to call it directly.
 
 The recorder keeps **every** frame, oldest first, with no way to forget them: a
 six-hundred-tick check holds six hundred frames. That is deliberate and it is
@@ -430,6 +440,12 @@ assert!(
 
 Worth running over every literal a game draws, because the habit that produces
 one is typing prose. `—`, `’` and `·` are the three that arrive uninvited.
+"Every literal it draws" means the check has to *reach* those strings: a copy
+of them pasted into the check file is inspecting the text the check was written
+against, and a bad character typed into the literal the game actually draws
+leaves the copy passing. Have the game answer for its own text — a function
+returning the exact string it will hand `ctx.text`, which the draw system and
+the check both call (`prototype_kit`'s `readout_text` is the shape).
 
 **And count the expected quads in `chars()`, never `len()`.** `ctx.text` submits
 one per *character*; `str::len` is *bytes*. `drawn == HINT.len()` is right for
@@ -476,9 +492,16 @@ replacing it with a position-only one passes the entire session — every
 assertion, the same 5–0, every drawn frame. The margin is real and a played
 session cannot see it. So ask the function its contract directly
 rather than hoping play reaches the case: one tick of travel eight units long
-across that same paddle, plus the two negative cases — past the end of it, and
-leaving through the same face — is three calls and no match at all. It will be
-the only check in the file that is not about a played game.
+across that same paddle, plus the **three** negative cases — past the end of
+it, leaving through the same face, and *already behind it, still travelling
+away* — is four calls and no match at all. The fourth is the one to make
+yourself write, because it is the only one that guards the "still in front of
+it" test: replace that condition with `true` and the sweep reports a contact at
+a *negative* fraction of the tick — a shot that beat the paddle batted back out
+of the goal — while the through, past-the-end and leaving cases all still pass.
+No rally reaches it, since a ball behind the paddle has scored — which is
+exactly why only a direct call can test it. It will be the only check in the
+file that is not about a played game.
 
 **Mutate the game and check the run notices — and commit before you start.** The
 cheapest way to find out whether a `--verify` file is an instrument or a

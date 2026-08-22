@@ -1,13 +1,22 @@
 # E0 findings — what building a game with this engine actually cost
 
 Status: **closed after eleven runs and a hundred and forty-one findings
-(ADR-0036).** There is no run 12. The milestone is ticked; the bar in §2 was
+(ADR-0036).** The loop has no run 12. The milestone is ticked; the bar in §2 was
 never met and is retired rather than lowered, and the streak at closure is zero.
 This file stops being a ledger and becomes a source — for the `make-game` skill
 first, which practices §3 says is written from what E0 taught. The harness is
 `docs/internal/e0-prompt.md` and is kept intact: E0 remains runnable as a
 deliberate regression check, and §6's run 12 watch list is the list to score it
 against. What ended is the repeat-until-clean loop, not the ability to run it.
+
+**Run 12 happened after all — as that regression check, not as a resumption of
+the loop** (2026-08-21, `docs/e0/run-12.md`, PR #57). It was the first run
+driven by the `make-game` skill, and the first with all four documents. The bar
+stays retired and the numbering stays closed at F-141, per ADR-0036: run 12's
+findings are recorded under its own log's numbers (its F1–F12) in §4i, which
+also scores §6's watch list — the first list here written before its run and
+scored after the exercise closed. The run has a row in §3 for the same reason
+every other run does: a run that happened is a row, whatever the bar's status.
 
 **The bar moved after run 8** (ADR-0029, §2): two consecutive runs with no
 `engine` finding and no *novel* `docs` finding, a re-tread of a recorded shape
@@ -202,6 +211,8 @@ prompt.
 | 9 | 2026-08-20 | Pong shipped; **not** a pass | 1 | 8 | 0 (+1 `environment`, closed) | Compiled clean, `--verify` green over 3,600 ticks with **three** controllers, `fmt` and `clippy` clean, and **18 of 20 injected faults caught** — the two escapes both the shape the document predicts, and the second (a deleted "already behind the plane" guard) invisible to a whole played session rather than merely unlikely. Forty minutes and a restructure of three systems lost to a requirement filed in the document a run is told to read last (F-113) — the first cost in this file caused by a fix rather than by a gap. The one `engine` finding is **accepted and fixed**: `find_bounds`, the fold six checks were writing by hand (F-116, ADR-0032). Three novel `docs` findings, five re-treads, one confirmation (F-123) and two the triage found while fixing the rest. **Valid, and played in full** — the transcript is reviewed and clean, the owner has played it in a window and in a browser, and F-111's and F-124's fixes let this triage do **both** halves too (`docs/e0/run-9-playtest.png`, `docs/e0/run-9-browser.png`) — the first E0 game a session has seen in a browser. Raw notes: `docs/e0/run-9.md`. Triage: §4f. §6. |
 | 10 | 2026-08-20 | Pong shipped; **not** a pass | **0** | 9 | 0 | Compiled clean, `--verify` green over 5,036 ticks with three controllers, and **22 of 23 injected faults caught** — the one escape a guard the run had already reasoned was redundant, kept and labelled rather than deleted. **No `engine` finding, and the third consecutive run to score exactly three novel `docs` findings**, which is the number §6's after-eight-runs assessment said run 10 would adjudicate: three in a row reads as a floor rather than as a trend that has not started. Never blocked; never wanted `src/` to learn what a function *did*. The run's own headline is a caveat about the instrument rather than a finding — the three documents are *visibly* aimed at Pong, so friction this run did not hit is not evidence about a different game (§5). Its most expensive hour was tuning, which is not the engine's, and the one piece of engine-shaped friction in it is that a game's constants cannot vary within a process (F-128, **ADR-0033**). **Valid, and played in full** — the run played it in a window under Xvfb, and this triage ran the browser half (`docs/e0/run-10-browser.png`: both paddles, the ball, the dashed centre line, the hint row, and 0–1 because the opponent had already scored while the page ran). Raw notes: `docs/e0/run-10.md`. Triage: §4g. §6. |
 | 11 | 2026-08-21 | Pong shipped; **not** a pass | 1 | 4 | 0 | Compiled clean, `--verify` green over 4,000 ticks with three players, `chaser: 1-1`, a capture, `fmt` and `clippy` clean, never blocked, and **19 of 19 injected faults caught** — the third run to score full marks, and the first whose round reported the *shape* of what escaped rather than only the count. Its own headline is that the four documents were enough: it never wanted `src/` to learn what a function did, and the twice it wanted to look something up the document had it and the run had misread. The one `engine` finding is **accepted and fixed** — `PhysicalSize::aspect` is now a `const fn`, which is **F-069's rule applied to the list F-069 itself wrote** (F-137), five runs later, found the identical way: by trying to write the constant. **One novel `docs` finding** (F-141, the capture recipe worked only for a game with art), after three runs at three. The other three are boundaries of earlier fixes, and one of them — the constant-moves-with-the-check rule, fourth sighting — is **re-diagnosed rather than re-instanced**: the round is named as the mechanism and the rule as the vocabulary for reading its result (F-140). **Valid, and played in full** — the run played it in a window under Xvfb itself (`docs/e0/run-11-playtest.png`) and this triage ran the browser half (`docs/e0/run-11-browser.png`: both paddles, the ball, the dashed centre line, the walls, the hint row, and 0–1 because the opponent had already scored while the page ran). Raw notes: `docs/e0/run-11.md`. Triage: §4h. §6. |
+
+| 12 | 2026-08-21 | **Regression check (ADR-0036)**; Pong shipped; the retired bar is not applied | 0 | 11 (5 novel, 6 boundaries or relatives of recorded shapes) | 2 | The first run under the `make-game` skill and the first with four documents. Compiled clean; `--verify` green with three players — `rollout 5-0, chaser 4-5, idle 0-5`, the exact signature the controllers document opens with; **17 of 17 injected faults caught on the second round** after a first round of 13; `tools/test` at 755; `tools/serve-web pong --check` green; played under Xvfb with `xdotool` driving the keys. Never blocked, and **no `engine` finding — the eighth consecutive run without one**. Its four mutation escapes are its best evidence and three became document fixes. Its costliest gaps: the NaN recipe's one-conjunct case (two clippy rounds) and the diagnosis table reading "no shot exists" as "objective wrong" (a round). Raw notes: `docs/e0/run-12.md`. Triage and watch-list scoring: §4i. |
 
 Run 1 produced a working, fun Pong and a document-shaped hole underneath it. The
 game is not the measurement — `docs/e0/run-1.md` is — and it says the run could
@@ -6617,6 +6628,185 @@ redundancy working. The run says it kept re-reading rather than trusting, "becau
 it is the one fact in the surface that contradicts the name of the thing", which
 is a property of the name and not of the prose.
 
+## 4i. Run 12 triage — the regression check, on one page
+
+**Run 12 is the check ADR-0036 reserved, so this triage answers a different
+question from the eight above it: not "is the bar met" — the bar is retired —
+but "did the fixes buy what the watch list said they would".** The raw log is
+`docs/e0/run-12.md` and its own numbering (F1–F12) is used throughout;
+ADR-0036's "F-141 is the last finding" stands, so nothing here mints an
+`F-` number. Every fix below landed in the commit series this section belongs
+to, and each names its finding in its message.
+
+**No `engine` finding — the eighth consecutive run without one.** The one
+engine-shaped question the run raises (F10, below) is answered without touching
+the API.
+
+### The docs findings, and where each fix went
+
+- **F2/F5 — the NaN comparison recipe collapses at one condition.** The
+  passage taught "name each condition positively, negate the whole conjunction",
+  which with a single condition reduces to `if !(x > 0.0)` — the literal shape
+  `neg_cmp_op_on_partial_ord` rejects. Two clippy rounds, two files, one
+  sentence. This is the **boundary of the run-11-era fix**: run 11's watch list
+  even named the adjacent failure ("a run whose sweep contains `!(a > b)`…"),
+  and run 12 hit the case one step past it — the sanctioned form, degenerate.
+  Fixed: the lint passage now carries the one-conjunct case with its own
+  compiled block — bind the condition to a name, negate the name.
+- **F4a/F11 — `ctx.line` centres its thickness and nothing said so.** A border
+  on the camera edge hangs half off screen, the first thing a Pong draws and
+  the run's first `--verify` failure. Novel. Fixed twice over: *Concepts* now
+  gives the line its metric sentence beside text's (asserted by
+  `a_horizontal_line_is_as_thick_as_it_was_asked_to_be`, which already pinned
+  it), and `Submit::line`'s summary states the centring in the reference.
+- **F4c — the diagnosis table cannot tell "wrong objective" from "the game
+  admits no threat".** `met 31 of 31 / aim 0.00 / threat 1.24` read as "the
+  objective is wrong"; the objective was the document's own prescription, and
+  the fact was a best available shot of 1.24 units against a paddle reaching
+  1.88 — no shot existed. The **boundary of F-139's fix**: the closed form that
+  landed there is explicitly for a *chasing* opponent, and the run's opponent
+  predicts. Fixed with both halves: the table's row now names the ambiguity and
+  its discriminator (when the objective already maximises threat, X below the
+  opponent's reach means no shot was on the menu), and the balance section
+  carries the predictor's inequality — reaction-window times speed plus reach,
+  against half the landing spread — with what does *not* cancel and why it is
+  settled by sweeping the opponent's two fallibility knobs against the verdict
+  lines rather than compared as constants.
+- **F7.3 — a groove passes "did it score" and "did it win", and only "did the
+  match end" sees it.** `OPPONENT_PLACEMENT = 0.0` — the degeneracy the
+  controllers document is *about* — went chaser 4–0 in 5,400 ticks with a
+  60-touch rally, through both checks. Novel, and the best finding in the run.
+  Fixed: the verdict-lines section now names the tick bound as the fourth
+  verdict — every match must finish.
+- **F7.4 — the swept-contract's negative cases were presented as the set and
+  are not.** The run wrote the document's three; mutating `in_front` to `true`
+  walked through all of them, because the only case that guards it — already
+  behind the paddle, still travelling away — is the case a rally can never
+  produce. Boundary of the swept-contract passage's own wording. Fixed: the
+  passage now lists four cases and says why the fourth cannot be reached by
+  play.
+- **F10 — `HeadlessSim::draw()` recommended to checks, and a dead end for
+  them.** Concepts sent a check there; every instrument a check uses is on
+  `FrameRecord`, which only `FrameRecorder::draw` produces, and the testing
+  document never mentioned the other road — two ways to run the Draw phase,
+  the wrong one recommended, the documents disagreeing by silence. The
+  engine-shaped reading ("should it exist at all?") is answered **no change**,
+  without an ADR because there is no decision open: `FrameRecorder::draw` *is*
+  `HeadlessSim::draw` plus instruments, and render-core can only reach core's
+  Draw phase through a public method (the ADR-0015 seam), so the method must
+  exist for the recorder to exist. One-way-ness holds at the level that
+  matters: for a check there is one way, the recorder. Fixed in all three
+  places that were silent or wrong: Concepts points checks at the recorder and
+  names `HeadlessSim::draw` as the mechanism under it; the testing document
+  says the same where it introduces the recorder; the method's own summary now
+  says which of the two a check calls.
+- **F8 — the printable-string check could not reach the strings the game
+  draws.** The document said "run it over every literal a game draws" and not
+  how a check reaches them; the run kept a second copy of its banners and the
+  em-dash mutation sailed past it. The solution was in `prototype_kit`
+  (`readout_text`) and not in the prose — the F-100/F-113 class again. Fixed:
+  the passage now says the game answers for its own text through a function
+  both the draw system and the check call.
+- **F9 — the commit-before-revert rule is attached to the mutation round, and
+  the capture step does the same reverts.** The run obeyed it at step 6 and
+  lost an uncommitted refactor at step 7, whose "break the game on purpose and
+  look again" is a mutation round in miniature. Boundary of the mutation
+  passage. Fixed in the capture document's closing paragraph and restated at
+  the skill's step 7.
+- **F6 — the sweep's objective function and the sweep's mechanism live in two
+  documents, and neither pointed at the other.** The testing document offers
+  the sweep; the verdict lines it should be read against are the controllers
+  document's. Novel, small. Fixed: the sweep passage now names the verdict
+  lines as the objective a sweep reads.
+- **F3 — cargo's `no example target` error reads as a missing manifest entry.**
+  The document stated the truth and could pre-empt the misleading error in one
+  clause; now it does. Novel, minor.
+- **F11b — `Vec2::move_towards` has no scalar twin and a paddle chases in one
+  axis.** The run wrote the workaround twice in two files before noticing.
+  Fixed in `vec2_tour`, which is the `Vec2` entry: the one-axis shape is now an
+  assert with the "not a `Vec2` operation" note `signum` already gets.
+
+### The `author` findings
+
+- **F7.1** — `rebound` flipped in y escaped the first round because the
+  controller plans with `rules::rebound`: the document's "a check that reads
+  the game's own answer back cannot see that answer change", read and written
+  anyway. The round caught it, the run fixed it with a literal-numbers contract
+  check, which is the prescribed remedy.
+- **F11c** — whether `insert_resource` replaces during staging: answerable from
+  the reference ("replacing any of the same type"), and the run answered it
+  there. Filed only because staging is where it looked first.
+- **F7.2** — the paddle-height check moved with `PADDLE_HALF_Y`: F-140's fifth
+  sighting, *caught by the mutation round and re-written as a requirement*,
+  which is precisely the mechanism F-140's re-diagnosis says should carry this
+  rule. Confirmation, not a new instance.
+
+### The harness findings — for `e0-prompt.md`'s owner, not for the documents
+
+- **F1** — `make-game` step 5's pointer at `examples/pong/controller.rs`
+  dangled, *deliberately*: the setup commit deletes `pong/` per before-the-run
+  step 2 and its message flags the pointer. The merge restored the file and the
+  pointer is correct again — verified. The structural fact: the skill may point
+  at `pong` (it exists outside runs), but **any** pointer at it dangles during
+  a re-run, which is `gen-api-doc`'s `EPHEMERAL_EXAMPLES` rule reaching a file
+  no gate covers. That is why every run-12 document fix above cites
+  `prototype_kit` or `slalom` and none cites `pong` — the generator refused the
+  first draft that did, exactly as designed. If E0 is re-run again, the skill's
+  step-5 pointer dangles again; the fix belongs in the harness's step 2 (delete
+  *and* note the skill) or in the skill growing a permanent worked
+  controller-vs-opponent example, and either is the owner's call.
+- **F12** — nothing gave an unattended run the thirty-second bar, and the
+  run's Xvfb-and-xdotool substitute proves opening, keys and drawing while
+  saying nothing about fun. The proxy that worked — the three verdict lines
+  plus their tick counts, which are what caught the groove — is now stated in
+  the skill's step 3 as the only headless way to claim the bar. The skill is
+  outside `docs/api/`, so this is a skill fix rather than a `docs` finding.
+
+### §6's watch list, scored
+
+Every item was written before the run and kept unedited; the scores read
+against `docs/e0/run-12.md` and the shipped `pong/`.
+
+- **Layout from window: pass, boringly** — `HALF_W = HALF_H * WINDOW.aspect()`
+  in the first file written, and the log never mentions the aspect ratio.
+- **Bias before speed: the first outcome** — the opponent met the ball
+  off-centre from the first draft, before anything ran. What the run *still*
+  needed was the thickness-then-speed coupling, which it credits with turning
+  seventy-touch 0–0 rallies into a game — the fix landed early and the
+  remaining cost moved one document over.
+- **Closed form used, not re-derived: pass** — `OPPONENT_SPEED`'s comment
+  states the inequality as the reason 12.0 came down to 11.0, before tuning.
+  The form's boundary is F4c above: it was used, held, and ran out exactly
+  where its stated scope ends.
+- **Shapes-only capture without deleting lines: pass** — `pong/capture.rs`
+  builds no `Assets` store and its header names the lines it leaves out, in
+  F-141's words.
+- **Round as the mechanism: the status quo working** — one round at 13 of 17,
+  four fixes, a second at 17 of 17. Not the early-round pattern the item hoped
+  for, and not the suspicious clean sweep either.
+- **Escaped shapes volunteered: pass** — all four, in detail, unprompted. The
+  reporting is a property of the round, not of run 11.
+- **`tools/mutate` wanted: no** — the run built both hard errors in four lines
+  and neither fired; the decision to wait holds.
+- **The neighbour-defect step: did not generalise, as feared** — the run's two
+  costliest findings (F2/F5, F4c) are each one clause past a run-11-era fix.
+  This triage applied the step the item prescribes — each fix above was made
+  answering the question *beside* the finding too (the NaN fix carries its
+  degenerate case, the follower form now sits beside the predictor's) — but
+  that is one triage doing it once, again. The item's own conclusion stands
+  open: the step becomes real when it is part of what "fixed" means, not a
+  habit.
+- **Novel count: not one** — five clean novelties and six boundaries or
+  relatives of recorded shapes. Read with §6's caveat, that is the corpus-density explanation
+  weakening and the boundary explanation strengthening: the documents' new
+  gaps are mostly the edges of their newest fixes. It is also the first run
+  under the `make-game` skill and the first with a fourth document, so the run
+  read more prescriptions than any before it — and a run that follows more
+  prescriptions finds more of their edges.
+- **Invitations to guess: one, exactly** — the NaN passage's conjunction form
+  invited the reader to infer the one-conjunct case, and the inference was
+  wrong. Its fix above removes the inference.
+
 ## 5. Notes on the run's procedure
 
 Two things about run 1 that are not findings but would confuse a later reader.
@@ -7407,13 +7597,14 @@ after the trims that paid for the pointer — and it buys a place for the *next*
 controller finding to land at no document cost at all, which is the only reason
 the budget arithmetic below is survivable.
 
-### What run 12 should be watched for — **unrun** (ADR-0036)
+### What run 12 should be watched for — **run as a regression check, and scored in §4i**
 
-*Written before run 12 was cancelled, and kept unedited.* E0 closed after run 11,
-so nothing below was ever scored. It is kept rather than deleted because it is
-the only record of what run 11's fixes were expected to buy, and because it is
-the list to score against if E0 is ever re-run as a regression check. Read every
-item as an open question, not as a result.
+*Written before run 12 was cancelled, kept unedited when it was, and left
+unedited now that the run has happened after all.* E0 closed after run 11; the
+owner then ran the harness once, as the regression check ADR-0036 reserved, and
+§4i scores every item below against `docs/e0/run-12.md`. The items keep their
+original wording, because the value of a prediction is what it said before the
+result.
 
 - **Whether a layout takes its shape from its window.** F-137's fix is only real
   if the next run writes `const HALF_W: f32 = HALF_H * WINDOW.aspect();` without
