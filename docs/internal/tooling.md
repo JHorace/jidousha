@@ -410,7 +410,9 @@ a row (stop rule printed, `failure-streak.json` count 2).
   run time with a message about nothing in particular. `build-web` reads the
   version from Cargo.lock, compares it to the installed CLI, and prints the
   exact `cargo install` line when they differ — and `tools/doctor` runs the
-  same comparison as an `ENV_FIXABLE` check, plus a MIME self-check against
+  same comparison (mismatch `ENV_FIXABLE`; absence info only, since build-web
+  gates it and a runner that never builds web is healthy — practices §6.1),
+  plus a MIME self-check against
   serve-web's real handler and a wasm-opt presence line (info only), by loading
   the tools as modules rather than re-implementing them (web-publish.md §5).
   This is the single most likely

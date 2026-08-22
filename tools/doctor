@@ -229,12 +229,17 @@ def load_sibling(script_name: str):
 
 
 def check_wasm_bindgen() -> Check:
-    """The wasm-bindgen CLI must match the crate version exactly.
+    """The wasm-bindgen CLI, when present, must match the crate version exactly.
 
     The CLI and the crate generate two halves of one interface; a skew produces
     glue that fails at run time with a message about nothing in particular —
-    the classic silent breakage (web-publish.md §5). The subprocess goes through
-    doctor's own `run` so the timeout invariant holds.
+    the classic silent breakage (web-publish.md §5), and FIXABLE here. Absence
+    is only INFO: it cannot break anything silently — `tools/build-web` refuses
+    with this same install command before any build — and a machine that never
+    builds for the web is healthy without it. The CI doctor job runs on exactly
+    such a machine, and a healthy runner must produce ENV_OK (practices §6.1).
+    The subprocess goes through doctor's own `run` so the timeout invariant
+    holds.
     """
     try:
         build_web = load_sibling("build-web")
@@ -252,9 +257,9 @@ def check_wasm_bindgen() -> Check:
     if code == 127:
         return Check(
             "wasm-bindgen",
-            FIXABLE,
-            f"the wasm-bindgen CLI is not installed; the workspace needs exactly {wanted}",
-            fix=fix,
+            INFO,
+            "the wasm-bindgen CLI is not installed — needed only to build for "
+            f"the web; tools/build-web gates that with the same command ({fix})",
         )
     if code != 0:
         return Check("wasm-bindgen", BROKEN, f"`wasm-bindgen --version` failed: {output}")

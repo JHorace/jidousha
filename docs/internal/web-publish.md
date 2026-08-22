@@ -107,9 +107,13 @@ One `index.html` template, self-contained (no external CDN dependencies):
 
 ## 5. Toolchain checks (doctor additions)
 
-- `wasm-bindgen-cli` present AND version-identical to the workspace's
+- `wasm-bindgen-cli`, when present, version-identical to the workspace's
   `wasm-bindgen` crate version (mismatch is the classic silent runtime
   breakage → `ENV_FIXABLE: cargo install wasm-bindgen-cli --version <x>`).
+  Absence is info, not a fault: it cannot break silently — `build-web` gates
+  every build with that same command — and a machine that never builds for
+  the web is healthy without it, which the CI doctor job requires
+  (practices §6.1: a healthy runner must produce ENV_OK).
 - `wasm32-unknown-unknown` target installed (already listed, ADR-0005).
 - `wasm-opt`: optional; absence reported as info, not failure.
 - `tools/serve-web` MIME self-check (§1).

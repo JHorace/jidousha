@@ -2481,6 +2481,35 @@ class DoctorWebChecksTest(unittest.TestCase):
         else:
             self.assertIn(check.status, (doctor.OK, doctor.INFO, doctor.BROKEN))
 
+    def test_a_missing_wasm_bindgen_cli_is_information_not_a_fault(self):
+        # A machine that never builds for the web is healthy without the CLI —
+        # the CI doctor job runs on one, and a healthy runner must produce
+        # ENV_OK (practices §6.1). build-web gates the actual build with the
+        # same install command, so absence cannot break anything silently.
+        previous = doctor.run
+        doctor.run = lambda cmd, timeout_s=doctor.COMMAND_TIMEOUT_S: (127, "not found")
+        try:
+            check = doctor.check_wasm_bindgen()
+        finally:
+            doctor.run = previous
+        self.assertEqual(check.status, doctor.INFO)
+        self.assertIn("cargo install wasm-bindgen-cli", check.detail)
+
+    def test_a_mismatched_wasm_bindgen_cli_is_fixable_with_the_pinned_command(self):
+        # Present-but-wrong is the classic silent runtime breakage
+        # (web-publish.md §5) — that one is an environment defect to fix.
+        previous = doctor.run
+        doctor.run = lambda cmd, timeout_s=doctor.COMMAND_TIMEOUT_S: (0, "wasm-bindgen 0.0.1")
+        try:
+            check = doctor.check_wasm_bindgen()
+        finally:
+            doctor.run = previous
+        wanted = build_web.locked_wasm_bindgen_version()
+        self.assertEqual(check.status, doctor.FIXABLE)
+        self.assertEqual(
+            check.fix, f"cargo install wasm-bindgen-cli --version {wanted} --locked"
+        )
+
     def test_wasm_opt_absence_is_information_not_failure(self):
         # Optional by design: the unoptimized module is correct, just larger.
         check = doctor.check_wasm_opt()
