@@ -131,7 +131,7 @@ Tick in the completing commit. (All unticked at handoff.)
 - [x] A0  - [x] I0  - [x] R0  - [x] M5  - [x] R1  - [x] A1  - [x] R2
 - [x] R3  - [x] I1  - [x] A2  - [x] I2  - [x] R4  - [x] A3  - [x] F0
 - [x] E0  - [x] make-game skill
-- [x] W0  - [ ] W1  - [ ] W2  - [ ] W3
+- [x] W0  - [ ] W1  - [x] W2  - [ ] W3
 
 E0 is ticked as **closed after eleven runs, not as passed** (ADR-0036). The
 condition §3 states was never met — the streak at closure is zero — and it is
@@ -142,11 +142,13 @@ what the closure does not establish.
 lists are now the roadmap conversation rather than pending work. W0–W3 are
 post-v1 — the web publish track (ADR-0037, web-publish.md §6).
 
-W1 and W2 are implemented (wrangler.toml + the `web` and `deploy` jobs in
-ci.yml) but tick only when their exit criteria are observed live, which no
-local run can do: W1 when a `main` push serves every example at the
-production URL, W2 when a test PR gets its sticky preview comment and a
-second push updates that same comment.
+W2 was observed live on PR #59: one sticky comment
+(`pr-59-jidousha.jpsumihiro.workers.dev`, created 2026-08-22T04:57Z), and the
+next push edited that same comment in place with the new stamp — no
+duplicate. W1 is implemented (wrangler.toml + the `web` and `deploy` jobs in
+ci.yml; the Worker exists, bootstrapped by the first preview) but ticks only
+when a `main` push is observed serving every example at the production URL —
+the first merge of this track is that observation.
 
 ## 5. Document map
 
