@@ -1,0 +1,265 @@
+#!/usr/bin/env python3
+"""tools/check-game-deps — every game reaches the engine through the facade only.
+
+ADR-0038 puts prototypes in the workspace at `games/<name>/`. What that buys,
+and the reason they are crates rather than examples, is a dependency edge that
+lives in a manifest: `cargo metadata` resolves it transitively, so "a game goes
+through `jidousha` and nothing else" (public-api.md §4 CONTRACT) stops being a
+grep over source text and becomes exact.
+
+The rule: a crate under `games/*` may name the facade crate among its
+dependencies — at any depth, of any kind, including dev — and may not reach any
+other workspace crate. The facade is a wall, not a waypoint: everything the
+engine has is behind it, and the walk stops there rather than following it into
+`jidousha-core` and calling that a breach.
+
+Usage:  tools/check-game-deps
+
+Exit codes: 0 every game is facade-only · 1 a game reaches past the facade, or a
+game directory is not a workspace member · 2 the check could not run.
+
+Key functions: `internal_crates`, `game_packages`, `reaches_past_facade`,
+`unlisted_game_directories`, `main`.
+Depends on: the Python 3.8+ standard library, and `cargo metadata`.
+INVARIANT: the walk never traverses the facade package. Traversing it would
+report every internal crate as a breach of every game, which is the same as
+having no check.
+"""
+
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+# Where prototypes live, and where retired ones go (ADR-0038). `attic/` is
+# outside the workspace and outside every glob here: it is read, never built.
+GAMES_DIR = "games"
+ATTIC_DIR = "attic"
+
+# The one crate a game is allowed to name. Everything else the engine has is
+# behind it (public-api.md §1).
+FACADE = "jidousha"
+
+ADR = "ADR-0038"
+
+METADATA_TIMEOUT_S = 120
+
+
+def fault(detail: str, fix: str) -> "None":
+    """Report a tooling or environment problem in the engine's shape (core.md §9)."""
+    print(
+        f"[jidousha] tools/check-game-deps could not run\n"
+        f"  {detail}\n"
+        f"  likely cause: cargo is unavailable, or the workspace manifest is broken\n"
+        f"  fix: {fix}",
+        file=sys.stderr,
+    )
+    sys.exit(2)
+
+
+def workspace_packages(metadata: dict) -> "dict[str, dict]":
+    """Every workspace member package, keyed by its resolve-graph id."""
+    members = set(metadata.get("workspace_members", []))
+    return {
+        package["id"]: package
+        for package in metadata.get("packages", [])
+        if package["id"] in members
+    }
+
+
+def internal_crates(metadata: dict, root: Path) -> "set[str]":
+    """Names of the engine's own crates, the facade excluded.
+
+    Derived from the workspace rather than from a `jidousha-*` prefix: a crate
+    renamed or added under `crates/` is covered the day it lands, and a game
+    that happens to be called `jidousha-something` is not mistaken for engine
+    code.
+    """
+    crates_root = str(root / "crates")
+    return {
+        package["name"]
+        for package in workspace_packages(metadata).values()
+        if package["name"] != FACADE
+        and str(Path(package["manifest_path"]).parent).startswith(crates_root)
+    }
+
+
+def game_packages(metadata: dict, root: Path) -> "list[dict]":
+    """Every workspace member whose manifest lives under `games/`, sorted by name."""
+    games_root = str(root / GAMES_DIR)
+    found = [
+        package
+        for package in workspace_packages(metadata).values()
+        if str(Path(package["manifest_path"]).parent).startswith(games_root)
+    ]
+    return sorted(found, key=lambda package: package["name"])
+
+
+def resolve_edges(metadata: dict) -> "dict[str, list[tuple[str, list[str]]]]":
+    """The resolved dependency graph as id → [(dependency id, kinds)].
+
+    Kinds are cargo's own words — `null` for a normal dependency, `dev`, `build`
+    — carried through so a breach can say which table it came from. All three
+    are breaches: a dev-dependency on an internal crate is a game's *test*
+    reaching past the facade, which is the same reach.
+    """
+    graph: "dict[str, list[tuple[str, list[str]]]]" = {}
+    resolve = metadata.get("resolve") or {}
+    for node in resolve.get("nodes", []):
+        edges = []
+        for dep in node.get("deps", []):
+            kinds = sorted(
+                {(kind.get("kind") or "normal") for kind in dep.get("dep_kinds", [])}
+            ) or ["normal"]
+            edges.append((dep["pkg"], kinds))
+        graph[node["id"]] = edges
+    return graph
+
+
+def package_names(metadata: dict) -> "dict[str, str]":
+    """id → package name, for every package the resolve graph can mention."""
+    return {package["id"]: package["name"] for package in metadata.get("packages", [])}
+
+
+def reaches_past_facade(
+    metadata: dict, root: Path, game_id: str
+) -> "list[tuple[str, list[str], list[str]]]":
+    """Every internal crate one game reaches, as (crate, kinds, path of names).
+
+    Breadth-first from the game, so the reported path is a shortest one — the
+    edge an author can actually delete. The facade is never traversed
+    (INVARIANT above): reaching it is the whole allowed API.
+    """
+    names = package_names(metadata)
+    graph = resolve_edges(metadata)
+    internal = internal_crates(metadata, root)
+
+    breaches: "list[tuple[str, list[str], list[str]]]" = []
+    seen = {game_id}
+    queue: "list[tuple[str, list[str], list[str]]]" = [(game_id, [], [names[game_id]])]
+    while queue:
+        current, kinds_here, path = queue.pop(0)
+        for dependency, kinds in graph.get(current, []):
+            name = names.get(dependency, dependency)
+            # The kinds that got us here bound the kinds beyond it: a dev-only
+            # dependency's own normal dependencies are still only reachable in
+            # a dev build. The first hop's words are the honest ones to report.
+            edge_kinds = kinds_here or kinds
+            if name in internal:
+                breaches.append((name, edge_kinds, path + [name]))
+                continue
+            if name == FACADE or dependency in seen:
+                continue
+            seen.add(dependency)
+            queue.append((dependency, edge_kinds, path + [name]))
+    return sorted(breaches)
+
+
+def unlisted_game_directories(root: Path, members: "list[dict]") -> "list[str]":
+    """Directories under `games/` that hold a crate cargo is not building.
+
+    A prototype that is not a workspace member gets none of the gates ADR-0038
+    promises it — not this check, not clippy, not `tools/test` — and its absence
+    is silent, because the thing that would notice is the tool it escaped.
+    """
+    games = root / GAMES_DIR
+    if not games.is_dir():
+        return []
+    listed = {Path(package["manifest_path"]).parent.name for package in members}
+    return sorted(
+        entry.name
+        for entry in games.iterdir()
+        if entry.is_dir() and (entry / "Cargo.toml").is_file() and entry.name not in listed
+    )
+
+
+def breach_report(game: str, breaches: "list[tuple[str, list[str], list[str]]]") -> str:
+    """The failure text for one game, in the engine's message shape (core.md §9)."""
+    lines = [
+        f"[jidousha] games/{game} depends on an engine crate that is not the facade"
+    ]
+    for name, kinds, path in breaches:
+        lines.append(f"  dependency: {name} ({', '.join(kinds)})")
+        lines.append(f"  reached by: {' -> '.join(path)}")
+    lines += [
+        f"  likely cause: a `{breaches[0][0]}` line in games/{game}/Cargo.toml, or a "
+        "crate in between that carries one",
+        f"  fix: depend on `{FACADE}` alone and use what it re-exports; if the facade "
+        f"does not expose what the game needs, that gap is the finding to report "
+        f"({ADR}, public-api.md §4)",
+    ]
+    return "\n".join(lines)
+
+
+def read_metadata() -> dict:
+    """Ask cargo for the resolved workspace graph."""
+    try:
+        proc = subprocess.run(
+            ["cargo", "metadata", "--format-version", "1"],
+            cwd=REPO_ROOT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=METADATA_TIMEOUT_S,
+            text=True,
+        )
+    except (OSError, subprocess.TimeoutExpired) as err:
+        fault(f"`cargo metadata` did not complete: {err}", "run `cargo metadata` by hand")
+    if proc.returncode != 0:
+        fault(
+            f"`cargo metadata` exited {proc.returncode}: {proc.stderr.strip()}",
+            "read the error above; it is cargo's, not this tool's",
+        )
+    try:
+        return json.loads(proc.stdout)
+    except ValueError as err:
+        fault(f"`cargo metadata` printed something that is not JSON: {err}", "run tools/doctor")
+    return {}  # unreachable; `fault` exits
+
+
+def main(argv: "list[str]") -> int:
+    if len(argv) > 1 and argv[1] in ("-h", "--help"):
+        print(__doc__)
+        return 0
+
+    metadata = read_metadata()
+    games = game_packages(metadata, REPO_ROOT)
+
+    unlisted = unlisted_game_directories(REPO_ROOT, games)
+    if unlisted:
+        named = ", ".join(f"games/{name}" for name in unlisted)
+        print(
+            f"[jidousha] a prototype is not in the workspace\n"
+            f"  not a workspace member: {named}\n"
+            f"  likely cause: the crate was created without adding it to the workspace\n"
+            f'  fix: `members` in the root Cargo.toml globs "games/*"; check the '
+            f"directory holds a Cargo.toml with a [package] name ({ADR})",
+            file=sys.stderr,
+        )
+        return 1
+
+    if not games:
+        # No prototypes yet, which is a fact about the tree and not a failure:
+        # `games/` ships empty and takes what comes next (ADR-0038).
+        print(f"[check-game-deps] no games under {GAMES_DIR}/ — nothing to check")
+        return 0
+
+    failed = False
+    for package in games:
+        breaches = reaches_past_facade(metadata, REPO_ROOT, package["id"])
+        if breaches:
+            print(breach_report(package["name"], breaches), file=sys.stderr)
+            failed = True
+        else:
+            print(f"[check-game-deps] {package['name']}: {FACADE} only — ok")
+    if failed:
+        return 1
+    print(f"[check-game-deps] {len(games)} game(s) reach the engine through {FACADE} only")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

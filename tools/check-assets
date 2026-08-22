@@ -282,11 +282,32 @@ def check_file(repo: Path, source: Path) -> "list[str]":
     return problems
 
 
+# Every glob below is rooted at a workspace directory, so `attic/` — retired
+# prototypes, outside the workspace (ADR-0038) — is never reached. Named here
+# anyway, and asserted by a self-test: a glob that grew a `**` at the front
+# would start reporting broken paths in code nobody builds.
+IGNORED_ROOTS = ("attic",)
+
+SOURCE_GLOBS = (
+    "crates/*/src/**/*.rs",
+    "crates/*/examples/**/*.rs",
+    # Prototypes are workspace members and load assets like anything else
+    # (ADR-0038); a mistyped path in a game is the same runtime placeholder hunt.
+    "games/*/src/**/*.rs",
+    "games/*/examples/**/*.rs",
+)
+
+
 def rust_sources(repo: Path) -> "list[Path]":
-    """Every Rust file in the workspace's crates, sorted."""
-    return sorted(repo.glob("crates/*/src/**/*.rs")) + sorted(
-        repo.glob("crates/*/examples/**/*.rs")
-    )
+    """Every Rust file in the workspace's crates and games, sorted."""
+    found: "list[Path]" = []
+    for pattern in SOURCE_GLOBS:
+        found += sorted(repo.glob(pattern))
+    return [
+        path
+        for path in found
+        if not any(part in IGNORED_ROOTS for part in path.relative_to(repo).parts)
+    ]
 
 
 def main(argv: "list[str]") -> int:
@@ -299,7 +320,7 @@ def main(argv: "list[str]") -> int:
         print(
             problem(
                 "found no Rust sources to check",
-                f"looked under {repo}/crates",
+                f"looked under {repo}/crates and {repo}/games",
                 "the check was run from outside the repository",
                 "run it from the repository, or pass --root <repo>",
             ),

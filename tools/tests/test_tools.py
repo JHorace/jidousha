@@ -47,6 +47,7 @@ gen_api_doc = load_tool("gen-api-doc")
 check_api_prose = load_tool("check-api-prose")
 check_api_coverage = load_tool("check-api-coverage")
 check_compile_fail = load_tool("check-compile-fail")
+check_game_deps = load_tool("check-game-deps")
 api_coverage = load_tool("check-api-coverage")
 
 
@@ -2184,12 +2185,17 @@ class VerifyToolTest(unittest.TestCase):
         )
 
     def test_an_example_is_looked_up_by_name_across_the_workspace(self):
-        examples = [("jidousha-core", "homing"), ("jidousha-platform", "prototype_kit")]
-        self.assertEqual(verify.find_example(examples, "prototype_kit"), "jidousha-platform")
+        playables = [
+            ("jidousha-core", "homing", "example"),
+            ("jidousha-platform", "prototype_kit", "example"),
+        ]
+        self.assertEqual(
+            verify.find_playable(playables, "prototype_kit"), ("jidousha-platform", "example")
+        )
 
     def test_an_unknown_example_is_not_resolved_to_some_other_package(self):
-        examples = [("jidousha-core", "homing")]
-        self.assertIsNone(verify.find_example(examples, "nope"))
+        playables = [("jidousha-core", "homing", "example")]
+        self.assertIsNone(verify.find_playable(playables, "nope"))
 
     def test_a_clean_run_with_a_verdict_is_a_pass(self):
         self.assertEqual(verify.verdict_status("ok", "verified thing over 3 ticks"), "pass")
@@ -2414,7 +2420,9 @@ class BuildWebTest(unittest.TestCase):
     def test_the_root_index_leads_with_the_headline_example(self):
         # prototype_kit is the headline (web-publish.md §3); the rest stay
         # alphabetical so the list is stable across builds.
-        items = build_web.root_index_items(["sprites", "prototype_kit", "homing"])
+        items = build_web.root_index_items(
+            ["sprites", "prototype_kit", "homing"], headline="prototype_kit"
+        )
         first = items.splitlines()[0]
         self.assertIn("prototype_kit", first)
         self.assertIn('class="headline"', first)
@@ -2428,7 +2436,7 @@ class BuildWebTest(unittest.TestCase):
             build_web.DIST = Path(scratch)
             try:
                 step = build_web.stage_root_index(
-                    ["pong", "prototype_kit"], "abc1234 · 2026-08-22"
+                    ["pong", "prototype_kit"], [], "abc1234 · 2026-08-22"
                 )
                 page = (Path(scratch) / "index.html").read_text(encoding="utf-8")
                 stamp = (Path(scratch) / "stamp.txt").read_text(encoding="utf-8")
@@ -2436,6 +2444,7 @@ class BuildWebTest(unittest.TestCase):
                 build_web.DIST = previous
         self.assertEqual(step, 0)
         self.assertNotIn("__ITEMS__", page)
+        self.assertNotIn("__GAMES__", page)
         self.assertNotIn("__BUILD_STAMP__", page)
         self.assertIn('href="pong/"', page)
         self.assertEqual(stamp, "abc1234 · 2026-08-22\n")
@@ -2443,9 +2452,9 @@ class BuildWebTest(unittest.TestCase):
     def test_every_native_only_exclusion_names_a_real_example(self):
         # The list must rot loudly: an entry for a renamed or deleted example
         # would silently exclude nothing while claiming to exclude something.
-        targets = build_web.example_targets()
+        targets = build_web.playable_targets()
         self.assertIsNotNone(targets)
-        names = {example for _package, example in targets}
+        names = {name for _package, name, _kind in targets}
         for name in build_web.NATIVE_ONLY_EXAMPLES:
             self.assertIn(name, names)
 
@@ -2533,3 +2542,306 @@ class DoctorWebChecksTest(unittest.TestCase):
         # The pin moves only with a browser check in hand (build-web's
         # constant): 108 verified broken, 124 verified good on PR #59.
         self.assertGreaterEqual(build_web.MIN_WASM_OPT_VERSION, 124)
+
+
+# --- games: prototypes as workspace members (ADR-0038) -----------------------
+
+GAMES_ROOT = Path("/repo")
+
+
+def workspace_metadata(packages, edges=None):
+    """Synthetic `cargo metadata` for a workspace of `packages`.
+
+    `packages` is [(name, manifest directory, [(target name, [kinds])])];
+    `edges` is {package name: [(dependency name, kind or None)]}. Ids are the
+    names, which is enough for every walk under test and reads better in a
+    failure than a `path+file://` URL would.
+    """
+    edges = edges or {}
+    return {
+        "workspace_members": [name for name, _directory, _targets in packages],
+        "packages": [
+            {
+                "id": name,
+                "name": name,
+                "manifest_path": str(GAMES_ROOT / directory / "Cargo.toml"),
+                "targets": [{"name": target, "kind": kinds} for target, kinds in targets],
+            }
+            for name, directory, targets in packages
+        ],
+        "resolve": {
+            "nodes": [
+                {
+                    "id": name,
+                    "deps": [
+                        {"pkg": dependency, "dep_kinds": [{"kind": kind}]}
+                        for dependency, kind in edges.get(name, [])
+                    ],
+                }
+                for name, _directory, _targets in packages
+            ]
+        },
+    }
+
+
+ENGINE = [
+    ("jidousha", "crates/jidousha", [("jidousha", ["lib"])]),
+    ("jidousha-core", "crates/jidousha-core", [("jidousha_core", ["lib"])]),
+    ("jidousha-render-wgpu", "crates/jidousha-render-wgpu", [("jidousha_render_wgpu", ["lib"])]),
+]
+ENGINE_EDGES = {"jidousha": [("jidousha-core", None), ("jidousha-render-wgpu", None)]}
+
+
+def workspace_with_game(game_edges, name="pong", directory="games/pong"):
+    """The engine plus one game whose resolved dependencies are `game_edges`."""
+    packages = ENGINE + [(name, directory, [(name, ["bin"])])]
+    edges = dict(ENGINE_EDGES)
+    edges[name] = game_edges
+    return workspace_metadata(packages, edges)
+
+
+class GameDependencyTest(unittest.TestCase):
+    def test_a_game_depending_only_on_the_facade_passes(self):
+        metadata = workspace_with_game([("jidousha", None)])
+        self.assertEqual(
+            check_game_deps.reaches_past_facade(metadata, GAMES_ROOT, "pong"), []
+        )
+
+    def test_the_facade_is_a_wall_and_not_a_waypoint(self):
+        # The facade depends on every internal crate. Walking through it would
+        # report all of them as breaches of every game, which is the same as
+        # having no check at all — the INVARIANT the script states.
+        metadata = workspace_with_game([("jidousha", None)])
+        breaches = check_game_deps.reaches_past_facade(metadata, GAMES_ROOT, "pong")
+        self.assertNotIn("jidousha-core", [name for name, _kinds, _path in breaches])
+
+    def test_a_direct_reach_past_the_facade_is_a_breach(self):
+        metadata = workspace_with_game([("jidousha", None), ("jidousha-core", None)])
+        breaches = check_game_deps.reaches_past_facade(metadata, GAMES_ROOT, "pong")
+        self.assertEqual([name for name, _kinds, _path in breaches], ["jidousha-core"])
+
+    def test_a_transitive_reach_is_a_breach_and_the_path_names_the_middle(self):
+        # The reason a game is a crate rather than an example (ADR-0038): a
+        # grep over source text cannot see this one at all.
+        packages = ENGINE + [
+            ("pong", "games/pong", [("pong", ["bin"])]),
+            ("helper", "vendor/helper", [("helper", ["lib"])]),
+        ]
+        edges = dict(ENGINE_EDGES)
+        edges["pong"] = [("jidousha", None), ("helper", None)]
+        edges["helper"] = [("jidousha-render-wgpu", None)]
+        breaches = check_game_deps.reaches_past_facade(
+            workspace_metadata(packages, edges), GAMES_ROOT, "pong"
+        )
+        self.assertEqual(
+            breaches, [("jidousha-render-wgpu", ["normal"], ["pong", "helper", "jidousha-render-wgpu"])]
+        )
+
+    def test_a_dev_dependency_on_an_engine_crate_is_a_breach_too(self):
+        # A game's *test* reaching past the facade is the same reach, and the
+        # message says which table it came from so the line is findable.
+        metadata = workspace_with_game([("jidousha", None), ("jidousha-core", "dev")])
+        breaches = check_game_deps.reaches_past_facade(metadata, GAMES_ROOT, "pong")
+        self.assertEqual(breaches, [("jidousha-core", ["dev"], ["pong", "jidousha-core"])])
+
+    def test_the_engine_crates_are_read_off_the_workspace_not_off_a_prefix(self):
+        # A crate renamed or added under crates/ is covered the day it lands.
+        metadata = workspace_with_game([("jidousha", None)])
+        self.assertEqual(
+            check_game_deps.internal_crates(metadata, GAMES_ROOT),
+            {"jidousha-core", "jidousha-render-wgpu"},
+        )
+
+    def test_the_facade_is_never_one_of_the_crates_a_game_may_not_name(self):
+        metadata = workspace_with_game([("jidousha", None)])
+        self.assertNotIn(
+            check_game_deps.FACADE, check_game_deps.internal_crates(metadata, GAMES_ROOT)
+        )
+
+    def test_a_workspace_with_no_games_has_no_games(self):
+        # `games/` ships empty and the first prototype lands later; that is a
+        # fact about the tree, not a failure (ADR-0038).
+        metadata = workspace_metadata(ENGINE, ENGINE_EDGES)
+        self.assertEqual(check_game_deps.game_packages(metadata, GAMES_ROOT), [])
+
+    def test_only_crates_under_games_are_games(self):
+        metadata = workspace_with_game([("jidousha", None)])
+        self.assertEqual(
+            [package["name"] for package in check_game_deps.game_packages(metadata, GAMES_ROOT)],
+            ["pong"],
+        )
+
+    def test_a_game_directory_outside_the_workspace_is_reported(self):
+        # It would get none of the gates ADR-0038 promises it, and the absence
+        # is silent: the thing that would notice is the tool it escaped.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "games/stray").mkdir(parents=True)
+            (root / "games/stray/Cargo.toml").write_text("[package]\nname = \"stray\"\n")
+            self.assertEqual(check_game_deps.unlisted_game_directories(root, []), ["stray"])
+
+    def test_a_listed_game_is_not_reported_as_stray(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "games/pong").mkdir(parents=True)
+            (root / "games/pong/Cargo.toml").write_text("[package]\nname = \"pong\"\n")
+            members = [{"manifest_path": str(root / "games/pong/Cargo.toml")}]
+            self.assertEqual(check_game_deps.unlisted_game_directories(root, members), [])
+
+    def test_a_games_readme_is_not_mistaken_for_a_crate(self):
+        # `games/README.md` is what keeps the `games/*` workspace glob non-empty
+        # while no prototype exists — cargo resolves a glob that matches nothing
+        # to a literal path and fails on it.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "games").mkdir(parents=True)
+            (root / "games/README.md").write_text("# games/\n")
+            self.assertEqual(check_game_deps.unlisted_game_directories(root, []), [])
+
+    def test_the_breach_report_names_the_dependency_and_the_adr(self):
+        # The error is what an agent pastes back into its own context
+        # (practices §5.5): it has to carry the fix with it.
+        report = check_game_deps.breach_report(
+            "pong", [("jidousha-core", ["normal"], ["pong", "jidousha-core"])]
+        )
+        self.assertIn("jidousha-core", report)
+        self.assertIn(check_game_deps.ADR, report)
+        self.assertIn("fix:", report)
+
+    def test_the_repository_itself_has_no_game_reaching_past_the_facade(self):
+        # The check run against the tree that ships, not only against fixtures.
+        metadata = check_game_deps.read_metadata()
+        for package in check_game_deps.game_packages(metadata, REPO_ROOT):
+            self.assertEqual(
+                check_game_deps.reaches_past_facade(metadata, REPO_ROOT, package["id"]),
+                [],
+                f"{package['name']} reaches past the facade",
+            )
+
+
+class GameToolingTest(unittest.TestCase):
+    METADATA = workspace_with_game([("jidousha", None)])
+
+    def test_the_test_wrapper_finds_a_game(self):
+        self.assertEqual(
+            test_wrapper.parse_game_targets(self.METADATA, GAMES_ROOT), [("pong", "pong")]
+        )
+
+    def test_the_test_wrapper_does_not_call_an_engine_crate_a_game(self):
+        self.assertEqual(
+            test_wrapper.parse_game_targets(workspace_metadata(ENGINE, ENGINE_EDGES), GAMES_ROOT),
+            [],
+        )
+
+    def test_a_game_is_verified_rather_than_run_bare(self):
+        # Every game is verified and none is registered anywhere: it is a game
+        # because of where it lives, which is the step that was missed after E0
+        # runs 4, 5 and 7 (F-094) and now cannot be.
+        name, command = test_wrapper.game_phase("pong")
+        self.assertEqual(name, "game-verify:pong")
+        self.assertIn("tools/verify", command)
+
+    def test_verify_resolves_a_game_and_an_example_by_name(self):
+        playables = verify.parse_playables(self.METADATA, GAMES_ROOT)
+        self.assertEqual(verify.find_playable(playables, "pong"), ("pong", "game"))
+        self.assertIsNone(verify.find_playable(playables, "nothing-by-that-name"))
+
+    def test_verify_runs_a_game_as_its_package_binary(self):
+        # An example is picked out of its crate by name; a game *is* its crate.
+        self.assertEqual(
+            verify.verify_command("pong", "pong", "game", []),
+            ["cargo", "run", "--quiet", "-p", "pong", "--", "--verify"],
+        )
+
+    def test_verify_still_runs_an_example_with_the_example_selector(self):
+        self.assertEqual(
+            verify.verify_command("jidousha", "slalom", "example", []),
+            ["cargo", "run", "--quiet", "-p", "jidousha", "--example", "slalom", "--", "--verify"],
+        )
+
+    def test_a_game_and_an_example_may_not_share_a_name(self):
+        # `tools/verify <name>`, `tools/build-web <name>` and `dist/<name>/` all
+        # key off the bare name, so a collision is a rename somebody owes.
+        colliding = workspace_metadata(
+            [
+                ("jidousha", "crates/jidousha", [("slalom", ["example"])]),
+                ("slalom", "games/slalom", [("slalom", ["bin"])]),
+            ]
+        )
+        self.assertEqual(
+            verify.duplicate_names(verify.parse_playables(colliding, GAMES_ROOT)), ["slalom"]
+        )
+
+    def test_the_committed_tree_has_no_colliding_playable_names(self):
+        playables = verify.parse_playables(check_game_deps.read_metadata(), REPO_ROOT)
+        self.assertEqual(verify.duplicate_names(playables), [])
+
+    def test_a_games_wasm_module_is_not_looked_for_under_examples(self):
+        # Cargo puts an example's module in `examples/` under the profile
+        # directory and a binary's in the profile directory itself. The only
+        # place that distinction reaches.
+        game = build_web.module_path("pong", "game", debug=False)
+        example = build_web.module_path("slalom", "example", debug=False)
+        self.assertEqual(game.parent.name, "release")
+        self.assertEqual(example.parent.name, "examples")
+
+    def test_the_web_fleet_carries_every_game_and_the_facades_examples(self):
+        targets = [
+            ("jidousha", "sprites", "example"),
+            ("jidousha", "load_from_disk", "example"),
+            ("jidousha-platform", "window_blank", "example"),
+            ("pong", "pong", "game"),
+        ]
+        with contextlib.redirect_stdout(io.StringIO()):
+            examples, games = build_web.fleet(targets)
+        # `load_from_disk` is native by design; window_blank is an internal
+        # crate's example and is engine documentation, not playtest material.
+        self.assertEqual(examples, ["sprites"])
+        self.assertEqual(games, ["pong"])
+
+    def test_the_root_index_has_no_games_section_when_there_are_no_games(self):
+        # An index with no prototypes yet should not carry an empty heading.
+        self.assertEqual(build_web.root_index_games([]), "")
+
+    def test_the_root_index_gives_games_their_own_section(self):
+        section = build_web.root_index_games(["pong"])
+        self.assertIn("<h2>games</h2>", section)
+        self.assertIn('<a href="pong/">pong</a>', section)
+
+    def test_the_root_index_template_has_a_slot_for_each_section(self):
+        # A template that lost the placeholder would deploy the literal text.
+        template = (REPO_ROOT / "tools/web-template/root-index.html").read_text("utf-8")
+        self.assertIn("__ITEMS__", template)
+        self.assertIn("__GAMES__", template)
+
+    def test_check_assets_reads_a_games_sources(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "games/pong/src").mkdir(parents=True)
+            (root / "games/pong/src/main.rs").write_text("fn main() {}")
+            self.assertEqual(
+                [path.name for path in check_assets.rust_sources(root)], ["main.rs"]
+            )
+
+    def test_check_assets_never_reads_the_attic(self):
+        # Retired prototypes are outside the workspace and are not expected to
+        # compile against the engine as it stands (ADR-0038); reporting their
+        # asset paths would be noise about code nobody builds.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "attic/old/src").mkdir(parents=True)
+            (root / "attic/old/src/main.rs").write_text("fn main() {}")
+            self.assertEqual(check_assets.rust_sources(root), [])
+
+    def test_the_facade_check_runs_locally_and_in_ci_from_the_same_script(self):
+        # ADR-0038's consequence: a check enforced in one place and skippable in
+        # the other is a check whose result depends on where you stood.
+        wrapper = (REPO_ROOT / "tools/test").read_text("utf-8")
+        workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text("utf-8")
+        self.assertIn('Phase("check-game-deps"', wrapper)
+        self.assertIn("tools/check-game-deps", workflow)
+
+    def test_the_workspace_excludes_the_attic_and_includes_games(self):
+        manifest = (REPO_ROOT / "Cargo.toml").read_text("utf-8")
+        self.assertIn('"games/*"', manifest)
+        self.assertIn('exclude = ["attic"]', manifest)

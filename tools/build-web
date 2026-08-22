@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build one Jidousha example for the web, into dist/<name>/.
+"""Build one Jidousha example or game for the web, into dist/<name>/.
 
 CONTRACT (web-publish.md §1): this is the ONLY web build path — CI, local dev,
 and game repos all run this same script. `tools/serve-web` serves what this
@@ -7,8 +7,8 @@ builds; the deploy workflow (W1) uploads it verbatim.
 
     tools/build-web sprites             # release build into dist/sprites/
     tools/build-web sprites --debug     # unoptimized, for fast iteration
-    tools/build-web --all               # every example + the root index page
-                                        # (the engine-repo deploy layout, §3)
+    tools/build-web --all               # every example and game + the root index
+                                        # page (the engine-repo deploy layout, §3)
 
 The pipeline: cargo build for wasm32 (release by default — what ships is what
 gets tested), wasm-bindgen to generate the JS glue, wasm-opt -Os if installed
@@ -145,8 +145,31 @@ def run(command: "list[str]", what: str) -> int:
     return 0
 
 
-def example_targets() -> "list[tuple[str, str]] | None":
-    """Every (package, example) pair the workspace defines, sorted by name."""
+def parse_playables(metadata: dict, repo: Path) -> "list[tuple[str, str, str]]":
+    """Everything the workspace can put on a page, as (package, name, kind).
+
+    `example` is an example target of a workspace member; `game` is a binary of
+    a workspace member under `games/` (ADR-0038). The kind decides how cargo is
+    asked for it and where the module lands, and nothing else here.
+    """
+    members = set(metadata.get("workspace_members", []))
+    games_root = str(repo / "games")
+    found = []
+    for package in metadata.get("packages", []):
+        if package["id"] not in members:
+            continue
+        is_game = str(Path(package["manifest_path"]).parent).startswith(games_root)
+        for target in package.get("targets", []):
+            kinds = target.get("kind", [])
+            if "example" in kinds:
+                found.append((package["name"], target["name"], "example"))
+            elif is_game and "bin" in kinds:
+                found.append((package["name"], target["name"], "game"))
+    return sorted(found, key=lambda entry: entry[1])
+
+
+def playable_targets() -> "list[tuple[str, str, str]] | None":
+    """Every (package, name, kind) the workspace defines, sorted by name."""
     proc = subprocess.run(
         ["cargo", "metadata", "--format-version", "1", "--no-deps"],
         cwd=REPO_ROOT,
@@ -156,26 +179,17 @@ def example_targets() -> "list[tuple[str, str]] | None":
     )
     if proc.returncode != 0:
         return None
-    metadata = json.loads(proc.stdout)
-    members = set(metadata.get("workspace_members", []))
-    found = []
-    for package in metadata.get("packages", []):
-        if package["id"] not in members:
-            continue
-        for target in package.get("targets", []):
-            if "example" in target.get("kind", []):
-                found.append((package["name"], target["name"]))
-    return sorted(found, key=lambda pair: pair[1])
+    return parse_playables(json.loads(proc.stdout), REPO_ROOT)
 
 
-def find_example(name: str) -> "tuple[str, str] | None":
-    """The package owning `name`, and the name itself."""
-    targets = example_targets()
+def find_playable(name: str) -> "tuple[str, str, str] | None":
+    """The package owning `name`, the name, and its kind."""
+    targets = playable_targets()
     if targets is None:
         return None
-    for package, example in targets:
-        if example == name:
-            return (package, example)
+    for package, playable, kind in targets:
+        if playable == name:
+            return (package, playable, kind)
     return None
 
 
@@ -298,29 +312,45 @@ def report_size(wasm: Path) -> None:
         )
 
 
-def compile_examples(package: str, examples: "list[str]", debug: bool) -> int:
-    """One cargo invocation for every requested example of one package."""
+def compile_playables(package: str, names: "list[str]", kind: str, debug: bool) -> int:
+    """One cargo invocation for every requested target of one package.
+
+    A game's binary needs no selector — the crate is the game — where an example
+    is picked out of its crate by name.
+    """
     command = ["cargo", "build", "--target", TARGET, "-p", package]
-    for example in examples:
-        command += ["--example", example]
+    if kind == "example":
+        for name in names:
+            command += ["--example", name]
     if not debug:
         command.append("--release")
     return run(command, "the wasm build")
 
 
-def stage_example(example: str, debug: bool, stamp: str) -> int:
-    """Bind, optimize, and stage one already-compiled example under dist/<name>/."""
-    profile = "debug" if debug else "release"
-    wasm = REPO_ROOT / "target" / TARGET / profile / "examples" / f"{example}.wasm"
+def module_path(name: str, kind: str, debug: bool) -> Path:
+    """Where cargo leaves the wasm module for one playable.
+
+    Examples land in an `examples/` subdirectory of the profile directory;
+    binaries land in the profile directory itself. The only place this
+    distinction reaches.
+    """
+    profile = REPO_ROOT / "target" / TARGET / ("debug" if debug else "release")
+    directory = profile / "examples" if kind == "example" else profile
+    return directory / f"{name}.wasm"
+
+
+def stage_playable(name: str, kind: str, debug: bool, stamp: str) -> int:
+    """Bind, optimize, and stage one already-compiled playable under dist/<name>/."""
+    wasm = module_path(name, kind, debug)
     if not wasm.exists():
         return fail(
             "the wasm build produced no module",
             f"expected {wasm.relative_to(REPO_ROOT)}",
-            "the example built for a different profile, or cargo changed its output layout",
+            "it built for a different profile, or cargo changed its output layout",
             "check the build output above for where the artifact went",
         )
 
-    out_dir = DIST / example
+    out_dir = DIST / name
     out_dir.mkdir(parents=True, exist_ok=True)
     step = run(
         [
@@ -331,7 +361,7 @@ def stage_example(example: str, debug: bool, stamp: str) -> int:
             "--out-dir",
             str(out_dir),
             "--out-name",
-            example,
+            name,
             str(wasm),
         ],
         "wasm-bindgen",
@@ -339,7 +369,7 @@ def stage_example(example: str, debug: bool, stamp: str) -> int:
     if step != 0:
         return step
 
-    module = out_dir / f"{example}_bg.wasm"
+    module = out_dir / f"{name}_bg.wasm"
     optimize(module)
     report_size(module)
 
@@ -350,32 +380,54 @@ def stage_example(example: str, debug: bool, stamp: str) -> int:
             "the checkout is incomplete, or the template was moved without updating this tool",
             "restore tools/web-template/index.html",
         )
-    stage_page(out_dir, example, stamp)
+    stage_page(out_dir, name, stamp)
     stage_assets(out_dir)
-    print(f"[build-web] built {out_dir.relative_to(REPO_ROOT)}/ — serve it with `tools/serve-web {example}`")
+    print(f"[build-web] built {out_dir.relative_to(REPO_ROOT)}/ — serve it with `tools/serve-web {name}`")
     return 0
 
 
-def build(package: str, example: str, debug: bool) -> int:
-    """Compile, bind, optimize, and stage one example under dist/<name>/."""
-    step = compile_examples(package, [example], debug)
+def build(package: str, name: str, kind: str, debug: bool) -> int:
+    """Compile, bind, optimize, and stage one playable under dist/<name>/."""
+    step = compile_playables(package, [name], kind, debug)
     if step != 0:
         return step
-    return stage_example(example, debug, build_stamp())
+    return stage_playable(name, kind, debug, build_stamp())
 
 
-def root_index_items(examples: "list[str]") -> str:
-    """The root page's list, `prototype_kit` first — it is the headline
-    (web-publish.md §3) — and the rest alphabetical."""
-    ordered = sorted(examples, key=lambda name: (name != "prototype_kit", name))
+def root_index_items(names: "list[str]", headline: "str | None" = None) -> str:
+    """One section's list, `headline` first when the section has one.
+
+    `prototype_kit` leads the examples (web-publish.md §3); games are listed in
+    the order they sort, because no prototype is the headline of the others.
+    """
+    ordered = sorted(names, key=lambda name: (name != headline, name))
     lines = []
     for name in ordered:
-        headline = ' class="headline"' if name == "prototype_kit" else ""
-        lines.append(f'<li{headline}><a href="{name}/">{name}</a></li>')
+        marker = ' class="headline"' if name == headline else ""
+        lines.append(f'<li{marker}><a href="{name}/">{name}</a></li>')
     return "\n        ".join(lines)
 
 
-def stage_root_index(examples: "list[str]", stamp: str) -> int:
+def root_index_games(names: "list[str]") -> str:
+    """The games section of the root page, or nothing at all when there are none.
+
+    `games/` ships empty and the first prototype lands later (ADR-0038), so the
+    common case today is an index with no games section — not one with an empty
+    heading over an empty list.
+    """
+    if not names:
+        return ""
+    return (
+        '\n      <h2>games</h2>\n'
+        "      <p>prototypes built with the engine — one crate each, under "
+        "<code>games/</code></p>\n"
+        "      <ul>\n        "
+        + root_index_items(names)
+        + "\n      </ul>\n"
+    )
+
+
+def stage_root_index(examples: "list[str]", games: "list[str]", stamp: str) -> int:
     """Write the dist/ root: the index page and the stamp file.
 
     `stamp.txt` exists so the deploy workflow can put the exact stamp the pages
@@ -389,68 +441,94 @@ def stage_root_index(examples: "list[str]", stamp: str) -> int:
             "restore tools/web-template/root-index.html",
         )
     page = ROOT_TEMPLATE.read_text(encoding="utf-8")
-    page = page.replace("__ITEMS__", root_index_items(examples))
+    page = page.replace("__ITEMS__", root_index_items(examples, headline="prototype_kit"))
+    page = page.replace("__GAMES__", root_index_games(games))
     page = page.replace("__BUILD_STAMP__", stamp)
     (DIST / "index.html").write_text(page, encoding="utf-8")
     (DIST / "stamp.txt").write_text(stamp + "\n", encoding="utf-8")
-    print(f"[build-web] wrote dist/index.html listing {len(examples)} example(s)")
+    print(
+        f"[build-web] wrote dist/index.html listing {len(examples)} example(s) "
+        f"and {len(games)} game(s)"
+    )
     return 0
 
 
-def prune_stale(examples: "list[str]") -> None:
-    """Remove dist/ subdirectories that no longer name an example.
+def prune_stale(names: "list[str]") -> None:
+    """Remove dist/ subdirectories that no longer name an example or a game.
 
-    dist/ is what deploys, verbatim — a renamed example must not leave its old
-    self playable on the site.
+    dist/ is what deploys, verbatim — a renamed example, or a prototype moved to
+    `attic/`, must not leave its old self playable on the site.
     """
-    keep = set(examples)
+    keep = set(names)
     for entry in DIST.iterdir():
         if entry.is_dir() and entry.name not in keep:
             shutil.rmtree(entry)
-            print(f"[build-web] pruned stale dist/{entry.name}/ (no such example)")
+            print(f"[build-web] pruned stale dist/{entry.name}/ (no such example or game)")
 
 
-def build_all(targets: "list[tuple[str, str]]", debug: bool) -> int:
-    """The engine-repo deploy layout: every web example, plus the root index.
+def fleet(targets: "list[tuple[str, str, str]]") -> "tuple[list[str], list[str]]":
+    """The examples and the games that get pages, from everything the workspace has.
 
-    The fleet is the facade crate's examples — what a game author sees and
-    what docs/api/ points at (`cargo run -p jidousha --example <name>`).
-    Internal crates' examples (render-core's headless demos, platform's
-    window_blank) are engine documentation, not playtest material, and some
-    never touch the JS boundary at all.
+    The example half is the facade crate's — what a game author sees and what
+    docs/api/ points at (`cargo run -p jidousha --example <name>`). Internal
+    crates' examples (render-core's headless demos, platform's `window_blank`)
+    are engine documentation, not playtest material, and some never touch the JS
+    boundary at all. The game half is every prototype: a game exists to be
+    played, and a playtest URL on the first push is most of why it lives here
+    (ADR-0038).
     """
-    by_package: "dict[str, list[str]]" = {}
-    for package, example in targets:
+    examples, games = [], []
+    for package, name, kind in targets:
+        if kind == "game":
+            games.append(name)
+            continue
         if package != FACADE_PACKAGE:
-            print(f"[build-web] skipping {example}: an internal {package} example, not the facade's")
+            print(f"[build-web] skipping {name}: an internal {package} example, not the facade's")
             continue
-        if example in NATIVE_ONLY_EXAMPLES:
-            print(f"[build-web] skipping {example}: {NATIVE_ONLY_EXAMPLES[example]}")
+        if name in NATIVE_ONLY_EXAMPLES:
+            print(f"[build-web] skipping {name}: {NATIVE_ONLY_EXAMPLES[name]}")
             continue
-        by_package.setdefault(package, []).append(example)
-    targets = [(package, example) for package, examples in by_package.items() for example in examples]
-    for package, examples in by_package.items():
-        step = compile_examples(package, examples, debug)
+        examples.append(name)
+    return sorted(examples), sorted(games)
+
+
+def build_all(targets: "list[tuple[str, str, str]]", debug: bool) -> int:
+    """The engine-repo deploy layout: every web example and game, plus the index."""
+    examples, games = fleet(targets)
+    package_of = {name: package for package, name, _kind in targets}
+
+    # One cargo invocation per (package, kind): the facade's examples together,
+    # then each game's own crate.
+    if examples:
+        step = compile_playables(FACADE_PACKAGE, examples, "example", debug)
         if step != 0:
             return step
+    for name in games:
+        step = compile_playables(package_of[name], [name], "game", debug)
+        if step != 0:
+            return step
+
     stamp = build_stamp()
-    names = [example for _package, example in targets]
-    for example in names:
-        step = stage_example(example, debug, stamp)
+    for name in examples:
+        step = stage_playable(name, "example", debug, stamp)
         if step != 0:
             return step
-    prune_stale(names)
-    return stage_root_index(names, stamp)
+    for name in games:
+        step = stage_playable(name, "game", debug, stamp)
+        if step != 0:
+            return step
+    prune_stale(examples + games)
+    return stage_root_index(examples, games, stamp)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("example", nargs="?", help="the example to build, e.g. sprites")
+    parser.add_argument("name", nargs="?", help="the example or game to build, e.g. sprites")
     parser.add_argument(
         "--all",
         action="store_true",
-        help="build every example and the root index page (the engine-repo "
-        "deploy layout, web-publish.md §3)",
+        help="build every example and game, plus the root index page (the "
+        "engine-repo deploy layout, web-publish.md §3)",
     )
     parser.add_argument(
         "--debug",
@@ -458,12 +536,12 @@ def main() -> int:
         help="build the debug profile (default is release: what ships is what gets tested)",
     )
     args = parser.parse_args()
-    if args.all == bool(args.example):
+    if args.all == bool(args.name):
         return fail(
-            "this tool builds one named example, or --all — not both, not neither",
-            f"example={args.example!r}, all={args.all}",
+            "this tool builds one named example or game, or --all — not both, not neither",
+            f"name={args.name!r}, all={args.all}",
             "a missing argument, or a name given alongside --all",
-            "run `tools/build-web <example>` or `tools/build-web --all`",
+            "run `tools/build-web <name>` or `tools/build-web --all`",
         )
 
     step = check_toolchain(locked_wasm_bindgen_version())
@@ -471,33 +549,33 @@ def main() -> int:
         return step
 
     if args.all:
-        targets = example_targets()
+        targets = playable_targets()
         if not targets:
             return fail(
-                "no examples to build",
-                "cargo metadata listed no example targets in the workspace",
-                "cargo failed above, or the workspace really has no examples",
+                "nothing to build",
+                "cargo metadata listed no example or game targets in the workspace",
+                "cargo failed above, or the workspace really has neither",
                 "run `cargo metadata` by hand and read its error",
             )
         return build_all(targets, args.debug)
 
-    if args.example in NATIVE_ONLY_EXAMPLES:
+    if args.name in NATIVE_ONLY_EXAMPLES:
         return fail(
-            f"{args.example} is native by design and has no web build",
-            NATIVE_ONLY_EXAMPLES[args.example],
+            f"{args.name} is native by design and has no web build",
+            NATIVE_ONLY_EXAMPLES[args.name],
             "its wasm main is a printed stub, so wasm-bindgen has nothing to bind",
-            f"run it natively: cargo run -p jidousha --example {args.example}",
+            f"run it natively: cargo run -p jidousha --example {args.name}",
         )
-    found = find_example(args.example)
+    found = find_playable(args.name)
     if found is None:
         return fail(
-            f"no example named {args.example!r}",
-            "the workspace defines no example target with that name",
-            "a typo, or the example lives outside this workspace",
-            "run `cargo metadata` or look under crates/*/examples/ for the list",
+            f"no example or game named {args.name!r}",
+            "the workspace defines no example target and no game with that name",
+            "a typo, or it lives outside this workspace",
+            "run `tools/verify --list` for every name this repo can run",
         )
-    package, example = found
-    return build(package, example, args.debug)
+    package, name, kind = found
+    return build(package, name, kind, args.debug)
 
 
 if __name__ == "__main__":

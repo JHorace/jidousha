@@ -1,6 +1,9 @@
 [workspace]
 resolver = "3"
-members = ["crates/*"]
+members = ["crates/*", "games/*"]
+# Retired prototypes keep their history in the tree and out of every build
+# (ADR-0038). Excluded, not deleted: `attic/` is read, never compiled.
+exclude = ["attic"]
 
 [workspace.package]
 version = "0.1.0"

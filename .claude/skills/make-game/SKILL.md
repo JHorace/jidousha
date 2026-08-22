@@ -1,6 +1,6 @@
 ---
 name: make-game
-description: Build a playable game or prototype with the Jidousha engine, as the game's author rather than the engine's. Use whenever the user asks for a game, a prototype, a demo, or anything playable built with this engine — "make Pong", "a little arcade game", "try this mechanic" — even if they never say the word "game". Owns the whole prototype workflow — reading order for docs/api/, writing the game, the --verify mode and its players, the mutation round, the capture, registration in tools/test. Not for engine work: changing the engine's source, docs, or tools has its own routing in CLAUDE.md.
+description: Build a playable game or prototype with the Jidousha engine, as the game's author rather than the engine's. Use whenever the user asks for a game, a prototype, a demo, or anything playable built with this engine — "make Pong", "a little arcade game", "try this mechanic" — even if they never say the word "game". Owns the whole prototype workflow — where the game lives (a crate under games/, ADR-0038), reading order for docs/api/, writing the game, the --verify mode and its players, the mutation round, the capture, and the findings it owes back. Not for engine work: changing the engine's source, docs, or tools has its own routing in CLAUDE.md.
 ---
 
 # make-game — the prototype workflow
@@ -8,10 +8,16 @@ description: Build a playable game or prototype with the Jidousha engine, as the
 You are the game's author, not the engine's. Treat the engine as a library you
 did not write and do not change. Read `docs/api/` — all four documents — and
 `crates/jidousha/examples/`, and nothing else: not `crates/*/src/`, not
-`docs/internal/`, not `docs/adr/`. If a document does not answer a question,
-do not read the source for the answer: work around it in the game and name the
-gap in your commit message — the API documents are maintained on exactly that
-evidence, and a reported gap gets fixed where a silent workaround hides it.
+`docs/internal/`, not `docs/adr/`. **This binds the session, not only the game
+file**: opening the engine's source to answer a question spends the evidence
+this whole exercise exists to collect, whether or not a line of it reaches the
+game. If a document does not answer a question, work around it in the game and
+name the gap — in your commit message and in step 9's findings — because the API
+documents are maintained on exactly that evidence, and a reported gap gets fixed
+where a silent workaround hides it.
+
+ADR-0038 is the one exception to "not `docs/adr/`", and step 2 is its whole
+content for you: where the crate goes and what it may depend on.
 
 Everything a game needs to *know* is in those four documents. What this
 checklist adds is **order**: each step below is cheap at the moment it is
@@ -34,10 +40,29 @@ none has to be discovered by needing it.
 
 Before the first system:
 
-- [ ] Make the game a directory — `crates/jidousha/examples/<name>/` with a
-  `main.rs` — because a game with a `--verify` mode wants one (*Concepts*, "An
-  example can be a directory"). `examples/prototype_kit/` is the shape:
-  `main.rs`, `checks.rs`, `verify.rs`, `capture.rs`.
+- [ ] Make the game **its own crate**, at `games/<name>/` (ADR-0038). Nothing
+  registers it anywhere: living there is what makes it built, linted, verified
+  and published. The layout, and the four files `examples/prototype_kit/` is
+  the shape of:
+
+  ```
+  games/<name>/Cargo.toml     [package] name = "<name>", the four `.workspace = true`
+                              lines, and one dependency: jidousha = { path = "../../crates/jidousha" }
+                              plus `[lints] workspace = true`
+  games/<name>/src/main.rs    the game, and `#![allow(missing_docs)]` at the top
+                              src/checks.rs, src/verify.rs, src/capture.rs beside it
+  ```
+
+  Two things about that manifest are load-bearing:
+
+  - **`jidousha` is the only engine crate it may name**, at any depth. Naming
+    `jidousha-core` or any other fails `tools/check-game-deps` in CI. When the
+    facade does not expose what the game needs, that gap is a finding (step 9),
+    not a dependency line.
+  - **`#![allow(missing_docs)]` at the crate root** is how a game opts out of
+    the one workspace lint that is the engine's and not a game's. Cargo refuses
+    a manifest that overrides a workspace lint table, so the crate root is where
+    the exemption lives. Everything else in that table still applies.
 - [ ] State the layout in constants derived from the window — the three-line
   block in *Concepts* ("A layout in constants"). One line now; a hand-typed
   ratio later, coupled to the window by nothing but an assertion.
@@ -58,7 +83,7 @@ Before the first system:
 
 ## 3. Build until it plays
 
-`cargo check` after every edit. `cargo run -p jidousha --example <name>` and
+`cargo check` after every edit. `cargo run -p <name>` and
 play it when a display exists; `tools/serve-web <name> --check` drives a
 browser at the web build headlessly either way. The honest bar for a prototype
 is fun for about thirty seconds.
@@ -87,8 +112,10 @@ way a check file is, and skimming it costs more than reading it.
 ## 5. Give the check a player
 
 Read `docs/api/jidousha-controllers.md` whole before believing — or tuning
-against — any number a run reports. `examples/slalom/` is the document worked;
-`examples/pong/controller.rs` is it worked against an opponent.
+against — any number a run reports. `crates/jidousha/examples/slalom/` is the document
+worked; `crates/jidousha/examples/pong/controller.rs` is it worked against an
+opponent — those three stay engine examples and are the ones to read, not to
+move.
 
 - [ ] Write the three players the document opens with, one verdict line each —
   its first section is why no single player, and only the middle line, can
@@ -127,14 +154,35 @@ Read `docs/api/jidousha-capture.md` last, once the check runs and asserts.
 
 ## 8. Ship it
 
-- [ ] Register the game in `tools/test`: add `<name>` to both
-  `WINDOWED_EXAMPLES` and `VERIFIABLE_EXAMPLES`, so it is built and verified
-  on every push. (An unregistered `--verify` game is still run, with a loud
-  note — the lists are what a reader consults, so take the step.)
-- [ ] `cargo fmt --all` clean, clippy clean, `tools/test` green — the report
-  file is the verdict. `tools/check-assets` if the game loads art.
+- [ ] Nothing to register — a game under `games/` is picked up by `tools/test`,
+  `tools/verify`, `tools/build-web --all` and the deploy from where it lives
+  (ADR-0038). The step that used to be here is the step that kept being missed.
+- [ ] `cargo fmt --all` clean, clippy clean, `tools/check-game-deps` clean,
+  `tools/test` green — the report file is the verdict. `tools/check-assets` if
+  the game loads art.
+- [ ] The PR's preview comment carries a playtest URL for the game, at
+  `/<name>/`. Open it, play it there, and say in the PR what it was like — a
+  build nobody played is a build nobody checked.
 - [ ] In the commit message: anything a document failed to answer, or answered
   somewhere you did not look.
+
+## 9. Write down what the documents cost you
+
+A prototype is a report on `docs/api/` as well as a game, and this is the half
+that is easy to skip because the game already works. E0 ended (ADR-0036); the
+reporting did not.
+
+- [ ] Every question the four documents did not answer, answered wrongly, or
+  answered somewhere you did not look — one entry each, in the format
+  `docs/internal/e0-findings.md` uses: what you were doing, what you expected,
+  what happened, and which document owns it. Read one existing entry for the
+  shape; do not read the file's analysis sections, which are about runs you
+  were not in.
+- [ ] Put them in the PR description. A maintainer triages them; the fix is
+  theirs, not yours, and a workaround you shipped silently is a gap nobody
+  fixes.
+- [ ] `0 findings` is a real answer and worth saying explicitly. It has never
+  yet been the true one.
 
 ---
 

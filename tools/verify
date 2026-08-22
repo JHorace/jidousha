@@ -1,24 +1,26 @@
 #!/usr/bin/env python3
-"""tools/verify — run one example's headless verification and report on it.
+"""tools/verify — run one playable's headless verification and report on it.
 
 The other side of `tools/serve-web`: that one drives a browser and asks whether
 a picture appeared, this one drives no display at all and asks what the game
-*did*. An example opts in by handling `--verify` — scripting its own input,
+*did*. A playable is an example of the facade crate or a game under `games/`
+(ADR-0038); either opts in by handling `--verify` — scripting its own input,
 running a fixed number of ticks headless, and asserting on world state and the
 draw transcript (input.md §5). This wrapper runs that mode under a timeout and
 writes down what happened.
 
-Usage:  tools/verify <example> [-- extra args for the example]
+Usage:  tools/verify <name> [-- extra args for the run]
         tools/verify --list
 
-Exit codes: 0 verified · 1 the example's own assertions failed · 2 tooling or
-environment fault (unknown example, timeout, no `--verify` mode).
+Exit codes: 0 verified · 1 the run's own assertions failed · 2 tooling or
+environment fault (unknown name, timeout, no `--verify` mode).
 
-Key functions: `parse_verdict`, `find_example`, `run_example`, `main`.
+Key functions: `parse_verdict`, `parse_playables`, `find_playable`,
+`run_playable`, `main`.
 Depends on: the Python 3.8+ standard library only.
 INVARIANT: the report is written on every path out of `main` that ran anything,
 including timeouts — an absent report after a run means this script died.
-INVARIANT: the report goes to `target/verify/<example>.json`, never to
+INVARIANT: the report goes to `target/verify/<name>.json`, never to
 `report.json`, which belongs to `tools/test` (tooling.md §3). Two tools writing
 one ground-truth file is how ground truth stops being true.
 """
@@ -107,32 +109,64 @@ def parse_artifact(text: str) -> "str | None":
     return None
 
 
-def parse_examples(metadata: dict) -> "list[tuple[str, str]]":
-    """Every example target in the workspace, as (package, example name).
+def parse_playables(metadata: dict, repo: Path) -> "list[tuple[str, str, str]]":
+    """Everything in the workspace this can run, as (package, name, kind).
+
+    Two kinds, and the kind decides the command rather than a list of names:
+
+    - `example` — an example target of any workspace member, the shape every E0
+      game had and the shape `prototype_kit`, `slalom` and `pong` keep.
+    - `game` — a binary of a workspace member under `games/`, which is what a
+      prototype is now (ADR-0038).
 
     Only workspace members: a dependency's examples are not ours to verify.
     """
     members = set(metadata.get("workspace_members", []))
-    examples = [
-        (package["name"], target["name"])
-        for package in metadata.get("packages", [])
-        if package["id"] in members
-        for target in package.get("targets", [])
-        if "example" in target.get("kind", [])
-    ]
-    return sorted(examples)
+    games_root = str(repo / "games")
+    playables = []
+    for package in metadata.get("packages", []):
+        if package["id"] not in members:
+            continue
+        is_game = str(Path(package["manifest_path"]).parent).startswith(games_root)
+        for target in package.get("targets", []):
+            kinds = target.get("kind", [])
+            if "example" in kinds:
+                playables.append((package["name"], target["name"], "example"))
+            elif is_game and "bin" in kinds:
+                playables.append((package["name"], target["name"], "game"))
+    return sorted(playables, key=lambda entry: entry[1])
 
 
-def find_example(examples: "list[tuple[str, str]]", name: str) -> "str | None":
-    """The package `name` lives in, or None if no example is called that."""
-    for package, example in examples:
-        if example == name:
-            return package
+def find_playable(
+    playables: "list[tuple[str, str, str]]", name: str
+) -> "tuple[str, str] | None":
+    """The (package, kind) `name` names, or None if nothing is called that.
+
+    A game and an example sharing a name would make `tools/verify <name>`
+    ambiguous, so the first match wins and a self-test keeps the tree free of
+    the collision — one name, one thing to run (practices §5.3).
+    """
+    for package, playable, kind in playables:
+        if playable == name:
+            return (package, kind)
     return None
 
 
-def discover_examples() -> "list[tuple[str, str]]":
-    """Ask cargo what examples exist."""
+def duplicate_names(playables: "list[tuple[str, str, str]]") -> "list[str]":
+    """Names carried by more than one playable.
+
+    `tools/verify <name>`, `tools/build-web <name>` and `dist/<name>/` all key
+    off the bare name, so two playables sharing one is not a collision this
+    tooling can resolve — it is a rename somebody owes.
+    """
+    seen: "dict[str, int]" = {}
+    for _package, name, _kind in playables:
+        seen[name] = seen.get(name, 0) + 1
+    return sorted(name for name, count in seen.items() if count > 1)
+
+
+def discover_playables() -> "list[tuple[str, str, str]]":
+    """Ask cargo what examples and games exist."""
     try:
         proc = subprocess.run(
             ["cargo", "metadata", "--format-version", "1", "--no-deps"],
@@ -143,10 +177,10 @@ def discover_examples() -> "list[tuple[str, str]]":
             text=True,
         )
     except (OSError, subprocess.TimeoutExpired) as err:
-        fault(f"could not list the workspace's examples: {err}")
+        fault(f"could not list the workspace's examples and games: {err}")
     if proc.returncode != 0:
-        fault(f"could not list the workspace's examples: {proc.stderr.strip()}")
-    return parse_examples(json.loads(proc.stdout))
+        fault(f"could not list the workspace's examples and games: {proc.stderr.strip()}")
+    return parse_playables(json.loads(proc.stdout), REPO_ROOT)
 
 
 def fault(detail: str) -> "None":
@@ -154,27 +188,26 @@ def fault(detail: str) -> "None":
     print(
         f"[jidousha] tools/verify could not run\n"
         f"  {detail}\n"
-        f"  likely cause: the example was renamed, or the environment is wrong\n"
+        f"  likely cause: the example or game was renamed, or the environment is wrong\n"
         f"  fix: tools/verify --list, then run tools/doctor if the name is right",
         file=sys.stderr,
     )
     sys.exit(2)
 
 
-def run_example(package: str, example: str, extra: "list[str]") -> dict:
-    """Run one example in `--verify` mode, capturing everything it printed."""
-    command = [
-        "cargo",
-        "run",
-        "--quiet",
-        "-p",
-        package,
-        "--example",
-        example,
-        "--",
-        "--verify",
-        *extra,
-    ]
+def verify_command(package: str, name: str, kind: str, extra: "list[str]") -> "list[str]":
+    """The cargo invocation that runs one playable in `--verify` mode.
+
+    The only difference between the two kinds: an example is selected with
+    `--example`, a game is its package's binary and needs no selector.
+    """
+    select = ["--example", name] if kind == "example" else []
+    return ["cargo", "run", "--quiet", "-p", package, *select, "--", "--verify", *extra]
+
+
+def run_playable(package: str, name: str, kind: str, extra: "list[str]") -> dict:
+    """Run one playable in `--verify` mode, capturing everything it printed."""
+    command = verify_command(package, name, kind, extra)
     print(f"[tools/verify] {' '.join(command)}", flush=True)
     started = time.monotonic()
     try:
@@ -226,20 +259,28 @@ def main(argv: "list[str]") -> int:
         print(__doc__)
         return 0 if args else 2
 
-    examples = discover_examples()
+    playables = discover_playables()
+    collisions = duplicate_names(playables)
+    if collisions:
+        fault(
+            f"more than one thing is called {', '.join(collisions)}. `tools/verify <name>`, "
+            "`tools/build-web <name>` and `dist/<name>/` all key off the bare name, so this "
+            "is a rename somebody owes (ADR-0038)"
+        )
     if args[0] == "--list":
-        for package, example in examples:
-            print(f"{example}  ({package})")
+        for package, playable, kind in playables:
+            print(f"{playable}  ({package}, {kind})")
         return 0
 
     name = args[0]
     extra = args[2:] if len(args) > 1 and args[1] == "--" else args[1:]
-    package = find_example(examples, name)
-    if package is None:
-        known = ", ".join(example for _, example in examples)
-        fault(f"there is no example called {name!r}. known examples: {known}")
+    found = find_playable(playables, name)
+    if found is None:
+        known = ", ".join(playable for _, playable, _ in playables)
+        fault(f"there is no example or game called {name!r}. known: {known}")
+    package, kind = found
 
-    result = run_example(package, name, extra)
+    result = run_playable(package, name, kind, extra)
     verdict, summary = parse_verdict(result["output"])
     status = verdict_status(result["status"], verdict)
     exit_code = EXIT_CODES[status]
@@ -247,7 +288,8 @@ def main(argv: "list[str]") -> int:
     report = {
         "tool": "tools/verify",
         "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "example": name,
+        "target": name,
+        "kind": kind,
         "package": package,
         "argv": args,
         "status": status,
@@ -275,13 +317,13 @@ def main(argv: "list[str]") -> int:
         print(
             f"\n[jidousha] {name} has no --verify mode\n"
             f"  it exited 0 without printing a line beginning {VERDICT_PREFIX!r}\n"
-            f"  likely cause: the example ignores the flag and ran normally\n"
+            f"  likely cause: the {kind} ignores the flag and ran normally\n"
             f"  fix: give it a `--verify` branch that scripts input, ticks headless, "
             f"and asserts (input.md §5)",
             file=sys.stderr,
         )
     else:
-        # The example's own failure message is already in the output, in the
+        # The run's own failure message is already in the output, in the
         # engine's shape; repeating it here in a different shape would give two
         # accounts of one problem.
         print(f"\n[tools/verify] {status.upper()} — {name}", file=sys.stderr)

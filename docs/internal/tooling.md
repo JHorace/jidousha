@@ -12,7 +12,7 @@ subsystems (`docs/internal/<subsystem>.md`) or the decisions behind the rules
 
 ## 1. What it does
 
-Nine scripts, each answering one question (plus the web pipeline pair,
+Ten scripts, each answering one question (plus the web pipeline pair,
 `tools/build-web` and `tools/serve-web` — §3 and web-publish.md). All are
 Python 3.8+, standard library only — no third-party import, so they keep
 working when the package ecosystem is exactly what broke.
@@ -24,8 +24,9 @@ working when the package ecosystem is exactly what broke.
 | `tools/check-claude-md` | Is the always-in-context router still small? | 0 ok · 1 over cap · 2 missing |
 | `tools/dep-count` | How big is the dependency graph? | always 0 (reports only) |
 | `tools/check-compile-fail` | Do the errors that must be compile errors still say the right thing? | 0 ok · 1 drifted · 2 harness broke |
-| `tools/verify` | What did the game actually do, with nobody watching? | 0 verified · 1 the example's assertions failed · 2 tooling/env fault |
+| `tools/verify` | What did the game actually do, with nobody watching? | 0 verified · 1 its own assertions failed · 2 tooling/env fault |
 | `tools/check-assets` | Does every asset path in the code name a file that exists? | 0 all resolve · 1 a reference is broken · 2 the check could not run |
+| `tools/check-game-deps` | Does every game reach the engine through the facade only? | 0 facade-only · 1 a game reaches past it, or a game is not a workspace member · 2 could not run |
 | `tools/gen-api-doc` | Is `docs/api/` what the facade actually says? | 0 written/current · 1 stale, over budget, leaking vocabulary, or naming a test or example that is not there · 2 could not run |
 | `tools/check-api-coverage` | Is every public item shown in an example — and can anything reach each `testing` export? | 0 covered · 1 a gap, an unreachable entry, or a breach · 2 could not run |
 | `tools/check-api-prose` | Does the hand-written half of `docs/api/` contain code that compiles? | 0 every block compiles · 1 one does not · 2 could not build the facade |
@@ -41,10 +42,12 @@ agent ──> tools/test ──> phase: tool-selftest  (python -m unittest, tool
                          phase: doc-test       (cargo test --doc)
                          phase: compile-fail   (tools/check-compile-fail)
                          phase: check-assets   (tools/check-assets)
+                         phase: check-game-deps (tools/check-game-deps)
                          phase: check-api-coverage (tools/check-api-coverage)
                          phase: check-api-prose (tools/check-api-prose)
                          phase: api-doc        (tools/gen-api-doc --check)
                          phase: example:<name> (cargo run --example, one per example)
+                         phase: game-verify:<name> (tools/verify, one per game)
                               │
                               ├─> terminal (advisory)
                               └─> target/verify/report.json     (GROUND TRUTH)
@@ -52,10 +55,11 @@ agent ──> tools/test ──> phase: tool-selftest  (python -m unittest, tool
 
 agent ──> tools/doctor ──> fifteen checks ──> verdict line + target/verify/doctor.json
 
-agent ──> tools/verify <example> ──> cargo run --example <name> -- --verify
-                              │
+agent ──> tools/verify <name> ──> cargo run [--example <name>] -- --verify
+                              │      (a game is its crate's binary and takes no
+                              │       --example selector — ADR-0038)
                               ├─> terminal: the verdict line and its summary
-                              └─> target/verify/<example>.json  (verdict, summary,
+                              └─> target/verify/<name>.json  (verdict, summary,
                                   and the whole draw transcript)
 ```
 
@@ -92,7 +96,7 @@ second mode would be a second way to do one thing.
   writes `target/verify/report.json` on every exit path; an absent report means
   the wrapper itself died.
 - **One tool, one report file.** `tools/verify` writes
-  `target/verify/<example>.json`, never `report.json`. Two tools writing one
+  `target/verify/<name>.json`, never `report.json`. Two tools writing one
   ground-truth file is how ground truth stops being true, and the second writer
   would be the one whose result you were not looking at.
 - **A verify run that verified nothing is not a pass.** An example opts into
@@ -124,6 +128,19 @@ second mode would be a second way to do one thing.
   a different thing from a failure. `prototype_kit` was the worked example
   teaching the opposite and now teaches this; the document's skeleton shows the
   `ExitCode` return.
+- **A game is a game because of where it lives.** Every tool that enumerates
+  something playable asks `cargo metadata`: a workspace member under `games/`
+  with a binary is a game, an example target is an example (ADR-0038). There is
+  no registration list for games and so none to fall out of date — the step that
+  was missed after E0 runs 4, 5 and 7 (F-094) does not exist for them. `attic/`
+  is outside the workspace and outside every glob here: retired prototypes are
+  read, never built. One consequence worth knowing: a `games/*` members glob that
+  matches nothing makes cargo fail on a literal path, which is why
+  `games/README.md` exists while no prototype does.
+- **The facade check runs in both places from one script.** `tools/check-game-deps`
+  is a `tools/test` phase *and* its own CI job. A check enforced in one place and
+  skippable in the other is a check whose result depends on where you stood; a
+  self-test asserts both call sites still name it.
 - **Doctor never hangs.** Every subprocess and network call is bounded by a
   timeout — doctor is what you run when something else hangs.
 - **`fix` is non-empty exactly when a check is `FIXABLE`** (tested), and
