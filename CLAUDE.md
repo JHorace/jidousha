@@ -51,6 +51,7 @@ failure. Delete it in the commit that resolves the blockage.
 | Make or change a design decision | `docs/adr/` (search it — the decision may exist) |
 | Add/change public API | `docs/conventions.md`, then the matching `examples/` file |
 | Write a game with the engine | `docs/api/` (all three files) and `examples/` ONLY — never `src/` |
+| Touch web build/deploy | `docs/internal/web-publish.md` |
 | Wonder why code looks wrong | The `DELIBERATE:` tag near it → linked ADR |
 
 ## Top conventions (full list: docs/conventions.md)

@@ -55,6 +55,10 @@ Facade & docs (public-api.md)         F0 (all above): facade crate, prelude,
                                         gen-api-doc + docs/api, check-api-coverage,
                                         quickstart example
 Acceptance                            E0 (F0): see below
+Web publish (web-publish.md §6)       W0 (R1) → W1 (W0 + owner secrets,
+                                        web-publish.md §7) → W2 (W1)
+                                      W3 (W2; pairs with the post-E0
+                                        make-game skill work)
 ```
 
 Recommended strict order:
@@ -127,14 +131,16 @@ Tick in the completing commit. (All unticked at handoff.)
 - [x] A0  - [x] I0  - [x] R0  - [x] M5  - [x] R1  - [x] A1  - [x] R2
 - [x] R3  - [x] I1  - [x] A2  - [x] I2  - [x] R4  - [x] A3  - [x] F0
 - [x] E0  - [x] make-game skill
+- [ ] W0  - [ ] W1  - [ ] W2  - [ ] W3
 
 E0 is ticked as **closed after eleven runs, not as passed** (ADR-0036). The
 condition §3 states was never met — the streak at closure is zero — and it is
 retired rather than lowered. `e0-findings.md` §2 and §6 carry the reasoning and
 what the closure does not establish.
 
-`make-game` was the last box: v1 is complete, and per §3 the deferred lists
-are now the roadmap conversation rather than pending work.
+`make-game` was the last box of v1: v1 is complete, and per §3 the deferred
+lists are now the roadmap conversation rather than pending work. W0–W3 are
+post-v1 — the web publish track (ADR-0037, web-publish.md §6).
 
 ## 5. Document map
 
@@ -143,13 +149,14 @@ CLAUDE.md                        router — always read first
 docs/agent-practices.md          why every rule exists; enforcement map
 docs/conventions.md              coordinates, units, color, naming
 docs/implementation-plan.md      this file
-docs/adr/0001..0035              decisions; DELIBERATE tags point here
+docs/adr/0001..0037              decisions; DELIBERATE tags point here
 docs/internal/core.md            ECS, schedule, time, app (M-milestones)
 docs/internal/renderer.md        submissions, backend seam (R-milestones)
 docs/internal/assets.md          handles, readiness determinism (A-milestones)
 docs/internal/input.md           snapshots, replay (I-milestones)
 docs/internal/public-api.md      facade inventory, docs/api spec (F0/E0)
 docs/internal/tooling.md         tools/ scripts, CI jobs, enforcement (M0)
+docs/internal/web-publish.md     web build/serve/deploy pipeline (W-milestones)
 docs/internal/e0-prompt.md       the acceptance prompt, verbatim (E0 harness)
 docs/internal/e0-findings.md     what building a game actually cost (E0)
 docs/templates/BLOCKED.md        escalation template

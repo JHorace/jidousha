@@ -1,7 +1,6 @@
-# ADR-00NN: Web builds auto-publish to Cloudflare Workers static assets
+# ADR-0037: Web builds auto-publish to Cloudflare Workers static assets
 
 Status: accepted · 2026-08-16
-(NN: assign the next free ADR number when landing this in the repo.)
 
 ## Context
 

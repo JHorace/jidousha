@@ -4,7 +4,7 @@ Status: **design draft, pre-implementation.** Becomes the living internal doc
 for the web build/publish tooling. **CONTRACT** items binding as elsewhere.
 
 Inherits: web as tier-1 + single-threaded/no-COOP-COEP (ADR-0005), Cloudflare
-Workers static assets decision (ADR-00NN), error taxonomy (core §9), recording
+Workers static assets decision (ADR-0037), error taxonomy (core §9), recording
 format (input §5), dependency budget (practices §5.8).
 
 In scope: `tools/build-web`, `tools/serve-web`, the playtest page shell, CI
@@ -72,7 +72,7 @@ One `index.html` template, self-contained (no external CDN dependencies):
 - PR preview posts a **sticky comment** (created once, updated on subsequent
   pushes — never one comment per push) with the preview URL + build stamp.
 - Fork PRs: secrets absent → deploy job skips with a neutral notice. Not
-  worked around (ADR-00NN).
+  worked around (ADR-0037).
 - CI-only deps: node + wrangler live in the workflow, never in rust-toolchain
   or doctor's local requirements.
 
