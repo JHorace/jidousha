@@ -176,13 +176,28 @@ jobs:
           sudo install -m 755 "${name}/wasm-bindgen" /usr/local/bin/wasm-bindgen
           rm -rf "${name}"
       # Optional for build-web (it skips with a log line), but what deploys
-      # should be the smaller module, and here it is one package away.
-      - name: install binaryen (wasm-opt)
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends binaryen
+      # should be the smaller module. A pinned release binary, NOT Ubuntu's
+      # package: 24.04 ships binaryen 108, which clamps the externref table
+      # wasm-bindgen's glue grows from JS — every optimized module then died
+      # at startup in every browser (found by playtesting PR #59's preview).
+      # build-web also refuses a wasm-opt older than its own pinned minimum,
+      # so a runner-image change cannot silently reintroduce this.
+      - name: install binaryen (wasm-opt), pinned release
+        run: |
+          version="version_124"
+          curl -sSfL --retry 3 "https://github.com/WebAssembly/binaryen/releases/download/${version}/binaryen-${version}-x86_64-linux.tar.gz" | tar xz
+          sudo install -m 755 "binaryen-${version}/bin/wasm-opt" /usr/local/bin/wasm-opt
+          rm -rf "binaryen-${version}"
       # CONTRACT (web-publish.md §1): tools/build-web is the ONLY web build
       # path — no inline build steps here. What CI deploys is what a developer
       # built locally with the same command.
       - run: python tools/build-web --all
+      # Run the optimized bytes in a real browser before they can deploy — the
+      # exact check that would have caught the binaryen-108 table damage.
+      # sprites exercises rendering and assets; the ?panic=1 half checks the
+      # overlay contract too (web-publish.md §2).
+      - name: browser-check the optimized build
+        run: python tools/serve-web sprites --check
       - uses: actions/upload-artifact@v4
         with:
           name: web-dist

@@ -124,7 +124,15 @@ One `index.html` template, self-contained (no external CDN dependencies):
   the web is healthy without it, which the CI doctor job requires
   (practices §6.1: a healthy runner must produce ENV_OK).
 - `wasm32-unknown-unknown` target installed (already listed, ADR-0005).
-- `wasm-opt`: optional; absence reported as info, not failure.
+- `wasm-opt`: optional; absence reported as info, not failure. A version
+  older than build-web's pinned minimum (124) is *refused* by build-web —
+  skipped with a log line — and doctor says so: binaryen 108 (Ubuntu 24.04's
+  package, and the runner's) clamps the externref table wasm-bindgen's glue
+  grows from JS, and every optimized module then dies at startup in every
+  browser (`RangeError: WebAssembly.Table.grow`; found by playtesting PR
+  #59's preview on iPad Safari and Android Firefox/Chrome, reproduced in
+  desktop Chromium, gone at binaryen 124). CI installs a pinned binaryen
+  release and browser-checks the optimized bytes before they can deploy.
 - `tools/serve-web` MIME self-check (§1).
 
 ## 6. Milestones

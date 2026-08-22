@@ -240,10 +240,14 @@
           say(
             "__EXAMPLE__ failed to load: " +
               String(error) +
-              "\nlikely cause: a browser too old for WebAssembly modules, or " +
-              "a server that does not send .wasm as application/wasm" +
+              "\nlikely cause: a browser too old for WebAssembly modules; a " +
+              "server that does not send .wasm as application/wasm; or — if a " +
+              "current browser shows this on every page — a module damaged by " +
+              "the build toolchain (an old wasm-opt does exactly that)" +
               "\nfix: try a current browser; if serving this yourself, use " +
-              "tools/serve-web, which sets the MIME type correctly",
+              "tools/serve-web, which sets the MIME type correctly; if every " +
+              "browser fails, rebuild with tools/build-web and read its " +
+              "wasm-opt line",
             true,
           );
           document.body.dataset.jidousha = "failed";

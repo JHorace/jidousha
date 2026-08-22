@@ -46,6 +46,15 @@ TARGET = "wasm32-unknown-unknown"
 # past this, so drift is visible long before it is a problem (web-publish.md §1).
 WASM_WARN_BYTES = 5 * 1024 * 1024
 
+# The oldest wasm-opt this tool will use. Ubuntu 24.04's binaryen 108 clamps
+# the externref table wasm-bindgen's glue grows from JS, so every optimized
+# module died at startup — "RangeError: WebAssembly.Table.grow" in every
+# browser, found by playtesting PR #59's preview on three of them. version 124
+# is verified good by `tools/serve-web --check`; move this pin only with a
+# browser check in hand. Below it the module ships unoptimized with a log line:
+# correct-but-larger beats broken (web-publish.md §1).
+MIN_WASM_OPT_VERSION = 124
+
 # Examples that are native by design: their wasm `main` is a printed stub (the
 # example's own source says why, under its `cfg(target_arch = "wasm32")`), so
 # there is nothing for wasm-bindgen to bind and nothing for a page to run.
@@ -232,15 +241,38 @@ def stage_assets(out_dir: Path) -> None:
     print(f"[build-web] staged {count} asset file(s)")
 
 
-def optimize(wasm: Path) -> None:
-    """Shrink the module with wasm-opt when it is installed.
-
-    Optional by design (web-publish.md §1): absence is a log line, never a
-    failure — the unoptimized module is correct, just larger.
-    """
+def installed_wasm_opt() -> "tuple[str, int] | None":
+    """The wasm-opt on PATH as (binary, version), or None. Version 0 = unparsable."""
     binary = shutil.which("wasm-opt")
     if binary is None:
+        return None
+    proc = subprocess.run(
+        [binary, "--version"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+    )
+    match = re.search(r"version[ _](\d+)", proc.stdout)
+    return (binary, int(match.group(1)) if match else 0)
+
+
+def optimize(wasm: Path) -> None:
+    """Shrink the module with wasm-opt when a trustworthy one is installed.
+
+    Optional by design (web-publish.md §1): absence is a log line, never a
+    failure — the unoptimized module is correct, just larger. A wasm-opt older
+    than MIN_WASM_OPT_VERSION is treated as absent, loudly: an old one does not
+    merely optimize less, it damages the module (see the constant).
+    """
+    found = installed_wasm_opt()
+    if found is None:
         print("[build-web] wasm-opt not found — skipping optimization (optional; binaryen provides it)")
+        return
+    binary, version = found
+    if version < MIN_WASM_OPT_VERSION:
+        print(
+            f"[build-web] wasm-opt {version or '(unknown version)'} is older than "
+            f"{MIN_WASM_OPT_VERSION} — skipping optimization: binaryen 108 clamps the "
+            "externref table and every optimized module dies at startup in every "
+            "browser (web-publish.md §5); the unoptimized module is correct"
+        )
         return
     optimized = wasm.with_suffix(".wasm.opt")
     proc = subprocess.run([binary, "-Os", str(wasm), "-o", str(optimized)])

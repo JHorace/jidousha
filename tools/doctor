@@ -283,7 +283,13 @@ def check_wasm_bindgen() -> Check:
 
 
 def check_wasm_opt() -> Check:
-    """wasm-opt is optional: build-web ships unoptimized modules without it."""
+    """wasm-opt is optional: build-web ships unoptimized modules without it.
+
+    A version below build-web's pinned minimum is worth naming: build-web will
+    refuse it (an old binaryen damages the externref table — modules die at
+    startup in every browser), and "installed but ignored" would otherwise be
+    a mystery.
+    """
     code, output = run(["wasm-opt", "--version"])
     if code == 127:
         return Check(
@@ -294,6 +300,21 @@ def check_wasm_opt() -> Check:
         )
     if code != 0:
         return Check("wasm-opt", INFO, f"`wasm-opt --version` failed: {output}")
+    match = re.search(r"version[ _](\d+)", output)
+    version = int(match.group(1)) if match else 0
+    try:
+        minimum = load_sibling("build-web").MIN_WASM_OPT_VERSION
+    except Exception:  # noqa: BLE001 — the wasm-bindgen check reports this
+        minimum = None
+    if minimum is not None and version < minimum:
+        return Check(
+            "wasm-opt",
+            INFO,
+            f"version {version or '(unparsable)'} is older than the {minimum} "
+            "tools/build-web requires — it will skip optimization rather than "
+            "ship a damaged module (binaryen 108 clamps the externref table; "
+            "web-publish.md §5)",
+        )
     return Check("wasm-opt", INFO, output.splitlines()[0] if output else "present")
 
 

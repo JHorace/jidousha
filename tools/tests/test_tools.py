@@ -2514,3 +2514,22 @@ class DoctorWebChecksTest(unittest.TestCase):
         # Optional by design: the unoptimized module is correct, just larger.
         check = doctor.check_wasm_opt()
         self.assertEqual(check.status, doctor.INFO)
+
+    def test_an_old_wasm_opt_is_reported_as_one_build_web_will_refuse(self):
+        # binaryen 108 (Ubuntu 24.04's package) clamps the externref table and
+        # every optimized module dies at startup in every browser — found by
+        # playtesting PR #59's preview. "Installed but ignored" must not be a
+        # mystery, so doctor names the refusal.
+        previous = doctor.run
+        doctor.run = lambda cmd, timeout_s=doctor.COMMAND_TIMEOUT_S: (0, "wasm-opt version 108")
+        try:
+            check = doctor.check_wasm_opt()
+        finally:
+            doctor.run = previous
+        self.assertEqual(check.status, doctor.INFO)
+        self.assertIn("skip optimization", check.detail)
+
+    def test_the_wasm_opt_minimum_is_the_verified_good_version(self):
+        # The pin moves only with a browser check in hand (build-web's
+        # constant): 108 verified broken, 124 verified good on PR #59.
+        self.assertGreaterEqual(build_web.MIN_WASM_OPT_VERSION, 124)
