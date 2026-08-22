@@ -105,7 +105,10 @@ One `index.html` template, self-contained (no external CDN dependencies):
   failure.
 - PR preview posts a **sticky comment** (created once, found again by an HTML
   marker and updated on subsequent pushes — never one comment per push) with
-  the preview URL + build stamp (from `dist/stamp.txt`).
+  the preview URL + build stamp (from `dist/stamp.txt`). On previews the
+  stamp's sha names the PR's **merge commit** (CI checks out
+  `refs/pull/N/merge`), not the branch head — what deployed is what would
+  merge, and the stamp says so honestly.
 - Fork PRs: secrets absent → deploy job skips with a neutral notice. Not
   worked around (ADR-0037).
 - CI-only deps: node + wrangler live in the workflow, never in rust-toolchain
