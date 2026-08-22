@@ -131,7 +131,7 @@ Tick in the completing commit. (All unticked at handoff.)
 - [x] A0  - [x] I0  - [x] R0  - [x] M5  - [x] R1  - [x] A1  - [x] R2
 - [x] R3  - [x] I1  - [x] A2  - [x] I2  - [x] R4  - [x] A3  - [x] F0
 - [x] E0  - [x] make-game skill
-- [x] W0  - [ ] W1  - [x] W2  - [ ] W3
+- [x] W0  - [x] W1  - [x] W2  - [ ] W3
 
 E0 is ticked as **closed after eleven runs, not as passed** (ADR-0036). The
 condition §3 states was never met — the streak at closure is zero — and it is
@@ -142,13 +142,16 @@ what the closure does not establish.
 lists are now the roadmap conversation rather than pending work. W0–W3 are
 post-v1 — the web publish track (ADR-0037, web-publish.md §6).
 
-W2 was observed live on PR #59: one sticky comment
+W1 and W2 were observed live on PR #59 and its merge. W2: one sticky comment
 (`pr-59-jidousha.jpsumihiro.workers.dev`, created 2026-08-22T04:57Z), and the
 next push edited that same comment in place with the new stamp — no
-duplicate. W1 is implemented (wrangler.toml + the `web` and `deploy` jobs in
-ci.yml; the Worker exists, bootstrapped by the first preview) but ticks only
-when a `main` push is observed serving every example at the production URL —
-the first merge of this track is that observation.
+duplicate. W1: the merge's `main` run (7a9ecfd) went green through every gate
+— including the in-browser check of the optimized bytes — and its `deploy
+production` step succeeded at 05:28Z, so `jidousha.jpsumihiro.workers.dev`
+serves the fleet; the same build passed a human playtest on iPad Safari via
+the preview. The track's one production incident is recorded in
+web-publish.md §5: binaryen 108 damaged every optimized module, caught by
+that playtest and now gated three ways.
 
 ## 5. Document map
 

@@ -1,8 +1,8 @@
 # Web publish — design and contracts
 
-Status: **living — W0 and W2 done; W1 implemented, ticked at the first
-observed `main` deploy; W3 still design.** The internal doc for the web
-build/publish tooling. **CONTRACT** items binding as elsewhere.
+Status: **living — W0–W2 done and observed live; W3 still design.** The
+internal doc for the web build/publish tooling. **CONTRACT** items binding
+as elsewhere.
 
 Inherits: web as tier-1 + single-threaded/no-COOP-COEP (ADR-0005), Cloudflare
 Workers static assets decision (ADR-0037), error taxonomy (core §9), recording
