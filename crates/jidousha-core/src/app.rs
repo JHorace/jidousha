@@ -188,13 +188,18 @@ impl HeadlessSim {
         self.simulation.tick();
     }
 
-    /// Run the Draw phase once, as a rendered frame would, and return what it
-    /// submitted.
+    /// Run the Draw phase once and return the raw quads it submitted — the
+    /// mechanism `FrameRecorder` wraps, not the call a check makes.
     ///
-    /// Draw cannot change the world (ADR-0008), so this exists for tests that
-    /// want to exercise draw systems and for `tools/verify` — a headless run
-    /// that never draws is still a correct run. The returned submissions are
-    /// this frame's only; the next `draw` starts empty.
+    /// Draw cannot change the world (ADR-0008), so this exists so draw systems
+    /// can be exercised headlessly at all — a headless run that never draws is
+    /// still a correct run. What it returns is the sink itself: quads in
+    /// submission order, with none of the instruments a check asks its
+    /// questions through (`bounds`, `covering`, glyph counts). Those live on
+    /// the frame `jidousha::testing`'s `FrameRecorder::draw` records, and the
+    /// recorder calls this on the way — one mechanism, instrumented once. The
+    /// returned submissions are this frame's only; the next `draw` starts
+    /// empty.
     ///
     /// # Panics
     ///

@@ -8,8 +8,11 @@ first tick, then `Update` for logic, then `Draw`. `Startup` and `Update` are
 per *tick*; **`Draw` is not** — a window draws once a frame, however many ticks
 that frame ran, including none, and a headless `tick()` does not draw at all.
 So a `Draw` system sees the world the last `Update` left and must not count on
-being called the same number of times; a check that wants a frame asks for one,
-with `HeadlessSim::draw()`. Those three are
+being called the same number of times; a check that wants a frame draws one
+through the `FrameRecorder` in *Checking a game you wrote*, which runs the Draw
+phase and hands back a frame a check can question. (`HeadlessSim::draw()` is
+the raw mechanism underneath — it returns the submitted quads and nothing
+more, and the recorder calls it for you.) Those three are
 the whole set — `Phase` and `IntoSystem` appear in `add_system`'s signature as
 bounds, are not exported, and are not names a game writes or can collide with, so
 your own `enum Phase` for "which screen are we on" is yours to take. Within a
@@ -210,6 +213,15 @@ the ninety-five printable ASCII characters the font covers, with a blank cell of
 its own.
 <!-- asserted-by: a_circle_covers_a_disc_and_not_its_bounding_box, text_becomes_one_quad_per_character_from_the_font_atlas, text_advances_by_one_cell_per_character -->
 
+**`ctx.line` centres its thickness on the segment** — half a `thickness` to
+each side, with no flag to move it. A border drawn *along* an edge therefore
+hangs half its width past it, and a court line on the camera's boundary is the
+first thing a Pong draws: inset the segment by half the thickness, or leave the
+camera a margin around the court — `examples/prototype_kit`'s `draw_the_field`
+insets its whole field from `visible_bounds` before a line is drawn. `ctx.rect`
+has no such overhang; it fills exactly the `Rect` it is given.
+<!-- asserted-by: a_horizontal_line_is_as_thick_as_it_was_asked_to_be -->
+
 **Text's vertical metric, exactly, because every vertical number in a game's
 layout rests on it.** `at` is the top-left of the first character's *cell*, not
 of its ink: a glyph's quad is `size` tall whatever the character draws inside it,
@@ -332,8 +344,12 @@ Draw system costs an allocation a frame and buys nothing.
 **An example can be a directory, and a game with a `--verify` mode wants one.**
 `cargo run --example <name>` picks up `examples/<name>.rs` and
 `examples/<name>/main.rs` alike, with no `[[example]]` entry in any `Cargo.toml`
-either way. The second is what lets the game, its checks and its capture path be
-files beside each other, reached with `mod verify;` from `main.rs`.
+either way. Until `main.rs` exists cargo answers `error: no example target
+named '<name>'` — which reads exactly like a missing manifest entry and is only
+the file not being there yet: create `examples/<name>/main.rs` first and `mod`
+the others in as they arrive. The directory form is what lets the game, its
+checks and its capture path be files beside each other, reached with
+`mod verify;` from `main.rs`.
 `examples/prototype_kit` is the worked version.
 
 **A game written in this repository's `examples/` inherits the engine's own
@@ -399,6 +415,25 @@ Stock clippy lints that games written here have tripped:
   }
   # Some(before / travel) }
   ```
+
+  With **one** condition the recipe collapses back to the very shape the lint
+  rejects — `if !(distance > 0.0)` is a negated comparison however carefully it
+  was reached. The degenerate case of "lift the negation off the comparison" is
+  to bind the condition to a name and negate the name:
+
+  ```rust
+  # fn crossing(distance: f32) -> Option<f32> {
+  let reachable = distance > 0.0;   // NaN fails this, so the answer is "never"
+  if !reachable {
+      return None;
+  }
+  # Some(distance) }
+  ```
+
+  Same NaN behaviour, clippy-clean for the same reason — the `!` is on a `bool`
+  — and it is the case a *prediction* meets, because a sweep tests three things
+  and "does the ball ever get there" tests one. One game paid two clippy rounds
+  in two files for reading the conjunction form as the whole recipe.
 
   `examples/prototype_kit/checks.rs` writes the NaN half out at length around its
   own comparisons, for the same reason. Written this way, obeying the lint and

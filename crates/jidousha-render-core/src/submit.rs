@@ -42,7 +42,13 @@ pub trait Submit {
     /// Y is down, so `rect.min` is its top-left corner (ADR-0010).
     fn rect(&mut self, rect: Rect, color: Color, depth: Depth);
 
-    /// Draw a line from `from` to `to`, `thickness` world units wide.
+    /// Draw a line from `from` to `to`, `thickness` world units wide, centred
+    /// on the segment — half the thickness to each side.
+    ///
+    /// The centring is the fact every border rests on: a line drawn *along* a
+    /// boundary hangs half its thickness past it, so a border on the camera's
+    /// edge is half off screen. Inset the segment by `thickness / 2`, or leave
+    /// the camera a margin around what the border encloses.
     ///
     /// The thickness is in world units like everything else, so a line keeps
     /// its weight relative to the scene when the camera zooms — which is what a

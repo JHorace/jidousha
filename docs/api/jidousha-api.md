@@ -164,8 +164,11 @@ first tick, then `Update` for logic, then `Draw`. `Startup` and `Update` are
 per *tick*; **`Draw` is not** — a window draws once a frame, however many ticks
 that frame ran, including none, and a headless `tick()` does not draw at all.
 So a `Draw` system sees the world the last `Update` left and must not count on
-being called the same number of times; a check that wants a frame asks for one,
-with `HeadlessSim::draw()`. Those three are
+being called the same number of times; a check that wants a frame draws one
+through the `FrameRecorder` in *Checking a game you wrote*, which runs the Draw
+phase and hands back a frame a check can question. (`HeadlessSim::draw()` is
+the raw mechanism underneath — it returns the submitted quads and nothing
+more, and the recorder calls it for you.) Those three are
 the whole set — `Phase` and `IntoSystem` appear in `add_system`'s signature as
 bounds, are not exported, and are not names a game writes or can collide with, so
 your own `enum Phase` for "which screen are we on" is yours to take. Within a
@@ -363,6 +366,14 @@ can assert an exact count against rather than a coincidence: a space is one of
 the ninety-five printable ASCII characters the font covers, with a blank cell of
 its own.
 
+**`ctx.line` centres its thickness on the segment** — half a `thickness` to
+each side, with no flag to move it. A border drawn *along* an edge therefore
+hangs half its width past it, and a court line on the camera's boundary is the
+first thing a Pong draws: inset the segment by half the thickness, or leave the
+camera a margin around the court — `examples/prototype_kit`'s `draw_the_field`
+insets its whole field from `visible_bounds` before a line is drawn. `ctx.rect`
+has no such overhang; it fills exactly the `Rect` it is given.
+
 **Text's vertical metric, exactly, because every vertical number in a game's
 layout rests on it.** `at` is the top-left of the first character's *cell*, not
 of its ink: a glyph's quad is `size` tall whatever the character draws inside it,
@@ -483,8 +494,12 @@ Draw system costs an allocation a frame and buys nothing.
 **An example can be a directory, and a game with a `--verify` mode wants one.**
 `cargo run --example <name>` picks up `examples/<name>.rs` and
 `examples/<name>/main.rs` alike, with no `[[example]]` entry in any `Cargo.toml`
-either way. The second is what lets the game, its checks and its capture path be
-files beside each other, reached with `mod verify;` from `main.rs`.
+either way. Until `main.rs` exists cargo answers `error: no example target
+named '<name>'` — which reads exactly like a missing manifest entry and is only
+the file not being there yet: create `examples/<name>/main.rs` first and `mod`
+the others in as they arrive. The directory form is what lets the game, its
+checks and its capture path be files beside each other, reached with
+`mod verify;` from `main.rs`.
 `examples/prototype_kit` is the worked version.
 
 **A game written in this repository's `examples/` inherits the engine's own
@@ -548,6 +563,23 @@ Stock clippy lints that games written here have tripped:
       return None;   // a NaN fails every conjunct, so the answer is "no contact"
   }
   ```
+
+  With **one** condition the recipe collapses back to the very shape the lint
+  rejects — `if !(distance > 0.0)` is a negated comparison however carefully it
+  was reached. The degenerate case of "lift the negation off the comparison" is
+  to bind the condition to a name and negate the name:
+
+  ```rust
+  let reachable = distance > 0.0;   // NaN fails this, so the answer is "never"
+  if !reachable {
+      return None;
+  }
+  ```
+
+  Same NaN behaviour, clippy-clean for the same reason — the `!` is on a `bool`
+  — and it is the case a *prediction* meets, because a sweep tests three things
+  and "does the ball ever get there" tests one. One game paid two clippy rounds
+  in two files for reading the conjunction form as the whole recipe.
 
   `examples/prototype_kit/checks.rs` writes the NaN half out at length around its
   own comparisons, for the same reason. Written this way, obeying the lint and
@@ -665,8 +697,8 @@ pub struct HeadlessSim;
 
 impl HeadlessSim {
     pub fn tick(&mut self);  // Run one Update tick, running Startup first if it has not run yet
-    // Run the Draw phase once, as a rendered frame would, and return what it
-    // submitted
+    // Run the Draw phase once and return the raw quads it submitted — the
+    // mechanism `FrameRecorder` wraps, not the call a check makes
     pub fn draw(&mut self) -> &Submissions;
     pub fn world(&self) -> &World;  // The world, for asserting on state
     pub fn world_mut(&mut self) -> &mut World;  // The world, for arranging a test's starting state
@@ -1250,6 +1282,12 @@ fn main() {
         Vec2::new(3.0, 4.0)
     );
 
+    // There is no scalar `move_towards` — `f32` is not a `Vec2` operation. A
+    // paddle chases in *one* axis, so the one line there is: hold the
+    // component you are not steering, take the one you are.
+    let paddle_y = Vec2::new(0.0, 2.0).move_towards(Vec2::new(0.0, 6.0), 2.5).y;
+    assert!((paddle_y - 4.5).abs() < 1e-6);
+
     // Angles go through the engine's own `sin_cos`, never through `f32::sin`:
     // those are the deterministic ones, and determinism is what makes a replay
     // replay. It lives in `jidousha::math` and the prelude re-exports it, so
@@ -1531,7 +1569,9 @@ The drawing verbs, added to `DrawCtx`.
 pub trait Submit {
     fn sprite(&mut self, transform: &Transform, sprite: &Sprite);  // Draw `sprite` at `transform`
     fn rect(&mut self, rect: Rect, color: Color, depth: Depth);  // Fill an axis-aligned rectangle
-    fn line(&mut self, from: Vec2, to: Vec2, thickness: f32, color: Color, depth: Depth);  // Draw a line from `from` to `to`, `thickness` world units wide
+    // Draw a line from `from` to `to`, `thickness` world units wide, centred on
+    // the segment — half the thickness to each side
+    fn line(&mut self, from: Vec2, to: Vec2, thickness: f32, color: Color, depth: Depth);
     fn circle(&mut self, center: Vec2, radius: f32, color: Color, depth: Depth);  // Fill a circle, as a fan of sixteen quads rather than as one
     fn text(&mut self, at: Vec2, text: &str, style: TextStyle);  // Draw `text` with its first character's top-left corner at `at`
 }

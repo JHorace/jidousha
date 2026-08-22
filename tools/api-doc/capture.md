@@ -64,4 +64,8 @@ nothing on its own; the question is whether it writes *your game's* PNG, and a
 path wired to the wrong frame or to a stale plan passes every check that does not
 ask. So look — name what you see — then break the game on purpose and look again:
 move a paddle, stop drawing the score, change the clear colour, and confirm the
-picture follows.
+picture follows. **Commit first.** This is a mutation round in miniature, and the
+way back from each break is the same `git checkout -- <file>` the mutation
+passage in *Checking a game you wrote* warns about — it eats every uncommitted
+change in the game file, including whatever you fixed since the round that made
+you commit last.

@@ -31,6 +31,16 @@ entirely. What to do about it is the last section, and it is not a speed.
 Wins 5–0, loses 4–5, loses 0–5 — three lines, and only the middle one can say
 the game is playable.
 
+**Put the tick count on each line, because the fourth verdict is that every
+match *ended*.** A groove does not lose — it stalls. One game's opponent, its
+placement offset zeroed, gave the chaser 4–0 in five and a half thousand ticks
+with a sixty-touch rally: "did it score" and "did it win" both waved that
+through, and the only number that saw the degeneracy was the match never
+finishing. So bound the ticks a match may take and fail the run when the bound
+is hit with nobody at the winning score — the wins and the losses cannot see
+this one, and it is the exact failure this document's degenerate rallies
+produce.
+
 ## Play to win
 
 **A controller that plays it safe is not a playability test.** A blind script
@@ -139,7 +149,15 @@ different contracts and that line covers only the first.
 Read together they say which half of the program to open, which no single number
 can. N far below M: it cannot reach the ball. N healthy and Y large: it is aiming
 at noise. N healthy with Y and X both small: it hits where it aimed and its aims
-are not threats, so the objective is wrong. **All three healthy and still 0–0:
+are not threats — the objective is wrong, **or no threat exists to aim for**,
+and the numbers alone cannot tell those apart. Before opening the controller,
+put X beside the opponent's reach: when the objective already maximises
+distance from where the opponent will be, X *is* the best shot the game had on
+the menu, and an X below the reach means there was no shot at all — the next
+section's arithmetic is the half to open. One run's `met 31 of 31 / 0.00 /
+1.24` read, by this table, as a wrong objective; the objective was this
+document's own prescription, and the fact was a best available shot of 1.24
+units against a paddle reaching 1.88. **All three healthy and still 0–0:
 the controller is fine and the game is not** — go and do the arithmetic on the
 game. That is the half a run without these numbers cannot reach, because a
 correct controller and a broken one produce the same 0–0.
@@ -174,6 +192,35 @@ is a game. This is the same inequality, reduced for the opponent whose rule is
 "be where the ball is"; it is worth having in this form because nothing in it is
 measured. Both numbers are stated in the game's own constants, so the comparison
 can be made before the game is ever run.
+
+**Against an opponent that predicts, nothing cancels, and what tuning can do
+changes with that.** A predictor commits to where the ball will cross and moves
+from wherever it stood when its rule let it start — so the interval it defends
+is anchored there:
+
+```text
+opponent_speed * time_from_its_reaction_point_to_arrival + its_reach
+    versus    half the spread of landings a strike can produce
+```
+
+The spread is what the striker can actually do — the steepest bounce it can
+take with margin, from the positions it can reach in time, folded by the walls,
+never wider than the court. When the left side wins, no shot exists: every
+available landing is inside the defended interval, the planned-threat number
+above comes back small *whatever the objective*, and the table's
+"objective is wrong" row is a misread. The crossing time does not cancel here,
+which is why this one is checked at the speeds a rally actually reaches, and
+why — unlike the follower's line — the ball's speed is genuinely a knob: a
+faster ball shortens the reaction window on one side and leaves the other
+alone. But the knobs to move first are the opponent's own fallibility, because
+they act directly: how late its rule lets it start, and how far off its own
+centre it takes the ball — that offset is donated to the striker, since a
+paddle standing away from the middle of the spread cannot defend the far end of
+it. The folding and the reaction gate keep this form from reducing to named
+constants the way the follower's does, so settle it as a sweep of those two
+knobs read against the three verdict lines — the game that measured the 1.24
+above settled its gate and its offset in eight such rows, and the verdict
+lines chose the row.
 
 **And the paddle both of these are about is your game's opponent, not only your
 controller.** "A controller that tracks the ball perfectly returns it dead flat"

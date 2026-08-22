@@ -147,6 +147,12 @@ fn main() {
         Vec2::new(3.0, 4.0)
     );
 
+    // There is no scalar `move_towards` — `f32` is not a `Vec2` operation. A
+    // paddle chases in *one* axis, so the one line there is: hold the
+    // component you are not steering, take the one you are.
+    let paddle_y = Vec2::new(0.0, 2.0).move_towards(Vec2::new(0.0, 6.0), 2.5).y;
+    assert!((paddle_y - 4.5).abs() < 1e-6);
+
     // Angles go through the engine's own `sin_cos`, never through `f32::sin`:
     // those are the deterministic ones, and determinism is what makes a replay
     // replay. It lives in `jidousha::math` and the prelude re-exports it, so
