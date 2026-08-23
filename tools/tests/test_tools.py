@@ -2473,33 +2473,37 @@ class BuildWebTest(unittest.TestCase):
         # prototype_kit is the headline (web-publish.md §3); the rest stay
         # alphabetical so the list is stable across builds.
         items = build_web.root_index_items(
-            ["sprites", "prototype_kit", "homing"], headline="prototype_kit"
+            ["sprites", "prototype_kit", "homing"], headline=build_web.HEADLINE_EXAMPLE
         )
         first = items.splitlines()[0]
         self.assertIn("prototype_kit", first)
         self.assertIn('class="headline"', first)
         self.assertLess(items.index("homing"), items.index('"sprites/"'))
 
-    def test_staging_the_root_index_writes_the_page_and_the_stamp_file(self):
-        # stamp.txt is what the deploy workflow reads for its PR comment —
-        # the same stamp the pages carry, not a re-derivation.
+    def test_staging_the_root_index_writes_the_page_the_stamp_and_the_fleet(self):
+        # stamp.txt is what the deploy workflow reads for its PR comment — the
+        # same stamp the pages carry, not a re-derivation — and fleet.txt is
+        # what it reads to browser-check a page that is certainly there
+        # (web-publish.md §4).
         with tempfile.TemporaryDirectory() as scratch:
             previous = build_web.DIST
             build_web.DIST = Path(scratch)
             try:
-                step = build_web.stage_root_index(
-                    ["pong", "prototype_kit"], [], "abc1234 · 2026-08-22"
-                )
+                with contextlib.redirect_stdout(io.StringIO()):
+                    step = build_web.stage_root_index(
+                        ["pong", "prototype_kit"], [], "abc1234 · 2026-08-22"
+                    )
                 page = (Path(scratch) / "index.html").read_text(encoding="utf-8")
                 stamp = (Path(scratch) / "stamp.txt").read_text(encoding="utf-8")
+                listing = (Path(scratch) / "fleet.txt").read_text(encoding="utf-8")
             finally:
                 build_web.DIST = previous
         self.assertEqual(step, 0)
-        self.assertNotIn("__ITEMS__", page)
-        self.assertNotIn("__GAMES__", page)
+        self.assertNotIn("__SECTIONS__", page)
         self.assertNotIn("__BUILD_STAMP__", page)
         self.assertIn('href="pong/"', page)
         self.assertEqual(stamp, "abc1234 · 2026-08-22\n")
+        self.assertEqual(listing, "prototype_kit\npong\n")
 
     def test_every_native_only_exclusion_names_a_real_example(self):
         # The list must rot loudly: an entry for a renamed or deleted example
@@ -2851,6 +2855,82 @@ class GameToolingTest(unittest.TestCase):
         self.assertEqual(examples, ["sprites"])
         self.assertEqual(games, ["pong"])
 
+    def test_the_release_fleet_keeps_every_game_and_only_allowlisted_examples(self):
+        # web-publish.md §3a (owner, 2026-08-23): production is the curated
+        # face. The example half narrows to RELEASE_EXAMPLES; the game half is
+        # the same in both fleets, because the glob is what decides it.
+        targets = [
+            ("jidousha", "sprites", "example"),
+            ("jidousha", "prototype_kit", "example"),
+            ("slalom", "slalom", "game"),
+        ] + [("jidousha", name, "example") for name in build_web.RELEASE_EXAMPLES]
+        with contextlib.redirect_stdout(io.StringIO()) as log:
+            examples, games = build_web.fleet(targets, release=True)
+        self.assertEqual(examples, sorted(build_web.RELEASE_EXAMPLES))
+        self.assertEqual(games, ["slalom"])
+        # Loud, like every other exclusion: a silently shrinking site is how an
+        # example goes missing without anyone noticing.
+        self.assertIn("sprites", log.getvalue())
+
+    def test_a_new_game_reaches_the_production_page_with_no_configuration(self):
+        # ADR-0038's no-registration property, which this split must preserve:
+        # a crate under `games/` is on the production page because the glob
+        # found it, and for no other reason.
+        newcomer = [("brand_new", "brand_new", "game")]
+        with contextlib.redirect_stdout(io.StringIO()):
+            _examples, games = build_web.fleet(newcomer, release=True)
+        self.assertEqual(games, ["brand_new"])
+
+    def test_the_example_allowlist_names_no_game(self):
+        # A game name written into the allowlist would be the first breach of
+        # the no-registration property: games come from the glob, always.
+        targets = build_web.playable_targets()
+        self.assertIsNotNone(targets)
+        game_names = {name for _package, name, kind in targets if kind == "game"}
+        self.assertEqual(game_names & set(build_web.RELEASE_EXAMPLES), set())
+
+    def test_every_allowlisted_example_names_a_real_web_example(self):
+        # The allowlist must rot loudly: an entry for a renamed, deleted or
+        # native-only example would quietly shrink the production page.
+        targets = build_web.playable_targets()
+        self.assertIsNotNone(targets)
+        with contextlib.redirect_stdout(io.StringIO()):
+            examples, _games = build_web.fleet(targets)
+        self.assertEqual(build_web.missing_from_allowlist(examples), [])
+
+    def test_an_allowlist_entry_nothing_builds_is_reported_not_dropped(self):
+        self.assertEqual(build_web.missing_from_allowlist([]), list(build_web.RELEASE_EXAMPLES))
+
+    def test_the_fleet_listing_leads_with_the_page_ci_browser_checks(self):
+        # dist/fleet.txt is how the workflow checks a page without naming one:
+        # its first line is the page the index leads with, in either fleet.
+        full = build_web.fleet_listing(["sprites", build_web.HEADLINE_EXAMPLE], ["giri"])
+        self.assertEqual(full.splitlines()[0], build_web.HEADLINE_EXAMPLE)
+        self.assertEqual(sorted(full.split()), sorted(["sprites", build_web.HEADLINE_EXAMPLE, "giri"]))
+        release = build_web.fleet_listing(["pong"], ["giri"])
+        self.assertEqual(release.splitlines()[0], "pong")
+
+    def test_the_workflow_chooses_a_fleet_and_never_names_a_member(self):
+        # The predictable failure mode this split has: the allowlist duplicated
+        # into the workflow. The allowlist is data in tools/build-web and only
+        # there; CI picks `--release-fleet` on main and `--all` on a PR, and
+        # browser-checks whatever dist/fleet.txt leads with.
+        workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text("utf-8")
+        self.assertIn("--release-fleet", workflow)
+        self.assertIn("--all", workflow)
+        self.assertIn("dist/fleet.txt", workflow)
+        targets = build_web.playable_targets()
+        self.assertIsNotNone(targets)
+        pages = {name for _package, name, _kind in targets}
+        for name in sorted(pages):
+            self.assertNotIn(
+                f"serve-web {name}", workflow, "the browser check names a page, not the fleet"
+            )
+        for name in build_web.RELEASE_EXAMPLES:
+            self.assertNotIn(
+                f"build-web {name}", workflow, "the allowlist leaked into the workflow"
+            )
+
     def test_a_game_gets_its_own_asset_root_and_an_example_does_not(self):
         # ADR-0040: a game's art travels with the crate; an example loads from
         # the repository's shared root and owns nothing.
@@ -2927,18 +3007,33 @@ class GameToolingTest(unittest.TestCase):
 
     def test_the_root_index_has_no_games_section_when_there_are_no_games(self):
         # An index with no prototypes yet should not carry an empty heading.
-        self.assertEqual(build_web.root_index_games([]), "")
+        self.assertEqual(build_web.root_index_section("games", "blurb", []), "")
 
     def test_the_root_index_gives_games_their_own_section(self):
-        section = build_web.root_index_games(["pong"])
+        section = build_web.root_index_sections([], ["pong"], release=False)
         self.assertIn("<h2>games</h2>", section)
         self.assertIn('<a href="pong/">pong</a>', section)
 
-    def test_the_root_index_template_has_a_slot_for_each_section(self):
+    def test_the_root_index_template_has_a_slot_for_the_sections(self):
         # A template that lost the placeholder would deploy the literal text.
         template = (REPO_ROOT / "tools/web-template/root-index.html").read_text("utf-8")
-        self.assertIn("__ITEMS__", template)
-        self.assertIn("__GAMES__", template)
+        self.assertIn("__SECTIONS__", template)
+
+    def test_the_production_index_leads_with_games_then_the_worked_example(self):
+        # web-publish.md §3a: the prototypes are what production is for, and
+        # the allowlisted example sits under them as the worked reference.
+        page = build_web.root_index_sections(["pong"], ["giri"], release=True)
+        self.assertLess(page.index("<h2>games</h2>"), page.index("<h2>worked example</h2>"))
+        self.assertIn('<a href="giri/">giri</a>', page)
+        self.assertIn('<a href="pong/">pong</a>', page)
+
+    def test_the_preview_index_leads_with_the_examples_it_exists_to_show(self):
+        # A preview is the diagnostic surface: the engine change under review
+        # shows up in the examples, so they stay first and keep their headline.
+        page = build_web.root_index_sections(["pong", "prototype_kit"], ["giri"], release=False)
+        self.assertLess(page.index("<h2>examples</h2>"), page.index("<h2>games</h2>"))
+        self.assertIn('class="headline"', page)
+        self.assertNotIn("worked example", page)
 
     def test_check_assets_reads_a_games_sources(self):
         with tempfile.TemporaryDirectory() as tmp:

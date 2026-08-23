@@ -155,8 +155,10 @@ Read `docs/api/jidousha-capture.md` last, once the check runs and asserts.
 ## 8. Ship it
 
 - [ ] Nothing to register — a game under `games/` is picked up by `tools/test`,
-  `tools/verify`, `tools/build-web --all` and the deploy from where it lives
-  (ADR-0038). The step that used to be here is the step that kept being missed.
+  `tools/verify`, `tools/build-web` and the deploy from where it lives
+  (ADR-0038). That holds for the production page too: the deploy curates which
+  *examples* it serves and never which games (web-publish.md §3a). The step that
+  used to be here is the step that kept being missed.
 - [ ] `cargo fmt --all` clean, clippy clean, `tools/check-game-deps` clean,
   `tools/test` green — the report file is the verdict. `tools/check-assets` if
   the game loads art.

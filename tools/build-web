@@ -7,14 +7,26 @@ builds; the deploy workflow (W1) uploads it verbatim.
 
     tools/build-web sprites             # release build into dist/sprites/
     tools/build-web sprites --debug     # unoptimized, for fast iteration
-    tools/build-web --all               # every example and game + the root index
-                                        # page (the engine-repo deploy layout, §3)
+    tools/build-web --all               # the full fleet: every example and game +
+                                        # the root index page (what PR previews
+                                        # deploy — the diagnostic surface, §3)
+    tools/build-web --release-fleet     # the release fleet: every game + the
+                                        # examples RELEASE_EXAMPLES allows (what
+                                        # the production deploy serves, §3a)
 
 The pipeline: cargo build for wasm32 (release by default — what ships is what
 gets tested), wasm-bindgen to generate the JS glue, wasm-opt -Os if installed
 (optional; skipped with a log line), then stage the playtest page from
 tools/web-template/ with the example name and build stamp substituted, and every
 asset root the page's code can name copied in under it.
+
+**Two fleets, one allowlist** (web-publish.md §3a): production is the curated
+face and previews are the diagnostic surface, so `--release-fleet` builds every
+game plus the examples `RELEASE_EXAMPLES` names, and `--all` builds everything.
+Games are in both, always, enumerated from the `games/*` glob — a new prototype
+is on the production page with no configuration anywhere (ADR-0038). Only
+examples are allowlisted, and `RELEASE_EXAMPLES` below is the whole allowlist:
+the deploy workflow chooses a fleet, it never names what is in one.
 
 **dist/<name>/ is repository-shaped** (ADR-0040): an asset root is staged at the
 path the code names it by, so `asset_source("assets")` and
@@ -77,6 +89,27 @@ NATIVE_ONLY_EXAMPLES = {
     "load_from_disk": "reads real files off a real disk (assets.md §5); "
     "its wasm build is a printed stub by design",
 }
+
+# THE ALLOWLIST (web-publish.md §3a, owner 2026-08-23). The examples the
+# production page serves, and the only place this list exists — the deploy
+# workflow picks a fleet by name, it never names a fleet's members.
+#
+# Games are deliberately absent and must stay absent: they come from the
+# `games/*` glob by way of `cargo metadata`, so a new prototype is on the
+# production page with no configuration anywhere (ADR-0038's no-registration
+# property). A game name written here would be that property's first breach.
+#
+# Adding an example here is a decision about what the project's face shows, not
+# a build detail: production is curated, PR previews carry the whole fleet
+# because that is where engine changes get eyeballed.
+RELEASE_EXAMPLES = ("pong",)
+
+# The example the full fleet leads with (web-publish.md §3). It heads the
+# examples list on the index and, being first in `fleet.txt`, is the page CI
+# browser-checks — on a release build that falls to the allowlist's first
+# example instead, which is the point: neither the workflow nor this constant
+# has to know which fleet was built.
+HEADLINE_EXAMPLE = "prototype_kit"
 
 
 def fail(what: str, specifics: str, cause: str, fix: str) -> int:
@@ -482,44 +515,102 @@ def build(package: str, name: str, kind: str, debug: bool) -> int:
     return stage_playable(name, kind, debug, build_stamp(), own_root)
 
 
+def ordered_names(names: "list[str]", headline: "str | None" = None) -> "list[str]":
+    """`names` sorted, with `headline` pulled to the front when it is present.
+
+    One ordering for the index and for `fleet.txt`, so the page's first link and
+    the fleet listing's first line are the same page.
+    """
+    return sorted(names, key=lambda name: (name != headline, name))
+
+
 def root_index_items(names: "list[str]", headline: "str | None" = None) -> str:
     """One section's list, `headline` first when the section has one.
 
-    `prototype_kit` leads the examples (web-publish.md §3); games are listed in
-    the order they sort, because no prototype is the headline of the others.
+    `prototype_kit` leads the examples on the full fleet (web-publish.md §3);
+    games are listed in the order they sort, because no prototype is the
+    headline of the others.
     """
-    ordered = sorted(names, key=lambda name: (name != headline, name))
     lines = []
-    for name in ordered:
+    for name in ordered_names(names, headline):
         marker = ' class="headline"' if name == headline else ""
         lines.append(f'<li{marker}><a href="{name}/">{name}</a></li>')
     return "\n        ".join(lines)
 
 
-def root_index_games(names: "list[str]") -> str:
-    """The games section of the root page, or nothing at all when there are none.
+def root_index_section(
+    heading: str, blurb: str, names: "list[str]", headline: "str | None" = None
+) -> str:
+    """One heading, one blurb and one list — or nothing when the section is empty.
 
-    `games/` ships empty and the first prototype lands later (ADR-0038), so the
-    common case today is an index with no games section — not one with an empty
-    heading over an empty list.
+    An empty section is omitted whole rather than left as a heading over an
+    empty list: `games/` can be empty (ADR-0038), and so can an allowlist.
     """
     if not names:
         return ""
     return (
-        '\n      <h2>games</h2>\n'
-        "      <p>prototypes built with the engine — one crate each, under "
-        "<code>games/</code></p>\n"
+        f"\n      <h2>{heading}</h2>\n"
+        f"      <p>{blurb}</p>\n"
         "      <ul>\n        "
-        + root_index_items(names)
+        + root_index_items(names, headline)
         + "\n      </ul>\n"
     )
 
 
-def stage_root_index(examples: "list[str]", games: "list[str]", stamp: str) -> int:
-    """Write the dist/ root: the index page and the stamp file.
+def root_index_sections(examples: "list[str]", games: "list[str]", release: bool) -> str:
+    """The body of the root index: two sections, ordered by what this build is for.
+
+    The production page leads with **games** — the prototypes are the thing to
+    play — and follows with the **worked example** the allowlist keeps beside
+    them (web-publish.md §3a). A preview page keeps the shape it has always had:
+    the whole example fleet first, headline first, then the games. Previews are
+    read by whoever is reviewing an engine change, and the examples are what
+    that change shows up in.
+    """
+    games_section = root_index_section(
+        "games",
+        "prototypes built with the engine — one crate each, under <code>games/</code>",
+        games,
+    )
+    if release:
+        return games_section + root_index_section(
+            "worked example",
+            "the engine's own example the production page keeps playable — every "
+            "other example lives on the PR previews",
+            examples,
+        )
+    return (
+        root_index_section(
+            "examples",
+            "every example of the engine, built for the web — pick one to play",
+            examples,
+            headline=HEADLINE_EXAMPLE,
+        )
+        + games_section
+    )
+
+
+def fleet_listing(examples: "list[str]", games: "list[str]") -> str:
+    """Every page this build produced, one per line, the index's first link first.
+
+    Written to `dist/fleet.txt` for CI, which browser-checks the first line
+    (web-publish.md §4). The check thereby follows whichever fleet was built
+    instead of naming a member of one — the release fleet has no `sprites` to
+    check, and no workflow should have to know that.
+    """
+    return "".join(
+        f"{name}\n" for name in ordered_names(examples, HEADLINE_EXAMPLE) + sorted(games)
+    )
+
+
+def stage_root_index(
+    examples: "list[str]", games: "list[str]", stamp: str, release: bool = False
+) -> int:
+    """Write the dist/ root: the index page, the stamp file and the fleet listing.
 
     `stamp.txt` exists so the deploy workflow can put the exact stamp the pages
-    carry into its PR comment without re-deriving it (web-publish.md §4).
+    carry into its PR comment without re-deriving it; `fleet.txt` so it can
+    browser-check a page that is certainly there (web-publish.md §4).
     """
     if not ROOT_TEMPLATE.exists():
         return fail(
@@ -529,14 +620,15 @@ def stage_root_index(examples: "list[str]", games: "list[str]", stamp: str) -> i
             "restore tools/web-template/root-index.html",
         )
     page = ROOT_TEMPLATE.read_text(encoding="utf-8")
-    page = page.replace("__ITEMS__", root_index_items(examples, headline="prototype_kit"))
-    page = page.replace("__GAMES__", root_index_games(games))
+    page = page.replace("__SECTIONS__", root_index_sections(examples, games, release))
     page = page.replace("__BUILD_STAMP__", stamp)
     (DIST / "index.html").write_text(page, encoding="utf-8")
     (DIST / "stamp.txt").write_text(stamp + "\n", encoding="utf-8")
+    (DIST / "fleet.txt").write_text(fleet_listing(examples, games), encoding="utf-8")
     print(
         f"[build-web] wrote dist/index.html listing {len(examples)} example(s) "
-        f"and {len(games)} game(s)"
+        f"and {len(games)} game(s) — the "
+        f"{'release' if release else 'full'} fleet"
     )
     return 0
 
@@ -554,7 +646,9 @@ def prune_stale(names: "list[str]") -> None:
             print(f"[build-web] pruned stale dist/{entry.name}/ (no such example or game)")
 
 
-def fleet(targets: "list[tuple[str, str, str]]") -> "tuple[list[str], list[str]]":
+def fleet(
+    targets: "list[tuple[str, str, str]]", release: bool = False
+) -> "tuple[list[str], list[str]]":
     """The examples and the games that get pages, from everything the workspace has.
 
     The example half is the facade crate's — what a game author sees and what
@@ -564,6 +658,14 @@ def fleet(targets: "list[tuple[str, str, str]]") -> "tuple[list[str], list[str]]
     boundary at all. The game half is every prototype: a game exists to be
     played, and a playtest URL on the first push is most of why it lives here
     (ADR-0038).
+
+    `release` narrows the *examples* to `RELEASE_EXAMPLES` and nothing else
+    (web-publish.md §3a). The game half is identical in both fleets, because the
+    production page is where a prototype is played and the glob is the only
+    thing that decides what is on it.
+
+    Every exclusion is printed. A silent one is how a web-runnable example goes
+    quietly missing from the site.
     """
     examples, games = [], []
     for package, name, kind in targets:
@@ -576,13 +678,47 @@ def fleet(targets: "list[tuple[str, str, str]]") -> "tuple[list[str], list[str]]
         if name in NATIVE_ONLY_EXAMPLES:
             print(f"[build-web] skipping {name}: {NATIVE_ONLY_EXAMPLES[name]}")
             continue
+        if release and name not in RELEASE_EXAMPLES:
+            print(
+                f"[build-web] skipping {name}: not on the release fleet's example "
+                "allowlist — it plays on PR previews (web-publish.md §3a)"
+            )
+            continue
         examples.append(name)
     return sorted(examples), sorted(games)
 
 
-def build_all(targets: "list[tuple[str, str, str]]", debug: bool) -> int:
-    """The engine-repo deploy layout: every web example and game, plus the index."""
-    examples, games = fleet(targets)
+def missing_from_allowlist(examples: "list[str]") -> "list[str]":
+    """Allowlist entries the workspace did not produce a page for.
+
+    The allowlist must rot loudly, like `NATIVE_ONLY_EXAMPLES`: an entry naming
+    a renamed, deleted or native-only example would quietly shrink the
+    production page instead of failing the build that shrank it.
+    """
+    return [name for name in RELEASE_EXAMPLES if name not in examples]
+
+
+def build_all(targets: "list[tuple[str, str, str]]", debug: bool, release: bool = False) -> int:
+    """The engine-repo deploy layout: a whole fleet of pages, plus the index.
+
+    `release` builds the production fleet — every game, plus the allowlisted
+    examples — where the default builds everything a PR preview shows
+    (web-publish.md §3a). One code path either way: the fleets differ in what
+    `fleet()` returns and in nothing else.
+    """
+    examples, games = fleet(targets, release)
+    if release:
+        missing = missing_from_allowlist(examples)
+        if missing:
+            return fail(
+                "the release fleet's example allowlist names something this "
+                "workspace cannot put on a page",
+                f"no web-buildable facade example named {', '.join(missing)}",
+                "an example was renamed, deleted, or became native-only, and the "
+                "allowlist was not updated with it",
+                "fix RELEASE_EXAMPLES in tools/build-web — it is the one place "
+                "the allowlist lives (web-publish.md §3a)",
+            )
     package_of = {name: package for package, name, _kind in targets}
 
     # One cargo invocation per (package, kind): the facade's examples together,
@@ -608,7 +744,7 @@ def build_all(targets: "list[tuple[str, str, str]]", debug: bool) -> int:
         if step != 0:
             return step
     prune_stale(examples + games)
-    return stage_root_index(examples, games, stamp)
+    return stage_root_index(examples, games, stamp, release)
 
 
 def main() -> int:
@@ -617,8 +753,14 @@ def main() -> int:
     parser.add_argument(
         "--all",
         action="store_true",
-        help="build every example and game, plus the root index page (the "
-        "engine-repo deploy layout, web-publish.md §3)",
+        help="build the full fleet — every example and game, plus the root index "
+        "page — which is what PR previews deploy (web-publish.md §3)",
+    )
+    parser.add_argument(
+        "--release-fleet",
+        action="store_true",
+        help="build the release fleet — every game plus the allowlisted examples "
+        "— which is what the production deploy serves (web-publish.md §3a)",
     )
     parser.add_argument(
         "--debug",
@@ -626,19 +768,21 @@ def main() -> int:
         help="build the debug profile (default is release: what ships is what gets tested)",
     )
     args = parser.parse_args()
-    if args.all == bool(args.name):
+    if [bool(args.name), args.all, args.release_fleet].count(True) != 1:
         return fail(
-            "this tool builds one named example or game, or --all — not both, not neither",
-            f"name={args.name!r}, all={args.all}",
-            "a missing argument, or a name given alongside --all",
-            "run `tools/build-web <name>` or `tools/build-web --all`",
+            "this tool builds one named example or game, or one whole fleet — "
+            "exactly one of a name, --all and --release-fleet",
+            f"name={args.name!r}, all={args.all}, release_fleet={args.release_fleet}",
+            "a missing argument, or two ways of saying what to build at once",
+            "run `tools/build-web <name>`, `tools/build-web --all` (the preview "
+            "fleet) or `tools/build-web --release-fleet` (the production fleet)",
         )
 
     step = check_toolchain(locked_wasm_bindgen_version())
     if step != 0:
         return step
 
-    if args.all:
+    if args.all or args.release_fleet:
         targets = playable_targets()
         if not targets:
             return fail(
@@ -647,7 +791,7 @@ def main() -> int:
                 "cargo failed above, or the workspace really has neither",
                 "run `cargo metadata` by hand and read its error",
             )
-        return build_all(targets, args.debug)
+        return build_all(targets, args.debug, args.release_fleet)
 
     if args.name in NATIVE_ONLY_EXAMPLES:
         return fail(

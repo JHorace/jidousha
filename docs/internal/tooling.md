@@ -390,7 +390,9 @@ a row (stop rule printed, `failure-streak.json` count 2).
   when installed, then the playtest page from `tools/web-template/` staged into
   `dist/<example>/` with the name and build stamp substituted. CONTRACT
   (web-publish.md §1): it is the ONLY web build path — CI, local dev, and game
-  repos all call it. `serve-web [<example>]` serves `dist/` and nothing else,
+  repos all call it. `--all` and `--release-fleet` build a whole fleet plus the
+  root index instead of one page (§3a). `serve-web [<example>]` serves `dist/`
+  and nothing else — whatever was built there, one page or either fleet —
   so what works locally is what works deployed. `--check` drives a headless
   Chromium at the page twice: once to assert the module started and the canvas
   was drawn on (screenshot → PNG decode), once with `?panic=1` to assert the
@@ -399,14 +401,24 @@ a row (stop rule printed, `failure-streak.json` count 2).
   Stdlib only, including the PNG decoder — forty lines of `zlib` and
   un-filtering, for the same reason the input codec is hand-written (ADR-0014).
 - **The deploy is two CI jobs and nothing local** (W1–W2, web-publish.md §4).
-  `web` runs `tools/build-web --all` — the fleet is the facade crate's
-  examples, minus the native-only ones build-web names and skips aloud — with
-  the `wasm-bindgen` CLI installed at the version Cargo.lock pins (the session
+  `web` runs `tools/build-web` for **one of two fleets** (web-publish.md §3a,
+  owner 2026-08-23): `--release-fleet` on a `main` push — every game plus the
+  examples the `RELEASE_EXAMPLES` allowlist names — and `--all` on a PR, which
+  is the full fleet: the facade crate's examples, minus the native-only ones
+  build-web names and skips aloud, plus every game. Production is the curated
+  face; a preview is the diagnostic surface, which is where the binaryen defect
+  below was found. The allowlist is data in `tools/build-web` and lives nowhere
+  else — the workflow picks a fleet by name and never names a fleet's members,
+  and games are enumerated from the `games/*` glob in both fleets, so a new
+  prototype needs no configuration anywhere (ADR-0038). The job installs the
+  `wasm-bindgen` CLI at the version Cargo.lock pins (the session
   hook's recipe) and a **pinned binaryen release** so the deploy ships
   optimized modules (never Ubuntu's binaryen 108, which damages the externref
   table — web-publish.md §5; build-web refuses a wasm-opt below its pinned
   minimum, so a runner change cannot silently reintroduce it), then
-  browser-checks the optimized bytes (`tools/serve-web sprites --check`)
+  browser-checks the optimized bytes against the first line of `dist/fleet.txt`
+  (`tools/serve-web "$(head -n 1 dist/fleet.txt)" --check`), so the check
+  follows whichever fleet was built,
   before uploading `dist/` as an artifact. `deploy` runs only after every other gate in the same
   run: `wrangler deploy` on a `main` push (production), `wrangler versions
   upload --preview-alias pr-<number>` on a PR (stable preview URL per PR), with

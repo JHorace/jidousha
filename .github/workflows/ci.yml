@@ -205,16 +205,31 @@ jobs:
       # CONTRACT (web-publish.md §1): tools/build-web is the ONLY web build
       # path — no inline build steps here. What CI deploys is what a developer
       # built locally with the same command.
-      - run: python tools/build-web --all
+      #
+      # Which fleet, though, is this workflow's decision and only this one
+      # (web-publish.md §3a, owner 2026-08-23): a `main` push builds the
+      # release fleet, because production is the curated face; a PR builds the
+      # full fleet, because a preview is where an engine change gets eyeballed
+      # and where device bugs turn up (the binaryen defect was caught on one).
+      # This step picks a fleet by name and never names a fleet's members — the
+      # example allowlist is data in tools/build-web, in exactly one place, and
+      # games are enumerated from the `games/*` glob in both fleets (ADR-0038).
+      - name: build the web fleet (release on main, full on PRs)
+        run: python tools/build-web ${{ github.event_name == 'push' && '--release-fleet' || '--all' }}
       # Run the optimized bytes in a real browser before they can deploy — the
-      # exact check that would have caught the binaryen-108 table damage.
-      # sprites exercises rendering and assets; the ?panic=1 half checks the
+      # exact check that would have caught the binaryen-108 table damage. The
+      # page comes from dist/fleet.txt's first line, which build-web wrote: the
+      # check follows whichever fleet was built rather than naming a page that
+      # one of the two fleets does not have. The ?panic=1 half checks the
       # overlay contract too (web-publish.md §2). JIDOUSHA_CHROMIUM points at
       # the runner's google-chrome: the `chromium` on its PATH is a snap shim
       # that hangs headless (observed: 120s, no DOM), and the tool's env
       # override exists for exactly this.
       - name: browser-check the optimized build
-        run: JIDOUSHA_CHROMIUM="$(command -v google-chrome)" python tools/serve-web sprites --check
+        run: |
+          page="$(head -n 1 dist/fleet.txt)"
+          echo "browser-checking /${page}/ — the page this fleet leads with"
+          JIDOUSHA_CHROMIUM="$(command -v google-chrome)" python tools/serve-web "${page}" --check
       - uses: actions/upload-artifact@v4
         with:
           name: web-dist
@@ -302,7 +317,8 @@ jobs:
               marker,
               `**Web preview**: ${url}`,
               "",
-              `Every example and game, playable at build \`${stamp}\`.`,
+              `The full fleet — every example and game — playable at build \`${stamp}\`.`,
+              "Production serves the release fleet instead: the games plus the worked example (web-publish.md §3a).",
               "Add `?panic=1` to any page URL to see its bug-report overlay.",
               "",
               "_Updated in place on each push._",
