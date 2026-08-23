@@ -220,8 +220,10 @@ jobs:
       # exact check that would have caught the binaryen-108 table damage. The
       # page comes from dist/fleet.txt's first line, which build-web wrote: the
       # check follows whichever fleet was built rather than naming a page that
-      # one of the two fleets does not have. The ?panic=1 half checks the
-      # overlay contract too (web-publish.md §2). JIDOUSHA_CHROMIUM points at
+      # one of the two fleets does not have. The ?panic=1 and ?frametime=1
+      # passes check the two overlay contracts too (web-publish.md §2) — and the
+      # second of those can *require* a software-rendering verdict, because a
+      # runner has no GPU. JIDOUSHA_CHROMIUM points at
       # the runner's google-chrome: the `chromium` on its PATH is a snap shim
       # that hangs headless (observed: 120s, no DOM), and the tool's env
       # override exists for exactly this.
@@ -319,7 +321,7 @@ jobs:
               "",
               `The full fleet — every example and game — playable at build \`${stamp}\`.`,
               "Production serves the release fleet instead: the games plus the worked example (web-publish.md §3a).",
-              "Add `?panic=1` to any page URL to see its bug-report overlay.",
+              "Add `?panic=1` to any page URL to see its bug-report overlay, or `?frametime=1` for the frame-pacing readout (web-publish.md §2).",
               "",
               "_Updated in place on each push._",
             ].join("\n");

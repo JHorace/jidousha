@@ -94,6 +94,20 @@ Implemented (R0):
   and the embedded font it needs — is R3's, and testing an expansion that does
   not exist is not a thing that can be done. §11 is corrected below.
 
+**Interpolation is a game's, not a renderer's** (2026-08-23). The refusal above
+— nothing retained across frames — is what makes `Time::alpha` the game's job:
+there is no engine-side previous transform to lerp from, and there will not be
+one. What changed is that the refusal now has a demonstrated alternative rather
+than only a sentence. `examples/pong` and `examples/prototype_kit` keep a
+`Previous` component of their own and submit `previous.lerp(current, alpha)`
+from Draw; `jidousha-core/tests/interpolation.rs` holds the engine-side proof
+that it produces even motion when frames do not land on ticks; ADR-0041 is the
+one thing the engine had to change for it, and it is a value only Draw reads. A
+game that wants its *sprites* interpolated writes its own `ctx.sprite` loop —
+`draw_sprites` submits committed state, and giving it a second mode would be the
+retained state this section rules out. See core.md §7 and
+`docs/internal/frame-pacing.md`.
+
 **Ordering.** Per conventions: stable sort by (`layer: i16`, `z: f32`,
 submission order). CONTRACT: identical submission streams produce identical
 sorted order and identical batches — the submission transcript (§9) is

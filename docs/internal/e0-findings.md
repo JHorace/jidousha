@@ -1704,7 +1704,7 @@ purpose and could not say so.
 | F-045 | `sin_cos` has two spellings | docs | first | — | doc fix landed; the *document* taught the wrong one |
 | F-046 | `--verify` never mentioned | docs | first | — | doc fix landed, plus the verdict-line protocol |
 | F-047 | a mediocre controller makes you retune | docs | **runs 1, 2, 3** | F-037 predicted this run | doc fix landed; worked example declined again |
-| F-048 | `Time::alpha` has no consumer | docs | first | renderer.md §2 (no retained state) | doc fix landed |
+| F-048 | `Time::alpha` has no consumer | docs | first | renderer.md §2 (no retained state) | doc fix landed; **closed 2026-08-23** — `pong` and `prototype_kit` interpolate, Concepts has the worked idiom, ADR-0041 |
 | F-049 | `Depth::layer`'s numbering is imitation | docs | first | — | doc fix landed |
 | F-050 | `Phase` looks taken and is not | docs | **3rd of F-017's class** | curation invariant, facade `INVARIANT` | doc fix landed; **not** exported |
 | F-051 | `Seconds` has no multiplication | author | first | `as_f32`'s own entry | one sentence; the absence is correct |
@@ -2315,6 +2315,19 @@ wanted. Its body says the engine draws no interpolation of its own, gives the
 `previous.lerp(current, alpha)` shape, and says that ignoring it is the correct
 move for a prototype. Concepts says the same beside the drawing paragraph, because
 "why does my fast ball judder" is a Concepts question.
+
+**Closed, 2026-08-23.** The doc fix stood for four months and the field still had
+no demonstrated consumer, which is what "the user is the game" costs when no game
+is it. It has one now: `examples/pong` interpolates its paddles and its ball,
+`examples/prototype_kit` its paddle, and *Concepts* carries the idiom written out
+with its three caveats (one tick of latency, teleports must snap, `draw_sprites`
+submits committed state). Writing it revealed why nobody could have: at `alpha ==
+0.0`, which is what every headless driver reported, `previous.lerp(current,
+alpha)` is `previous`, so the documented idiom failed every check comparing a
+drawn quad against world state. **ADR-0041** is the fix. The prompting occasion
+was the owner's 2026-08-23 report of Pong's ball jumping in Firefox on Linux —
+`docs/internal/frame-pacing.md` — and that observation's own verdict is still
+open; this finding is not.
 
 **"A field with no user yet" is not the verdict.** It has a user; the user is the
 game, and the document did not name it. That distinction is the whole of the

@@ -525,6 +525,48 @@ pub fn run() -> ExitCode {
         );
     }
 
+    // The interpolation idiom's one ordering rule: the remembering runs before
+    // anything that moves. Registered after a mover, `Previous` would hold that
+    // mover's *new* position and the ball would be drawn a tick further behind
+    // than it should be — which nothing else here can see, because the world
+    // ends up identical either way and only what was *drawn* moves.
+    let remember_at = at("remember_where_things_were");
+    checks.require(
+        remember_at.is_some(),
+        "the system that maintains Previous is not in the schedule",
+        format!(
+            "remember_where_things_were {remember_at:?}; without it every Previous holds its \
+             spawn position for ever and Draw interpolates from the wrong end"
+        ),
+    );
+    if let (Some(remember), Some(one), Some(two), Some(ball)) =
+        (remember_at, player_at, opponent_at, ball_at)
+    {
+        checks.require(
+            remember < one && remember < two && remember < ball,
+            "something moves before its previous position is remembered",
+            format!(
+                "in run order: remember_where_things_were at {remember}, drive_the_player at \
+                 {one}, drive_the_opponent at {two}, move_the_ball at {ball}"
+            ),
+        );
+    }
+
+    // Interpolation must not move what a per-tick driver draws: `alpha` is 1.0
+    // here (ADR-0041), so `previous.lerp(current, alpha)` is `current` and every
+    // assertion below comparing a drawn quad against world state is comparing
+    // the same two numbers it compared before this game interpolated anything.
+    let alpha = sim.world().resource::<Time>().alpha;
+    checks.require(
+        near_within(alpha, 1.0, 1e-6),
+        "a headless tick did not leave alpha at the tick it ran",
+        format!(
+            "Time::alpha is {alpha}, not 1.0; the drawn positions below are then \
+             interpolated somewhere short of the committed state and every bounds \
+             assertion in this file is measuring a different ball to the one the world holds"
+        ),
+    );
+
     // --- three players, three verdicts -------------------------------------
     let Session {
         outcome,

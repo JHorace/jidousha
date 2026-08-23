@@ -11,6 +11,13 @@
   The engine appends its own canvas to the body (winit's `with_append`), so
   there is no canvas element here to get out of step with the one winit makes.
 
+  Diagnostic seam: `?frametime=1` turns on the frame-pacing overlay
+  (web-publish.md §2). It is page-side only — it reads `performance.now()` and
+  `requestAnimationFrame` and never calls into the wasm module, so nothing it
+  measures can reach the simulation. Every deployed build has it, which is what
+  makes "open it with ?frametime=1 and screenshot the overlay" a bug report a
+  playtester on an unknown browser can actually file.
+
   Reserved seam (deferred, do not build yet): the "download recording" button
   lands here once the input recording buffer is reachable from the page
   (input §5, web-publish.md §2) — remote playtesting becomes remote
@@ -125,6 +132,63 @@
       #panic-copy:hover {
         background: #34343f;
       }
+      /* The frame-pacing overlay (?frametime=1, web-publish.md §2). Below the
+         panic overlay's z-index on purpose: a panic is the more important
+         thing to read. */
+      #frametime {
+        position: fixed;
+        top: 8px;
+        right: 8px;
+        display: none;
+        z-index: 9;
+        max-width: min(380px, calc(100% - 16px));
+        /* A last resort rather than the plan: the readings are kept short enough
+           to fit, because a panel that takes no pointer events cannot be
+           scrolled by the person reading it. */
+        max-height: calc(100% - 16px);
+        overflow: auto;
+        padding: 8px 10px;
+        border: 1px solid #2a2a33;
+        border-radius: 6px;
+        background: rgba(16, 16, 20, 0.9);
+        color: #c8c8d0;
+        font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+        /* `pre-wrap`, not `pre`: the histogram's rows are short enough never to
+           wrap at this width, and the one line that is not — the renderer
+           string, which is the line a bug report is *for* — wraps instead of
+           disappearing off the right edge. */
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        /* Never in the way of the game underneath: this is an instrument, not
+           a control. */
+        pointer-events: none;
+      }
+      #frametime.shown {
+        display: block;
+      }
+      #frametime h2 {
+        margin: 0 0 4px;
+        font-size: 11px;
+        color: #8ad0ff;
+      }
+      #frametime-warning {
+        display: none;
+        margin: 4px 0 0;
+        padding: 4px 6px;
+        border: 1px solid #a06030;
+        border-radius: 4px;
+        background: #241a10;
+        color: #ffc080;
+        white-space: pre-wrap;
+      }
+      #frametime-warning.shown {
+        display: block;
+      }
+      #frametime-note {
+        margin: 4px 0 0;
+        color: #6a6a75;
+        white-space: pre-wrap;
+      }
     </style>
   </head>
   <body>
@@ -138,6 +202,12 @@
         <pre id="panic-text"></pre>
         <button id="panic-copy">copy the message</button>
       </div>
+    </div>
+    <div id="frametime">
+      <h2>frame pacing — __EXAMPLE__</h2>
+      <div id="frametime-body">measuring…</div>
+      <div id="frametime-warning"></div>
+      <div id="frametime-note"></div>
     </div>
     <div id="status">starting __EXAMPLE__…</div>
     <div id="stamp">build __BUILD_STAMP__</div>
@@ -219,6 +289,276 @@
       window.addEventListener("unhandledrejection", (event) => {
         if (!panicked) say(String(event.reason), true);
       });
+
+      // --- the frame-pacing overlay (?frametime=1, web-publish.md §2) -------
+      //
+      // What it is for: "the ball jumps forward in this browser and glides in
+      // that one" is a report nobody can act on, and the two facts that settle
+      // it — how evenly frames arrive, and whether this browser is rendering in
+      // software — are both readable from the page. So the page reads them, on
+      // any deployed build, from a query parameter alone.
+      //
+      // CONTRACT: this is presentation-side and stays that way. It reads
+      // `performance.now()` and `requestAnimationFrame` and never calls into
+      // the wasm module; the engine's own clock is `jidousha-platform`'s and
+      // real time reaches the simulation through one door (ADR-0005, core.md
+      // §7). Nothing measured here can move a tick.
+      const frametimeRequested = () => {
+        const value = new URLSearchParams(location.search).get("frametime");
+        return value !== null && value !== "0" && value !== "false";
+      };
+
+      // The engine's numbers, mirrored here so the model below is the loop the
+      // game is actually running (core.md §7). A copy, and knowingly: the page
+      // cannot import a Rust constant, so this is the one place two numbers
+      // have to agree by hand.
+      const TICK_HZ = 60; // GameConfig::fixed_dt's default, 1/60
+      const MAX_FRAME_S = 0.25; // Simulation's spiral-of-death ceiling
+
+      /// How coarse this browser's clock is, in milliseconds.
+      //
+      // Hypothesis 2 in one number. Firefox clamps `performance.now()` to about
+      // a millisecond by default; a 1ms quantum against a 16.67ms cadence
+      // drifts, and the accumulator answers a drifting delta with an occasional
+      // 0-tick or 2-tick frame — which is a visible stutter with no dropped
+      // frame behind it. Chrome's quantum is ~5µs and does not do this.
+      const clockQuantum = () => {
+        const started = performance.now();
+        let last = started;
+        let smallest = Infinity;
+        // Bounded twice: by iterations and by wall time, because a browser that
+        // returns a constant would otherwise spin here forever.
+        for (let i = 0; i < 400000; i += 1) {
+          const now = performance.now();
+          const step = now - last;
+          if (step > 0 && step < smallest) smallest = step;
+          last = now;
+          if (now - started > 25) break;
+        }
+        return Number.isFinite(smallest) ? smallest : null;
+      };
+
+      // Which renderer this browser hands WebGL, and whether it is a CPU.
+      //
+      // Hypothesis 1 in one string. Firefox on Linux falls back to software
+      // WebRender and software WebGL more readily than Chrome does, and a frame
+      // that misses its deadline makes the accumulator run two ticks to catch
+      // up — the "jumps forward" signature. `WEBGL_debug_renderer_info` is the
+      // only way to ask, it is absent under `privacy.resistFingerprinting`, and
+      // an absent answer is reported as absent rather than guessed at.
+      const SOFTWARE_RENDERERS =
+        /llvmpipe|lavapipe|swiftshader|softpipe|swrast|software|mesa offscreen|basic render/i;
+      const probeRenderer = () => {
+        let gl = null;
+        try {
+          const probe = document.createElement("canvas");
+          probe.width = 1;
+          probe.height = 1;
+          gl = probe.getContext("webgl2") || probe.getContext("webgl");
+          if (!gl) return { name: null, why: "this browser gave no WebGL context" };
+          const info = gl.getExtension("WEBGL_debug_renderer_info");
+          const name = String(
+            (info && gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) ||
+              gl.getParameter(gl.RENDERER) ||
+              "",
+          );
+          return name
+            ? { name, why: null }
+            : { name: null, why: "the renderer string is hidden (privacy settings)" };
+        } catch (error) {
+          return { name: null, why: String(error) };
+        } finally {
+          // A probe context that stays alive is a context the game cannot have
+          // on a browser with a small limit.
+          try {
+            const lose = gl && gl.getExtension("WEBGL_lose_context");
+            if (lose) lose.loseContext();
+          } catch {
+            // Losing the probe is a courtesy, not a requirement.
+          }
+        }
+      };
+
+      const startFrametimeOverlay = () => {
+        const panel = document.getElementById("frametime");
+        const body = document.getElementById("frametime-body");
+        const warning = document.getElementById("frametime-warning");
+        const note = document.getElementById("frametime-note");
+        panel.classList.add("shown");
+
+        const renderer = probeRenderer();
+        const software = renderer.name !== null && SOFTWARE_RENDERERS.test(renderer.name);
+        const verdict = renderer.name === null ? "unknown" : software ? "software" : "hardware";
+        // The marker `tools/serve-web --check` reads, and the one line of this
+        // overlay a bug report has to contain.
+        document.body.dataset.jidoushaFrametime = verdict;
+        if (software) {
+          warning.textContent =
+            "this browser is software-rendering; expect jank\n" +
+            "a frame the CPU misses makes the engine run two ticks at once — " +
+            "which is what a ball jumping forward looks like";
+          warning.classList.add("shown");
+        }
+
+        const quantum = clockQuantum();
+        // Kept to two lines: the panel must fit without scrolling, because it
+        // takes no pointer events and so cannot be scrolled.
+        note.textContent =
+          "ticks/frame is modelled, not read from the engine: this page runs the " +
+          "same accumulator (" +
+          TICK_HZ +
+          " Hz, " +
+          MAX_FRAME_S +
+          "s ceiling) over these deltas.\n" +
+          "Firefox: about:support → Graphics → Compositing.";
+
+        // A rolling window, so the panel describes the last few seconds rather
+        // than averaging away the thing being looked for.
+        const WINDOW = 240;
+        const deltas = [];
+        let accumulator = 0;
+        const ticksPerFrame = [0, 0, 0, 0]; // 0, 1, 2, 3-or-more
+        let frames = 0;
+        let previous = null;
+        let painted = 0;
+
+        const histogram = () => {
+          // One-millisecond buckets to 25ms, then coarse. A millisecond is the
+          // resolution that separates 8.33 from 16.67 and shows a quantised
+          // clock's deltas piling onto whole numbers.
+          const buckets = new Map();
+          const label = (ms) => {
+            if (ms >= 50) return "50ms+";
+            if (ms >= 34) return "34-50ms";
+            if (ms >= 25) return "25-34ms";
+            const low = Math.floor(ms);
+            return String(low) + "-" + String(low + 1) + "ms";
+          };
+          const order = (ms) => (ms >= 50 ? 1000 : ms >= 34 ? 999 : ms >= 25 ? 998 : Math.floor(ms));
+          for (const ms of deltas) {
+            const key = label(ms);
+            const seen = buckets.get(key) || { count: 0, order: order(ms) };
+            seen.count += 1;
+            buckets.set(key, seen);
+          }
+          const rows = [...buckets.entries()].sort((a, b) => a[1].order - b[1].order);
+          const most = rows.reduce((peak, row) => Math.max(peak, row[1].count), 1);
+          return rows
+            .map(([key, seen]) => {
+              const bar = "#".repeat(Math.max(1, Math.round((seen.count / most) * 20)));
+              const share = Math.round((seen.count / deltas.length) * 100);
+              return (
+                "  " +
+                key.padStart(8) +
+                " " +
+                bar.padEnd(20) +
+                " " +
+                String(seen.count).padStart(4) +
+                " (" +
+                share +
+                "%)"
+              );
+            })
+            .join("\n");
+        };
+
+        const render = () => {
+          const sorted = [...deltas].sort((a, b) => a - b);
+          const median = sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0;
+          const mean = sorted.length
+            ? deltas.reduce((sum, ms) => sum + ms, 0) / deltas.length
+            : 0;
+          const refresh = median > 0 ? 1000 / median : 0;
+          const share = (count) => Math.round((count / Math.max(1, frames)) * 100);
+          // The static half is written from the first frame on, so a page
+          // dumped early says what browser it is rather than "measuring…".
+          body.textContent =
+            "display   ~" +
+            refresh.toFixed(1) +
+            " Hz (median frame " +
+            median.toFixed(2) +
+            "ms, mean " +
+            mean.toFixed(2) +
+            "ms)\n" +
+            "spread    " +
+            (sorted.length ? sorted[0].toFixed(2) : "0.00") +
+            "ms .. " +
+            (sorted.length ? sorted[sorted.length - 1].toFixed(2) : "0.00") +
+            "ms over " +
+            deltas.length +
+            " frames\n" +
+            "renderer  " +
+            (renderer.name || "unknown — " + renderer.why) +
+            "\n" +
+            "webgpu    " +
+            ("gpu" in navigator ? "available" : "absent") +
+            "\n" +
+            "clock     " +
+            (quantum === null ? "unreadable" : "~" + quantum.toFixed(3) + "ms resolution") +
+            "\n" +
+            "ticks/fr  0:" +
+            ticksPerFrame[0] +
+            " (" +
+            share(ticksPerFrame[0]) +
+            "%)  1:" +
+            ticksPerFrame[1] +
+            " (" +
+            share(ticksPerFrame[1]) +
+            "%)  2:" +
+            ticksPerFrame[2] +
+            " (" +
+            share(ticksPerFrame[2]) +
+            "%)  3+:" +
+            ticksPerFrame[3] +
+            " (" +
+            share(ticksPerFrame[3]) +
+            "%)\n" +
+            "frame deltas\n" +
+            histogram();
+        };
+
+        const onFrame = (now) => {
+          if (previous !== null) {
+            const ms = now - previous;
+            deltas.push(ms);
+            if (deltas.length > WINDOW) deltas.shift();
+            // The engine's accumulator, run on the same deltas: whole ticks come
+            // out, the remainder carries, and a frame longer than the ceiling is
+            // clamped rather than spent (core.md §7).
+            accumulator += Math.min(ms / 1000, MAX_FRAME_S);
+            let ticks = 0;
+            while (accumulator >= 1 / TICK_HZ) {
+              accumulator -= 1 / TICK_HZ;
+              ticks += 1;
+            }
+            ticksPerFrame[Math.min(ticks, 3)] += 1;
+            frames += 1;
+            // Four repaints a second: the panel is an instrument, and an
+            // instrument that costs a frame to draw is measuring itself.
+            if (now - painted > 250) {
+              painted = now;
+              render();
+            }
+          } else {
+            // Something on the panel from the first frame, so a page dumped by
+            // a headless browser is never dumped mid-"measuring…".
+            render();
+            painted = now;
+          }
+          previous = now;
+          requestAnimationFrame(onFrame);
+        };
+        requestAnimationFrame(onFrame);
+        console.log(
+          "[jidousha] frame-pacing overlay on; WebGL renderer: " +
+            (renderer.name || "unknown") +
+            " (" +
+            verdict +
+            ")",
+        );
+      };
+
+      if (frametimeRequested()) startFrametimeOverlay();
 
       try {
         const module = await import("./__EXAMPLE__.js");

@@ -21,6 +21,17 @@
 //! `add_system` calls in `register`, and `verify.rs` asserts on
 //! `schedule_debug()` so a tidy-up cannot reverse it silently.
 //!
+//! **The ball is drawn between two ticks, not on one.** The simulation steps
+//! sixty times a second; a browser or a display that does not present frames on
+//! that cadence shows the same tick twice and then skips one, and the eye reads
+//! that as the ball jumping forward. So every moving thing carries a `Previous`
+//! position this file maintains, and `Draw` submits
+//! `previous.lerp(current, Time::alpha)`. The engine has no part in this and
+//! deliberately never will — an engine-side previous transform is retained
+//! render state, which renderer.md §2 rules out — so this is what the idiom
+//! looks like when a game writes it. It costs one tick of latency and a
+//! two-line rule about teleports, both stated at `Previous`.
+//!
 //! **The layout is constants, for one aspect.** `WINDOW` is 16:9, every
 //! position below is stated for that shape, and the check gives its recorder
 //! the same size. Dragging the window narrower than 16:9 moves the side walls
@@ -306,6 +317,24 @@ struct Ball {
 }
 impl Component for Ball {}
 
+/// Where a drawn thing stood at the start of the tick it is now past.
+///
+/// **The game's own state, and that is the whole point.** `Time::alpha` says
+/// where the frame about to be drawn falls between the previous tick and the
+/// current one, and it is the only half of interpolation the engine supplies:
+/// there is no lerp helper and no engine-side previous transform, because that
+/// would be retained render state (renderer.md §2, e0-findings.md F-048). The
+/// other half is this component, `remember_where_things_were`, and one `lerp`
+/// in `Draw`.
+///
+/// **A teleport must snap this too.** Interpolating across one draws the thing
+/// streaking across the court for a frame, so `park_the_ball` and
+/// `restart_the_match` — the two places anything here jumps rather than travels
+/// — write the new position into both.
+#[derive(Clone, Copy)]
+struct Previous(Vec2);
+impl Component for Previous {}
+
 /// The score, and what the court is doing right now.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Match {
@@ -474,6 +503,16 @@ fn free_step(pos: Vec2, velocity: Vec2, dt: f32) -> (Vec2, Vec2, Vec2) {
     (straight, settled, reflected)
 }
 
+/// Where something is drawn this frame: between where it was and where it is.
+///
+/// The engine's entire contribution to this is `alpha`. A windowed frame gets
+/// `0.0..1.0` and this glides; a driver that draws once per tick gets exactly
+/// `1.0` and this is `now`, which is why interpolating changed nothing about
+/// what `--verify` sees (ADR-0041).
+fn drawn_at(was: Vec2, now: Vec2, alpha: f32) -> Vec2 {
+    was.lerp(now, alpha)
+}
+
 /// How far off a paddle's centre a ball may strike and still be returned.
 const fn contact_span() -> f32 {
     PADDLE_SIZE.y / 2.0 + BALL_RADIUS
@@ -494,11 +533,18 @@ fn config() -> GameConfig {
 
 /// Every system this game has, in the order they run.
 ///
-/// The order is the decision: both paddles move before the ball, so the ball's
-/// sweep meets each paddle where it ended up. `verify.rs` asserts on
-/// `schedule_debug()` because nothing else in the surface can see a swap here.
+/// The order is the decision: `remember_where_things_were` runs before anything
+/// moves, and both paddles move before the ball, so the ball's sweep meets each
+/// paddle where it ended up. `verify.rs` asserts on `schedule_debug()` because
+/// nothing else in the surface can see a swap here.
 fn register(app: &mut App) {
     app.add_system(Startup, set_the_court);
+    // First, and it has to be: it copies where things are into where they
+    // *were*, so everything below it moves away from a remembered position and
+    // `Draw` has two ends to interpolate between. Registered anywhere else it
+    // would remember a position something had already left, and the ball would
+    // be drawn a tick further behind than it should be.
+    app.add_system(Update, remember_where_things_were);
     app.add_system(Update, restart_the_match);
     app.add_system(Update, drive_the_player);
     app.add_system(Update, drive_the_opponent);
@@ -543,15 +589,17 @@ fn set_the_court(world: &mut World) {
 
     for side in [Side::Player, Side::Opponent] {
         let paddle = world.spawn();
-        world.insert(
-            paddle,
-            Transform::at(Vec2::new(side.sign() * PADDLE_X, 0.0)),
-        );
+        let at = Vec2::new(side.sign() * PADDLE_X, 0.0);
+        world.insert(paddle, Transform::at(at));
+        // Starting where it starts: a `Previous` of the origin would draw the
+        // first frame with both paddles halfway to their posts.
+        world.insert(paddle, Previous(at));
         world.insert(paddle, Paddle { side });
     }
 
     let ball = world.spawn();
     world.insert(ball, Transform::at(Vec2::ZERO));
+    world.insert(ball, Previous(Vec2::ZERO));
     world.insert(
         ball,
         Ball {
@@ -559,6 +607,18 @@ fn set_the_court(world: &mut World) {
             speed: SERVE_SPEED,
         },
     );
+}
+
+/// Copy where everything is into where it was, before anything moves it.
+///
+/// The Update half of the interpolation idiom, and the first system to run —
+/// see `register`. Everything that carries a `Previous` is remembered by the
+/// one loop, so adding a moving thing to this game is one component, not one
+/// more special case here.
+fn remember_where_things_were(world: &mut World) {
+    for (_, previous, transform) in world.query_mut::<(&mut Previous, &Transform)>() {
+        previous.0 = transform.pos;
+    }
 }
 
 /// Space starts a new match once one has been won.
@@ -574,8 +634,13 @@ fn restart_the_match(world: &mut World) {
     }
     world.insert_resource(Match::new());
     park_the_ball(world);
-    for (_, transform, _) in world.query_mut::<(&mut Transform, &Paddle)>() {
+    // A teleport, so `Previous` goes with it — a paddle interpolated across
+    // this would be drawn sliding to the centre from wherever the last match
+    // left it (see `Previous`).
+    for (_, transform, previous, _) in world.query_mut::<(&mut Transform, &mut Previous, &Paddle)>()
+    {
         transform.pos.y = 0.0;
+        previous.0 = transform.pos;
     }
 }
 
@@ -761,6 +826,12 @@ fn park_the_ball(world: &mut World) {
         if let Some(transform) = world.find_component_mut::<Transform>(entity) {
             transform.pos = Vec2::ZERO;
         }
+        // The one teleport in the game, and the frame after a goal is exactly
+        // when a player is watching: without this the ball is drawn streaking
+        // back from the goal line to the centre spot (see `Previous`).
+        if let Some(previous) = world.find_component_mut::<Previous>(entity) {
+            previous.0 = Vec2::ZERO;
+        }
         if let Some(ball) = world.find_component_mut::<Ball>(entity) {
             ball.velocity = Vec2::ZERO;
             ball.speed = SERVE_SPEED;
@@ -770,24 +841,34 @@ fn park_the_ball(world: &mut World) {
 
 // --- drawing -------------------------------------------------------------
 
-/// Paddles and ball.
+/// Paddles and ball, drawn between the last two ticks rather than on the last.
+///
+/// The Draw half of the interpolation idiom. `alpha` is read once — it is the
+/// same number for every submission in a frame, and reading it per entity would
+/// only suggest otherwise.
 fn draw_the_play(ctx: &mut DrawCtx) {
     let depth = Depth::layer(layers::PLAY);
+    let alpha = ctx.world.resource::<Time>().alpha;
     // Straight out of the query: a Draw system's iterator borrows the world,
     // not the context, so there is no two-pass collect to do here.
-    for (_, transform, paddle) in ctx.world.query::<(&Transform, &Paddle)>() {
+    for (_, transform, previous, paddle) in ctx.world.query::<(&Transform, &Previous, &Paddle)>() {
         let color = match paddle.side {
             Side::Player => PLAYER_COLOR,
             Side::Opponent => OPPONENT_COLOR,
         };
         ctx.rect(
-            Rect::from_center_size(transform.pos, PADDLE_SIZE),
+            Rect::from_center_size(drawn_at(previous.0, transform.pos, alpha), PADDLE_SIZE),
             color,
             depth,
         );
     }
-    for (_, transform, _) in ctx.world.query::<(&Transform, &Ball)>() {
-        ctx.circle(transform.pos, BALL_RADIUS, BALL_COLOR, depth);
+    for (_, transform, previous, _) in ctx.world.query::<(&Transform, &Previous, &Ball)>() {
+        ctx.circle(
+            drawn_at(previous.0, transform.pos, alpha),
+            BALL_RADIUS,
+            BALL_COLOR,
+            depth,
+        );
     }
 }
 

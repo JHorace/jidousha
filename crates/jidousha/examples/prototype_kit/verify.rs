@@ -141,6 +141,14 @@ pub(super) struct Run {
     /// means anything. Carried out rather than rebuilt here, so a check reads
     /// the camera the frame was actually planned from.
     pub(super) camera: Camera,
+    /// The interpolation fraction the last frame was drawn at.
+    ///
+    /// `1.0` for a driver that draws once per tick, which is what this run is
+    /// (ADR-0041) — so `previous.lerp(current, alpha)` is `current` and every
+    /// assertion below about where a quad landed is reading the committed state
+    /// the world holds. Carried out rather than assumed, because the assumption
+    /// is exactly what would rot.
+    pub(super) alpha: f32,
 }
 
 /// Play the scripted session, recording every frame.
@@ -217,6 +225,7 @@ pub(super) fn play() -> Run {
             viewport: HEADLESS_VIEWPORT,
             ..*sim.world().resource::<Camera>()
         },
+        alpha: sim.world().resource::<Time>().alpha,
         last,
         font,
     }
@@ -253,7 +262,23 @@ pub fn run() -> ExitCode {
         last,
         font,
         camera,
+        alpha,
     } = play();
+
+    // The paddle is drawn interpolated (see `Previous` in main.rs), and this run
+    // draws once per tick — so `alpha` is 1.0, the lerp lands on the committed
+    // state, and every assertion below about where a quad is may go on reading
+    // the world (ADR-0041). Stated as a check rather than as a comment, because
+    // if it stopped being true every one of those assertions would start
+    // measuring the paddle one tick before the one it is asking about.
+    checks.require(
+        near(alpha, 1.0),
+        "a run that draws once per tick did not draw at a full alpha",
+        format!(
+            "Time::alpha is {alpha}, not 1.0; what was drawn is then somewhere short of \
+             what the world holds, and the paddle assertions below compare two different ticks"
+        ),
+    );
 
     // --- what the world did ------------------------------------------
     // Y is down (ADR-0010), so the bottom of the screen is the larger number.
@@ -643,7 +668,9 @@ pub fn run() -> ExitCode {
     // alike. The string is the only instrument there is, which is why `main.rs`
     // hands its readout back as one rather than formatting it inside the draw
     // system where nothing could reach it.
-    let readout = crate::readout_text(TICKS, TICKS as f32 / 60.0, 0.0);
+    // Built with the alpha the run actually drew at rather than a literal, so
+    // the string checked below is the string drawn above.
+    let readout = crate::readout_text(TICKS, TICKS as f32 / 60.0, alpha);
     for (name, text) in [
         ("the score", crate::SCORE_TEXT),
         ("the font sample", crate::FONT_SAMPLE),

@@ -139,6 +139,27 @@ fn alpha_reports_how_far_into_the_next_tick_the_frame_fell() {
 }
 
 #[test]
+fn a_driver_that_draws_once_per_tick_reports_an_alpha_of_one() {
+    // `tick` is the per-tick driver's whole loop, and its frame lands exactly on
+    // the tick it just ran — so a game interpolating `previous.lerp(current,
+    // alpha)` draws its committed state and its transcript is unchanged by
+    // interpolating at all (ADR-0041).
+    let mut simulation = Simulation::new(1, Seconds(0.1));
+    simulation.tick();
+    assert_eq!(simulation.world().resource::<Time>().alpha, 1.0);
+}
+
+#[test]
+fn a_frame_that_ran_ticks_still_reports_the_remainder_and_not_the_tick() {
+    // The windowed value wins where both apply: `advance` runs ticks (each
+    // leaving 1.0) and then writes the accumulator's remainder over the top.
+    let mut simulation = Simulation::new(1, Seconds(0.1));
+    simulation.advance(Seconds(0.13), |_, _| {});
+    let alpha = simulation.world().resource::<Time>().alpha;
+    assert!((alpha - 0.3).abs() < 1e-6, "{alpha}");
+}
+
+#[test]
 fn a_stalled_frame_is_clamped_instead_of_spiralling() {
     let mut simulation = Simulation::new(1, Seconds(0.1));
     // Ten seconds of stall would be a hundred ticks without the clamp.

@@ -392,10 +392,69 @@ its field border with. A dashed centre marking is a column of `ctx.rect` calls.
 
 `Draw` reads the world's **committed** state — the values the last `Update`
 left — so a fast body steps rather than glides at whatever rate the frames come.
-`Time::alpha` is how far into the next tick the last frame fell, for a game that
-minds enough to keep last tick's position in a component of its own and submit
-`previous.lerp(current, alpha)`. Nothing in v1 consumes it and there is no
-interpolation helper; a prototype ignores it and is right to.
+
+**On a display or a browser that does not present frames on the 60Hz cadence,
+that stepping is visible, and it looks like a jump rather than a stutter.** The
+simulation runs sixty ticks a second whatever the screen does; a frame that
+arrives late makes the loop run two ticks to catch up, and a frame that arrives
+early runs none, so the same position is drawn twice and then the next one is
+twice as far away. A 120Hz display in a well-behaved browser is fine — every
+tick is shown exactly twice, evenly — and the same page in a browser that is
+software-rendering, or whose clock is coarse enough to drift against 16.67ms,
+is not. `?frametime=1` on any Jidousha web build shows which of those is
+happening.
+
+**The fix is four lines and the game owns all of them.** Keep last tick's
+position in a component of your own, copy the current one into it in an `Update`
+system registered *before* anything that moves, and submit the blend from
+`Draw`:
+
+```rust
+#[derive(Clone, Copy)]
+struct Previous(Vec2);
+impl Component for Previous {}
+
+// Registered first in Update, before anything that moves.
+fn remember_where_things_were(world: &mut World) {
+    for (_, previous, transform) in world.query_mut::<(&mut Previous, &Transform)>() {
+        previous.0 = transform.pos;
+    }
+}
+
+fn draw_the_play(ctx: &mut DrawCtx) {
+    let alpha = ctx.world.resource::<Time>().alpha;
+    for (_, transform, previous) in ctx.world.query::<(&Transform, &Previous)>() {
+        let at = previous.0.lerp(transform.pos, alpha);
+        ctx.circle(at, 0.45, Color::WHITE, Depth::layer(0));
+    }
+}
+```
+
+`examples/prototype_kit` has exactly this on its paddle, and is the worked
+example. Four things are worth knowing before you copy it:
+
+- **`Time::alpha` is the engine's whole contribution.** There is no lerp helper
+  and no engine-side "previous transform", deliberately: the engine retains
+  nothing across frames, so the previous position is yours to keep.
+- **It costs one tick of latency.** You are drawing between the last two ticks,
+  not predicting the next one, so what is on screen is up to 16.7ms behind the
+  simulation. That is the standard trade and it is why ignoring `alpha` is still
+  a reasonable choice for a prototype.
+- **A teleport has to snap the previous position too**, or the thing is drawn
+  streaking across the screen for a frame. Anywhere a body jumps rather than
+  travels — a respawn, a screen wrap, a reset between rounds — write the new
+  position into both components, not just the transform.
+- **`jidousha::systems::draw_sprites` submits committed state**, so a sprite
+  drawn by it steps at the tick rate. A game that wants its sprites interpolated
+  writes its own `ctx.sprite` loop; `examples/prototype_kit` keeps one of each on
+  screen so the difference is visible.
+
+**Interpolating changes nothing about what a check sees.** A run that draws once
+per tick — `HeadlessSim::draw`, `FrameRecorder`, `tools/verify` — lands its frame
+exactly on the tick it just ran, so `alpha` is `1.0` there, `previous.lerp(current,
+1.0)` is `current`, and every assertion you write about where a quad landed goes
+on reading the world. The engine's own examples adopted interpolation without a
+single verify outcome or captured frame moving.
 
 **A game of pure shapes needs no asset story at all.** `ctx.rect`, `ctx.circle`,
 `ctx.line` and `ctx.text` draw without a single file, and nothing requires an
@@ -1457,7 +1516,7 @@ pub struct Time {
     pub tick: u64,  // Update ticks since startup, counting from 1 on the first Update
     pub fixed_dt: Seconds,  // The length of one tick
     pub elapsed: Seconds,  // `tick * fixed_dt`
-    pub alpha: f32,  // A Draw-only interpolation fraction that nothing in v1 consumes
+    pub alpha: f32,  // Where this frame falls between the previous tick and the current one
 }
 // Clone Copy Debug PartialEq
 

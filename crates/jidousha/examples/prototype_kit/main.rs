@@ -122,6 +122,32 @@ struct Paddle {
 }
 impl Component for Paddle {}
 
+/// Where a drawn thing stood at the start of the tick it is now past.
+///
+/// **The other half of `Time::alpha`, and the game owns it.** The simulation
+/// steps sixty times a second whatever the display does; a browser or a monitor
+/// that does not present frames on that cadence shows one tick twice and skips
+/// the next, and the eye reads that as a jump. `Draw` submits
+/// `previous.lerp(current, alpha)` instead of `current`, and the motion is
+/// smooth at the cost of one tick of latency.
+///
+/// The engine supplies the fraction and nothing else — no lerp helper, no
+/// engine-side previous transform, because that would be retained render state
+/// (renderer.md §2, e0-findings.md F-048). `examples/pong` is the same idiom
+/// with more moving things, including the teleport rule this scene has no need
+/// of: nothing here ever jumps, so nothing here ever has to snap `Previous`.
+///
+/// **The bouncing sprite deliberately does not have one**, and the difference
+/// is visible on the same screen. It is drawn by
+/// `jidousha::systems::draw_sprites`, an engine system that submits committed
+/// state — so it steps at the tick rate while the paddle glides. A game that
+/// wants its sprites interpolated writes its own `ctx.sprite` loop; this one
+/// keeps the contrast, because seeing both is worth more here than smoothing
+/// one.
+#[derive(Clone, Copy)]
+struct Previous(Vec2);
+impl Component for Previous {}
+
 /// The game's configuration, shared by the window and the verify run so that
 /// what is verified is what a person sees.
 fn config() -> GameConfig {
@@ -138,6 +164,10 @@ fn config() -> GameConfig {
 /// be verifying a different program.
 fn register(app: &mut App) {
     app.add_system(Startup, set_the_scene);
+    // First, and it has to be: it copies where things are into where they
+    // *were*, so everything below moves away from a remembered position and
+    // `Draw` has two ends to interpolate between.
+    app.add_system(Update, remember_where_things_were);
     app.add_system(Update, drive_the_paddle);
     app.add_system(Update, bounce);
     app.add_system(Update, turn);
@@ -211,7 +241,11 @@ fn set_the_scene(world: &mut World) {
 
     // The player's paddle, on the left.
     let paddle = world.spawn();
-    world.insert(paddle, Transform::at(Vec2::new(-14.0, 0.0)));
+    let at = Vec2::new(-14.0, 0.0);
+    world.insert(paddle, Transform::at(at));
+    // Starting where it starts: a `Previous` of the origin would draw the first
+    // frame with the paddle halfway to its post.
+    world.insert(paddle, Previous(at));
     world.insert(
         paddle,
         Paddle {
@@ -219,6 +253,17 @@ fn set_the_scene(world: &mut World) {
             limit: 7.0,
         },
     );
+}
+
+/// Copy where everything is into where it was, before anything moves it.
+///
+/// The Update half of the interpolation idiom — see `Previous`. One loop over
+/// everything that carries the component, so adding a moving thing to this
+/// scene is one `world.insert` and no change here.
+fn remember_where_things_were(world: &mut World) {
+    for (_, previous, transform) in world.query_mut::<(&mut Previous, &Transform)>() {
+        previous.0 = transform.pos;
+    }
 }
 
 /// Move the paddle with W and S, clamped to the field.
@@ -314,9 +359,13 @@ fn draw_the_field(ctx: &mut DrawCtx) {
     // the *world*, not from `ctx`, so drawing inside the loop is fine. The
     // two-pass pattern belongs to `&mut World` systems, where the query really
     // does hold the thing being written to (`homing.rs` is that one).
-    for (_, transform, _) in ctx.world.query::<(&Transform, &Paddle)>() {
+    // The Draw half of the interpolation idiom (see `Previous`): where the
+    // paddle is drawn is between where it was and where it is, and `alpha` says
+    // where. Read once — it is the same number for every submission in a frame.
+    let alpha = ctx.world.resource::<Time>().alpha;
+    for (_, transform, previous, _) in ctx.world.query::<(&Transform, &Previous, &Paddle)>() {
         ctx.rect(
-            Rect::from_center_size(transform.pos, PADDLE_SIZE),
+            Rect::from_center_size(previous.0.lerp(transform.pos, alpha), PADDLE_SIZE),
             Color::rgb(0.4, 1.0, 0.7),
             Depth::layer(layers::PLAY),
         );
