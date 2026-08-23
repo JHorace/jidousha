@@ -120,10 +120,19 @@ One `index.html` template, self-contained (no external CDN dependencies):
     "basic render" ⇒ a visible warning, "this browser is software-rendering;
     expect jank". Absent under `privacy.resistFingerprinting`, and reported as
     absent rather than guessed at;
-  - whether WebGPU is present, and the browser's `performance.now()`
-    resolution — Firefox clamps to ~1ms by default, Chrome to ~5µs, and a 1ms
-    quantum against a 16.67ms cadence produces periodic 0-tick and 2-tick
-    frames with nothing actually dropped.
+  - whether WebGPU is present, and **the grain of the browser's clock, read off
+    the frame deltas themselves**: a quantised clock can only report whole
+    milliseconds, so every delta it produces is a whole number of them, while a
+    fine clock scatters. Firefox clamps `performance.now()` to ~1ms by default
+    and Chrome to ~5µs, and a 1ms quantum against a 16.67ms cadence produces
+    periodic 0-tick and 2-tick frames with nothing actually dropped.
+    DELIBERATE: derived, not microbenchmarked. A loop that spins until the
+    clock ticks would burn real milliseconds *inside a rAF callback* — on the
+    slow browsers this overlay exists to diagnose it would make a frame late
+    and then report that frame as late — and it could not bound itself either,
+    because a browser driven with `--virtual-time-budget` does not advance
+    `performance.now()` during synchronous execution, which is precisely the
+    browser `serve-web --check` drives.
 - CONTRACT: **the overlay is presentation-side and never feeds the
   simulation.** It reads `performance.now()` and `requestAnimationFrame` and
   never calls into the wasm module; real time reaches the engine through

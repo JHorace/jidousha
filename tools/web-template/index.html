@@ -315,28 +315,43 @@
       const TICK_HZ = 60; // GameConfig::fixed_dt's default, 1/60
       const MAX_FRAME_S = 0.25; // Simulation's spiral-of-death ceiling
 
-      /// How coarse this browser's clock is, in milliseconds.
+      // How coarse this browser's clock is, read off the frame deltas.
       //
-      // Hypothesis 2 in one number. Firefox clamps `performance.now()` to about
-      // a millisecond by default; a 1ms quantum against a 16.67ms cadence
-      // drifts, and the accumulator answers a drifting delta with an occasional
-      // 0-tick or 2-tick frame — which is a visible stutter with no dropped
-      // frame behind it. Chrome's quantum is ~5µs and does not do this.
-      const clockQuantum = () => {
-        const started = performance.now();
-        let last = started;
-        let smallest = Infinity;
-        // Bounded twice: by iterations and by wall time, because a browser that
-        // returns a constant would otherwise spin here forever.
-        for (let i = 0; i < 400000; i += 1) {
-          const now = performance.now();
-          const step = now - last;
-          if (step > 0 && step < smallest) smallest = step;
-          last = now;
-          if (now - started > 25) break;
-        }
-        return Number.isFinite(smallest) ? smallest : null;
-      };
+      // Hypothesis 2. Firefox clamps `performance.now()` to about a millisecond
+      // by default; a 1ms quantum against a 16.67ms cadence drifts, and the
+      // accumulator answers a drifting delta with an occasional 0-tick or
+      // 2-tick frame — a visible stutter with no dropped frame behind it.
+      // Chrome's quantum is ~5µs and does not do this.
+      //
+      // DELIBERATE: read from the deltas already collected, rather than by
+      // busy-looping on `performance.now()` until it moves. Two reasons, and
+      // the first alone settles it:
+      //
+      //  1. **An instrument for frame pacing must not spend a frame measuring
+      //     itself.** A loop that runs until the clock ticks burns real
+      //     milliseconds inside a rAF callback — on exactly the slow browsers
+      //     this overlay exists to diagnose, that is a frame it *caused* to be
+      //     late, reported as a frame that was late.
+      //  2. **A loop on the clock cannot bound itself with that same clock.** A
+      //     headless browser driven with `--virtual-time-budget` does not
+      //     advance `performance.now()` during synchronous execution, so a
+      //     wall-clock escape hatch never fires and only the iteration ceiling
+      //     stops it. `tools/serve-web --check` drives exactly such a browser.
+      //
+      // What is left is a better measurement anyway: a quantised clock can only
+      // report whole milliseconds, so every frame delta it produces is a whole
+      // number of them, while a fine clock scatters. That is read from the
+      // page's real frame cadence rather than from a microbenchmark of the
+      // clock, and it costs nothing.
+
+      /// Frame deltas below this far from a whole millisecond count as whole.
+      ///
+      /// Float noise only: a 1ms-quantised clock lands on integers exactly, and
+      /// a fine one misses by hundredths at the very least.
+      const WHOLE_MS_EPSILON = 0.02;
+
+      /// How many deltas before the verdict is worth printing.
+      const CLOCK_SAMPLE = 30;
 
       // Which renderer this browser hands WebGL, and whether it is a CPU.
       //
@@ -400,7 +415,6 @@
           warning.classList.add("shown");
         }
 
-        const quantum = clockQuantum();
         // Kept to two lines: the panel must fit without scrolling, because it
         // takes no pointer events and so cannot be scrolled.
         note.textContent =
@@ -421,6 +435,16 @@
         let frames = 0;
         let previous = null;
         let painted = 0;
+
+        // The clock's grain, over the same rolling window the histogram reads.
+        const clockGrain = () => {
+          if (deltas.length < CLOCK_SAMPLE) return "sampling…";
+          const off = (ms) => Math.abs(ms - Math.round(ms));
+          const worst = deltas.reduce((peak, ms) => Math.max(peak, off(ms)), 0);
+          return worst < WHOLE_MS_EPSILON
+            ? "whole milliseconds — coarse (~1ms), drifts against a 16.67ms cadence"
+            : "sub-millisecond — fine";
+        };
 
         const histogram = () => {
           // One-millisecond buckets to 25ms, then coarse. A millisecond is the
@@ -494,7 +518,7 @@
             ("gpu" in navigator ? "available" : "absent") +
             "\n" +
             "clock     " +
-            (quantum === null ? "unreadable" : "~" + quantum.toFixed(3) + "ms resolution") +
+            clockGrain() +
             "\n" +
             "ticks/fr  0:" +
             ticksPerFrame[0] +
