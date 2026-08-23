@@ -21,14 +21,26 @@ use std::process::ExitCode;
 use jidousha::prelude::*;
 
 mod beats;
+mod board;
 mod capture;
 mod checks;
 mod constants;
 mod contracts;
+mod door;
+mod floors;
 mod flow;
 mod judge;
+mod layout;
+mod library;
 mod model;
+mod mutation;
+mod party;
+mod resolution;
 mod resolve;
+mod scaling;
+mod screens;
+mod sprites;
+mod theme;
 mod ui;
 mod verify;
 
@@ -36,17 +48,12 @@ use beats::Dungeon;
 use constants::Tuning;
 use flow::{Flow, Preview, StartAt};
 
-/// The window the game opens at, and the shape every extent below is stated in.
-pub const WINDOW: PhysicalSize = PhysicalSize::new(1280, 720);
-/// Half the world height the camera spans - the one number this layout picks.
-pub const HALF_H: f32 = 9.0;
-/// And half the width, which is that times the shape of the window.
+/// The window the game opens at.
 ///
-/// Derived rather than typed: `HALF_H * (16.0 / 9.0)` would be two facts about
-/// one window, and changing `WINDOW` would leave the ratio silently stale.
-pub const HALF_W: f32 = HALF_H * WINDOW.aspect();
-/// What the camera's `height` is set to.
-pub const VIEW_HEIGHT: f32 = HALF_H * 2.0;
+/// Twice UI.md §6's reference surface on each axis, so the shipped window is
+/// the design at an exact integer scale - which is what "pixel art at integer
+/// multiples where possible" means for the default case (UI.md §1.4).
+pub const WINDOW: PhysicalSize = PhysicalSize::new(1920, 1080);
 
 /// The game's configuration, shared by the window and the verify run, so what
 /// is verified is what a person plays.
@@ -60,27 +67,32 @@ pub fn config() -> GameConfig {
 
 /// Every system this game has, in one place and in one order.
 ///
-/// **The Update order is a decision, not a tidy-up.** `handle_pointer` changes
-/// the selection and `refresh_preview` recomputes the arithmetic shown for it;
-/// in this order a click and the numbers it produces land on the same tick, and
-/// reversed the screen would show the previous tick's party. Nothing but a
-/// reader protects a system order, so `verify.rs` asserts it out of
-/// `schedule_debug()`.
+/// **The Update order is three decisions, not a tidy-up.** `scaling::fit` runs
+/// first, so the click handler after it converts pointer pixels through the
+/// same camera the frame the player clicked on was drawn with. `handle_pointer`
+/// changes what is taken and who is in, and `refresh_preview` recomputes the
+/// arithmetic shown for it; in this order a click and the numbers it produces
+/// land on the same tick, and reversed the screen would show the previous
+/// tick's party. Nothing but a reader protects a system order, so `verify.rs`
+/// asserts it out of `schedule_debug()`.
 ///
-/// **The Draw order is a decision too, and the other way round.** `draw_headline`
-/// submits glyphs *before* `draw_backdrop` submits the bar behind them: where a
+/// **The Draw order is a decision too, and the other way round.** `draw_content`
+/// submits every glyph *last*, after the chrome that sits behind it, and the
+/// bands in `theme::layers` are what actually put them in front - where a
 /// game's submission order already agrees with its bands, no assertion over a
 /// recorded frame can see a band at all, because the depth sort and the
-/// submission sequence produce the same list.
+/// submission sequence produce the same list. `draw_overlay` submits the log
+/// drawer's scrim *before* `draw_content` submits the drawer's own text, so
+/// only OVERLAY sorting under OVERLAY_TEXT keeps that text readable.
 pub fn register(app: &mut App) {
     app.add_system(Startup, open_the_chain);
+    app.add_system(Update, scaling::fit);
     app.add_system(Update, flow::handle_pointer);
     app.add_system(Update, flow::refresh_preview);
-    app.add_system(Draw, ui::draw_headline);
-    app.add_system(Draw, ui::draw_backdrop);
-    app.add_system(Draw, ui::draw_roster);
-    app.add_system(Draw, ui::draw_main);
-    app.add_system(Draw, ui::draw_constants);
+    app.add_system(Draw, screens::draw_ground);
+    app.add_system(Draw, screens::draw_board);
+    app.add_system(Draw, screens::draw_overlay);
+    app.add_system(Draw, screens::draw_content);
 }
 
 /// Startup: the camera, the tuning constants, and the first beat.
@@ -98,14 +110,19 @@ fn open_the_chain(world: &mut World) {
         .copied()
         .unwrap_or_default();
 
-    world.insert_resource(Camera {
-        center: Vec2::ZERO,
-        height: VIEW_HEIGHT,
-        clear_color: ui::BACKDROP,
-        ..Camera::default()
-    });
+    // `center` and `height` are the game's and are refitted every tick by
+    // `scaling::fit` from whatever `viewport` the driver last stamped. The
+    // viewport put here is only ever read on the first tick and under
+    // `headless`, where nothing stamps one at all - which is exactly the case a
+    // scripted click has to agree with (jidousha-testing.md's viewport trap).
+    let surface = world
+        .find_resource::<scaling::Surface>()
+        .copied()
+        .unwrap_or_default();
+    world.insert_resource(scaling::camera_for(surface.0));
     world.insert_resource(Flow::default());
     world.insert_resource(Preview::default());
+    flow::install_art(world);
     flow::load_beat(world, start.0);
 }
 
@@ -137,7 +154,10 @@ fn main() -> ExitCode {
     if std::env::args().any(|argument| argument == "--verify") {
         return verify::run();
     }
-    println!("giri - click a name to offer it a job, then SEND THEM. close the window to quit");
+    println!(
+        "giri - take a quest, click your people to add them, then SEND PARTY. \
+         close the window to quit"
+    );
     match run(config(), register) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {

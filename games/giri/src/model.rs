@@ -230,8 +230,6 @@ impl Social {
 pub struct MemberTerm {
     /// Who the term is about.
     pub member: Entity,
-    /// Their name.
-    pub name: &'static str,
     /// `regard(c -> m)`.
     pub regard: i32,
     /// `incompat(c, m)`, subtracted.
@@ -271,12 +269,128 @@ impl Willingness {
     ///
     /// Handed back as a string so a check can ask the game for the exact text
     /// it draws: no assertion over drawn quads can see a wrong character.
+    ///
+    /// **The compact form is the only form** (UI.md §5, rung 1: "the status
+    /// line shows the raw sum"). A party card is fourteen columns wide, so a
+    /// spelled-out `des 5 + regard 2 - incompat 4 = 3` wraps to three lines and
+    /// a second, shorter spelling for the card would be two strings for one
+    /// number - which is how a preview starts disagreeing with a report. The
+    /// per-member breakdown lives in `terms`, and UI.md §5's rung 2 is where it
+    /// reaches the surface.
     pub fn arithmetic(&self) -> String {
         format!(
-            "des {} + regard {} - incompat {} = {}",
+            "{}{:+}-{} = {}",
             self.desperation, self.regard_total, self.incompat_total, self.total
         )
     }
+}
+
+/// The answer at the door (DESIGN §3.2, the door rule).
+///
+/// Joining is gated **in both directions**: the newcomer has to consent, and
+/// no incumbent's willingness may go negative. The two failures are different
+/// things to a player - one is somebody saying no, the other is somebody
+/// already inside saying no on their behalf - so they are different variants
+/// rather than one bool, and each carries the arithmetic the UI names its
+/// reason with.
+#[derive(Clone, Debug)]
+pub enum Admission {
+    /// Both directions consent; the candidate is in.
+    Admitted(Willingness),
+    /// Rule 1: the newcomer will not come. Their sum.
+    Refuses(Willingness),
+    /// Rule 2: an incumbent would go negative and blocks the arrival.
+    Blocked {
+        /// Who is blocking.
+        blocker: Entity,
+        /// Their name, for the line that says so.
+        name: &'static str,
+        /// **The blocker's** sum, not the newcomer's - it is their objection.
+        willingness: Willingness,
+    },
+}
+
+impl Admission {
+    /// Whether the candidate may be added.
+    pub fn admitted(&self) -> bool {
+        matches!(self, Admission::Admitted(_))
+    }
+
+    /// The status line UI.md §4 states for a character who is not in the party.
+    ///
+    /// Exactly one of three, and the grammar is the specification's: a bounced
+    /// click surfaces this same string in the toast and in the log, so the
+    /// card, the toast and the log cannot describe one refusal three ways.
+    pub fn status_line(&self) -> String {
+        match self {
+            Admission::Admitted(entry) => format!("would join - {}", entry.arithmetic()),
+            Admission::Refuses(entry) => format!("refuses - {}", entry.arithmetic()),
+            Admission::Blocked {
+                name, willingness, ..
+            } => format!("{name} blocks - {}", willingness.arithmetic()),
+        }
+    }
+
+    /// The toast a bounced click raises, naming who and why.
+    pub fn bounce(&self, candidate: &str) -> Option<String> {
+        match self {
+            Admission::Admitted(_) => None,
+            Admission::Refuses(entry) => Some(format!(
+                "{candidate} refuses this company - {}",
+                entry.arithmetic()
+            )),
+            Admission::Blocked {
+                name, willingness, ..
+            } => Some(format!(
+                "{name} will not work with {candidate} - {}",
+                willingness.arithmetic()
+            )),
+        }
+    }
+}
+
+/// **The door** (DESIGN §3.2): may `candidate` be added to `party`?
+///
+/// ```text
+/// admit(c, P) iff willingness(c, P + {c}) >= 0
+///             and for every m in P: willingness(m, P + {c}) >= 0
+/// ```
+///
+/// Order-symmetric about who is at the door, which is the rule's whole point:
+/// Tim in the party blocks Bob by the same numbers that make Tim refuse when
+/// Bob is in the party first. Incumbents are walked in roster order so the
+/// *named* blocker is stable - two incumbents could both object, and a UI that
+/// named whichever the query happened to hand back first would name a different
+/// one on a different day.
+///
+/// **Consent is evaluated at the door only.** Nothing re-runs this when a
+/// member leaves, so removing a bonded partner can leave a member behind whose
+/// willingness is now negative. That is decided (owner, 2026-08-23): blocking
+/// is more legible than members walking out, and party state staying monotonic
+/// under the player's own actions is worth more than the drama.
+pub fn admit(social: &Social, tuning: &Tuning, candidate: Entity, party: &[Entity]) -> Admission {
+    let mut with = party.to_vec();
+    if !with.contains(&candidate) {
+        with.push(candidate);
+    }
+    let newcomer = willingness(social, tuning, candidate, &with);
+    if !newcomer.joins() {
+        return Admission::Refuses(newcomer);
+    }
+    for member in &social.members {
+        if !party.contains(&member.entity) || member.entity == candidate {
+            continue;
+        }
+        let incumbent = willingness(social, tuning, member.entity, &with);
+        if !incumbent.joins() {
+            return Admission::Blocked {
+                blocker: member.entity,
+                name: member.name,
+                willingness: incumbent,
+            };
+        }
+    }
+    Admission::Admitted(newcomer)
 }
 
 /// **Willingness** (DESIGN §3.2, first firing moment): character `who` asked to
@@ -298,7 +412,6 @@ pub fn willingness(social: &Social, tuning: &Tuning, who: Entity, party: &[Entit
         }
         terms.push(MemberTerm {
             member: member.entity,
-            name: member.name,
             regard: social.regard(who, member.entity),
             incompat: social.incompat(tuning, who, member.entity),
         });
@@ -400,38 +513,4 @@ pub fn betrayals(
         }
     }
     done
-}
-
-/// One regard edge moving, and why.
-#[derive(Clone, Copy, Debug)]
-pub struct RegardChange {
-    /// Who holds the opinion.
-    pub from: Entity,
-    /// Who it is about.
-    pub to: Entity,
-    /// What it was.
-    pub before: i32,
-    /// What it becomes.
-    pub after: i32,
-}
-
-/// Everything one dungeon did, as data — before any of it touches the world.
-#[derive(Clone, Debug, Default)]
-pub struct Resolution {
-    /// The party, in roster order.
-    pub party: Vec<Entity>,
-    /// Who came back.
-    pub survivors: Vec<Entity>,
-    /// Every killing, in the order they were evaluated.
-    pub betrayals: Vec<Betrayal>,
-    /// What each survivor took.
-    pub payouts: Vec<(Entity, i32)>,
-    /// Every edge that moved.
-    pub regard_changes: Vec<RegardChange>,
-    /// Every infamy that moved: who, from, to.
-    pub infamy_changes: Vec<(Entity, i32, i32)>,
-    /// Every desperation that moved: who, from, to.
-    pub desperation_changes: Vec<(Entity, i32, i32)>,
-    /// The mechanical narration, one line per consequence.
-    pub lines: Vec<String>,
 }

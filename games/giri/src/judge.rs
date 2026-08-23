@@ -1,21 +1,21 @@
-//! Judging one played beat: its `Expect` list against the world, and its
-//! panels against the frame.
+//! Judging one played beat: its `Expect` list against the world, its door
+//! probes against the door rule, and its screens against the frame.
 //!
-//! The two halves are separate because they fail for different reasons and are
-//! run at different times: the mutation round judges the world only, because a
+//! The halves are separate because they fail for different reasons and are run
+//! at different times: the mutation round judges the world only, because a
 //! perturbed constant is a claim about outcomes and a thousand unread frames
-//! are a thousand frames to allocate.
+//! are a thousand frames to allocate (FINDINGS G-004).
 
 use jidousha::prelude::*;
 use jidousha::testing::{BackendTextureId, FrameRecord};
 
-use crate::beats::{BeatSpec, CHAIN, Expect, stat_line};
+use crate::beats::{BeatSpec, CHAIN, Expect};
 use crate::checks::{Checks, near};
 use crate::constants::Tuning;
-use crate::flow::{Flow, Stage};
+use crate::flow::Stage;
 use crate::model::{Social, willingness};
-use crate::ui;
 use crate::verify::BeatRun;
+use crate::{layout, party, screens, theme, ui};
 
 /// Resolve a beat's authored names against the world it produced.
 fn entities(social: &Social, names: &[&str]) -> Option<Vec<Entity>> {
@@ -116,18 +116,7 @@ pub fn judge_world(checks: &mut Checks, spec: &BeatSpec, run: &BeatRun, tuning: 
                         member.map_or(-1, |member| member.desperation)
                     ),
                 );
-                // And the sheet says so, which is invariant 2: a number that
-                // decides an outcome is a number on screen. The string is the
-                // only instrument - no assertion over drawn quads can read one.
-                checks.require(
-                    member
-                        .is_some_and(|member| stat_line(member).contains(&format!("DES {value}"))),
-                    "the sheet does not show the desperation the beat ends on",
-                    format!(
-                        "beat {beat}: {who}'s sheet line is {:?}, which does not carry DES {value}",
-                        member.map(stat_line)
-                    ),
-                );
+                shows_stat(checks, run, who, 0, value, "desperation");
             }
             Expect::Infamy { who, value } => {
                 let member = run.after.by_name(who);
@@ -139,15 +128,7 @@ pub fn judge_world(checks: &mut Checks, spec: &BeatSpec, run: &BeatRun, tuning: 
                         member.map_or(-1, |member| member.infamy)
                     ),
                 );
-                checks.require(
-                    member
-                        .is_some_and(|member| stat_line(member).contains(&format!("INF {value}"))),
-                    "the sheet does not show the infamy the beat ends on",
-                    format!(
-                        "beat {beat}: {who}'s sheet line is {:?}, which does not carry INF {value}",
-                        member.map(stat_line)
-                    ),
-                );
+                shows_stat(checks, run, who, 1, value, "infamy");
             }
             Expect::Wealth { who, value } => {
                 let member = run.after.by_name(who);
@@ -159,6 +140,7 @@ pub fn judge_world(checks: &mut Checks, spec: &BeatSpec, run: &BeatRun, tuning: 
                         member.map_or(-1, |member| member.wealth)
                     ),
                 );
+                shows_stat(checks, run, who, 2, value, "wealth");
             }
             Expect::Regard { from, to, value } => {
                 let (Some(from_entity), Some(to_entity)) = (
@@ -180,6 +162,17 @@ pub fn judge_world(checks: &mut Checks, spec: &BeatSpec, run: &BeatRun, tuning: 
                         "beat {beat}: regard({from}->{to}) is {held}, and the beat says {value}"
                     ),
                 );
+                // And it is on the sheet, which is invariant 2: an edge that
+                // decides an outcome is an edge on screen.
+                let line = party::regard_line(&run.after, from_entity);
+                checks.require(
+                    value == 0 || line.contains(&format!("{to} {value:+}")),
+                    "the party card does not show the regard edge the beat ends on",
+                    format!(
+                        "beat {beat}: {from}'s regard line is {line:?}, which does not carry \
+                         {to} {value:+}"
+                    ),
+                );
             }
             Expect::ReportSays { fragment } => {
                 checks.require(
@@ -193,6 +186,8 @@ pub fn judge_world(checks: &mut Checks, spec: &BeatSpec, run: &BeatRun, tuning: 
             }
         }
     }
+
+    judge_door(checks, run);
 
     // The party the send verb saw is in roster order, which is the order
     // betrayal is evaluated in - so a party left in click order is a party
@@ -216,10 +211,10 @@ pub fn judge_world(checks: &mut Checks, spec: &BeatSpec, run: &BeatRun, tuning: 
         ),
     );
 
-    // The stage machine: sending reaches the report, continuing leaves it.
+    // The stage machine: sending reaches the takeover, dismissing it leaves.
     checks.require(
-        run.stage_after_send == Stage::Report,
-        "sending the party did not reach the report",
+        run.stage_after_send == Stage::Resolution,
+        "sending the party did not reach the resolution screen",
         format!(
             "beat {beat}: the stage after the send click is {:?}, and the party was {}",
             run.stage_after_send,
@@ -234,16 +229,108 @@ pub fn judge_world(checks: &mut Checks, spec: &BeatSpec, run: &BeatRun, tuning: 
     let wanted = if last_beat {
         Stage::Complete
     } else {
-        Stage::Assembly
+        Stage::Board
     };
     checks.require(
         run.stage_at_end == wanted,
-        "continuing out of the report went somewhere else",
+        "dismissing the resolution screen went somewhere else",
         format!(
-            "beat {beat} of {}: continuing left the game in {:?} on beat {}, wanted {wanted:?}",
+            "beat {beat} of {}: it left the game in {:?} on beat {}, wanted {wanted:?}",
             CHAIN.len(),
             run.stage_at_end,
             run.beat_at_end + 1
+        ),
+    );
+}
+
+/// **The door rule, as the player meets it** (DESIGN §3.2).
+///
+/// Both probes are the same two people in the two possible orders, so what is
+/// checked is the rule's order-symmetry rather than one outcome twice: with the
+/// clean one at the door the newcomer refuses, with the clean one already
+/// inside the incumbent blocks, and both leave the party exactly as it was. A
+/// rule that admitted either would let a party be sent that its own members
+/// will not stand in.
+fn judge_door(checks: &mut Checks, run: &BeatRun) {
+    let beat = run.index + 1;
+    if let (Some(bounce), Some(who)) = (&run.refusal, run.refusal_name) {
+        let said = bounce.toast.clone().unwrap_or_default();
+        checks.require(
+            said.contains(who) && said.contains("refuses"),
+            "a newcomer who refuses was not bounced with their own arithmetic",
+            format!(
+                "beat {beat}: the toast said {said:?}; it has to name {who} and say they refuse"
+            ),
+        );
+        checks.require(
+            !bounce.party.contains(&who),
+            "somebody who refuses was added to the party anyway",
+            format!("beat {beat}: the party came out {:?}", bounce.party),
+        );
+        checks.require(
+            bounce.party.len() == 1,
+            "a bounced click changed the party it bounced off",
+            format!(
+                "beat {beat}: one member was staged before the bounce and the party is {:?}",
+                bounce.party
+            ),
+        );
+        checks.require(
+            bounce
+                .logged
+                .as_deref()
+                .is_some_and(|line| line.contains(who)),
+            "a bounced click did not reach the log",
+            format!("beat {beat}: the newest log line is {:?}", bounce.logged),
+        );
+    }
+    if let (Some(bounce), Some((blocked, blocker))) = (&run.veto, run.veto_names) {
+        let said = bounce.toast.clone().unwrap_or_default();
+        checks.require(
+            said.contains(blocker) && said.contains(blocked),
+            "an incumbent's veto did not name the blocker and the blocked",
+            format!(
+                "beat {beat}: the toast said {said:?}; {blocker} is the incumbent who blocks \
+                 {blocked}"
+            ),
+        );
+        checks.require(
+            !bounce.party.contains(&blocked) && bounce.party.contains(&blocker),
+            "an incumbent's veto did not keep the party it is about",
+            format!(
+                "beat {beat}: the party came out {:?}; {blocker} was in it and {blocked} was \
+                 turned away at the door",
+                bounce.party
+            ),
+        );
+        checks.require(
+            bounce
+                .logged
+                .as_deref()
+                .is_some_and(|line| line.contains(blocker) && line.contains(blocked)),
+            "an incumbent's veto did not reach the log",
+            format!("beat {beat}: the newest log line is {:?}", bounce.logged),
+        );
+    }
+}
+
+/// A stat the beat states exactly is a stat on the party card.
+///
+/// Invariant 2 applied to the strip: a number that decides an outcome is a
+/// number on screen, beside the icon that says which number it is.
+fn shows_stat(checks: &mut Checks, run: &BeatRun, who: &str, slot: usize, value: i32, what: &str) {
+    let Some(member) = run.after.by_name(who) else {
+        return;
+    };
+    let index = member.roster_index;
+    let stats = party::stats_of(layout::party_card(index), member, member.alive);
+    let shown = stats.get(slot).map(|stat| stat.value.text.clone());
+    checks.require(
+        shown.as_deref() == Some(value.to_string().as_str()),
+        "the party card does not show the stat the beat ends on",
+        format!(
+            "beat {}: {who}'s {what} slot reads {shown:?} and the beat says {value}",
+            run.index + 1
         ),
     );
 }
@@ -261,185 +348,199 @@ fn describe(run: &BeatRun, who: &str) -> String {
     }
 }
 
-/// How many glyphs were drawn as one row starting at `at`.
+/// How many of a row's glyphs were drawn, counted inside the row's own box.
 ///
 /// `ctx.text` puts the top-left of the first character's *cell* at `at` and
-/// advances along the row, so a run's glyphs all share `bounds().min.y` and
-/// start at `at.x`. Counting them is how a check reads "this string was drawn,
-/// all of it" off a frame that cannot tell it which characters they were.
-pub fn glyph_run(frame: &FrameRecord, font: BackendTextureId, at: Vec2) -> usize {
+/// advances along the row, so a run's glyphs share `bounds().min.y` and span
+/// exactly `width_of(text)`. Counting *inside that span* rather than "everything
+/// to the right of it" is what lets two runs share a row - the status bar puts
+/// four on one - without either counting the other's characters.
+pub fn glyph_run(frame: &FrameRecord, font: BackendTextureId, run: &ui::TextRun) -> usize {
+    let box_ = run.bounds();
     frame
         .quads()
         .iter()
         .filter(|quad| {
             quad.texture == font
-                && near(quad.bounds().min.y, at.y)
-                && quad.bounds().min.x >= at.x - 0.001
+                && near(quad.bounds().min.y, box_.min.y)
+                // Half a world unit of slack on each side: a row's own glyphs
+                // span exactly `width_of(text)` in exact arithmetic, and
+                // whether the last one lands a hair over is a rounding question
+                // no assertion should turn on. One glyph is nine units wide, so
+                // this cannot swallow a neighbouring row's first character.
+                && quad.bounds().min.x >= box_.min.x - 0.5
+                && quad.bounds().max.x <= box_.max.x + 0.5
         })
         .count()
 }
 
-/// Judge what a beat drew.
-pub fn judge_frames(checks: &mut Checks, spec: &BeatSpec, run: &BeatRun) {
+/// Judge what a beat's screens drew.
+///
+/// Every screen is asked the same question — is every row of what this screen
+/// *says* on the frame, all of it — against `screens::content`, which is the
+/// same function the draw system renders. One layout, two readers.
+pub fn judge_frames(checks: &mut Checks, run: &BeatRun) {
     let beat = run.index + 1;
-    // Every sheet: name, stats, edges and status, all of it on screen. The
-    // count is exact because `ctx.text` submits one quad per character, spaces
-    // included, and none of these strings has a line break in it.
-    if let Some(frame) = &run.ready_frame {
-        for (index, member) in run.at_assembly.members.iter().enumerate() {
-            let card = ui::card_rect(index);
-            let drawn = frame
-                .quads()
-                .iter()
-                .filter(|quad| quad.texture == run.font && card.contains_rect(quad.bounds()))
-                .count();
-            let wanted = 1
-                + member.name.chars().count()
-                + stat_line(member).chars().count()
-                + ui::regard_line(&run.at_assembly, member.entity)
-                    .chars()
-                    .count()
-                + ui::status_line(
-                    &run.at_assembly,
-                    member,
-                    run.ready.entries.iter().any(|e| e.who == member.entity),
-                )
-                .chars()
-                .count();
+    for (mode, frame, flow, social, preview) in [
+        (
+            "the board with the quest taken",
+            &run.board_frame,
+            &run.board_flow,
+            &run.at_assembly,
+            &run.board_preview,
+        ),
+        (
+            "the board with the party staged",
+            &run.ready_frame,
+            &run.ready_flow,
+            &run.at_assembly,
+            &run.ready,
+        ),
+        (
+            "the resolution takeover",
+            &run.report_frame,
+            &run.report_flow,
+            &run.after,
+            &run.report_preview,
+        ),
+    ] {
+        let Some(frame) = frame else { continue };
+        let panel = screens::content(flow, social, preview);
+        for text_run in &panel.runs {
+            let drawn = glyph_run(frame, run.font, text_run);
             checks.require(
-                drawn == wanted,
-                "a roster sheet is not drawing everything it says it draws",
+                drawn == text_run.text.chars().count(),
+                "a row of a screen is not drawn as the string it is",
                 format!(
-                    "beat {beat}: {}'s card holds {drawn} glyphs and its four lines plus the \
-                     portrait initial are {wanted}",
-                    member.name
-                ),
-            );
-        }
-        // And the assembled party's willingness, row by row, in the same
-        // arithmetic the send gate used.
-        let runs = ui::assembly_runs(spec, &Flow::default(), &run.ready);
-        for text_run in &runs {
-            checks.require(
-                glyph_run(frame, run.font, text_run.at) == text_run.text.chars().count(),
-                "a row of the assembly panel is not drawn as the string it is",
-                format!(
-                    "beat {beat}: {:?} at ({:.2}, {:.2}) is {} characters and {} glyphs were \
-                     drawn on that row",
+                    "beat {beat}, {mode}: {:?} at ({:.1}, {:.1}) is {} characters and {drawn} \
+                     glyphs landed in its box",
                     text_run.text,
                     text_run.at.x,
                     text_run.at.y,
                     text_run.text.chars().count(),
-                    glyph_run(frame, run.font, text_run.at)
+                ),
+            );
+        }
+        for icon in &panel.icons {
+            let covered = frame.quads().iter().any(|quad| {
+                quad.texture != run.font
+                    && near(quad.bounds().min.x, icon.at.x)
+                    && near(quad.bounds().min.y, icon.at.y)
+            });
+            checks.require(
+                covered,
+                "an icon a screen says it draws is not on the frame",
+                format!(
+                    "beat {beat}, {mode}: {:?} at ({:.1}, {:.1}) has no quad",
+                    icon.art, icon.at.x, icon.at.y
                 ),
             );
         }
     }
-    // The refusal, with its arithmetic, before anything was committed.
-    if let (Some(frame), Some(probe)) = (&run.probe_frame, &run.probe) {
-        let refusing: Vec<&crate::model::Willingness> = probe
-            .entries
-            .iter()
-            .filter(|entry| !entry.joins())
-            .collect();
+
+    // --- a card's edge says whether its character is in (UI.md §2) --------
+    //
+    // Two channels for one fact: the status line says "in" and the border says
+    // it again in teal. Asserted because a border is the one signifier no
+    // string check can see, and because the colour is what a player reads at a
+    // glance while the arithmetic is what they read on purpose.
+    if let Some(frame) = &run.ready_frame {
+        let quads = frame.quads();
+        for member in &run.at_assembly.members {
+            let card = layout::party_card(member.roster_index);
+            let edge = quads
+                .iter()
+                .find(|quad| {
+                    quad.texture != run.font
+                        && near(quad.bounds().min.x, card.min.x)
+                        && near(quad.bounds().min.y, card.min.y)
+                        && quad.bounds().size().y < 4.0
+                })
+                .map(|quad| quad.tint);
+            let inside = run.ready_flow.party.contains(&member.entity);
+            let wanted = if inside {
+                theme::REGARD
+            } else if member.alive {
+                theme::BORDER
+            } else {
+                theme::RULE
+            };
+            checks.require(
+                edge == Some(wanted),
+                "a party card's edge does not say whether its character is in",
+                format!(
+                    "beat {beat}: {} is {}in the party and the card's top edge is {edge:?}, \
+                     wanted {wanted:?}",
+                    member.name,
+                    if inside { "" } else { "not " }
+                ),
+            );
+        }
+    }
+
+    // --- the send verb exists only while a quest is taken (UI.md §3) -------
+    if let Some(frame) = &run.board_frame {
+        let button = layout::send_button();
+        // *Either* face colour: a button that exists and is disabled is the
+        // state UI.md §3 asks for once a quest is taken and the party is still
+        // short, and looking only for the live gold would call that absent.
+        let drawn = frame.quads().iter().any(|quad| {
+            quad.texture != run.font
+                && (quad.tint == theme::GOLD || quad.tint == theme::BUTTON_DEAD)
+                && near(quad.bounds().min.x, button.min.x)
+                && near(quad.bounds().min.y, button.min.y)
+        });
         checks.require(
-            !refusing.is_empty(),
-            "the beat's refusal probe selected nobody who refuses",
+            drawn == run.board_flow.taken.is_some(),
+            "the send verb's presence does not follow whether a quest is taken",
             format!(
-                "beat {beat}: every one of {:?} was willing",
-                probe.entries.iter().map(|e| e.name).collect::<Vec<_>>()
+                "beat {beat}: a quest is {}taken and the button face is {}drawn; UI.md §3 says \
+                 it exists only while one is",
+                if run.board_flow.taken.is_some() {
+                    ""
+                } else {
+                    "not "
+                },
+                if drawn { "" } else { "not " },
             ),
         );
-        for entry in refusing {
-            let line = ui::willingness_line(entry);
-            let row = ui::assembly_runs(spec, &Flow::default(), probe)
-                .into_iter()
-                .find(|text_run| text_run.text == line);
-            let drawn = row
-                .as_ref()
-                .map_or(0, |text_run| glyph_run(frame, run.font, text_run.at));
-            checks.require(
-                drawn == line.chars().count(),
-                "a refusal is not shown with its arithmetic before commitment",
-                format!(
-                    "beat {beat}: {line:?} is {} characters and {drawn} glyphs were drawn on \
-                     its row",
-                    line.chars().count()
-                ),
-            );
-        }
+        // And it is disabled with a stated reason rather than silently dead.
         checks.require(
-            !probe.can_send,
-            "a party somebody refuses can be sent anyway",
-            format!("beat {beat}: the gate said {:?}", probe.blocked),
+            run.board_preview.can_send || !run.board_preview.blocked.is_empty(),
+            "the send verb is disabled without saying why",
+            format!(
+                "beat {beat}: the gate cannot send and its stated reason is {:?}",
+                run.board_preview.blocked
+            ),
         );
     }
-    // A half-filled party says so, in the numbers the panels show.
-    if let (Some(frame), Some(_)) = (&run.partial_frame, spec.send.get(1)) {
-        let glyphs = frame
+
+    // --- the takeover replaces the board entirely (UI.md §3) ---------------
+    if let Some(frame) = &run.report_frame {
+        let middle = layout::design().center();
+        let front = frame.covering(middle).into_iter().next();
+        checks.require(
+            front.is_some_and(|quad| {
+                quad.tint == theme::SCRIM || quad.texture == run.font || quad.tint == theme::BAR
+            }),
+            "the resolution screen does not replace the board it took over",
+            format!(
+                "beat {beat}: the front-most quad at the middle of the screen is {:?}; the \
+                 takeover is a full-screen replacement, not a panel over a board",
+                front.map(|quad| quad.tint)
+            ),
+        );
+        let cards = frame
             .quads()
             .iter()
-            .filter(|quad| quad.texture == run.font)
+            .filter(|quad| quad.tint == theme::BAR)
             .count();
         checks.require(
-            glyphs > 0,
-            "the half-filled assembly screen drew no text at all",
-            format!("beat {beat}: {glyphs} glyphs"),
-        );
-    }
-    // The report, row by row - the story surface, drawn.
-    if let Some(frame) = &run.report_frame {
-        let flow = Flow {
-            report: run.report.clone(),
-            ..Flow::default()
-        };
-        for text_run in ui::report_runs(&flow) {
-            let drawn = glyph_run(frame, run.font, text_run.at);
-            checks.require(
-                drawn == text_run.text.chars().count(),
-                "a row of the resolution report is not drawn as the string it is",
-                format!(
-                    "beat {beat}: {:?} is {} characters and {drawn} glyphs were drawn at \
-                     ({:.2}, {:.2})",
-                    text_run.text,
-                    text_run.text.chars().count(),
-                    text_run.at.x,
-                    text_run.at.y
-                ),
-            );
-        }
-        // The bands, where the sort disagrees with the submission order:
-        // `draw_headline` submits its glyphs *before* `draw_backdrop` submits
-        // the bar behind them, so only TEXT sorting over PANEL puts the bar
-        // first. Where a game's submission order already agrees with its
-        // bands, no assertion over a recorded frame can see a band at all.
-        let quads = frame.quads();
-        let headline_at = Vec2::new(ui::ROSTER_X, -crate::HALF_H + 0.35);
-        let bar = quads
-            .iter()
-            .position(|quad| quad.tint == ui::PANEL_FILL && quad.bounds().size().x > 20.0);
-        let glyph = quads
-            .iter()
-            .position(|quad| quad.texture == run.font && near(quad.bounds().min.y, headline_at.y));
-        checks.require(
-            bar.is_some() && glyph.is_some() && bar < glyph,
-            "the headline bar is drawn over the headline instead of behind it",
+            cards >= run.report_flow.events.len(),
+            "the resolution screen drew fewer event cards than the run produced",
             format!(
-                "beat {beat}: as indices into the draw order, the bar is {bar:?} and the \
-                 headline's first glyph is {glyph:?}; the game submits the glyphs first, so \
-                 only PANEL sorting under TEXT can put the bar first"
-            ),
-        );
-        let front = frame
-            .covering(headline_at + Vec2::new(0.1, 0.2))
-            .into_iter()
-            .next();
-        checks.require(
-            front.is_some_and(|quad| quad.texture == run.font),
-            "the headline is not the front-most thing where the game draws it",
-            format!(
-                "beat {beat}: the front-most quad at the headline's first cell is {:?}",
-                front.map(|quad| quad.tint)
+                "beat {beat}: {} events and {cards} card fills",
+                run.report_flow.events.len()
             ),
         );
     }

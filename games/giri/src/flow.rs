@@ -1,37 +1,54 @@
-//! Game flow: which beat, which stage, who is selected — and the pointer that
-//! moves all three.
+//! Game flow: which beat, which screen, what is taken, who is in — and the
+//! pointer that moves all of it (UI.md §3).
 //!
-//! An explicit state machine in a resource (DESIGN.md §9). Three stages and two
-//! verbs: in `Assembly` the player selects a party and sends it; in `Report`
-//! they read what it cost and continue; `Complete` is the end of the chain.
-//! Pointer only.
+//! An explicit state machine in a resource (DESIGN §9). **Three modes get
+//! three screens** (UI.md §1.3): the quest board, the full-screen resolution
+//! takeover, and the end of the chain. The log is a drawer over the board and
+//! never the primary channel.
 //!
-//! **The gate and the preview are one function.** `assess` answers "can this be
-//! sent, and what does each member say" and is called by the send verb and by
-//! the preview alike, so what the UI shows and what the simulation allows
-//! cannot disagree. It calls `model::willingness`, which is also what
-//! resolution's betrayal and drift are computed beside — one decision function,
-//! three firing moments.
+//! **The gate, the preview and the door are one function each, called from
+//! both phases.** `assess` answers "what does this party say and can it be
+//! sent"; `model::admit` answers "may this character be added". The send verb
+//! and the info panel call the first; the click handler and the party strip
+//! call the second. Nothing recomputes a rule at a draw site, which is why the
+//! preview cannot say something the resolution disagrees with (DESIGN
+//! invariant; ADR-0039's `World::view` is the mechanism).
 
 use jidousha::prelude::*;
 
 use crate::beats::{CHAIN, Dungeon, EdgeSpec};
 use crate::constants::Tuning;
 use crate::model::{
-    Character, Desperation, Infamy, RegardEdge, Social, Wealth, Willingness, willingness,
+    Admission, Character, Desperation, Infamy, RegardEdge, Social, Wealth, Willingness, admit,
+    willingness,
 };
-use crate::resolve::{apply, resolve};
-use crate::ui;
+use crate::resolve::{DriftLine, EventCard, apply, resolve};
+use crate::{layout, sprites};
 
-/// Which stage of a beat the player is in.
+/// Which screen the player is on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Stage {
-    /// Picking a party, with the willingness preview live.
-    Assembly,
-    /// Reading what the dungeon did.
-    Report,
+    /// The quest board: quests, the info panel, the party strip.
+    Board,
+    /// The resolution takeover, replacing the board entirely.
+    Resolution,
     /// The chain is finished.
     Complete,
+}
+
+/// How many ticks a bounced click's toast stays up. About two and a half
+/// seconds at the engine's fixed sixty, which is the mockup's own 2800ms.
+pub const TOAST_TICKS: u64 = 168;
+
+/// A transient message about a click that did not do what it looked like it
+/// would (UI.md §4: "a bounced click surfaces the arithmetic in a transient
+/// toast and in the log").
+#[derive(Clone, Debug)]
+pub struct Toast {
+    /// What it says.
+    pub text: String,
+    /// The tick it stops being drawn.
+    pub until: u64,
 }
 
 /// Where the game is.
@@ -39,14 +56,30 @@ pub enum Stage {
 pub struct Flow {
     /// Which beat of `CHAIN`.
     pub beat: usize,
-    /// Which stage of it.
+    /// Which screen.
     pub stage: Stage,
-    /// Which of the beat's dungeons is selected.
-    pub dungeon: usize,
+    /// The quest the player has taken, if any. `None` means no send verb.
+    pub taken: Option<usize>,
+    /// The quest under the pointer this tick, which *peeks* in the panel.
+    pub peek: Option<usize>,
     /// The party being assembled, in roster order.
     pub party: Vec<Entity>,
-    /// The last resolution's narration, line by line.
+    /// The last resolution's narration - the log's copy and the assertions'.
     pub report: Vec<String>,
+    /// The last resolution's event cards.
+    pub events: Vec<EventCard>,
+    /// The last resolution's drift ledger.
+    pub drift: Vec<DriftLine>,
+    /// Which quest the takeover is about.
+    pub resolved: Option<usize>,
+    /// What the player has taken in cuts, across the session.
+    pub gold: i32,
+    /// The log, most recent first. Secondary by design (UI.md §3).
+    pub log: Vec<String>,
+    /// Whether the drawer is open.
+    pub log_open: bool,
+    /// The transient message, if one is up.
+    pub toast: Option<Toast>,
 }
 impl Resource for Flow {}
 
@@ -54,10 +87,18 @@ impl Default for Flow {
     fn default() -> Self {
         Self {
             beat: 0,
-            stage: Stage::Assembly,
-            dungeon: 0,
+            stage: Stage::Board,
+            taken: None,
+            peek: None,
             party: Vec::new(),
             report: Vec::new(),
+            events: Vec::new(),
+            drift: Vec::new(),
+            resolved: None,
+            gold: 0,
+            log: Vec::new(),
+            log_open: false,
+            toast: None,
         }
     }
 }
@@ -68,9 +109,40 @@ impl Flow {
         CHAIN.get(self.beat)
     }
 
-    /// The selected dungeon, if the beat offers one.
-    pub fn dungeon(&self) -> Option<&'static Dungeon> {
-        self.spec().and_then(|beat| beat.dungeons.get(self.dungeon))
+    /// Which quest the info panel is showing: the peek if there is one,
+    /// otherwise the taken one. Moving off a peeked card re-locks (UI.md §3).
+    pub fn shown(&self) -> Option<usize> {
+        self.peek.or(self.taken)
+    }
+
+    /// The quest at `index` of this beat's offers.
+    pub fn quest(&self, index: usize) -> Option<&'static Dungeon> {
+        self.spec().and_then(|beat| beat.dungeons.get(index))
+    }
+
+    /// The taken quest — the only one the send verb will run.
+    pub fn taken_quest(&self) -> Option<&'static Dungeon> {
+        self.taken.and_then(|index| self.quest(index))
+    }
+
+    /// The quest the info panel is drawing.
+    pub fn shown_quest(&self) -> Option<&'static Dungeon> {
+        self.shown().and_then(|index| self.quest(index))
+    }
+
+    /// Put a line at the top of the log.
+    pub fn note(&mut self, line: String) {
+        self.log.insert(0, format!("b{} - {line}", self.beat + 1));
+    }
+
+    /// Raise a toast, and log the same sentence — nothing appears only in the
+    /// log, and nothing that matters appears only in a toast (UI.md §3).
+    pub fn bounce(&mut self, tick: u64, text: String) {
+        self.note(text.clone());
+        self.toast = Some(Toast {
+            text,
+            until: tick + TOAST_TICKS,
+        });
     }
 }
 
@@ -78,36 +150,49 @@ impl Flow {
 ///
 /// A simulation input like `Tuning`: the windowed game inserts none and starts
 /// at the top of the chain, and `--verify` puts one in before the first tick so
-/// a beat can be played on its own. Stamped into the verify report for the same
-/// reason the constants are — a run nobody can reproduce is not evidence.
+/// a beat can be played on its own.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct StartAt(pub usize);
 impl Resource for StartAt {}
 
-/// What the party assembly currently says, arithmetic and all.
+/// What the assembly currently says, arithmetic and all.
 ///
-/// Derived state, recomputed every tick from the same function the send gate
-/// uses. Nothing here is a decision; it is the decision, shown.
+/// Derived state, recomputed every tick from the same functions the send verb
+/// and the click handler gate on. Nothing here is a decision; it is the
+/// decisions, shown.
 #[derive(Clone, Debug, Default)]
 pub struct Preview {
-    /// One entry per selected member, in roster order.
+    /// One entry per party member, in roster order.
     pub entries: Vec<Willingness>,
-    /// Whether the party is the size the dungeon takes.
+    /// One answer per living character *not* in the party, in roster order -
+    /// what the door would say if they were clicked right now.
+    pub doors: Vec<(Entity, Admission)>,
+    /// Whether the party is the size the quest takes.
     pub headcount_ok: bool,
-    /// Whether the party satisfies the dungeon's composition predicate.
+    /// Whether the party satisfies the quest's composition predicate.
     pub requirement_ok: bool,
-    /// Whether every selected member will actually come.
+    /// Whether every member is still willing.
     pub all_willing: bool,
     /// Whether the send verb is available.
     pub can_send: bool,
-    /// Why not, if not — stated in the same numbers the panels show.
+    /// Why not, if not — the reason the disabled button states (UI.md §3).
     pub blocked: String,
 }
 impl Resource for Preview {}
 
-/// The one gate: what this party says, and whether it can be sent.
-///
-/// Called by the preview and by the send verb. Two callers, one answer.
+impl Preview {
+    /// The door's answer for a character, if they are one the door was asked
+    /// about.
+    pub fn door(&self, who: Entity) -> Option<&Admission> {
+        self.doors
+            .iter()
+            .find(|(entity, _)| *entity == who)
+            .map(|(_, admission)| admission)
+    }
+}
+
+/// The one gate: what this party says, who could still join, and whether it
+/// can be sent.
 pub fn assess(
     social: &Social,
     tuning: &Tuning,
@@ -118,12 +203,19 @@ pub fn assess(
         .iter()
         .map(|member| willingness(social, tuning, *member, party))
         .collect();
+    let doors: Vec<(Entity, Admission)> = social
+        .members
+        .iter()
+        .filter(|member| member.alive && !party.contains(&member.entity))
+        .map(|member| (member.entity, admit(social, tuning, member.entity, party)))
+        .collect();
     let all_willing = entries.iter().all(Willingness::joins);
     let Some(dungeon) = dungeon else {
         return Preview {
             entries,
+            doors,
             all_willing,
-            blocked: "no job selected".to_owned(),
+            blocked: "take a quest to send them out".to_owned(),
             ..Preview::default()
         };
     };
@@ -134,26 +226,33 @@ pub fn assess(
         .filter(|entry| !entry.joins())
         .map(|entry| entry.name)
         .collect();
-    let blocked = if !headcount_ok {
-        format!(
-            "party of {}; {} takes {}",
-            party.len(),
-            dungeon.name,
-            dungeon.headcount
-        )
+    let blocked = if party.len() < dungeon.headcount {
+        format!("need {} more", dungeon.headcount - party.len())
+    } else if party.len() > dungeon.headcount {
+        format!("{} too many", party.len() - dungeon.headcount)
     } else if !requirement_ok {
-        format!("{} wants {}", dungeon.name, dungeon.requires.describe())
-    } else if !all_willing {
-        format!("{} will not come", refusing.join(" and "))
+        dungeon.requires.shortfall().to_owned()
     } else {
         String::new()
     };
+    let _ = &refusing;
     Preview {
         entries,
+        doors,
         headcount_ok,
         requirement_ok,
         all_willing,
-        can_send: headcount_ok && requirement_ok && all_willing,
+        // **Not gated on `all_willing`, and that is the door rule, not an
+        // oversight.** Consent is evaluated at the door only (DESIGN §3.2):
+        // once a member is in they stay until the player removes them or the
+        // party is sent, and removing a bonded partner can push a remaining
+        // member negative. Gating the send on it would leave that player with a
+        // party they assembled legally, cannot send, and can only fix by
+        // removing somebody - which is the re-evaluation the rule declines to
+        // do, arriving by the back door. The member's own card still says what
+        // they now think, in ember; the game does not hide it, it just does not
+        // ask them again.
+        can_send: headcount_ok && requirement_ok,
         blocked,
     }
 }
@@ -161,7 +260,8 @@ pub fn assess(
 /// Put a beat's authored state into the world, replacing whatever was there.
 ///
 /// Read pass then write pass: what exists is collected before anything is
-/// despawned, because the query borrows the world it is about to change.
+/// despawned, because the query borrows the world it is about to change. The
+/// log and the player's gold survive a beat boundary; nothing else does.
 pub fn load_beat(world: &mut World, index: usize) {
     let characters: Vec<Entity> = world
         .query::<&Character>()
@@ -208,16 +308,26 @@ pub fn load_beat(world: &mut World, index: usize) {
     let flow = world.resource_mut::<Flow>();
     flow.beat = index;
     flow.stage = if index < CHAIN.len() {
-        Stage::Assembly
+        Stage::Board
     } else {
         Stage::Complete
     };
-    flow.dungeon = 0;
+    flow.taken = None;
+    flow.peek = None;
     flow.party.clear();
     flow.report.clear();
+    flow.events.clear();
+    flow.drift.clear();
+    flow.resolved = None;
+    flow.log_open = false;
+    flow.toast = None;
 }
 
 /// The pointer, which is the whole of the player's input (DESIGN §7).
+///
+/// Hover as well as click: the info panel's peek is a hover state, so the
+/// pointer's *position* is read every tick and not only on the tick it is
+/// pressed.
 pub fn handle_pointer(world: &mut World) {
     let Some((clicked, screen)) = world.find_resource::<Input>().map(|input| {
         let pointer = input.pointer();
@@ -225,15 +335,25 @@ pub fn handle_pointer(world: &mut World) {
     }) else {
         return;
     };
-    if !clicked {
-        return;
-    }
     let at = world.resource::<Camera>().screen_to_world(screen);
+    let tick = world.resource::<Time>().tick;
     let stage = world.resource::<Flow>().stage;
+
+    // A toast is transient by the clock, not by the next click: a player who
+    // clicks somewhere harmless should still be able to read why the last click
+    // bounced.
+    {
+        let flow = world.resource_mut::<Flow>();
+        if flow.toast.as_ref().is_some_and(|toast| tick >= toast.until) {
+            flow.toast = None;
+        }
+    }
+
     match stage {
-        Stage::Assembly => click_in_assembly(world, at),
-        Stage::Report | Stage::Complete => {
-            if ui::continue_button().contains(at) {
+        Stage::Board => board_input(world, at, tick, clicked),
+        // The takeover is dismissed by a click anywhere (UI.md §3).
+        Stage::Resolution | Stage::Complete => {
+            if clicked {
                 let next = match stage {
                     // The chain loops rather than dead-ending, so a playtest of
                     // the last beat is one click from the first.
@@ -246,70 +366,166 @@ pub fn handle_pointer(world: &mut World) {
     }
 }
 
-fn click_in_assembly(world: &mut World, at: Vec2) {
+fn board_input(world: &mut World, at: Vec2, tick: u64, clicked: bool) {
     let social = Social::read(&world.view());
-    let flow = world.resource::<Flow>();
-    let Some(beat) = flow.spec() else {
-        return;
-    };
-    let mut party = flow.party.clone();
-    let mut dungeon = flow.dungeon;
-    let mut send = false;
+    let tuning = *world.resource::<Tuning>();
+    let offered = world
+        .resource::<Flow>()
+        .spec()
+        .map_or(0, |beat| beat.dungeons.len());
 
+    // Hover first, every tick, click or no click.
+    let peek = (0..offered.min(layout::QUEST_SLOTS)).find(|index| {
+        let card = layout::quest_card(*index);
+        card.contains(at) && Some(*index) != world.resource::<Flow>().taken
+    });
+    world.resource_mut::<Flow>().peek = peek;
+    if !clicked {
+        return;
+    }
+
+    // The drawer swallows clicks while it is open: it covers the board, and a
+    // click that fell through it would act on a card the player cannot see.
+    if world.resource::<Flow>().log_open {
+        let flow = world.resource_mut::<Flow>();
+        flow.log_open = false;
+        return;
+    }
+    if layout::log_button().contains(at) {
+        let flow = world.resource_mut::<Flow>();
+        flow.log_open = true;
+        return;
+    }
+
+    // Take a quest, or release the taken one. Two verbs, one each: while a
+    // quest is taken the panel is locked to it and RELEASE is the only way out
+    // (UI.md §3), so a click on another card peeks and does not re-take.
+    let taken = world.resource::<Flow>().taken;
+    if taken.is_some() {
+        if layout::release_button().contains(at) {
+            let flow = world.resource_mut::<Flow>();
+            flow.taken = None;
+            flow.note("released the quest".to_owned());
+            return;
+        }
+    } else if let Some(index) =
+        (0..offered.min(layout::QUEST_SLOTS)).find(|index| layout::quest_card(*index).contains(at))
+    {
+        let line = world.resource::<Flow>().quest(index).map(crate::job_line);
+        let flow = world.resource_mut::<Flow>();
+        flow.taken = Some(index);
+        flow.peek = None;
+        if let Some(line) = line {
+            flow.note(format!("took {line}"));
+        }
+        return;
+    }
+
+    // The party strip: click to add or remove, under the door rule.
     for (index, member) in social.members.iter().enumerate() {
-        if ui::card_rect(index).contains(at) {
-            match party.iter().position(|entity| *entity == member.entity) {
-                Some(position) => {
-                    party.remove(position);
-                }
-                None => party.push(member.entity),
+        if !layout::party_card(index).contains(at) {
+            continue;
+        }
+        if !member.alive {
+            // Dead characters stay on the roster, grayed and unclickable:
+            // memory is a signifier (UI.md §2).
+            return;
+        }
+        let party = world.resource::<Flow>().party.clone();
+        if let Some(position) = party.iter().position(|entity| *entity == member.entity) {
+            let flow = world.resource_mut::<Flow>();
+            flow.party.remove(position);
+            flow.note(format!("{} stood down", member.name));
+            return;
+        }
+        let answer = admit(&social, &tuning, member.entity, &party);
+        match answer.bounce(member.name) {
+            Some(text) => world.resource_mut::<Flow>().bounce(tick, text),
+            None => {
+                let mut party = party;
+                party.push(member.entity);
+                // The party is kept in roster order, because that is the order
+                // betrayal is evaluated in and a party whose order depended on
+                // click order would make the outcome depend on it too.
+                party.sort_by_key(|entity| {
+                    social
+                        .member(*entity)
+                        .map_or(usize::MAX, |member| member.roster_index)
+                });
+                world.resource_mut::<Flow>().party = party;
             }
         }
-    }
-    // The party is kept in roster order, because that is the order betrayal is
-    // evaluated in and a party whose order depended on click order would make
-    // the outcome depend on it too.
-    party.sort_by_key(|entity| {
-        social
-            .member(*entity)
-            .map_or(usize::MAX, |member| member.roster_index)
-    });
-    for index in 0..beat.dungeons.len() {
-        if ui::dungeon_row_rect(index).contains(at) {
-            dungeon = index;
-        }
-    }
-    if ui::send_button().contains(at) {
-        send = true;
+        return;
     }
 
-    let tuning = *world.resource::<Tuning>();
-    let selected = beat.dungeons.get(dungeon).copied();
-    let ready = assess(&social, &tuning, &party, selected.as_ref());
-    {
-        let flow = world.resource_mut::<Flow>();
-        flow.party = party.clone();
-        flow.dungeon = dungeon;
-    }
-    if send
-        && ready.can_send
-        && let Some(dungeon) = selected
-    {
-        let resolution = resolve(&social, &tuning, &dungeon, &party);
-        apply(world, &resolution);
-        let flow = world.resource_mut::<Flow>();
-        flow.report = resolution.lines;
-        flow.stage = Stage::Report;
+    // The send verb, which exists only while a quest is taken.
+    if taken.is_some() && layout::send_button().contains(at) {
+        send(world, &social, &tuning);
     }
 }
 
-/// Recompute the willingness preview, every tick, from the gate itself.
+/// Run the taken quest, if the gate allows it, and go to the takeover.
+fn send(world: &mut World, social: &Social, tuning: &Tuning) {
+    let (party, quest, index) = {
+        let flow = world.resource::<Flow>();
+        let Some(index) = flow.taken else {
+            return;
+        };
+        let Some(quest) = flow.taken_quest().copied() else {
+            return;
+        };
+        (flow.party.clone(), quest, index)
+    };
+    let ready = assess(social, tuning, &party, Some(&quest));
+    if !ready.can_send {
+        return;
+    }
+    let resolution = resolve(social, tuning, &quest, &party);
+    apply(world, &resolution);
+    let survivors: Vec<&str> = resolution
+        .survivors
+        .iter()
+        .map(|entity| social.name(*entity))
+        .collect();
+    let lost = party.len() - resolution.survivors.len();
+    let flow = world.resource_mut::<Flow>();
+    flow.gold += quest.cut;
+    flow.report = resolution.lines;
+    flow.events = resolution.events;
+    flow.drift = resolution.drift;
+    flow.resolved = Some(index);
+    flow.stage = Stage::Resolution;
+    flow.toast = None;
+    flow.note(format!(
+        "{} cleared - cut {}g - {} came back{}",
+        quest.name,
+        quest.cut,
+        survivors.join(", "),
+        if lost == 0 {
+            String::new()
+        } else {
+            format!(" - {lost} did not")
+        }
+    ));
+}
+
+/// Recompute the preview, every tick, from the gate itself.
 pub fn refresh_preview(world: &mut World) {
     let social = Social::read(&world.view());
     let tuning = *world.resource::<Tuning>();
     let flow = world.resource::<Flow>();
     let party = flow.party.clone();
-    let dungeon = flow.dungeon().copied();
-    let preview = assess(&social, &tuning, &party, dungeon.as_ref());
+    // The *taken* quest, not the peeked one: the gate is about what would
+    // actually be sent, and a peek must not change whether the button is live.
+    let quest = flow.taken_quest().copied();
+    let preview = assess(&social, &tuning, &party, quest.as_ref());
     world.insert_resource(preview);
+}
+
+/// The art store and its handles, inserted before anything draws.
+pub fn install_art(world: &mut World) {
+    let mut assets = sprites::store();
+    let gallery = sprites::Gallery::load(&mut assets);
+    world.insert_resource(assets);
+    world.insert_resource(gallery);
 }

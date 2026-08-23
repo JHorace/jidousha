@@ -19,21 +19,21 @@
 
 use jidousha::prelude::*;
 
-use crate::beats::{CHAIN, Requirement};
+use crate::beats::{QuestIcon, Requirement};
 use crate::checks::Checks;
-use crate::constants::{Field, Tuning};
-use crate::flow::{Flow, assess};
-use crate::judge::judge_world;
+use crate::constants::Tuning;
+use crate::flow::assess;
 use crate::model::{
     Character, Desperation, Infamy, RegardEdge, Social, Wealth, betrayals, share_each, willingness,
 };
 use crate::resolve::resolve;
-use crate::ui;
-use crate::verify::play;
 
 /// A roster built for one question: `(name, desperation, infamy)` in roster
 /// order, then the edges between them by index.
-fn bench(rows: &[(&'static str, i32, i32)], edges: &[(usize, usize, i32)]) -> (World, Vec<Entity>) {
+pub(crate) fn bench(
+    rows: &[(&'static str, i32, i32)],
+    edges: &[(usize, usize, i32)],
+) -> (World, Vec<Entity>) {
     let mut world = World::new();
     let mut ids = Vec::new();
     for (roster_index, (name, desperation, infamy)) in rows.iter().enumerate() {
@@ -66,7 +66,7 @@ fn bench(rows: &[(&'static str, i32, i32)], edges: &[(usize, usize, i32)]) -> (W
 fn bench_kill(
     tuning: &Tuning,
     bonded_to_victim: bool,
-) -> (Social, Vec<Entity>, crate::model::Resolution) {
+) -> (Social, Vec<Entity>, crate::resolve::Resolution) {
     let mut edges = vec![(0usize, 2usize, tuning.k_loyal + 1)];
     if bonded_to_victim {
         edges.push((2, 1, 2));
@@ -75,6 +75,8 @@ fn bench_kill(
     let social = Social::read(&world.view());
     let dungeon = crate::beats::Dungeon {
         name: "the bench",
+        blurb: "a roster built for one question",
+        icon: QuestIcon::Cave,
         headcount: 3,
         pot: 12,
         cut: 0,
@@ -258,7 +260,7 @@ pub fn battery(checks: &mut Checks, tuning: &Tuning) {
             ),
         );
     }
-    let drop_of = |outcome: &crate::model::Resolution, ids: &[Entity]| {
+    let drop_of = |outcome: &crate::resolve::Resolution, ids: &[Entity]| {
         outcome
             .regard_changes
             .iter()
@@ -395,6 +397,8 @@ pub fn battery(checks: &mut Checks, tuning: &Tuning) {
     let social = Social::read(&world.view());
     let two_of_three = crate::beats::Dungeon {
         name: "the bench",
+        blurb: "a roster built for one question",
+        icon: QuestIcon::Cave,
         headcount: 3,
         pot: 12,
         cut: 0,
@@ -402,13 +406,13 @@ pub fn battery(checks: &mut Checks, tuning: &Tuning) {
     };
     let gate = assess(&social, tuning, &ids, Some(&two_of_three));
     checks.require(
-        !gate.can_send && !gate.headcount_ok && gate.blocked.contains("takes 3"),
+        !gate.can_send && !gate.headcount_ok && gate.blocked == "need 1 more",
         "an under-filled party is not blocked by the headcount it is short of",
         format!("the gate said {:?}", gate.blocked),
     );
     let gate = assess(&social, tuning, &ids[..1], Some(&two_of_three));
     checks.require(
-        !gate.can_send && gate.blocked.contains("takes 3"),
+        !gate.can_send && gate.blocked == "need 2 more",
         "the headcount is reported before the predicate that also fails",
         format!("the gate said {:?}", gate.blocked),
     );
@@ -421,7 +425,7 @@ pub fn battery(checks: &mut Checks, tuning: &Tuning) {
         !gate.can_send
             && gate.headcount_ok
             && !gate.requirement_ok
-            && gate.blocked.contains("nobody of infamy 3+"),
+            && gate.blocked == "a known face in the party",
         "a party that breaks the dungeon's predicate is not blocked by it",
         format!("the gate said {:?}", gate.blocked),
     );
@@ -429,13 +433,18 @@ pub fn battery(checks: &mut Checks, tuning: &Tuning) {
         requires: Requirement::AnyParty,
         ..three
     };
-    let gate = assess(&social, tuning, &ids, Some(&open));
+    let gate = assess(
+        &social,
+        tuning,
+        &ids[1..],
+        Some(&crate::beats::Dungeon {
+            headcount: 1,
+            ..open
+        }),
+    );
     checks.require(
-        !gate.can_send
-            && gate.requirement_ok
-            && !gate.all_willing
-            && gate.blocked.contains("Clean will not come"),
-        "a party somebody refuses is not blocked by the refusal",
+        gate.can_send && gate.blocked.is_empty(),
+        "a one-member party that satisfies everything cannot be sent",
         format!("the gate said {:?}", gate.blocked),
     );
     let gate = assess(
@@ -452,168 +461,6 @@ pub fn battery(checks: &mut Checks, tuning: &Tuning) {
         "a party that satisfies everything cannot be sent",
         format!("the gate said {:?}", gate.blocked),
     );
-}
 
-/// Every string the game draws, in characters the font can draw.
-pub fn printable_strings(checks: &mut Checks) {
-    let mut strings: Vec<(String, String)> = Vec::new();
-    let mut note = |what: String, text: String| strings.push((what, text));
-    note(
-        "the constants readout".to_owned(),
-        Tuning::SHIPPED.readout(),
-    );
-    for (index, spec) in CHAIN.iter().enumerate() {
-        let beat = index + 1;
-        note(format!("beat {beat}'s title"), spec.title.to_owned());
-        note(format!("beat {beat}'s dilemma"), spec.dilemma.to_owned());
-        note(format!("beat {beat}'s lesson"), spec.teaches.to_owned());
-        for character in spec.roster {
-            note(format!("beat {beat}'s roster"), character.name.to_owned());
-        }
-        for dungeon in spec.dungeons {
-            note(format!("beat {beat}'s job"), crate::job_line(dungeon));
-            note(
-                format!("beat {beat}'s requirement"),
-                dungeon.requires.describe(),
-            );
-        }
-        let played = play(index, Tuning::SHIPPED, false);
-        note(
-            format!("beat {beat}'s headline"),
-            ui::headline(&Flow {
-                beat: index,
-                ..Flow::default()
-            }),
-        );
-        for line in &played.report {
-            note(format!("beat {beat}'s report"), line.clone());
-        }
-        for text_run in ui::assembly_runs(spec, &Flow::default(), &played.ready) {
-            note(format!("beat {beat}'s assembly panel"), text_run.text);
-        }
-        for member in &played.after.members {
-            note(
-                format!("beat {beat}'s sheet"),
-                crate::beats::stat_line(member),
-            );
-            note(
-                format!("beat {beat}'s edges"),
-                ui::regard_line(&played.after, member.entity),
-            );
-            note(
-                format!("beat {beat}'s status line"),
-                ui::status_line(&played.after, member, false),
-            );
-        }
-    }
-    for text_run in ui::complete_runs() {
-        note("the end of the chain".to_owned(), text_run.text);
-    }
-    for (what, text) in &strings {
-        let stray = text
-            .chars()
-            .find(|glyph| *glyph != '\n' && !(' '..='~').contains(glyph));
-        checks.require(
-            stray.is_none(),
-            "a string the game draws has a character the font cannot draw",
-            format!(
-                "{what} contains {stray:?} in {text:?}; it draws as a box at exactly a \
-                 letter's width, and no assertion over what was drawn can tell the difference"
-            ),
-        );
-    }
-}
-
-/// Break every constant on purpose and check the beats notice.
-///
-/// A beat that passes under a mutated constant is a vacuous assertion, and this
-/// is the only thing that says which of the two a check is. It runs in-process
-/// because the constants are a resource rather than a `const` block: forty
-/// candidate settings are forty `headless(..)` sims in one run.
-pub fn mutation_round(checks: &mut Checks) -> String {
-    let mut noticed_by_beat = 0;
-    let mut noticed_by_battery = 0;
-    let mut missed: Vec<&'static str> = Vec::new();
-    let mut only_contracts: Vec<String> = Vec::new();
-    for field in Field::ALL.iter().copied() {
-        let mutated = Tuning::SHIPPED.with(field, perturbation(field));
-        let mut beat_failures = 0;
-        for index in 0..CHAIN.len() {
-            let mut probe = Checks::default();
-            let played = play(index, mutated, false);
-            if let Some(spec) = CHAIN.get(index) {
-                judge_world(&mut probe, spec, &played, &mutated);
-            }
-            beat_failures += probe.failures();
-        }
-        let mut probe = Checks::default();
-        battery(&mut probe, &mutated);
-        let battery_failures = probe.failures();
-        let shipped = Tuning::SHIPPED.field(field);
-        if beat_failures > 0 {
-            noticed_by_beat += 1;
-        } else if battery_failures > 0 {
-            noticed_by_battery += 1;
-            // Worth saying which check caught it: a constant no *beat* notices
-            // is a constant the tutorial does not yet exercise, and that is a
-            // fact about the chain rather than about the check.
-            only_contracts.push(format!(
-                "{} {shipped}->{}: {}",
-                field.name(),
-                perturbation(field),
-                probe.first_failure().unwrap_or_default()
-            ));
-        } else {
-            missed.push(field.name());
-        }
-        checks.require(
-            beat_failures + battery_failures > 0,
-            "a tuning constant can be changed without any check noticing",
-            format!(
-                "{} moved from {shipped} to {} and every beat and every contract still \
-                 passed; a check that survives its own constant moving is not measuring it",
-                field.name(),
-                perturbation(field),
-            ),
-        );
-    }
-    let mut summary = format!(
-        "{} of {} constants noticed ({noticed_by_beat} by a beat, {noticed_by_battery} by the \
-         contract battery only)",
-        noticed_by_beat + noticed_by_battery,
-        Field::ALL.len(),
-    );
-    if !missed.is_empty() {
-        summary.push_str(&format!("; nothing noticed {missed:?}"));
-    }
-    for line in &only_contracts {
-        summary.push_str(&format!("\n    no beat exercises {line}"));
-    }
-    summary
-}
-
-/// What each constant is moved to, and why that value has to matter.
-fn perturbation(field: Field) -> i32 {
-    match field {
-        // No gap costs anything: Tim stops refusing Bob.
-        Field::KInf => 0,
-        // Nobody is ever desperate enough: Bob does not kill Steve.
-        Field::KKill => 99,
-        // Everybody is loyal enough: the same killing does not happen.
-        Field::KLoyal => 99,
-        // A clean job leaves no bond behind.
-        Field::BondGain => 0,
-        // A witnessed kill stays private.
-        Field::InfamyPerKill => 0,
-        // Witnesses hold nothing against the killer.
-        Field::WitnessGrudge => 0,
-        // Being bonded to the victim adds nothing.
-        Field::BondedGrudge => 0,
-        // Sitting out costs nothing, so no price is ever met.
-        Field::DesperationRise => 0,
-        // Profiting relieves nothing.
-        Field::DesperationFall => 0,
-        // Desperation falls through the floor into refusing clean work.
-        Field::DesperationFloor => -99,
-    }
+    crate::door::door(checks, tuning);
 }

@@ -19,9 +19,103 @@ use jidousha::prelude::*;
 use crate::beats::Dungeon;
 use crate::constants::Tuning;
 use crate::model::{
-    Betrayal, Dead, Desperation, Infamy, RegardChange, RegardEdge, Resolution, Social, Wealth,
-    betrayals, share_each,
+    Betrayal, Dead, Desperation, Infamy, RegardEdge, Social, Wealth, betrayals, share_each,
 };
+
+// ── what a resolution *is*: the record the write pass and the screens read ──
+//
+// These live here rather than in `model.rs` because `resolve` is the only thing
+// that builds them, and because they are the shape of an outcome rather than
+// the shape of the world. `model.rs` owns state and the decision function; this
+// file owns what one dungeon did with them.
+
+/// One regard edge moving, and why.
+#[derive(Clone, Copy, Debug)]
+pub struct RegardChange {
+    /// Who holds the opinion.
+    pub from: Entity,
+    /// Who it is about.
+    pub to: Entity,
+    /// What it was.
+    pub before: i32,
+    /// What it becomes.
+    pub after: i32,
+}
+
+/// What an event card on the resolution screen is about (UI.md §3).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EventKind {
+    /// A betrayal: skull-marked, ember-bordered.
+    Kill,
+    /// Money changing hands: coin-marked.
+    Coin,
+    /// A consequence that is neither, drawn with the signifier it is about.
+    Word,
+}
+
+/// One card on the resolution screen: what happened, and the arithmetic under
+/// it in small text (UI.md §3).
+#[derive(Clone, Debug)]
+pub struct EventCard {
+    /// Which signifier the card carries.
+    pub kind: EventKind,
+    /// The sentence.
+    pub text: String,
+    /// The rule inputs beneath it, if the event has any worth naming.
+    pub sub: Option<String>,
+}
+
+/// Which way a drift-ledger line reads for the people in it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DriftTone {
+    /// Need going up - the hungry-wait line, and every other cost.
+    Cost,
+    /// Need coming down.
+    Relief,
+    /// A regard edge moving.
+    Regard,
+    /// An infamy moving.
+    Infamy,
+}
+
+/// One line of the drift ledger.
+#[derive(Clone, Debug)]
+pub struct DriftLine {
+    /// How it reads.
+    pub tone: DriftTone,
+    /// What it says.
+    pub text: String,
+}
+
+/// Everything one dungeon did, as data — before any of it touches the world.
+#[derive(Clone, Debug, Default)]
+pub struct Resolution {
+    /// The party, in roster order.
+    pub party: Vec<Entity>,
+    /// Who came back.
+    pub survivors: Vec<Entity>,
+    /// Every killing, in the order they were evaluated.
+    pub betrayals: Vec<Betrayal>,
+    /// What each survivor took.
+    pub payouts: Vec<(Entity, i32)>,
+    /// Every edge that moved.
+    pub regard_changes: Vec<RegardChange>,
+    /// Every infamy that moved: who, from, to.
+    pub infamy_changes: Vec<(Entity, i32, i32)>,
+    /// Every desperation that moved: who, from, to.
+    pub desperation_changes: Vec<(Entity, i32, i32)>,
+    /// The mechanical narration, one line per consequence.
+    ///
+    /// The ASCII story surface DESIGN §7 mandates, and what the log drawer and
+    /// every `Expect::ReportSays` read. The takeover draws `events` and `drift`
+    /// instead — the same consequences, laid out rather than listed — so the
+    /// two are built together from one pass and cannot describe different runs.
+    pub lines: Vec<String>,
+    /// The event cards, in the order the rules produced them.
+    pub events: Vec<EventCard>,
+    /// The drift ledger, after the cards.
+    pub drift: Vec<DriftLine>,
+}
 
 /// Run a dungeon. `party` is in roster order.
 pub fn resolve(
@@ -65,6 +159,25 @@ pub fn resolve(
             regard,
             tuning.k_loyal,
         ));
+        // The same killing as a card: the sentence a player reads, and the
+        // three clauses that produced it in small text under it (UI.md §3).
+        out.events.push(EventCard {
+            kind: EventKind::Kill,
+            text: format!("{} turned on {}.", names(killer), names(victim)),
+            sub: Some(format!(
+                "desperation {desperation} >= {} - regard {regard} < {} - share {share_before}g \
+                 -> {share_after}g",
+                tuning.k_kill, tuning.k_loyal
+            )),
+        });
+    }
+    // Absence of an event is also information (UI.md §3).
+    if out.betrayals.is_empty() {
+        out.events.push(EventCard {
+            kind: EventKind::Word,
+            text: "No blood spilled. Everyone walked back out.".to_owned(),
+            sub: None,
+        });
     }
     out.survivors = party
         .iter()
@@ -90,7 +203,6 @@ pub fn resolve(
             if survivor_count == 1 { "" } else { "s" },
         ));
     }
-
     // --- bond drift ---------------------------------------------------
     //
     // "Shared success without betrayal raises mutual regard between all
@@ -108,6 +220,15 @@ pub fn resolve(
                     names(second),
                     tuning.bond_gain
                 ));
+                out.drift.push(DriftLine {
+                    tone: DriftTone::Regard,
+                    text: format!(
+                        "shared work: {} and {} regard +{} both ways",
+                        names(first),
+                        names(second),
+                        tuning.bond_gain
+                    ),
+                });
             }
         }
     }
@@ -123,6 +244,13 @@ pub fn resolve(
             before,
             after
         ));
+        out.events.push(EventCard {
+            kind: EventKind::Word,
+            text: format!("Word gets out about {}.", names(betrayal.killer)),
+            sub: Some(format!(
+                "infamy {before}->{after} - every witness holds it against them personally"
+            )),
+        });
         // Each surviving witness holds it against the killer personally, and
         // holds it harder if they were bonded to the victim: relationships are
         // what make events travel (DESIGN §3.3.3).
@@ -150,8 +278,42 @@ pub fn resolve(
                     String::new()
                 },
             ));
+            out.drift.push(DriftLine {
+                tone: DriftTone::Regard,
+                text: format!(
+                    "{} saw it: regard toward {} {}->{}",
+                    names(witness),
+                    names(betrayal.killer),
+                    before,
+                    before - drop
+                ),
+            });
         }
+        out.drift.push(DriftLine {
+            tone: DriftTone::Infamy,
+            text: format!(
+                "{} infamy {}->{}",
+                names(betrayal.killer),
+                social.infamy(betrayal.killer),
+                social.infamy(betrayal.killer) + tuning.infamy_per_kill
+            ),
+        });
     }
+
+    // The payout is the last card, after what the killing cost: a player reads
+    // the column in the order the rules fired, and the money is what the whole
+    // column was for.
+    out.events.push(EventCard {
+        kind: EventKind::Coin,
+        text: format!("Your cut: {}g. Each survivor takes {share}g.", dungeon.cut),
+        sub: Some(format!(
+            "pot {}g - cut {}g = {}g split {survivor_count} way{}",
+            dungeon.pot,
+            dungeon.cut,
+            (dungeon.pot - dungeon.cut).max(0),
+            if survivor_count == 1 { "" } else { "s" },
+        )),
+    });
 
     // --- round-end desperation drift ----------------------------------
     //
@@ -184,6 +346,16 @@ pub fn resolve(
             "{} {} - desperation {}->{}",
             member.name, why, before, after
         ));
+        if before != after {
+            out.drift.push(DriftLine {
+                tone: if after < before {
+                    DriftTone::Relief
+                } else {
+                    DriftTone::Cost
+                },
+                text: format!("{} {why}: desperation {before}->{after}", member.name),
+            });
+        }
     }
     out
 }
