@@ -437,7 +437,7 @@ def check_frametime_overlay(browser: str, port: int, example: str) -> int:
 
     body = re.search(r'<div id="frametime-body">(.*?)</div>', dom, re.S)
     text = body.group(1) if body else ""
-    for required in ("display", "renderer", "ticks/fr", "frame deltas"):
+    for required in ("display", "renderer", "clock", "ticks/fr", "frame deltas"):
         if required not in text:
             return fail(
                 "the frame-pacing overlay is missing one of its readings",

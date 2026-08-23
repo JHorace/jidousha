@@ -54,12 +54,13 @@ Each of these produces a distinguishable signature on the `?frametime=1` overlay
    millisecond by default; Chrome's resolution is ~5µs. A 1ms quantum against a
    16.67ms cadence drifts, and a drifting delta feeds the accumulator an
    occasional 0-tick or 2-tick frame with nothing actually slow behind it.
-   *Signature:* the clock line reads ~1ms, the histogram piles onto whole
-   milliseconds and stays tight around the refresh period, the renderer is
-   hardware and the warning is absent, and 0-tick and 2-tick frames appear in
-   roughly equal, small numbers.
+   *Signature:* the clock line reads "whole milliseconds — coarse", the
+   histogram piles onto whole milliseconds and stays tight around the refresh
+   period, the renderer is hardware and the warning is absent, and 0-tick and
+   2-tick frames appear in roughly equal, small numbers.
 3. **rAF / compositor scheduling jitter.** Neither of the above: hardware
-   renderer, fine clock, and the deltas themselves are uneven.
+   renderer, a clock line reading "sub-millisecond — fine", and the deltas
+   themselves uneven.
    *Signature:* a histogram with real spread and no other line explaining it.
 
 These are not exclusive — 1 and 2 can both be true — and the point of the
