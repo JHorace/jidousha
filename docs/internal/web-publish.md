@@ -1,7 +1,8 @@
 # Web publish — design and contracts
 
 Status: **living — W0, W1 and W2 done (W1 ticked 2026-08-22 on the owner's
-observation of the production deploy); W3 deferred behind ADR-0038's trigger and
+observation of the production deploy; what production serves since 2026-08-23 is
+§3a's release fleet); W3 deferred behind ADR-0038's trigger and
 still design.** The internal doc for the web
 build/publish tooling. **CONTRACT** items binding as elsewhere.
 
@@ -19,7 +20,8 @@ asset CDN tricks, threads (would reopen COOP/COEP).
 ## 1. The pipeline
 
 ```
-tools/build-web <example-or-game> [--debug]
+tools/build-web <example-or-game> [--debug]   # one page
+tools/build-web --all | --release-fleet       # a whole fleet + the root index (§3a)
   cargo build --target wasm32-unknown-unknown (release profile by default;
   --debug for fast iteration — what ships is what gets tested)
   wasm-bindgen --target web --out-dir dist/<name>/
@@ -36,7 +38,9 @@ tools/serve-web [<name>] [--check]
 ```
 
 - CONTRACT: `tools/build-web` is the ONLY web build path — CI, local dev, and
-  game repos all call the same script. No inline build steps in workflows.
+  game repos all call the same script. No inline build steps in workflows. It
+  builds one named page, or one of the two fleets §3a defines; the workflow
+  chooses a fleet by name and never names a fleet's members.
 - Build stamp: short git sha + build date, injected into the page (visible
   footer + `console.log`). A playtester's bug report always identifies its
   build. Sha comes from git at build time (allowed: this is tooling, not
@@ -72,10 +76,11 @@ a game ships art). This section is the pipeline half of it.
   page. The game crate's directory comes from `cargo metadata` — a crate's
   directory and its binary's name are two different things and only one of them
   names the page.
-- **The deploy needs nothing for this.** The workflow runs `build-web --all` and
+- **The deploy needs nothing for this.** The workflow runs a fleet build and
   uploads `dist/` verbatim (§4), so a staged game directory rides along with the
   page it belongs to. Verified rather than assumed, on the PR that landed
-  ADR-0040.
+  ADR-0040. Neither fleet changes it: games are in both (§3a), and a page that
+  is not built stages nothing because it does not exist.
 
 ## 2. The playtest page shell (`tools/web-template/`)
 
@@ -107,27 +112,91 @@ One `index.html` template, self-contained (no external CDN dependencies):
 
 ## 3. Deploy targets and layout
 
-- **Engine repo**: `dist/` root is a generated index page listing every built
-  example and game — games in their own section (ADR-0038) — each at
+- **Engine repo**: `dist/` root is a generated index page listing every page
+  this build produced — games in their own section (ADR-0038) — each at
   `/<name>/`, plus `stamp.txt` (the build stamp, read by
-  the deploy workflow for its PR comment). Production URL serves latest
-  `main`; dogfoods the whole pipeline. Examples built (`tools/build-web
-  --all`): the **facade crate's** — what a game author sees — minus the
+  the deploy workflow for its PR comment) and `fleet.txt` (the page names, the
+  index's first link first, read by the workflow's browser check so it need not
+  name a page — §3a, §4). Production URL serves latest
+  `main`; dogfoods the whole pipeline. Examples built (`tools/build-web --all`,
+  the full fleet): the **facade crate's** — what a game author sees — minus the
   native-only ones build-web names and skips aloud (`load_from_disk` reads a
   real disk; its wasm main is a printed stub, so wasm-bindgen has nothing to
   bind). Internal crates' examples are engine documentation, not playtest
   material. `prototype_kit` is the headline and leads the examples. Every crate under
   `games/` is built too, whole: a prototype exists to be played, and a playtest
   URL on its first push is most of why it lives in this repo (ADR-0038). Stale
-  `dist/` subdirectories are pruned on every `--all` build — dist deploys
+  `dist/` subdirectories are pruned on every fleet build — dist deploys
   verbatim, so a renamed example, or a prototype moved to `attic/`, must not
-  stay playable.
+  stay playable. Which of these pages the *production* deploy serves is §3a; a
+  PR preview serves all of them.
 - **Game repos**: single game at site root. Same scripts, same template,
   simpler layout — and the same §1a rule reads simpler too: the game *is* the
   repository, so its art is at `assets/` and its root string is `"assets"`
   (ADR-0040 says which line changes on the day a prototype moves out).
 - Wrangler config: `wrangler.toml` with `assets.directory = "dist"`, no worker
   script, no bindings. Preview URLs enabled (default).
+
+## 3a. Two fleets: production is curated, previews are the whole fleet
+
+Decided by the owner, **2026-08-23**. Production deploys from `main` serve
+**every game under `games/*` plus an explicit example allowlist**, which
+currently holds exactly `pong`. **PR previews keep the full fleet** — every
+example and every game.
+
+- **The allowlist is data, in exactly one place**: `RELEASE_EXAMPLES` in
+  `tools/build-web`. Nothing else may hold a copy of it. The workflow chooses a
+  fleet by name (`--release-fleet` on a `main` push, `--all` on a PR) and never
+  names a fleet's members; `wrangler.toml` uploads whichever `dist/` it is
+  handed. A test asserts the workflow contains no page name, because the
+  predictable way this rots is a second copy of the list living in CI.
+- **Games are never allowlisted.** They are enumerated by the `games/*` glob,
+  through `cargo metadata`, in *both* fleets — so a new prototype is on the
+  production page with zero configuration, which is ADR-0038's no-registration
+  property and is not up for negotiation here. A game name written into
+  `RELEASE_EXAMPLES`, the workflow, or the index generator would be that
+  property's first breach. Only *examples* are curated.
+- **The allowlist rots loudly.** An entry naming an example the workspace no
+  longer builds for the web fails the release build with the §9 message rather
+  than quietly shrinking the page — the same discipline as
+  `NATIVE_ONLY_EXAMPLES`.
+- **The production index has two sections**: *games* (from the glob) first,
+  because the prototypes are the thing to play, then *worked example* (the
+  allowlist) as the reference a game author reads. The preview index keeps the
+  shape it has always had — the whole example fleet first, `prototype_kit`
+  leading, then games — because a preview is read by whoever is reviewing an
+  engine change, and the examples are where that change shows up.
+- **The browser check follows the fleet.** `build-web` writes `dist/fleet.txt`
+  (the page names, the index's first link first) and the workflow checks its
+  first line, so neither fleet needs a page the other lacks. That is
+  `prototype_kit` on a preview and the allowlist's first example on production.
+
+**Rationale.** W1's exit criterion — "every example playable remotely" (§6) —
+was a *milestone's* exit criterion, met and observed on 2026-08-22, not a
+standing policy. Production is the curated face of the project: a visitor should
+find the games and one worked example, not a dozen engine test pages. Previews
+are the diagnostic surface, where engine PRs get eyeballed and where device bugs
+have historically been found — the binaryen-108 externref defect (§5) was caught
+by playtesting PR #59's preview on an iPad and two Android browsers, and a
+preview that had shipped only the curated fleet would have had far less surface
+to find it on.
+
+**Declined: keep publishing everything to production.** It is simpler by exactly
+one flag, and it is what W1 built. It was declined because the production URL is
+what the project shows people, and a page mostly made of `headless_sim`,
+`input_echo`, `loading_gate`, `spawn_and_reap`, `vec2_tour` and `window_clear`
+reads as a test harness rather than as an engine with games on it. The
+diagnostic value those pages carry is real, which is exactly why they stay on
+previews rather than being deleted: the split keeps both properties instead of
+trading one for the other.
+
+**No ADR.** The decision reverses no CONTRACT — searched before landing: §1's
+one-build-path CONTRACT holds (both fleets are `tools/build-web`), §1a's
+asset-root CONTRACT holds, and ADR-0038's guarantee is about a game needing no
+registration, which is preserved exactly. ADR-0038's consequence list mentions
+`tools/build-web --all` as the deploy's fleet; that names the mechanism of the
+day, not the guarantee, and the ADR stands as written (ADRs are superseded, not
+edited). This section is where the decision lives.
 
 ## 4. CI workflow (engine repo; template mirrors it)
 
@@ -136,6 +205,11 @@ One `index.html` template, self-contained (no external CDN dependencies):
   pr-<number>`, so the preview URL is stable across pushes while its content
   tracks the branch head). Both live in `.github/workflows/ci.yml` (`web` +
   `deploy` jobs) — same workflow run as the gates, per the next line.
+- The `web` job builds the fleet the trigger calls for: `tools/build-web
+  --release-fleet` on a `main` push, `--all` on a PR (§3a). That one expression
+  is the whole of CI's knowledge about fleets — it names neither an example nor
+  a game. It then browser-checks the first line of `dist/fleet.txt`, so the
+  check runs against a page the built fleet actually contains.
 - Deploy job runs only after build+test jobs pass in the same workflow run.
   Concurrency group per-branch, cancel-in-progress (stale pushes don't race).
 - Bootstrap: previews are versions of the production Worker, so the first
@@ -184,7 +258,9 @@ One `index.html` template, self-contained (no external CDN dependencies):
   a playable local page; a forced panic shows the overlay with the §9 text.
 - **W1 — production deploy** (needs W0 + owner setup §7). Workflow, wrangler
   config, root index generation. Exit: `main` push updates the live URL;
-  every example playable remotely.
+  every example playable remotely. (Met and observed 2026-08-22. That exit
+  criterion was this milestone's, not a standing policy: what production serves
+  from then on is §3a's decision, taken 2026-08-23.)
 - **W2 — PR previews** (needs W1). Preview deploys + sticky comment.
   Exit: a test PR shows its own URL in a comment; second push updates the
   same comment; close/merge cleans up per Workers defaults.

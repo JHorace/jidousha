@@ -148,7 +148,10 @@ next push edited that same comment in place with the new stamp — no
 duplicate. **W1 ticks on 2026-08-22**: the owner observed the production deploy
 from `main`, every example served and playable at the production URL. The
 condition the previous paragraph set — a `main` push observed serving the whole
-fleet, not merely a green deploy job — is the one that was met.
+fleet, not merely a green deploy job — is the one that was met. That was the
+milestone's exit criterion and not a standing policy: since 2026-08-23
+production serves a curated release fleet — every game plus an example
+allowlist — while PR previews keep the full fleet (web-publish.md §3a).
 
 **W3 is deferred behind a trigger rather than a date** (ADR-0038): prototypes
 are workspace members at `games/<name>/` on `main`, so the game-repo template
