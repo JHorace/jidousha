@@ -83,6 +83,7 @@ World::{resource, resource_mut, find_resource, insert_resource, remove_resource}
 World::query::<Q>()                       // Q: tuples of &T/&mut T, With<T>, Without<T>
 World::commands() -> Commands             // spawn/despawn/insert/remove, deferred
 DrawCtx { world: &WorldView, ... }        // WorldView: read-only query/component/resource
+World::view() -> WorldView                // one reader for both phases (ADR-0039)
 derive(Component)
 ```
 
@@ -108,6 +109,7 @@ DrawCtx::{sprite(&Transform, &Sprite), rect(Rect, Color, Depth),
           line(Vec2, Vec2, f32, Color, Depth), circle(Vec2, f32, Color, Depth),
           text(Vec2, &str, TextStyle)}
 TextStyle { size, color, depth }          // + Default
+TextStyle::{width_of(&str) -> f32, columns_in(f32) -> usize}   // the ratio, both ways
 systems::draw_sprites                     // provided Draw system
 ```
 
@@ -343,6 +345,32 @@ each has its ADR.
   `Input` and never builds one; what changed is that the signature now says so
   and names the document where its argument lives. The entry's example was a
   construction a game never writes, and is now a game reading input in a system.
+
+**Changed after giri (prototype #1): two additions, both from its findings.**
+Prototype findings land here the way E0 run findings do; the ledger is
+`games/giri/FINDINGS.md`.
+
+- **`World::view() -> WorldView<'_>`** joins the inventory (ADR-0039, G-001).
+  A projection read by an Update system *and* by a Draw system had to be
+  written twice, because `World::query` and `WorldView::query` are separate
+  inherent methods and a `WorldView` could not be made outside the Draw phase.
+  giri's `Social` carried eleven duplicated lines for it — and the cost is not
+  the lines but that two collectors of one projection can drift, which in a game
+  whose UI *is* the projection means a preview that disagrees with the
+  resolution. ADR-0008 is unweakened and pinned by a compile-fail snippet: a
+  `&mut T` query through a view is the same compile error it is through
+  `ctx.world`. A `Read` trait implemented by both types was the alternative and
+  was **declined** — it puts a trait bound in every game's reader signature and
+  adds a second way to spell "query a world".
+- **`TextStyle::columns_in(width) -> usize`** joins the inventory (G-003). A
+  game laying a *generated* string — a dilemma sentence, a report row — into a
+  fixed-width column has to answer "how many characters fit", and `TextStyle`
+  measured the other direction only. The ratio was documented in exactly one
+  sentence, so every game that missed it wrote `width / size` and drew a line
+  off the side of the world. It is the inverse of `width_of` and the two doc
+  comments name each other, with a round-trip test keeping them in step. A
+  documented `ADVANCE_RATIO` constant was the alternative and was **declined**:
+  a game would still write the division, which is the thing to remove.
 
 Rough count: ~46 types/functions. CONTRACT: the v1 prototype substrate
 ("agent Pong/asteroids/breakout") must be expressible with this list alone —

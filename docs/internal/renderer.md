@@ -289,6 +289,17 @@ Implemented (R3):
   in the source. Three sites, one metric. `TextStyle::width_of` measures a
   string exactly (monospace, no kerning) — without it a game cannot centre a
   score, and guessing is what makes prototype UI look wrong.
+- **`TextStyle::columns_in(width)` is that same ratio read backwards**, and it
+  is on the public side for the same reason the advance is (giri G-001's
+  sibling, G-003). Wrapping is a non-goal, so a game drawing a *generated*
+  string into a fixed column has to answer "how many characters fit" before it
+  draws; the ratio was stated in exactly one sentence, and a game that missed it
+  writes `width / size` and draws a line off the side of the world — which the
+  bounds assertion catches ten minutes later rather than at the call. It rounds
+  down, so the count always fits. `width_of` and `columns_in` name each other in
+  their doc comments and a round-trip test keeps them in step; a documented
+  `ADVANCE_RATIO` constant was declined, because a game would still write the
+  division.
 - `\n` starts a new line. Wrapping remains the non-goal; an explicit line break
   is three lines of code and is what a multi-line debug readout needs.
 - The atlas is registered in the `TextureTable` like any loaded texture, under

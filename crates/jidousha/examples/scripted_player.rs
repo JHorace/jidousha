@@ -16,11 +16,17 @@
 //!   *respond* — a blind script never returns a ball, so it can prove the
 //!   controls work and still say nothing about whether the game is playable.
 //!
+//! A third part, for a game whose input is a **mouse**: `pointer_at` takes
+//! screen pixels and a game states its targets in world units, so the click has
+//! to be converted — and converted through the camera the frame is drawn with,
+//! viewport included. `click_a_world_target` is that worked end to end, with
+//! the result read back off a recorded frame's transcript.
+//!
 //! Run it: `cargo run -p jidousha --example scripted_player`
 
 use jidousha::prelude::*;
 // Driving input is a testing facility, not something a shipped game does.
-use jidousha::testing::{InputEvent, InputScript, InputSnapshot, SnapshotBuilder};
+use jidousha::testing::{FrameRecorder, InputEvent, InputScript, InputSnapshot, SnapshotBuilder};
 
 /// Where the player is, in world units.
 #[derive(Clone, Copy, Debug)]
@@ -111,6 +117,9 @@ fn main() {
         .hold(Key::D, 10..100)
         .press(Key::Space, 20)
         .press(Key::Space, 70)
+        // A pixel picked out of the air, because nothing here has to be *hit*:
+        // this click tests the edge, not the aim. A click that has to land on
+        // something is `click_a_world_target`, below.
         .pointer_at(64, Vec2::new(640.0, 200.0))
         .click(PointerButton::Primary, 65);
 
@@ -202,6 +211,7 @@ fn main() {
     println!("replayed the script: identical to the bit");
 
     chase_a_target();
+    click_a_world_target();
 }
 
 /// The other half: input decided from what the game is doing, tick by tick.
@@ -303,4 +313,167 @@ fn chase_a_target() {
         tally.jumps, 0,
         "a controller that never presses Space must produce no press edge for it"
     );
+}
+
+/// The third shape: a **pointer** game, whose targets are world rectangles.
+///
+/// `InputScript::pointer_at` takes screen pixels. A game states where things
+/// are in world units. So a scripted click is a conversion, and the conversion
+/// is `Camera::world_to_screen` through a camera built **exactly** as the game
+/// builds its own — `viewport` included.
+///
+/// That last word is the whole trap. Nothing stamps `Camera::viewport` under
+/// `headless`: the windowed driver measures the window and writes it in every
+/// frame, and there is no window here. A check that builds its camera
+/// differently from the game's — a different height, a default viewport, a
+/// centre it guessed — converts every click to the wrong pixel, and the run
+/// fails with nothing selected and no clue why, because the input arrived
+/// perfectly and simply landed somewhere else.
+///
+/// One camera, built once, used by the game *and* by the script, is what makes
+/// that impossible. Then the click is asserted twice: on the world, and on the
+/// recorded frame's transcript — the closest thing to looking at the screen.
+fn click_a_world_target() {
+    /// The viewport the frames are drawn at. The recorder's override and the
+    /// camera below agree because they are the same constant.
+    const VIEWPORT: PhysicalSize = PhysicalSize::new(1280, 720);
+    /// How many world units the frame spans vertically.
+    const VIEW_HEIGHT: f32 = 20.0;
+    /// How long the run is.
+    const TICKS: u64 = 30;
+
+    /// Where the button is, in world units — the game's own statement of it,
+    /// and the only place it is written down.
+    fn button() -> Rect {
+        Rect::from_center_size(Vec2::new(6.0, -4.0), Vec2::new(5.0, 2.0))
+    }
+
+    /// The camera the game installs, and the one a click is aimed through.
+    ///
+    /// A function rather than two copies: the check cannot drift from the game
+    /// if there is only one of it.
+    fn camera() -> Camera {
+        Camera {
+            center: Vec2::ZERO,
+            height: VIEW_HEIGHT,
+            clear_color: Color::rgb(0.05, 0.06, 0.09),
+            viewport: VIEWPORT,
+        }
+    }
+
+    /// Whether the button has been pressed, and how often it was missed.
+    #[derive(Clone, Copy, Debug, Default)]
+    struct Panel {
+        pressed: bool,
+        missed: u32,
+    }
+    impl Resource for Panel {}
+
+    fn install_the_panel(world: &mut World) {
+        world.insert_resource(camera());
+        world.insert_resource(Panel::default());
+    }
+
+    /// The game's side of the same conversion, in the other direction.
+    fn press_the_button(world: &mut World) {
+        let Some(input) = world.find_resource::<Input>() else {
+            return;
+        };
+        if !input.pointer().just_pressed(PointerButton::Primary) {
+            return;
+        }
+        let screen = input.pointer().screen;
+        let at = world.resource::<Camera>().screen_to_world(screen);
+        let panel = world.resource_mut::<Panel>();
+        if button().contains(at) {
+            panel.pressed = true;
+        } else {
+            panel.missed += 1;
+        }
+    }
+
+    /// Lit once pressed, so the frame says what the world says.
+    fn draw_the_button(ctx: &mut DrawCtx) {
+        let panel = *ctx.world.resource::<Panel>();
+        let color = if panel.pressed {
+            Color::rgb(0.2, 0.9, 0.4)
+        } else {
+            Color::rgb(0.35, 0.35, 0.4)
+        };
+        ctx.rect(button(), color, Depth::layer(0));
+    }
+
+    // The click, aimed in world units and converted once. Three ticks: move,
+    // press, settle — the pointer has to be somewhere before the button that
+    // reads it goes down.
+    let aim = camera().world_to_screen(button().center());
+    let script = InputScript::new()
+        .pointer_at(10, aim)
+        .click(PointerButton::Primary, 11);
+
+    let mut sim = headless(
+        GameConfig {
+            title: "pointer target",
+            ..GameConfig::default()
+        },
+        |app| {
+            app.add_system(Startup, install_the_panel);
+            app.add_system(Update, press_the_button);
+            app.add_system(Draw, draw_the_button);
+        },
+    );
+    sim.world_mut()
+        .insert_resource(Input::new(InputSnapshot::new()));
+
+    let mut recorder = FrameRecorder::new(VIEWPORT);
+    let mut last = None;
+    for tick in 1..=TICKS {
+        sim.world_mut()
+            .insert_resource(Input::new(script.snapshot_at(tick)));
+        sim.tick();
+        last = Some(recorder.draw(&mut sim));
+    }
+    let Some(frame) = last else {
+        panic!("a frame was drawn on every one of the {TICKS} ticks");
+    };
+
+    let panel = *sim.world().resource::<Panel>();
+    println!(
+        "pointer: aimed at {aim:?} for world {:?}",
+        button().center()
+    );
+    assert!(
+        panel.pressed,
+        "the click converted to {aim:?} and missed a button at {:?} — the \
+         camera the script aimed through is not the one the game reads with",
+        button()
+    );
+    assert_eq!(panel.missed, 0, "one click, aimed, and it landed");
+
+    // And the same fact read off the frame, which is what a person would have
+    // seen. `covering` answers "what is at this world position?"; the tint is
+    // the button's lit colour, so the drawing agrees with the world.
+    let under = frame.covering(button().center());
+    assert_eq!(under.len(), 1, "exactly the button is under that point");
+    assert!(
+        (under[0].tint.g - 0.9).abs() < 1e-6,
+        "the button drew unlit: {:?}",
+        under[0].tint
+    );
+    // The transcript is the screenshot substitute: one line per quad, in world
+    // units, stable enough to assert on and diff. The expected line is built
+    // from `button()` rather than typed out, so it cannot drift from the game.
+    let transcript = frame.transcript();
+    let expected = format!(
+        "quad ({:.3}, {:.3}) ({:.3}, {:.3})",
+        button().min.x,
+        button().min.y,
+        button().max.x,
+        button().max.y
+    );
+    assert!(
+        transcript.contains(&expected),
+        "expected `{expected}` — the button is not where the game says it is:\n{transcript}"
+    );
+    println!("pointer: the button is lit, and the frame agrees\n{transcript}");
 }

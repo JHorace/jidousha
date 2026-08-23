@@ -147,14 +147,6 @@ pub fn wrap(text: &str, columns: usize) -> String {
     lines.join("\n")
 }
 
-/// How many characters of `size` fit in `width` world units.
-///
-/// The advance is `size * 7 / 9` (docs/api: every printable character, spaces
-/// included, is exactly that wide), so this is the one place the ratio appears.
-pub fn columns_in(width: f32, size: f32) -> usize {
-    (width / (size * 7.0 / 9.0)) as usize
-}
-
 fn style(size: f32, color: Color) -> TextStyle {
     TextStyle {
         size,
@@ -183,10 +175,13 @@ pub fn draw_headline(ctx: &mut DrawCtx) {
         INK,
     );
     let sentence = match flow.spec() {
-        Some(beat) => wrap(beat.dilemma, columns_in(HALF_W * 2.0 - MARGIN * 2.0, SMALL)),
+        Some(beat) => wrap(
+            beat.dilemma,
+            style(SMALL, FAINT).columns_in(HALF_W * 2.0 - MARGIN * 2.0),
+        ),
         None => wrap(
             "The chain is finished. Every beat came out the way its numbers said it would.",
-            columns_in(HALF_W * 2.0 - MARGIN * 2.0, SMALL),
+            style(SMALL, FAINT).columns_in(HALF_W * 2.0 - MARGIN * 2.0),
         ),
     };
     label(
@@ -227,7 +222,7 @@ pub fn draw_backdrop(ctx: &mut DrawCtx) {
 
 /// Every sheet: every stat and every edge, for everyone (invariant 2).
 pub fn draw_roster(ctx: &mut DrawCtx) {
-    let social = Social::view(&ctx.world);
+    let social = Social::read(&ctx.world);
     let flow = ctx.world.resource::<Flow>();
     for (index, member) in social.members.iter().enumerate() {
         let card = card_rect(index);
@@ -509,7 +504,7 @@ pub fn complete_runs() -> Vec<TextRun> {
     for (index, line) in wrap(
         "Four beats, no dice, and nothing hidden. Everything that happened was \
          on the sheets before you pressed send.",
-        columns_in(MAIN_W, SMALL),
+        style(SMALL, FAINT).columns_in(MAIN_W),
     )
     .lines()
     .enumerate()

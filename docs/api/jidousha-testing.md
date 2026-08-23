@@ -111,6 +111,21 @@ apologise for it — just keep the winning row in the source rather than in the
 script, because the script's last write is whatever the last candidate happened
 to be.
 
+**A sweep multiplies sessions, and the recorder is priced per session.** The
+`FrameRecorder` below keeps every frame with no way to forget them, which is
+affordable for one run and is not the number a sweep is paying: four beats
+re-run for each of ten candidate rows is forty-four sessions in one process,
+and at a frame a tick that is thousands of frames nobody will ever read. Build
+the recorder only for the runs that read frames — the runs that assert on
+*drawings* — and let the rest of the sweep, which asserts on world state, run
+without one:
+
+```rust
+// `record` is a parameter of the function that plays one session.
+let mut recorder = record.then(|| FrameRecorder::new(VIEWPORT));
+let frame = recorder.as_mut().map(|recorder| recorder.draw(&mut sim));
+```
+
 **"Forward" means your game's own step functions, not a copy of the
 simulation.** There is no way to fork a `HeadlessSim` — `World` is not
 cloneable, `Recording` replays input rather than state, and rebuilding from
@@ -159,6 +174,38 @@ what makes a key held for a hundred ticks press exactly once. Building a
 one-tick script per tick instead (`hold(key, tick..tick + 1)`) puts a press edge
 on *every* tick, because every tick is the start of its own range.
 `examples/scripted_player.rs` runs both shapes side by side.
+
+**A pointer game's targets are world rectangles, and `pointer_at` takes screen
+pixels.** So a scripted click is a conversion, and `Camera::world_to_screen` is
+it — through a camera built **exactly** as the game builds its own, `viewport`
+included:
+
+```rust
+const VIEWPORT: PhysicalSize = PhysicalSize::new(1280, 720);
+// One camera, built once, used by the game *and* by the script.
+fn camera() -> Camera {
+    Camera { center: Vec2::ZERO, height: 20.0, clear_color: palette::COURT, viewport: VIEWPORT }
+}
+
+// Where the game says the button is — in world units, its own statement of it.
+let button = Rect::from_center_size(Vec2::new(6.0, -4.0), Vec2::new(5.0, 2.0));
+let script = InputScript::new()
+    .pointer_at(10, camera().world_to_screen(button.center()))
+    .click(PointerButton::Primary, 11);
+```
+
+**`viewport` is the whole trap, and it is the same one as below.** Nothing
+stamps `Camera::viewport` under `headless` — the windowed driver measures a
+window and there is no window here — so a check that builds its camera
+differently from the game's converts every click to the wrong pixel. The input
+arrives perfectly and lands somewhere else, and the run fails with nothing
+selected and no clue why. Give the game's camera and the recorder the same
+viewport constant and the question stops existing.
+
+Read the click back the same way anything else is read: the world says whether
+it registered, and `frame.covering(button.center())` says whether the thing it
+hit is drawn where the game claims. `examples/scripted_player.rs` runs it end to
+end, asserting on both.
 
 For "the player is there and doing nothing" — not the same as inserting no
 `Input` at all, and what proves a game can be *lost* as well as won — the value is
@@ -223,7 +270,9 @@ arithmetic, and nothing in this surface asks you to walk it yourself.
 The recorder keeps **every** frame, oldest first, with no way to forget them: a
 six-hundred-tick check holds six hundred frames. That is deliberate and it is
 affordable at prototype scale — the history is what a failing assertion reads
-backwards, and the tick before the one that broke is usually the interesting one.
+backwards, and the tick before the one that broke is usually the interesting
+one. That price is per **session**, so a run that builds many of them wants the
+`Option<FrameRecorder>` above.
 
 The recorder's viewport **overrides** the `Camera` resource's; everything else —
 centre, height, clear color — is the game's own. Nothing writes the recorder's

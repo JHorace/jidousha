@@ -239,7 +239,7 @@ pub fn play(index: usize, tuning: Tuning, record: bool) -> BeatRun {
             .insert_resource(Input::new(plan.script.snapshot_at(tick)));
         sim.tick();
         if tick == 1 {
-            run.at_assembly = Social::read(sim.world());
+            run.at_assembly = Social::read(&sim.world().view());
             run.camera = Camera {
                 viewport: HEADLESS_VIEWPORT,
                 ..*sim.world().resource::<Camera>()
@@ -275,7 +275,7 @@ pub fn play(index: usize, tuning: Tuning, record: bool) -> BeatRun {
             let flow = sim.world().resource::<Flow>();
             run.stage_after_send = flow.stage;
             run.report = flow.report.clone();
-            run.after = Social::read(sim.world());
+            run.after = Social::read(&sim.world().view());
             run.report_frame = frame.clone();
         }
         if tick == plan.end_at {

@@ -48,6 +48,40 @@ fn spawn_the_field(world: &mut World) {
     }
 }
 
+/// The projection the game is about: where the anchor is, and how wide each
+/// mote's orbit is.
+///
+/// A game's UI is nearly always a picture of something like this, and the same
+/// something is what the rules are applied to — so the reader below is written
+/// **once** and called from both phases. Writing it twice is how the preview
+/// and the simulation come to disagree.
+#[derive(Debug, Default)]
+struct Field {
+    /// Where the anchor is right now.
+    anchor: Vec2,
+    /// Every mote's orbit radius, in query order.
+    radii: Vec<f32>,
+}
+
+/// The one reader, over the read-only view both phases can produce.
+///
+/// An `Update` system makes one with `world.view()`; a `Draw` system already
+/// has one as `ctx.world`. Nothing reachable through a `WorldView` mutates, so
+/// this cannot be a back door into Draw-phase writes (ADR-0008, ADR-0039).
+fn read_the_field(world: &WorldView<'_>) -> Field {
+    Field {
+        anchor: world
+            .query::<(&Position, With<Anchor>)>()
+            .map(|(_, position, ())| position.0)
+            .next()
+            .unwrap_or(Vec2::ZERO),
+        radii: world
+            .query::<&Orbit>()
+            .map(|(_, orbit)| orbit.radius)
+            .collect(),
+    }
+}
+
 /// Drift the anchor along +X, one unit of distance per second of game time.
 fn drift_the_anchor(world: &mut World) {
     let step = world.resource::<Time>().fixed_dt.as_f32();
@@ -58,14 +92,11 @@ fn drift_the_anchor(world: &mut World) {
 
 /// Swing each mote around the anchor.
 ///
-/// The anchor's position is read in a pass of its own, because a mutable query
-/// borrows the whole world — the read-pass/write-pass pattern (core.md §5).
+/// The field is read in a pass of its own, because a mutable query borrows the
+/// whole world — the read-pass/write-pass pattern (core.md §5). The read pass
+/// is `read_the_field`, the same function the Draw system below calls.
 fn orbit_the_anchor(world: &mut World) {
-    let anchor = world
-        .query::<(&Position, With<Anchor>)>()
-        .map(|(_, position, ())| position.0)
-        .next()
-        .unwrap_or(Vec2::ZERO);
+    let anchor = read_the_field(&world.view()).anchor;
 
     for (_, position, orbit) in world.query_mut::<(&mut Position, &Orbit)>() {
         let offset = position.0 - anchor;
@@ -79,11 +110,16 @@ fn orbit_the_anchor(world: &mut World) {
 /// A Draw system: it reads the world and reports through a channel outside it.
 ///
 /// It could not write the world if it tried — `DrawCtx` exposes no method that
-/// does (ADR-0008).
+/// does (ADR-0008). What it *can* do is call the same reader the Update system
+/// calls, because `ctx.world` and `world.view()` are the same type.
 fn draw_the_field(ctx: &mut DrawCtx) {
-    let motes = ctx.world.query::<(&Position, &Orbit)>().count();
+    let field = read_the_field(&ctx.world);
     let tick = ctx.world.resource::<Time>().tick;
-    println!("frame at tick {tick}: {motes} motes");
+    println!(
+        "frame at tick {tick}: {} motes around {:?}",
+        field.radii.len(),
+        field.anchor
+    );
 }
 
 fn main() {
