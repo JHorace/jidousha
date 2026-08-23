@@ -5,7 +5,7 @@
 //! them is answered here by reading a recorded frame, on every target,
 //! including wasm CI.
 
-use jidousha_assets::{Assets, MemorySource, TextureHandle};
+use jidousha_assets::{Assets, MemorySource, TextureData, TextureHandle};
 
 use jidousha_core::math::{Radians, Vec2};
 use jidousha_core::{
@@ -23,7 +23,14 @@ const PLACEHOLDER: BackendTextureId = BackendTextureId(1);
 fn assets_with(paths: &[&str]) -> (Assets, Vec<TextureHandle>) {
     let mut source = MemorySource::new();
     for path in paths {
-        source.insert(path, vec![0]);
+        source.insert_texture(
+            path,
+            TextureData {
+                width: 1,
+                height: 1,
+                rgba: vec![255; 4],
+            },
+        );
     }
     let mut assets = Assets::new(source);
     let handles = paths.iter().map(|path| assets.load_texture(path)).collect();

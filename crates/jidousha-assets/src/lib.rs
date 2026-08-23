@@ -8,6 +8,9 @@
 //! collected at one deterministic point per frame.
 //! INVARIANT: no filesystem, no network. Bytes arrive through the
 //! [`ByteSource`] seam, which the platform crates implement (assets.md §5).
+//! INVARIANT: a texture is `Ready` only when the store holds its texels —
+//! bytes that a texture request resolves are decoded at the commit, and bytes
+//! that are not a picture resolve `Failed` (assets.md §3, §6).
 //!
 //! Built so far (`docs/internal/assets.md` §8): A0 — the store, the states and
 //! the commit point; A1 — PNG decoding and, in `jidousha-platform`, the native
@@ -16,10 +19,13 @@
 //! to.
 //!
 //! ```
-//! use jidousha_assets::{Assets, AssetStatus, MemorySource};
+//! use jidousha_assets::{Assets, AssetStatus, MemorySource, TextureData, encode_png};
 //!
+//! // A file's bytes, exactly as a disk would hand them over. The store decodes
+//! // them when a texture request resolves — one PNG path, every platform.
+//! let picture = TextureData { width: 1, height: 1, rgba: vec![255; 4] };
 //! let mut source = MemorySource::new();
-//! source.insert("player.png", b"pretend this is a png".to_vec());
+//! source.insert("player.png", encode_png(&picture));
 //! source.complete_at("player.png", 2);
 //!
 //! let mut assets = Assets::new(source);

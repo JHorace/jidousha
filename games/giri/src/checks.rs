@@ -69,6 +69,15 @@ fn complaint(what: &str, specifics: &str) -> String {
     )
 }
 
+/// An engine message flattened onto one line, for a one-line summary.
+///
+/// A §9 message is four lines by design, and a `Checks` entry is one: a
+/// failure that carried its own line breaks would break the report's shape
+/// around the one entry a reader most needs to find.
+pub fn one_line(message: &str) -> String {
+    message.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 /// `a > b`, and false when either is NaN.
 ///
 /// Spelled out rather than written `!(a <= b)`: the negation of a float

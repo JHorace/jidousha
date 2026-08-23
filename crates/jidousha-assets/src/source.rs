@@ -45,10 +45,15 @@ pub struct Completion {
     pub request: RequestId,
     /// What arrived, or why it did not.
     ///
-    /// CONTRACT: the payload matches the [`AssetKind`] the request asked for.
-    /// A source that fetched a texture returns decoded texels, not the file it
-    /// read — decoding belongs to whoever has the bytes and a thread to spare
-    /// (assets.md §5).
+    /// A texture request may be answered either way: with decoded texels, or
+    /// with the file's bytes, which the store decodes at the commit through the
+    /// one PNG path (assets.md §3 CONTRACT). A source with a thread to spare
+    /// decodes there — the native loader does, which is what keeps PNG decoding
+    /// off the frame — and one without hands the bytes over (assets.md §5).
+    ///
+    /// CONTRACT: a `load_bytes` request is answered with bytes. There is
+    /// nothing to turn texels back into, and a store that called such a load
+    /// `Ready` would have no bytes to hand back.
     pub result: Result<Payload, AssetError>,
 }
 
@@ -71,10 +76,12 @@ pub trait ByteSource: Send + Sync + 'static {
     /// Begin fetching `path`. Never blocks, never fails here — a path that
     /// cannot be read fails later, as a completion.
     ///
-    /// `kind` says what to return: raw bytes, or decoded texels. A source that
-    /// can decode off the frame should, and one that cannot decodes wherever it
-    /// is able to — the requirement is only that the payload matches
-    /// (assets.md §3, §5).
+    /// `kind` says what the *game* asked for. A source that can decode off the
+    /// frame should — that is the whole reason the native loader has a thread —
+    /// and one that cannot may hand a texture request the file's bytes and let
+    /// [`Assets::commit`](crate::Assets::commit) decode them. Both run the same
+    /// [`decode_png`](crate::decode_png), so the texels are bit-identical
+    /// whichever side of the seam ran it (assets.md §3, §5).
     fn request(&mut self, path: &str, kind: AssetKind) -> RequestId;
 
     /// Everything that finished by `tick`, in a deterministic order.
@@ -94,10 +101,13 @@ pub trait ByteSource: Send + Sync + 'static {
 /// without a disk (assets.md §5, §7).
 ///
 /// ```
-/// use jidousha_assets::{Assets, AssetStatus, MemorySource};
+/// use jidousha_assets::{Assets, AssetStatus, MemorySource, TextureData};
 ///
 /// let mut source = MemorySource::new();
-/// source.insert("player.png", b"fake png".to_vec());
+/// // Real PNG bytes work here too — a texture request decodes whatever it
+/// // resolves. Texels are the shorter spelling when the picture is invented.
+/// let texels = TextureData { width: 1, height: 1, rgba: vec![255; 4] };
+/// source.insert_texture("player.png", texels);
 /// source.complete_at("player.png", 3);
 ///
 /// let mut assets = Assets::new(source);
@@ -143,22 +153,37 @@ impl MemorySource {
         }
     }
 
-    /// Put bytes at `path`.
+    /// Put a file's bytes at `path`.
     ///
-    /// Handed back as-is, whatever kind is asked for. Scripting a store is
-    /// about *timing*, not about round-tripping a file format, so a test that
-    /// loads this as a texture gets these bytes rather than a decode error —
-    /// use [`insert_texture`](MemorySource::insert_texture) when the texels
-    /// themselves matter.
+    /// **Raw image bytes are the expected thing here.** A `load_texture` for
+    /// this path decodes them at the commit, through the same
+    /// [`decode_png`](crate::decode_png) every platform uses, so a store built
+    /// from real PNG files behaves exactly as a disk does — and bytes that are
+    /// not a picture resolve `Failed` with the §6 decode error naming what the
+    /// decoder found, never `Ready` with nothing to sample (assets.md §3, §6).
+    ///
+    /// A `load_bytes` for this path hands these bytes back unchanged, which is
+    /// what a store scripting a data file wants.
+    ///
+    /// Use [`insert_texture`](MemorySource::insert_texture) instead when the
+    /// texels are invented rather than decoded — a flat 2×2 in a renderer test
+    /// is shorter written as texels than as a file.
     pub fn insert(&mut self, path: &str, bytes: Vec<u8>) {
         self.content
             .insert(path.to_owned(), Ok(Payload::Bytes(bytes)));
     }
 
-    /// Put a decoded image at `path`.
+    /// Put an already-decoded image at `path`.
     ///
     /// What the native loader produces, without needing a real PNG in the
     /// test: a size and some texels are the part a renderer test cares about.
+    /// Nothing decodes on the way out — the picture is already a picture — so
+    /// this is the spelling for texels a test invented, and
+    /// [`insert`](MemorySource::insert) is the one for a file's bytes.
+    ///
+    /// A path inserted this way must be asked for with `load_texture`: there
+    /// are no bytes here for a `load_bytes` to hand back, and the store panics
+    /// rather than call such a load `Ready` (assets.md §6).
     pub fn insert_texture(&mut self, path: &str, texture: TextureData) {
         self.content
             .insert(path.to_owned(), Ok(Payload::Texture(texture)));

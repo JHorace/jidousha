@@ -317,7 +317,14 @@ fn a_sprite_and_a_line_of_text_are_two_batches_in_depth_order() {
     }
     fn memory() -> jidousha_assets::MemorySource {
         let mut source = jidousha_assets::MemorySource::new();
-        source.insert("a.png", vec![0]);
+        source.insert_texture(
+            "a.png",
+            jidousha_assets::TextureData {
+                width: 1,
+                height: 1,
+                rgba: vec![255; 4],
+            },
+        );
         source
     }
     let (frame, _) = record(draw);

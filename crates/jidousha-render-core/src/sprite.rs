@@ -14,10 +14,11 @@ use jidousha_core::{Color, Component, Quad, Rect, Transform};
 ///
 /// ```
 /// # use jidousha_render_core::Sprite;
-/// # use jidousha_assets::{Assets, MemorySource};
+/// # use jidousha_assets::{Assets, MemorySource, TextureData};
 /// # use jidousha_core::math::Vec2;
 /// # let mut source = MemorySource::new();
-/// # source.insert("ship.png", vec![0]);
+/// # let texels = TextureData { width: 1, height: 1, rgba: vec![255; 4] };
+/// # source.insert_texture("ship.png", texels);
 /// # let mut assets = Assets::new(source);
 /// let ship = Sprite {
 ///     texture: assets.load_texture("ship.png"),
@@ -120,12 +121,19 @@ impl Sprite {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use jidousha_assets::{Assets, MemorySource};
+    use jidousha_assets::{Assets, MemorySource, TextureData};
     use jidousha_core::math::Radians;
 
     fn a_handle() -> TextureHandle {
         let mut source = MemorySource::new();
-        source.insert("a.png", vec![0]);
+        source.insert_texture(
+            "a.png",
+            TextureData {
+                width: 1,
+                height: 1,
+                rgba: vec![255; 4],
+            },
+        );
         Assets::new(source).load_texture("a.png")
     }
 

@@ -6,8 +6,15 @@
 //! the first, whose texture is scripted to arrive at a known tick, asserted on
 //! both sides of that tick. No GPU — the null backend records what a real one
 //! would have been told, which is exactly where the placeholder policy lives.
+//!
+//! The last two are the store's decode seen from where a game notices it
+//! (giri's FINDINGS G-006): a store given a PNG *file's bytes* draws the
+//! picture, and one given bytes that are not a picture draws the placeholder
+//! and reports why. Both are asserted on the transcript, because "every sprite
+//! is magenta" is a fault no assertion over the store's own answers could see
+//! while the store believed the load had worked.
 
-use jidousha_assets::{Assets, MemorySource, TextureData};
+use jidousha_assets::{Assets, MemorySource, TextureData, encode_png};
 use jidousha_core::math::Vec2;
 use jidousha_core::{Draw, GameConfig, Transform, headless};
 use jidousha_render_core::{
@@ -199,4 +206,92 @@ fn two_sprites_waiting_on_different_textures_merge_and_then_split() {
         panic!("a frame was drawn");
     };
     assert_eq!(frame.plan.batches.len(), 2, "two textures, two draw calls");
+}
+
+#[test]
+fn a_sprite_draws_its_texture_when_the_store_was_given_the_files_bytes() {
+    // G-006's exact spelling, which is what a game reaches for first: the bytes
+    // of a PNG go into the store, `load_texture` asks for them, and the sprite
+    // samples the picture. It used to sample the magenta placeholder while
+    // every status said `Ready` and nothing was reported anywhere, and no
+    // assertion over drawn quads could see it — which is why the assertion here
+    // is on the transcript rather than on the store.
+    let mut game = Game::new();
+    let mut source = MemorySource::new();
+    source.insert("icon_coin.png", encode_png(&texture(4, 4, 77)));
+    let mut assets = Assets::new(source);
+    let coin = assets.load_texture("icon_coin.png");
+    game.sim.world_mut().insert_resource(assets);
+    game.sim.world_mut().insert_resource(Camera::default());
+
+    let entity = game.sim.world_mut().spawn();
+    game.sim.world_mut().insert(entity, Transform::default());
+    game.sim.world_mut().insert(
+        entity,
+        Sprite {
+            size: Vec2::new(4.0, 4.0),
+            ..Sprite::new(coin)
+        },
+    );
+
+    game.frame();
+    let drawn = game.drawn_texture();
+    assert_ne!(
+        drawn,
+        game.textures.placeholder(),
+        "the quad names the art, not the placeholder"
+    );
+    assert_eq!(drawn, game.textures.resolve(coin.texture_id()));
+
+    let Some((desc, texels)) = game.backend.uploaded(drawn) else {
+        panic!("the texture reached the backend");
+    };
+    assert_eq!((desc.size.width, desc.size.height), (4, 4));
+    assert_eq!(
+        texels,
+        vec![77; 4 * 4 * 4],
+        "the texels the file held, decoded by the store"
+    );
+}
+
+#[test]
+fn a_sprite_whose_file_is_not_a_picture_draws_the_placeholder_and_the_store_says_so() {
+    // The other side of the same fix: bytes that do not decode are a §6 failure
+    // with the game's line in it, not a `Ready` texture with nothing in it.
+    let mut game = Game::new();
+    let mut source = MemorySource::new();
+    source.insert(
+        "icon_coin.png",
+        b"GIF89a, which this engine does not read".to_vec(),
+    );
+    let mut assets = Assets::new(source);
+    let coin = assets.load_texture("icon_coin.png");
+    let failures = assets.commit(0);
+    assert_eq!(failures.len(), 1);
+    assert!(
+        failures[0]
+            .message()
+            .contains("not a PNG this engine can read"),
+        "{}",
+        failures[0].message()
+    );
+    assert_eq!(
+        assets.status(coin),
+        jidousha_assets::AssetStatus::Failed,
+        "not Ready"
+    );
+    game.sim.world_mut().insert_resource(assets);
+    game.sim.world_mut().insert_resource(Camera::default());
+
+    let entity = game.sim.world_mut().spawn();
+    game.sim.world_mut().insert(entity, Transform::default());
+    game.sim.world_mut().insert(entity, Sprite::new(coin));
+
+    game.frame();
+    assert_eq!(game.drawn_texture(), game.textures.placeholder());
+    assert_eq!(
+        game.backend.texture_count(),
+        game.built_in,
+        "nothing was uploaded for a file that is not a picture"
+    );
 }

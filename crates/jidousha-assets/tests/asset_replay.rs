@@ -11,8 +11,8 @@ mod support;
 
 use std::fmt::Write as _;
 
-use jidousha_assets::{AssetStatus, Assets, MemorySource};
-use support::{CATALOG, Handle, Op, generate, source};
+use jidousha_assets::{AssetStatus, Assets, MemorySource, encode_png};
+use support::{CATALOG, Handle, Op, generate, picture, source};
 
 /// Every observable thing the store said, in order, as text a diff can read.
 fn transcript(ops: &[Op]) -> String {
@@ -23,9 +23,9 @@ fn transcript(ops: &[Op]) -> String {
 
     for op in ops {
         match *op {
-            Op::Load { index, as_texture } => {
+            Op::Load { index } => {
                 let entry = CATALOG[index];
-                let handle = if as_texture {
+                let handle = if entry.texture {
                     Handle::Texture(assets.load_texture(entry.path))
                 } else {
                     Handle::Bytes(assets.load_bytes(entry.path))
@@ -101,7 +101,9 @@ fn a_scripted_load_swaps_in_at_its_tick_and_only_there() {
     // The golden transcript from assets.md §7: placeholder until the scripted
     // tick, real texture from then on, and a failure reported exactly once.
     let mut source = MemorySource::new();
-    source.insert("hero.png", b"texels".to_vec());
+    // The file's bytes, as a disk hands them over; the store decodes them at
+    // the commit that readies the asset (assets.md §3).
+    source.insert("hero.png", encode_png(&picture(2, 2, 7)));
     source.complete_at("hero.png", 3);
     let mut assets = Assets::new(source);
 
@@ -134,6 +136,10 @@ fn a_scripted_load_swaps_in_at_its_tick_and_only_there() {
 5: hero=Ready ghost=Failed failed=[] all_ready=true
 "
     );
-    assert_eq!(assets.bytes_of(hero), Some(&b"texels"[..]));
+    assert_eq!(
+        assets.texture_of(hero).map(|texture| texture.width),
+        Some(2),
+        "the texels the store decoded, not the file it was handed"
+    );
     assert_eq!(assets.status(ghost), AssetStatus::Failed);
 }

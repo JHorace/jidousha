@@ -16,6 +16,7 @@ import re
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -161,7 +162,7 @@ class DoctorGpuTest(unittest.TestCase):
 
 
 class CheckAssetsTest(unittest.TestCase):
-    FILE_BACKED = 'const ASSET_ROOT: &str = "art";\nAssets::new(FileSource::new(ASSET_ROOT));\n'
+    FILE_BACKED = 'const ASSET_ROOT: &str = "assets";\nAssets::new(FileSource::new(ASSET_ROOT));\n'
     MEMORY_BACKED = 'let mut source = MemorySource::new();\nassets.load_texture("nowhere.png");\n'
 
     def test_a_file_that_loads_from_disk_is_checked(self):
@@ -181,7 +182,7 @@ class CheckAssetsTest(unittest.TestCase):
         self.assertTrue(check_assets.defines_the_source(text))
 
     def test_the_asset_root_is_read_from_the_constant_the_store_was_given(self):
-        self.assertEqual(check_assets.asset_root_of(self.FILE_BACKED), "art")
+        self.assertEqual(check_assets.asset_root_of(self.FILE_BACKED), "assets")
 
     def test_an_asset_root_passed_as_a_literal_is_read_too(self):
         self.assertEqual(
@@ -275,10 +276,10 @@ class CheckAssetsTest(unittest.TestCase):
     def test_a_broken_reference_is_reported_in_the_engines_message_shape(self):
         with tempfile.TemporaryDirectory() as directory:
             repo = Path(directory)
-            (repo / "art").mkdir()
+            (repo / "assets").mkdir()
             source = repo / "game.rs"
             source.write_text(
-                'const ASSET_ROOT: &str = "art";\n'
+                'const ASSET_ROOT: &str = "assets";\n'
                 "fn main() { Assets::new(FileSource::new(ASSET_ROOT)); }\n"
                 'fn go() { assets.load_texture("gone.png"); }\n'
             )
@@ -301,17 +302,68 @@ class CheckAssetsTest(unittest.TestCase):
         self.assertIn(shared, rust, "the engine's message changed")
         with tempfile.TemporaryDirectory() as directory:
             repo = Path(directory)
-            (repo / "art").mkdir()
-            (repo / "art" / "hero.png").write_bytes(b"x")
+            (repo / "assets").mkdir()
+            (repo / "assets" / "hero.png").write_bytes(b"x")
             source = repo / "game.rs"
             source.write_text(
-                'const ASSET_ROOT: &str = "art";\n'
+                'const ASSET_ROOT: &str = "assets";\n'
                 "fn main() { Assets::new(FileSource::new(ASSET_ROOT)); }\n"
                 'fn go() { assets.load_texture("Hero.png"); }\n'
             )
             problems = check_assets.check_file(repo, source)
             self.assertEqual(len(problems), 1)
             self.assertIn(shared, problems[0], "the check's copy changed")
+
+    def test_a_game_crate_loads_from_its_own_assets_directory(self):
+        # ADR-0040's rule, from the source side: `games/<name>/` owns its art.
+        self.assertEqual(
+            check_assets.expected_root(Path("games/giri/src/sprites.rs")),
+            "games/giri/assets",
+        )
+
+    def test_everything_outside_games_loads_from_the_shared_root(self):
+        self.assertEqual(
+            check_assets.expected_root(Path("crates/jidousha/examples/sprites.rs")), "assets"
+        )
+
+    def test_a_game_that_loads_from_the_shared_root_is_reported(self):
+        # The failure this rule exists for: `tools/build-web` stages a game's
+        # own directory and the repository's shared one, and nothing else, so a
+        # root outside the rule reads on a disk and 404s on the deployed page.
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            (repo / "assets").mkdir()
+            (repo / "assets" / "hero.png").write_bytes(b"x")
+            crate = repo / "games" / "giri" / "src"
+            crate.mkdir(parents=True)
+            source = crate / "sprites.rs"
+            source.write_text(
+                'const ASSET_ROOT: &str = "assets";\n'
+                "fn main() { Assets::new(asset_source(ASSET_ROOT)); }\n"
+                'fn go() { assets.load_texture("hero.png"); }\n'
+            )
+            problems = check_assets.check_file(repo, source)
+            self.assertEqual(len(problems), 1)
+            self.assertIn("games/giri/assets", problems[0])
+            self.assertIn("web-publish.md", problems[0])
+
+    def test_a_game_loading_from_its_own_root_is_checked_like_anything_else(self):
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            art = repo / "games" / "giri" / "assets"
+            art.mkdir(parents=True)
+            (art / "icon_coin.png").write_bytes(b"x")
+            source = repo / "games" / "giri" / "src" / "sprites.rs"
+            source.parent.mkdir(parents=True)
+            source.write_text(
+                'const ASSET_ROOT: &str = "games/giri/assets";\n'
+                "fn main() { Assets::new(asset_source(ASSET_ROOT)); }\n"
+                'fn go() { assets.load_texture("icon_coin.png"); }\n'
+                'fn oops() { assets.load_texture("icon_gone.png"); }\n'
+            )
+            problems = check_assets.check_file(repo, source)
+            self.assertEqual(len(problems), 1, problems)
+            self.assertIn("icon_gone.png", problems[0])
 
     def _run_main(self, repo):
         """Run the script end to end against `repo`, returning (code, stderr)."""
@@ -323,12 +375,12 @@ class CheckAssetsTest(unittest.TestCase):
     def _repo_with(self, load: str):
         directory = tempfile.TemporaryDirectory()
         repo = Path(directory.name)
-        (repo / "art").mkdir()
-        (repo / "art" / "hero.png").write_bytes(b"x")
+        (repo / "assets").mkdir()
+        (repo / "assets" / "hero.png").write_bytes(b"x")
         crate = repo / "crates" / "game" / "examples"
         crate.mkdir(parents=True)
         (crate / "game.rs").write_text(
-            'const ASSET_ROOT: &str = "art";\n'
+            'const ASSET_ROOT: &str = "assets";\n'
             "fn main() { Assets::new(FileSource::new(ASSET_ROOT)); }\n"
             f"fn go() {{ {load} }}\n"
         )
@@ -2798,6 +2850,80 @@ class GameToolingTest(unittest.TestCase):
         # crate's example and is engine documentation, not playtest material.
         self.assertEqual(examples, ["sprites"])
         self.assertEqual(games, ["pong"])
+
+    def test_a_game_gets_its_own_asset_root_and_an_example_does_not(self):
+        # ADR-0040: a game's art travels with the crate; an example loads from
+        # the repository's shared root and owns nothing.
+        dirs = {"giri": "games/giri", "jidousha": "crates/jidousha"}
+        with unittest.mock.patch.object(build_web, "REPO_ROOT", REPO_ROOT):
+            self.assertEqual(
+                build_web.own_asset_root("giri", "game", dirs), "games/giri/assets"
+            )
+            self.assertIsNone(build_web.own_asset_root("jidousha", "example", dirs))
+
+    def test_a_game_with_no_art_directory_stages_nothing_of_its_own(self):
+        dirs = {"shapes": "games/shapes"}
+        self.assertIsNone(build_web.own_asset_root("shapes", "game", dirs))
+
+    def test_a_crates_directory_comes_from_its_manifest_not_from_its_name(self):
+        # A crate's directory and its binary's name are two different things,
+        # and only one of them names the page.
+        metadata = workspace_metadata([("giri", "games/giri", [("giri", ["bin"])])])
+        self.assertEqual(
+            build_web.parse_package_dirs(metadata, GAMES_ROOT), {"giri": "games/giri"}
+        )
+
+    def test_an_asset_root_is_staged_at_the_path_the_code_names_it_by(self):
+        # The whole of ADR-0040's contract, checked on a scratch tree:
+        # `dist/<name>/` is repository-shaped, so `asset_source("games/x/assets")`
+        # fetches from the page exactly what it reads from the disk.
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            (repo / "assets" / "sprites").mkdir(parents=True)
+            (repo / "assets" / "sprites" / "hero.png").write_bytes(b"x")
+            (repo / "games" / "giri" / "assets").mkdir(parents=True)
+            (repo / "games" / "giri" / "assets" / "icon_coin.png").write_bytes(b"x")
+            out = repo / "dist" / "giri"
+            out.mkdir(parents=True)
+            with unittest.mock.patch.object(build_web, "REPO_ROOT", repo):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    build_web.stage_assets(out, "games/giri/assets")
+            self.assertTrue((out / "assets" / "sprites" / "hero.png").is_file())
+            self.assertTrue((out / "games" / "giri" / "assets" / "icon_coin.png").is_file())
+
+    def test_a_page_with_no_root_of_its_own_still_gets_the_shared_one(self):
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            (repo / "assets").mkdir()
+            (repo / "assets" / "hero.png").write_bytes(b"x")
+            out = repo / "dist" / "sprites"
+            out.mkdir(parents=True)
+            with unittest.mock.patch.object(build_web, "REPO_ROOT", repo):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    build_web.stage_assets(out)
+            self.assertTrue((out / "assets" / "hero.png").is_file())
+            self.assertFalse((out / "games").exists())
+
+    def test_the_two_roots_the_build_stages_are_the_two_the_check_allows(self):
+        # The pair of tools is the contract: one staging and the other checking
+        # different sets would put art on a page nothing asks for, or refuse a
+        # root that deploys fine. Asserted on the committed tree.
+        for source in check_assets.rust_sources(REPO_ROOT):
+            text = source.read_text("utf-8")
+            if not check_assets.builds_file_source(text) or check_assets.defines_the_source(
+                text
+            ):
+                continue
+            root = check_assets.asset_root_of(text)
+            where = source.relative_to(REPO_ROOT)
+            self.assertEqual(root, check_assets.expected_root(where), str(where))
+            if root != "assets":
+                package = where.parts[1]
+                self.assertEqual(
+                    build_web.own_asset_root(package, "game", {package: f"games/{package}"}),
+                    root,
+                    "the build stages the root the check demands",
+                )
 
     def test_the_root_index_has_no_games_section_when_there_are_no_games(self):
         # An index with no prototypes yet should not carry an empty heading.

@@ -24,7 +24,8 @@ tools/build-web <example-or-game> [--debug]
   --debug for fast iteration — what ships is what gets tested)
   wasm-bindgen --target web --out-dir dist/<name>/
   wasm-opt -Os if available (optional; skipped with a log line if absent)
-  stage: index.html (from tools/web-template/), assets/, build stamp
+  stage: index.html (from tools/web-template/), every asset root the page's
+  code can name (§1a), build stamp
 tools/serve-web [<name>] [--check]
   local static server for dist/; MUST serve application/wasm correctly
   (implementation free; doctor verifies by fetching a .wasm and checking the
@@ -42,6 +43,39 @@ tools/serve-web [<name>] [--check]
   simulation — the wall-clock ban applies to engine code, not build scripts).
 - wasm size: log final .wasm size in CI; warn (not fail) over 5 MB — drift
   visibility per practices §5.8's spirit.
+
+## 1a. Asset roots: `dist/<name>/` is repository-shaped
+
+Decided by the owner, 2026-08-23, and recorded as **ADR-0040** — which also
+records the alternative that was declined (blessing `include_bytes!` as the way
+a game ships art). This section is the pipeline half of it.
+
+- CONTRACT: **an asset root is staged under the page at the path the code names
+  it by.** `asset_source("assets")` and `asset_source("games/giri/assets")` are
+  both paths from the top of the repository; the native loader reads them from
+  there and the web loader fetches them relative to the page, and the build puts
+  the directory at the same relative path under the page so one string means one
+  set of pictures (assets.md §2's identical-paths CONTRACT).
+- **Two roots, and a file's position picks which one it may use:**
+  - the repository's shared `assets/` — what the engine's examples load from,
+    staged for **every** page, unchanged from W0;
+  - `games/<name>/assets/` — a game crate's own art, staged for **that game's
+    page only**, so a prototype's art travels with it and two prototypes'
+    `icon_coin.png` cannot collide (ADR-0038).
+- The URL a game's picture ends up at is therefore
+  `/giri/games/giri/assets/icon_coin.png`, which is redundant and is the price
+  of the rule. ADR-0040's rationale is why the shorter `/giri/assets/…` is not
+  available: it would make one string mean two different directories depending
+  on which crate wrote it.
+- `tools/check-assets` enforces the same two roots from the source side, so a
+  root the build does not stage fails CI rather than 404ing on the deployed
+  page. The game crate's directory comes from `cargo metadata` — a crate's
+  directory and its binary's name are two different things and only one of them
+  names the page.
+- **The deploy needs nothing for this.** The workflow runs `build-web --all` and
+  uploads `dist/` verbatim (§4), so a staged game directory rides along with the
+  page it belongs to. Verified rather than assumed, on the PR that landed
+  ADR-0040.
 
 ## 2. The playtest page shell (`tools/web-template/`)
 
@@ -89,7 +123,9 @@ One `index.html` template, self-contained (no external CDN dependencies):
   verbatim, so a renamed example, or a prototype moved to `attic/`, must not
   stay playable.
 - **Game repos**: single game at site root. Same scripts, same template,
-  simpler layout.
+  simpler layout — and the same §1a rule reads simpler too: the game *is* the
+  repository, so its art is at `assets/` and its root string is `"assets"`
+  (ADR-0040 says which line changes on the day a prototype moves out).
 - Wrangler config: `wrangler.toml` with `assets.directory = "dist"`, no worker
   script, no bindings. Preview URLs enabled (default).
 

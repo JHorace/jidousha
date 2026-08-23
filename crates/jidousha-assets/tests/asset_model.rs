@@ -34,6 +34,9 @@ struct Seen {
     unloaded_in_flight: usize,
     /// Handles whose slot index had been used by an earlier, unloaded handle.
     reused_slots: usize,
+    /// Readings of a `Ready` texture that had texels — the store decoded a
+    /// file's bytes at the commit (FINDINGS G-006).
+    decoded: usize,
 }
 
 impl Pair {
@@ -50,9 +53,9 @@ impl Pair {
     /// Apply one operation to both stores, returning the first disagreement.
     fn apply(&mut self, op: Op, retired: &mut Vec<String>) -> Result<(), String> {
         match op {
-            Op::Load { index, as_texture } => {
+            Op::Load { index } => {
                 let entry = CATALOG[index];
-                let handle = if as_texture {
+                let handle = if entry.texture {
                     Handle::Texture(self.assets.load_texture(entry.path))
                 } else {
                     Handle::Bytes(self.assets.load_bytes(entry.path))
@@ -139,6 +142,22 @@ impl Pair {
                     handle.debug()
                 ));
             }
+
+            // The G-006 property, checked on every handle after every
+            // operation: a `Ready` texture has texels. The catalogue's pictures
+            // are inserted as PNG *files*, so the only way for this to hold is
+            // for the store to have decoded them at the commit.
+            let got = handle.texels(&self.assets);
+            let want = self.model.texels(key);
+            if got != want {
+                return Err(format!(
+                    "texels({}) is {got:?}, model says {want:?}",
+                    handle.debug()
+                ));
+            }
+            if got.is_some() {
+                self.seen.decoded += 1;
+            }
         }
 
         if self.assets.all_ready() != self.model.all_ready() {
@@ -210,6 +229,7 @@ fn the_generated_sequences_reach_every_interesting_state() {
         total.failed += seen.failed;
         total.unloaded_in_flight += seen.unloaded_in_flight;
         total.reused_slots += seen.reused_slots;
+        total.decoded += seen.decoded;
     }
     assert!(total.ready > 0, "no asset ever became Ready: {total:?}");
     assert!(total.failed > 0, "no asset ever Failed: {total:?}");
@@ -220,5 +240,9 @@ fn the_generated_sequences_reach_every_interesting_state() {
     assert!(
         total.reused_slots > 0,
         "no unloaded slot was ever reused: {total:?}"
+    );
+    assert!(
+        total.decoded > 0,
+        "no texture was ever decoded from a file's bytes: {total:?}"
     );
 }

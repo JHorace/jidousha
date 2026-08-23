@@ -17,10 +17,11 @@
 //! use jidousha_core::{Draw, GameConfig, Transform, headless, math::Vec2};
 //! use jidousha_render_core::{Camera, NullBackend, RenderBackend, Sprite, TextureTable,
 //!     BackendTextureId, draw_sprites, plan_frame};
-//! use jidousha_assets::{Assets, MemorySource};
+//! use jidousha_assets::{Assets, MemorySource, TextureData};
 //!
 //! let mut source = MemorySource::new();
-//! source.insert("ship.png", vec![0]);
+//! let texels = TextureData { width: 1, height: 1, rgba: vec![255; 4] };
+//! source.insert_texture("ship.png", texels);
 //! let mut assets = Assets::new(source);
 //! let ship = assets.load_texture("ship.png");
 //!

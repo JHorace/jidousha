@@ -12,7 +12,9 @@
 //! three pieces at once — core's simulation, input's recording, and assets'
 //! store. Nothing here touches winit.
 
-use jidousha_assets::{AssetStatus, Assets, MemorySource, ReplaySource, TextureHandle};
+use jidousha_assets::{
+    AssetStatus, Assets, MemorySource, ReplaySource, TextureData, TextureHandle, encode_png,
+};
 use jidousha_core::math::Vec2;
 use jidousha_core::{
     Component, GameConfig, HeadlessSim, Resource, Rng, Startup, Time, Update, World, headless,
@@ -134,10 +136,23 @@ fn hash_world(world: &World) -> u64 {
     hash
 }
 
+/// The hero's file, as a disk would hand it over.
+///
+/// A real PNG rather than three bytes: a texture request decodes what it
+/// resolves (assets.md §3), so a stand-in would script a *failure* and this
+/// test is about an asset that arrives.
+fn hero_png() -> Vec<u8> {
+    encode_png(&TextureData {
+        width: 2,
+        height: 2,
+        rgba: vec![255; 16],
+    })
+}
+
 /// The store the session loads from, with its scripted arrival ticks.
 fn scripted_store() -> MemorySource {
     let mut source = MemorySource::new();
-    source.insert("sprites/hero.png", vec![1, 2, 3]);
+    source.insert("sprites/hero.png", hero_png());
     // Arrives partway through, so the run spends time on both sides of it.
     source.complete_at("sprites/hero.png", 40);
     // `sprites/nowhere.png` is absent, and fails at the commit that resolves it.
@@ -225,7 +240,7 @@ fn replay(recording: &Recording) -> Vec<u64> {
         })
         .collect();
     let mut store = MemorySource::new();
-    store.insert("sprites/hero.png", vec![1, 2, 3]);
+    store.insert("sprites/hero.png", hero_png());
     // Everything resolves immediately here; the replay source holds it back.
     let mut sim = new_sim(ReplaySource::new(store, schedule));
 
@@ -301,7 +316,7 @@ fn a_replay_whose_readiness_is_dropped_does_not_match() {
     // asserting nothing.
     let (recording, recorded) = record();
     let mut store = MemorySource::new();
-    store.insert("sprites/hero.png", vec![1, 2, 3]);
+    store.insert("sprites/hero.png", hero_png());
     let mut sim = new_sim(store);
     for record in recording.ticks() {
         let Some(assets) = sim.world_mut().find_resource_mut::<Assets>() else {

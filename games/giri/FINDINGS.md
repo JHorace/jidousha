@@ -14,7 +14,10 @@ Four from the first slice, then two more from the presentation rebuild
 (2026-08-23), which was the first session to give giri art and a scaling
 contract. Both new ones are about the same half-hour: a game with its own
 pictures has no documented way to get them onto a web page, and the store it
-ends up using accepts them and silently draws nothing.
+ends up using accepts them and silently draws nothing. Both are resolved as of
+2026-08-23 — a game crate has an asset root (ADR-0040) and the store decodes at
+the texture-load boundary — and giri consumes both fixes, which is what proves
+they close.
 
 ### G-001 — no read-only projection both an Update system and a Draw system can read
 
@@ -155,7 +158,7 @@ questions it asked were about assets and about the camera.
 ### G-005 — a game crate has no way to ship its own art to the web
 
 Class: tooling · Game: giri · Documents: `jidousha-api.md` (`asset_source`,
-`Assets`) · Open
+`Assets`) · Fixed in: ADR-0040, this branch
 
 ADR-0038 says a game is a crate under `games/` and that living there is what
 makes it built, linted, verified and published. giri's art is giri's — four
@@ -184,10 +187,38 @@ cannot have an asset root.** Either the web build learns to stage a game's own
 directory, or the documents should say that compiled-in bytes are the answer for
 a game under `games/`, and say it where `asset_source` is.
 
+**Resolved.** The web build learned to stage it, which was the first of the two
+and is the owner's decision (2026-08-23). `games/giri/assets/` is a real asset
+root now: giri loads it with `asset_source("games/giri/assets")` and the
+`include_bytes!` table is gone. The rule that makes one string work on both
+platforms is **`dist/<name>/` is repository-shaped** — `tools/build-web` stages
+an asset root under the page at the path the code names it by, so the native
+read and the web fetch resolve the same directory. Two roots reach a page and a
+file's position picks its own: the repository's shared `assets/` for the
+engine's examples, `games/<name>/assets/` for a game.
+
+The other half of this entry's offer — blessing compiled-in bytes as the answer
+— was **declined**, with the reasons in ADR-0040: it does not scale past a
+handful of files (the owner's curated library is incoming), it turns every art
+tweak into a recompile, and art that cannot travel with its game contradicts
+what ADR-0038 put games in this repository to get. The ADR also records why a
+game's art is not staged as plain `assets/` beside its page, which would have
+been the prettier URL: it would make one string mean two different directories
+depending on which crate wrote it.
+
+Where the missing sentence now lives: `asset_source`'s doc comment (so
+`jidousha-api.md`'s entry carries it), a new paragraph in the Concepts prose
+that says a game's art is its crate's own and that the same string works on the
+web, and `web-publish.md` §1a for the pipeline half. `tools/check-assets`
+enforces the same two roots from the source side — a root the build does not
+stage is now a CI failure rather than a 404 after deploying — and giri's
+thirteen paths are checked by it for the first time, because compiled-in bytes
+were invisible to it.
+
 ### G-006 — `MemorySource::insert` accepts image bytes, reports `Ready`, and draws nothing
 
 Class: api · Game: giri · Documents: `jidousha-api.md` (`Assets`,
-`MemorySource`), `jidousha-testing.md` (`decode_png`) · Open
+`MemorySource`), `jidousha-testing.md` (`decode_png`) · Fixed in: this branch
 
 Following G-005's workaround, giri built its store the obvious way:
 
@@ -226,3 +257,35 @@ Two things follow, and they are separable:
 giri's `src/sprites.rs` decodes with `decode_png` and panics with a four-part
 message if a file stops decoding, because that is the only place the game could
 notice.
+
+**Resolved.** The store decodes, at the texture-load boundary, whatever the
+source. Bytes that a `load_texture` request resolves — from a disk, from a page,
+from a `MemorySource` — go through the engine's one `decode_png` (assets.md §3
+CONTRACT), so the spelling this entry opens with now works and giri's own art is
+loaded exactly that way. Bytes that are not a picture resolve `Failed` with the
+§6 decode error naming what the decoder found, reported once at the commit, with
+the game's own line in it.
+
+The serious half is closed structurally rather than by a rule: `Ready` is
+reachable for a texture only through a decoded payload, and the property is
+written as a test in this entry's own words — *a store can never report `Ready`
+for a texture it has no texels for* (`jidousha-assets/tests/asset_ops.rs`) —
+plus a second reading of it on every handle after every operation of two
+thousand random sequences (`tests/asset_model.rs`), and the transcript version a
+game would recognise: raw PNG bytes in, `load_texture`, and the sprite draws the
+*texture* rather than the placeholder
+(`jidousha-render-core/tests/loading_frames.rs`).
+
+The decoder's address was the separable half, and it did **not** move:
+`decode_png` stays in `jidousha::testing`, because no shipping game needs it once
+the store decodes. giri's `src/sprites.rs` has no decoder and no panic path left
+— the file that had to notice does not have to notice any more. The other
+direction is now loud rather than silent too: a scripted store's `insert_texture`
+asked for with `load_bytes` panics, because there are no bytes to hand back and
+`Ready` would be the same lie the other way round.
+
+One thing this cost, recorded because it is the sort of thing that goes
+unwritten: every doc example, test fixture and example that scripted a store
+with `b"fake png"` and loaded it as a texture was documenting the bug. They now
+insert either real PNG bytes or texels, and `examples/loading_gate.rs` says
+which is which and why.

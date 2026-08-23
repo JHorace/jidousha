@@ -2,13 +2,34 @@
 //! commits, and the difference between a failure and a mistake (assets.md
 //! §1, §4, §6).
 
-use jidousha_assets::{AssetStatus, Assets, MemorySource};
+use jidousha_assets::{
+    AssetError, AssetStatus, Assets, MemorySource, TextureData, decode_png, encode_png,
+};
 use jidousha_core::{Resource, World};
 
+/// A flat picture, as a file would hold it.
+fn png(width: u32, height: u32, fill: u8) -> Vec<u8> {
+    encode_png(&TextureData {
+        width,
+        height,
+        rgba: vec![fill; (width * height * 4) as usize],
+    })
+}
+
+/// A source holding a real file at each path — a PNG where the name says
+/// picture, some bytes otherwise.
+///
+/// Real files rather than stand-ins because the store decodes what a texture
+/// request resolves (assets.md §3): scripting `b"bytes of a.png"` here would be
+/// scripting a load that fails.
 fn source_with(paths: &[&str]) -> MemorySource {
     let mut source = MemorySource::new();
     for path in paths {
-        source.insert(path, format!("bytes of {path}").into_bytes());
+        if path.ends_with(".png") {
+            source.insert(path, png(2, 2, 200));
+        } else {
+            source.insert(path, format!("bytes of {path}").into_bytes());
+        }
     }
     source
 }
@@ -220,4 +241,180 @@ fn assets_live_in_the_world_like_any_other_resource() {
         world.resource::<Assets>().status(handle),
         AssetStatus::Ready
     );
+}
+
+#[test]
+fn a_texture_loaded_from_a_files_bytes_is_ready_with_the_texels_that_file_held() {
+    // The spelling a game reaches for first: the bytes of a PNG go in, a
+    // texture request asks for them, and the store decodes at the commit. It
+    // used to resolve `Ready` with nothing to sample (FINDINGS G-006).
+    let mut source = MemorySource::new();
+    source.insert("icon_coin.png", png(8, 8, 42));
+    let mut assets = Assets::new(source);
+    let coin = assets.load_texture("icon_coin.png");
+
+    assert!(
+        assets.commit(1).is_empty(),
+        "a readable PNG is not a failure"
+    );
+    assert_eq!(assets.status(coin), AssetStatus::Ready);
+    let Some(texture) = assets.texture_of(coin) else {
+        panic!("a Ready texture has texels");
+    };
+    assert_eq!((texture.width, texture.height), (8, 8));
+    assert_eq!(texture.rgba, vec![42; 8 * 8 * 4]);
+}
+
+#[test]
+fn the_store_decodes_exactly_what_decode_png_does() {
+    // §3's CONTRACT is one decoder everywhere, so the texels a store produces
+    // and the texels the exposed decoder produces are the same bytes — not
+    // merely the same size.
+    let bytes = png(3, 5, 91);
+    let mut source = MemorySource::new();
+    source.insert("hero.png", bytes.clone());
+    let mut assets = Assets::new(source);
+    let hero = assets.load_texture("hero.png");
+    assets.commit(1);
+
+    let Ok(directly) = decode_png(&bytes) else {
+        panic!("the fixture decodes");
+    };
+    assert_eq!(assets.texture_of(hero), Some(&directly));
+}
+
+#[test]
+fn bytes_that_are_not_a_picture_fail_with_a_decode_error_instead_of_reporting_ready() {
+    let mut source = MemorySource::new();
+    source.insert(
+        "portrait.png",
+        b"GIF89a and some bytes that are not a PNG".to_vec(),
+    );
+    let mut assets = Assets::new(source);
+    let portrait = assets.load_texture("portrait.png");
+
+    let failures = assets.commit(1);
+    assert_eq!(assets.status(portrait), AssetStatus::Failed);
+    assert_eq!(failures.len(), 1, "reported, not swallowed");
+    assert!(
+        matches!(failures[0].error, AssetError::Decode { .. }),
+        "a decode error, not a generic one: {:?}",
+        failures[0].error
+    );
+
+    // The §6 shape, with the decoder's own account of what it found in it.
+    let message = failures[0].message();
+    assert!(message.starts_with("[jidousha] asset failed:"), "{message}");
+    assert!(message.contains("portrait.png"), "{message}");
+    assert!(
+        message.contains("asset_ops.rs"),
+        "the line that asked: {message}"
+    );
+    assert!(
+        message.contains("not a PNG this engine can read"),
+        "{message}"
+    );
+    assert!(message.contains("fix:"), "{message}");
+}
+
+#[test]
+fn an_image_larger_than_the_envelope_fails_at_the_commit_that_resolves_it() {
+    // The decode's other refusal, now reachable through a scripted store:
+    // over-limit is a §6 failure, not a texture nothing can upload.
+    let mut source = MemorySource::new();
+    source.insert("huge.png", png(2049, 1, 0));
+    let mut assets = Assets::new(source);
+    let huge = assets.load_texture("huge.png");
+
+    let failures = assets.commit(1);
+    assert_eq!(assets.status(huge), AssetStatus::Failed);
+    assert!(
+        matches!(failures[0].error, AssetError::TooLarge { width: 2049, .. }),
+        "{:?}",
+        failures[0].error
+    );
+}
+
+#[test]
+fn a_store_can_never_report_ready_for_a_texture_it_has_no_texels_for() {
+    // The property G-006 is about, stated over every way a texture request can
+    // resolve: a file's bytes, texels a test invented, bytes that are not a
+    // picture, an image past the envelope, a scripted failure, and a path
+    // nobody put anything at. Whatever the source did, `Ready` and "has texels"
+    // are the same answer — there is no third state where a sprite draws the
+    // placeholder while the store calls the load a success.
+    let mut source = MemorySource::new();
+    source.insert("from-a-file.png", png(2, 2, 1));
+    source.insert("also-a-file.png", png(1, 3, 2));
+    source.insert_texture(
+        "invented.png",
+        TextureData {
+            width: 1,
+            height: 1,
+            rgba: vec![9; 4],
+        },
+    );
+    source.insert("not-a-picture.png", b"certainly not a PNG".to_vec());
+    source.insert("truncated.png", png(4, 4, 3)[..20].to_vec());
+    source.insert("huge.png", png(1, 2049, 0));
+    source.fail(
+        "unreadable.png",
+        AssetError::Unreadable {
+            detail: "permission denied".to_owned(),
+        },
+    );
+    source.complete_at("also-a-file.png", 4);
+
+    let mut assets = Assets::new(source);
+    let handles: Vec<_> = [
+        "from-a-file.png",
+        "also-a-file.png",
+        "invented.png",
+        "not-a-picture.png",
+        "truncated.png",
+        "huge.png",
+        "unreadable.png",
+        "never-inserted.png",
+    ]
+    .map(|path| (path, assets.load_texture(path)))
+    .into();
+
+    let mut ever_ready = 0;
+    for tick in 1..=6 {
+        assets.commit(tick);
+        for (path, handle) in &handles {
+            let ready = assets.status(*handle) == AssetStatus::Ready;
+            let has_texels = assets.texture_of(*handle).is_some();
+            assert_eq!(
+                ready,
+                has_texels,
+                "{path} at tick {tick}: status {:?}, texels {has_texels}",
+                assets.status(*handle)
+            );
+            ever_ready += usize::from(ready);
+        }
+    }
+    // Teeth: a store that failed everything would satisfy the property and
+    // prove nothing about the loads that are supposed to work.
+    assert!(ever_ready > 0, "no texture ever became Ready");
+}
+
+#[test]
+#[should_panic(expected = "a bytes load resolved with decoded texels")]
+fn asking_for_scripted_texels_as_raw_bytes_panics_rather_than_reporting_ready() {
+    // The same lie in the other direction: there are no bytes to hand back, so
+    // `Ready` would mean `bytes_of` answering None for a successful load. It is
+    // a mistake in the store the test wrote, so it says so loudly (assets.md §6).
+    let mut source = MemorySource::new();
+    source.insert_texture(
+        "player.png",
+        TextureData {
+            width: 1,
+            height: 1,
+            rgba: vec![0; 4],
+        },
+    );
+    let mut assets = Assets::new(source);
+    let _ = assets.load_bytes("player.png");
+    assets.commit(1);
 }

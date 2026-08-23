@@ -17,6 +17,7 @@
 //! (assets.md §7).
 
 use jidousha::prelude::*;
+use jidousha::testing::TextureData;
 
 /// What the game is doing right now.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -69,7 +70,19 @@ fn main() {
     // interesting case: the gate must open anyway, or the game hangs forever
     // waiting for a file that is never coming.
     let mut source = MemorySource::new();
-    source.insert("hero.png", b"pretend these are texels".to_vec());
+    // Texels rather than a file's bytes, because this example is about *when* a
+    // load resolves and not about what is in it. A store handed a real PNG's
+    // bytes with `insert` works the same way — the store decodes them when the
+    // texture request resolves, and bytes that are not a picture resolve
+    // `Failed` exactly as the missing `banner.png` does below.
+    source.insert_texture(
+        "hero.png",
+        TextureData {
+            width: 2,
+            height: 2,
+            rgba: vec![255; 16],
+        },
+    );
     source.complete_at("hero.png", 4);
 
     let mut sim = headless(

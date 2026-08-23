@@ -22,12 +22,12 @@ use jidousha::prelude::*;
 use jidousha::testing::{BackendTextureId, FrameRecord, FrameRecorder, InputScript};
 
 use crate::beats::{BeatSpec, CHAIN, Expect};
-use crate::checks::{Checks, fail, greater};
+use crate::checks::{Checks, fail, greater, one_line};
 use crate::constants::Tuning;
 use crate::flow::{Flow, Preview, Stage, StartAt};
 use crate::judge::{judge_frames, judge_world};
 use crate::model::Social;
-use crate::{capture, contracts, floors, layout, library, mutation, scaling};
+use crate::{capture, contracts, floors, layout, library, mutation, scaling, sprites};
 
 /// The surface the reference run draws at: UI.md §6's reference resolution,
 /// doubled, which is the window the game opens.
@@ -321,6 +321,23 @@ pub fn play_at(index: usize, tuning: Tuning, record: bool, viewport: PhysicalSiz
             .insert_resource(Input::new(plan.script.snapshot_at(tick)));
         sim.tick();
         if tick == 1 {
+            // The art, before the first frame is photographed. `sprites::settle`
+            // is what keeps a recorded run reproducible now that the pictures
+            // come off a disk: without it the transcript would say whichever of
+            // the thirteen files the loader thread had finished, which is a
+            // property of the machine rather than of the game.
+            if recorder.is_some() {
+                let assets = sim.world_mut().resource_mut::<Assets>();
+                if let Some(failure) = sprites::settle(assets).first() {
+                    // Not one fault among several: every frame after this one is
+                    // a picture of placeholders, so every reading taken off it
+                    // would be a reading of the wrong screen.
+                    fail(
+                        "giri's art did not load for a recorded run",
+                        &one_line(&failure.message()),
+                    );
+                }
+            }
             run.at_assembly = Social::read(&sim.world().view());
             run.camera = Camera {
                 viewport,

@@ -409,6 +409,25 @@ has not arrived draws a magenta checkerboard, so a game runs from the first
 frame and a missing file is visible rather than silent. `Assets::all_ready` is
 there when you genuinely want a loading screen.
 
+**Your art lives in your own crate's `assets/`, and the same path string works
+on the web.** `asset_source(root)` names a directory *from the top of the
+repository*, and there are two roots: an engine example loads from the shared
+`assets/`, and a game crate at `games/<name>/` loads from
+`games/<name>/assets` — its own directory, which travels with it. The web build
+stages that directory under your page at the same path, so
+`asset_source("games/giri/assets")` plus `load_texture("icon_coin.png")` is one
+spelling that reads a file natively and fetches it on the web. Adding a picture
+is adding a file; nothing is compiled in, and there is no second spelling for
+the browser.
+
+**The engine decodes; a picture that will not decode fails loudly.** Whatever a
+texture load resolves — a file off a disk, bytes fetched from a page, bytes a
+test put in a `MemorySource` — it goes through the engine's one PNG path, so
+texels are identical on every platform. A file that is not a readable PNG
+resolves `Failed` and `commit` hands you a message naming your load's line.
+There is no state in which a load reports success and your sprite draws the
+placeholder: if `Assets::status` says `Ready`, the texture is there.
+
 **Input is one value per tick.** `Input` answers `held`, `just_pressed` and
 `just_released` about this tick only — no events, no callbacks, no polling
 mid-tick. A tap that begins and ends between two frames still produces both
@@ -604,13 +623,14 @@ impl App {
 
 #### `asset_source`
 
-The asset source this platform reads with.
+The asset source this platform reads with — `root` is a path from the top of the repository, and the web build stages it under your page, so the same string works on both.
 
 ```rust
 pub fn asset_source(root: &str) -> impl ByteSource;
 ```
 
 ```rust
+// In a game at `games/giri/`, this would be "games/giri/assets".
 let mut assets = Assets::new(asset_source("assets"));
 let hero = assets.load_texture("sprites/hero.png");
 ```
@@ -1740,8 +1760,8 @@ pub struct MemorySource;
 
 impl MemorySource {
     pub fn new() -> Self;  // A source with nothing in it
-    pub fn insert(&mut self, path: &str, bytes: Vec<u8>);  // Put bytes at `path`
-    pub fn insert_texture(&mut self, path: &str, texture: TextureData);  // Put a decoded image at `path`
+    pub fn insert(&mut self, path: &str, bytes: Vec<u8>);  // Put a file's bytes at `path`
+    pub fn insert_texture(&mut self, path: &str, texture: TextureData);  // Put an already-decoded image at `path`
     pub fn fail(&mut self, path: &str, error: AssetError);  // Make `path` fail, as a missing or unreadable file would
     pub fn complete_at(&mut self, path: &str, tick: u64);  // Hold `path`'s completion until `tick`
 }
@@ -1749,7 +1769,10 @@ impl MemorySource {
 
 ```rust
 let mut source = MemorySource::new();
-source.insert("player.png", b"fake png".to_vec());
+// Real PNG bytes work here too — a texture request decodes whatever it
+// resolves. Texels are the shorter spelling when the picture is invented.
+let texels = TextureData { width: 1, height: 1, rgba: vec![255; 4] };
+source.insert_texture("player.png", texels);
 source.complete_at("player.png", 3);
 
 let mut assets = Assets::new(source);

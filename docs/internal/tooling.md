@@ -25,7 +25,7 @@ working when the package ecosystem is exactly what broke.
 | `tools/dep-count` | How big is the dependency graph? | always 0 (reports only) |
 | `tools/check-compile-fail` | Do the errors that must be compile errors still say the right thing? | 0 ok · 1 drifted · 2 harness broke |
 | `tools/verify` | What did the game actually do, with nobody watching? | 0 verified · 1 its own assertions failed · 2 tooling/env fault |
-| `tools/check-assets` | Does every asset path in the code name a file that exists? | 0 all resolve · 1 a reference is broken · 2 the check could not run |
+| `tools/check-assets` | Does every asset path in the code name a file that exists, under the root that file is allowed to use? | 0 all resolve · 1 a reference is broken · 2 the check could not run |
 | `tools/check-game-deps` | Does every game reach the engine through the facade only? | 0 facade-only · 1 a game reaches past it, or a game is not a workspace member · 2 could not run |
 | `tools/gen-api-doc` | Is `docs/api/` what the facade actually says? | 0 written/current · 1 stale, over budget, leaking vocabulary, or naming a test or example that is not there · 2 could not run |
 | `tools/check-api-coverage` | Is every public item shown in an example — and can anything reach each `testing` export? | 0 covered · 1 a gap, an unreachable entry, or a breach · 2 could not run |
@@ -128,6 +128,13 @@ second mode would be a second way to do one thing.
   a different thing from a failure. `prototype_kit` was the worked example
   teaching the opposite and now teaches this; the document's skeleton shows the
   `ExitCode` return.
+- **A game's own directory is where its art lives, and two tools agree on
+  that** (ADR-0040). `tools/check-assets` refuses any root but the repository's
+  shared `assets/` and, for a file under `games/<name>/`, that crate's own
+  `assets/`; `tools/build-web` stages exactly those two under a page, at the
+  paths the code names them by. The pair is the whole reason a game's art works
+  on the deployed page: one tool would only ever be checking or staging its own
+  half.
 - **A game is a game because of where it lives.** Every tool that enumerates
   something playable asks `cargo metadata`: a workspace member under `games/`
   with a binary is a game, an example target is an example (ADR-0038). There is
@@ -346,7 +353,10 @@ a row (stop rule printed, `failure-streak.json` count 2).
   runner that is still compiling. Two escape hatches, both marker comments and
   both requiring a reason: `check-assets: deliberately missing` for the examples
   that demonstrate failure, and `check-assets: computed path` for §2's
-  sanctioned interpolated directory.
+  sanctioned interpolated directory. It also checks the *root* before the paths:
+  a file under `games/<name>/` may load only from that crate's own `assets/`,
+  everything else only from the repository's shared one, because those are the
+  two directories `tools/build-web` stages under a page (ADR-0040).
 - **The golden tier needs a rasterizer, and CI installs one.** A runner has no
   GPU, so `mesa-vulkan-drivers` (lavapipe, Mesa's CPU rasterizer) is installed on
   the Linux test job. Without it the golden tests skip and say so and the job
