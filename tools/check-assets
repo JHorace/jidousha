@@ -17,12 +17,19 @@ from a `MemorySource` names paths that deliberately do not exist on disk —
 `examples/loading_gate.rs` is the whole point of that seam — and reporting them
 would make this check's first act a false alarm.
 
+**There are two asset roots and a file's position picks which one it may use**
+(`expected_root`): a game crate under `games/<name>/` loads from
+`games/<name>/assets`, everything else from the repository's shared `assets/`.
+Those are the two `tools/build-web` stages under a page, so a root outside the
+rule is art that reads on a developer's disk and 404s on the deployed page
+(ADR-0040).
+
 Usage:  tools/check-assets [--root <repo>]
 
 Exit codes: 0 every reference resolves · 1 a reference is broken · 2 the check
 itself could not run.
 
-Key functions: `asset_root_of`, `literal_loads`, `computed_loads`,
+Key functions: `expected_root`, `asset_root_of`, `literal_loads`, `computed_loads`,
 `resolve_case_strict`, `check_file`, `main`.
 Depends on: the Python 3.8+ standard library only.
 INVARIANT: a file is checked only if it builds a filesystem-backed store, and
@@ -104,6 +111,23 @@ def builds_file_source(text: str) -> bool:
     are not repository files.
     """
     return FILE_SOURCE_RE.search(text) is not None
+
+
+def expected_root(where: Path) -> str:
+    """The asset root a file in this position is allowed to load from.
+
+    **Two roots, and which one is a fact about where the file lives**
+    (ADR-0040, web-publish.md §1a): a game crate under `games/<name>/` owns its
+    art and loads from `games/<name>/assets`, and everything else loads from the
+    repository's shared `assets/`. The web build stages exactly these two under
+    a page, at the paths they are named by, so a root outside the rule is a root
+    that reads on native and 404s on the web — which is the failure this check
+    exists to catch before it deploys.
+    """
+    parts = where.parts
+    if len(parts) > 2 and parts[0] == "games":
+        return f"games/{parts[1]}/assets"
+    return "assets"
 
 
 def asset_root_of(text: str) -> "str | None":
@@ -224,6 +248,20 @@ def check_file(repo: Path, source: Path) -> "list[str]":
                 "the root is computed, or comes from another module",
                 "name the root with a `const ROOT: &str = \"...\";` beside the store, so the "
                 "paths in this file can be checked (assets.md §2)",
+            )
+        ]
+
+    wanted = expected_root(where)
+    if root_name != wanted:
+        return [
+            problem(
+                f"{where} loads from {root_name!r}, which is not its asset root",
+                f"a file here loads from {wanted!r}",
+                "a game crate owns its art and loads from its own directory; everything else "
+                "loads from the repository's shared root (ADR-0040)",
+                f"point the store at {wanted!r}. Those are the two roots `tools/build-web` "
+                "stages under a page, so a root outside the rule reads on native and 404s on "
+                "the web (web-publish.md §1a)",
             )
         ]
 

@@ -48,20 +48,42 @@ use jidousha_core::{App, GameConfig};
 
 use crate::driver::Driver;
 
-/// The asset source this platform reads with.
+/// The asset source this platform reads with — `root` is a path from the top of
+/// the repository, and the web build stages it under your page, so the same
+/// string works on both.
 ///
 /// **This is what a game calls.** `FileSource` and `WebSource` are both public
 /// and both real, but which one a game wants is never a question it should have
 /// to answer — a game that wrote the `cfg` itself would be doing the platform
 /// crate's job, and would get it wrong the first time it was ported.
 ///
-/// `root` is a directory on native and a URL prefix relative to the page on the
-/// web. The same string works for both, which is the point: paths are relative
-/// to the asset root with forward slashes everywhere (assets.md §2 CONTRACT).
+/// `root` names a directory **from the top of the repository**, and the same
+/// string works on both platforms: native reads it from there, and on the web
+/// the build stages that directory under the page at the same path, so the
+/// relative URL and the relative path are one string (assets.md §2 CONTRACT).
+/// Everything a game loads is relative to it, with forward slashes everywhere.
+///
+/// **There are two roots, and where your code lives picks which one is yours**
+/// (ADR-0040):
+///
+/// - an engine example loads from the repository's shared `"assets"`;
+/// - a game crate loads from its own — `"games/giri/assets"` for a game at
+///   `games/giri/` — so its art travels with it and two games' `icon_coin.png`
+///   cannot collide.
+///
+/// `tools/build-web` stages exactly those two under a page and
+/// `tools/check-assets` refuses any other, which is what makes "it works on the
+/// web too" something you can rely on rather than something to find out after
+/// deploying.
+///
+/// Bytes this store resolves for a `load_texture` are decoded by the engine, so
+/// a picture is a picture on every platform and a file that is not one resolves
+/// `Failed` with a message naming your line (assets.md §3, §6).
 ///
 /// ```no_run
 /// use jidousha_assets::Assets;
 ///
+/// // In a game at `games/giri/`, this would be "games/giri/assets".
 /// let mut assets = Assets::new(jidousha_platform::asset_source("assets"));
 /// let hero = assets.load_texture("sprites/hero.png");
 /// # let _ = hero;

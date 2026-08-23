@@ -257,6 +257,25 @@ has not arrived draws a magenta checkerboard, so a game runs from the first
 frame and a missing file is visible rather than silent. `Assets::all_ready` is
 there when you genuinely want a loading screen.
 
+**Your art lives in your own crate's `assets/`, and the same path string works
+on the web.** `asset_source(root)` names a directory *from the top of the
+repository*, and there are two roots: an engine example loads from the shared
+`assets/`, and a game crate at `games/<name>/` loads from
+`games/<name>/assets` — its own directory, which travels with it. The web build
+stages that directory under your page at the same path, so
+`asset_source("games/giri/assets")` plus `load_texture("icon_coin.png")` is one
+spelling that reads a file natively and fetches it on the web. Adding a picture
+is adding a file; nothing is compiled in, and there is no second spelling for
+the browser.
+
+**The engine decodes; a picture that will not decode fails loudly.** Whatever a
+texture load resolves — a file off a disk, bytes fetched from a page, bytes a
+test put in a `MemorySource` — it goes through the engine's one PNG path, so
+texels are identical on every platform. A file that is not a readable PNG
+resolves `Failed` and `commit` hands you a message naming your load's line.
+There is no state in which a load reports success and your sprite draws the
+placeholder: if `Assets::status` says `Ready`, the texture is there.
+
 **Input is one value per tick.** `Input` answers `held`, `just_pressed` and
 `just_released` about this tick only — no events, no callbacks, no polling
 mid-tick. A tap that begins and ends between two frames still produces both

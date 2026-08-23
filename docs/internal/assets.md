@@ -67,11 +67,36 @@ Implemented (A0):
 
 ## 2. Paths
 
-- One **asset root**: `assets/` beside the game manifest, configurable in
-  `GameConfig`. All paths are relative to it: `load_texture("player.png")`,
-  `load_texture("levels/1/bg.png")`. Forward slashes only, on every platform.
+- One **asset root** per program, named as a path **from the top of the
+  repository**: `asset_source("assets")`. All load paths are relative to it:
+  `load_texture("player.png")`, `load_texture("levels/1/bg.png")`. Forward
+  slashes only, on every platform.
 - Web serves the same directory over HTTP (same-origin, relative URL); native
   reads the filesystem. Identical path strings work identically. CONTRACT.
+- **Two roots, and where the code lives picks which one is its own**
+  (ADR-0040, decided 2026-08-23): the engine's examples load from the
+  repository's shared `assets/`; a game crate at `games/<name>/` loads from
+  `games/<name>/assets`, so its art travels with it and two prototypes'
+  `icon_coin.png` cannot collide (ADR-0038). `tools/build-web` stages both under
+  a page at the paths they are named by — `dist/<name>/` is repository-shaped,
+  which is what keeps the CONTRACT above true for a game (web-publish.md §1a) —
+  and `tools/check-assets` refuses a root outside the rule, because that is a
+  root that reads on a developer's disk and 404s on the deployed page.
+
+  This section previously said "`assets/` beside the game manifest,
+  configurable in `GameConfig`", which was the design before there was a second
+  crate loading anything. The correction is what the implementation forced:
+  nothing configures a root through `GameConfig` (a game builds its own store
+  and hands it a root), and "beside the manifest" cannot be resolved from a
+  string that has to mean one directory on a disk and one URL under a page. The
+  directory *is* beside a game's manifest; the string names it from the
+  workspace root, which is the one place both loaders can agree on.
+- Native resolves a relative root against the **process's working directory**,
+  which is the workspace root for everything that runs a program here
+  (`tools/test`, `tools/verify`, `cargo run -p <game>`). A shipped native binary
+  run from somewhere else would not find its art; nothing distributes one, and
+  the day something does, that is a decision about installation layout rather
+  than about this seam.
 - **Case-strict everywhere, including Windows.** The native loader verifies the
   on-disk name matches the requested path byte-for-byte (directory-listing
   check) and fails with a §9 error if only the case differs. Rationale: the
@@ -93,6 +118,27 @@ Implemented (A0):
 - CONTRACT: decoding uses the same `png` crate code path on every platform —
   never the browser's image decoder — so texel data is bit-identical
   everywhere. Golden-image tests (renderer §9) depend on this.
+- CONTRACT: **the decode happens at the texture-load boundary, whatever the
+  source.** Bytes that a `load_texture` request resolves are decoded by
+  `Assets::commit` unless the source already decoded them, so a store scripted
+  with a real PNG file behaves exactly as a disk does. A source with a thread to
+  spare should decode there — the native loader does, which is what keeps PNG
+  decoding off the frame — and one without hands the bytes over. Either way it
+  is `decode_png` that ran.
+- CONTRACT: **a store can never report `Ready` for a texture it has no texels
+  for.** Bytes that do not decode resolve `Failed` with the §6 decode error;
+  there is no state in which a load reports success and a sprite draws the
+  placeholder. Structural rather than remembered: `Ready` is reachable for a
+  texture only through a decoded payload (`texels_for` in `assets.rs`), and the
+  property is asserted in those words in `tests/asset_ops.rs` and on every
+  handle after every operation in `tests/asset_model.rs`.
+
+  Implemented (2026-08-23) in response to `games/giri/FINDINGS.md` G-006, which
+  is what a silent success costs: `MemorySource::insert` of a PNG's bytes used
+  to resolve `Ready` with the file still undecoded, `all_ready` said true,
+  `commit` reported nothing, every sprite drew the magenta placeholder, and no
+  assertion over drawn quads could see it. It survived a green verify run until
+  a person looked at a picture.
 - Decoded textures are RGBA8, sRGB (conventions). Limits enforced at decode
   time with §9 errors: max 2048×2048 (renderer §8 envelope; the error message
   names the file, its size, and the limit).
@@ -180,6 +226,12 @@ jidousha-platform   provides the ByteSource impls:
   fs, fetch, or wasm-bindgen; platform crates own I/O. A third impl —
   `MemorySource` (preloaded path → bytes map with scripted completion ticks) —
   is the test/verify workhorse and ships in `jidousha-assets` itself.
+- A source answers a texture request with **either** decoded texels or the
+  file's bytes (§3's boundary CONTRACT). What it may not do is answer a
+  `load_bytes` request with texels: there is nothing to turn a picture back
+  into, and a store that called such a load `Ready` would have no bytes to hand
+  back. That is a mistake in the store rather than a fact about the world, so it
+  panics in the §9 shape rather than resolving anything.
 
 Implemented (A0):
 
@@ -251,8 +303,13 @@ frame is drawn this frame.
 ```
 
 - Failure classes with distinct messages: not found, case mismatch (detected
-  separately, message names the near-miss file), decode error (names the byte
-  offset/chunk), over-limit dimensions, HTTP error on web (status code + URL).
+  separately, message names the near-miss file), decode error (carries what the
+  decoder said, which names the chunk or offset when it knows one), over-limit
+  dimensions, HTTP error on web (status code + URL).
+- The decode classes — `Decode` and `TooLarge` — reach a load from **any**
+  source, not only from a loader that reads files: §3's boundary means a
+  scripted store's bytes are decoded too, and a scripted store handed something
+  that is not a picture reports the same sentence a disk would.
 - Each failure is reported **once** (at commit), not per frame; the placeholder
   does the per-frame signaling visually.
 - `load_*` records the callsite (`#[track_caller]`) so errors point at the
@@ -277,7 +334,10 @@ Implemented (A0):
 
 - **Asset-reference check** (`tools/check-assets`, in CI): extract string
   literals from `load_texture`/`load_bytes` callsites across examples and game
-  code; verify each file exists (byte-for-byte case) under the asset root.
+  code; verify each file exists (byte-for-byte case) under the asset root, and
+  that the root is the one a file in that position is allowed to use — the
+  repository's shared `assets/`, or `games/<name>/assets` for a game crate
+  (§2, ADR-0040).
   Broken references fail CI before anything runs. (Enabled by the
   literal-paths convention, §2.)
 - `tools/doctor` checks: asset root exists and is readable; for web runs, that
@@ -308,7 +368,16 @@ Implemented (A3):
 - **Computed paths are reported, not ignored.** §2 asks for literals precisely
   so this check is possible; a path built with `format!` is unverifiable, so it
   fails unless it carries `check-assets: computed path` and a reason. The
-  convention erodes silently otherwise.
+  convention erodes silently otherwise. giri is what this rule buys: its
+  thirteen loads are written out one literal each rather than folded over its
+  own library table, and that is the difference between a mistyped picture being
+  a CI failure and being a magenta quad somebody has to notice.
+- **The root is checked before the paths are** (added with ADR-0040):
+  `expected_root` answers "which root may a file in this position load from"
+  from the file's path alone — `games/<name>/assets` under `games/<name>/`, the
+  repository's `assets` everywhere else. Those are the two `tools/build-web`
+  stages under a page, so this is the check that keeps a game's art loadable on
+  the web rather than only on the machine that made it.
 - **`tools/doctor` gains an `assets` check.** BROKEN when the root is missing or
   unreadable, because nothing an agent can run creates a directory of art;
   INFO when it is empty, because a repository may legitimately have none yet and
@@ -330,6 +399,19 @@ arrival tick, so the placeholder is on screen for a known number of frames and
 the art for the rest. No flag for real I/O yet: nothing has asked for one, and a
 verify run that reads the disk is a verify run that can fail for reasons that say
 nothing about the game.
+
+**A game that owns a directory of art verifies against that directory** (2026-08-23,
+ADR-0040), which is the first case of a verify run touching a disk, and it does
+not weaken the sentence above: giri's `--verify` polls `commit` at tick 1 until
+`all_ready` before it records a frame (`sprites::settle`), so every texture
+resolves at the same tick a scripted store would have resolved it at, and the
+transcript is a function of the game rather than of how fast the disk was.
+`tools/check-assets` is what makes the files' presence a CI failure rather than
+a run-time one. The engine offers no blocking load and should not: the poll is
+four lines in the game, it is the shape the browser could never have (which is
+why the *game* does not do this — a window and a page both draw the placeholder
+for the frame or two the art takes), and it belongs to the check rather than to
+the engine.
 
 Implemented (I2): `ReplaySource` (`replay.rs`) is the other half of §4 — it
 wraps any source and releases its completions on the ticks a recording says,

@@ -15,7 +15,7 @@ use crate::constants::Tuning;
 use crate::flow::{Flow, Preview};
 use crate::model::Social;
 use crate::screens;
-use crate::sprites::Art;
+use crate::sprites::{self, Art};
 use crate::verify::play;
 
 /// **The art library** (UI.md §2, §9; DESIGN §7's curation model).
@@ -46,37 +46,61 @@ pub fn library(checks: &mut Checks) {
             "an art file is not role-named lowercase snake_case",
             format!("{file:?} - DESIGN §7's curation model names the shape"),
         );
-        let bytes = art.bytes();
+    }
+
+    // The files themselves, through the store the game loads from. Reading them
+    // any other way would be a second decoder in a game that no longer has one:
+    // a file that is not a picture, or is one the engine will not take, resolves
+    // `Failed` here exactly as it would on a player's machine (assets.md §6,
+    // FINDINGS G-006).
+    let mut assets = sprites::store();
+    let gallery = sprites::Gallery::load(&mut assets);
+    for failure in sprites::settle(&mut assets) {
         checks.require(
-            bytes.starts_with(b"\x89PNG\r\n\x1a\n"),
-            "an art file is not a PNG",
-            format!("{file:?} starts with {:?}", &bytes[..bytes.len().min(8)]),
+            false,
+            "an art file did not load",
+            crate::checks::one_line(&failure.message()),
         );
-        // IHDR is the first chunk, and its width and height are the two big-
-        // endian words at byte 16.
-        let read = |at: usize| {
-            u32::from_be_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]])
-        };
-        if bytes.len() < 24 {
+    }
+    checks.require(
+        gallery.paths(&assets) == sprites::Gallery::library_files(),
+        "the loads and the library table are in different orders",
+        format!(
+            "the store was asked for {:?} and the table reads {:?}; `Gallery::handle` indexes \
+             one by the other",
+            gallery.paths(&assets),
+            sprites::Gallery::library_files()
+        ),
+    );
+    for art in Art::ALL.iter().copied() {
+        let file = art.file();
+        let Some(texture) = assets.texture_of(gallery.handle(art)) else {
+            // Already reported as a failure above; saying it twice per role
+            // would bury the message that names the file.
             continue;
-        }
-        let (width, height) = (read(16), read(20));
+        };
         checks.require(
-            width == art.texels().width && height == art.texels().height,
+            texture.width == art.texels().width && texture.height == art.texels().height,
             "an art file is not the size the game says it is",
             format!(
-                "{file:?} is {width}x{height} on disk and {}x{} in the library; every icon is \
-                 placed and scaled from the library's number",
+                "{file:?} is {}x{} on disk and {}x{} in the library; every icon is placed and \
+                 scaled from the library's number",
+                texture.width,
+                texture.height,
                 art.texels().width,
                 art.texels().height
             ),
         );
         checks.require(
-            width <= 2048 && height <= 2048,
+            texture.width <= 2048 && texture.height <= 2048,
             "an art file is larger than the curation model allows",
-            format!("{file:?} is {width}x{height} and individual PNGs stay at or under 2048"),
+            format!(
+                "{file:?} is {}x{} and individual PNGs stay at or under 2048",
+                texture.width, texture.height
+            ),
         );
     }
+
     // Every signifier UI.md §2's table names has a role, and every character on
     // every beat's roster has a portrait nobody else has.
     let mut faces: Vec<(&'static str, Art)> = Vec::new();

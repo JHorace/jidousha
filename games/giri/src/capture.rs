@@ -10,9 +10,10 @@
 //! went wrong.
 //!
 //! giri has art now, so this is the long path: the same `Assets` store the game
-//! builds, the same loads, one commit, and `upload_ready_textures` before the
-//! plan is replayed — a plan naming a texture the backend does not have renders
-//! the wrong picture into a file nothing else looks at.
+//! builds, the same loads, the same wait for the disk (`sprites::settle`), and
+//! `upload_ready_textures` before the plan is replayed — a plan naming a texture
+//! the backend does not have renders the wrong picture into a file nothing else
+//! looks at.
 //!
 //! A machine with no GPU is not a failure: every runner this project has is
 //! headless and some have no graphics stack at all.
@@ -25,7 +26,7 @@ use jidousha::testing::{
     create_builtin_textures, encode_png, upload_ready_textures,
 };
 
-use crate::checks::{Checks, fail};
+use crate::checks::{Checks, fail, one_line};
 use crate::constants::Tuning;
 use crate::sprites;
 use crate::verify::{self, BeatRun};
@@ -40,11 +41,6 @@ struct Wanted {
     surface: PhysicalSize,
     frame: FrameRecord,
     font: BackendTextureId,
-}
-
-/// An engine message flattened onto one line, for a one-line summary.
-fn one_line(message: &str) -> String {
-    message.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// How big a picture of `surface` is written at.
@@ -161,14 +157,14 @@ pub fn capture_screens(checks: &mut Checks, runs: &[BeatRun], tuning: Tuning) ->
     // sprite ids name textures this backend has.
     let mut assets = sprites::store();
     let _gallery = sprites::Gallery::load(&mut assets);
-    let _ = assets.commit(1);
+    for failure in sprites::settle(&mut assets) {
+        checks.require(
+            false,
+            "giri's art did not all resolve for the capture",
+            one_line(&failure.message()),
+        );
+    }
     upload_ready_textures(&mut assets, &mut gpu, &mut textures);
-    checks.require(
-        assets.all_ready(),
-        "giri's art did not all resolve for the capture",
-        "every texture is compiled in through a MemorySource, so one commit resolves them all"
-            .to_owned(),
-    );
     checks.require(
         textures.resolve(FONT_TEXTURE) == first.font,
         "the replay's texture ids do not mean what the recorded plan means",

@@ -18,17 +18,40 @@
 // are an artifact of that, not a signal about the code.
 #![allow(dead_code)]
 
-use jidousha_assets::{AssetError, AssetStatus, Assets, BytesHandle, MemorySource, TextureHandle};
+use jidousha_assets::{
+    AssetError, AssetStatus, Assets, BytesHandle, MemorySource, TextureData, TextureHandle,
+    encode_png,
+};
 
 /// What the world does when asked for a path.
+///
+/// Pictures are held as the *file's* bytes, exactly as a disk hands them over,
+/// because that is where the store's decode lives now: a texture request
+/// resolves bytes and the store decodes them (assets.md §3). A catalogue of
+/// pre-decoded texels would run past the code this suite exists to check.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Content {
-    /// The bytes are there.
-    Present(&'static [u8]),
-    /// The path exists but cannot be read — a decode error, a permission.
+    /// A data file's bytes, handed back unchanged.
+    Data(&'static [u8]),
+    /// A picture: a real PNG of this size, filled with this value.
+    Picture { width: u32, height: u32, fill: u8 },
+    /// Bytes at a picture's path that are not a picture — the case that used to
+    /// resolve `Ready` and draw nothing (FINDINGS G-006).
+    Undecodable(&'static [u8]),
+    /// The path exists but cannot be read — a permission, a truncated read.
     Unreadable(&'static str),
     /// Nothing is there at all, the commonest real failure.
     Absent,
+}
+
+impl Content {
+    /// The texels a `Ready` asset of this content holds, if it is a picture.
+    pub fn texels(self) -> Option<(u32, u32)> {
+        match self {
+            Content::Picture { width, height, .. } => Some((width, height)),
+            _ => None,
+        }
+    }
 }
 
 /// One path a generated sequence may ask for, and when it answers.
@@ -36,6 +59,10 @@ pub enum Content {
 pub struct Scripted {
     pub path: &'static str,
     pub content: Content,
+    /// Whether the game asks for this with `load_texture` rather than
+    /// `load_bytes`. A property of the path, not of the operation: a picture
+    /// asked for as bytes is a mistake in the store, not a state to explore.
+    pub texture: bool,
     /// The tick this path's request completes on. Zero means "at the first
     /// commit after the request", which is what an unscripted source does.
     pub due: u64,
@@ -46,58 +73,101 @@ pub struct Scripted {
 /// Deliberately mixed: immediate and late, readable and not, present and
 /// absent — so a single sequence walks every edge of the state machine rather
 /// than just the happy one.
-pub const CATALOG: [Scripted; 8] = [
+pub const CATALOG: [Scripted; 9] = [
     Scripted {
         path: "player.png",
-        content: Content::Present(b"player texels"),
+        content: Content::Picture {
+            width: 2,
+            height: 2,
+            fill: 11,
+        },
+        texture: true,
         due: 0,
     },
     Scripted {
         path: "enemy.png",
-        content: Content::Present(b"enemy texels"),
+        content: Content::Picture {
+            width: 3,
+            height: 1,
+            fill: 22,
+        },
+        texture: true,
         due: 3,
     },
     Scripted {
         path: "boss.png",
-        content: Content::Present(b"boss texels"),
+        content: Content::Picture {
+            width: 4,
+            height: 5,
+            fill: 33,
+        },
+        texture: true,
         due: 17,
     },
     Scripted {
         path: "level.bin",
-        content: Content::Present(b"level data"),
+        content: Content::Data(b"level data"),
+        texture: false,
         due: 0,
     },
     Scripted {
         path: "music.bin",
-        content: Content::Present(b"music data"),
+        content: Content::Data(b"music data"),
+        texture: false,
         due: 8,
+    },
+    Scripted {
+        path: "not-a-picture.png",
+        content: Content::Undecodable(b"GIF89a and some bytes that are not a PNG"),
+        texture: true,
+        due: 0,
     },
     Scripted {
         path: "corrupt.png",
         content: Content::Unreadable("decode failed at byte 12"),
+        texture: true,
         due: 0,
     },
     Scripted {
         path: "late-corrupt.bin",
         content: Content::Unreadable("truncated after 4 bytes"),
+        texture: false,
         due: 5,
     },
     Scripted {
         path: "missing.png",
         content: Content::Absent,
+        texture: true,
         due: 0,
     },
 ];
+
+/// A flat picture of one value — what a catalogue entry's PNG holds.
+pub fn picture(width: u32, height: u32, fill: u8) -> TextureData {
+    TextureData {
+        width,
+        height,
+        rgba: vec![fill; (width * height * 4) as usize],
+    }
+}
 
 /// A source loaded with the catalogue, ready for a store to pull from.
 pub fn source() -> MemorySource {
     let mut source = MemorySource::new();
     for entry in CATALOG {
         match entry.content {
-            Content::Present(bytes) => source.insert(entry.path, bytes.to_vec()),
+            Content::Data(bytes) | Content::Undecodable(bytes) => {
+                source.insert(entry.path, bytes.to_vec());
+            }
+            // The file's bytes, not its texels: the store is what decodes.
+            Content::Picture {
+                width,
+                height,
+                fill,
+            } => source.insert(entry.path, encode_png(&picture(width, height, fill))),
             Content::Unreadable(reason) => source.fail(
                 entry.path,
-                AssetError::Decode {
+                AssetError::Unreadable {
                     detail: reason.to_owned(),
                 },
             ),
@@ -114,8 +184,8 @@ pub fn source() -> MemorySource {
 /// One operation in a generated sequence.
 #[derive(Clone, Copy, Debug)]
 pub enum Op {
-    /// Load `CATALOG[index]`, as a texture when `as_texture`, else as bytes.
-    Load { index: usize, as_texture: bool },
+    /// Load `CATALOG[index]`, with the load the entry says it is asked for.
+    Load { index: usize },
     /// Commit this many ticks after the last one. Zero repeats a tick, which
     /// is legal and must change nothing.
     Commit { advance: u64 },
@@ -145,6 +215,18 @@ impl Handle {
         match self {
             Handle::Texture(handle) => assets.bytes_of(handle),
             Handle::Bytes(handle) => assets.bytes_of(handle),
+        }
+    }
+
+    /// The size of the texels behind a texture handle, while the store has them.
+    ///
+    /// `None` for a bytes handle, which never holds a picture.
+    pub fn texels(self, assets: &Assets) -> Option<(u32, u32)> {
+        match self {
+            Handle::Texture(handle) => assets
+                .texture_of(handle)
+                .map(|texture| (texture.width, texture.height)),
+            Handle::Bytes(_) => None,
         }
     }
 
@@ -220,8 +302,11 @@ impl Reference {
                 continue;
             }
             match asset.entry.content {
-                Content::Present(_) => asset.status = AssetStatus::Ready,
-                Content::Unreadable(_) | Content::Absent => {
+                Content::Data(_) | Content::Picture { .. } => asset.status = AssetStatus::Ready,
+                // Bytes that are not a picture fail exactly as a missing file
+                // does: the store decodes at the boundary, so there is no third
+                // state where a texture is Ready with nothing in it.
+                Content::Undecodable(_) | Content::Unreadable(_) | Content::Absent => {
                     asset.status = AssetStatus::Failed;
                     failures.push(asset.entry.path.to_owned());
                 }
@@ -238,11 +323,27 @@ impl Reference {
         self.assets[key].entry.path
     }
 
-    /// The bytes a `Ready` asset carries; nothing otherwise.
+    /// The bytes a `Ready` data asset carries; nothing otherwise.
+    ///
+    /// A picture carries texels rather than bytes once it is decoded — see
+    /// [`texels`](Reference::texels).
     pub fn bytes(&self, key: usize) -> Option<&'static [u8]> {
         let asset = &self.assets[key];
         match (asset.status, asset.entry.content) {
-            (AssetStatus::Ready, Content::Present(bytes)) => Some(bytes),
+            (AssetStatus::Ready, Content::Data(bytes)) => Some(bytes),
+            _ => None,
+        }
+    }
+
+    /// The size of the texels a `Ready` picture holds; nothing otherwise.
+    ///
+    /// The model's half of "a store never reports `Ready` for a texture it has
+    /// no texels for": every `Ready` picture here has a size, so the real store
+    /// answering `None` is a mismatch rather than a shrug (FINDINGS G-006).
+    pub fn texels(&self, key: usize) -> Option<(u32, u32)> {
+        let asset = &self.assets[key];
+        match asset.status {
+            AssetStatus::Ready => asset.entry.content.texels(),
             _ => None,
         }
     }
@@ -296,7 +397,6 @@ pub fn generate(seed: u64, length: usize) -> Vec<Op> {
                 live += 1;
                 Op::Load {
                     index: rng.below(CATALOG.len() as u32) as usize,
-                    as_texture: rng.below(2) == 0,
                 }
             }
             40..=79 => Op::Commit {

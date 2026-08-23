@@ -9,11 +9,17 @@
 //! it at arbitrary moments the same game would diverge between machines. One
 //! commit point per frame is what makes readiness part of the recorded timeline
 //! instead (assets.md §4 CONTRACT).
+//! INVARIANT: a texture is `Ready` only when the store holds its texels. Bytes
+//! that arrive for a texture request are decoded here, at the boundary, through
+//! the one PNG path every platform uses (assets.md §3 CONTRACT); bytes that do
+//! not decode resolve `Failed` with the §6 decode error. A `Ready` texture with
+//! nothing to sample is the silent failure this crate is forbidden to have.
 
 use std::collections::BTreeMap;
 
 use jidousha_core::{Resource, TextureId, message};
 
+use crate::decode::decode_png;
 use crate::handle::{AssetHandle, AssetId, AssetKind, BytesHandle, IdAllocator, TextureHandle};
 use crate::payload::{AssetError, Payload, TextureData};
 use crate::source::{ByteSource, RequestId};
@@ -136,11 +142,12 @@ impl Table {
 /// plumbing:
 ///
 /// ```
-/// # use jidousha_assets::{Assets, MemorySource};
+/// # use jidousha_assets::{Assets, MemorySource, TextureData};
 /// # use jidousha_core::World;
 /// # let mut world = World::new();
 /// # let mut source = MemorySource::new();
-/// # source.insert("player.png", vec![0]);
+/// # let texels = TextureData { width: 1, height: 1, rgba: vec![255; 4] };
+/// # source.insert_texture("player.png", texels);
 /// world.insert_resource(Assets::new(source));
 ///
 /// let player = world.resource_mut::<Assets>().load_texture("player.png");
@@ -386,11 +393,19 @@ impl Assets {
             let Some(Some(entry)) = table.entries.get_mut(id.index()) else {
                 continue;
             };
+            // Decoded here, at the boundary, rather than trusted: a texture
+            // request that resolves raw bytes is decoded through the one PNG
+            // path (§3 CONTRACT), so a store scripted with a real file behaves
+            // exactly as a disk does — and bytes that are not a picture become
+            // a §6 failure instead of a `Ready` texture with nothing in it.
+            let result = completion
+                .result
+                .and_then(|payload| texels_for(kind, payload));
             self.resolved.push(Resolution {
                 request: completion.request,
-                arrived: completion.result.is_ok(),
+                arrived: result.is_ok(),
             });
-            match completion.result {
+            match result {
                 Ok(payload) => {
                     entry.status = AssetStatus::Ready;
                     // Queued here rather than at `take_uploads` time, because
@@ -499,6 +514,52 @@ impl Assets {
                  with. A missing file reports Failed instead — this is not that",
             )
         );
+    }
+}
+
+/// Make what arrived answer the kind that was asked for.
+///
+/// **The one decode point for a texture request** (assets.md §3 CONTRACT). A
+/// source with a thread to spare decodes there and hands over texels — the
+/// native loader does, which is what keeps PNG decoding off the frame; one
+/// without a thread hands over the bytes and they are decoded here. Either way
+/// it is [`decode_png`] that ran, so the texels are bit-identical everywhere.
+///
+/// This is what makes the store's invariant structural rather than a rule
+/// somebody has to remember: `Ready` is reachable for a texture only through a
+/// `Payload::Texture`, and the only way to get one out of bytes is a decode
+/// that succeeded.
+///
+/// PERF: a decode on the frame thread, for sources that do not decode
+/// themselves. That is the web loader's documented position already
+/// (assets.md §5) and a scripted store's content is small; the native path,
+/// which is the one with real files on it, still decodes off-thread.
+///
+/// # Panics
+///
+/// If a `load_bytes` request resolves with decoded texels. A source promised
+/// bytes and produced a picture, so there are no bytes to hand back and
+/// `bytes_of` would answer `None` for something the store called `Ready` — the
+/// same lie in the other direction. It is a contract violation rather than an
+/// environmental failure (assets.md §5, §9's rule), so it says so loudly.
+fn texels_for(kind: AssetKind, payload: Payload) -> Result<Payload, AssetError> {
+    match (kind, payload) {
+        (AssetKind::Texture, Payload::Bytes(bytes)) => decode_png(&bytes).map(Payload::Texture),
+        (AssetKind::Bytes, Payload::Texture(texture)) => panic!(
+            "{}",
+            message(
+                "a bytes load resolved with decoded texels",
+                &format!(
+                    "the source answered a load_bytes request with a {}x{} image",
+                    texture.width, texture.height
+                ),
+                "a scripted store used insert_texture for a path the game asks for with \
+                 load_bytes",
+                "insert the file's bytes with MemorySource::insert, or ask for it with \
+                 load_texture",
+            )
+        ),
+        (_, payload) => Ok(payload),
     }
 }
 

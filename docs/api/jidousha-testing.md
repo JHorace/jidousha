@@ -1011,8 +1011,8 @@ pub struct MemorySource;
 
 impl MemorySource {
     pub fn new() -> Self;  // A source with nothing in it
-    pub fn insert(&mut self, path: &str, bytes: Vec<u8>);  // Put bytes at `path`
-    pub fn insert_texture(&mut self, path: &str, texture: TextureData);  // Put a decoded image at `path`
+    pub fn insert(&mut self, path: &str, bytes: Vec<u8>);  // Put a file's bytes at `path`
+    pub fn insert_texture(&mut self, path: &str, texture: TextureData);  // Put an already-decoded image at `path`
     pub fn fail(&mut self, path: &str, error: AssetError);  // Make `path` fail, as a missing or unreadable file would
     pub fn complete_at(&mut self, path: &str, tick: u64);  // Hold `path`'s completion until `tick`
 }
@@ -1020,7 +1020,10 @@ impl MemorySource {
 
 ```rust
 let mut source = MemorySource::new();
-source.insert("player.png", b"fake png".to_vec());
+// Real PNG bytes work here too — a texture request decodes whatever it
+// resolves. Texels are the shorter spelling when the picture is invented.
+let texels = TextureData { width: 1, height: 1, rgba: vec![255; 4] };
+source.insert_texture("player.png", texels);
 source.complete_at("player.png", 3);
 
 let mut assets = Assets::new(source);

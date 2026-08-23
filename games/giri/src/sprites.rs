@@ -12,26 +12,26 @@
 //! role naming keeps its value either way: it is what makes the swap free on
 //! the day somebody wants one.
 //!
-//! **The bytes are compiled in, and that is a platform fact rather than a
-//! preference.** `tools/build-web` stages the repository's root `assets/`
-//! directory beside the page, so a game crate that owns its own art has no
-//! path a web build would fetch it from; `include_bytes!` and a `MemorySource`
-//! give native and web the identical store, and the loading path is the same
-//! `Assets` one either way (FINDINGS G-005).
+//! **The art is a directory, and the directory is giri's own.**
+//! `games/giri/assets/` is this crate's asset root: the game loads from it
+//! through `asset_source` and the paths below are the same strings on native
+//! and on the web, because `tools/build-web` stages this directory under the
+//! game's page at the path it is named by (ADR-0040). Adding a picture is
+//! adding a file — no rebuild of a byte table, no fifty-entry `include_bytes!`,
+//! and no art that cannot travel with the game that owns it (FINDINGS G-005).
 //!
-//! **And the decode is the game's**, which is the part that surprised. A
-//! `MemorySource` fed raw PNG bytes with `insert` resolves `Ready` and has
-//! nothing for a sprite to sample, so every quad draws the engine's magenta
-//! placeholder and no failure is reported anywhere. `insert_texture` with an
-//! already-decoded `TextureData` is the path that works, and the only decoder
-//! the facade offers is `jidousha::testing::decode_png` (FINDINGS G-006).
+//! **The store decodes.** `load_texture` resolves the file's bytes and the
+//! engine decodes them through its one PNG path, so a file that stops being a
+//! picture resolves `Failed` and is reported at the commit — there is no state
+//! where the store calls a texture ready and a sprite draws the magenta
+//! placeholder (assets.md §3, §6; FINDINGS G-006). This file therefore has no
+//! decoder in it and nothing to panic about.
 //!
 //! Sizes are native texels. Everything is drawn at an **integer multiple** of
 //! them — the engine samples nearest with no filtering, and a pixel-art icon at
 //! a fractional scale is a pixel-art icon with a wobble in it (UI.md §1.4).
 
 use jidousha::prelude::*;
-use jidousha::testing::decode_png;
 
 use crate::beats::QuestIcon;
 
@@ -69,114 +69,47 @@ pub enum Art {
     Heart,
 }
 
-/// One entry: the role, the file it lives in, the bytes, and its texel size.
+/// giri's asset root: this crate's own `assets/` directory.
+///
+/// Named from the workspace root, which is where the native loader resolves it
+/// from and where `tools/build-web` mirrors it from under the page — one string
+/// on both platforms (assets.md §2 CONTRACT, ADR-0040).
+pub const ASSET_ROOT: &str = "games/giri/assets";
+
+/// How many polls [`settle`] gives the loader before calling the art absent.
+///
+/// Generous: thirteen small files off one loader thread finish in the first few
+/// polls, and a number this size can only be reached by a fault.
+const SETTLE_POLLS: usize = 100_000;
+
+/// One entry: the role, the file it lives in, and its texel size.
 struct Slot {
     art: Art,
     file: &'static str,
-    bytes: &'static [u8],
     texels: PhysicalSize,
 }
 
 /// The library, in the order `Gallery` indexes it.
 const LIBRARY: &[Slot] = &[
-    slot(
-        Art::PortraitAlex,
-        "portrait_alex.png",
-        include_bytes!("../assets/portrait_alex.png"),
-        16,
-        16,
-    ),
-    slot(
-        Art::PortraitBob,
-        "portrait_bob.png",
-        include_bytes!("../assets/portrait_bob.png"),
-        16,
-        16,
-    ),
-    slot(
-        Art::PortraitSteve,
-        "portrait_steve.png",
-        include_bytes!("../assets/portrait_steve.png"),
-        16,
-        16,
-    ),
-    slot(
-        Art::PortraitTim,
-        "portrait_tim.png",
-        include_bytes!("../assets/portrait_tim.png"),
-        16,
-        16,
-    ),
-    slot(
-        Art::QuestCave,
-        "quest_cave.png",
-        include_bytes!("../assets/quest_cave.png"),
-        12,
-        12,
-    ),
-    slot(
-        Art::QuestCrypt,
-        "quest_crypt.png",
-        include_bytes!("../assets/quest_crypt.png"),
-        12,
-        12,
-    ),
-    slot(
-        Art::QuestTower,
-        "quest_tower.png",
-        include_bytes!("../assets/quest_tower.png"),
-        12,
-        12,
-    ),
-    slot(
-        Art::QuestVault,
-        "quest_vault.png",
-        include_bytes!("../assets/quest_vault.png"),
-        12,
-        12,
-    ),
-    slot(
-        Art::Flame,
-        "icon_flame.png",
-        include_bytes!("../assets/icon_flame.png"),
-        8,
-        8,
-    ),
-    slot(
-        Art::Eye,
-        "icon_eye.png",
-        include_bytes!("../assets/icon_eye.png"),
-        8,
-        8,
-    ),
-    slot(
-        Art::Coin,
-        "icon_coin.png",
-        include_bytes!("../assets/icon_coin.png"),
-        8,
-        8,
-    ),
-    slot(
-        Art::Skull,
-        "icon_skull.png",
-        include_bytes!("../assets/icon_skull.png"),
-        10,
-        10,
-    ),
-    slot(
-        Art::Heart,
-        "icon_heart.png",
-        include_bytes!("../assets/icon_heart.png"),
-        8,
-        8,
-    ),
+    slot(Art::PortraitAlex, "portrait_alex.png", 16, 16),
+    slot(Art::PortraitBob, "portrait_bob.png", 16, 16),
+    slot(Art::PortraitSteve, "portrait_steve.png", 16, 16),
+    slot(Art::PortraitTim, "portrait_tim.png", 16, 16),
+    slot(Art::QuestCave, "quest_cave.png", 12, 12),
+    slot(Art::QuestCrypt, "quest_crypt.png", 12, 12),
+    slot(Art::QuestTower, "quest_tower.png", 12, 12),
+    slot(Art::QuestVault, "quest_vault.png", 12, 12),
+    slot(Art::Flame, "icon_flame.png", 8, 8),
+    slot(Art::Eye, "icon_eye.png", 8, 8),
+    slot(Art::Coin, "icon_coin.png", 8, 8),
+    slot(Art::Skull, "icon_skull.png", 10, 10),
+    slot(Art::Heart, "icon_heart.png", 8, 8),
 ];
 
-const fn slot(art: Art, file: &'static str, bytes: &'static [u8], w: u32, h: u32) -> Slot {
+const fn slot(art: Art, file: &'static str, w: u32, h: u32) -> Slot {
     Slot {
         art,
         file,
-        bytes,
         texels: PhysicalSize::new(w, h),
     }
 }
@@ -211,11 +144,6 @@ impl Art {
     /// The file this role loads from — the name the owner's library replaces.
     pub fn file(self) -> &'static str {
         LIBRARY[self.index()].file
-    }
-
-    /// The bytes, compiled in.
-    pub fn bytes(self) -> &'static [u8] {
-        LIBRARY[self.index()].bytes
     }
 
     /// The picture's own size in texels.
@@ -265,28 +193,61 @@ impl Art {
 
 /// The asset store giri loads from — the same one the game, the recorder and
 /// the capture path build, so all three sample the same textures.
+///
+/// One `asset_source` and no `cfg`: the platform crate picks the loader, and
+/// [`ASSET_ROOT`] means the same directory on both (ADR-0040). Nothing here can
+/// fail at call time — a file that is missing or is no longer a picture
+/// resolves `Failed` at the commit that answers it, with the engine's message
+/// naming the line that asked (assets.md §6).
 pub fn store() -> Assets {
-    let mut source = MemorySource::new();
-    for slot in LIBRARY {
-        match decode_png(slot.bytes) {
-            Ok(texture) => source.insert_texture(slot.file, texture),
-            // No silent failure: art that stopped decoding is art every sprite
-            // draws as a magenta placeholder, which is a fault no assertion
-            // over quads can see and which the store itself calls `Ready`.
-            // This is the only place giri can notice, so it says so loudly.
-            Err(error) => panic!(
-                "{}",
-                message(
-                    "giri's own art no longer decodes",
-                    &format!("{}: {error}", slot.file),
-                    "a file under games/giri/assets/ is not a PNG this engine reads",
-                    "run games/giri/art/make_art.py to rewrite the library from its grids, \
-                     or re-import the file",
-                )
-            ),
+    Assets::new(asset_source(ASSET_ROOT))
+}
+
+/// Poll `assets` until every load it was asked for has resolved, at tick 1.
+///
+/// **For the runs that must not depend on a disk**: `--verify` asserts on draw
+/// transcripts and the capture path replays plans through a real GPU, and both
+/// would otherwise photograph whatever the loader thread had finished by then.
+/// Committing the same tick repeatedly is legal and moves nothing on the
+/// timeline (assets.md §4), so every texture becomes ready at tick 1 exactly as
+/// a scripted store would make it — the run is reproducible again.
+///
+/// Not for the game: a window and a browser both draw the placeholder for the
+/// frame or two the art takes, which is the engine's whole loading policy, and
+/// a browser cannot spin on a `fetch` at all.
+///
+/// Returns what failed, for a caller to report; the failures are already
+/// §6-shaped.
+///
+/// # Panics
+///
+/// If the loads have not resolved after [`SETTLE_POLLS`] polls. That is not a
+/// slow disk — it is a loader that has stopped — and a capture written from a
+/// half-loaded store is a picture nobody can read a verdict off.
+pub fn settle(assets: &mut Assets) -> Vec<AssetFailure> {
+    let mut failures = Vec::new();
+    for _ in 0..SETTLE_POLLS {
+        failures.extend(assets.commit(1));
+        if assets.all_ready() {
+            return failures;
         }
+        // The loader is on another thread; there is nothing to do but let it
+        // have the processor. No clock is read — the engine forbids one, and a
+        // count of polls is what this needs anyway.
+        std::thread::yield_now();
     }
-    Assets::new(source)
+    panic!(
+        "{}",
+        message(
+            "giri's art never finished loading",
+            &format!("{SETTLE_POLLS} polls of the asset loader and something is still in flight"),
+            "the loader thread stopped, or the filesystem is not answering",
+            &format!(
+                "run `tools/check-assets` to confirm every file under {ASSET_ROOT}/ is there, \
+                 then `tools/doctor`"
+            ),
+        )
+    )
 }
 
 /// Every handle, by role.
@@ -298,13 +259,52 @@ impl Resource for Gallery {}
 
 impl Gallery {
     /// Ask the store for every role, in library order.
+    ///
+    /// **Written out, one literal per role**, because an asset path is a string
+    /// literal at the load site (assets.md §2): that is what lets
+    /// `tools/check-assets` prove, before the game runs, that all thirteen name
+    /// files that exist with exactly this spelling. A fold over `LIBRARY` would
+    /// be shorter and would make every path invisible to the check that turns a
+    /// typo into a CI failure instead of a magenta quad.
+    ///
+    /// The order is `LIBRARY`'s, because [`handle`](Gallery::handle) indexes by
+    /// it; `library.rs`'s art-library contract asserts the two lists against
+    /// each other, so they cannot drift.
     pub fn load(assets: &mut Assets) -> Self {
         Self {
-            handles: LIBRARY
-                .iter()
-                .map(|slot| assets.load_texture(slot.file))
-                .collect(),
+            handles: vec![
+                assets.load_texture("portrait_alex.png"),
+                assets.load_texture("portrait_bob.png"),
+                assets.load_texture("portrait_steve.png"),
+                assets.load_texture("portrait_tim.png"),
+                assets.load_texture("quest_cave.png"),
+                assets.load_texture("quest_crypt.png"),
+                assets.load_texture("quest_tower.png"),
+                assets.load_texture("quest_vault.png"),
+                assets.load_texture("icon_flame.png"),
+                assets.load_texture("icon_eye.png"),
+                assets.load_texture("icon_coin.png"),
+                assets.load_texture("icon_skull.png"),
+                assets.load_texture("icon_heart.png"),
+            ],
         }
+    }
+
+    /// The path each handle was asked for, in library order.
+    ///
+    /// What `library.rs`'s contract compares against `LIBRARY`: the explicit
+    /// load list above and the table are two orders, and only an assertion
+    /// keeps them one.
+    pub fn paths<'a>(&self, assets: &'a Assets) -> Vec<&'a str> {
+        self.handles
+            .iter()
+            .map(|handle| assets.path_of(*handle))
+            .collect()
+    }
+
+    /// Every role's file, in library order — the list `paths` must equal.
+    pub fn library_files() -> Vec<&'static str> {
+        LIBRARY.iter().map(|slot| slot.file).collect()
     }
 
     /// The handle for a role.

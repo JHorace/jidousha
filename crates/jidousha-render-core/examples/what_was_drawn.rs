@@ -11,7 +11,7 @@
 //!
 //! Run it: `cargo run -p jidousha-render-core --example what_was_drawn`
 
-use jidousha_assets::{Assets, MemorySource};
+use jidousha_assets::{Assets, MemorySource, TextureData};
 use jidousha_core::math::{Radians, Vec2};
 use jidousha_core::{Color, Component, Draw, GameConfig, Time, Transform, Update, World, headless};
 use jidousha_render_core::{
@@ -40,8 +40,16 @@ fn main() {
     // Two of the three textures exist; "ghost.png" does not, which is the
     // interesting one.
     let mut source = MemorySource::new();
-    source.insert("ship.png", vec![0]);
-    source.insert("rock.png", vec![0]);
+    for path in ["ship.png", "rock.png"] {
+        source.insert_texture(
+            path,
+            TextureData {
+                width: 1,
+                height: 1,
+                rgba: vec![255; 4],
+            },
+        );
+    }
     let mut assets = Assets::new(source);
     let ship = assets.load_texture("ship.png");
     let rock = assets.load_texture("rock.png");

@@ -13,8 +13,15 @@ builds; the deploy workflow (W1) uploads it verbatim.
 The pipeline: cargo build for wasm32 (release by default — what ships is what
 gets tested), wasm-bindgen to generate the JS glue, wasm-opt -Os if installed
 (optional; skipped with a log line), then stage the playtest page from
-tools/web-template/ with the example name and build stamp substituted, and the
-asset root copied in beside it.
+tools/web-template/ with the example name and build stamp substituted, and every
+asset root the page's code can name copied in under it.
+
+**dist/<name>/ is repository-shaped** (ADR-0040): an asset root is staged at the
+path the code names it by, so `asset_source("assets")` and
+`asset_source("games/giri/assets")` fetch the same directories on the web that
+they read on native. Examples load from the repository's shared `assets/`; a
+game also gets its own `<crate>/assets/`, which is how a prototype's art travels
+with it (ADR-0038).
 
 Stdlib only, like every other tool here (tooling.md). The one external tool it
 needs that cargo cannot provide is the `wasm-bindgen` CLI, whose version must
@@ -168,8 +175,32 @@ def parse_playables(metadata: dict, repo: Path) -> "list[tuple[str, str, str]]":
     return sorted(found, key=lambda entry: entry[1])
 
 
-def playable_targets() -> "list[tuple[str, str, str]] | None":
-    """Every (package, name, kind) the workspace defines, sorted by name."""
+def parse_package_dirs(metadata: dict, repo: Path) -> "dict[str, str]":
+    """Each workspace member's directory, relative to the repository root.
+
+    What `stage_assets` needs to find a game's own `assets/`: a game is a crate
+    (ADR-0038) and its art lives beside its manifest, so the directory cargo
+    reports is the one authority on where that is. Read from the manifest rather
+    than assumed to be `games/<name>/`, because a crate's directory and its
+    binary's name are two different things and only one of them names the page.
+    """
+    members = set(metadata.get("workspace_members", []))
+    dirs = {}
+    for package in metadata.get("packages", []):
+        if package["id"] not in members:
+            continue
+        directory = Path(package["manifest_path"]).parent
+        try:
+            dirs[package["name"]] = directory.relative_to(repo).as_posix()
+        except ValueError:
+            # Outside the repository: nothing here can stage it, and nothing in
+            # this workspace is.
+            continue
+    return dirs
+
+
+def workspace_metadata() -> "dict | None":
+    """`cargo metadata` for this workspace, or None if cargo could not run."""
     proc = subprocess.run(
         ["cargo", "metadata", "--format-version", "1", "--no-deps"],
         cwd=REPO_ROOT,
@@ -179,7 +210,38 @@ def playable_targets() -> "list[tuple[str, str, str]] | None":
     )
     if proc.returncode != 0:
         return None
-    return parse_playables(json.loads(proc.stdout), REPO_ROOT)
+    return json.loads(proc.stdout)
+
+
+def playable_targets() -> "list[tuple[str, str, str]] | None":
+    """Every (package, name, kind) the workspace defines, sorted by name."""
+    metadata = workspace_metadata()
+    if metadata is None:
+        return None
+    return parse_playables(metadata, REPO_ROOT)
+
+
+def package_dirs() -> "dict[str, str]":
+    """Each workspace member's repository-relative directory, or nothing."""
+    metadata = workspace_metadata()
+    return {} if metadata is None else parse_package_dirs(metadata, REPO_ROOT)
+
+
+def own_asset_root(package: str, kind: str, dirs: "dict[str, str]") -> "str | None":
+    """The asset root this playable owns, beyond the repository's shared one.
+
+    A game's own art lives at `<its crate>/assets/` and travels with it
+    (ADR-0038, ADR-0040); an example loads from the repository's shared
+    `assets/` and owns nothing. `None` when there is no such directory, which is
+    a game that draws shapes and text.
+    """
+    if kind != "game":
+        return None
+    directory = dirs.get(package)
+    if directory is None:
+        return None
+    root = f"{directory}/assets"
+    return root if (REPO_ROOT / root).is_dir() else None
 
 
 def find_playable(name: str) -> "tuple[str, str, str] | None":
@@ -234,25 +296,48 @@ def stage_page(out_dir: Path, example: str, stamp: str, template: Path = TEMPLAT
     (out_dir / "index.html").write_text(page, encoding="utf-8")
 
 
-def stage_assets(out_dir: Path) -> None:
-    """Copy the asset root next to the page, the way a deploy does.
+def stage_one_root(out_dir: Path, root: str) -> int:
+    """Copy one asset root under the page at the path the code names it by.
 
-    The web loader (A2) fetches `assets/...` *relative to the page*, so the
-    directory that serves the page has to contain them — which is exactly what
-    a deployment is. Copying rather than symlinking keeps dist/ honest: what is
-    in it is what ships.
+    Copying rather than symlinking keeps dist/ honest: what is in it is what
+    ships.
     """
-    source = REPO_ROOT / "assets"
+    source = REPO_ROOT / root
     if not source.is_dir():
-        # A repository with no asset root is fine; examples that load nothing
-        # still run.
-        return
-    destination = out_dir / "assets"
+        return 0
+    destination = out_dir / root
     if destination.exists():
         shutil.rmtree(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(source, destination)
-    count = sum(1 for path in destination.rglob("*") if path.is_file())
-    print(f"[build-web] staged {count} asset file(s)")
+    return sum(1 for path in destination.rglob("*") if path.is_file())
+
+
+def stage_assets(out_dir: Path, own_root: "str | None" = None) -> None:
+    """Copy every asset root the page's code can name, the way a deploy does.
+
+    **`dist/<name>/` is repository-shaped** (ADR-0040, web-publish.md §1a). The
+    web loader (A2) fetches an asset root *relative to the page*, and the native
+    loader reads it relative to the workspace root, so the two agree only if the
+    directory sits under the page at the path the code names — `"assets"` for
+    the repository's shared root, `"games/giri/assets"` for a game's own. One
+    string, one directory, both platforms (assets.md §2 CONTRACT).
+
+    Two roots reach a page, and which ones is not a guess:
+
+    - the repository's shared `assets/`, which every example loads from and
+      which is staged for every page;
+    - the game's own `<crate>/assets/`, staged for that game's page only, so a
+      prototype's art travels with it and two games' `icon_coin.png` cannot
+      collide (ADR-0038, FINDINGS G-005).
+    """
+    staged = stage_one_root(out_dir, "assets")
+    if own_root is not None:
+        staged += stage_one_root(out_dir, own_root)
+        print(f"[build-web] staged {own_root}/ beside the page")
+    # A repository with no asset root is fine; a page whose game loads nothing
+    # still runs, so zero is reported rather than refused.
+    print(f"[build-web] staged {staged} asset file(s)")
 
 
 def installed_wasm_opt() -> "tuple[str, int] | None":
@@ -339,7 +424,9 @@ def module_path(name: str, kind: str, debug: bool) -> Path:
     return directory / f"{name}.wasm"
 
 
-def stage_playable(name: str, kind: str, debug: bool, stamp: str) -> int:
+def stage_playable(
+    name: str, kind: str, debug: bool, stamp: str, own_root: "str | None" = None
+) -> int:
     """Bind, optimize, and stage one already-compiled playable under dist/<name>/."""
     wasm = module_path(name, kind, debug)
     if not wasm.exists():
@@ -381,7 +468,7 @@ def stage_playable(name: str, kind: str, debug: bool, stamp: str) -> int:
             "restore tools/web-template/index.html",
         )
     stage_page(out_dir, name, stamp)
-    stage_assets(out_dir)
+    stage_assets(out_dir, own_root)
     print(f"[build-web] built {out_dir.relative_to(REPO_ROOT)}/ — serve it with `tools/serve-web {name}`")
     return 0
 
@@ -391,7 +478,8 @@ def build(package: str, name: str, kind: str, debug: bool) -> int:
     step = compile_playables(package, [name], kind, debug)
     if step != 0:
         return step
-    return stage_playable(name, kind, debug, build_stamp())
+    own_root = own_asset_root(package, kind, package_dirs())
+    return stage_playable(name, kind, debug, build_stamp(), own_root)
 
 
 def root_index_items(names: "list[str]", headline: "str | None" = None) -> str:
@@ -509,12 +597,14 @@ def build_all(targets: "list[tuple[str, str, str]]", debug: bool) -> int:
             return step
 
     stamp = build_stamp()
+    dirs = package_dirs()
     for name in examples:
         step = stage_playable(name, "example", debug, stamp)
         if step != 0:
             return step
     for name in games:
-        step = stage_playable(name, "game", debug, stamp)
+        own_root = own_asset_root(package_of[name], "game", dirs)
+        step = stage_playable(name, "game", debug, stamp, own_root)
         if step != 0:
             return step
     prune_stale(examples + games)
