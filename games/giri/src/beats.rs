@@ -13,7 +13,7 @@
 //! regression harness — a constant that stops producing these outcomes fails
 //! the run.
 
-use crate::model::{Member, Social};
+use crate::model::Social;
 
 /// A character's authored starting state.
 #[derive(Clone, Copy, Debug)]
@@ -78,6 +78,21 @@ impl Requirement {
         }
     }
 
+    /// Why a party fails this predicate, as the send verb states it (UI.md §3).
+    ///
+    /// The reason a button is disabled, not the requirement it is about —
+    /// "no known face in the party" rather than "at least one member of
+    /// infamy 3+". A player who has read the panel knows the requirement; what
+    /// they need from the button is which way theirs falls short.
+    pub fn shortfall(self) -> &'static str {
+        match self {
+            // Unreachable: a predicate every party meets is never the reason.
+            Requirement::AnyParty => "nothing",
+            Requirement::AtLeastOneInfamous { .. } => "no known face in the party",
+            Requirement::NoInfamous { .. } => "a known face in the party",
+        }
+    }
+
     /// The predicate as the dungeon panel states it.
     pub fn describe(self) -> String {
         match self {
@@ -92,6 +107,23 @@ impl Requirement {
     }
 }
 
+/// Which dungeon icon a job carries.
+///
+/// A quest *type*, not a quest: UI.md §2 gives one icon per type and requires
+/// it to be unique per type, so this enum and `assets/quest_*.png` are one
+/// list. Presentation only — nothing in the rules reads it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum QuestIcon {
+    /// A mouth in a hillside.
+    Cave,
+    /// A stone that is somebody's.
+    Crypt,
+    /// Something that watches a road.
+    Tower,
+    /// Something with a door and a lock.
+    Vault,
+}
+
 /// A job: what it asks for, what it pays, and what the player keeps.
 ///
 /// Everything visible before assembly, like everything else (DESIGN §5).
@@ -99,6 +131,10 @@ impl Requirement {
 pub struct Dungeon {
     /// What it is called.
     pub name: &'static str,
+    /// A sentence for the info panel (UI.md §3). Flavour; no rule reads it.
+    pub blurb: &'static str,
+    /// Which icon it carries.
+    pub icon: QuestIcon,
     /// How many bodies it takes.
     pub headcount: usize,
     /// The whole pot.
@@ -247,6 +283,8 @@ pub const CHAIN: &[BeatSpec] = &[
         edges: &[],
         dungeons: &[Dungeon {
             name: "the sewer job",
+            blurb: "A starter job. One warm body will do.",
+            icon: QuestIcon::Cave,
             headcount: 1,
             pot: 6,
             cut: 2,
@@ -300,6 +338,8 @@ pub const CHAIN: &[BeatSpec] = &[
         edges: &[],
         dungeons: &[Dungeon {
             name: "the deep vault",
+            blurb: "Two go down. What comes back up is their business.",
+            icon: QuestIcon::Vault,
             headcount: 2,
             pot: 6,
             cut: 2,
@@ -371,6 +411,8 @@ pub const CHAIN: &[BeatSpec] = &[
         edges: &[],
         dungeons: &[Dungeon {
             name: "the long road",
+            blurb: "Two sets of hands, a long walk, and a pot that splits.",
+            icon: QuestIcon::Tower,
             headcount: 2,
             pot: 8,
             cut: 2,
@@ -459,6 +501,8 @@ pub const CHAIN: &[BeatSpec] = &[
         edges: &[],
         dungeons: &[Dungeon {
             name: "the second road",
+            blurb: "The same road again, and a hungrier man to walk it.",
+            icon: QuestIcon::Crypt,
             headcount: 2,
             pot: 8,
             cut: 2,
@@ -512,22 +556,3 @@ pub const CHAIN: &[BeatSpec] = &[
         ],
     },
 ];
-
-/// The initial of a name, for the portrait quad.
-///
-/// giri v1 has no assets at all: a "portrait" is a tinted quad with a letter on
-/// it (DESIGN §7).
-pub fn initial(name: &str) -> char {
-    name.chars().next().unwrap_or('?')
-}
-
-/// The sheet line every roster card carries, as one string.
-///
-/// A function rather than a `format!` inside the draw system, so a check can
-/// ask the game for the exact text it draws.
-pub fn stat_line(member: &Member) -> String {
-    format!(
-        "DES {}  INF {}  WLT {}",
-        member.desperation, member.infamy, member.wealth
-    )
-}

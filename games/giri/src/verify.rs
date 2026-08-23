@@ -1,21 +1,20 @@
-//! `--verify`: the tutorial, played by a script, asserted on, and printed.
+//! `--verify`: the chain, played by a script, asserted on, and photographed.
 //!
-//! The beats are the test suite (DESIGN.md §8). Each one is driven end to end
+//! The beats are the test suite (DESIGN §8). Each one is driven end to end
 //! through `InputScript` - the same pointer a person uses, at the same
-//! rectangles - and judged twice: once on world state (refusals, deaths,
-//! infamy, regard, desperation trajectories) and once on the null-backend
-//! transcript (every sheet drawn, every report row drawn as its own string).
+//! rectangles - and judged three ways: on world state, on the null-backend
+//! transcript, and against UI.md §7's readability floors.
 //!
-//! Then three things a played beat cannot reach:
+//! The script does more than assemble. It probes the **door rule** in both
+//! directions on any beat that has a refusal in it: one order makes the
+//! newcomer refuse, the reverse order makes the incumbent block, and DESIGN
+//! §3.2 says those are the same numbers seen from two sides. Both are asserted
+//! to bounce, to name the right person, and to leave the party untouched.
 //!
-//! - **the contract battery** (`contracts.rs`): the decision function asked
-//!   directly, including the roster-order betrayal case no tutorial beat
-//!   produces and the two dungeon predicates no tutorial beat uses;
-//! - **the mutation round** (`contracts.rs`): every tuning constant perturbed
-//!   in turn, demanding that some beat or contract notices. A beat that passes
-//!   under a mutated constant is a vacuous assertion;
-//! - **the capture**: one recorded frame rendered for real, so somebody can
-//!   look at it.
+//! Then the things play cannot reach: the contract battery, the mutation round,
+//! and the captures - one PNG per screen mode at reference size and at a narrow
+//! one, because a scaling regression is invisible to every assertion here
+//! (UI.md §8).
 
 use std::process::ExitCode;
 
@@ -25,36 +24,36 @@ use jidousha::testing::{BackendTextureId, FrameRecord, FrameRecorder, InputScrip
 use crate::beats::{BeatSpec, CHAIN, Expect};
 use crate::checks::{Checks, fail, greater};
 use crate::constants::Tuning;
-use crate::contracts;
 use crate::flow::{Flow, Preview, Stage, StartAt};
-use crate::judge::{glyph_run, judge_frames, judge_world};
+use crate::judge::{judge_frames, judge_world};
 use crate::model::Social;
-use crate::ui;
-use crate::{config, register};
+use crate::{capture, contracts, floors, layout, library, mutation, scaling};
 
-/// The viewport the headless run draws at - the window's own, so the recorder's
-/// override and the game's camera agree and every bounds assertion is about the
-/// aspect the game is laid out for.
+/// The surface the reference run draws at: UI.md §6's reference resolution,
+/// doubled, which is the window the game opens.
 pub const HEADLESS_VIEWPORT: PhysicalSize = crate::WINDOW;
+
+/// The narrow surface UI.md §8 asks the second capture set for.
+///
+/// Narrow rather than short on purpose: horizontal shrink is the axis §6's
+/// defect was on, and a capture set that only ever got shorter would have gone
+/// on passing through it.
+pub const NARROW_VIEWPORT: PhysicalSize = PhysicalSize::new(600, 540);
 
 /// The camera a scripted click is aimed through.
 ///
-/// The same one `open_the_chain` installs. A script converts a world-space
-/// rectangle to pixels with `world_to_screen`, and the game converts back with
-/// `screen_to_world`; if these two cameras disagreed, every click would land
-/// somewhere else and the run would fail with the party empty.
-pub fn headless_camera() -> Camera {
-    Camera {
-        center: Vec2::ZERO,
-        height: crate::VIEW_HEIGHT,
-        clear_color: ui::BACKDROP,
-        viewport: HEADLESS_VIEWPORT,
-    }
+/// Built by `scaling::camera_for`, which is also what the game fits its camera
+/// with every tick - so a script converts a world rectangle to pixels with the
+/// same camera the game converts back with. Nothing stamps `Camera::viewport`
+/// under `headless`, and two cameras that disagreed would send every click to
+/// the wrong pixel and fail the run with an empty party and no clue why.
+pub fn headless_camera(viewport: PhysicalSize) -> Camera {
+    scaling::camera_for(viewport)
 }
 
 /// A scripted click: put the pointer on a world point, then tap it there.
-fn click(script: InputScript, tick: &mut u64, at: Vec2) -> InputScript {
-    let screen = headless_camera().world_to_screen(at);
+fn click(script: InputScript, tick: &mut u64, at: Vec2, viewport: PhysicalSize) -> InputScript {
+    let screen = headless_camera(viewport).world_to_screen(at);
     let next = script
         .pointer_at(*tick, screen)
         .click(PointerButton::Primary, *tick + 1);
@@ -67,79 +66,125 @@ fn click(script: InputScript, tick: &mut u64, at: Vec2) -> InputScript {
 /// The scripted session for one beat, and the ticks worth looking at.
 struct Plan {
     script: InputScript,
-    /// The tick the refusal probe is on screen, if the beat has a refusal.
-    probe_at: Option<u64>,
-    /// The tick a half-filled party is on screen, if the beat sends more than one.
-    partial_at: Option<u64>,
-    /// The tick the assembled party is on screen and willing.
+    /// The tick the board is on screen with the quest taken and nobody staged.
+    board_at: u64,
+    /// The tick a refusal has just bounced, if the beat has one.
+    refusal_at: Option<u64>,
+    /// The tick an incumbent's veto has just bounced, if the beat has one.
+    veto_at: Option<u64>,
+    /// Who the veto probe expected to be blocked, and by whom.
+    veto_names: Option<(&'static str, &'static str)>,
+    /// Who the refusal probe expected to refuse.
+    refusal_name: Option<&'static str>,
+    /// The tick the assembled party is on screen and sendable.
     ready_at: u64,
-    /// The tick after the dungeon resolved.
+    /// The tick the takeover is up.
     report_at: u64,
-    /// The tick after continuing out of the report.
+    /// The tick after dismissing it.
     end_at: u64,
     /// The last tick to run.
     last: u64,
 }
 
-/// Build the session: probe the refusal the beat is about, take it back,
-/// assemble the intended party, send it, read the report, continue.
-fn plan_for(spec: &BeatSpec) -> Plan {
-    let probe: Vec<usize> = spec
-        .expect
-        .iter()
-        .find_map(|expect| match expect {
-            Expect::Refuses { party, .. } => Some(*party),
-            _ => None,
-        })
-        .map(|party| {
-            party
-                .iter()
-                .filter_map(|name| spec.index_of(name))
-                .collect()
-        })
-        .unwrap_or_default();
+/// The pair a door probe is built from: somebody who refuses a party, and the
+/// one other member of it.
+///
+/// Both probes come out of the beat's own `Expect::Refuses`, so a beat that has
+/// no refusal in it is probed for neither and says so rather than inventing a
+/// case its roster does not hold.
+fn refusal_pair(spec: &BeatSpec) -> Option<(&'static str, &'static str)> {
+    spec.expect.iter().find_map(|expect| match expect {
+        Expect::Refuses { who, party } if party.len() == 2 => party
+            .iter()
+            .find(|name| *name != who)
+            .map(|other| (*who, *other)),
+        _ => None,
+    })
+}
 
+/// Build the session: take the quest, probe the door from both sides, assemble
+/// the intended party, send it, read the takeover, continue.
+fn plan_for(spec: &BeatSpec, viewport: PhysicalSize) -> Plan {
     let mut script = InputScript::new();
     let mut tick = 3;
-    let mut probe_at = None;
-    if !probe.is_empty() {
-        for index in &probe {
-            script = click(script, &mut tick, ui::card_rect(*index).center());
-        }
-        probe_at = Some(tick);
+    let click_at =
+        |script: InputScript, tick: &mut u64, at: Vec2| click(script, tick, at, viewport);
+
+    // The quest first: the send verb does not exist until one is taken.
+    script = click_at(script, &mut tick, layout::quest_card(0).center());
+    let board_at = tick;
+    tick += 1;
+
+    let pair = refusal_pair(spec);
+    let card = |name: &str| {
+        spec.index_of(name)
+            .map(|index| layout::party_card(index).center())
+    };
+
+    // Rule 1, the newcomer's own refusal: the other one goes in first.
+    let mut refusal_at = None;
+    let mut refusal_name = None;
+    if let Some((refuser, other)) = pair
+        && let (Some(refuser_card), Some(other_card)) = (card(refuser), card(other))
+    {
+        script = click_at(script, &mut tick, other_card);
+        script = click_at(script, &mut tick, refuser_card);
+        refusal_at = Some(tick);
+        refusal_name = Some(refuser);
         tick += 1;
         // Take it back: a refusal is feedback, not a failure (DESIGN §5).
-        for index in &probe {
-            script = click(script, &mut tick, ui::card_rect(*index).center());
-        }
+        script = click_at(script, &mut tick, other_card);
     }
 
-    let mut partial_at = None;
-    for (offered, name) in spec.send.iter().enumerate() {
-        if let Some(index) = spec.index_of(name) {
-            script = click(script, &mut tick, ui::card_rect(index).center());
-        }
-        if offered == 0 && spec.send.len() > 1 {
-            partial_at = Some(tick);
-            tick += 1;
+    // Rule 2, the incumbent's veto: the *same two people, the other way round*.
+    let mut veto_at = None;
+    let mut veto_names = None;
+    if let Some((refuser, other)) = pair
+        && let (Some(refuser_card), Some(other_card)) = (card(refuser), card(other))
+    {
+        script = click_at(script, &mut tick, refuser_card);
+        script = click_at(script, &mut tick, other_card);
+        veto_at = Some(tick);
+        veto_names = Some((other, refuser));
+        tick += 1;
+        script = click_at(script, &mut tick, refuser_card);
+    }
+
+    for name in spec.send {
+        if let Some(at) = card(name) {
+            script = click_at(script, &mut tick, at);
         }
     }
     let ready_at = tick;
     tick += 1;
-    script = click(script, &mut tick, ui::send_button().center());
+    script = click_at(script, &mut tick, layout::send_button().center());
     let report_at = tick;
     tick += 1;
-    script = click(script, &mut tick, ui::continue_button().center());
+    script = click_at(script, &mut tick, layout::takeover().center());
     let end_at = tick;
     Plan {
         script,
-        probe_at,
-        partial_at,
+        board_at,
+        refusal_at,
+        veto_at,
+        veto_names,
+        refusal_name,
         ready_at,
         report_at,
         end_at,
         last: end_at + 1,
     }
+}
+
+/// What a door probe produced: the message, and the party it left behind.
+#[derive(Clone, Debug, Default)]
+pub struct Bounce {
+    /// The toast, if one was raised.
+    pub toast: Option<String>,
+    /// The most recent log line.
+    pub logged: Option<String>,
+    /// The party at that moment, by name and in order.
+    pub party: Vec<&'static str>,
 }
 
 /// What one scripted beat did.
@@ -150,33 +195,51 @@ pub struct BeatRun {
     pub at_assembly: Social,
     /// The social state the dungeon left behind.
     pub after: Social,
-    /// The preview while the refusing party was selected.
-    pub probe: Option<Preview>,
+    /// The rule-1 probe.
+    pub refusal: Option<Bounce>,
+    /// Who it expected to refuse.
+    pub refusal_name: Option<&'static str>,
+    /// The rule-2 probe.
+    pub veto: Option<Bounce>,
+    /// Who it expected to be blocked, and by whom.
+    pub veto_names: Option<(&'static str, &'static str)>,
     /// The preview once the intended party was assembled.
     pub ready: Preview,
+    /// The flow once the intended party was assembled.
+    pub ready_flow: Flow,
+    /// The flow with the quest taken and nobody staged.
+    pub board_flow: Flow,
+    /// The preview at that moment.
+    pub board_preview: Preview,
+    /// The flow while the takeover was up.
+    pub report_flow: Flow,
+    /// The preview at that moment.
+    pub report_preview: Preview,
     /// The resolution's narration.
     pub report: Vec<String>,
     /// The stage the send verb produced.
     pub stage_after_send: Stage,
-    /// The stage continuing produced, and which beat it left the game on.
+    /// The stage dismissing the takeover produced.
     pub stage_at_end: Stage,
-    /// Which beat continuing moved to.
+    /// Which beat that left the game on.
     pub beat_at_end: usize,
     /// How many frames were drawn.
     pub frames: usize,
-    /// The frame with the refusal on it.
-    pub probe_frame: Option<FrameRecord>,
-    /// The frame with a half-filled party on it.
-    pub partial_frame: Option<FrameRecord>,
-    /// The frame with the assembled party on it.
+    /// The board with the quest taken and the party empty.
+    pub board_frame: Option<FrameRecord>,
+    /// The frame the refusal bounced on.
+    pub refusal_frame: Option<FrameRecord>,
+    /// The frame the veto bounced on.
+    pub veto_frame: Option<FrameRecord>,
+    /// The board with the party staged and the send verb live.
     pub ready_frame: Option<FrameRecord>,
-    /// The frame with the report on it.
+    /// The resolution takeover.
     pub report_frame: Option<FrameRecord>,
-    /// The frame after continuing - the next beat, or the end of the chain.
+    /// The frame after dismissing it.
     pub end_frame: Option<FrameRecord>,
-    /// Everything drawn outside the camera, over every frame of the run.
-    pub off_screen: Vec<Rect>,
-    /// How close the closest quad came to the camera's edge, over every frame.
+    /// Everything drawn outside the design rect, over every frame.
+    pub outside: Vec<Rect>,
+    /// How close the closest quad came to the design rect's edge.
     pub clearance: f32,
     /// How many quads the run drew in all.
     pub quads: usize,
@@ -188,25 +251,35 @@ pub struct BeatRun {
     pub schedule: String,
 }
 
+fn names(social: &Social, party: &[Entity]) -> Vec<&'static str> {
+    party.iter().map(|entity| social.name(*entity)).collect()
+}
+
 /// Play one beat through the script, with `tuning` in effect.
 ///
 /// `record` off is the mutation round's shape: the world assertions are the
 /// ones a perturbed constant is judged on, and a thousand unread frames are a
-/// thousand frames to allocate.
+/// thousand frames to allocate (FINDINGS G-004).
 pub fn play(index: usize, tuning: Tuning, record: bool) -> BeatRun {
+    play_at(index, tuning, record, HEADLESS_VIEWPORT)
+}
+
+/// The same, on a surface of a stated size — what the narrow capture set runs.
+pub fn play_at(index: usize, tuning: Tuning, record: bool, viewport: PhysicalSize) -> BeatRun {
     let Some(spec) = CHAIN.get(index) else {
         fail(
             "a beat was asked for that the chain does not have",
             &format!("beat {index} of {}", CHAIN.len()),
         );
     };
-    let plan = plan_for(spec);
-    let mut sim = headless(config(), register);
+    let plan = plan_for(spec, viewport);
+    let mut sim = headless(crate::config(), crate::register);
     // Before Startup, which is what `open_the_chain` reads them with.
     sim.world_mut().insert_resource(tuning);
     sim.world_mut().insert_resource(StartAt(index));
+    sim.world_mut().insert_resource(scaling::Surface(viewport));
 
-    let mut recorder = record.then(|| FrameRecorder::new(HEADLESS_VIEWPORT));
+    let mut recorder = record.then(|| FrameRecorder::new(viewport));
     let font = recorder
         .as_ref()
         .map_or(BackendTextureId(0), FrameRecorder::font_texture);
@@ -214,23 +287,32 @@ pub fn play(index: usize, tuning: Tuning, record: bool) -> BeatRun {
         index,
         at_assembly: Social::default(),
         after: Social::default(),
-        probe: None,
+        refusal: None,
+        refusal_name: plan.refusal_name,
+        veto: None,
+        veto_names: plan.veto_names,
         ready: Preview::default(),
+        ready_flow: Flow::default(),
+        board_flow: Flow::default(),
+        board_preview: Preview::default(),
+        report_flow: Flow::default(),
+        report_preview: Preview::default(),
         report: Vec::new(),
-        stage_after_send: Stage::Assembly,
-        stage_at_end: Stage::Assembly,
+        stage_after_send: Stage::Board,
+        stage_at_end: Stage::Board,
         beat_at_end: index,
         frames: 0,
-        probe_frame: None,
-        partial_frame: None,
+        board_frame: None,
+        refusal_frame: None,
+        veto_frame: None,
         ready_frame: None,
         report_frame: None,
         end_frame: None,
-        off_screen: Vec::new(),
+        outside: Vec::new(),
         clearance: f32::MAX,
         quads: 0,
         font,
-        camera: headless_camera(),
+        camera: headless_camera(viewport),
         schedule: sim.schedule_debug(),
     };
 
@@ -241,51 +323,85 @@ pub fn play(index: usize, tuning: Tuning, record: bool) -> BeatRun {
         if tick == 1 {
             run.at_assembly = Social::read(&sim.world().view());
             run.camera = Camera {
-                viewport: HEADLESS_VIEWPORT,
+                viewport,
                 ..*sim.world().resource::<Camera>()
             };
             run.schedule = sim.schedule_debug();
         }
+        if let Some(recorder) = recorder.as_mut() {
+            recorder.settle_assets(&mut sim, tick);
+        }
         let frame = recorder.as_mut().map(|recorder| recorder.draw(&mut sim));
         if let Some(frame) = &frame {
             run.frames += 1;
-            let view = run.camera.visible_bounds();
+            let design = layout::design();
             for quad in frame.quads() {
                 let bounds = quad.bounds();
                 run.quads += 1;
-                if !view.contains_rect(bounds) {
-                    run.off_screen.push(bounds);
+                if !inside(design, bounds) {
+                    run.outside.push(bounds);
                 }
-                let gap = (bounds.min - view.min).min(view.max - bounds.max);
+                let gap = (bounds.min - design.min).min(design.max - bounds.max);
                 run.clearance = run.clearance.min(gap.x.min(gap.y));
             }
         }
-        if Some(tick) == plan.probe_at {
-            run.probe = Some(sim.world().resource::<Preview>().clone());
-            run.probe_frame = frame.clone();
+        let social = Social::read(&sim.world().view());
+        let flow = sim.world().resource::<Flow>().clone();
+        if tick == plan.board_at {
+            run.board_flow = flow.clone();
+            run.board_preview = sim.world().resource::<Preview>().clone();
+            run.board_frame = frame.clone();
         }
-        if Some(tick) == plan.partial_at {
-            run.partial_frame = frame.clone();
+        if Some(tick) == plan.refusal_at {
+            run.refusal = Some(bounce_of(&flow, &social));
+            run.refusal_frame = frame.clone();
+        }
+        if Some(tick) == plan.veto_at {
+            run.veto = Some(bounce_of(&flow, &social));
+            run.veto_frame = frame.clone();
         }
         if tick == plan.ready_at {
             run.ready = sim.world().resource::<Preview>().clone();
+            run.ready_flow = flow.clone();
             run.ready_frame = frame.clone();
         }
         if tick == plan.report_at {
-            let flow = sim.world().resource::<Flow>();
             run.stage_after_send = flow.stage;
             run.report = flow.report.clone();
-            run.after = Social::read(&sim.world().view());
+            run.report_flow = flow.clone();
+            run.report_preview = sim.world().resource::<Preview>().clone();
+            run.after = social.clone();
             run.report_frame = frame.clone();
         }
         if tick == plan.end_at {
-            let flow = sim.world().resource::<Flow>();
             run.stage_at_end = flow.stage;
             run.beat_at_end = flow.beat;
             run.end_frame = frame;
         }
     }
     run
+}
+
+fn bounce_of(flow: &Flow, social: &Social) -> Bounce {
+    Bounce {
+        toast: flow.toast.as_ref().map(|toast| toast.text.clone()),
+        logged: flow.log.first().cloned(),
+        party: names(social, &flow.party),
+    }
+}
+
+/// Whether `bounds` sits inside `area`, to within a hundredth of a world unit.
+///
+/// A tolerance rather than `contains_rect`, because the design rect's own
+/// background quad is exactly the design rect: the camera's width is
+/// `height * viewport.aspect()` in f32, and whether that lands a hair over or
+/// under 960 is a rounding question no requirement should depend on.
+pub fn inside(area: Rect, bounds: Rect) -> bool {
+    const SLACK: f32 = 0.01;
+    bounds.min.x >= area.min.x - SLACK
+        && bounds.min.y >= area.min.y - SLACK
+        && bounds.max.x <= area.max.x + SLACK
+        && bounds.max.y <= area.max.y + SLACK
 }
 
 pub fn run() -> ExitCode {
@@ -298,7 +414,8 @@ pub fn run() -> ExitCode {
             continue;
         };
         judge_world(&mut checks, spec, &played, &tuning);
-        judge_frames(&mut checks, spec, &played);
+        judge_frames(&mut checks, &played);
+        floors::judge(&mut checks, &played);
         runs.push(played);
     }
     let Some(last) = runs.last() else {
@@ -308,18 +425,18 @@ pub fn run() -> ExitCode {
         );
     };
 
-    // --- nothing off screen, over every frame of every beat ------------
-    let off_screen: Vec<&Rect> = runs.iter().flat_map(|run| run.off_screen.iter()).collect();
-    let view = last.camera.visible_bounds();
+    // --- nothing outside the design rect, over every frame of every beat ---
+    let outside: Vec<&Rect> = runs.iter().flat_map(|run| run.outside.iter()).collect();
     checks.require(
-        off_screen.is_empty(),
-        "something was drawn outside what the camera shows",
+        outside.is_empty(),
+        "something was drawn outside the 960x540 the layout is stated in",
         format!(
-            "{} quads of {} fall outside {view:?}; the first is {:?} - a sheet line or a \
-             report row wider than its column is the usual culprit",
-            off_screen.len(),
+            "{} quads of {} fall outside {:?}; the first is {:?} - a wrapped line or a \
+             status line wider than its card is the usual culprit",
+            outside.len(),
             runs.iter().map(|run| run.quads).sum::<usize>(),
-            off_screen.first(),
+            layout::design(),
+            outside.first(),
         ),
     );
     let clearance = runs
@@ -327,118 +444,55 @@ pub fn run() -> ExitCode {
         .map(|run| run.clearance)
         .fold(f32::MAX, f32::min);
 
-    // --- the layout's own requirements, not its constants ---------------
-    //
-    // "On screen" is not "in the right place". These say what the layout is
-    // *for*, so they survive somebody changing the number that produced it.
-    let cards = last.at_assembly.members.len();
-    let lowest_card = ui::card_rect(cards.saturating_sub(1)).max.y;
-    checks.require(
-        greater(ui::send_button().min.y, lowest_card),
-        "the send button overlaps the roster it is about",
-        format!(
-            "the last of {cards} cards ends at y {lowest_card:.2} and the button starts at \
-             {:.2}",
-            ui::send_button().min.y
-        ),
-    );
-    // The roster sits between the headline and the first job row, and the two
-    // columns start level. Stated as a pair rather than against CONTENT_TOP,
-    // which is the constant that put both of them there: a check spelled
-    // `card_rect(0).min.y == CONTENT_TOP` moves with the cards and cannot see
-    // them drift. This pair caught exactly that, injected on purpose.
-    checks.require(
-        greater(ui::card_rect(0).min.y, ui::header_bar().max.y - 0.11),
-        "the roster is drawn up into the headline it sits under",
-        format!(
-            "the first card starts at y {:.2} and the headline bar ends at {:.2}",
-            ui::card_rect(0).min.y,
-            ui::header_bar().max.y
-        ),
-    );
-    checks.require(
-        !greater(ui::card_rect(0).min.y, ui::dungeon_row_rect(0).min.y),
-        "the roster column and the wide column do not start level",
-        format!(
-            "the first card starts at y {:.2} and the first job row at {:.2}; a column that \
-             starts lower than the one beside it is a column that has drifted",
-            ui::card_rect(0).min.y,
-            ui::dungeon_row_rect(0).min.y
-        ),
-    );
-    checks.require(
-        greater(ui::MAIN_X, ui::card_rect(0).max.x),
-        "the wide column starts inside the roster column",
-        format!(
-            "cards end at x {:.2} and the column starts at {:.2}",
-            ui::card_rect(0).max.x,
-            ui::MAIN_X
-        ),
-    );
-    let report_bottom = ui::report_row_y(last.report.len().saturating_sub(1)) + ui::SMALL;
-    checks.require(
-        greater(ui::continue_button().min.y, report_bottom),
-        "the report runs into the button under it",
-        format!(
-            "{} report rows end at y {report_bottom:.2} and the button starts at {:.2}",
-            last.report.len(),
-            ui::continue_button().min.y
-        ),
-    );
+    floors::layout_floors(&mut checks);
+    let scaling_report = floors::scaling_contract(&mut checks);
 
-    // --- the schedule order, which nothing else can see -----------------
+    // --- the schedule order, which nothing else can see -------------------
     let order = &last.schedule;
-    let (pointer_at, preview_at) = (order.find("handle_pointer"), order.find("refresh_preview"));
-    checks.require(
-        pointer_at.is_some() && preview_at.is_some() && pointer_at < preview_at,
-        "the preview is computed before the click that changes it",
-        format!(
-            "handle_pointer is at {pointer_at:?} and refresh_preview at {preview_at:?} in the \
-             schedule; reversed, the arithmetic on screen is the previous tick's party"
+    let marks = |name: &str| order.find(name);
+    for (first, second, why) in [
+        (
+            "fit",
+            "handle_pointer",
+            "the camera is fitted after the click that is converted through it, so a resized \
+             window sends one frame's clicks to the previous frame's rectangles",
         ),
-    );
-    let (headline_at, backdrop_at) = (order.find("draw_headline"), order.find("draw_backdrop"));
-    checks.require(
-        headline_at.is_some() && backdrop_at.is_some() && headline_at < backdrop_at,
-        "the headline is no longer submitted before the bar behind it",
-        format!(
-            "draw_headline is at {headline_at:?} and draw_backdrop at {backdrop_at:?}; with the \
-             bar submitted first, no assertion over a recorded frame can see the band at all"
+        (
+            "handle_pointer",
+            "refresh_preview",
+            "the preview is computed before the click that changes it, so the arithmetic on \
+             screen is the previous tick's party",
         ),
-    );
+        (
+            "draw_overlay",
+            "draw_content",
+            "the log drawer's scrim is submitted after the text it is meant to sit behind",
+        ),
+    ] {
+        let (a, b) = (marks(first), marks(second));
+        checks.require(
+            a.is_some() && b.is_some() && a < b,
+            "a system order the game depends on has been reversed",
+            format!("{first} is at {a:?} and {second} at {b:?} in the schedule; {why}"),
+        );
+    }
 
-    // --- the screen the run reaches exactly once ------------------------
+    // --- the screen the run reaches exactly once --------------------------
     checks.require(
         last.stage_at_end == Stage::Complete,
         "finishing the last beat did not finish the chain",
         format!("the chain ended in {:?}", last.stage_at_end),
     );
-    if let Some(frame) = &last.end_frame {
-        for text_run in ui::complete_runs() {
-            let drawn = glyph_run(frame, last.font, text_run.at);
-            checks.require(
-                drawn == text_run.text.chars().count(),
-                "a row of the end-of-chain screen is not drawn as the string it is",
-                format!(
-                    "{:?} is {} characters and {drawn} glyphs were drawn at ({:.2}, {:.2})",
-                    text_run.text,
-                    text_run.text.chars().count(),
-                    text_run.at.x,
-                    text_run.at.y
-                ),
-            );
-        }
-    }
 
-    // --- the background, which leaves no quad behind --------------------
+    // --- the background, which leaves no quad behind ----------------------
     if let Some(frame) = &last.report_frame {
         let cleared = frame.plan.clear_color;
         checks.require(
-            cleared == ui::BACKDROP,
+            cleared == crate::theme::VOID,
             "the screen was cleared to a colour the game does not name",
             format!(
-                "it cleared to {cleared:?}; the game's constant is {:?}",
-                ui::BACKDROP
+                "it cleared to {cleared:?}; the letterbox's constant is {:?}",
+                crate::theme::VOID
             ),
         );
         // And the requirement the colour exists to meet, which the constant
@@ -454,33 +508,19 @@ pub fn run() -> ExitCode {
         );
     }
 
-    // --- every string the game draws, in characters the font has --------
-    contracts::printable_strings(&mut checks);
-    // --- the contracts a played beat never reaches ----------------------
+    // --- the art library, and every string the game draws -----------------
+    library::library(&mut checks);
+    library::printable_strings(&mut checks);
+    // --- the contracts a played beat never reaches ------------------------
     contracts::battery(&mut checks, &tuning);
-    // --- and the round that says whether any of it is an instrument -----
-    let mutations = contracts::mutation_round(&mut checks);
+    // --- and the round that says whether any of it is an instrument -------
+    let mutations = mutation::mutation_round(&mut checks);
+    // --- the pictures a person looks at -----------------------------------
+    let captured = capture::capture_screens(&mut checks, &runs, tuning);
 
-    // The picture is of the screen a player spends the beat on, with a refusal
-    // and its arithmetic on it: sheets, the job, the willingness sum, and a
-    // name in red saying no. The report is asserted row by row above and the
-    // transcript below is its frame; this is the one a person looks at.
-    let shown = runs
-        .iter()
-        .find(|run| run.probe_frame.is_some())
-        .unwrap_or(last);
-    let captured = shown
-        .probe_frame
-        .as_ref()
-        .or(shown.report_frame.as_ref())
-        .map_or_else(
-            || "skipped, no frame was recorded".to_owned(),
-            |frame| crate::capture::capture_a_frame(&mut checks, frame, shown.font),
-        );
     let verdict = checks.verdict();
-
     println!(
-        "verified giri over {} beats, {} ticks of scripted pointer",
+        "verified giri over {} beats, {} frames of scripted pointer",
         CHAIN.len(),
         runs.iter().map(|run| run.frames).sum::<usize>()
     );
@@ -491,23 +531,36 @@ pub fn run() -> ExitCode {
     for (index, run) in runs.iter().enumerate() {
         let spec = CHAIN.get(index).map_or("?", |spec| spec.title);
         println!(
-            "  beat {} {spec:?}: {} frames, {} report rows, {} dead, {} refusals previewed",
+            "  beat {} {spec:?}: {} frames, {} report rows, {} event cards, {} dead, \
+             door probes {}",
             index + 1,
             run.frames,
             run.report.len(),
+            run.report_flow.events.len(),
             run.after.members.iter().filter(|m| !m.alive).count(),
-            run.probe.as_ref().map_or(0, |probe| probe
-                .entries
-                .iter()
-                .filter(|e| !e.joins())
-                .count()),
+            match (&run.refusal, &run.veto) {
+                (Some(_), Some(_)) => "refusal and veto",
+                (Some(_), None) => "refusal only",
+                (None, Some(_)) => "veto only",
+                (None, None) => "none - no refusal in this beat",
+            },
         );
     }
-    println!("  closest quad to the edge: {clearance:.2} world units");
+    println!("  closest quad to the design edge: {clearance:.2} world units");
+    println!("  scaling: {scaling_report}");
     println!("  mutation round: {mutations}");
-    println!("  capture: {captured}");
+    println!("{captured}");
     if let Some(frame) = &last.report_frame {
         print!("{}", frame.transcript());
     }
     verdict
+}
+
+/// Every screen mode a capture set covers, and the frame each comes from.
+pub fn screen_modes(run: &BeatRun) -> Vec<(&'static str, Option<&FrameRecord>)> {
+    vec![
+        ("board", run.board_frame.as_ref()),
+        ("staged", run.ready_frame.as_ref()),
+        ("resolution", run.report_frame.as_ref()),
+    ]
 }
