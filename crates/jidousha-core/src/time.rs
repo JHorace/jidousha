@@ -54,22 +54,30 @@ pub struct Time {
     /// ~2.8s if the steps were summed). Logic that must be exact keys off
     /// `tick`, which is why that is the canonical timeline.
     pub elapsed: Seconds,
-    /// A Draw-only interpolation fraction that nothing in v1 consumes.
+    /// Where this frame falls between the previous tick and the current one.
     ///
-    /// How far into the next tick the last rendered frame fell, in `0.0..1.0`.
-    /// Update systems must ignore it: reading it there would make the simulation
-    /// depend on frame timing, which is exactly what the fixed timestep exists to
-    /// prevent.
+    /// `0.0` is the tick before last; `1.0` is the tick just run. Update systems
+    /// must ignore it: reading it there would make the simulation depend on frame
+    /// timing, which is exactly what the fixed timestep exists to prevent.
     ///
     /// **The engine draws no interpolation of its own.** There is no lerp helper
     /// and no "previous transform" the renderer knows about — `Draw` reads the
     /// world's committed state, so a game that submits `transform.pos` unchanged
     /// judders at the tick rate however fast the frames come. The field is here
     /// for a game that minds: keep last tick's value in a component of your own
-    /// and submit `previous.lerp(current, alpha)` from the Draw system. E0 run 4
-    /// read the definition, found nothing that consumed it, and ignored it
-    /// (e0-findings.md F-048) — which is the correct move for a prototype and
-    /// the reason the field's own line now says so.
+    /// and submit `previous.lerp(current, alpha)` from the Draw system.
+    /// `examples/pong` does exactly that and is the worked example
+    /// (e0-findings.md F-048).
+    ///
+    /// **A windowed frame reports `0.0..1.0`; a per-tick driver reports exactly
+    /// `1.0`.** The windowed loop has real time left over that it has not yet
+    /// simulated, and `alpha` is that remainder as a fraction of a tick — so an
+    /// interpolating game draws one tick behind and gets smooth motion for it.
+    /// A driver that draws once per tick — `HeadlessSim`, `tools/verify`,
+    /// `FrameRecorder` — has no remainder: its frame lands exactly on the tick
+    /// it just ran, so `alpha` is `1.0` there and an interpolating game draws
+    /// its committed state, byte for byte what it drew before it interpolated
+    /// (ADR-0041).
     pub alpha: f32,
 }
 
@@ -92,9 +100,18 @@ impl Time {
     /// `elapsed` is recomputed from `tick` rather than accumulated, so a long
     /// run cannot drift the way repeated addition of a fractional `fixed_dt`
     /// would.
+    ///
+    /// DELIBERATE: `alpha` goes to `1.0` here (see ADR-0041). A tick leaves the
+    /// clock standing exactly on a tick boundary, and a driver that draws once
+    /// per tick draws it there — so `previous.lerp(current, 1.0)` is `current`
+    /// and an interpolating game's headless transcript is the one it had before
+    /// it interpolated. [`Simulation::advance`](crate::Simulation::advance)
+    /// overwrites this with the accumulator's remainder after its ticks have
+    /// run, which is the windowed value.
     pub(crate) fn advance(&mut self) {
         self.tick += 1;
         self.elapsed = Seconds(self.tick as f32 * self.fixed_dt.as_f32());
+        self.alpha = 1.0;
     }
 }
 
@@ -107,6 +124,16 @@ mod tests {
         let time = Time::new(Seconds(0.5));
         assert_eq!(time.tick, 0);
         assert_eq!(time.elapsed, Seconds::ZERO);
+    }
+
+    #[test]
+    fn a_tick_leaves_the_interpolation_fraction_at_the_tick_it_just_ran() {
+        // A driver that draws once per tick draws the state it just committed:
+        // `previous.lerp(current, 1.0)` is `current`, so interpolation changes
+        // nothing about a headless transcript (ADR-0041).
+        let mut time = Time::new(Seconds(1.0 / 60.0));
+        time.advance();
+        assert_eq!(time.alpha, 1.0);
     }
 
     #[test]

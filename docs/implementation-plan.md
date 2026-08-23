@@ -167,7 +167,7 @@ CLAUDE.md                        router — always read first
 docs/agent-practices.md          why every rule exists; enforcement map
 docs/conventions.md              coordinates, units, color, naming
 docs/implementation-plan.md      this file
-docs/adr/0001..0037              decisions; DELIBERATE tags point here
+docs/adr/0001..0041              decisions; DELIBERATE tags point here
 docs/internal/core.md            ECS, schedule, time, app (M-milestones)
 docs/internal/renderer.md        submissions, backend seam (R-milestones)
 docs/internal/assets.md          handles, readiness determinism (A-milestones)
@@ -175,6 +175,7 @@ docs/internal/input.md           snapshots, replay (I-milestones)
 docs/internal/public-api.md      facade inventory, docs/api spec (F0/E0)
 docs/internal/tooling.md         tools/ scripts, CI jobs, enforcement (M0)
 docs/internal/web-publish.md     web build/serve/deploy pipeline (W-milestones)
+docs/internal/frame-pacing.md    the Firefox pacing observation; open verdict
 docs/internal/e0-prompt.md       the acceptance prompt, verbatim (E0 harness)
 docs/internal/e0-findings.md     what building a game actually cost (E0)
 docs/templates/BLOCKED.md        escalation template

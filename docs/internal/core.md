@@ -370,11 +370,11 @@ Loop shape (standard accumulator):
 ```
 frame:
   platform pumps events → input snapshot(s)         (jidousha-platform)
-  accumulator += real frame time (clamped, max 0.25s)
+  accumulator += real frame time (clamped, max 0.25s — twice; see below)
   while accumulator >= fixed_dt:
       run Update phase once (tick += 1)             // input snapshot fixed per tick
       accumulator -= fixed_dt
-  alpha = accumulator / fixed_dt
+  alpha = accumulator / fixed_dt                    // a per-tick driver: 1.0
   run Draw phase once
 ```
 
@@ -396,6 +396,41 @@ frame:
   run read the definition, found no consumer, and could not tell whether the field
   had a user or was unfinished. It has a user; the user is the game. These
   statements move together.
+
+- **`alpha` is `1.0` for a driver that draws once per tick** (**ADR-0041**,
+  2026-08-23). `Time::advance` sets it, `Simulation::advance` overwrites it with
+  the accumulator's remainder once its ticks have run — so the windowed value is
+  the `0.0..1.0` it always was, and `HeadlessSim`, `tools/verify`,
+  `FrameRecorder` and every doctest see `1.0` instead of the `Time::new` zero
+  they used to see. The reason is that the documented idiom was untestable
+  without it: at `alpha == 0.0`, `previous.lerp(current, alpha)` is `previous`, so
+  a headless run adopting the idiom drew the tick *before* the one it had run and
+  every check comparing a drawn quad against world state failed. Every game
+  following the documentation would have met that on its first check. The field's
+  meaning is restated rather than changed — "where this frame falls between the
+  previous tick and the current one", which is the same number for the windowed
+  loop and the only reading with an endpoint at the tick just run. Nothing about
+  replay identity can move: `alpha` is Draw-only, no Update system may read it,
+  so no simulation state depends on it. `examples/pong` and
+  `examples/prototype_kit` are the worked examples, and pong's verify report and
+  captured frame are byte-identical across the change.
+
+  The observation that prompted all of this, and the reading still outstanding on
+  it, are in `docs/internal/frame-pacing.md`.
+
+- **The catch-up bound is real and it lives in two places, both `MAX_FRAME =
+  0.25s`**: `FrameClock::frame` (jidousha-platform `clock.rs`) clamps what the
+  clock will even report, and `Simulation::advance` clamps the argument again on
+  the way in — so a headless driver passing its own number gets the same ceiling
+  as the windowed one. What is bounded is a **frame's contribution of real
+  time**, not ticks directly; at the default timestep the ceiling is fifteen
+  ticks in one frame. There is no separate ticks-per-frame clamp and does not
+  need to be: the two express the same thing, and stating it in seconds is what
+  makes it independent of `fixed_dt`. `FrameClock::skip` is the third piece —
+  time spent behind a screensaver or an unfocused window is forgotten rather than
+  spent, so coming back does not lurch. Verified by
+  `a_stalled_frame_is_clamped_instead_of_spiralling` and
+  `a_frame_is_never_longer_than_the_ceiling`.
 
 - CONTRACT (the engine's central promise): **simulation state is a pure function
   of (seed, registered systems, per-tick input snapshots).** Native and web

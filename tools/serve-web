@@ -10,12 +10,19 @@ what works here is what works deployed. It MUST serve `.wasm` as
     tools/serve-web                     # serve dist/ as a whole
     tools/serve-web sprites --check     # drive a headless browser at the page,
                                         # then at the forced panic (?panic=1),
-                                        # report, exit
+                                        # then at ?frametime=1, report, exit
 
 `--check` is what makes the web target *checkable* rather than merely
 compilable: it loads the page in a real Chromium, asserts the module started
-and drew, then loads it again with `?panic=1` and asserts the panic overlay
-rendered the full §9 message (web-publish.md §2, §6 W0 exit criteria).
+and drew, loads it again with `?panic=1` and asserts the panic overlay rendered
+the full §9 message, and loads it a third time with `?frametime=1` and asserts
+the frame-pacing overlay came up and classified the renderer (web-publish.md §2,
+§6 W0 exit criteria).
+
+The third pass has a property the other two do not: this browser is *deliberately*
+software-rendering — `--use-angle=swiftshader`, because a CI runner has no GPU —
+so the overlay's software-rendering warning is a thing the check can require
+rather than merely tolerate, and a detector that stopped detecting fails here.
 
 Stdlib only, like every other tool here (tooling.md).
 """
@@ -392,8 +399,79 @@ def check_panic_overlay(browser: str, port: int, example: str) -> int:
     return 0
 
 
+def check_frametime_overlay(browser: str, port: int, example: str) -> int:
+    """`?frametime=1` brings up the frame-pacing overlay and names the renderer.
+
+    The overlay is the answer to "the ball is jumpy in my browser" — a page-side
+    instrument on every deployed build, reachable by query parameter alone
+    (web-publish.md §2). A diagnostic nobody can reach is a diagnostic that
+    rots, so it is checked the same way the panic overlay is.
+    """
+    loaded = load_page(
+        browser, f"http://127.0.0.1:{port}/{example}/index.html?frametime=1", "frametime"
+    )
+    if isinstance(loaded, int):
+        return loaded
+    dom, _shot, log = loaded
+    verdict = re.search(r'data-jidousha-frametime="([a-z]+)"', dom)
+    if verdict is None:
+        return fail(
+            f"{example} with ?frametime=1 did not bring up the frame-pacing overlay",
+            "no data-jidousha-frametime marker in the page",
+            "the overlay's query-parameter gate did not fire, or it threw before "
+            "classifying the renderer",
+            f"read {log.relative_to(REPO_ROOT)}; open the page with ?frametime=1 yourself",
+        )
+    classification = verdict.group(1)
+    print(f"[serve-web] frametime overlay says the renderer is: {classification}")
+
+    panel = re.search(r'<div id="frametime"([^>]*)>(.*?)\n\s*</div>\s*<div id="status"', dom, re.S)
+    shown = 'class="shown"' in (panel.group(1) if panel else "")
+    if not shown:
+        return fail(
+            f"{example} with ?frametime=1 left the overlay hidden",
+            f"the marker says {classification} but #frametime never got the shown class",
+            "the panel was classified and then not displayed",
+            "open the page with ?frametime=1 and look at the top right",
+        )
+
+    body = re.search(r'<div id="frametime-body">(.*?)</div>', dom, re.S)
+    text = body.group(1) if body else ""
+    for required in ("display", "renderer", "ticks/fr", "frame deltas"):
+        if required not in text:
+            return fail(
+                "the frame-pacing overlay is missing one of its readings",
+                f"wanted {required!r}; overlay body: {text[:300]!r}",
+                "the overlay rendered before it had anything to say, or a reading was dropped",
+                "open the page with ?frametime=1 and compare against web-publish.md §2",
+            )
+
+    # This browser runs on SwiftShader by construction (see `load_page`), so an
+    # overlay that cannot see software rendering here cannot see it anywhere.
+    if classification != "software":
+        return fail(
+            "the frame-pacing overlay did not notice it was software-rendering",
+            f"it classified this browser as {classification}; it is driven with "
+            "--use-angle=swiftshader",
+            "the renderer string moved, or WEBGL_debug_renderer_info stopped answering",
+            f"read {log.relative_to(REPO_ROOT)} for the renderer the overlay logged, and "
+            "widen SOFTWARE_RENDERERS in tools/web-template/index.html to match it",
+        )
+    warning = re.search(r'<div id="frametime-warning"([^>]*)>(.*?)</div>', dom, re.S)
+    if "software-rendering" not in (warning.group(2) if warning else ""):
+        return fail(
+            "the frame-pacing overlay classified software rendering and did not say so",
+            f"warning box: {(warning.group(2) if warning else '')[:200]!r}",
+            "the classification and the visible warning came apart",
+            "a playtester reads the box, not the data attribute — fix the box",
+        )
+    print("[serve-web] PASS — ?frametime=1 showed the overlay and caught the software renderer")
+    return 0
+
+
 def check(port: int, example: str) -> int:
-    """Both halves: the page runs and draws; the panic overlay works."""
+    """Three passes: the page runs and draws; the panic overlay works; the
+    frame-pacing overlay comes up and classifies the renderer."""
     browser = chromium()
     if browser is None:
         return fail(
@@ -407,7 +485,10 @@ def check(port: int, example: str) -> int:
     step = check_runs(browser, port, example)
     if step != 0:
         return step
-    return check_panic_overlay(browser, port, example)
+    step = check_panic_overlay(browser, port, example)
+    if step != 0:
+        return step
+    return check_frametime_overlay(browser, port, example)
 
 
 def main() -> int:

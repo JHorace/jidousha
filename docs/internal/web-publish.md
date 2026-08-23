@@ -33,8 +33,9 @@ tools/serve-web [<name>] [--check]
   (implementation free; doctor verifies by fetching a .wasm and checking the
   Content-Type). --check drives a headless browser at /<name>/: once
   asserting the page ran and drew, once at ?panic=1 asserting the panic
-  overlay rendered the full §9 text. Check artifacts go to target/web-check/,
-  never into dist/ — dist is what deploys.
+  overlay rendered the full §9 text, once at ?frametime=1 asserting the
+  frame-pacing overlay came up and classified the renderer (§2). Check
+  artifacts go to target/web-check/, never into dist/ — dist is what deploys.
 ```
 
 - CONTRACT: `tools/build-web` is the ONLY web build path — CI, local dev, and
@@ -104,6 +105,46 @@ One `index.html` template, self-contained (no external CDN dependencies):
   only). It exists so the overlay contract is verifiable — manually on any
   deployed build, and by `serve-web --check`'s second pass — and it ships in
   real games because a bug-reporting path nobody can test is a path that rots.
+- **Frame-pacing overlay** (`?frametime=1`): a page-side instrument, on every
+  deployed build, reachable by query parameter alone. It answers the one
+  question a remote playtest cannot otherwise answer — "the ball is jumpy in my
+  browser and smooth in yours, why" — with the two facts that settle it:
+  - a rolling histogram of `requestAnimationFrame` deltas (one-millisecond
+    buckets, which is the resolution that separates a 120Hz cadence from a 60Hz
+    one and shows a quantised clock piling its deltas onto whole numbers),
+    the estimated display refresh from their median, and their spread;
+  - **ticks per rendered frame** — 0, 1, 2, 3+ — which is the *symptom*: the
+    ball appears to jump forward exactly when one frame runs two ticks;
+  - the **WebGL renderer string** (`WEBGL_debug_renderer_info`), classified.
+    llvmpipe / lavapipe / SwiftShader / swrast / "software" / Mesa offscreen /
+    "basic render" ⇒ a visible warning, "this browser is software-rendering;
+    expect jank". Absent under `privacy.resistFingerprinting`, and reported as
+    absent rather than guessed at;
+  - whether WebGPU is present, and the browser's `performance.now()`
+    resolution — Firefox clamps to ~1ms by default, Chrome to ~5µs, and a 1ms
+    quantum against a 16.67ms cadence produces periodic 0-tick and 2-tick
+    frames with nothing actually dropped.
+- CONTRACT: **the overlay is presentation-side and never feeds the
+  simulation.** It reads `performance.now()` and `requestAnimationFrame` and
+  never calls into the wasm module; real time reaches the engine through
+  `jidousha-platform`'s clock and the `Simulation::advance` argument, and
+  nowhere else (ADR-0005, core.md §7). The consequence, stated on the panel
+  itself: **ticks-per-frame is modelled, not read from the engine** — the page
+  runs the same accumulator (60 Hz, 0.25s ceiling — the one place two constants
+  agree by hand) over the deltas it measured. The alternative, exporting a
+  counter from the wasm side, would put a page-side reader on the simulation's
+  timeline for a diagnostic, and that is the door this contract keeps shut.
+- The panel takes **no pointer events**, so it can never shadow the game's own
+  input — which is also why its readings are kept short enough to fit without
+  scrolling rather than relying on a scrollbar nobody can reach.
+- Why it exists and what its readings mean, hypothesis by hypothesis:
+  `docs/internal/frame-pacing.md`, which is where the owner's reading of it gets
+  written down.
+- `serve-web --check` has a third pass for it (§1). That pass can require more
+  than "the overlay appeared": the check browser is deliberately
+  software-rendering (`--use-angle=swiftshader`, because a runner has no GPU),
+  so an overlay that fails to *notice* fails CI. A detector nothing exercises is
+  a detector that rots, and this one is exercised on every run.
 - Build stamp footer (§1).
 - Reserved hook (deferred, do not build yet): "download recording" button
   wired to the input recording buffer (input §5) once I2 lands — turns remote
