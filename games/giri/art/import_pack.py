@@ -20,7 +20,11 @@ Usage:
 With no `--map`, files are matched to roles by basename: a pack file named
 `icon_flame.png` fills the `icon_flame` role. Roles the pack does not fill keep
 their current file, so a partial library is fine and says which slots are still
-placeholders.
+the generated art.
+
+Nothing is waiting on this script: the generated set *is* giri's art (owner,
+2026-08-23). It exists because the day a library does arrive, the terms check
+and the role renaming should already have a door rather than be improvised.
 
 Exit codes: 0 imported (or, under --dry-run, would import) · 1 a file was
 rejected or the terms were not confirmed · 2 the script could not run.
@@ -92,9 +96,8 @@ def write_credits(rows: "list[tuple[str, int, int]]", licence: str, source: str)
         lines.append(f"| `{role}.png` | {width}x{height} | {source} | {licence} |")
     lines += [
         "",
-        "Roles absent from this table are still the script-generated placeholders",
-        "`art/make_placeholders.py` writes; the slots are the same either way",
-        "(UI.md §9).",
+        "Roles absent from this table are still the art `art/make_art.py`",
+        "generates; the slots are the same either way (UI.md §9).",
         "",
         "## Replacing a file",
         "",

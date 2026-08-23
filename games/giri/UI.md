@@ -223,6 +223,16 @@ left in a pull request nobody reads twice. Each says what changed and why.
   height scales uniformly when the window shrinks vertically and not at all
   when it shrinks horizontally. `src/scaling.rs` refits the height every frame;
   `floors.rs::scaling_contract` asserts the four claims at four surfaces.
+- **§9's asset slots are filled, and the owner kept what filled them**
+  (DECIDED, 2026-08-23). §1.4 and §9 are written expecting a curated library to
+  replace the script-generated art; the owner reviewed the captures and chose to
+  ship the generated set instead, so read those two passages as describing a
+  door rather than a queue. Nothing is pending: `assets/CREDITS.md` records
+  every file as original work of this repository, `art/make_art.py` (named for
+  what it does now) writes them from the grids in `art/sprite_defs.py`, and a
+  change to how giri looks is a change to a grid. `art/import_pack.py` stays,
+  because the role naming that makes a swap free is worth keeping whether or not
+  a swap ever happens.
 - **§8's capture set is six PNGs, not three**: board, board-with-party-staged
   and resolution, each at the reference surface and at 600x540. The narrow set
   is a second scripted run rather than a re-render, because a recorded frame's

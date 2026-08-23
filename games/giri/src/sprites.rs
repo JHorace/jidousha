@@ -1,12 +1,16 @@
 //! giri's art library: one role, one file, one handle (UI.md §2, §9).
 //!
 //! **The role is the contract, not the picture.** Every asset is named for
-//! what it *means* — `icon_flame` is desperation, `portrait_tim` is Tim — so
-//! the owner's curated library replaces the files by name and no code here
-//! changes (DESIGN §7's curation model; UI.md §9's asset slots). Nothing is
-//! downloaded: `art/make_placeholders.py` writes the committed PNGs from
-//! committed grids, and `assets/CREDITS.md` records the provenance of every
-//! one.
+//! what it *means* — `icon_flame` is desperation, `portrait_tim` is Tim — so a
+//! library replaces the files by name and no code here changes (DESIGN §7's
+//! curation model; UI.md §9's asset slots). Nothing is downloaded:
+//! `art/make_art.py` writes the committed PNGs from committed grids, and
+//! `assets/CREDITS.md` records the provenance of every one.
+//!
+//! The generated set is what giri ships (owner, 2026-08-23), so the grids in
+//! `art/sprite_defs.py` are where a change to how the game looks is made. The
+//! role naming keeps its value either way: it is what makes the swap free on
+//! the day somebody wants one.
 //!
 //! **The bytes are compiled in, and that is a platform fact rather than a
 //! preference.** `tools/build-web` stages the repository's root `assets/`
@@ -276,8 +280,8 @@ pub fn store() -> Assets {
                     "giri's own art no longer decodes",
                     &format!("{}: {error}", slot.file),
                     "a file under games/giri/assets/ is not a PNG this engine reads",
-                    "run games/giri/art/make_placeholders.py to rewrite the placeholders, or \
-                     re-import the library file",
+                    "run games/giri/art/make_art.py to rewrite the library from its grids, \
+                     or re-import the file",
                 )
             ),
         }

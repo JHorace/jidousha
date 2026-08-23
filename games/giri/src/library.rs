@@ -25,8 +25,8 @@ use crate::verify::play;
 /// must remain unique per character" silently, and every other check in this
 /// game would go on passing. So the files are checked for distinctness, for
 /// being pictures at all, and for being the size the code says they are — which
-/// is the check that catches the owner's curated library arriving at a
-/// different resolution from the placeholders it replaced.
+/// is the check that catches a file being replaced by one at a different
+/// resolution - by a hand edit to a grid, or by a library arriving one day.
 pub fn library(checks: &mut Checks) {
     let mut files: Vec<&'static str> = Vec::new();
     for art in Art::ALL.iter().copied() {

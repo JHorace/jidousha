@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""games/giri/art/make_placeholders.py — write giri's placeholder art.
+"""games/giri/art/make_art.py — write giri's art.
 
 Reads the grids in `sprite_defs.py` and writes one PNG per asset slot into
 `games/giri/assets/`, role-named lowercase snake_case (DESIGN §7's curation
@@ -7,12 +7,13 @@ model). Original art, generated deterministically by a committed script:
 nothing here is downloaded, and the same run on any machine writes the same
 bytes.
 
-These are placeholders in the sense UI.md §9 means: the *slots* are final and
-the pictures are not. The owner's curated library replaces the files by name
-and the game does not change — the sprite is named by its role, not by what it
-happens to look like today.
+**This is giri's art, not a stand-in for it** (owner, 2026-08-23). It began as
+the placeholder set the mockup's grids describe and the owner kept it, so the
+grids in `sprite_defs.py` are where a change to how giri looks is made — edit a
+grid, run this, look at the captures. `import_pack.py` remains the door a
+different library would come in through; nothing is waiting on it.
 
-Usage:  games/giri/art/make_placeholders.py [--check]
+Usage:  games/giri/art/make_art.py [--check]
 
 `--check` writes nothing and reports whether the committed PNGs are what this
 script would produce, which is how a hand edit to a grid gets noticed.
@@ -116,7 +117,7 @@ def main(argv: "list[str]") -> int:
         if stale:
             print(f"[giri-art] out of date: {', '.join(stale)}")
             print("  likely cause: a grid in sprite_defs.py changed and the PNGs were not rewritten")
-            print("  fix: run games/giri/art/make_placeholders.py")
+            print("  fix: run games/giri/art/make_art.py")
             return 1
         print(f"[giri-art] {len(LIBRARY)} file(s) match the committed grids")
         return 0

@@ -1,13 +1,13 @@
-"""The placeholder sprite grids and their palettes — giri's whole art library.
+"""The sprite grids and their palettes — giri's whole art library.
 
 One definition per asset slot in `UI.md` §9, in the shape the approved mockup
 drew them: a list of equal-length strings, one character per texel, resolved
 against a palette. `.` (and any key the palette does not carry) is transparent.
 
-Kept beside `make_placeholders.py` rather than inside it so the *pictures* and
-the *encoder* are two files: the owner's curated library replaces the PNGs this
-produces without either file changing, and a hand edit to a grid is a diff of
-the picture rather than of a script.
+Kept beside `make_art.py` rather than inside it so the *pictures* and the
+*encoder* are two files: a hand edit to a grid is a diff of the picture rather
+than of a script, and this is where a change to how giri looks is made (owner,
+2026-08-23 — the generated set is the shipped art, not a stand-in for one).
 
 Palettes are UI.md §2's colour roles: stone for dungeons, the icon palette for
 stat and event icons, bone for the skull, and one per-character palette per
