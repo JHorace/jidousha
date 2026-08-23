@@ -247,7 +247,7 @@ pub fn handle_pointer(world: &mut World) {
 }
 
 fn click_in_assembly(world: &mut World, at: Vec2) {
-    let social = Social::read(world);
+    let social = Social::read(&world.view());
     let flow = world.resource::<Flow>();
     let Some(beat) = flow.spec() else {
         return;
@@ -305,7 +305,7 @@ fn click_in_assembly(world: &mut World, at: Vec2) {
 
 /// Recompute the willingness preview, every tick, from the gate itself.
 pub fn refresh_preview(world: &mut World) {
-    let social = Social::read(world);
+    let social = Social::read(&world.view());
     let tuning = *world.resource::<Tuning>();
     let flow = world.resource::<Flow>();
     let party = flow.party.clone();

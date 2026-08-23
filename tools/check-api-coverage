@@ -60,7 +60,6 @@ EXEMPT = {
     # which, because "no example names it" and "no example uses it" are very
     # different facts and only the second is a problem.
     "Submit": "a trait used through method syntax: `ctx.sprite(...)` resolves through it",
-    "WorldView": "reached as `ctx.world`; a game never writes the type",
     "Commands": "inferred from `world.commands()` — see examples/spawn_and_reap.rs",
     "Bundle": "a bundle is written as a tuple: `commands().spawn((Position(..), Velocity(..)))`",
     "Quad": "the sink `ctx.sprite(...)` writes into; a game submits through the verbs",

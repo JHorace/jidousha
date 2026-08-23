@@ -72,7 +72,7 @@ fn bench_kill(
         edges.push((2, 1, 2));
     }
     let (world, ids) = bench(&[("Kil", 8, 0), ("Vic", 0, 0), ("Wit", 0, 0)], &edges);
-    let social = Social::read(&world);
+    let social = Social::read(&world.view());
     let dungeon = crate::beats::Dungeon {
         name: "the bench",
         headcount: 3,
@@ -104,7 +104,7 @@ pub fn battery(checks: &mut Checks, tuning: &Tuning) {
 
     // --- willingness: a bond outranks public information ---------------
     let (world, ids) = bench(&[("Clean", 1, 0), ("Known", 0, 3)], &[]);
-    let social = Social::read(&world);
+    let social = Social::read(&world.view());
     let answer = willingness(&social, tuning, ids[0], &ids);
     checks.require(
         answer.total == 1 - tuning.k_inf * 3 && !answer.joins(),
@@ -112,7 +112,7 @@ pub fn battery(checks: &mut Checks, tuning: &Tuning) {
         format!("Clean says {}", answer.arithmetic()),
     );
     let (world, ids) = bench(&[("Clean", 1, 0), ("Known", 0, 3)], &[(0, 1, 5)]);
-    let social = Social::read(&world);
+    let social = Social::read(&world.view());
     let answer = willingness(&social, tuning, ids[0], &ids);
     checks.require(
         answer.joins() && answer.regard_total == 5,
@@ -151,7 +151,7 @@ pub fn battery(checks: &mut Checks, tuning: &Tuning) {
     // nothing for it - drop the clamp and a reputation becomes a recruiting
     // bonus, which no beat above would notice.
     let (world, ids) = bench(&[("Clean", 0, 0), ("Known", 0, 5)], &[]);
-    let social = Social::read(&world);
+    let social = Social::read(&world.view());
     let downhill = social.incompat(tuning, ids[1], ids[0]);
     checks.require(
         downhill == 0,
@@ -183,7 +183,7 @@ pub fn battery(checks: &mut Checks, tuning: &Tuning) {
             &[("First", 8, 0), ("Second", 8, 0)]
         };
         let (world, ids) = bench(rows, &[]);
-        let social = Social::read(&world);
+        let social = Social::read(&world.view());
         let done = betrayals(&social, tuning, &ids, 6, 2);
         let killer = done.first().map(|betrayal| social.name(betrayal.killer));
         checks.require(
@@ -201,7 +201,7 @@ pub fn battery(checks: &mut Checks, tuning: &Tuning) {
     // Each clause on its own, because a rule that fires when any one of three
     // holds passes every test where all three do.
     let (world, ids) = bench(&[("Calm", tuning.k_kill - 1, 0), ("Other", 0, 0)], &[]);
-    let social = Social::read(&world);
+    let social = Social::read(&world.view());
     checks.require(
         betrayals(&social, tuning, &ids, 6, 2).is_empty(),
         "a character below K_kill betrayed anyway",
@@ -215,7 +215,7 @@ pub fn battery(checks: &mut Checks, tuning: &Tuning) {
         &[("Loyal", 9, 0), ("Friend", 0, 0)],
         &[(0, 1, tuning.k_loyal)],
     );
-    let social = Social::read(&world);
+    let social = Social::read(&world.view());
     checks.require(
         betrayals(&social, tuning, &ids, 6, 2).is_empty(),
         "regard at K_loyal did not suppress a betrayal",
@@ -225,7 +225,7 @@ pub fn battery(checks: &mut Checks, tuning: &Tuning) {
         ),
     );
     let (world, ids) = bench(&[("Broke", 9, 0), ("Other", 0, 0)], &[]);
-    let social = Social::read(&world);
+    let social = Social::read(&world.view());
     checks.require(
         betrayals(&social, tuning, &ids, 2, 2).is_empty(),
         "a killing with nothing to gain happened anyway",
@@ -362,7 +362,7 @@ pub fn battery(checks: &mut Checks, tuning: &Tuning) {
 
     // --- the dungeon predicates no tutorial beat uses -------------------
     let (world, ids) = bench(&[("Clean", 0, 0), ("Known", 0, 4)], &[]);
-    let social = Social::read(&world);
+    let social = Social::read(&world.view());
     for (requirement, party, want) in [
         (Requirement::AnyParty, &ids[..], true),
         (
@@ -392,7 +392,7 @@ pub fn battery(checks: &mut Checks, tuning: &Tuning) {
 
     // --- the gate, including the states play does not stop on -----------
     let (world, ids) = bench(&[("Clean", 1, 0), ("Known", 0, 3)], &[]);
-    let social = Social::read(&world);
+    let social = Social::read(&world.view());
     let two_of_three = crate::beats::Dungeon {
         name: "the bench",
         headcount: 3,

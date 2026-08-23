@@ -292,7 +292,13 @@ Three phases, fixed set for v1:
   is the submission sink. Phases are types naming their system signature, so
   registering an Update-shaped fn in Draw is a compile error. The verification
   harness keeps a world-hash check across Draw as defense-in-depth against
-  interior-mutability escapes.
+  interior-mutability escapes. **`World::view(&self) -> WorldView<'_>`**
+  (ADR-0039, giri G-001) hands that same read-only view out from anywhere, so a
+  projection an Update system and a Draw system both read is written once
+  instead of twice. It weakens nothing: the view has no method that mutates, and
+  `tests/compile-fail/view_query_cannot_write.rs` holds the `&mut T` rejection
+  to the same sentences the Draw-phase snippet asserts. It lives in `draw.rs`
+  beside `WorldView`, so the module dependency still runs one way.
 
 ```rust
 app.add_system(Update, physics_system);   // appended; runs in registration order

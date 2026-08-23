@@ -96,7 +96,9 @@ impl TextStyle {
     /// Every character advances the same `size * 7 / 9`, so a layout can be
     /// reasoned about before it is run: an N-character line is `N * 7 / 9 *
     /// size` wide, and whether it fits is arithmetic rather than a thing to
-    /// discover from a transcript.
+    /// discover from a transcript. The other direction — how many characters
+    /// fit a column of known width — is [`columns_in`](TextStyle::columns_in),
+    /// so a game never writes that fraction down itself.
     ///
     /// `\n` starts a new line, so a multi-line string laid out at one position
     /// is a block, and this is the width of that block. Centering by it is the
@@ -121,6 +123,31 @@ impl TextStyle {
             .max()
             .unwrap_or(0);
         longest as f32 * self.advance()
+    }
+
+    /// How many characters of this size fit across `width` world units.
+    ///
+    /// The inverse of [`width_of`](TextStyle::width_of), and the answer a game
+    /// laying a *generated* string into a fixed column needs: `ctx.text` does
+    /// not wrap, and `\n` is the only break, so "how many characters fit" is a
+    /// question the game has to answer before it draws. The ratio is the same
+    /// one `width_of` measures with — every character advances `size * 7 / 9` —
+    /// and this is where a game gets it without writing that fraction down.
+    ///
+    /// Rounds **down**, so the count always fits: a width narrower than one
+    /// character is zero columns, and a line of `columns_in(w)` characters is
+    /// never wider than `w`.
+    ///
+    /// ```
+    /// # use jidousha_render_core::TextStyle;
+    /// let style = TextStyle { size: 0.9, ..TextStyle::default() };
+    /// let columns = style.columns_in(30.0);
+    /// assert!(style.width_of(&"x".repeat(columns)) <= 30.0);
+    /// ```
+    #[must_use]
+    pub fn columns_in(&self, width: f32) -> usize {
+        // `as` saturates: a negative width is zero columns rather than a wrap.
+        (width / self.advance()) as usize
     }
 
     /// How far one character moves the pen, in world units.
@@ -355,6 +382,49 @@ mod tests {
         let glyphs = layout(Vec2::ZERO, "abc", &style);
         let last = glyph_quad(&glyphs[2], &style);
         assert_eq!(last.corners[1].x, style.width_of("abc"));
+    }
+
+    #[test]
+    fn the_column_count_and_the_measured_width_are_the_same_ratio_read_two_ways() {
+        // `width_of`'s doc states the advance as `size * 7 / 9` and
+        // `columns_in` is that sentence read backwards, so a game never has to
+        // rediscover the fraction (games/giri/FINDINGS.md G-003). This is the
+        // assertion that keeps the two in step: a round trip through both, at
+        // sizes and lengths that do not divide evenly.
+        for size in [0.7_f32, 1.0, 9.0, 13.5] {
+            let style = TextStyle {
+                size,
+                ..TextStyle::default()
+            };
+            for length in [1_usize, 2, 7, 40, 137] {
+                let line = "x".repeat(length);
+                let width = style.width_of(&line);
+                assert_eq!(
+                    style.columns_in(width),
+                    length,
+                    "size {size}: {length} characters measure {width} and must count back"
+                );
+                // And it never overruns: one more character than it reported
+                // is wider than the column it was asked about.
+                let fitted = style.columns_in(width);
+                assert!(style.width_of(&"x".repeat(fitted + 1)) > width);
+            }
+        }
+    }
+
+    #[test]
+    fn a_column_narrower_than_one_character_fits_nothing() {
+        // The floor, at the only boundary a layout actually meets: a panel too
+        // narrow for a single glyph reports zero rather than one, so a caller
+        // slicing by the count draws nothing instead of overrunning.
+        let style = TextStyle {
+            size: 9.0,
+            ..TextStyle::default()
+        };
+        assert_eq!(style.columns_in(6.9), 0);
+        assert_eq!(style.columns_in(7.0), 1);
+        assert_eq!(style.columns_in(0.0), 0);
+        assert_eq!(style.columns_in(-10.0), 0);
     }
 
     #[test]

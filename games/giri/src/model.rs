@@ -112,34 +112,14 @@ pub struct Social {
 }
 
 impl Social {
-    /// Read the world (an Update system's view).
-    pub fn read(world: &World) -> Self {
-        let rows: Vec<(Entity, Character, i32, i32, i32)> = world
-            .query::<(&Character, &Desperation, &Infamy, &Wealth)>()
-            .map(|(entity, character, desperation, infamy, wealth)| {
-                (entity, *character, desperation.0, infamy.0, wealth.0)
-            })
-            .collect();
-        let dead: Vec<(Entity, Entity)> = rows
-            .iter()
-            .filter_map(|(entity, ..)| {
-                world
-                    .find_component::<Dead>(*entity)
-                    .map(|dead| (*entity, dead.killed_by))
-            })
-            .collect();
-        let edges = world
-            .query::<&RegardEdge>()
-            .map(|(_, edge)| *edge)
-            .collect();
-        Self::assemble(rows, &dead, edges)
-    }
-
-    /// Read the world a Draw system sees.
+    /// Read the world, from either phase.
     ///
-    /// The same snapshot from the read-only view, because the UI shows exactly
-    /// what the simulation decided from — two collectors, one model.
-    pub fn view(world: &WorldView<'_>) -> Self {
+    /// One reader, because the UI shows exactly what the simulation decided
+    /// from: a preview that disagreed with the resolution would be a lie, and
+    /// two collectors is how that starts. An Update system makes the view with
+    /// `world.view()`; a Draw system already holds one as `ctx.world`
+    /// (ADR-0039).
+    pub fn read(world: &WorldView<'_>) -> Self {
         let rows: Vec<(Entity, Character, i32, i32, i32)> = world
             .query::<(&Character, &Desperation, &Infamy, &Wealth)>()
             .map(|(entity, character, desperation, infamy, wealth)| {

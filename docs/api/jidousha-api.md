@@ -480,6 +480,33 @@ than from the context, so a Draw system draws straight out of its query and
 never needs the `Vec`. Both worked examples do it that way. Collecting first in a
 Draw system costs an allocation a frame and buys nothing.
 
+**A projection both phases read is written once, over a `WorldView`.** A game's
+UI is usually a picture of some projection — the roster, the scoreboard, the
+preview of what a move would do — and the rules are applied to that same
+projection, so the two must read it the same way or the picture and the rules
+come apart. `world.view()` is what makes that one function: it hands back the
+read-only `WorldView` a Draw system is *already* given as `ctx.world`, so one
+reader serves both callers.
+
+```rust
+struct Roster(Vec<Entity>);   // the projection: plain data, no world in it
+
+// The one reader. It takes the read-only view, so both phases can call it.
+fn read_the_roster(world: &WorldView<'_>) -> Roster {
+    Roster(world.query::<With<Player>>().map(|(entity, ())| entity).collect())
+}
+
+fn steer(world: &mut World) { let roster = read_the_roster(&world.view()); }
+fn draw(ctx: &mut DrawCtx) { let roster = read_the_roster(&ctx.world); }
+```
+
+Nothing reachable through a `WorldView` mutates, so this is not a way to write
+the world from Draw: `world.view().query::<&mut T>()` is the same compile error
+`ctx.world.query::<&mut T>()` is. Write the reader as a free function returning
+a plain snapshot and the rest of the game stops needing a world at all — which
+is also what lets a check call it directly. `examples/headless_sim.rs` is the
+worked version.
+
 **An example can be a directory, and a game with a `--verify` mode wants one.**
 `cargo run --example <name>` picks up `examples/<name>.rs` and
 `examples/<name>/main.rs` alike, with no `[[example]]` entry in any `Cargo.toml`
@@ -902,6 +929,7 @@ impl World {
     // alive
     pub fn find_component_mut<T: Component>(&mut self, entity: Entity) -> Option<&mut T>;
     pub fn commands(&self) -> Commands<'_>;  // Record structural changes to apply at the end of the running system
+    pub fn view(&self) -> WorldView<'_>;  // This world as a `WorldView` — the same type a Draw system is handed
     pub fn insert_resource<T: Resource>(&mut self, value: T);  // Store a resource, replacing any of the same type
     pub fn remove_resource<T: Resource>(&mut self);  // Drop the `T` resource
     pub fn resource<T: Resource>(&self) -> &T;  // The `T` resource, panicking if the world has none
@@ -1560,6 +1588,7 @@ pub struct TextStyle {
 
 impl TextStyle {
     pub fn width_of(&self, text: &str) -> f32;  // In world units — its widest line only, so a block centres crooked
+    pub fn columns_in(&self, width: f32) -> usize;  // How many characters of this size fit across `width` world units
 }
 ```
 

@@ -149,6 +149,29 @@ fn watch_the_input(world: &mut World) {
     }
 }
 
+/// Keep every line of `block` inside `columns` characters.
+///
+/// `ctx.text` does not wrap and `\n` is the only break, so a generated line
+/// too long for its panel runs off the side of the world and nothing warns.
+/// The caller gets `columns` from [`TextStyle::columns_in`], which is
+/// `width_of` read backwards — so a game laying generated strings into a fixed
+/// column never writes the font's advance down itself.
+fn clipped(block: &str, columns: usize) -> String {
+    block
+        .lines()
+        .map(|line| {
+            if line.chars().count() <= columns {
+                return line.to_owned();
+            }
+            // Three dots rather than an ellipsis: the font covers printable
+            // ASCII, and anything else draws as a visible box.
+            let keep: String = line.chars().take(columns.saturating_sub(3)).collect();
+            format!("{keep}...")
+        })
+        .collect::<Vec<String>>()
+        .join("\n")
+}
+
 fn draw_the_readout(ctx: &mut DrawCtx) {
     let echo = ctx.world.resource::<Echo>();
     let camera = ctx.world.resource::<Camera>();
@@ -168,6 +191,9 @@ fn draw_the_readout(ctx: &mut DrawCtx) {
 
     let left = view.min.x + 1.0;
     let mut line = view.min.y + 1.0;
+    // The panel is everything between the left margin and a matching one on
+    // the right. Hold enough keys at once and the list outgrows it.
+    let columns = body.columns_in(view.max.x - 1.0 - left);
 
     ctx.text(Vec2::new(left, line), "input echo", heading);
     line += heading.size * 1.6;
@@ -198,7 +224,7 @@ fn draw_the_readout(ctx: &mut DrawCtx) {
         echo.scroll_total,
         if echo.focused { "yes" } else { "no" },
     );
-    ctx.text(Vec2::new(left, line), &facts, body);
+    ctx.text(Vec2::new(left, line), &clipped(&facts, columns), body);
     line += body.size * 7.0;
 
     ctx.text(Vec2::new(left, line), "recent edges", heading);
@@ -210,7 +236,7 @@ fn draw_the_readout(ctx: &mut DrawCtx) {
     };
     ctx.text(
         Vec2::new(left, line),
-        &log,
+        &clipped(&log, columns),
         TextStyle {
             color: Color::rgba(1.0, 0.95, 0.7, 0.95),
             ..body

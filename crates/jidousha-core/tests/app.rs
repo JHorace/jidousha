@@ -2,7 +2,7 @@
 
 use jidousha_core::{
     Component, Draw, DrawCtx, GameConfig, Resource, Rng, Seconds, Startup, Time, Update, World,
-    headless,
+    WorldView, headless,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -259,6 +259,84 @@ fn each_headless_call_builds_a_fresh_game_so_a_sweep_is_a_loop() {
         vec![Tuning(1), Tuning(2), Tuning(3), Tuning(4)],
         "one process, four games, no recompile"
     );
+}
+
+/// The projection a UI is a picture of, written once (ADR-0039).
+///
+/// It takes a `&WorldView<'_>`, which is what an Update system and a Draw
+/// system can both produce — the first through `World::view`, the second
+/// because that is what it was handed.
+fn positions_in(world: &WorldView<'_>) -> Vec<i32> {
+    let mut seen: Vec<i32> = world
+        .query::<&Position>()
+        .map(|(_, position)| position.0)
+        .collect();
+    seen.sort_unstable();
+    seen
+}
+
+/// A resource nothing ever inserts, so `find_resource` has an absence to report.
+#[derive(Debug, Default)]
+struct NeverInserted;
+impl Resource for NeverInserted {}
+
+#[test]
+fn one_reader_over_a_world_view_answers_the_same_from_update_and_from_draw() {
+    /// Update reads through `World::view` and stores the answer.
+    fn read_in_update(world: &mut World) {
+        let seen = positions_in(&world.view());
+        world.resource_mut::<Reported>().0 = seen;
+    }
+
+    /// Draw reads through the view it was handed — the same function.
+    fn read_in_draw(ctx: &mut DrawCtx) {
+        let seen = positions_in(&ctx.world);
+        // Draw cannot write the world, so it reports outside it.
+        println!("{seen:?}");
+        assert_eq!(seen, ctx.world.resource::<Reported>().0);
+    }
+
+    #[derive(Debug, Default)]
+    struct Reported(Vec<i32>);
+    impl Resource for Reported {}
+
+    let mut sim = headless(GameConfig::default(), |app| {
+        app.add_system(Startup, spawn_two);
+        app.add_system(Update, advance);
+        app.add_system(Update, read_in_update);
+        app.add_system(Draw, read_in_draw);
+    });
+    sim.world_mut().insert_resource(Reported::default());
+    sim.tick();
+    sim.draw();
+
+    assert_eq!(
+        sim.world().resource::<Reported>().0,
+        vec![11, 12],
+        "the reader ran in Update, and Draw agreed with it"
+    );
+}
+
+#[test]
+fn a_view_taken_from_a_world_reads_exactly_what_the_world_holds() {
+    let mut sim = headless(GameConfig::default(), |app| {
+        app.add_system(Startup, spawn_two);
+    });
+    sim.tick();
+
+    let world = sim.world();
+    let view = world.view();
+    assert_eq!(view.entity_count(), world.entity_count());
+    assert_eq!(positions_in(&view), vec![1, 2]);
+    assert_eq!(view.resource::<Time>().tick, world.resource::<Time>().tick);
+    let (entity, _) = world
+        .query::<&Position>()
+        .next()
+        .unwrap_or_else(|| panic!("two entities were spawned"));
+    assert!(view.is_alive(entity));
+    assert_eq!(view.component::<Position>(entity), world.component(entity));
+    assert!(view.find_component::<Position>(entity).is_some());
+    assert!(view.find_resource::<NeverInserted>().is_none());
 }
 
 /// Run `body`, returning the message it panicked with.

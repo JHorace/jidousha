@@ -2,6 +2,8 @@
 //!
 //! Key types: `DrawCtx`, `WorldView`, `Draw`.
 //! Depends on: `query`, `resource`, `world`. Must never depend on: `simulation`.
+//! `World::view` lives here rather than in `world`, so the module dependency
+//! runs one way: this module knows `World`, `World` does not know this one.
 //! INVARIANT: `WorldView` exposes no method that mutates. Draw runs once per
 //! rendered frame, not once per tick, so a write here would make simulation
 //! state depend on frame rate — the one thing the fixed timestep exists to
@@ -20,6 +22,10 @@ use crate::world::World;
 /// It carries the same query syntax as [`World`], restricted to read-only
 /// access: `&T` yes, `&mut T` no — the bound reports the difference as a
 /// compile error naming the fix (ADR-0008).
+///
+/// A Draw system is handed one as `ctx.world`; anywhere else, [`World::view`]
+/// makes one. That is what lets a projection both an Update system and a Draw
+/// system read be written once rather than twice (ADR-0039).
 ///
 /// ```
 /// # use jidousha_core::{Component, DrawCtx};
@@ -91,6 +97,44 @@ impl<'w> WorldView<'w> {
     #[must_use]
     pub fn entity_count(&self) -> usize {
         self.world.entity_count()
+    }
+}
+
+impl World {
+    /// This world as a [`WorldView`] — the same type a Draw system is handed.
+    ///
+    /// A game's UI is usually a picture of some projection of the world: a
+    /// roster, a scoreboard, the preview of what a move would do. That
+    /// projection is read by an `Update` system *and* by a `Draw` system, and
+    /// both must read it the same way or the picture and the rules disagree.
+    /// This is what lets one reader serve both: take a `&WorldView<'_>`, and
+    /// call it with `&world.view()` from Update and `&ctx.world` from Draw
+    /// (ADR-0039).
+    ///
+    /// Handing one out weakens nothing. Read-only here is the *type*: a
+    /// `WorldView` has no method that mutates, so the guarantee Draw depends on
+    /// holds wherever a view goes (ADR-0008).
+    ///
+    /// ```
+    /// # use jidousha_core::{Component, DrawCtx, World, WorldView};
+    /// # #[derive(Debug)] struct Score(u32);
+    /// # impl Component for Score {}
+    /// /// The projection, written once.
+    /// fn total(world: &WorldView<'_>) -> u32 {
+    ///     world.query::<&Score>().map(|(_, score)| score.0).sum()
+    /// }
+    ///
+    /// fn check_the_total(world: &mut World) {
+    ///     let _ = total(&world.view());
+    /// }
+    ///
+    /// fn draw_the_total(ctx: &mut DrawCtx) {
+    ///     let _ = total(&ctx.world);
+    /// }
+    /// ```
+    #[must_use]
+    pub fn view(&self) -> WorldView<'_> {
+        WorldView::new(self)
     }
 }
 
