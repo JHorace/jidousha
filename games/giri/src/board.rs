@@ -90,12 +90,13 @@ pub fn quest_row(flow: &Flow) -> Panel {
             (theme::FAINT, theme::FAINT)
         };
         let icon = Art::for_quest(quest.icon);
-        let width = icon.size_at(6.0).x;
+        let scale = icon.scale_across(layout::quest_icon::CARD);
+        let width = icon.size_at(scale).x;
         panel.icon(
             IconRun::new(
                 Vec2::new(card.center().x - width * 0.5, card.min.y + 10.0),
                 icon,
-                6.0,
+                scale,
             )
             .tinted(if lit {
                 Color::WHITE
@@ -206,7 +207,11 @@ pub fn info(flow: &Flow, social: &Social, preview: &Preview) -> Panel {
     };
 
     let icon = Art::for_quest(quest.icon);
-    panel.icon(IconRun::new(content.min, icon, 4.0));
+    panel.icon(IconRun::new(
+        content.min,
+        icon,
+        icon.scale_across(layout::quest_icon::DETAIL),
+    ));
     let title = quest.name.to_uppercase();
     panel.block(
         content.min + Vec2::new(56.0, 8.0),

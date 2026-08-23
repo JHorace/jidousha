@@ -181,6 +181,10 @@ per DESIGN §7's curation model: role-named lowercase snake_case files,
 committed import script, `CREDITS.md`, license check against repo
 visibility before any purchased asset is committed.
 
+*(The library arrived on 2026-08-23. The sizes above are what this section
+forecast; the sizes now in the files are in §10's asset-slot amendment, which
+supersedes them.)*
+
 ## 10. Amendments from the implementing session (2026-08-23)
 
 Sections 1–9 above are the design session's document, verbatim. Everything
@@ -237,3 +241,42 @@ left in a pull request nobody reads twice. Each says what changed and why.
   and resolution, each at the reference surface and at 600x540. The narrow set
   is a second scripted run rather than a re-render, because a recorded frame's
   geometry was produced by that run's camera.
+
+## 11. Amendments from the curation session (2026-08-23)
+
+The owner's Kenney packs arrived after the session §10 records, so the bullet
+above about shipping the generated set is superseded: twelve of the thirteen
+slots are now a curated subset of those packs. Everything §10 says about *why*
+the door was built still holds — it is the door the library came in through, and
+no code changed to receive it beyond the sizes below.
+
+- **§9's asset slots, at the sizes now in the files.** All thirteen are native
+  texel sizes, and every slot is still drawn at a whole-number multiple of them
+  (§1.4). The quest row is filled from two packs at two sizes, which is why its
+  entry names a *drawn* size rather than a scale.
+
+  | Slot | Texels | Drawn | Source |
+  |---|---|---|---|
+  | 4 portraits | 16x16 | 48x48 (scale 3) | Tiny Dungeon |
+  | 3 quest icons — cave, crypt, tower | 8x8 | 64 / 48 / 64 units | Micro Roguelike |
+  | 1 quest icon — vault | 16x16 | 64 / 48 / 64 units | Tiny Dungeon |
+  | 4 stat icons — flame, coin, skull, heart | 8x8 | 16x16 (scale 2) | Micro Roguelike |
+  | 1 stat icon — eye | 8x8 | 16x16 (scale 2) | generated (`art/sprite_defs.py`) |
+
+  The three numbers for a quest icon are its card, detail-panel and takeover
+  sizes (`layout::quest_icon`). Portraits and stat icons are drawn at exactly
+  the sizes they were before, so nothing in §3's flow or §4's party card moved;
+  the quest card icon went from 72 to 64 units and the takeover from 60 to 64,
+  because those are the sizes both 8x8 and 16x16 divide into.
+
+- **Quest icons are sized, not scaled.** With two texel sizes in one row, a
+  shared scale would draw them at two different sizes. `Art::scale_across` takes
+  the size the row wants and returns each art's own whole-number scale; it
+  panics if the two do not divide, so a future import at an odd size fails at
+  the call site rather than drawing a wobble. §7's floor asserting integer icon
+  scales still checks every icon actually drawn.
+
+- **§2's signifier table is unchanged, including the eye.** No eye glyph exists
+  in any of the owner's seven packs, so infamy keeps its generated violet icon
+  rather than taking a substitute that would have meant editing §2. A stable
+  signifier is not something an import gets to change.
