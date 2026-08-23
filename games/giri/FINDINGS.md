@@ -15,7 +15,8 @@ that would have saved a reader time and did not exist.
 
 ### G-001 — no read-only projection both an Update system and a Draw system can read
 
-Class: api · Game: giri · Documents: `jidousha-api.md` (Concepts; ECS reference)
+Class: api · Game: giri · Documents: `jidousha-api.md` (Concepts; ECS reference) ·
+Fixed in: ADR-0039, `43e4e35`
 
 giri's whole UI is a view of relational state — every stat and every regard edge
 — and DESIGN's invariant is that the willingness preview and the simulation must
@@ -43,9 +44,19 @@ would put a trait bound in every game's signature, and `World::view(&self) ->
 WorldView` would not (and appears to be what the type already is). Which is the
 maintainer's call; this entry is the evidence that something is wanted.
 
+**Resolved.** `World::view(&self) -> WorldView<'_>` landed as ADR-0039 — the
+shape this entry proposed, with the `Read` trait declined for the reason it
+gives. ADR-0008 is unweakened and pinned by
+`crates/jidousha-core/tests/compile-fail/view_query_cannot_write.rs`: a `&mut T`
+query through a view is the same compile error it is through `ctx.world`.
+`Social::read` and `Social::view` are now one `Social::read(&WorldView<'_>)`,
+called with `&world.view()` from Update and `&ctx.world` from Draw; every beat
+outcome is byte-identical, which is the evidence the two collectors were the
+same function. `examples/headless_sim.rs` is the worked version.
+
 ### G-002 — nothing says how to script a pointer at a target the game states in world space
 
-Class: docs · Game: giri · Document: `jidousha-testing.md`
+Class: docs · Game: giri · Document: `jidousha-testing.md` · Fixed in: `43e4e35`
 
 giri is pointer-only, so its `--verify` mode has to click a card and a button
 that the game knows as world-space rectangles. `InputScript::pointer_at` takes
@@ -77,9 +88,18 @@ camera paragraphs in the other document and a guess that turned out right.
 The general form is worth stating: **the testing document is written for a game
 driven by keys**, and a pointer game reads it a document short.
 
+**Resolved.** `tools/api-doc/testing.md` (which generates `jidousha-testing.md`)
+now carries the worked pointer sequence beside the `InputScript` material — a
+world rectangle converted with `Camera::world_to_screen` through a camera built
+exactly as the game builds its own — and states the `viewport` trap there rather
+than only at `visible_bounds()`. `examples/scripted_player.rs` gained a third
+section that clicks a world rectangle and asserts on the world *and* on the
+recorded frame's transcript, so the document's claim has a worked instance.
+
 ### G-003 — a game laying generated text into a column reimplements the font's advance
 
-Class: api · Game: giri · Documents: `jidousha-api.md` (Concepts; `TextStyle`)
+Class: api · Game: giri · Documents: `jidousha-api.md` (Concepts; `TextStyle`) ·
+Fixed in: `43e4e35`
 
 `ctx.text` does not wrap and `\n` is the only break, which the documents say
 plainly and which is the right v1 boundary. So a game that draws a *generated*
@@ -96,9 +116,16 @@ the side of the world — which the bounds assertion catches, in the tenth minut
 rather than the first. A `TextStyle::columns_in` (or a documented
 `ADVANCE_RATIO`) would cost one line and remove a magic 7/9 from every game.
 
+**Resolved.** `TextStyle::columns_in(width) -> usize` landed — one of the two
+this entry offered, not both: a documented `ADVANCE_RATIO` was declined because
+a game would still write the division, which is the thing to remove. Its doc
+comment and `width_of`'s name each other, and a round-trip test keeps the stated
+ratio and the new API in step. giri's local `columns_in` and its 7/9 are gone,
+and `examples/input_echo.rs` clips its generated readout with the new call.
+
 ### G-004 — "the recorder keeps every frame" is priced for one session, and a verify mode runs many
 
-Class: docs · Game: giri · Document: `jidousha-testing.md`
+Class: docs · Game: giri · Document: `jidousha-testing.md` · Fixed in: `43e4e35`
 
 The document says the recorder keeps every frame with no way to forget them, and
 that this "is deliberate and it is affordable at prototype scale". True of one
