@@ -7,16 +7,27 @@ model). Original art, generated deterministically by a committed script:
 nothing here is downloaded, and the same run on any machine writes the same
 bytes.
 
-**This is giri's art, not a stand-in for it** (owner, 2026-08-23). It began as
-the placeholder set the mockup's grids describe and the owner kept it, so the
-grids in `sprite_defs.py` are where a change to how giri looks is made — edit a
-grid, run this, look at the captures. `import_pack.py` remains the door a
-different library would come in through; nothing is waiting on it.
+The grids in `sprite_defs.py` are where a change to a *generated* slot is made —
+edit a grid, run this, look at the captures. For a curated slot the equivalent
+is `kenney-manifest.json` plus `extract.py` and `import_pack.py`. Both paths are
+live and neither is a stand-in for the other.
 
-Usage:  games/giri/art/make_art.py [--check]
+Usage:  games/giri/art/make_art.py [--check] [--restore]
 
-`--check` writes nothing and reports whether the committed PNGs are what this
-script would produce, which is how a hand edit to a grid gets noticed.
+**It writes only the slots no pack fills.** Since 2026-08-23 twelve of the
+thirteen are curated from the owner's Kenney packs and only the infamy eye is
+generated (`kenney-manifest.json` records which is which), so a plain run
+rewrites the eye and leaves the curated files alone. Without that, editing one
+grid would quietly overwrite twelve imported sprites.
+
+`--check` writes nothing and reports whether the *generated* PNGs are what this
+script would produce, which is how a hand edit to a grid gets noticed. Curated
+slots are reported as skipped rather than as stale — they are not this script's
+to be right about.
+
+`--restore` is the documented way back: it writes every slot from its grid,
+discarding the curated art. That is a real thing to want if a pack is ever
+withdrawn, and it is a verb rather than a default for the obvious reason.
 
 Exit codes: 0 written (or, under --check, in step) · 1 under --check, a file is
 missing or stale · 2 the script could not run.
@@ -26,6 +37,7 @@ Depends on: the Python 3.8+ standard library only.
 
 from __future__ import annotations
 
+import json
 import struct
 import sys
 import zlib
@@ -33,6 +45,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ASSETS = HERE.parent / "assets"
+MANIFEST = HERE / "kenney-manifest.json"
 sys.path.insert(0, str(HERE))
 
 from sprite_defs import LIBRARY  # noqa: E402
@@ -101,27 +114,68 @@ def render(name: str, grid: "list[str]", palette: "dict[str, str]") -> "tuple[Pa
     return (ASSETS / f"{name}.png", png(width, height, texels(grid, palette)))
 
 
+def curated() -> "set[str]":
+    """Roles a pack fills, per `kenney-manifest.json` — the ones grids do not own.
+
+    Read rather than assumed, because the two art paths coexist: twelve slots
+    are curated from the owner's packs and the infamy eye is generated, and a
+    script that cannot tell them apart would either report the curated files as
+    stale or overwrite them with grids. The manifest is the record of which is
+    which; without one, every role is a grid's, which is what this was before a
+    pack existed.
+    """
+    if not MANIFEST.is_file():
+        return set()
+    chosen = json.loads(MANIFEST.read_text(encoding="utf-8")).get("chosen", {})
+    return {
+        role
+        for role, pick in chosen.items()
+        if not role.startswith("_") and pick is not None
+    }
+
+
 def main(argv: "list[str]") -> int:
     checking = "--check" in argv[1:]
+    # The way back to the fully generated set: an explicit verb, because the
+    # default must never silently undo a curation (art/kenney-manifest.json).
+    restoring = "--restore" in argv[1:]
     ASSETS.mkdir(parents=True, exist_ok=True)
+    skip = set() if restoring else curated()
+
     stale: "list[str]" = []
+    written = 0
     for name, grid, palette in LIBRARY:
         path, bytes_out = render(name, grid, palette)
+        if name in skip:
+            continue
         if checking:
             if not path.exists() or path.read_bytes() != bytes_out:
                 stale.append(path.name)
             continue
         path.write_bytes(bytes_out)
+        written += 1
         print(f"[giri-art] {path.relative_to(HERE.parent)}  {len(grid[0])}x{len(grid)}")
+
+    mine = len(LIBRARY) - len(skip)
     if checking:
         if stale:
             print(f"[giri-art] out of date: {', '.join(stale)}")
             print("  likely cause: a grid in sprite_defs.py changed and the PNGs were not rewritten")
             print("  fix: run games/giri/art/make_art.py")
             return 1
-        print(f"[giri-art] {len(LIBRARY)} file(s) match the committed grids")
+        print(f"[giri-art] {mine} generated file(s) match the committed grids")
+        if skip:
+            print(
+                f"  {len(skip)} curated slot(s) not checked — a pack fills them "
+                "(art/kenney-manifest.json)"
+            )
         return 0
-    print(f"[giri-art] wrote {len(LIBRARY)} file(s) to {ASSETS}")
+    print(f"[giri-art] wrote {written} file(s) to {ASSETS}")
+    if skip:
+        print(
+            f"  left {len(skip)} curated slot(s) alone; `--restore` would overwrite them "
+            "with their grids"
+        )
     return 0
 
 

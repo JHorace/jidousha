@@ -128,6 +128,23 @@ const PCARD_W: f32 = 170.0;
 const PCARD_H: f32 = 164.0;
 const PCARD_GAP: f32 = 12.0;
 
+/// How big a quest icon is drawn, in reference pixels, at each of its three
+/// sizes.
+///
+/// **Sizes rather than scales**, because the four quest icons are not all one
+/// texel size: three are 8x8 and the vault is 16x16 (the owner's curation,
+/// `art/kenney-manifest.json`). `Art::scale_across` turns each of these into that
+/// art's own whole-number scale, so a row of them is even. Every number here is
+/// a multiple of 16 for that reason — it has to divide by both.
+pub mod quest_icon {
+    /// On a quest card, in the board's row of four.
+    pub const CARD: f32 = 64.0;
+    /// In the detail panel beside the quest's name.
+    pub const DETAIL: f32 = 48.0;
+    /// On the resolution takeover's head.
+    pub const TAKEOVER: f32 = 64.0;
+}
+
 /// The rows inside a party card, measured from its top edge.
 ///
 /// Named rather than added up at each draw site, because `floors.rs` asserts

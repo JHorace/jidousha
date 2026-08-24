@@ -66,7 +66,12 @@ pub fn takeover(flow: &Flow) -> Panel {
     // --- the job it was about ---------------------------------------------
     let head = layout::takeover_head();
     if let Some(quest) = quest {
-        panel.icon(IconRun::over(head, Art::for_quest(quest.icon), 5.0));
+        let icon = Art::for_quest(quest.icon);
+        panel.icon(IconRun::over(
+            head,
+            icon,
+            icon.scale_across(layout::quest_icon::TAKEOVER),
+        ));
         panel.text(TextRun::over(
             head + Vec2::new(76.0, 20.0),
             quest.name.to_uppercase(),

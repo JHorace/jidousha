@@ -4,13 +4,17 @@
 //! what it *means* — `icon_flame` is desperation, `portrait_tim` is Tim — so a
 //! library replaces the files by name and no code here changes (DESIGN §7's
 //! curation model; UI.md §9's asset slots). Nothing is downloaded:
-//! `art/make_art.py` writes the committed PNGs from committed grids, and
-//! `assets/CREDITS.md` records the provenance of every one.
+//! the owner supplies a pack and a committed script curates from it, or
+//! `art/make_art.py` writes a PNG from committed grids — and `assets/CREDITS.md`
+//! records the provenance of every one.
 //!
-//! The generated set is what giri ships (owner, 2026-08-23), so the grids in
-//! `art/sprite_defs.py` are where a change to how the game looks is made. The
-//! role naming keeps its value either way: it is what makes the swap free on
-//! the day somebody wants one.
+//! That claim was tested on 2026-08-23: the owner's Kenney packs replaced twelve
+//! of the thirteen slots and **no code here changed except the texel sizes in
+//! `LIBRARY`**. Which pack region fills which role is
+//! `art/kenney-manifest.json`; the thirteenth slot, the infamy eye, is still
+//! generated from the grids in `art/sprite_defs.py`, because no eye glyph exists
+//! in any of the packs. Both paths stay live, and a change to how giri looks is
+//! a change to whichever of the two owns the slot.
 //!
 //! **The art is a directory, and the directory is giri's own.**
 //! `games/giri/assets/` is this crate's asset root: the game loads from it
@@ -95,14 +99,14 @@ const LIBRARY: &[Slot] = &[
     slot(Art::PortraitBob, "portrait_bob.png", 16, 16),
     slot(Art::PortraitSteve, "portrait_steve.png", 16, 16),
     slot(Art::PortraitTim, "portrait_tim.png", 16, 16),
-    slot(Art::QuestCave, "quest_cave.png", 12, 12),
-    slot(Art::QuestCrypt, "quest_crypt.png", 12, 12),
-    slot(Art::QuestTower, "quest_tower.png", 12, 12),
-    slot(Art::QuestVault, "quest_vault.png", 12, 12),
+    slot(Art::QuestCave, "quest_cave.png", 8, 8),
+    slot(Art::QuestCrypt, "quest_crypt.png", 8, 8),
+    slot(Art::QuestTower, "quest_tower.png", 8, 8),
+    slot(Art::QuestVault, "quest_vault.png", 16, 16),
     slot(Art::Flame, "icon_flame.png", 8, 8),
     slot(Art::Eye, "icon_eye.png", 8, 8),
     slot(Art::Coin, "icon_coin.png", 8, 8),
-    slot(Art::Skull, "icon_skull.png", 10, 10),
+    slot(Art::Skull, "icon_skull.png", 8, 8),
     slot(Art::Heart, "icon_heart.png", 8, 8),
 ];
 
@@ -155,6 +159,45 @@ impl Art {
     pub fn size_at(self, scale: f32) -> Vec2 {
         let texels = self.texels();
         Vec2::new(texels.width as f32, texels.height as f32) * scale
+    }
+
+    /// The scale that draws this art `units` reference pixels across.
+    ///
+    /// **The drawn size is the contract, not the scale.** One slot family is
+    /// filled from two packs at two texel sizes — the quest icons are 8x8 from
+    /// Micro Roguelike and 16x16 from Tiny Dungeon (`art/kenney-manifest.json`)
+    /// — and a single shared scale would draw them at two different sizes in
+    /// the same row. Stating the size the row wants and deriving each art's
+    /// scale keeps the row even, and keeps every scale a whole number.
+    ///
+    /// # Panics
+    ///
+    /// If `units` is not a whole multiple of this art's texel width. That is a
+    /// layout constant and an asset disagreeing, and the fix is one of the two
+    /// numbers — never a picture drawn at a fractional scale, which the engine
+    /// samples nearest and so draws with a wobble in it (UI.md §1.4). The
+    /// readability floors assert the same thing over every icon actually drawn;
+    /// this catches it at the call site, where the wrong number is.
+    pub fn scale_across(self, units: f32) -> f32 {
+        let texels = self.texels().width as f32;
+        let scale = units / texels;
+        if !crate::checks::near(scale, scale.round()) {
+            panic!(
+                "{}",
+                message(
+                    "a pixel-art icon would be drawn at a fractional scale",
+                    &format!(
+                        "{:?} is {texels} texels across and the layout asked for {units} units, \
+                         which is {scale} texels per texel",
+                        self
+                    ),
+                    "a layout constant and an asset size that are not whole multiples",
+                    "pick a size that is a multiple of every art in the row, or re-import \
+                     the odd one at a size that fits",
+                )
+            )
+        }
+        scale.round()
     }
 
     /// The portrait for a character.

@@ -289,3 +289,51 @@ unwritten: every doc example, test fixture and example that scripted a store
 with `b"fake png"` and loaded it as a texture was documenting the bug. They now
 insert either real PNG bytes or texels, and `examples/loading_gate.rs` says
 which is which and why.
+
+## From the curation session (2026-08-23)
+
+This session swapped giri's generated art for a curated subset of the owner's
+Kenney packs. It asked `docs/api/` nothing new — no engine call changed, and the
+whole swap landed as texel sizes in one table, which is the curation model
+working exactly as DESIGN §7 claims. The one gap it did hit is in the repository's
+tooling rather than its API, and it is recorded here for the same reason as the
+rest: a workaround that ships silently is a gap nobody fixes.
+
+### G-007 — the art tooling can write a PNG and cannot read one
+
+Class: tooling · Game: giri · Documents: `tooling.md` (stdlib-only tools) ·
+Fixed in: not fixed; worked around in `games/giri/art/pack_reader.py`
+
+Curating from an owner-supplied pack is a looking problem before it is anything
+else: you cannot choose a sprite you have not seen, and seeing several hundred
+candidates means rendering them as contact sheets. That needs a PNG **decoder**.
+
+The repository has three PNG encoders and no decoder reachable from a tool. The
+engine decodes at the texture-load boundary (G-006's fix), in Rust, inside a
+crate a Python tool cannot call. `art/make_art.py` writes PNGs from grids and
+never reads one. `tools/` has no image utility at all. Tools are stdlib-only by
+policy (tooling.md), and the standard library has `zlib` but no PNG.
+
+So giri hand-rolled one: `art/pack_reader.py` is ~150 lines of chunk walking,
+scanline unfiltering and palette expansion, covering the four colour-type and
+bit-depth combinations Kenney's packs actually use and raising on everything
+else. It is correct for this job and is a liability as a general decoder, which
+is precisely why it should not be the second game's problem too.
+
+Two things make this more than an inconvenience worth noting. The decoder is
+where a subtle bug hides silently: a mis-read palette produces a contact sheet
+that is *plausible* and wrong, and the only check on it is a human recognising
+that a sprite looks off. And the reading step immediately grew a second
+non-obvious piece — `strip_background`, which lifts a tilemap pack's baked-in
+opaque background by an edge-connected flood fill rather than a colour key,
+because Micro Roguelike's skull holds its eye sockets in the same colour as its
+background and a key erases them. That is a general fact about tilemap packs, not
+a giri fact, and the next game to import one will rediscover it by shipping a
+skull with no eyes.
+
+Not proposed for a fix now: one consumer is not a case for shared tooling
+(second-consumer rule), and giri's copy is scoped to what it verified against.
+The finding exists so that the second game to curate a pack promotes this rather
+than rewriting it — at which point the natural home is a `tools/` image module,
+and `strip_background`'s flood-fill-not-key rule is the part that must survive
+the move.

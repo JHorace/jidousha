@@ -15,16 +15,19 @@ before it writes, because the check is a human's to make and not a script's.
 
 Usage:
   art/import_pack.py --pack <dir> --licence "<terms>" --source "<where from>"
-                     [--map role=file ...] [--confirm-terms] [--dry-run]
+                     [--provenance <json>] [--map role=file ...]
+                     [--confirm-terms] [--dry-run]
 
 With no `--map`, files are matched to roles by basename: a pack file named
 `icon_flame.png` fills the `icon_flame` role. Roles the pack does not fill keep
 their current file, so a partial library is fine and says which slots are still
 the generated art.
 
-Nothing is waiting on this script: the generated set *is* giri's art (owner,
-2026-08-23). It exists because the day a library does arrive, the terms check
-and the role renaming should already have a door rather than be improvised.
+The pack this reads is normally the staging directory `art/extract.py` writes
+from the owner's picks, whose `provenance.json` names the pack each file was
+curated out of — several packs can fill one library, and `--provenance` is what
+lets `CREDITS.md` say which row came from which. A hand-assembled directory of
+role-named PNGs still works and needs none of that.
 
 Exit codes: 0 imported (or, under --dry-run, would import) · 1 a file was
 rejected or the terms were not confirmed · 2 the script could not run.
@@ -36,6 +39,7 @@ Depends on: the Python 3.8+ standard library only.
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import struct
 import sys
@@ -81,31 +85,84 @@ def plan(pack: Path, mapping: "dict[str, str]") -> "list[tuple[str, Path]]":
     return out
 
 
-def write_credits(rows: "list[tuple[str, int, int]]", licence: str, source: str) -> None:
-    """Replace the credits table's body with what is now in the library."""
+def write_credits(
+    rows: "list[tuple[str, int, int]]",
+    licence: str,
+    source: str,
+    provenance: "dict[str, dict]",
+) -> None:
+    """Replace the credits table's body with what is now in the library.
+
+    `provenance` names, per role, the pack a file was curated out of — several
+    packs can fill one library, and a table that credited them all to one line
+    would be wrong about every row but its own. Roles it does not carry fall
+    back to the single `--source`, which is the whole story for a one-pack
+    import.
+    """
     header = CREDITS.read_text(encoding="utf-8").split("## Current library")[0]
     lines = [
         header.rstrip(),
         "",
         "## Current library — imported",
         "",
-        "| File | Size | Source | Licence |",
-        "|---|---|---|---|",
+        "Each row is a **curated subset**: one individually chosen sprite, named for",
+        "the role it fills. No pack is redistributed here, whole or rearranged.",
+        "",
+        "| File | Size | Pack | Source | Licence | What it is |",
+        "|---|---|---|---|---|---|",
     ]
     for role, width, height in rows:
-        lines.append(f"| `{role}.png` | {width}x{height} | {source} | {licence} |")
+        entry = provenance.get(role, {})
+        lines.append(
+            f"| `{role}.png` | {width}x{height} "
+            f"| {entry.get('pack', '—')} "
+            f"| {entry.get('url', source)} "
+            f"| {entry.get('licence', licence)} "
+            f"| {entry.get('description', '—')} |"
+        )
+    # Every role the import did not fill still has a committed file, and this
+    # document's own rule is that a file with no row should not be here. So the
+    # generated remainder is named, not merely alluded to.
+    filled = {role for role, _, _ in rows}
+    generated = [role for role in roles() if role not in filled]
+    if generated:
+        lines += [
+            "",
+            "## Current library — generated",
+            "",
+            "Slots no pack filled. Original work of this repository, written by",
+            "`art/make_art.py` from the grids in `art/sprite_defs.py`.",
+            "",
+            "| File | Source | Licence |",
+            "|---|---|---|",
+        ]
+        for role in generated:
+            lines.append(f"| `{role}.png` | `art/sprite_defs.py` (this repository) | original work |")
     lines += [
         "",
-        "Roles absent from this table are still the art `art/make_art.py`",
-        "generates; the slots are the same either way (UI.md §9).",
+        "The slots are the same whichever way a file arrived (UI.md §9): the role is",
+        "the contract, not the picture.",
         "",
         "## Replacing a file",
         "",
-        "1. `games/giri/art/import_pack.py --pack <dir> --licence \"<terms>\" --source \"<where>\"`",
-        "2. The script writes the new PNG under its role name and rewrites this table.",
-        "3. Check the licence against this repository's visibility **before** the",
-        "   commit. A purchased pack whose terms forbid redistribution does not go in a",
-        "   public repository at all — not even \"temporarily\".",
+        "From a pack the manifest already knows, changing which sprite fills a role is",
+        "one line — edit `chosen` in `art/kenney-manifest.json`, then:",
+        "",
+        "```",
+        "art/extract.py --packs <dir>              # cuts the picks, role-named, into target/",
+        "art/import_pack.py --pack target/giri-art/staged \\",
+        "    --provenance target/giri-art/staged/provenance.json \\",
+        '    --licence "CC0 1.0" --source "https://kenney.nl" --confirm-terms',
+        "```",
+        "",
+        "From a pack nothing has looked at yet, see it first — `art/contact_sheet.py`",
+        "renders indexed sheets into `target/`, `art/role_sheet.py` renders the",
+        "shortlist for one role — then classify what you used into the manifest and run",
+        "the two commands above. Contact sheets are never committed.",
+        "",
+        "Whichever route: check the licence against this repository's visibility",
+        "**before** the commit. Art that may not be redistributed does not go in a",
+        "repository that redistributes it — not even \"temporarily\".",
         "",
     ]
     CREDITS.write_text("\n".join(lines), encoding="utf-8")
@@ -117,6 +174,12 @@ def main(argv: "list[str]") -> int:
     parser.add_argument("--licence", required=True, help="the terms, verbatim, for CREDITS.md")
     parser.add_argument("--source", required=True, help="where the pack came from")
     parser.add_argument("--map", action="append", default=[], metavar="role=file")
+    parser.add_argument(
+        "--provenance",
+        default=None,
+        metavar="JSON",
+        help="per-role pack/licence facts, as art/extract.py writes them",
+    )
     parser.add_argument("--confirm-terms", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv[1:])
@@ -134,6 +197,15 @@ def main(argv: "list[str]") -> int:
             print(f"[giri-art] --map wants role=file, got {entry!r}")
             return 1
         mapping[role] = name
+
+    provenance = {}
+    if args.provenance:
+        try:
+            provenance = json.loads(Path(args.provenance).read_text(encoding="utf-8"))
+        except (OSError, ValueError) as error:
+            print(f"[giri-art] the provenance file could not be read\n  {error}")
+            print("  fix: re-run art/extract.py, which writes it beside the staged PNGs")
+            return 1
 
     chosen = plan(pack, mapping)
     if not chosen:
@@ -155,7 +227,8 @@ def main(argv: "list[str]") -> int:
 
     print(f"[giri-art] {len(rows)} of {len(roles())} role(s) filled from {pack}")
     for role, width, height in rows:
-        print(f"  {role}.png  {width}x{height}")
+        pack_name = provenance.get(role, {}).get("pack", args.source)
+        print(f"  {role}.png  {width}x{height}  <- {pack_name}")
     print(f"  licence: {args.licence}")
     print(f"  source:  {args.source}")
     print(
@@ -174,7 +247,7 @@ def main(argv: "list[str]") -> int:
 
     for (role, _, _), (_, source) in zip(rows, chosen):
         shutil.copyfile(source, ASSETS / f"{role}.png")
-    write_credits(rows, args.licence, args.source)
+    write_credits(rows, args.licence, args.source, provenance)
     print(f"[giri-art] wrote {len(rows)} file(s) and rewrote {CREDITS.name}")
     print("  next: cargo check -p giri, then tools/verify giri, then look at the captures")
     return 0
