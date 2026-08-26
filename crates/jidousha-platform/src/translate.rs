@@ -12,6 +12,8 @@
 
 use jidousha_input::{InputEvent, Key, PointerButton, PointerId};
 use winit::dpi::PhysicalPosition;
+
+use crate::web::render_scale::RenderScale;
 use winit::event::{ElementState, MouseButton, MouseScrollDelta};
 use winit::keyboard::{KeyCode, PhysicalKey};
 
@@ -164,10 +166,25 @@ pub(crate) fn scroll_lines(delta: MouseScrollDelta) -> f32 {
 }
 
 /// Where a cursor moved to, in pixels from the window's top-left.
-pub(crate) fn pointer_moved(position: PhysicalPosition<f64>) -> InputEvent {
+///
+/// In *surface* pixels, which is the space the camera reads a pointer in
+/// (`Camera::screen_to_world` divides by the viewport). The render scale is
+/// applied here rather than left to the game because the viewport it is read
+/// against has already been scaled: a pointer left at the window's own
+/// resolution would put every click at twice the world position it looks like
+/// at `?renderscale=0.5` (web-publish.md §2, `web::render_scale`).
+///
+/// Scroll is deliberately *not* scaled beside it: a wheel notch is a gesture,
+/// not a place on the canvas, and how many pixels the page renders has nothing
+/// to say about how far a flick should scroll.
+pub(crate) fn pointer_moved(position: PhysicalPosition<f64>, scale: RenderScale) -> InputEvent {
+    let factor = f64::from(scale.factor());
     InputEvent::PointerMoved {
         id: PointerId::PRIMARY,
-        screen: jidousha_core::math::Vec2::new(position.x as f32, position.y as f32),
+        screen: jidousha_core::math::Vec2::new(
+            (position.x * factor) as f32,
+            (position.y * factor) as f32,
+        ),
     }
 }
 
@@ -380,10 +397,26 @@ mod tests {
     #[test]
     fn a_cursor_position_arrives_in_pixels_from_the_top_left() {
         assert_eq!(
-            pointer_moved(PhysicalPosition::new(12.5, 30.0)),
+            pointer_moved(PhysicalPosition::new(12.5, 30.0), RenderScale::FULL),
             InputEvent::PointerMoved {
                 id: PointerId::PRIMARY,
                 screen: jidousha_core::math::Vec2::new(12.5, 30.0),
+            }
+        );
+    }
+
+    #[test]
+    fn a_cursor_position_arrives_in_the_surfaces_pixels_not_the_windows() {
+        // At half render scale the surface has half as many pixels, so the
+        // same place on screen is half as many pixels from its top-left. Get
+        // this wrong and every click lands at twice the world position it
+        // looks like (web-publish.md §2).
+        let (half, _) = crate::web::render_scale::from_query("?renderscale=0.5");
+        assert_eq!(
+            pointer_moved(PhysicalPosition::new(12.5, 30.0), half),
+            InputEvent::PointerMoved {
+                id: PointerId::PRIMARY,
+                screen: jidousha_core::math::Vec2::new(6.25, 15.0),
             }
         );
     }

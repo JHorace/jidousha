@@ -18,6 +18,27 @@
   makes "open it with ?frametime=1 and screenshot the overlay" a bug report a
   playtester on an unknown browser can actually file.
 
+  Presentation seam: `?renderscale=0.5` renders at half the device resolution
+  and lets the browser upscale (web-publish.md §2). Opt-in, presentation-only —
+  world space, the letterbox and where a click lands are all unchanged, and the
+  page simply asks for fewer pixels.
+
+  It is two things, and the second one outlived the first. It is a *mitigation*
+  where the cost of a frame is per rendered pixel — measured, on a CPU-rasterizing
+  browser, at 50.00ms median down to 33.40ms. And it is a *discriminator*: it
+  moves the backing store and leaves the window alone, so a browser that is slow
+  and does not care about it is telling you the cost is somewhere a smaller
+  canvas cannot reach. On the defect this whole overlay was built for it did
+  exactly that — nothing at all — and that null result is what frame-pacing.md
+  §5.5 now turns on. The warning presents it as a test, not as a fix, for that
+  reason.
+
+  The parameter is read on the *engine* side (jidousha-platform's
+  web/render_scale.rs) rather than here, because the canvas's backing store is
+  written by wgpu from the size the surface is configured with; the overlay
+  reports what the page ended up with, which is the honest half of it to keep on
+  this side.
+
   Reserved seam (deferred, do not build yet): the "download recording" button
   lands here once the input recording buffer is reachable from the page
   (input §5, web-publish.md §2) — remote playtesting becomes remote
@@ -141,7 +162,10 @@
         right: 8px;
         display: none;
         z-index: 9;
-        max-width: min(380px, calc(100% - 16px));
+        /* Wide enough that the readings below do not wrap: a wrapped line costs
+           a row of a panel that must fit without scrolling, and the panel takes
+           no pointer events so nobody can scroll it. */
+        max-width: min(440px, calc(100% - 16px));
         /* A last resort rather than the plan: the readings are kept short enough
            to fit, because a panel that takes no pointer events cannot be
            scrolled by the person reading it. */
@@ -293,10 +317,15 @@
       // --- the frame-pacing overlay (?frametime=1, web-publish.md §2) -------
       //
       // What it is for: "the ball jumps forward in this browser and glides in
-      // that one" is a report nobody can act on, and the two facts that settle
-      // it — how evenly frames arrive, and whether this browser is rendering in
-      // software — are both readable from the page. So the page reads them, on
-      // any deployed build, from a query parameter alone.
+      // that one" is a report nobody can act on, and the facts that settle it —
+      // how evenly frames arrive, how far off the display's own cadence that
+      // is, and whether this browser admits to rendering in software — are all
+      // readable from the page. So the page reads them, on any deployed build,
+      // from a query parameter alone.
+      //
+      // One of those facts turned out to be a lie, which is why there are now
+      // three: the renderer string is spoofable and Firefox spoofs it
+      // (frame-pacing.md §5). The measured ones are the ones to trust.
       //
       // CONTRACT: this is presentation-side and stays that way. It reads
       // `performance.now()` and `requestAnimationFrame` and never calls into
@@ -353,6 +382,49 @@
       /// How many deltas before the verdict is worth printing.
       const CLOCK_SAMPLE = 30;
 
+      // Whether this browser is presenting slowly — measured, not read off a
+      // string.
+      //
+      // The finding that forced this (frame-pacing.md §5): the renderer string
+      // is *spoofable*. Firefox's anti-fingerprinting bucket reports "NVIDIA
+      // GeForce GTX 980, or similar" on a machine whose GPU is an RTX 5090, so
+      // the software warning below can be quietly wrong on precisely the
+      // browser this overlay was built to diagnose. What could not lie was the
+      // cadence: the same page presented at ~12 Hz in Firefox and ~238 Hz in
+      // Chrome, on the same display, on the same machine. So the warning a
+      // playtester can trust is the one derived from the frames themselves.
+      //
+      // It needs a reference the median cannot poison, and the "display ~N Hz"
+      // reading was not one: it is estimated *from* the median, so on the
+      // defective browser it read 12 Hz on a 240 Hz display and had nothing left
+      // to be surprised by. The tenth-percentile delta is that reference — a
+      // browser presenting at the display's cadence produces its quickest
+      // frames at the refresh period — and the tenth percentile rather than the
+      // outright minimum so one double-reported rAF cannot define it.
+
+      /// How far above the estimated refresh period a median frame has to sit.
+      ///
+      /// 2.5×: well past what an ordinary mixed workload does to a healthy
+      /// browser (Chrome's reading was 1.02× of its own quickest tenth) and well
+      /// under the defect (Firefox's was 5.2×).
+      const SLOW_RATIO = 2.5;
+
+      /// …and how slow it has to be in absolute terms, whatever the ratio says.
+      ///
+      /// 2.5× of a 240Hz period is still 96fps, which nobody needs a warning
+      /// about. A frame slower than a thirtieth of a second is choppy on any
+      /// display and no display refreshes slower than that, so this floor is
+      /// what stops the ratio firing on a browser that is merely fast.
+      const SLOW_FLOOR_MS = 1000 / 30;
+
+      /// How many frames before the verdict is worth printing.
+      ///
+      /// One second at 60Hz and five at the 12Hz this exists to catch, which is
+      /// the right way round: a slow page has to *stay* slow before the panel
+      /// says so, and a page that is slow for five seconds is not having a
+      /// moment.
+      const SLOW_SAMPLE = 60;
+
       // Which renderer this browser hands WebGL, and whether it is a CPU.
       //
       // Hypothesis 1 in one string. Firefox on Linux falls back to software
@@ -407,16 +479,47 @@
         // The marker `tools/serve-web --check` reads, and the one line of this
         // overlay a bug report has to contain.
         document.body.dataset.jidoushaFrametime = verdict;
-        if (software) {
-          warning.textContent =
-            "this browser is software-rendering; expect jank\n" +
-            "a frame the CPU misses makes the engine run two ticks at once — " +
-            "which is what a ball jumping forward looks like";
-          warning.classList.add("shown");
-        }
 
-        // Kept to two lines: the panel must fit without scrolling, because it
-        // takes no pointer events and so cannot be scrolled.
+        // Both warnings share one box, and the box says everything that is
+        // wrong rather than the first thing that is: a browser can be
+        // software-rendering *and* presenting slowly, and on the browser that
+        // prompted the second warning the first one is unreliable — the
+        // renderer string it reads is spoofed (frame-pacing.md §5).
+        const showWarnings = (pace) => {
+          const messages = [];
+          if (software) {
+            messages.push(
+              "this browser is software-rendering; expect jank\n" +
+                "a frame the CPU misses makes the engine run two ticks at once — " +
+                "which is what a ball jumping forward looks like",
+            );
+          }
+          if (pace.verdict === "slow") {
+            messages.push(
+              "this browser is presenting slowly; motion will be choppy\n" +
+                "median frame " +
+                pace.median.toFixed(2) +
+                "ms against a " +
+                pace.quick.toFixed(2) +
+                "ms refresh period (" +
+                pace.ratio.toFixed(1) +
+                "x) — no pacing logic makes a page this slow look smooth\n" +
+                "try &renderscale=0.5 — a quarter of the device pixels, game " +
+                "unchanged. If that helps, the cost is per rendered pixel; if it " +
+                "changes nothing, try a smaller window instead. Which of the two " +
+                "it is is the useful half of a bug report",
+            );
+          }
+          warning.textContent = messages.join("\n\n");
+          warning.classList.toggle("shown", messages.length > 0);
+        };
+        // From the first instruction, so a page dumped before any frame has
+        // been measured still carries whatever is already known.
+        document.body.dataset.jidoushaPresentation = "sampling";
+        showWarnings({ verdict: "sampling" });
+
+        // Kept short: the panel must fit without scrolling, because it takes no
+        // pointer events and so cannot be scrolled.
         note.textContent =
           "ticks/frame is modelled, not read from the engine: this page runs the " +
           "same accumulator (" +
@@ -424,7 +527,8 @@
           " Hz, " +
           MAX_FRAME_S +
           "s ceiling) over these deltas.\n" +
-          "Firefox: about:support → Graphics → Compositing.";
+          "?renderscale=0.5 draws a quarter of the pixels (presentation only).\n" +
+          "Firefox: about:support → Graphics → Compositing + GPU #1/#2.";
 
         // A rolling window, so the panel describes the last few seconds rather
         // than averaging away the thing being looked for.
@@ -444,6 +548,64 @@
           return worst < WHOLE_MS_EPSILON
             ? "whole milliseconds — coarse (~1ms), drifts against a 16.67ms cadence"
             : "sub-millisecond — fine";
+        };
+
+        /// The delta `fraction` of the way up a sorted window.
+        const percentile = (sorted, fraction) =>
+          sorted.length === 0
+            ? 0
+            : sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * fraction))];
+
+        /// How this browser is presenting, against the refresh period its own
+        /// quickest frames imply. See SLOW_RATIO above for why it is measured
+        /// this way rather than read off the renderer string.
+        const presentation = (sorted) => {
+          const quick = percentile(sorted, 0.1);
+          const median = percentile(sorted, 0.5);
+          if (sorted.length < SLOW_SAMPLE || quick <= 0) {
+            return { verdict: "sampling", quick, median, ratio: 0 };
+          }
+          const ratio = median / quick;
+          return {
+            verdict: ratio >= SLOW_RATIO && median > SLOW_FLOOR_MS ? "slow" : "ok",
+            quick,
+            median,
+            ratio,
+          };
+        };
+
+        // What the page actually got, rather than what its URL asked for.
+        //
+        // `?renderscale=` is read by the engine (jidousha-platform's
+        // web/render_scale.rs), not here: wgpu writes canvas.width from the size
+        // the surface is configured with, so a page-side write would be
+        // overwritten by the next configure. The page therefore reports the
+        // *effect* — the backing store against the device-pixel box it is
+        // displayed in — which is also the reading that answers "did the
+        // parameter do anything" without anybody having to trust the URL.
+        const backingStore = () => {
+          const canvas = document.querySelector("canvas");
+          if (!canvas || !canvas.width || !canvas.clientWidth) {
+            return "no canvas yet";
+          }
+          const ratio = window.devicePixelRatio || 1;
+          const box = {
+            width: Math.round(canvas.clientWidth * ratio),
+            height: Math.round(canvas.clientHeight * ratio),
+          };
+          const scale = box.width > 0 ? canvas.width / box.width : 1;
+          return (
+            scale.toFixed(2) +
+            "x — " +
+            canvas.width +
+            "x" +
+            canvas.height +
+            " of " +
+            box.width +
+            "x" +
+            box.height +
+            " device px"
+          );
         };
 
         const histogram = () => {
@@ -488,22 +650,45 @@
 
         const render = () => {
           const sorted = [...deltas].sort((a, b) => a - b);
-          const median = sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0;
+          const median = percentile(sorted, 0.5);
           const mean = sorted.length
             ? deltas.reduce((sum, ms) => sum + ms, 0) / deltas.length
             : 0;
-          const refresh = median > 0 ? 1000 / median : 0;
+          const presented = median > 0 ? 1000 / median : 0;
+          const pace = presentation(sorted);
+          // The marker `tools/serve-web --check` reads for the measured
+          // verdict, beside the renderer string's.
+          document.body.dataset.jidoushaPresentation = pace.verdict;
+          showWarnings(pace);
           const share = (count) => Math.round((count / Math.max(1, frames)) * 100);
+          // "present", not "display": this is the rate frames reach the screen
+          // at, and the whole finding in frame-pacing.md §5 is that the two can
+          // be twenty times apart. The line below is the display's own estimate.
+          //
           // The static half is written from the first frame on, so a page
           // dumped early says what browser it is rather than "measuring…".
           body.textContent =
-            "display   ~" +
-            refresh.toFixed(1) +
-            " Hz (median frame " +
+            "present   ~" +
+            presented.toFixed(1) +
+            " Hz — median " +
             median.toFixed(2) +
             "ms, mean " +
             mean.toFixed(2) +
-            "ms)\n" +
+            "ms\n" +
+            "refresh   " +
+            (pace.verdict === "sampling"
+              ? "sampling… (" + deltas.length + " of " + SLOW_SAMPLE + " frames)"
+              : "~" +
+                (1000 / pace.quick).toFixed(1) +
+                " Hz est.; this page " +
+                pace.ratio.toFixed(1) +
+                "x — slow past " +
+                SLOW_RATIO +
+                "x") +
+            "\n" +
+            "scale     " +
+            backingStore() +
+            "\n" +
             "spread    " +
             (sorted.length ? sorted[0].toFixed(2) : "0.00") +
             "ms .. " +

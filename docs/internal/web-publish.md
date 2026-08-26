@@ -108,18 +108,29 @@ One `index.html` template, self-contained (no external CDN dependencies):
 - **Frame-pacing overlay** (`?frametime=1`): a page-side instrument, on every
   deployed build, reachable by query parameter alone. It answers the one
   question a remote playtest cannot otherwise answer — "the ball is jumpy in my
-  browser and smooth in yours, why" — with the two facts that settle it:
+  browser and smooth in yours, why" — with the facts that settle it:
   - a rolling histogram of `requestAnimationFrame` deltas (one-millisecond
     buckets, which is the resolution that separates a 120Hz cadence from a 60Hz
     one and shows a quantised clock piling its deltas onto whole numbers),
-    the estimated display refresh from their median, and their spread;
+    the rate frames are **presented** at, from their median, and their spread.
+    Presented, not "display": the whole of frame-pacing.md §5 is that the two
+    can be twenty times apart, and a line that called 12 Hz the display's
+    refresh on a 240 Hz monitor was the first thing that reading corrected;
   - **ticks per rendered frame** — 0, 1, 2, 3+ — which is the *symptom*: the
     ball appears to jump forward exactly when one frame runs two ticks;
   - the **WebGL renderer string** (`WEBGL_debug_renderer_info`), classified.
     llvmpipe / lavapipe / SwiftShader / swrast / "software" / Mesa offscreen /
     "basic render" ⇒ a visible warning, "this browser is software-rendering;
     expect jank". Absent under `privacy.resistFingerprinting`, and reported as
-    absent rather than guessed at;
+    absent rather than guessed at. **It can also be a lie, which is the reading
+    below's whole reason for existing**: Firefox's anti-fingerprinting bucket
+    substitutes a *plausible* card ("NVIDIA GeForce GTX 980, or similar") rather
+    than withholding the string, so this line can read like healthy hardware on
+    a browser presenting at 12fps — and it does that on a **stock** profile, not
+    only a hardened one (frame-pacing.md §5.3 checked: no
+    `privacy.resistFingerprinting`, no modified `webgl.*`). The check stays
+    because when it fires it is right and it is the one thing that names a CPU
+    rasterizer outright; it is no longer the only warning;
   - whether WebGPU is present, and **the grain of the browser's clock, read off
     the frame deltas themselves**: a quantised clock can only report whole
     milliseconds, so every delta it produces is a whole number of them, while a
@@ -133,6 +144,38 @@ One `index.html` template, self-contained (no external CDN dependencies):
     because a browser driven with `--virtual-time-budget` does not advance
     `performance.now()` during synchronous execution, which is precisely the
     browser `serve-web --check` drives.
+  - **whether this browser is presenting slowly — measured, not read.** The
+    rolling median frame time against the refresh period the browser's *own*
+    quickest frames imply: the tenth-percentile delta, so that one
+    double-reported `rAF` cannot define it, and so that the reference is
+    something the median cannot poison (the presented-rate line is estimated
+    *from* the median, so on the defective browser it read 12 Hz on a 240 Hz
+    display and had nothing left to be surprised by). Past **2.5×** of that
+    period, **and** past a thirtieth of a second in absolute terms, over a
+    window of at least **60 frames**, the warning box says so and offers the
+    render scale below as a test — "if that helps, the cost is per rendered
+    pixel; if it changes nothing, try a smaller window" — rather than as a fix,
+    for the reason frame-pacing.md §5.5 records. The three numbers, and why each: 2.5× sits well above a
+    healthy browser under load (Chrome measured 1.02× of its own quickest tenth)
+    and well below the defect (Firefox, 5.2×); the absolute floor is what stops
+    the ratio firing on a browser that is merely *fast* — 2.5× of a 240Hz period
+    is 96fps, which needs no warning — and no display refreshes slower than
+    1/30s, so the floor cannot be tripped by a slow monitor; 60 frames is one
+    second at 60Hz and five at the 12Hz this exists to catch, which is the right
+    way round, because a slow page has to *stay* slow before the panel says so.
+    **The estimate has since been corroborated by a number it never saw**: on
+    the defective browser it read ~62 Hz, and that browser's own `about:support`
+    reports `targetFrameRate: 60` (frame-pacing.md §5.3). The quickest-tenth
+    delta found what the browser could actually have achieved — not the 240 Hz
+    the monitor can do, and not the 12 Hz it was doing.
+    **When this and the renderer-string warning disagree, this is the one to
+    trust**: Firefox's anti-fingerprinting bucket spoofs the renderer string, so
+    the string read like healthy hardware on a browser presenting at 12fps
+    (frame-pacing.md §5). Strings can lie; measurements did not.
+  - **the render scale the page actually got** — the canvas's backing store
+    against the device-pixel box it is displayed in. Reported as measured rather
+    than restated from the URL, so it answers "did the parameter do anything"
+    without anyone having to trust the URL.
 - CONTRACT: **the overlay is presentation-side and never feeds the
   simulation.** It reads `performance.now()` and `requestAnimationFrame` and
   never calls into the wasm module; real time reaches the engine through
@@ -147,13 +190,64 @@ One `index.html` template, self-contained (no external CDN dependencies):
   input — which is also why its readings are kept short enough to fit without
   scrolling rather than relying on a scrollbar nobody can reach.
 - Why it exists and what its readings mean, hypothesis by hypothesis:
-  `docs/internal/frame-pacing.md`, which is where the owner's reading of it gets
-  written down.
+  `docs/internal/frame-pacing.md` — which is also the worked example of this
+  overlay doing its job, over four rounds of readings, and is now closed and
+  parked with the defect characterised as a browser bug rather than an engine
+  one.
 - `serve-web --check` has a third pass for it (§1). That pass can require more
   than "the overlay appeared": the check browser is deliberately
   software-rendering (`--use-angle=swiftshader`, because a runner has no GPU),
   so an overlay that fails to *notice* fails CI. A detector nothing exercises is
-  a detector that rots, and this one is exercised on every run.
+  a detector that rots, and this one is exercised on every run. The measured
+  slow-presentation verdict is checked one notch weaker and deliberately: that
+  browser is driven under `--virtual-time-budget`, so its cadence is synthetic
+  and *which* verdict it reaches is not a thing to assert — what the pass
+  asserts is that the classifier ran and reached one of its three, because a
+  detector that throws is a detector that silently stops warning anybody.
+- **Render scale** (`?renderscale=0.5`): it clamps the canvas's **backing
+  store** — the page renders that fraction of the device pixels the window has,
+  and the browser upscales. Half the linear scale is a quarter of the pixels.
+  - **It is a mitigation, and it is a diagnostic, and the second one is why it
+    earns its place.** Where a frame's cost is per *rendered* pixel it helps, and
+    that is measured rather than assumed: on a CPU-rasterizing browser at a
+    fractional device pixel ratio, a 50.00ms median fell to 33.40ms; at ratio 1
+    it turned a 16.50–33.40ms spread with 15% two-tick frames into a flat
+    16.50–16.80ms with 1%. Where the cost is *not* per rendered pixel it does
+    nothing — and because it moves the backing store while leaving the window
+    alone, "it did nothing" is a reading, not a disappointment: it says the cost
+    is somewhere a smaller canvas cannot reach. That is exactly what it said on
+    the defect this was built for — unchanged at 0.5 **and** at 0.25, where the
+    canvas renders a *sixteenth* of the pixels, which turns "did nothing" into a
+    demonstration that the cost is independent of the drawing buffer's size
+    rather than weakly tied to it (frame-pacing.md §5.5, §5.6). That is what the
+    overlay's warning presents it as: a test with two informative answers, not a
+    fix.
+  - CONTRACT: **presentation-only, and that is a three-part promise.** The scale
+    multiplies the surface size, the camera viewport that follows it, and
+    pointer positions — *together*. So world-space rendering is unchanged, the
+    aspect ratio a letterbox is built on is unchanged (games/giri/UI.md §6),
+    a click lands where it looks like it lands at any scale, and the simulation
+    never learns that any of this happened. The only thing that moves is how
+    many device pixels the browser is asked to fill.
+  - **Opt-in, and nothing changes for anyone who does not ask.** Absent, the
+    scale is 1 and the arithmetic is the identity. A default cap on device pixel
+    ratio would be a real decision about what every deployed build looks like,
+    and it would need an ADR rather than a quiet edit here.
+  - Accepted range **0.25 to 1**. The floor is where a sprite stops being a
+    picture; the ceiling is 1 because rendering *more* pixels than the display
+    has is supersampling — a different decision with a different cost, and the
+    WebGL2 envelope (renderer.md §8) is not somewhere to wander into by typing a
+    bigger number into a URL. Out of range is clamped, unparseable is ignored,
+    and **neither is silent**: both report the §9 shape to the console, which
+    the page puts on its status line (core.md §9).
+  - **Read on the engine side**, in `jidousha-platform`'s `web/render_scale.rs`,
+    not in the template — the canvas's backing store is written by wgpu from the
+    extent the surface is configured with, so a page-side `canvas.width` would be
+    overwritten by the next configure. The template's half is documenting the
+    parameter, reporting the scale the page ended up with, and naming it in the
+    slow-presentation warning. One reader for every page parameter
+    (`web::query_parameter`), so `?panic=1` and `?renderscale=` cannot disagree
+    about what a query string means.
 - Build stamp footer (§1).
 - Reserved hook (deferred, do not build yet): "download recording" button
   wired to the input recording buffer (input §5) once I2 lands — turns remote

@@ -2329,6 +2329,14 @@ was the owner's 2026-08-23 report of Pong's ball jumping in Firefox on Linux —
 `docs/internal/frame-pacing.md` — and that observation's own verdict is still
 open; this finding is not.
 
+> _Added 2026-08-26, and only as a pointer — this register is closed
+> (ADR-0036) and the paragraph above is left as written._ That verdict is no
+> longer open. It landed as a browser presentation defect specific to Firefox on
+> Linux/Wayland/NVIDIA, and the note is parked. It does not disturb this finding
+> or ADR-0041: interpolation is correct, is the right fix under every hypothesis
+> that *was* a pacing problem, and was simply never going to help a browser
+> presenting at 12fps.
+
 **"A field with no user yet" is not the verdict.** It has a user; the user is the
 game, and the document did not name it. That distinction is the whole of the
 finding: run 4 asked "is it for something the document should name, or is it a

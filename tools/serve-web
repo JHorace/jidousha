@@ -16,8 +16,8 @@ what works here is what works deployed. It MUST serve `.wasm` as
 compilable: it loads the page in a real Chromium, asserts the module started
 and drew, loads it again with `?panic=1` and asserts the panic overlay rendered
 the full §9 message, and loads it a third time with `?frametime=1` and asserts
-the frame-pacing overlay came up and classified the renderer (web-publish.md §2,
-§6 W0 exit criteria).
+the frame-pacing overlay came up, classified the renderer and reached a measured
+verdict on how this browser presents (web-publish.md §2, §6 W0 exit criteria).
 
 The third pass has a property the other two do not: this browser is *deliberately*
 software-rendering — `--use-angle=swiftshader`, because a CI runner has no GPU —
@@ -437,7 +437,15 @@ def check_frametime_overlay(browser: str, port: int, example: str) -> int:
 
     body = re.search(r'<div id="frametime-body">(.*?)</div>', dom, re.S)
     text = body.group(1) if body else ""
-    for required in ("display", "renderer", "clock", "ticks/fr", "frame deltas"):
+    for required in (
+        "present",
+        "refresh",
+        "scale",
+        "renderer",
+        "clock",
+        "ticks/fr",
+        "frame deltas",
+    ):
         if required not in text:
             return fail(
                 "the frame-pacing overlay is missing one of its readings",
@@ -445,6 +453,23 @@ def check_frametime_overlay(browser: str, port: int, example: str) -> int:
                 "the overlay rendered before it had anything to say, or a reading was dropped",
                 "open the page with ?frametime=1 and compare against web-publish.md §2",
             )
+
+    # The measured slow-presentation verdict (web-publish.md §2). This browser
+    # is driven under `--virtual-time-budget`, so its frame cadence is synthetic
+    # and *which* verdict it reaches is not something to assert — what is worth
+    # asserting is that the classifier ran and reached one, because a detector
+    # that throws is a detector that silently stops warning anybody.
+    presentation = re.search(r'data-jidousha-presentation="([a-z]+)"', dom)
+    reached = presentation.group(1) if presentation else None
+    if reached not in ("sampling", "ok", "slow"):
+        return fail(
+            "the frame-pacing overlay did not classify how this browser presents",
+            f"data-jidousha-presentation is {reached!r}; wanted sampling, ok or slow",
+            "the measured slow-presentation check threw, or never ran a frame",
+            f"read {log.relative_to(REPO_ROOT)}; open the page with ?frametime=1 and "
+            "read the 'refresh' line",
+        )
+    print(f"[serve-web] frametime overlay says this browser presents: {reached}")
 
     # This browser runs on SwiftShader by construction (see `load_page`), so an
     # overlay that cannot see software rendering here cannot see it anywhere.

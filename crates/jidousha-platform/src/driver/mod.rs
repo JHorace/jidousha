@@ -30,6 +30,7 @@ use winit::window::{Window, WindowId};
 use crate::clock::FrameClock;
 use crate::error::RunError;
 use crate::translate;
+use crate::web::render_scale::{self, RenderScale};
 
 mod frame;
 #[cfg(test)]
@@ -73,6 +74,13 @@ pub(crate) struct Driver {
     /// alone meant every game drew at `Camera::default()`'s 1280x720 aspect
     /// until the player happened to resize the window (e0-findings.md F-012).
     viewport: PhysicalSize,
+    /// What fraction of the window's device pixels this run renders.
+    ///
+    /// [`RenderScale::FULL`] unless a page URL said otherwise (`?renderscale=`,
+    /// web-publish.md §2) — so on native, always. Read once at startup rather
+    /// than per frame: it comes from the URL the page was opened with, and a
+    /// value that changed under the surface would be a resize nobody asked for.
+    render_scale: RenderScale,
     clock: FrameClock,
     input: SnapshotBuilder,
     /// Set when something went wrong badly enough to stop; `run` returns it.
@@ -95,6 +103,7 @@ impl Driver {
             // default keeps a headless run and a windowed one describing the
             // same screen until the window says otherwise.
             viewport: Camera::default().viewport,
+            render_scale: render_scale::requested(),
             clock: FrameClock::new(),
             input: SnapshotBuilder::new(),
             #[cfg(not(target_arch = "wasm32"))]
@@ -120,6 +129,19 @@ impl Driver {
             self.failure = Some(error);
         }
         event_loop.exit();
+    }
+
+    /// How big to render, for a window winit says is this big.
+    ///
+    /// The **one** place a winit size becomes a surface size, which is what
+    /// makes the render scale a single multiplication rather than a rule every
+    /// call site has to remember. Both routes from winit — the window this run
+    /// opened with, and every resize after it — come through here, and the
+    /// pointer is scaled by the same factor in `translate::pointer_moved` so
+    /// the two never drift (web-publish.md §2).
+    fn surface_size(&self, size: winit::dpi::PhysicalSize<u32>) -> PhysicalSize {
+        self.render_scale
+            .apply(PhysicalSize::new(size.width, size.height))
     }
 
     /// Translate one key event and give it to the builder.
@@ -155,7 +177,7 @@ impl ApplicationHandler for Driver {
         match event_loop.create_window(attributes) {
             Ok(window) => {
                 let window = Arc::new(window);
-                let size = window_size(&window);
+                let size = self.surface_size(window.inner_size());
                 match WgpuBackend::new(Arc::clone(&window), size) {
                     Ok(mut backend) => {
                         // Before anything else is uploaded, so the white texel
@@ -240,12 +262,6 @@ fn window_attributes(config: &GameConfig) -> winit::window::WindowAttributes {
         .with_append(true)
 }
 
-/// The window's size in physical pixels, in the engine's vocabulary.
-fn window_size(window: &Window) -> PhysicalSize {
-    let size = window.inner_size();
-    PhysicalSize::new(size.width, size.height)
-}
-
 /// Whether an event asked the loop to stop.
 ///
 /// Exists so the event handling below can be tested: an `ActiveEventLoop` can
@@ -282,7 +298,7 @@ impl Driver {
             // Resize is lifecycle, not input (input.md §4): it goes to the
             // surface and to the camera, never through `Input`.
             WindowEvent::Resized(size) => {
-                self.resize(PhysicalSize::new(size.width, size.height));
+                self.resize(self.surface_size(*size));
             }
             // A scale change comes with its own resize event, so there is
             // nothing to do here that the arm above will not do.
@@ -300,7 +316,8 @@ impl Driver {
                 ..
             } => self.record_key(event.physical_key, event.state, event.repeat, *is_synthetic),
             WindowEvent::CursorMoved { position, .. } => {
-                self.input.record(translate::pointer_moved(*position));
+                self.input
+                    .record(translate::pointer_moved(*position, self.render_scale));
             }
             WindowEvent::MouseInput { state, button, .. } => {
                 if let Some(translated) = translate::button_event(*state, *button) {
@@ -394,6 +411,60 @@ mod tests {
         );
         driver.frame(frames_worth(1));
         assert_eq!(pointer(&driver).screen, Vec2::new(120.0, 45.0));
+    }
+
+    #[test]
+    fn a_render_scale_renders_fewer_pixels_and_leaves_a_click_where_it_looks() {
+        // `?renderscale=` is presentation-only (web-publish.md §2). The two
+        // halves of that promise are checked together here because they are one
+        // promise: fewer device pixels on the surface, and *nothing* a game can
+        // observe moved — not the aspect ratio the letterbox is built on
+        // (games/giri/UI.md §6), and not where a click lands in the world.
+        //
+        // The failure this exists to catch is a pointer left at the window's own
+        // resolution while the viewport it is read against was scaled: every
+        // click would then land at twice the world position it looks like.
+        let seen = |scale: RenderScale| {
+            let (mut driver, backend) = super::testing::driver_with_a_backend();
+            driver.render_scale = scale;
+            driver.on_window_event(&WindowEvent::Resized(winit::dpi::PhysicalSize::new(
+                1920, 1080,
+            )));
+            // Three-quarters across and a quarter down the window, in the
+            // window's own device pixels — the same place on screen whatever
+            // this run renders at.
+            driver.on_window_event(&WindowEvent::CursorMoved {
+                device_id: DeviceId::dummy(),
+                position: PhysicalPosition::new(1440.0, 270.0),
+            });
+            driver.frame(frames_worth(1));
+            let camera = *driver.simulation.world().resource::<Camera>();
+            let world = camera.screen_to_world(pointer(&driver).screen);
+            (backend.read(|backend| backend.surface()), camera, world)
+        };
+
+        let (full_surface, full_camera, full_world) = seen(RenderScale::FULL);
+        let (half, _) = render_scale::from_query("?renderscale=0.5");
+        let (half_surface, half_camera, half_world) = seen(half);
+
+        assert_eq!(full_surface, PhysicalSize::new(1920, 1080));
+        assert_eq!(
+            half_surface,
+            PhysicalSize::new(960, 540),
+            "half the linear resolution is a quarter of the pixels"
+        );
+        assert_eq!(
+            half_camera.viewport, half_surface,
+            "the camera describes the surface, not the window"
+        );
+        assert!(
+            (half_camera.viewport.aspect() - full_camera.viewport.aspect()).abs() < 1e-3,
+            "the aspect ratio the letterbox is built on must not move"
+        );
+        assert_eq!(
+            half_world, full_world,
+            "the same place on screen is the same place in the world"
+        );
     }
 
     #[test]
