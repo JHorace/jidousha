@@ -544,10 +544,22 @@ somebody else's bug.
 What the call rests on, stated so a future reader can check it rather than
 inherit it:
 
-- the defect needs **all four of** Firefox, Linux, Wayland, and the NVIDIA
-  proprietary driver — the blocklist row that starts it (`DMABUF_WEBGL`,
-  `FEATURE_FAILURE_BUG_1924578`) is scoped to that driver, and Chrome on the same
-  machine is unaffected at ~238fps (§5.1, §5.3);
+- it was observed on Firefox + Linux + Wayland + the NVIDIA proprietary driver,
+  and the evidence for those four is **not equal** — worth separating, because
+  trigger 1 below turns on it:
+  - **Firefox: direct.** Chrome on the same machine, same display, same page is
+    unaffected at ~238fps (§5.1).
+  - **The NVIDIA proprietary driver: strong.** The row that starts the whole
+    chain (`DMABUF_WEBGL`, `FEATURE_FAILURE_BUG_1924578`) is a gfxInfo blocklist
+    entry, and those are scoped by driver (§5.3).
+  - **Linux and Wayland: untested.** Neither was varied. They are part of the
+    configuration this was seen on, not established as necessary to it — the
+    same driver exists elsewhere, and the blocklist entry's real scope was never
+    read out of Mozilla's list.
+
+  So "purely a Linux/NVIDIA/Firefox issue" is the shape of the evidence rather
+  than a conclusion drawn from it, which is the honest way to hold it while
+  parked;
 - **nothing in this engine is implicated.** Not the frame clock, not the
   accumulator, not ADR-0041's interpolation — §5.6 works that through, and the
   conclusion is that the engine's whole obligation here was to make the thing
@@ -639,5 +651,8 @@ things it produced are not:
 > the same window size are fine, so it is WebGL-specific and not the compositor.
 > **Nothing in this engine is at fault; no engine change was made or is
 > indicated.** Parked by the owner, 2026-08-26, as a defect of one browser on one
-> platform with one driver — a well-supported reading of n = 1 machine. §5.7 has
-> the four triggers that reopen it and the two readings that would resume it._
+> platform with one driver — which is the shape of the evidence from n = 1
+> machine, not a measured scope: Firefox is established directly and the driver
+> strongly, while Linux and Wayland were simply never varied. §5.7 separates
+> those, and holds the four triggers that reopen it and the two readings that
+> would resume it._
