@@ -203,6 +203,15 @@ Implemented (R0):
 - A zero-sized viewport (a minimized window) reports an aspect of 1.0 and
   `screen_to_world` returns the camera center, rather than dividing by zero.
   A wrong answer nobody can see beats a NaN that spreads into gameplay.
+- `viewport` is the **surface** size, which is the window's size on every native
+  run and on a normal web page. A web page opened with `?renderscale=`
+  (web-publish.md §2) renders fewer device pixels than the window has, and the
+  viewport describes those; the scale is applied to both dimensions, so the
+  aspect ratio — and therefore the camera's width, and therefore any letterbox a
+  game builds on it — is exactly what it would have been. Pointer positions are
+  scaled by the same factor at the platform seam (input.md §3), which is what
+  keeps `screen_to_world` a division by the viewport rather than a question
+  about which browser is drawing.
 
 ## 5. Textures and the asset boundary
 

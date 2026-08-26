@@ -1,6 +1,7 @@
-//! The web asset source: `fetch`, a shared queue, and decoding at the commit.
+//! The web side of the platform: the asset source, and the page's seams.
 //!
-//! Key types: `WebSource`; `asset_url`.
+//! Key types: `WebSource`; `asset_url`, `query_parameter`; `panic`,
+//! `render_scale`.
 //! Depends on: `web-sys`, `wasm-bindgen-futures`, `jidousha-assets` (web only).
 //! Must never be depended on by: `jidousha-assets` — I/O lives on this side of
 //! the seam, exactly as it does for the native loader (assets.md §5).
@@ -36,9 +37,36 @@ pub(crate) fn asset_url(root: &str, path: &str) -> String {
     format!("{}/{}", root.trim_end_matches('/'), path)
 }
 
+/// The value of one query-string parameter, if the page URL carries it.
+///
+/// The **one** way this crate reads a page parameter, so `?panic=1` and
+/// `?renderscale=0.5` cannot disagree about what a query string means. Matching
+/// is on the whole parameter name, never a substring: `?nopanic=1` does not
+/// carry `panic`, and `?renderscaled=2` does not carry `renderscale`. A check
+/// that can be tripped by accident is a check nobody trusts.
+///
+/// A parameter written without a value (`?panic`) reads as an empty value
+/// rather than as absent — the caller decides whether that is a request or a
+/// mistake, and both of this crate's callers call it a mistake.
+///
+/// Compiled on every target although only the web calls it, for the same reason
+/// `asset_url` is: a function behind a `cfg` is a function no test on this
+/// machine can reach.
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub(crate) fn query_parameter<'a>(search: &'a str, name: &str) -> Option<&'a str> {
+    search
+        .trim_start_matches('?')
+        .split('&')
+        .find_map(|parameter| {
+            let (key, value) = parameter.split_once('=').unwrap_or((parameter, ""));
+            (key == name).then_some(value)
+        })
+}
+
 #[cfg(target_arch = "wasm32")]
 mod fetch;
 pub(crate) mod panic;
+pub(crate) mod render_scale;
 
 #[cfg(target_arch = "wasm32")]
 pub use fetch::WebSource;
@@ -68,6 +96,33 @@ mod tests {
         assert_eq!(
             asset_url("static/art", "ui/panel.png"),
             "static/art/ui/panel.png"
+        );
+    }
+
+    #[test]
+    fn a_query_parameter_is_read_by_its_whole_name() {
+        assert_eq!(query_parameter("?panic=1", "panic"), Some("1"));
+        assert_eq!(
+            query_parameter("?frametime=1&renderscale=0.5", "renderscale"),
+            Some("0.5")
+        );
+        assert_eq!(query_parameter("", "panic"), None);
+        assert_eq!(query_parameter("?nopanic=1", "panic"), None);
+        assert_eq!(query_parameter("?renderscaled=2", "renderscale"), None);
+    }
+
+    #[test]
+    fn a_parameter_written_without_a_value_reads_as_empty_rather_than_absent() {
+        assert_eq!(query_parameter("?renderscale", "renderscale"), Some(""));
+    }
+
+    #[test]
+    fn the_first_spelling_of_a_repeated_parameter_wins() {
+        // Not a decision worth making twice: one answer, and it is the one a
+        // reader of the URL sees first.
+        assert_eq!(
+            query_parameter("?renderscale=0.5&renderscale=1", "renderscale"),
+            Some("0.5")
         );
     }
 }

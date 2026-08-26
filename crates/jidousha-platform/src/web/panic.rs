@@ -69,13 +69,11 @@ pub(crate) fn payload_text(payload: &dyn std::any::Any) -> String {
 ///
 /// Exactly `panic=1` as a parameter — a substring match would fire on
 /// `?nopanic=1` or `?panic=10`, and a check that can be tripped by accident
-/// is a check nobody trusts.
+/// is a check nobody trusts. `super::query_parameter` is what makes the name
+/// half of that exact, and it is the same reader `?renderscale=` uses.
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) fn query_asks_for_panic(search: &str) -> bool {
-    search
-        .trim_start_matches('?')
-        .split('&')
-        .any(|parameter| parameter == "panic=1")
+    super::query_parameter(search, "panic") == Some("1")
 }
 
 /// Install the hook that mirrors panics onto the console for the page.

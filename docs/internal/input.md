@@ -122,10 +122,20 @@ pub struct PointerState {
   world positions — recording stays raw and minimal, and a replayed session with
   a code-modified camera stays *honest* (world pos reflects the camera the
   replayed code actually has). CONTRACT.
+- **Screen means *surface*, not window.** `screen` is pixels from the top-left of
+  the surface being drawn to, which is the same space `Camera::viewport`
+  describes — that is what makes `screen_to_world` a division rather than a
+  negotiation. The two are the same number on every native run and on a normal
+  web page; a web page opened with `?renderscale=` (web-publish.md §2) renders
+  fewer device pixels than the window has, and the platform crate scales pointer
+  positions by exactly the factor it scaled the surface by, so a click still
+  lands where it looks like it lands. Recording is unaffected: what is recorded
+  is what the game saw.
 - Scroll normalization (line-mode vs pixel-mode deltas differ across
   platforms/browsers): the platform layer normalizes to "lines" before the
   snapshot; whatever it produces is what's recorded — replay is exact even if
-  normalization heuristics later improve.
+  normalization heuristics later improve. Scroll is deliberately *not* touched by
+  the render scale above: a wheel notch is a gesture, not a place on the canvas.
 
 Implemented (I1):
 
