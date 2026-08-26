@@ -8,10 +8,11 @@
 //! state, `src/willing.rs` the decision function, `src/chain.rs` the tutorial
 //! as data, and `src/verify.rs` the tutorial run as a test suite.
 //!
-//! Pointer only. No audio, and no randomness in P1 - the outcome is a pure
-//! function of (authored beat state, player assignments, tuning constants),
-//! which is what makes every beat exactly assertable. Seeds enter with P2,
-//! via the engine `Rng` only.
+//! Pointer only. No audio. Since P2, seeded randomness - the engine `Rng`,
+//! read at resolution and nowhere else: the outcome is a pure function of
+//! (authored beat state, player assignments, constants, variant, seed), and
+//! every beat fixes its seed as data, which is what keeps every beat exactly
+//! assertable. Willingness never sees a die.
 //!
 //! Play it:  `cargo run -p giri`
 //! On the web: `tools/build-web giri && tools/serve-web giri`
@@ -35,6 +36,7 @@ mod flow;
 mod frames;
 mod judge;
 mod judgment;
+mod ladder;
 mod layout;
 mod library;
 mod links;
@@ -43,16 +45,19 @@ mod mutation;
 mod onset;
 mod party;
 mod presets;
+mod pressure;
 mod resolution;
 mod resolve;
 mod restart;
 mod scaling;
 mod screens;
 mod sprites;
+mod sweep;
 mod theme;
 mod traits;
 mod tuning;
 mod ui;
+mod variant;
 mod verify;
 mod web;
 mod willing;
@@ -108,7 +113,8 @@ pub fn register(app: &mut App) {
     app.add_system(Draw, screens::draw_content);
 }
 
-/// Startup: the camera, the tuning constants, and the first beat.
+/// Startup: the camera, the tuning constants, the variant and the seed, and
+/// the first beat.
 fn open_the_chain(world: &mut World) {
     // Whatever a harness left in the world before the first tick, or the set
     // the game ships with. A sweep, the mutation round and the live tuning
@@ -119,20 +125,62 @@ fn open_the_chain(world: &mut World) {
     // set wins over the page: `--verify` is not a browser, and a sweep asking
     // for one set and getting another would be a sweep of the wrong thing.
     let asked = planted.is_none().then(web::constants).flatten();
-    let carried = asked.is_some();
-    let (tuning, fault) = match asked {
+    let mut carried = asked.is_some();
+    let mut faults: Vec<String> = Vec::new();
+    let tuning = match asked {
         Some(Ok(parsed)) => {
             // Accepted links say so: a link is a claim about what a playtest
             // ran with, and the console is where somebody checks it without
             // opening the drawer (DESIGN §8a: a run is reproducible only if it
             // says what it ran with).
             println!("[giri] ?constants= accepted - {}", parsed.stamp());
-            (parsed, None)
+            parsed
         }
-        Some(Err(error)) => (Tuning::SHIPPED, Some(error.message())),
-        None => (planted.unwrap_or(Tuning::SHIPPED), None),
+        Some(Err(error)) => {
+            faults.push(error.message());
+            Tuning::SHIPPED
+        }
+        None => planted.unwrap_or(Tuning::SHIPPED),
     };
     world.insert_resource(tuning);
+
+    // `?seed=` and `?variant=` are the rest of the repro-link family (DESIGN
+    // §8b, §12) — simulation inputs, read once, before the first beat. A
+    // harness plants the resources directly and the page never overrides one
+    // it planted, for the sweep reason above.
+    if world.find_resource::<flow::SessionSeed>().is_none() {
+        let seed = match web::seed() {
+            Some(Ok(seed)) => {
+                println!("[giri] ?seed= accepted - {seed}");
+                // An accepted link opens the drawer exactly as a constants
+                // link does (UI.md §12's rule, extended to the family): the
+                // stamp is where somebody checks what the URL actually did.
+                carried = true;
+                Some(seed)
+            }
+            Some(Err(message)) => {
+                faults.push(message);
+                None
+            }
+            None => None,
+        };
+        world.insert_resource(flow::SessionSeed(seed));
+    }
+    if world.find_resource::<variant::VariantId>().is_none() {
+        let chosen = match web::variant() {
+            Some(Ok(variant)) => {
+                println!("[giri] ?variant= accepted - {}", variant.key());
+                carried = true;
+                variant
+            }
+            Some(Err(message)) => {
+                faults.push(message);
+                variant::VariantId::default()
+            }
+            None => variant::VariantId::default(),
+        };
+        world.insert_resource(chosen);
+    }
     let start = world
         .find_resource::<StartAt>()
         .copied()
@@ -164,9 +212,12 @@ fn open_the_chain(world: &mut World) {
     let flow = world.resource_mut::<Flow>();
     flow.tuner.pending = tuning;
     flow.tuner.open = carried;
-    if let Some(fault) = fault {
-        eprintln!("[giri] {fault}");
-        flow.tuner.fault = Some(fault);
+    if !faults.is_empty() {
+        for fault in &faults {
+            eprintln!("[giri] {fault}");
+        }
+        flow.tuner.fault = Some(faults.join("  /  "));
+        flow.tuner.open = true;
     }
 }
 
@@ -199,7 +250,8 @@ fn main() -> ExitCode {
         return verify::run();
     }
     println!(
-        "giri - take a quest, click your people to add them, then SEND PARTY. \
+        "giri - a job board and a roster of people with interests. click a job to take \
+         it, click people to add them, read the chip under the party, then SEND PARTY. \
          close the window to quit"
     );
     match run(config(), register) {

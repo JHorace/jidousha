@@ -78,6 +78,9 @@ of v2 builds around.
    replay identity is unchanged in kind. No other randomness source, ever.
    **P1 has no randomness at all** — its outcome is a pure function of (beat
    state, player assignments, constants), exactly as v1's was.
+   *Implemented (P2):* the `Rng` is read at resolution and nowhere else —
+   the willingness surface is asserted identical under far-apart seeds every
+   verify run — and the seed machinery is §8d.
 
 ## 3. The character sheet v2 (DECIDED in shape; caps DECIDED)
 
@@ -135,6 +138,16 @@ and its cells in the trait×mark table; the icon roles are category icons
 from the existing library (interim, UI.md §13). Traits whose registers name
 P2/P3 systems (craven's danger, vengeful's eagerness, proud's charity) carry
 table cells now and grow their real modifiers with those systems.
+
+*Implemented (P2):* the ladder-era trait effects landed as two more data
+tables — severity biases (greedy → skim, craven → abandon, vengeful →
+sabotage and murder; `ladder::SEVERITIES`) and pressure biases (greedy
+under a fat pot, vengeful beside a grudge; `pressure::PRESSURES`). Loyal's
+"betrayal floor higher toward bonded" arrives through the mechanism rather
+than a table cell: loyal doubles bonds, bonds at `K_loyal` suppress (§8),
+so the loyal hold the line sooner. Every row also carries a one-line
+behavioral description, shown on chip hover (the P1-playtest warm-up;
+UI.md §14).
 
 ## 5. Reputation marks (DECIDED — replaces scalar infamy)
 
@@ -202,20 +215,20 @@ The margin's boundaries: negative refuses; non-negative but under
   a member pushed negative by a departure stays, in ember, with their reason
   on the card.
 - **The margin is no longer discarded at the door**: it is computed and
-  stored on every answer as **strain** groundwork — how reluctantly this
-  party holds together — and strain is a primary betrayal input for the
-  ladder (§8). *In P1 nothing reads the margin after the door*, and the
-  retained deterministic betrayal does not see it.
+  stored on every answer as **strain** — how reluctantly this party holds
+  together — and strain is a primary betrayal input for the ladder (§8).
+  *Implemented (P2):* the margin gained its reader — §7a's strain component
+  maps it onto named constants. The deterministic variant (§8e) still does
+  not see it, which is part of what it preserves.
 - **Bonds, mechanically** (DECIDED 2026-08-22, unchanged): a bond (positive
   regard) overrides public information (it enters the same sum the mark
   reactions do), suppresses betrayal (`regard >= K_loyal`), and propagates
   consequences (harm to a bonded character creates a grudge in the survivor
   toward the killer). Package deals stay OPEN.
 
-**The retained deterministic betrayal (v1's rule, scheduled for
-replacement).** Until the ladder lands (P2), resolution keeps v1's exact
-rule: after success, in roster order at both levels, with kills taking
-effect immediately —
+**The retained deterministic betrayal (v1's rule, now the preserved
+variant).** Through P1, resolution kept v1's exact rule: after success, in
+roster order at both levels, with kills taking effect immediately —
 
 ```text
 betray(c, t) iff desperation(c) >= K_kill
@@ -223,11 +236,12 @@ betray(c, t) iff desperation(c) >= K_kill
            and regard(c->t) < K_loyal
 ```
 
-Kept, not polished: it is the mechanism v1's verdict finding 2 indicts, and
-P2 replaces it wholesale. The two changes P1 makes around it are the marks
-it writes (§5) and nothing else. Regard here is the raw edge, unweighted by
-traits — the trait weights are the *decision function's*, and this rule is
-the old economy arithmetic on its way out.
+*Implemented (P2):* the ladder (§8) replaced it as the shipped rule, and
+this rule survives verbatim as the `deterministic` variant (§8e) — the same
+function, still called, still deterministic, for comparison playtests.
+Regard here is the raw edge, unweighted by traits — the trait weights are
+the *decision function's*, and this rule is v1's economy arithmetic,
+preserved rather than polished.
 
 **Aftermath (unchanged in rule, extended in pen):** a clean run bonds every
 surviving pair (+`bond_gain` both ways, per run — a job somebody died on
@@ -263,46 +277,85 @@ assembly:
   organized-crime read of "a job that needs a known face" survives the
   migration intact — it needs a known *mark* now.)
 - **Pot and player's cut**: visible before assembly, like everything else.
-- **Resolution order** (stated, deterministic): willingness checks happen at
-  assembly time in the UI (refusals are *feedback*, not failures); if
-  requirements are met the dungeon succeeds; betrayal evaluation (§6's
-  retained rule, the ladder once P2 lands); payout; bond drift and clean-job
+- **Resolution order** (stated, deterministic in shape): willingness checks
+  happen at assembly time in the UI (refusals are *feedback*, not
+  failures); betrayal events in roster order under the chain's rule set
+  (§8, or §8e's preserved rule); the desertion re-evaluation (§8c); payout
+  through the skim and sabotage arithmetic; bond drift and clean-job
   counting; mark writes; round-end desperation drift.
-- **v2 still has no resolution failure** in P1: an under-filled party cannot
-  be sent, and a sent party succeeds. Failure semantics enter with the run
-  era's design (OPEN).
+- **P2 opens exactly one failure path**: a desertion re-evaluates the
+  quest's success against the remaining party (§8c), and a job left short
+  fails — no payout, no cut, said loudly on the takeover. An under-filled
+  party still cannot be *sent*; every other failure semantics waits for the
+  run era's design (OPEN).
 
-## 8. The betrayal ladder (DECIDED — **P2**, design ahead of implementation)
+## 7a. Pressure, strain and the foreshadowing bands (DECIDED 2026-08-26)
 
-Betrayal becomes a seeded probabilistic event on a severity ladder:
+*Implemented (P2).* At resolution, each party member has **pressure**: an
+integer computed from
+already-visible state, by one function —
 
-**skim** (take an extra share, quietly) → **abandon** (walk mid-quest; the
-quest's success re-evaluates without them) → **sabotage** (the quest
-suffers; someone gets hurt) → **murder** (the v1 event, now the rare
-summit).
+```text
+pressure(c) = strain_component      (the door margin, mapped: reluctant or
+                                     pushed-negative -> +strain_reluctant;
+                                     comfortable -> 0; margins above
+                                     eager_above -> -strain_eager)
+            + desperation_component (desperation x hunger_weight)
+            + trait_component       (per-trait biases, as data: greedy under
+                                     a fat pot, vengeful beside a grudge)
+            + opportunity_component (the gold a member would gain if one
+                                     fewer split the pot x opportunity_pull
+                                     - pot size relative to share, and party
+                                     size, in one number)
+```
 
-- Probability and reachable severity are driven by: strain (§6's margin,
-  persisted into the quest), desperation, traits (greedy skims, craven
-  abandons, vengeful escalates), and opportunity (pot size, party
-  structure). Constants and curves live in the tuning module; the drawer
-  (§8a) tunes them; distribution sweeps (§14) verify them.
-- **Foreshadowing is a UI obligation** (§12): parties read as *calm / uneasy
-  / powder keg* — qualitative bands, inspectable causes, no percentages on
-  the surface. Murder near-certainty must be visibly telegraphed before it
-  can happen; the small betrayals are common enough to teach the
-  distribution by experience.
-- Every rung writes: a mark (public), edges (witnesses, victims), biography
-  lines, and often desperation/wealth changes. The ladder is the reputation
-  system's pen.
+floored at zero. **The foreshadowing bands derive from the same pressure
+numbers the rolls consume** — *calm / uneasy / powder keg* are named cutoffs
+(`uneasy_at`, `powder_keg_at`) on the party's highest member pressure: the
+most dangerous person sets the mood. One source for the roll and the warning
+is what makes the foreshadowing unable to lie (invariant 2); the bands are
+UI vocabulary, the cutoffs are constants in the drawer, and the **party band
+chip** is visible before SEND (UI.md §14). The strain mapping is the stored
+margin's reader (§6): willingness stays deterministic — what it *risks* is
+what became probabilistic.
+
+## 8. The betrayal ladder (DECIDED, refined 2026-08-26) — *Implemented (P2)*
+
+Betrayal is a seeded probabilistic event on a severity ladder:
+
+**skim** (take an extra share) → **abandon** (walk mid-quest; the quest's
+success re-evaluates without them) → **sabotage** (the pot is damaged, the
+job soured) → **murder** (the v1 event, the rare summit).
+
+**The roll — seeded, ordered, legible.** In **roster order**, each member
+rolls once against their pressure (§7a): occurrence fires when a roll of
+`0..occurrence_die` lands under `pressure - occurrence_calm` (the roll
+forgives a calm party's pressure outright, which is what keeps their
+betrayals rare rather than merely less common). On occurrence a second
+bounded roll picks severity from the rungs *available at this pressure* —
+each rung has a floor, held as data beside its base weight — weighted by
+trait biases (greedy → skim, craven → abandon, vengeful → escalate).
+Randomness decides *whether and how bad*; **target selection stays
+deterministic** (legibility: the dice never choose the victim — the
+relationships do). At most one event per member per quest; rolls use
+start-of-resolution state; a member murdered before their turn never rolls,
+and a member bonded (`regard >= K_loyal`) toward everybody still present
+holds the line and never rolls either (§6's suppression clause).
+
+- **Murder is structurally gated: unreachable below the powder-keg
+  cutoff.** The murder rung's floor *is* `powder_keg_at` — the band chip's
+  own top cutoff, one constant — so "visibly telegraphed before it can
+  happen" is a property of the model, not a UI promise, and the sweep
+  (§8f) asserts it as *exactly zero* murders below the floor, never as a
+  rarity band. Murder is also infeasible without a v1-legal target: no
+  profit or everybody held at `K_loyal` takes it off the table.
+- Every rung writes: a mark (public), edges (the wronged), and a
+  resolution-report line in the mechanical-narration style. The ladder is
+  the reputation system's pen.
 - Design intent named plainly: v1 punished a computable mistake; v2 charges
   for a chosen gamble. Pressing reluctant, hungry people into service is
-  *priced in risk*, and benching them raises tomorrow's price (§11) —
-  avoidance is never free.
-
-*Implemented (P1):* none of it — P1 retains §6's deterministic rule, and the
-one piece of groundwork laid is the stored margin. The deterministic model
-remains available as a tier-2 variant for comparison playtests once the
-ladder lands (§15).
+  *priced in risk* — the strain component is that price — and benching
+  them raises tomorrow's price (§11). Avoidance is never free.
 
 ## 8a. Tuning and playtesting (DECIDED 2026-08-24)
 
@@ -335,6 +388,11 @@ per-beat assembly duration and sheet-look counts are logged locally
 covered v1's — it walks the constants module by design, so the new rows,
 stamp keys and `?constants=` keys appeared without the drawer being edited;
 the presets were re-derived for the wider set (`src/presets.rs`).
+
+*Implemented (P2):* the same walk carried the ten ladder-era constants in;
+the drawer grew to hold twenty-three rows (UI.md §14 owns the geometry),
+the presets were re-derived again, and the stamp gained the variant id and
+the seed (§8d) — a recording says *everything* it ran with.
 
 ## 8b. Variants — how incompatible mechanics coexist (DECIDED 2026-08-23)
 
@@ -381,6 +439,93 @@ section was written; see the repository history for the long form).
 **Decision procedure, compressed:** only numbers → tier 1. Expressible as
 choosing rule implementations at startup, without touching beats, screens or
 state shape → tier 2. Anything deeper → tier 3.
+
+*Implemented (P2):* the machinery's first real instance is §8e — one module
+(`src/variant.rs`) holds the id, the one `match`, and the picker's data;
+the id is a resource stamped into every report and settable with
+`?variant=`; verify runs the beats under both rule sets. The section's
+design survived contact with one bend: the chain-start picker lives *inside*
+the tuning drawer (its natural neighbours are the other simulation inputs),
+and picking a different rule set restarts the chain from the top — rule-set
+assembly is chain-start, so a new rule set is a new chain, immediately
+rather than pending.
+
+## 8c. The rungs — consequences, all public at resolution (DECIDED 2026-08-26)
+
+*Implemented (P2).* All betrayals are known by the resolution report (the
+game never hides from the *player*; whether characters in-world could have
+missed a "quiet" skim is a reserved hidden-info variant, not P2):
+
+- **Skim** — takes one share off the top before the split (the shipped
+  arithmetic: the skimmer gets a full share extra, everybody splits what is
+  left); mark *skimmer*; small regard hits from the shorted.
+- **Abandon** — leaves mid-quest: the quest's success **re-evaluates
+  against the remaining party** (headcount and predicates; the murdered
+  still count — they did the work before they died, which is v1's own
+  semantics kept). A job left short **fails**: no payout, no cut. The
+  deserter takes no share; their hunger still rises; mark *deserter*;
+  regard hits from those left holding the job.
+- **Sabotage** — the pot is damaged by a named fraction (`sabotage_loss`
+  twelfths of the pot) and the quest is soured; mark *saboteur*; strong
+  regard hits.
+- **Murder** — the v1 event, unchanged in its writes (comrade-killer,
+  witness grudges, bonded-grudge propagation, death); target selection is
+  the v1 deterministic rule, against the members still present.
+
+Every rung writes its mark once, its edges, and a report line naming the
+numbers the roll read (pressure, roll, die, and the rung's own arithmetic).
+A quest with any betrayal in it bonds nobody and counts as clean for
+nobody; events resolve in roster order and later members inherit only the
+shrinking room (rolls use start-of-resolution state — drift happens after).
+
+## 8d. Seeds (DECIDED 2026-08-26) — *Implemented (P2)*
+
+giri reads the engine `Rng` — the first and only randomness source
+(invariant 5) — **seeded per scenario**: every beat carries a fixed seed as
+authored data, re-fixed at the beat boundary (so each scenario's outcome is
+a pure function of scenario, choices, constants, variant and seed, whatever
+came before it, and an APPLY's restart replays exactly). The web page
+accepts `?seed=` beside `?constants=` and `?variant=` as a session-wide
+override; a verify scenario rides its seed in on `GameConfig::seed`. The
+seed joins every stamp, report and recording — the drawer's stamp block,
+the per-beat log line, the verify report's beat rows — so a repro link is
+`?constants=...&variant=...&seed=...`. **No `Rng` read happens outside
+resolution**: willingness stays deterministic, and verify asserts the whole
+assembly surface identical under far-apart seeds.
+
+## 8e. The deterministic variant (DECIDED 2026-08-26) — *Implemented (P2)*
+
+The §8b machinery's first customer. Two variants ship: `ladder` (default,
+§8) and `deterministic` — the v1 betrayal rule, **preserved verbatim** for
+comparison playtests: the same `model::betrayals` function v1 shipped,
+still called, never reimplemented, its narration byte-identical and its
+outcome seed-independent (asserted). The variant id is a simulation input —
+a resource, stamped into recordings, reports and the `?constants=` link
+family (`?variant=`), picked at chain start (the picker sits in the tuning
+drawer; switching restarts the chain). Verify runs the beats under both:
+the deterministic beats keep their v1 assertion lists; the ladder beats are
+fixed-seed. Under the deterministic rule the band chip does not draw —
+foreshadowing is the ladder's obligation, and v1's stance (the player does
+the arithmetic) is part of what the variant preserves.
+
+## 8f. Verify — fixed seeds and distributions (DECIDED 2026-08-26)
+
+*Implemented (P2).*
+
+- Beats: fixed-seed exact assertions, as established — two lists per beat
+  (§8e), plus exact pressure and band assertions on the staged party (the
+  numbers the rolls consume, hand-computed).
+- **Distribution sweeps** (a verify phase): 200 seeds over authored
+  scenarios asserting **bands** — the calm party betrays rarely, the
+  pressed party sits between, the powder-keg party betrays in most runs,
+  skims dominate the severities, murders are rare — and **zero murders
+  below the floor** (exact, not statistical: the one hard count, because
+  the gate is structural). Sweep results land in the report with constants,
+  variant and seed range.
+- The mutation round extends over the new constants and the band cutoffs —
+  a perturbed cutoff must break a band assertion (every sweep scenario also
+  asserts its band deterministically, which is what lets the round see a
+  moved cutoff without paying for a sweep per perturbation).
 
 ## 9. Goals (DECIDED — the wonder layer; **P3**, design ahead)
 
@@ -521,13 +666,16 @@ Bob is marked comrade-killer - a witnessed kill is public
 
 Flavor text can layer over it later; the arithmetic stays reachable.
 
-**Willingness is previewed; betrayal is not.** The preview shows each
-character's verdict and leading reason before commitment because refusal is
-*feedback* the player acts on (§7). Betrayal has no preview in P1: every
-input to it is on the sheets and in the drawer, and the player does the
-arithmetic — beat 2 stays a death the player *could foresee*. The ladder era
-replaces this stance with §8's foreshadowing bands, which are that preview,
-made qualitative.
+**Willingness is previewed; betrayal is foreshadowed.** The preview shows
+each character's verdict and leading reason before commitment because
+refusal is *feedback* the player acts on (§7). *Implemented (P2):* the
+ladder era replaced P1's no-preview stance with §7a's bands — the **party
+band chip**, visible before SEND, derived from the same pressures the rolls
+consume. No percentages on the surface; the causes are inspectable
+(pressures one step deep, constants in the drawer). Under the deterministic
+variant the chip does not draw: v1's the-player-does-the-arithmetic stance
+is part of what §8e preserves. The seed and variant id ride every stamp and
+recording (§8d) — a repro link carries constants, variant and seed.
 
 ## 12a. The scaling contract (DECIDED 2026-08-23)
 
@@ -559,17 +707,12 @@ contract notice. **The reasons-as-words surface is itself verifiable**: the
 transcript asserts that every rendered verdict carries at least one reason,
 and the floors apply to every new chip and line.
 
-**Under seeds (P2, design ahead):**
-
-- Scenario assertions run at **fixed seed**: exact outcomes, as today.
-- New: **distribution sweeps** — N seeds over a scenario, asserting rates in
-  bands (skims common, murders rare, the powder-keg party betrays within X%
-  of runs). The mutation round extends naturally: perturb a curve, watch a
-  band break.
-- The tuning drawer grows to cover the new constants and curve parameters;
-  presets become genuinely interesting (a CUTTHROAT world is a probability
-  regime). `?constants=` links carry reproductions; reproductions carry
-  seeds.
+**Under seeds — *Implemented (P2)*, specified in §8f:** scenario assertions
+at fixed seed (two lists per beat, one per variant), distribution sweeps in
+bands with the murder floor exact, the mutation round extended over the new
+constants and cutoffs, the drawer covering the whole set, and repro links
+carrying constants, variant and seed (§8d). A CUTTHROAT world is now a
+probability regime, as promised.
 
 ## 15. Phases (each phase = one handoff, one session)
 
@@ -578,11 +721,12 @@ and the floors apply to every new chip and line.
   verdict + margin + reasons-as-words (interim rendering), door rule intact.
   Deterministic betrayal temporarily retained. Beats re-authored minimally
   to stay green.
-- **P2 — Risk**: seeded RNG enters (engine `Rng`); strain; the betrayal
-  ladder with marks/edges/biography writes; foreshadowing bands;
-  distribution sweeps in verify; drawer covers the new constants. The
-  deterministic model remains available as a tier-2 variant for comparison
-  playtests.
+- **P2 — Risk** *(this build)*: seeded RNG (engine `Rng`, §8d); strain
+  (§7a); the betrayal ladder with mark/edge writes (§8, §8c);
+  foreshadowing bands and the party band chip (§7a, §12); distribution
+  sweeps in verify (§8f); the drawer covers the new constants; the
+  deterministic model preserved as the tier-2 variant `deterministic`
+  (§8e). Biography lines wait for P3's sheet work.
 - **P3 — Wants and the run**: goals (templates, progress, completion
   mutations, curdling, retirement/legacy, eagerness); the open run
   (generated stream with goal hooks, recruitment, roster > work; treasury
@@ -595,12 +739,12 @@ the owner playtests between phases and redirects.
 
 ## 16. Scope fences — what this phase does NOT do
 
-No traditional stats · no randomness in P1 (P2's seeds come through the
-engine `Rng` only) · no hidden information · no betrayal ladder, strain
-consumption, goals, eagerness, recruitment, or open run yet · no resolution
-failure · no audio, TTF, particles, gamepads · no downloaded art · no
-generated flavor text beyond mechanical narration · no player-reputation
-system (guild marks are a reserved hook).
+No traditional stats · randomness through the engine `Rng` only, read at
+resolution only (§8d) · no hidden information · no goals, eagerness,
+recruitment, treasury spending, or open run yet (P3) · no resolution
+failure beyond §8c's desertion re-evaluation · no audio, TTF, particles,
+gamepads · no downloaded art · no generated flavor text beyond mechanical
+narration · no player-reputation system (guild marks are a reserved hook).
 
 ## 17. Open questions
 
@@ -657,3 +801,60 @@ are inline above; this is the index.
 - **The eye signifier** now means reputation marks (UI.md §2 updated);
   trait chips borrow category icons from the existing five (interim, the UI
   session designs real ones).
+
+## 19. Implementation notes — P2, the Risk slice (2026-08-26)
+
+Everything here is a place where implementing the P2 specification decided
+something it left open, or bent a stated shape and says so. The changes are
+inline above; this is the index, and the PR that landed the slice lists the
+deviations one line each.
+
+- **§8: the murder floor is not a constant *at or above* the band boundary
+  — it is the boundary.** The specification asked for `murder_floor >= the
+  powder-keg cutoff`; the build makes the murder rung read `powder_keg_at`
+  itself. One constant satisfies the `>=` trivially and is the strongest
+  one-source form: the warning and the gate cannot be two numbers.
+- **§8: `occurrence_calm` was added** — pressure the occurrence roll
+  forgives. The specification's shape (roll once against pressure) made a
+  genuinely calm party betray in a quarter of runs at any playable die;
+  the grace term is what makes "a calm party betrays rarely" a true band.
+  It is a named, drawer-tunable constant like the rest.
+- **§8: rung floors, base weights, and the trait severity and pressure
+  biases are data tables** (`ladder::RUNGS`, `ladder::SEVERITIES`,
+  `pressure::PRESSURES`), not `Tuning` fields — the same species as the
+  trait×mark table, and like it, tuning content rather than drawer rows.
+  The scalar model constants (strain, hunger, opportunity, cutoffs, die,
+  grace, sabotage fraction) are all in the drawer. The mutation round
+  covers the fields; the tables are covered by the fixed-seed beats and
+  the battery's hard-number checks.
+- **§7a: opportunity is the betrayal gain** — the gold a member would gain
+  if one fewer split the pot — rather than separate pot-size and
+  party-size terms: "pot size relative to share, and party size, in one
+  number", and it is the same arithmetic the v1 rule's `shareGain` reads.
+- **§8c: a quest's completion counts the murdered.** The desertion
+  re-evaluation counts `party - deserters` against headcount and
+  predicates: the murdered did the work before they died, which is v1's
+  own vault semantics (two went down, one came back, the job cleared).
+- **§8c: the skim's arithmetic, made exact**: each skimmer takes one
+  post-cut share off the top (`share_each` at survivor count), and the
+  remaining pool splits among all paid survivors. With no skimmers this is
+  v1's split to the gold.
+- **§6/§8: the bond-suppression clause** landed as: a member bonded
+  (`regard >= K_loyal`) toward *everybody still present* never rolls.
+  Murder's per-target protection is unchanged inside target selection.
+- **§8d: per-scenario seeding is a re-seed of the engine `Rng` at the beat
+  boundary.** `GameConfig::seed` carries the scenario seed in verify's
+  one-sim-per-beat runs; a windowed session spans scenarios, so the beat
+  boundary re-fixes the seed (authored, or the `?seed=` override) — which
+  is also what makes an APPLY's restart replay exactly.
+- **§8e: the variant picker sits in the tuning drawer** and switching
+  restarts the chain immediately (see §8b's implementation note).
+- **The beats each carry two assertion lists and a fixed seed**; the
+  ladder lists pin every pressure and band by hand-computed number, which
+  is how the mutation round sees the pressure constants. Beat 3's ladder
+  story is a skim (the common rung, taught early); beat 4's is a powder-keg
+  warning that does not come true — a probability, not a promise.
+- **The tutorial copy was rewritten stranger-facing** (the P1-playtest
+  warm-up): dilemmas now say what to click and what to read, and every
+  trait row carries a one-line behavioral description shown on chip hover
+  (UI.md §14). Copy only; no assertion moved except the strings themselves.

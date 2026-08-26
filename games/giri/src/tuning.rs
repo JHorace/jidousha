@@ -27,6 +27,7 @@ use crate::constants::{Field, Tuning};
 use crate::flow::{Flow, Stage};
 use crate::presets::PRESETS;
 use crate::ui::{Panel, TextRun, columns, wrap};
+use crate::variant::VariantId;
 use crate::{layout, presets, theme};
 
 /// The drawer's state. **UI state, all of it** — not one field of this is read
@@ -67,7 +68,11 @@ pub fn dirty(pending: &Tuning, active: &Tuning) -> bool {
 }
 
 /// Everything the drawer says, as data (`ui::Panel`, like every other screen).
-pub fn drawer(flow: &Flow, active: &Tuning) -> Panel {
+///
+/// `variant` and the seed on `flow` join the stamp: a recording is only
+/// reproducible if it says everything it ran with, and since P2 that is
+/// constants, variant and seed together (DESIGN §8b, §12).
+pub fn drawer(flow: &Flow, active: &Tuning, variant: VariantId) -> Panel {
     let tuner = &flow.tuner;
     let mut panel = Panel::default();
     panel.text(TextRun::over(
@@ -183,6 +188,29 @@ pub fn drawer(flow: &Flow, active: &Tuning) -> Panel {
         );
     }
 
+    // --- the variant picker (DESIGN §8b): rule-set assembly is chain-start,
+    // so the picker lives with the other simulation inputs and switching
+    // restarts the chain from the top.
+    panel.text(TextRun::over(
+        layout::variant_label(),
+        "variant",
+        theme::SMALL,
+        theme::DIM,
+    ));
+    for (index, id) in VariantId::ALL.iter().copied().enumerate() {
+        let button = layout::variant_button(index);
+        panel.text(TextRun::over(
+            crate::ui::centered(button, id.key(), theme::SMALL, button.min.y + 10.0),
+            id.key(),
+            theme::SMALL,
+            if id == variant {
+                theme::GOLD
+            } else {
+                theme::DIM
+            },
+        ));
+    }
+
     // --- the stamp: what is actually in effect, always visible -------------
     panel.text(TextRun::over(
         layout::tuner_stamp(),
@@ -192,7 +220,12 @@ pub fn drawer(flow: &Flow, active: &Tuning) -> Panel {
     ));
     panel.block(
         layout::tuner_stamp() + Vec2::new(0.0, 14.0),
-        &active.readout(),
+        &format!(
+            "{}\nvariant {} - seed {}",
+            active.readout(),
+            variant.key(),
+            flow.seed
+        ),
         theme::SMALL,
         theme::INK,
     );
@@ -253,6 +286,30 @@ pub fn handle_pointer(world: &mut World, at: Vec2, tick: u64, clicked: bool) -> 
     for (index, preset) in PRESETS.iter().enumerate() {
         if layout::tuner_preset(index).contains(at) {
             world.resource_mut::<Flow>().tuner.pending = preset.tuning;
+            return true;
+        }
+    }
+    // The variant picker: rule-set assembly happens at chain start (DESIGN
+    // §8b), so picking a different rule set restarts the chain from the top —
+    // immediately, not pending, because a variant is not a number a beat can
+    // absorb at its own boundary.
+    for (index, id) in VariantId::ALL.iter().copied().enumerate() {
+        if layout::variant_button(index).contains(at) {
+            let current = world
+                .find_resource::<VariantId>()
+                .copied()
+                .unwrap_or_default();
+            if id != current {
+                world.insert_resource(id);
+                crate::flow::load_beat(world, 0);
+                let flow = world.resource_mut::<Flow>();
+                flow.tuner.open = true;
+                flow.stage = Stage::Board;
+                flow.bounce(
+                    tick,
+                    format!("variant {} - the chain restarts from the top", id.key()),
+                );
+            }
             return true;
         }
     }

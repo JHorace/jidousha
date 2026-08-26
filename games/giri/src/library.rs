@@ -146,6 +146,26 @@ pub fn printable_strings(checks: &mut Checks) {
     // happen to reach them.
     for def in crate::traits::TRAITS {
         note("a trait chip".to_owned(), def.name.to_owned());
+        note(
+            "a trait description".to_owned(),
+            format!("{} - {}", def.name, def.line),
+        );
+    }
+    for band in [
+        crate::pressure::Band::Calm,
+        crate::pressure::Band::Uneasy,
+        crate::pressure::Band::PowderKeg,
+    ] {
+        note(
+            "the band chip".to_owned(),
+            format!("the party reads {}", band.word()),
+        );
+    }
+    for id in crate::variant::VariantId::ALL {
+        note("the variant picker".to_owned(), id.key().to_owned());
+    }
+    for def in crate::ladder::RUNGS {
+        note("a rung's name".to_owned(), def.name.to_owned());
     }
     for mark in crate::traits::MarkId::ALL.iter().copied() {
         note("a mark line".to_owned(), mark.name().to_owned());
@@ -212,7 +232,9 @@ pub fn printable_strings(checks: &mut Checks) {
                 &played.report_preview,
             ),
         ] {
-            for text in screens::content(flow, social, preview, &played.tuning).strings() {
+            for text in
+                screens::content(flow, social, preview, &played.tuning, played.variant).strings()
+            {
                 note(format!("beat {beat}'s {mode}"), text.to_owned());
             }
         }
@@ -227,6 +249,7 @@ pub fn printable_strings(checks: &mut Checks) {
             &played.after,
             &played.report_preview,
             &played.tuning,
+            played.variant,
         )
         .strings()
         {
@@ -248,6 +271,7 @@ pub fn printable_strings(checks: &mut Checks) {
             &played.after,
             &played.report_preview,
             &played.tuning,
+            played.variant,
         )
         .strings()
         {
@@ -276,15 +300,17 @@ pub fn printable_strings(checks: &mut Checks) {
         &Social::default(),
         &Preview::default(),
         &Tuning::SHIPPED,
+        crate::variant::VariantId::default(),
     )
     .strings()
     {
         note("the end of the chain".to_owned(), text.to_owned());
     }
-    // Every reason a `?constants=` link is refused, since each is a string the
-    // page draws and none is reachable by playing (UI.md §12).
+    // Every reason a `?constants=`, `?seed=` or `?variant=` link is refused,
+    // since each is a string the page draws and none is reachable by playing
+    // (UI.md §12).
     for message in crate::links::refusals() {
-        note("a refused ?constants=".to_owned(), message);
+        note("a refused link".to_owned(), message);
     }
     for (what, text) in &strings {
         let stray = text

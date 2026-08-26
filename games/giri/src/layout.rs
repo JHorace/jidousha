@@ -106,7 +106,7 @@ pub fn log_panel() -> Rect {
     Rect::from_min_size(Vec2::new(0.0, 36.0), Vec2::new(DESIGN_W, 308.0))
 }
 
-// ── the tuning drawer (UI.md §12) ──────────────────────────────────────────
+// ── the tuning drawer (UI.md §12, §14) ─────────────────────────────────────
 
 /// The drawer's handle, in the status bar beside the log's.
 ///
@@ -118,25 +118,22 @@ pub fn tune_button() -> Rect {
     Rect::from_min_size(Vec2::new(656.0, 2.0), Vec2::new(80.0, 32.0))
 }
 
-/// The tuning drawer: the log drawer's rectangle, exactly.
+/// The tuning drawer: from under the status bar to the bottom of the screen.
 ///
-/// **Not the info column the mockup uses**, and the reason is the readability
-/// floor rather than taste: ten constants at UI.md §7's 32x32 target floor is
-/// 320 reference pixels of steppers alone, and the info column is 276 tall.
-/// Three columns of rows in a drawer the width of the board fit with room for
-/// the note and the stamp; the info column fits six constants and a scrollbar.
-/// A drawer is already this game's shape for "an overlay over the board" and
-/// the gold border is what says which drawer this one is (UI.md §12).
+/// The log drawer's rectangle held thirteen constants; twenty-three at UI.md
+/// §7's 32x32 target floor need eight rows a column, and the board band is
+/// six rows tall at most. So since P2 the drawer covers the party strip too
+/// (UI.md §14): a dev surface over the whole board, which nothing mid-beat
+/// needs visible — the drawer edits a *pending* copy and the beat does not
+/// move. Where a mechanical floor and a placement meet, the floor wins.
 pub fn tuner_panel() -> Rect {
-    log_panel()
+    Rect::from_min_size(Vec2::new(0.0, 36.0), Vec2::new(DESIGN_W, DESIGN_H - 36.0))
 }
 
 /// How many stepper rows a column holds before the next one starts.
 ///
-/// Five since P1: thirteen constants over three columns. The pitch tightened
-/// to keep five 32-tall steppers inside the drawer's band — the target floor
-/// is untouched, the air between rows is what got spent.
-pub const TUNER_ROWS: usize = 5;
+/// Eight since P2: twenty-three constants over three columns.
+pub const TUNER_ROWS: usize = 8;
 const TUNER_COL_X: f32 = 28.0;
 const TUNER_COL_PITCH: f32 = 312.0;
 const TUNER_ROW_Y: f32 = 110.0;
@@ -223,6 +220,21 @@ pub fn tuner_title() -> Vec2 {
     Vec2::new(TUNER_COL_X, 50.0)
 }
 
+/// The variant picker's label (DESIGN §8b: the picker sits beside where the
+/// tuning menu lives — since P2, inside it, on its own row under the
+/// steppers).
+pub fn variant_label() -> Vec2 {
+    Vec2::new(TUNER_COL_X, variant_button(0).min.y + 10.0)
+}
+
+/// Variant button `index` — one per `VariantId::ALL` row.
+pub fn variant_button(index: usize) -> Rect {
+    Rect::from_min_size(
+        Vec2::new(112.0 + index as f32 * 140.0, 388.0),
+        Vec2::new(132.0, 32.0),
+    )
+}
+
 /// The prose band under the steppers: the hint row first, then the note.
 ///
 /// One band with two tenants in order rather than two fixed slots, because the
@@ -230,7 +242,7 @@ pub fn tuner_title() -> Vec2 {
 /// `?constants=` — and a note pinned under the taller case would sit in a hole
 /// on every other frame.
 pub fn tuner_hint() -> Vec2 {
-    Vec2::new(TUNER_COL_X, 282.0)
+    Vec2::new(TUNER_COL_X, 432.0)
 }
 
 /// How wide the hint and the note may run before they wrap.
@@ -245,7 +257,7 @@ pub fn tuner_prose_width() -> f32 {
 /// The stamp: the constants actually in effect, always visible while the drawer
 /// is open (UI.md §12). Under the third stepper column, which is short.
 pub fn tuner_stamp() -> Vec2 {
-    Vec2::new(652.0, 216.0)
+    Vec2::new(652.0, 352.0)
 }
 
 /// Where log line `index` is drawn inside the drawer.
@@ -330,9 +342,33 @@ pub fn party_card(index: usize) -> Rect {
     )
 }
 
+/// Trait chip `index` of a party card — the row a hover shows the trait's
+/// one-line description for (UI.md §14). A hover rect, not a click target,
+/// so the 32x32 floor does not bind it.
+pub fn trait_chip(card: Rect, index: usize) -> Rect {
+    Rect::from_min_size(
+        Vec2::new(
+            card.min.x + 6.0,
+            card.min.y + pcard::TRAITS_TOP + index as f32 * pcard::TRAIT_PITCH,
+        ),
+        Vec2::new(card.size().x - 12.0, pcard::TRAIT_PITCH),
+    )
+}
+
 /// The strip's label.
 pub fn party_label() -> Vec2 {
     Vec2::new(PARTY_X, 346.0)
+}
+
+/// The party band chip (DESIGN §7a, UI.md §14): the skull, on the strip's
+/// label row — visible before SEND, which is the foreshadowing obligation.
+pub fn band_chip_icon() -> Vec2 {
+    Vec2::new(560.0, 344.0)
+}
+
+/// Where the chip's word starts, beside the skull.
+pub fn band_chip_text() -> Vec2 {
+    Vec2::new(582.0, 347.0)
 }
 
 /// The send verb. Hidden entirely until a quest is taken (UI.md §3).

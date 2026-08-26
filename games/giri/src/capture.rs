@@ -79,9 +79,17 @@ fn chosen(runs: &[BeatRun]) -> Vec<(&'static str, usize)> {
         .iter()
         .position(|run| run.refusal.is_some())
         .unwrap_or(0);
+    // The staged board comes from a powder-keg assembly when the chain has
+    // one (UI.md §14): the band chip at its loudest is the screen the
+    // foreshadowing obligation is judged on, and the owner reviews it from
+    // this capture.
+    let staged = runs
+        .iter()
+        .position(|run| run.ready.band == Some(crate::pressure::Band::PowderKeg))
+        .unwrap_or(refusal);
     vec![
         ("board", refusal),
-        ("staged", refusal),
+        ("staged", staged),
         ("resolution", killing),
     ]
 }
@@ -114,7 +122,14 @@ pub fn capture_screens(
                 font: run.font,
             });
         }
-        let narrow = verify::play_at(beat, tuning, true, verify::NARROW_VIEWPORT);
+        let narrow = verify::play_at(
+            beat,
+            tuning,
+            crate::variant::VariantId::default(),
+            None,
+            true,
+            verify::NARROW_VIEWPORT,
+        );
         if let Some(frame) = pick(&narrow, mode) {
             wanted.push(Wanted {
                 name: format!("{mode}-narrow"),

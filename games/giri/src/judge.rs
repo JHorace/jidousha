@@ -14,6 +14,7 @@ use crate::checks::Checks;
 use crate::constants::Tuning;
 use crate::flow::Stage;
 use crate::model::Social;
+use crate::variant::VariantId;
 use crate::verify::BeatRun;
 use crate::willing::willingness;
 use crate::{layout, party};
@@ -26,13 +27,42 @@ fn entities(social: &Social, names: &[&str]) -> Option<Vec<Entity>> {
         .collect()
 }
 
-/// Judge one beat's `Expect` list against what the run did.
+/// Whether an expectation is about the assembly moment — true of the claims
+/// that hold under any variant and any seed (willingness is deterministic),
+/// and judged on both rule sets for exactly that reason.
+fn assembly_claim(expect: &Expect) -> bool {
+    matches!(
+        expect,
+        Expect::Refuses { .. }
+            | Expect::Joins { .. }
+            | Expect::WillingnessIs { .. }
+            | Expect::VerdictIs { .. }
+            | Expect::TopReason { .. }
+            | Expect::BandIs { .. }
+            | Expect::PressureIs { .. }
+    )
+}
+
+/// Judge one beat's `Expect` lists against what the run did.
 ///
-/// The list is authored in `beats.rs` by hand, against arithmetic a person did
-/// on paper - which is what stops these assertions being the model reading its
-/// own answer back.
+/// The lists are authored in `beats.rs` by hand, against arithmetic a person
+/// did on paper - which is what stops these assertions being the model reading
+/// its own answer back. Which list depends on the run's variant (DESIGN §8e):
+/// the deterministic run keeps v1's whole list; the ladder run takes the
+/// assembly-moment claims (variant-independent by willingness determinism)
+/// plus the beat's fixed-seed `ladder` list.
 pub fn judge_world(checks: &mut Checks, spec: &BeatSpec, run: &BeatRun, tuning: &Tuning) {
     let beat = run.index + 1;
+    let expectations: Vec<Expect> = match run.variant {
+        VariantId::Deterministic => spec.expect.to_vec(),
+        VariantId::Ladder => spec
+            .expect
+            .iter()
+            .filter(|expect| assembly_claim(expect))
+            .chain(spec.ladder.iter())
+            .copied()
+            .collect(),
+    };
     // The beat's own job is part of the question (DESIGN §6: willingness
     // takes the quest); every assembly-moment claim is asked against it.
     let job = spec.dungeons.first();
@@ -47,7 +77,7 @@ pub fn judge_world(checks: &mut Checks, spec: &BeatSpec, run: &BeatRun, tuning: 
             job,
         ))
     };
-    for expect in spec.expect {
+    for expect in &expectations {
         match *expect {
             Expect::Refuses { who, party } | Expect::Joins { who, party } => {
                 let wants_join = matches!(expect, Expect::Joins { .. });
@@ -275,6 +305,43 @@ pub fn judge_world(checks: &mut Checks, spec: &BeatSpec, run: &BeatRun, tuning: 
                     format!(
                         "beat {beat}: no line contains {fragment:?}; the report was {:?}",
                         run.report
+                    ),
+                );
+            }
+            Expect::BandIs { band } => {
+                // Asserted against the Preview the staged strip drew from -
+                // the surface itself, not a recomputation beside it.
+                checks.require(
+                    run.ready.band == Some(band),
+                    "the band chip does not read what the beat says it reads",
+                    format!(
+                        "beat {beat}: the staged party's band is {:?} and the beat says \
+                         {band:?}; the pressures were {:?}",
+                        run.ready.band,
+                        run.ready
+                            .pressures
+                            .iter()
+                            .map(|p| p.total)
+                            .collect::<Vec<_>>()
+                    ),
+                );
+            }
+            Expect::PressureIs { who, total } => {
+                let entity = run.at_assembly.by_name(who).map(|member| member.entity);
+                let found = entity.and_then(|entity| {
+                    run.ready
+                        .pressures
+                        .iter()
+                        .find(|pressure| pressure.who == entity)
+                        .copied()
+                });
+                checks.require(
+                    found.is_some_and(|pressure| pressure.total == total),
+                    "a pressure the beat states exactly came out somewhere else",
+                    format!(
+                        "beat {beat}: {who}'s pressure is {:?} and the beat says {total} \
+                         (strain + hunger + traits + opportunity)",
+                        found
                     ),
                 );
             }

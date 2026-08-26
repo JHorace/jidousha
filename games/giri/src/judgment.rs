@@ -10,9 +10,8 @@
 
 use crate::checks::Checks;
 use crate::constants::Tuning;
-use crate::contracts::{bench, bench_job, set_clean_jobs};
+use crate::contracts::{bench, bench_job, resolve_v1, set_clean_jobs};
 use crate::model::Social;
-use crate::resolve::resolve;
 use crate::traits::{MarkId, TraitId, reaction_delta};
 use crate::willing::{Cause, Verdict, willingness};
 
@@ -317,7 +316,7 @@ pub fn battery(checks: &mut Checks, tuning: &Tuning) {
     let (mut world, ids) = bench(&[("Almost", 0, &[], &[]), ("Fresh", 0, &[], &[])], &[]);
     set_clean_jobs(&mut world, ids[0], tuning.reliable_after - 1);
     let social = Social::read(&world.view());
-    let outcome = resolve(&social, tuning, &bench_job(2, 6, 2), &ids);
+    let outcome = resolve_v1(&social, tuning, &bench_job(2, 6, 2), &ids);
     checks.require(
         outcome
             .clean_job_changes
@@ -376,7 +375,7 @@ pub fn battery(checks: &mut Checks, tuning: &Tuning) {
     );
     set_clean_jobs(&mut world, ids[0], tuning.reliable_after);
     let social = Social::read(&world.view());
-    let outcome = resolve(&social, tuning, &bench_job(2, 6, 2), &ids);
+    let outcome = resolve_v1(&social, tuning, &bench_job(2, 6, 2), &ids);
     checks.require(
         !outcome
             .mark_writes
@@ -394,7 +393,7 @@ pub fn battery(checks: &mut Checks, tuning: &Tuning) {
         &[],
     );
     let social = Social::read(&world.view());
-    let outcome = resolve(&social, tuning, &bench_job(2, 6, 0), &ids);
+    let outcome = resolve_v1(&social, tuning, &bench_job(2, 6, 0), &ids);
     checks.require(
         outcome.betrayals.len() == 1
             && !outcome

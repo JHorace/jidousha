@@ -22,10 +22,13 @@ use crate::model::{
     Character, CleanJobs, Desperation, Marks, RegardEdge, Social, Source, Traits, Wealth,
 };
 use crate::onset::{Card, Onset};
+use crate::pressure::{Band, Pressure};
 use crate::resolve::{DriftLine, EventCard, apply, resolve};
+use crate::traits::TraitId;
 use crate::tuning::Tuner;
+use crate::variant::VariantId;
 use crate::willing::{Admission, Willingness, admit, willingness};
-use crate::{layout, onset, sprites};
+use crate::{layout, onset, pressure, sprites};
 
 /// Which screen the player is on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -74,6 +77,15 @@ pub struct Flow {
     pub drift: Vec<DriftLine>,
     /// Which quest the takeover is about.
     pub resolved: Option<usize>,
+    /// Whether the last resolution's quest failed — a desertion left it short.
+    pub failed: bool,
+    /// The scenario seed this beat's dice are fixed to (DESIGN §12): the
+    /// beat's authored seed, or the session's `?seed=` override. Stamped into
+    /// the log at every beat load, so a recording says what it rolled with.
+    pub seed: u64,
+    /// The trait chip the pointer is on, for its one-line description
+    /// (UI.md §14) — hover state, read by nothing that decides an outcome.
+    pub trait_hover: Option<TraitId>,
     /// What the player has taken in cuts, across the session.
     pub gold: i32,
     /// The log, most recent first. Secondary by design (UI.md §3).
@@ -102,6 +114,9 @@ impl Default for Flow {
             events: Vec::new(),
             drift: Vec::new(),
             resolved: None,
+            failed: false,
+            seed: 0,
+            trait_hover: None,
             gold: 0,
             log: Vec::new(),
             log_open: false,
@@ -164,6 +179,14 @@ impl Flow {
 pub struct StartAt(pub usize);
 impl Resource for StartAt {}
 
+/// The session's seed override (DESIGN §12): `Some` when the page carried
+/// `?seed=` or a harness planted one, and every beat then rolls at that seed;
+/// `None` and each beat rolls at its own authored seed — the fixed-seed
+/// tutorial as data.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SessionSeed(pub Option<u64>);
+impl Resource for SessionSeed {}
+
 /// What the assembly currently says, arithmetic and all.
 ///
 /// Derived state, recomputed every tick from the same functions the send verb
@@ -186,6 +209,13 @@ pub struct Preview {
     pub can_send: bool,
     /// Why not, if not — the reason the disabled button states (UI.md §3).
     pub blocked: String,
+    /// Every party member's pressure against the taken quest, in roster order
+    /// — the same numbers the resolution's rolls will consume (DESIGN §7a).
+    pub pressures: Vec<Pressure>,
+    /// The party band the chip shows before SEND — `Some` only while a quest
+    /// is taken and the chain's rule set foreshadows (the ladder does; the
+    /// deterministic variant keeps v1's no-preview stance).
+    pub band: Option<Band>,
 }
 impl Resource for Preview {}
 
@@ -205,6 +235,7 @@ impl Preview {
 pub fn assess(
     social: &Social,
     tuning: &Tuning,
+    variant: VariantId,
     party: &[Entity],
     dungeon: Option<&Dungeon>,
 ) -> Preview {
@@ -235,6 +266,12 @@ pub fn assess(
     };
     let headcount_ok = party.len() == dungeon.headcount;
     let requirement_ok = dungeon.requires.met(social, party);
+    // The pressures and the band the chip shows (DESIGN §7a): the same
+    // `pressure::party` the resolution's rolls will read, on the same
+    // snapshot — one source, so the foreshadowing cannot lie.
+    let pressures = pressure::party(social, tuning, party, dungeon);
+    let band = (variant.foreshadows() && !party.is_empty())
+        .then(|| pressure::party_band(tuning, &pressures));
     let refusing: Vec<&str> = entries
         .iter()
         .filter(|entry| !entry.joins())
@@ -268,6 +305,8 @@ pub fn assess(
         // ask them again.
         can_send: headcount_ok && requirement_ok,
         blocked,
+        pressures,
+        band,
     }
 }
 
@@ -322,6 +361,25 @@ pub fn load_beat(world: &mut World, index: usize) {
         }
     }
 
+    // **Seeded per scenario** (DESIGN §12): the engine `Rng` is re-seeded at
+    // every beat boundary — the beat's authored seed, or the session's
+    // `?seed=` override — so each scenario's outcome is a pure function of
+    // (scenario, choices, constants, variant, seed) whatever came before it,
+    // and a restart replays exactly. The seed is logged with the variant so
+    // every recording says what it rolled with.
+    let session = world
+        .find_resource::<SessionSeed>()
+        .copied()
+        .unwrap_or_default();
+    let seed = session
+        .0
+        .unwrap_or_else(|| CHAIN.get(index).map_or(0, |beat| beat.seed));
+    world.insert_resource(Rng::from_seed(seed));
+    let variant = world
+        .find_resource::<VariantId>()
+        .copied()
+        .unwrap_or_default();
+
     let flow = world.resource_mut::<Flow>();
     flow.beat = index;
     flow.stage = if index < CHAIN.len() {
@@ -336,8 +394,14 @@ pub fn load_beat(world: &mut World, index: usize) {
     flow.events.clear();
     flow.drift.clear();
     flow.resolved = None;
+    flow.failed = false;
+    flow.seed = seed;
+    flow.trait_hover = None;
     flow.log_open = false;
     flow.toast = None;
+    if index < CHAIN.len() {
+        flow.note(format!("variant {} - seed {seed}", variant.key()));
+    }
     // A restart is a fresh assembly to measure, whether it came from finishing
     // the last beat or from an APPLY. The drawer's own state - open, pending,
     // and a fault nobody has acknowledged - survives it: pending persists until
@@ -420,6 +484,23 @@ fn board_input(world: &mut World, at: Vec2, tick: u64, clicked: bool) {
             .map(Card::Quest)
             .or(over_person.map(Card::Person))
     };
+    // The trait chip under the pointer, for its one-line description
+    // (UI.md §14): a hover, like the drawer's hint row, because a pixel-font
+    // game has no tooltip.
+    let over_trait = if taken_by_tuner {
+        None
+    } else {
+        over_person.and_then(|index| {
+            let member = social.members.get(index)?;
+            let card = layout::party_card(member.roster_index);
+            member
+                .traits
+                .iter()
+                .enumerate()
+                .find(|(chip, _)| layout::trait_chip(card, *chip).contains(at))
+                .map(|(_, trait_id)| *trait_id)
+        })
+    };
     {
         let taken = world.resource::<Flow>().taken;
         let flow = world.resource_mut::<Flow>();
@@ -427,6 +508,7 @@ fn board_input(world: &mut World, at: Vec2, tick: u64, clicked: bool) {
         // is still a card the pointer can be on, which is why the look counter
         // above is not derived from the peek.
         flow.peek = over_quest.filter(|index| !taken_by_tuner && Some(*index) != taken);
+        flow.trait_hover = over_trait;
         flow.onset.look(on);
     }
     if !clicked || taken_by_tuner {
@@ -534,7 +616,11 @@ fn send(world: &mut World, social: &Social, tuning: &Tuning, tick: u64) {
         };
         (flow.party.clone(), quest, index)
     };
-    let ready = assess(social, tuning, &party, Some(&quest));
+    let variant = world
+        .find_resource::<VariantId>()
+        .copied()
+        .unwrap_or_default();
+    let ready = assess(social, tuning, variant, &party, Some(&quest));
     if !ready.can_send {
         return;
     }
@@ -549,7 +635,13 @@ fn send(world: &mut World, social: &Social, tuning: &Tuning, tick: u64) {
         );
     }
     world.resource_mut::<Flow>().note(measured);
-    let resolution = resolve(social, tuning, &quest, &party);
+    // **The one moment the dice are read** (DESIGN §8, §12): the `Rng` enters
+    // resolution and nothing else — willingness, the door and the preview
+    // stay deterministic under any seed.
+    let resolution = {
+        let rng = world.resource_mut::<Rng>();
+        resolve(social, tuning, variant, &quest, &party, rng)
+    };
     apply(world, &resolution);
     let survivors: Vec<&str> = resolution
         .survivors
@@ -558,7 +650,8 @@ fn send(world: &mut World, social: &Social, tuning: &Tuning, tick: u64) {
         .collect();
     let lost = party.len() - resolution.survivors.len();
     let flow = world.resource_mut::<Flow>();
-    flow.gold += quest.cut;
+    flow.gold += resolution.cut_taken;
+    flow.failed = resolution.failed;
     flow.report = resolution.lines;
     flow.events = resolution.events;
     flow.drift = resolution.drift;
@@ -566,9 +659,14 @@ fn send(world: &mut World, social: &Social, tuning: &Tuning, tick: u64) {
     flow.stage = Stage::Resolution;
     flow.toast = None;
     flow.note(format!(
-        "{} cleared - cut {}g - {} came back{}",
+        "{} {} - cut {}g - {} came back{}",
         quest.name,
-        quest.cut,
+        if resolution.failed {
+            "failed"
+        } else {
+            "cleared"
+        },
+        resolution.cut_taken,
         survivors.join(", "),
         if lost == 0 {
             String::new()
@@ -582,12 +680,16 @@ fn send(world: &mut World, social: &Social, tuning: &Tuning, tick: u64) {
 pub fn refresh_preview(world: &mut World) {
     let social = Social::read(&world.view());
     let tuning = *world.resource::<Tuning>();
+    let variant = world
+        .find_resource::<VariantId>()
+        .copied()
+        .unwrap_or_default();
     let flow = world.resource::<Flow>();
     let party = flow.party.clone();
     // The *taken* quest, not the peeked one: the gate is about what would
     // actually be sent, and a peek must not change whether the button is live.
     let quest = flow.taken_quest().copied();
-    let preview = assess(&social, &tuning, &party, quest.as_ref());
+    let preview = assess(&social, &tuning, variant, &party, quest.as_ref());
     world.insert_resource(preview);
 }
 

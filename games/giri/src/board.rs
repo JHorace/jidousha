@@ -167,8 +167,24 @@ pub fn dilemma(flow: &Flow) -> Panel {
     );
     // The lesson gives its slot up to a toast while one is showing: a bounced
     // click is the more urgent of the two lines and they say the same kind of
-    // thing in the same place (`layout::beat_note`).
-    if let (Some(teaches), None) = (teaches, &flow.toast) {
+    // thing in the same place (`layout::beat_note`). A hovered trait chip
+    // borrows the slot next (UI.md §14): its one-line description is this
+    // game's hover text, and the note band is where a line about the thing
+    // under the pointer already lives.
+    if flow.toast.is_some() {
+        // party::toast draws it.
+    } else if let Some(trait_id) = flow.trait_hover {
+        let def = trait_id.def();
+        panel.block(
+            layout::beat_note(),
+            &wrap(
+                &format!("{} - {}", def.name, def.line),
+                columns(layout::beat_note_width(), theme::SMALL),
+            ),
+            theme::SMALL,
+            theme::DIM,
+        );
+    } else if let Some(teaches) = teaches {
         panel.block(
             layout::beat_note(),
             &wrap(

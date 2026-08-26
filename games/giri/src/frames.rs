@@ -69,7 +69,7 @@ pub fn judge_frames(checks: &mut Checks, run: &BeatRun) {
         ),
     ] {
         let Some(frame) = frame else { continue };
-        let panel = screens::content(flow, social, preview, &run.tuning);
+        let panel = screens::content(flow, social, preview, &run.tuning, run.variant);
         for text_run in &panel.runs {
             let drawn = glyph_run(frame, run.font, text_run);
             checks.require(
