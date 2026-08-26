@@ -1,14 +1,17 @@
 # Frame pacing on the web — an open investigation
 
-Status: **defect characterised, mechanism still open; one reading outstanding.**
-This note holds one observed defect, the ranked hypotheses for it, the
-instrument built to tell them apart, three rounds of owner readings, and what
-they have and have not settled (§5). Settled: what the defect *is*, that all
-three §3 hypotheses are wrong, and — from two experiments that vary different
-things — that **the cost tracks window size, not canvas resolution** (§5.5). Not
-settled: the mechanism. Two candidates have been proposed and both refuted, and
-the surviving three are in §5.5. **This note closes when §5.6's one reading
-lands** — not before, and it says so rather than guessing.
+Status: **not the engine's defect; one mechanism standing, one reading left.**
+Four rounds of owner readings (§5) have settled what the defect is, killed all
+three §3 hypotheses, and refuted two proposed mechanisms. One survives every
+reading: **a per-frame operation on the WebGL canvas sized by its displayed size
+rather than its backing store**, existing at all because Firefox blocklists the
+zero-copy WebGL path on this driver (§5.6). Ordinary pages at the same window
+size are fine, so it is WebGL-specific and not the compositor. **Nothing in this
+engine is at fault and no engine change is indicated** — what the engine owed
+this was diagnosability from a URL, and §4's instrument plus this branch's two
+changes delivered it. **This note closes when §5.7's one measurement lands**,
+which would also justify a display-scale seam that is deliberately not built
+until it does.
 
 Inherits: the frame-clock contract (ADR-0005), the loop and its catch-up bound
 (core.md §7), the playtest page shell (web-publish.md §2), no retained render
@@ -105,7 +108,7 @@ simulation time silently falling behind. Interpolation fixes the appearance
 without lying about the clock; the clamp's job is the spiral of death, and it is
 doing it.
 
-## 5. The verdict — a presentation-path defect in Firefox
+## 5. The verdict — a WebGL presentation defect in Firefox, not in the engine
 
 Read by the owner on their own machine, **2026-08-24**, on build `8bf8b2c`, from
 the `?frametime=1` overlay §4 built for exactly this. Both browsers, same
@@ -377,6 +380,12 @@ because a copy of a quarter as much data would have shown up. §5.4's confidence
 paragraph said this was the branch to take if the prediction failed, and it is
 the branch that happened.
 
+> **Refined, round 4 (§5.6).** "Demoted" was half right. The blocklist row is
+> not *a per-pixel copy of the drawing buffer* — that reading is dead — but it
+> is why a copy exists at all, and the copy is sized by the canvas's displayed
+> size rather than its source. So the row is back in the mechanism with its role
+> corrected, not out of it.
+
 #### What is still standing
 
 Three candidates fit "cost proportional to window area, indifferent to canvas
@@ -429,42 +438,132 @@ inferences drawn from it were not. That is the correct ratio for a note that
 insisted on readings over guesses, and the guesses are labelled as such above so
 that the third one is read the same way.
 
-### 5.6 Still open — one page that is not this game
+### 5.6 Round 4 — WebGL-specific, and indifferent to the canvas's resolution
 
-Do **not** run another `?renderscale=` variant; that variable is spent. The next
-reading has to separate "this browser is slow at WebGL" from "this browser is
-slow at presenting a window this size", and it takes one tab:
+Owner, **2026-08-26**, answering §5.5's three asks in one reply:
 
-1. **Open a non-WebGL page at the same window size, on the same display**, and
-   watch whether it is also janky — a long text page scrolled continuously is
-   enough; anything with no `<canvas>` in it. Then shrink the window and watch
-   again.
-   - **Ordinary pages are also slow, and shrinking helps** ⇒ candidate 1: the
-     defect is the compositor/present path and has nothing to do with WebGL or
-     with this engine. That is the end of the engine's involvement, and this note
-     closes as "not ours, recorded".
-   - **Ordinary pages are fine and only the WebGL page is slow** ⇒ candidate 2
-     or 3: the WebGL→compositor handoff, at composited size. `DMABUF_WEBGL` is
-     back in the frame and Mozilla bug **1924578** is the thing to read.
-2. **Optional, and only if step 1 says "WebGL-specific":** any other WebGL page
-   at the same window size — a `?frametime=1` page from another site, or any
-   WebGL demo. If those are slow too, it is the browser and not this engine's
-   use of it, which is worth knowing before anything is changed here.
-3. **Optional, cheap, and useful either way:** the overlay median at two window
-   sizes with the `scale` line's device-pixel box at each. Window area is now the
-   variable that *does* matter, so two points give its exponent.
+> No, ordinary pages are fine. […] the overlay's scale confirms renderscale is
+> working. I also tested renderscale=0.25, which still has a median frametime of
+> ~80ms (no improvement).
 
-Whoever reads that reply writes it into §5.5, picks between the candidates, and
-closes this note — or hands it to Mozilla, which for candidate 1 is where it
-belongs.
+Three readings, and each one closes something.
 
-> **Verdict:** _a presentation-path defect in Firefox — ~12fps on hardware that
-> does ~238fps in Chrome. Hypothesis 2 is dead; hypothesis 1 is dead for
-> compositing and unanswerable from a renderer string that stock Firefox spoofs;
-> interpolation was never going to fix it. Two mechanisms have been proposed and
-> both refuted: cross-GPU transfer by `about:support` (WebGL is on the RTX
-> 5090), and a per-pixel copy of the WebGL buffer by its own prediction failing
-> — `?renderscale=0.5` changed nothing. What the two experiments together
-> establish is sharper than either: **the cost tracks window size, not canvas
-> resolution.** §5.6's one non-WebGL page decides whether this is the engine's
-> problem at all._
+**1. The parameter was working.** The overlay's `scale` line confirmed the
+backing store it actually got, which was the direct witness §5.5 asked for. The
+null result stands as a real measurement rather than as a possible
+misconfiguration, and §5.5 is not void.
+
+**2. `?renderscale=0.25` is also ~80ms.** Not "a little better" — the same. At a
+quarter linear scale the canvas is rendering **one sixteenth** of the pixels it
+was, and the frame time did not move. The cost is therefore not weakly dependent
+on the WebGL drawing buffer's size; it is **independent of it**. Anything
+proportional to the number of pixels the game renders is out, at any coefficient.
+
+**3. Ordinary pages are fine at the same window size.** This kills **candidate
+1** outright: the compositor's own present path is not slow, because presenting a
+window of this size on this machine is something Firefox does perfectly well all
+day. Whatever is expensive happens *because there is a WebGL canvas on the page*.
+
+#### What is left is one statement
+
+Candidates 2 and 3 in §5.5 were the WebGL→compositor copy done at composited
+size, and the upscale itself. Round 4 does not separate them — and they collapse
+into one mechanism anyway, because physically they are the same event:
+
+> **Firefox is doing a per-frame operation on the WebGL canvas whose cost is set
+> by the canvas's *displayed* size, not by its backing store — and it does it
+> only because the canvas is a WebGL canvas.**
+
+Every reading in this note now falls out of that one sentence:
+
+| reading | why it follows |
+|---|---|
+| ~12fps in Firefox, ~238fps in Chrome (§5.1) | Chrome's WebGL→compositor plumbing is not on this path |
+| cost scales with window area (§5.1) | the canvas fills the page, so displayed size *is* window size |
+| `renderscale` 0.5 and 0.25 change nothing (§5.5, here) | the operation is sized by the destination, not the source |
+| ordinary pages fine at the same size (here) | they have no WebGL canvas, so the operation never happens |
+| hardware WebRender, fine clock (§5.1, §5.3) | neither is involved |
+| `DMABUF_WEBGL` blocked (§5.3) | **back in the frame** — it is why the handoff cannot be a zero-copy buffer share, and must be a copy at all |
+
+`DMABUF_WEBGL: blocked` (`FEATURE_FAILURE_BUG_1924578`) is therefore rehabilitated
+from §5.5's demotion, with its role corrected: it is not "a per-pixel copy of the
+drawing buffer" — that was the version the 0.5 reading refuted — it is **why a
+copy exists at all**, and the copy turns out to be sized by where the pixels are
+going rather than by where they came from. That distinction is the whole
+difference between `?renderscale=` helping and doing nothing, and it took the
+null result to see it.
+
+**One methodological caveat, recorded rather than buried.** "Ordinary pages are
+fine" is a strong reading but not a perfect control: a text page that is not
+scrolling does not repaint every frame, so it is not being asked to do per-frame
+work at all. The tightened version is in §5.7 and takes ten seconds; the
+conclusion is not expected to move, and it should be checked rather than assumed.
+
+#### What this means for the engine: nothing to fix, and that is the finding
+
+This is a browser defect on a specific configuration — Firefox on Wayland with
+the NVIDIA proprietary driver, where Mozilla's own blocklist disables the
+zero-copy WebGL path. It is not a bug in this engine, in the frame clock, in the
+accumulator, or in the interpolation ADR-0041 added. **No engine change is
+indicated, and none should be made.** What the engine owed this defect was the
+ability to diagnose it from a URL on a remote machine, and that is what §4's
+instrument and the two changes on this branch actually delivered:
+
+- the **measured slow-presentation warning** fires on it correctly (5.2×) where
+  the string-based one read like healthy hardware;
+- **`?renderscale=`** turned out to be the experiment that localised the cost,
+  which is a better outcome than the mitigation it was shipped as. §5.5 has that
+  correction; nothing about it changes again here.
+
+The remaining question is not "what do we change" but "is there a mitigation at
+all", and §5.7 is where that lives.
+
+### 5.7 Still open — the prediction, and the seam it would justify
+
+**The mechanism makes a specific prediction, and it is not the one already
+tested.** If the cost is set by the canvas's *displayed* size, then shrinking the
+canvas's **CSS box** — leaving the backing store alone, or shrinking both — must
+help, exactly where shrinking the backing store alone did nothing. The owner's
+window-shrink observation (§5.1) is consistent with it, but cannot distinguish
+"displayed canvas area" from "window area" on a page whose canvas fills the
+window, and no experiment on this page can.
+
+Two readings, in order, and the second only if the first says so:
+
+1. **Quantify the window-shrink effect.** The overlay median at two or three
+   window sizes, with the `scale` line's **device-pixel box** at each (that box
+   is the displayed size, which is the variable of interest). Roughly linear in
+   that area confirms the mechanism quantitatively and is the last thing it
+   needs. This replaces every ask in §5.5 and §5.6 as the one open item.
+2. **The tightened control**, ten seconds, worth doing alongside: a non-WebGL
+   page that repaints *every frame* — any CSS animation, a spinning `<div>` —
+   at the same window size. Fine there too ⇒ "WebGL-specific" is nailed rather
+   than inferred from a page that may simply not have been repainting.
+
+**If (1) confirms it, there is a mitigation worth building and it is not a bigger
+version of `?renderscale=`.** It is a *display*-scale seam: render at native
+resolution into a canvas whose CSS box is a fraction of the page, letterboxed in
+the middle. The player sees a smaller picture at full sharpness instead of a
+full-size soft one — a worse trade in general, and possibly the only one that
+works here. It would be **page-side only**, with no engine change at all: winit
+reads the canvas's device-pixel content box, so the surface, the camera viewport
+and pointer mapping all follow from CSS without a line of Rust.
+
+**It is deliberately not built yet.** Two mechanisms have already been proposed
+and refuted in this note (§5.4, §5.5), and the cost of the second mistake was a
+seam shipped with a claim that had to be corrected in three files. A third seam
+goes in *after* the reading that predicts it, not before. Reading (1) is small,
+the owner has the machine, and the note stays open for it.
+
+> **Verdict:** _a WebGL presentation defect in Firefox on this configuration —
+> ~12fps where Chrome does ~238fps, on hardware and a compositor that are both
+> fine. All three §3 hypotheses are dead. Two proposed mechanisms were refuted
+> (cross-GPU transfer, by `about:support`; a per-pixel copy of the drawing
+> buffer, by `?renderscale=` at 0.5 **and** 0.25 changing nothing), and one
+> survives every reading: **a per-frame operation on the WebGL canvas sized by
+> its displayed size rather than its backing store, existing at all because
+> `DMABUF_WEBGL` is blocklisted.** Ordinary pages at the same window size are
+> fine, so it is WebGL-specific and not the compositor. **Nothing in this engine
+> is at fault and no engine change is indicated.** §5.7 has the one measurement
+> that would confirm the mechanism quantitatively and justify a display-scale
+> seam — which is not built, on purpose, until it does._

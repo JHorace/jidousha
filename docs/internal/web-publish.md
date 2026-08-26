@@ -214,9 +214,12 @@ One `index.html` template, self-contained (no external CDN dependencies):
     nothing — and because it moves the backing store while leaving the window
     alone, "it did nothing" is a reading, not a disappointment: it says the cost
     is somewhere a smaller canvas cannot reach. That is exactly what it said on
-    the defect this was built for (frame-pacing.md §5.5), and it is what the
-    overlay's warning now presents it as: a test with two informative answers,
-    not a fix.
+    the defect this was built for — unchanged at 0.5 **and** at 0.25, where the
+    canvas renders a *sixteenth* of the pixels, which turns "did nothing" into a
+    demonstration that the cost is independent of the drawing buffer's size
+    rather than weakly tied to it (frame-pacing.md §5.5, §5.6). That is what the
+    overlay's warning presents it as: a test with two informative answers, not a
+    fix.
   - CONTRACT: **presentation-only, and that is a three-part promise.** The scale
     multiplies the surface size, the camera viewport that follows it, and
     pointer positions — *together*. So world-space rendering is unchanged, the
