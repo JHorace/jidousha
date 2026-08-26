@@ -126,8 +126,10 @@ One `index.html` template, self-contained (no external CDN dependencies):
     below's whole reason for existing**: Firefox's anti-fingerprinting bucket
     substitutes a *plausible* card ("NVIDIA GeForce GTX 980, or similar") rather
     than withholding the string, so this line can read like healthy hardware on
-    a browser presenting at 12fps (frame-pacing.md §5). The check stays because
-    when it fires it is right and it is the one thing that names a CPU
+    a browser presenting at 12fps — and it does that on a **stock** profile, not
+    only a hardened one (frame-pacing.md §5.3 checked: no
+    `privacy.resistFingerprinting`, no modified `webgl.*`). The check stays
+    because when it fires it is right and it is the one thing that names a CPU
     rasterizer outright; it is no longer the only warning;
   - whether WebGPU is present, and **the grain of the browser's clock, read off
     the frame deltas themselves**: a quantised clock can only report whole
@@ -159,6 +161,11 @@ One `index.html` template, self-contained (no external CDN dependencies):
     1/30s, so the floor cannot be tripped by a slow monitor; 60 frames is one
     second at 60Hz and five at the 12Hz this exists to catch, which is the right
     way round, because a slow page has to *stay* slow before the panel says so.
+    **The estimate has since been corroborated by a number it never saw**: on
+    the defective browser it read ~62 Hz, and that browser's own `about:support`
+    reports `targetFrameRate: 60` (frame-pacing.md §5.3). The quickest-tenth
+    delta found what the browser could actually have achieved — not the 240 Hz
+    the monitor can do, and not the 12 Hz it was doing.
     **When this and the renderer-string warning disagree, this is the one to
     trust**: Firefox's anti-fingerprinting bucket spoofs the renderer string, so
     the string read like healthy hardware on a browser presenting at 12fps
