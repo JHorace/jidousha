@@ -1,11 +1,11 @@
 //! The resolution takeover: a full-screen replacement for the board, with the
 //! event cards and the drift ledger (UI.md §3).
 //!
-//! **The story surface** (DESIGN §7). Every consequence is narrated
+//! **The story surface** (DESIGN §12). Every consequence is narrated
 //! mechanically and names the rule inputs: a betrayal is a skull-marked ember
 //! card with `desperation 8 >= 6 - regard 0 < 2 - share 2g -> 4g` in small text
 //! under it, the payout is a coin card, and the drift ledger carries the
-//! desperation arrows, the regard moves, the infamy moves and the hungry-wait
+//! desperation arrows, the regard moves, the marks written and the hungry-wait
 //! line for everybody who sat the round out.
 //!
 //! **If no blood was spilled, it says so**: absence of an event is also
@@ -142,14 +142,14 @@ pub fn takeover(flow: &Flow) -> Panel {
             DriftTone::Cost => theme::EMBER,
             DriftTone::Relief => theme::GOOD,
             DriftTone::Regard => theme::REGARD,
-            DriftTone::Infamy => theme::INFAMY,
+            DriftTone::Mark => theme::MARK,
         };
-        // Regard and infamy carry their signifiers; desperation lines carry the
+        // Regard and marks carry their signifiers; desperation lines carry the
         // flame, so no ledger row is text alone (UI.md §1).
         let art = match line.tone {
             DriftTone::Cost | DriftTone::Relief => Art::Flame,
             DriftTone::Regard => Art::Heart,
-            DriftTone::Infamy => Art::Eye,
+            DriftTone::Mark => Art::Eye,
         };
         panel.icon(IconRun::over(Vec2::new(column.min.x, y - 1.0), art, 2.0));
         panel.text(TextRun::over(

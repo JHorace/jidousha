@@ -132,11 +132,15 @@ pub fn tuner_panel() -> Rect {
 }
 
 /// How many stepper rows a column holds before the next one starts.
-pub const TUNER_ROWS: usize = 4;
+///
+/// Five since P1: thirteen constants over three columns. The pitch tightened
+/// to keep five 32-tall steppers inside the drawer's band — the target floor
+/// is untouched, the air between rows is what got spent.
+pub const TUNER_ROWS: usize = 5;
 const TUNER_COL_X: f32 = 28.0;
 const TUNER_COL_PITCH: f32 = 312.0;
-const TUNER_ROW_Y: f32 = 112.0;
-const TUNER_ROW_PITCH: f32 = 36.0;
+const TUNER_ROW_Y: f32 = 110.0;
+const TUNER_ROW_PITCH: f32 = 34.0;
 /// How wide a stepper's - and + are, on both axes. The smallest target in the
 /// game, and exactly UI.md §7's floor.
 const TUNER_STEP: f32 = 32.0;
@@ -208,9 +212,10 @@ pub fn tuner_preset(index: usize) -> Rect {
     )
 }
 
-/// The commit verb.
+/// The commit verb — on the preset row, right of the presets, because the
+/// stepper columns grew down into the band it used to sit in (UI.md §13).
 pub fn tuner_apply() -> Rect {
-    Rect::from_min_size(Vec2::new(TUNER_COL_X, 264.0), Vec2::new(120.0, 32.0))
+    Rect::from_min_size(Vec2::new(824.0, 72.0), Vec2::new(120.0, 32.0))
 }
 
 /// The drawer's title.
@@ -225,22 +230,22 @@ pub fn tuner_title() -> Vec2 {
 /// `?constants=` — and a note pinned under the taller case would sit in a hole
 /// on every other frame.
 pub fn tuner_hint() -> Vec2 {
-    Vec2::new(164.0, 266.0)
+    Vec2::new(TUNER_COL_X, 282.0)
 }
 
 /// How wide the hint and the note may run before they wrap.
 ///
-/// The stamp moved up beside the last stepper column, which is what gives this
-/// band the whole width of the drawer: a constant's meaning fits on one line
-/// here and wrapped to three in the column the stamp used to leave.
+/// Stops short of the stamp's column: the third stepper column is the short
+/// one, the stamp sits under it, and a prose row that ran the drawer's whole
+/// width would run straight through the readout.
 pub fn tuner_prose_width() -> f32 {
-    DESIGN_W - 28.0 - tuner_hint().x
+    652.0 - TUNER_COL_X - 16.0
 }
 
 /// The stamp: the constants actually in effect, always visible while the drawer
-/// is open (UI.md §12). Under the last stepper column, which is short.
+/// is open (UI.md §12). Under the third stepper column, which is short.
 pub fn tuner_stamp() -> Vec2 {
-    Vec2::new(652.0, 190.0)
+    Vec2::new(652.0, 216.0)
 }
 
 /// Where log line `index` is drawn inside the drawer.
@@ -260,9 +265,9 @@ pub fn party_strip() -> Rect {
 }
 
 const PARTY_X: f32 = 16.0;
-const PARTY_Y: f32 = 370.0;
+const PARTY_Y: f32 = 360.0;
 const PCARD_W: f32 = 170.0;
-const PCARD_H: f32 = 164.0;
+const PCARD_H: f32 = 176.0;
 const PCARD_GAP: f32 = 12.0;
 
 /// How big a quest icon is drawn, in reference pixels, at each of its three
@@ -285,21 +290,36 @@ pub mod quest_icon {
 /// The rows inside a party card, measured from its top edge.
 ///
 /// Named rather than added up at each draw site, because `floors.rs` asserts
-/// that the last of them ends inside the card and that the stat row's icons sit
-/// beside their numbers — both of which are questions about these offsets.
+/// that the stat row's icons sit beside their numbers and `judge.rs` rebuilds
+/// the card from the same offsets — both questions about these numbers.
+///
+/// **v2 card shape (interim, UI.md §13)**: the portrait moved to the left
+/// edge and the name, stats and desperation source share the column beside
+/// it, which is what bought the rows the sheet grew — trait chips, mark
+/// lines and the verdict all live below the header block. The chip band
+/// flows (one row per trait), the mark and regard rows follow it, and the
+/// status line is pinned at the bottom.
 pub mod pcard {
-    /// The portrait, at three texels per texel.
-    pub const PORTRAIT_TOP: f32 = 6.0;
+    /// The portrait's top, at the card's left edge.
+    pub const PORTRAIT_TOP: f32 = 4.0;
+    /// Its left inset.
+    pub const PORTRAIT_LEFT: f32 = 6.0;
     /// How big the portrait is drawn.
     pub const PORTRAIT_SCALE: f32 = 3.0;
-    /// The name.
-    pub const NAME_TOP: f32 = 58.0;
-    /// The stat row: flame, eye, coin.
-    pub const STATS_TOP: f32 = 76.0;
-    /// The character's outgoing regard edges.
-    pub const REGARD_TOP: f32 = 98.0;
-    /// The status line UI.md §4 states the grammar of.
-    pub const STATUS_TOP: f32 = 130.0;
+    /// Where the header column right of the portrait starts.
+    pub const RIGHT_COL: f32 = 58.0;
+    /// The name, in the header column.
+    pub const NAME_TOP: f32 = 4.0;
+    /// The stat row under it: flame, coin.
+    pub const STATS_TOP: f32 = 22.0;
+    /// The desperation source, under the stats.
+    pub const SOURCE_TOP: f32 = 40.0;
+    /// Where the trait chips start, full width.
+    pub const TRAITS_TOP: f32 = 56.0;
+    /// One chip row's pitch.
+    pub const TRAIT_PITCH: f32 = 16.0;
+    /// The status line UI.md §4 states the grammar of, pinned at the bottom.
+    pub const STATUS_TOP: f32 = 136.0;
 }
 
 /// Where roster card `index` is.
@@ -312,7 +332,7 @@ pub fn party_card(index: usize) -> Rect {
 
 /// The strip's label.
 pub fn party_label() -> Vec2 {
-    Vec2::new(PARTY_X, 352.0)
+    Vec2::new(PARTY_X, 346.0)
 }
 
 /// The send verb. Hidden entirely until a quest is taken (UI.md §3).

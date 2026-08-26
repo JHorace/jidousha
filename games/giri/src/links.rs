@@ -78,8 +78,8 @@ fn refused() -> Vec<(&'static str, ConstantsError)> {
         ("", ConstantsError::Empty),
         ("k_kill", ConstantsError::Pair("k_kill".to_owned())),
         (
-            "k_infamy:2",
-            ConstantsError::UnknownKey("k_infamy".to_owned()),
+            "k_charm:2",
+            ConstantsError::UnknownKey("k_charm".to_owned()),
         ),
         (
             "k_kill:4,k_kill:5",

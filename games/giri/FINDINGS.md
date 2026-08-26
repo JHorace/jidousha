@@ -399,3 +399,17 @@ Two shapes would close it, and they are separable:
 Native is deliberately not given an equivalent, and that is a game-side decision
 rather than a gap: the drawer is reachable on every platform (UI.md §9a), and a
 `--constants` flag would be a second way to do a thing that already has one.
+
+## From the P1 mechanics session (2026-08-26)
+
+Same reading discipline: `docs/api/` (all four) and `crates/jidousha/examples/`
+only. This session implemented DESIGN v2's People slice — traits, reputation
+marks, explicit wealth, willingness with verdict + margin + reasons — across
+the model, the beats, the interim UI and the verify harness.
+
+**0 new findings.** Every question the session asked was answered by the four
+documents or by machinery previous sessions already built against them: the
+new components are the same ECS shapes G-001's fix serves, the new screens are
+the same `Panel`-as-data pattern, the wider tuning set was picked up by the
+drawer because it walks the constants module, and no engine call was added or
+changed. First time this line has been true.

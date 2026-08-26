@@ -337,20 +337,29 @@ pub fn pay_line(quest: &Dungeon, party: usize) -> String {
 ///
 /// The door's two failures read differently and are named differently: a
 /// refusal is the character's own, a block is somebody else's on their behalf
-/// (DESIGN §3.2's door rule).
+/// (DESIGN §6's door rule). The reason leads, as words; the margin rides in
+/// parentheses, because the number stays reachable (invariant 2) even though
+/// the card no longer carries the sum.
 pub fn cannot_join(social: &Social, preview: &Preview) -> Vec<String> {
     preview
         .doors
         .iter()
         .filter(|(_, admission)| !admission.admitted())
-        .map(|(who, admission)| format!("{} {}", social.name(*who), admission.status_line()))
+        .map(|(who, admission)| {
+            format!(
+                "{} {} ({})",
+                social.name(*who),
+                admission.status_line(),
+                admission.margin()
+            )
+        })
         .collect()
 }
 
 /// ASCII for a requirement that passes or fails.
 ///
 /// The mockup's tick and cross are two characters the engine's font draws as
-/// boxes (DESIGN §7: the atlas covers space through `~`), and no assertion over
+/// boxes (DESIGN §12: the atlas covers space through `~`), and no assertion over
 /// drawn quads could see the difference — so they are spelled in the alphabet
 /// the font has, and the colour carries the same fact a second time.
 fn mark(ok: bool) -> &'static str {

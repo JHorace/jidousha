@@ -55,8 +55,8 @@ pub const GOLD: Color = hex(0xe0b34a);
 pub const GOLD_DEEP: Color = hex(0xa97e2f);
 /// Refusal, blocking, death, betrayal, and every cost.
 pub const EMBER: Color = hex(0xd4553a);
-/// Infamy.
-pub const INFAMY: Color = hex(0x9b6dd6);
+/// Reputation marks — what everyone knows.
+pub const MARK: Color = hex(0x9b6dd6);
 /// Regard, and a member who is in.
 pub const REGARD: Color = hex(0x4fae8f);
 /// A requirement that passes.

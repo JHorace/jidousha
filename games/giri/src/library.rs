@@ -18,7 +18,7 @@ use crate::screens;
 use crate::sprites::{self, Art};
 use crate::verify::play;
 
-/// **The art library** (UI.md §2, §9; DESIGN §7's curation model).
+/// **The art library** (UI.md §2, §9; DESIGN §12's curation model).
 ///
 /// The library is a contract about *roles*, and a role is only a role if it has
 /// a file of its own: two characters sharing a portrait would break "portraits
@@ -44,7 +44,7 @@ pub fn library(checks: &mut Checks) {
                     .chars()
                     .all(|glyph| glyph.is_ascii_lowercase() || glyph == '_'),
             "an art file is not role-named lowercase snake_case",
-            format!("{file:?} - DESIGN §7's curation model names the shape"),
+            format!("{file:?} - DESIGN §12's curation model names the shape"),
         );
     }
 
@@ -140,6 +140,37 @@ pub fn printable_strings(checks: &mut Checks) {
         "the constants readout".to_owned(),
         Tuning::SHIPPED.readout(),
     );
+    // The whole people vocabulary, whether or not a beat wears it: every trait
+    // chip, every mark line, and every reason template rendered once per mark
+    // — the strings a card can grow are decided here, not by which beats
+    // happen to reach them.
+    for def in crate::traits::TRAITS {
+        note("a trait chip".to_owned(), def.name.to_owned());
+    }
+    for mark in crate::traits::MarkId::ALL.iter().copied() {
+        note("a mark line".to_owned(), mark.name().to_owned());
+        for cause in [
+            crate::willing::Cause::MarkAgainst { mark, of: "Bob" },
+            crate::willing::Cause::MarkFor { mark, of: "Bob" },
+        ] {
+            note(
+                "a reason".to_owned(),
+                crate::willing::Reason { cause, weight: 1 }.text(),
+            );
+        }
+    }
+    for cause in [
+        crate::willing::Cause::NeedsMoney,
+        crate::willing::Cause::Trusts { of: "Bob" },
+        crate::willing::Cause::Grudge { of: "Bob" },
+        crate::willing::Cause::PotPull,
+        crate::willing::Cause::Indifferent,
+    ] {
+        note(
+            "a reason".to_owned(),
+            crate::willing::Reason { cause, weight: 1 }.text(),
+        );
+    }
     for (index, spec) in CHAIN.iter().enumerate() {
         let beat = index + 1;
         note(format!("beat {beat}'s title"), spec.title.to_owned());

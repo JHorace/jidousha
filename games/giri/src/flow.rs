@@ -1,7 +1,7 @@
 //! Game flow: which beat, which screen, what is taken, who is in — and the
 //! pointer that moves all of it (UI.md §3).
 //!
-//! An explicit state machine in a resource (DESIGN §9). **Three modes get
+//! An explicit state machine in a resource (DESIGN §13). **Three modes get
 //! three screens** (UI.md §1.3): the quest board, the full-screen resolution
 //! takeover, and the end of the chain. The log is a drawer over the board and
 //! never the primary channel.
@@ -19,12 +19,12 @@ use jidousha::prelude::*;
 use crate::beats::{CHAIN, Dungeon, EdgeSpec};
 use crate::constants::Tuning;
 use crate::model::{
-    Admission, Character, Desperation, Infamy, RegardEdge, Social, Wealth, Willingness, admit,
-    willingness,
+    Character, CleanJobs, Desperation, Marks, RegardEdge, Social, Source, Traits, Wealth,
 };
 use crate::onset::{Card, Onset};
 use crate::resolve::{DriftLine, EventCard, apply, resolve};
 use crate::tuning::Tuner;
+use crate::willing::{Admission, Willingness, admit, willingness};
 use crate::{layout, onset, sprites};
 
 /// Which screen the player is on.
@@ -210,13 +210,18 @@ pub fn assess(
 ) -> Preview {
     let entries: Vec<Willingness> = party
         .iter()
-        .map(|member| willingness(social, tuning, *member, party))
+        .map(|member| willingness(social, tuning, *member, party, dungeon))
         .collect();
     let doors: Vec<(Entity, Admission)> = social
         .members
         .iter()
         .filter(|member| member.alive && !party.contains(&member.entity))
-        .map(|member| (member.entity, admit(social, tuning, member.entity, party)))
+        .map(|member| {
+            (
+                member.entity,
+                admit(social, tuning, member.entity, party, dungeon),
+            )
+        })
         .collect();
     let all_willing = entries.iter().all(Willingness::joins);
     let Some(dungeon) = dungeon else {
@@ -252,7 +257,7 @@ pub fn assess(
         requirement_ok,
         all_willing,
         // **Not gated on `all_willing`, and that is the door rule, not an
-        // oversight.** Consent is evaluated at the door only (DESIGN §3.2):
+        // oversight.** Consent is evaluated at the door only (DESIGN §6):
         // once a member is in they stay until the player removes them or the
         // party is sent, and removing a bonded partner can push a remaining
         // member negative. Gating the send on it would leave that player with a
@@ -296,8 +301,11 @@ pub fn load_beat(world: &mut World, index: usize) {
                 },
             );
             world.insert(entity, Desperation(spec.desperation));
-            world.insert(entity, Infamy(spec.infamy));
+            world.insert(entity, Source(spec.source));
             world.insert(entity, Wealth(spec.wealth));
+            world.insert(entity, Traits(spec.traits.to_vec()));
+            world.insert(entity, Marks(spec.marks.to_vec()));
+            world.insert(entity, CleanJobs(spec.clean_jobs));
             spawned.push((spec.name, entity));
         }
         let find = |name: &str| {
@@ -340,7 +348,7 @@ pub fn load_beat(world: &mut World, index: usize) {
     flow.tuner.hover = None;
 }
 
-/// The pointer, which is the whole of the player's input (DESIGN §7).
+/// The pointer, which is the whole of the player's input (DESIGN §12).
 ///
 /// Hover as well as click: the info panel's peek is a hover state, so the
 /// pointer's *position* is read every tick and not only on the tick it is
@@ -479,13 +487,16 @@ fn board_input(world: &mut World, at: Vec2, tick: u64, clicked: bool) {
         // click that the door refused is still the player having started.
         world.resource_mut::<Flow>().onset.touch(tick);
         let party = world.resource::<Flow>().party.clone();
+        // The taken quest is part of the question (DESIGN §6: willingness
+        // takes the quest): with nothing taken, no pot pulls yet.
+        let job = world.resource::<Flow>().taken_quest().copied();
         if let Some(position) = party.iter().position(|entity| *entity == member.entity) {
             let flow = world.resource_mut::<Flow>();
             flow.party.remove(position);
             flow.note(format!("{} stood down", member.name));
             return;
         }
-        let answer = admit(&social, &tuning, member.entity, &party);
+        let answer = admit(&social, &tuning, member.entity, &party, job.as_ref());
         match answer.bounce(member.name) {
             Some(text) => world.resource_mut::<Flow>().bounce(tick, text),
             None => {

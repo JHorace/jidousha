@@ -1,21 +1,28 @@
-# giri — design (prototype #1)
+# giri — design (v2)
 
-Proposed home: `games/giri/DESIGN.md` — the game's design doc travels with the
-game (ADR-0038: games are workspace members; this file is game-side, not
+Home: `games/giri/DESIGN.md` — the game's design doc travels with the game
+(ADR-0038: games are workspace members; this file is game-side, not
 engine-side, so `docs/internal/` shape rules do not apply to it).
 
-Drafted in a design session 2026-08-22. Items marked **DECIDED** were settled
-with the owner in that session; items marked **PROPOSED** are this document's
-synthesis awaiting owner sign-off; **OPEN** items are future design work.
+v1 was drafted in the design session of 2026-08-22 and built across four
+sessions. This revision was drafted in the design session of 2026-08-24, from
+the owner's v1 playtest verdict, approved by the owner the same day, and
+landed with the P1 implementation (2026-08-26). Sections whose systems are
+later phases carry their design ahead of their implementation — the document
+states the design, and **Implemented (P1)** notes mark what code exists;
+§15 is the phase map.
+
+Status legend: **DECIDED** (owner-settled, dated), **PROPOSED** (this
+document's synthesis awaiting sign-off), **OPEN** (future design work).
 
 義理 (giri): duty, obligation, the web of what people owe each other.
 ぎりぎり (girigiri): barely scraping by.
 
 ---
 
-## 1. Concept
+## 1. Concept, and what v1 established
 
-An auto-battler where the pieces have interests. The player sees a dungeon's
+An auto-battler where the pieces have interests. The player sees a job's
 parameters in advance, assembles a party from a roster, and resolution is
 automatic — no attack/defend verbs. The inversion: roster members are not
 inert units. They consent, refuse, betray, bond, and remember. The player's
@@ -26,565 +33,627 @@ characters' welfare pull apart.** The tutorial's second beat teaches the
 player to profit from a death they could foresee. The player is complicit,
 and the game does not soften this.
 
-**The hypothesis prototype #1 tests (DECIDED):** inter-character dynamics
-*alone* can carry play. No traditional combat stats, no content breadth —
-if hand-authored five-character dilemmas are interesting, the rules are
-worth scaling into a simulation; if not, content won't save them.
+**v1's hypothesis** — inter-character dynamics alone can carry play —
+returned its verdict in the owner's playtests (2026-08-24): *they carry
+dilemmas, not yet a game.* Three findings, and they are what v2 answers:
 
-## 2. Design invariants (DECIDED)
+1. The willingness arithmetic is legible but the player should not be doing
+   it; the judgment must become rich enough that reading it beats computing
+   it.
+2. Deterministic betrayal is avoidable-by-arithmetic, so it never happens
+   except on purpose, and when it does it feels dictated rather than risked.
+3. Characters are constraint-bundles: nothing individuates them, so their
+   deaths are logistics, not losses.
 
-1. **Social dynamics only.** No strength/int-style stats in v1. Relational
-   attributes (compatibility predicates like "godly + priest") are the same
-   species as infamy-gating and are the natural *second* content axis —
-   still social, still not combat math.
-2. **The game never lies and never hides.** All stats and edges are numeric
-   and inspectable. Difficulty comes from combinatorics, not concealment —
-   chess, not poker. Early beats are exactly computable (that is what makes
-   them teachable); the intended endgame is that roster × edges × dungeon
-   stream outgrows exhaustive evaluation and players shift to heuristics and
-   long-term strategy. That shift is a *content threshold, not a systems
-   change* — hiding information later would be a UI decision, and this
-   invariant says: don't. Inspectability is sacred.
-3. **Scope: authored puzzle chain.** Hand-built beats in the tutorial's
-   style, each a designed dilemma, each introducing one concept. Sim/endless
-   modes come later, on proven rules.
+Positive finding: desperation is the keeper — the pressure mechanic the rest
+of v2 builds around.
+
+## 2. Design invariants (DECIDED, amended 2026-08-24)
+
+1. **Social dynamics only.** No strength/int-style stats. Traits, marks and
+   edges are the same species as v1's relational attributes — still social,
+   still not combat math.
+2. **The game never lies and never hides — restated, not weakened.** All
+   rules and all state remain inspectable. What changed is the *surface*:
+   the game shows judgments (will join / reluctant / refuses / blocked) and
+   their **reasons as words** ("won't work with a comrade-killer" · "needs
+   the money" · "trusts Alex"); the numeric machinery sits behind inspection
+   rather than on the card. Exact mental computability stops being a design
+   goal — the heuristic era is entered deliberately, through depth (more
+   interacting causes), never through concealment. Hidden character
+   knowledge (undisclosed traits) remains a **reserved variant experiment**,
+   not v2 behavior: v2 sheets are complete.
+3. **The authored puzzle chain is superseded by the open run** (§10). Beats
+   survive as *seeded scenarios*: the tutorial and the tuning/regression
+   harness, no longer the game's body. (P1 still plays the four-beat chain;
+   the run is P3.)
 4. **Resolution is pressure application, not combat simulation.** A dungeon
    exists to force the social rules to fire. Deepening resolution later
    means more moments where the decision function runs — never more stat
    math.
-5. **Determinism, fully.** v1 outcome is a pure function of (authored beat
-   state, player assignments). **No randomness at all in v1** — not even
-   seeded. The puzzle chain must be exactly reproducible and exactly
-   assertable. Seeded RNG (the engine's `Rng` resource) enters, if ever,
-   with the sim phase, and replay-safely.
+5. **Determinism — the sim-phase clause activates in P2.** Seeded randomness
+   enters simulation, exclusively via the engine's `Rng` (PCG32,
+   replay-exact everywhere). Outcomes are a pure function of (scenario,
+   player choices, constants, variant, **seed**). Recordings carry the seed;
+   replay identity is unchanged in kind. No other randomness source, ever.
+   **P1 has no randomness at all** — its outcome is a pure function of (beat
+   state, player assignments, constants), exactly as v1's was.
 
-## 3. The social model (PROPOSED)
+## 3. The character sheet v2 (DECIDED in shape; caps DECIDED)
 
-### 3.1 State
+A character is: **portrait · traits (≤3) · desperation, with its source ·
+wealth · reputation marks · bonds/grudges (regard edges) · one active goal ·
+biography**. Everything on the sheet is one of: who they are (traits), what
+they've lived (marks, biography, edges), what presses on them (desperation +
+source, wealth), what they want (goal).
 
-Per-character scalars:
+**Caps are design decisions, not UI accommodations** (owner direction,
+2026-08-24): at most **three traits**; exactly **one active goal**; marks
+made rare by the ladder's construction (§8) rather than by display
+truncation. If the sheet overwhelms at these caps, that is a presentation
+problem; without caps it would have been a design failure wearing a UI
+costume.
 
-- **desperation** — need. Rises when a character fails to profit in a round;
-  falls when they profit. The willingness override and the betrayal motive.
-- **infamy** — *public* knowledge: the global projection of witnessed acts.
-  Everyone sees it; it feeds everyone's evaluations of this character.
-- **wealth** — what profit accumulates into; the input that drives
-  desperation down. (May stay implicit in v1 — desperation adjustments can
-  encode it — but naming it now keeps the economy extensible.)
+**Desperation's source is bound at character generation** — a short phrase
+on the sheet naming *why* this one is hungry. Flavor-plus-data in P1; the
+goal machinery that makes sources mechanical is P3, and two identical
+numbers already read as two different management problems.
 
-Between characters, **directed personal edges**:
+*Implemented (P1):* traits, desperation + source, wealth, marks and edges
+are on every sheet; the trait cap is enforced by data validation over every
+authored roster (`traits::vocabulary`), not by prose. Goal and biography are
+P3.
 
-- **regard(A→B)** — one signed number per ordered pair (sparse; absent =
-  zero). Positive is a bond, negative is a grudge. Directed and asymmetric
-  on purpose: "Tim trusts Alex more than Alex trusts Tim" is where stories
-  live.
+## 4. Traits (DECIDED: visible on hire; the shipped list is tuning content)
 
-The infamy/regard split is the load-bearing distinction: **infamy is what
-strangers know; regard is what *this* character knows.** Bob's infamy gates
-him with everyone; Alex's regard for Bob overrides it for Alex alone.
+A small, closed, data-defined vocabulary — order of 12–20 — each trait: an
+id, a display name, an icon role, and a set of **modifiers to the decision
+function's terms**. Sketch of the register (final list is tuning content,
+not architecture):
 
-### 3.2 One decision function, three firing moments
+*greedy* (pot terms weigh on them; skim-prone when the ladder lands) ·
+*loyal* (bonds weigh double; betrayal floor higher toward bonded — P2) ·
+*proud* (will not stand with a thief; refuses charity — P3) · *craven*
+(fears a killer; danger terms weigh double — P2) · *vengeful* (grudges weigh
+double and never decay; eager toward grudge-resolving quests — P3) · *pious*
+(reacts to marks by kind, not size) · *pragmatic* (prefers known quantities
+— a marked skimmer over a stranger) · *cold* (edges weigh half, both ways) ·
+*upright* (refuses the dark-marked, whatever it costs) …
 
-Refusal, betrayal, and bonding are one computation — a character evaluating
-"what do I do, given my needs and my relations to these people?" — fired at
-three moments:
+Traits are per-character multipliers/filters on shared rules — the decision
+function stays one function receiving its inputs; **traits parameterize,
+they never branch gameplay code** (the §8b tier-2 discipline, applied to
+people: a trait is data the function reads, never an `if` in a system).
+Assignment: rolled at character generation from templates; **mutated only by
+history** (§8, §9). Visible from hire, always (DECIDED; hidden/discovered
+versions are reserved variant experiments).
 
-**Willingness** (party assembly): character `c` asked to join party `P`
-computes
+*Implemented (P1):* nine traits ship (`traits.rs::TRAITS`) — the eight of
+the register plus *upright*, which §5's own example calls for. Each row
+carries exact rational multipliers for bonds and grudges, a pot affinity,
+and its cells in the trait×mark table; the icon roles are category icons
+from the existing library (interim, UI.md §13). Traits whose registers name
+P2/P3 systems (craven's danger, vengeful's eagerness, proud's charity) carry
+table cells now and grow their real modifiers with those systems.
 
+## 5. Reputation marks (DECIDED — replaces scalar infamy)
+
+**Infamy the number is retired.** Public knowledge becomes **marks**:
+qualitative, earned, plural, written by witnessed events. The v1
+public/personal split survives sharpened: regard is what *this* character
+feels; marks are what *everyone* knows.
+
+- Marks come from the betrayal ladder (§8) and from conduct: *skimmer ·
+  deserter · saboteur · comrade-killer* on the dark side; *reliable (N clean
+  jobs) · kept-the-line* on the light; *survivor — parties die around this
+  one* for the ambiguous.
+- **Reactions are trait×mark, and they open doors as well as close them**
+  (DECIDED): the upright refuse a comrade-killer; the desperate swallow it;
+  the pragmatic *prefer* a known skimmer to an unknown; certain quests (the
+  underworld register) require a dark mark on someone in the party — the v1
+  "infamy only closes doors" problem is resolved structurally.
+- Marks are hard to lose: **goal completion is the only eraser** (§9). No
+  passive decay in v2 (OPEN for later: slow decay of minor marks).
+- **Guild marks** exist as a reserved hook (*keeps its word*, *spends its
+  people*): written by player-visible conduct, read by recruits and quest
+  givers. Minimal in v2 (§17 — the player-as-legible-actor question).
+
+*Implemented (P1):* the seven-mark vocabulary and the trait×mark table are
+data (`traits.rs`); a reaction is the mark's tone base (`mark_dark` /
+`mark_light`, ambiguous 0) plus the looker's table cells. This phase's
+writers: **murder writes comrade-killer** (where v1 wrote infamy +N) and
+**clean-job counting writes reliable** at `reliable_after` jobs; the other
+marks are written by the ladder (P2) and appear in P1 only as authored
+backstory. The quest predicates migrated: needs-a-known-face became
+**needs-a-dark-mark** (`Requirement::NeedsDarkMark` / `NoDarkMarks`). A mark
+is written once — it is a fact, not a counter.
+
+## 6. The decision function v2 (DECIDED in shape) — *Implemented (P1)*
+
+One function, as ever, now richer inputs:
+
+```text
+willingness(c, party, quest) =
+    desperation(c)
+  + sum over m in party, mark on m: reaction(traits(c), mark)
+  + sum over m in party: regard(c->m), as traits(c) weigh it
+  + the pot, as filtered by traits(c)
+  [+ eagerness — the quest's relevance to c's goal — P3]
 ```
-willingness(c, P) = desperation(c)
-                  + Σ_{m ∈ P} regard(c→m)
-                  − Σ_{m ∈ P} incompat(c, m)
-joins iff willingness ≥ 0
-incompat(c, m) = K_inf × max(0, infamy(m) − infamy(c))
-```
 
-Tim refuses Bob (infamy gap, no desperation to override it). Alex accepts
-(no gap — he has infamy too). Tim later accepts (desperation rose). "Everyone
-has a price" is a theorem of this function, not a scripted event.
+Output: a **verdict** (will join / reluctant / refuses) with its **margin**,
+and the **reasons** — the top contributing causes, rendered as words (§14).
+The margin's boundaries: negative refuses; non-negative but under
+`reluctant_below` is *reluctant* — in, but barely.
 
-**Joining is gated at the door, in both directions (DECIDED, 2026-08-23).** A
-character `c` may be added to party `P` iff:
+- **Reasons are a fixed vocabulary, as data** — one ASCII template per cause
+  kind (needs the money · won't work with a `<mark>` · prefers a known
+  `<mark>` · trusts `<name>` · despises `<name>` · the money is good ·
+  nothing pulls either way), never free-form debug text. Every rendered
+  verdict carries at least one reason; a sum with no causes falls back to
+  the indifferent template by construction.
+- **The door rule stands unchanged** and evaluates through the v2 function.
+  A character `c` may be added to party `P` iff (1) `willingness(c, P+{c},
+  q) >= 0` — the newcomer consents — and (2) no incumbent's willingness
+  would go negative; an incumbent who would blocks the arrival, and the UI
+  names the blocker and their reason. **Consent is evaluated at the door
+  only** (owner, 2026-08-23): later departures do not re-evaluate, the send
+  gate checks headcount and the composition predicate and nothing else, and
+  a member pushed negative by a departure stays, in ember, with their reason
+  on the card.
+- **The margin is no longer discarded at the door**: it is computed and
+  stored on every answer as **strain** groundwork — how reluctantly this
+  party holds together — and strain is a primary betrayal input for the
+  ladder (§8). *In P1 nothing reads the margin after the door*, and the
+  retained deterministic betrayal does not see it.
+- **Bonds, mechanically** (DECIDED 2026-08-22, unchanged): a bond (positive
+  regard) overrides public information (it enters the same sum the mark
+  reactions do), suppresses betrayal (`regard >= K_loyal`), and propagates
+  consequences (harm to a bonded character creates a grudge in the survivor
+  toward the killer). Package deals stay OPEN.
 
-1. `willingness(c, P ∪ {c}) ≥ 0` — the newcomer consents, and
-2. for every incumbent `m ∈ P`: `willingness(m, P ∪ {c}) ≥ 0` — no incumbent's
-   willingness would go negative. An incumbent whose willingness would go
-   negative **blocks** the arrival; the UI names the blocker and shows their
-   arithmetic. (Tim in the party blocks Bob for the same numbers by which Bob
-   in the party makes Tim refuse — the rule is order-symmetric about who is at
-   the door.)
+**The retained deterministic betrayal (v1's rule, scheduled for
+replacement).** Until the ladder lands (P2), resolution keeps v1's exact
+rule: after success, in roster order at both levels, with kills taking
+effect immediately —
 
-**Consent is evaluated at the door only.** Once a member is in, they stay
-until the player removes them or the party is sent — later arrivals cannot be
-admitted over a veto (rule 2), and later *departures* do not trigger
-re-evaluation, even though removing a bonded partner can push a remaining
-member's willingness negative. The alternative — members walking out when the
-party changes under them — was considered and rejected (owner, 2026-08-23):
-blocking is more legible, and party state staying monotonic under the player's
-own actions is worth more than the extra drama.
-
-*Implementation note (2026-08-23):* the rule's second half decides something
-the first half does not state. Because consent is not re-evaluated, **the send
-gate does not check willingness either** — it checks headcount and the
-composition predicate and nothing else. Gating the send on "every member is
-still willing" would leave a player with a party they assembled legally, cannot
-send, and can only fix by removing somebody, which is the re-evaluation this
-rule declines to do arriving by the back door. The member's own card still
-states their current sum, in ember; the game does not hide it, it just does not
-ask them again.
-
-**Betrayal** (resolution): the economy is the motive engine (§4). After
-success, each member evaluates, against each partymate:
-
-```
-betray(c, t) iff desperation(c) ≥ K_kill
+```text
+betray(c, t) iff desperation(c) >= K_kill
            and shareGain(c | t dead) > 0
-           and regard(c→t) < K_loyal
+           and regard(c->t) < K_loyal
 ```
 
-Deterministic; evaluation order is the party's roster order (stated, so it
-is predictable and assertable). Bob kills Steve: desperation high, share
-doubles, no regard. Bob and Alex spare each other: neither is desperate.
+Kept, not polished: it is the mechanism v1's verdict finding 2 indicts, and
+P2 replaces it wholesale. The two changes P1 makes around it are the marks
+it writes (§5) and nothing else. Regard here is the raw edge, unweighted by
+traits — the trait weights are the *decision function's*, and this rule is
+the old economy arithmetic on its way out.
 
-**Bond drift** (aftermath): shared success without betrayal raises mutual
-regard between all surviving pairs. Betrayal: the betrayer's infamy rises
-(public — there were witnesses, or the outcome speaks); each surviving
-witness's regard toward the betrayer drops (personal grudge). If a character
-had positive regard toward a victim, they acquire a grudge against the
-killer, and (OPEN) possibly grief effects on desperation. Round end: every
-roster member who did not profit has desperation rise; participants who
-profited have it fall.
+**Aftermath (unchanged in rule, extended in pen):** a clean run bonds every
+surviving pair (+`bond_gain` both ways, per run — a job somebody died on
+bonds nobody) and counts one clean job for every survivor; a betrayal writes
+the killer's mark, drops every surviving witness's regard toward them
+(`witness_grudge`, plus `bonded_grudge` if the witness was bonded to the
+victim); round end, every living non-profiter's desperation rises and every
+profiter's falls, floored at `desperation_floor`.
 
-These formulas are accepted as starting points (owner, 2026-08-22). All
-constants (`K_inf`, `K_kill`, `K_loyal`, drift magnitudes) are tuning values,
-named in one place in the game code, with the puzzle beats as their test
-suite: a constant change that breaks a beat's intended dilemma fails verify —
-the beats *are* the tuning harness. Runtime tuning is a first-class
-requirement; §8a owns it.
+*Implementation notes (P1, 2026-08-26) — choices the formulas leave open:*
 
-Three points the first implementation had to settle, because the formulas above
-do not (prototype #1, 2026-08-22 — see §12):
+- **The pot term is trait-only in P1**: base pot weight is zero, and the pot
+  pulls through a trait's pot affinity at `pot_pull` per gold of share. "The
+  pot as filtered by traits" is implemented literally; a base pull for
+  everyone is a tuning decision available any time (it is one constant).
+- **The share the pot term reads is the job's at its stated headcount** —
+  what the sheet promises — not the split among the party staged so far, so
+  an answer does not wobble while the party is assembled.
+- **With no quest taken, no pot pulls**: the quest is part of the question,
+  and the door evaluates against the taken quest or against none.
+- **Reasons sort by absolute contribution**, stable, with build order
+  (desperation, then each member's marks and edges in roster order, then the
+  pot) breaking ties — deterministic like everything else.
 
-- **Bond drift is per run, not per pair.** "Shared success without betrayal" is
-  read as *this dungeon had no betrayal in it*: a job somebody was killed on
-  leaves no bonds behind at all, not even between two survivors who had nothing
-  to do with it.
-- **Desperation has a floor**, `desperation_floor`, a constant like the others
-  and 0 in the shipped set. Without it `desperation_fall` takes a character
-  below zero the first time they profit, and a character at −2 refuses a clean
-  job with nothing wrong with it. At the floor they still take clean work and
-  nothing that costs them.
-- **Betrayal is evaluated in roster order at both levels**: `c` walks the party
-  in roster order and, for each `c`, `t` walks it in roster order too, with each
-  kill taking effect immediately. A character killed before their own turn never
-  evaluates.
+## 7. Dungeons and resolution (carried from v1; predicates migrated)
 
-### 3.3 Bonds, mechanically (DECIDED 2026-08-22)
-
-A bond (positive regard) does four things — this is the mechanical
-definition the concept was missing:
-
-1. **Overrides public information**: regard enters willingness alongside
-   incompat, so a strong bond outweighs an infamy gap (Alex joins Bob).
-2. **Suppresses betrayal**: the `regard(c→t) < K_loyal` clause.
-3. **Propagates consequences**: harm to a bonded character creates a grudge
-   in the survivor toward the killer. Relationships make events *travel*.
-4. **(OPEN, likely v1.1) Package deals**: above a threshold, willingness
-   couples — the pair joins together or not at all. This makes bonds a
-   constraint the player *plans around*, not just a buff.
-
-## 4. Economy (DECIDED 2026-08-22 — including the direction that infamy
-must not only close doors; the underworld-track mechanism below stays OPEN)
-
-Each dungeon has a **pot**, split among surviving participants after the
-player takes a stated cut. Fixed pot + division among survivors is what
-makes desperate betrayal *economically rational* — no separate betrayal
-mechanic exists, only arithmetic and the decision function.
-
-The designed-dilemma knob: **a dungeon that requires N characters but pays
-fewer than N worthwhile shares.** The player can read that math and send the
-party anyway. (Beat design leans on this.)
-
-Non-participants don't profit, so their desperation rises each round —
-the roster decays toward willingness. Refusal is always temporary.
-
-**OPEN — infamy needs a positive use.** If infamy only closes doors, optimal
-play quarantines infamous characters and the mechanic dead-ends. Proposal to
-explore: infamy-gated dungeons (an underworld track that *requires* infamy),
-so infamous rosters open different doors rather than fewer. Not in the first
-beats; the chain should surface the problem before the answer.
-
-## 5. Dungeons (PROPOSED)
-
-v1 dungeon = requirements + pot + payout rule:
+v2 dungeon = requirements + pot + payout rule, everything visible before
+assembly:
 
 - **Requirements**: headcount, plus composition predicates from the social
-  vocabulary ("at least one infamous member", "no infamous members",
-  "must include a bonded pair", ...). Predicates are the growth axis.
-  *Theme note (owner, 2026-08-22):* predicates like "at least one infamous
-  member" are accepted as gameplay-first and thematically artificial —
-  requirements will likely change in later versions, and **theme is mutable
-  and secondary during prototyping**. (Observed in passing: the predicate
-  that feels wrong for fantasy-RPG dressing is perfectly natural for an
-  organized-crime frame — a job that *needs* a known face. Theming is a
-  skin to choose after the gameplay proves out, and this is a candidate.)
+  vocabulary. The mark predicates (§5) are the current axis: a job that
+  needs a dark mark on somebody, a job that cannot be seen with one. (The
+  organized-crime read of "a job that needs a known face" survives the
+  migration intact — it needs a known *mark* now.)
 - **Pot and player's cut**: visible before assembly, like everything else.
 - **Resolution order** (stated, deterministic): willingness checks happen at
   assembly time in the UI (refusals are *feedback*, not failures); if
-  requirements are met the dungeon succeeds; betrayal evaluation; payout;
-  bond drift; round-end desperation drift.
-- **v1 has no resolution failure** (accepted for now, owner 2026-08-22,
-  with the expectation that requirements change in future versions): an
-  under-filled party cannot be sent, and a sent party succeeds. Puzzle
-  purity — stakes come from *what success costs*, not from whether the dice
-  come up. Failure semantics enter with the sim phase (OPEN), where they'll
-  need design (death? empty-handed return with a desperation spike?).
+  requirements are met the dungeon succeeds; betrayal evaluation (§6's
+  retained rule, the ladder once P2 lands); payout; bond drift and clean-job
+  counting; mark writes; round-end desperation drift.
+- **v2 still has no resolution failure** in P1: an under-filled party cannot
+  be sent, and a sent party succeeds. Failure semantics enter with the run
+  era's design (OPEN).
 
-## 6. The puzzle chain (PROPOSED structure; beats TBD with owner)
+## 8. The betrayal ladder (DECIDED — **P2**, design ahead of implementation)
 
-Beats 1–4 are the owner's tutorial, verbatim (Steve; Bob kills Steve; Tim
-refuses / Alex joins; Tim's price is met). Then one new concept per beat,
-roughly: grudge consequences (the survivor of a betrayal meets the betrayer
-again) · bond formation as a plannable asset · a shares-less-than-headcount
-dilemma · an infamy-gated requirement · package-deal bonds · grief ·
-a closing beat that requires exploiting everything at once, ideally with a
-genuinely uncomfortable optimal solution. Target ~10–15 beats.
+Betrayal becomes a seeded probabilistic event on a severity ladder:
 
-Authoring format: each beat = (initial roster state, dungeon(s), the
-intended dilemma stated in a sentence, expected-outcome assertions). The
-fourth field is the verify scenario (§8). Win = complete the chain.
+**skim** (take an extra share, quietly) → **abandon** (walk mid-quest; the
+quest's success re-evaluates without them) → **sabotage** (the quest
+suffers; someone gets hurt) → **murder** (the v1 event, now the rare
+summit).
 
-*Implementation (prototype #1):* the beats live in `src/beats.rs` as a `CHAIN`
-of `BeatSpec` values and are read by no code that names a beat number — beats 5+
-are added there and nowhere else. The verify scenario needs a fifth field beside
-the assertions, `send`: the party the scripted run assembles. Nothing in the
-game reads it and a player may send anything the gate allows; it is the
-scenario's "and then the player does this", which the assertions alone cannot
-say. Beats 1–4 are the owner's four, with rosters, pots and cuts authored to the
-formulas in §3.2 — beat 2's numbers are the ones §7's example line quotes.
+- Probability and reachable severity are driven by: strain (§6's margin,
+  persisted into the quest), desperation, traits (greedy skims, craven
+  abandons, vengeful escalates), and opportunity (pot size, party
+  structure). Constants and curves live in the tuning module; the drawer
+  (§8a) tunes them; distribution sweeps (§14) verify them.
+- **Foreshadowing is a UI obligation** (§12): parties read as *calm / uneasy
+  / powder keg* — qualitative bands, inspectable causes, no percentages on
+  the surface. Murder near-certainty must be visibly telegraphed before it
+  can happen; the small betrayals are common enough to teach the
+  distribution by experience.
+- Every rung writes: a mark (public), edges (witnesses, victims), biography
+  lines, and often desperation/wealth changes. The ladder is the reputation
+  system's pen.
+- Design intent named plainly: v1 punished a computable mistake; v2 charges
+  for a chosen gamble. Pressing reluctant, hungry people into service is
+  *priced in risk*, and benching them raises tomorrow's price (§11) —
+  avoidance is never free.
 
-## 7. Presentation (DECIDED unless marked)
-
-2D, sprites and quads, pointer input — nothing the engine lacks. No audio,
-no particles, no gamepads (standing policy: nothing pulled until needed).
-A **post-v1 polish pass is anticipated as an option** (owner, 2026-08-22):
-once the gameplay prototype is done, a deliberate polish step may pull
-menu items like particles or audio — that pass, if taken, *is* the "need"
-the standing policy asks for, and each pull gets its normal ADR.
-
-**Text: the engine's built-in `ctx.text`** — the embedded 5×7 monospace
-atlas (printable ASCII + fallback box, `width_of`, explicit `\n`; renderer.md
-§6). No font asset exists or is created. Constraints accepted for v1:
-ASCII-only names and copy, monospace, no wrapping (explicit line breaks).
-giri remains the likeliest first customer for the TTF menu item — the pull
-trigger is outgrowing 5×7 monospace ASCII, and that revisit is a menu pull
-and an ADR (PROPOSED).
-
-**Assets: curated or generated, never downloaded.** Sprites are generated by a
-committed script (original art, deterministic, reviewable) or owner-provided —
-**never downloaded from third-party sources by an agent** (provenance and
-licensing; owner approval plus a recorded license is the only exception). The
-curation model: role-named lowercase `snake_case` files, an import script
-committed beside them, a `CREDITS.md` naming source and license per file, and a
-license check against the repository's visibility before any purchased asset is
-committed. Individual PNGs stay at or under 2048 on each axis.
-
-*Landed 2026-08-23:* the library, generated by `art/make_art.py` from the grids
-in `art/sprite_defs.py` — four portraits, four dungeon icons, five stat and
-event icons. It was built as a placeholder set and the owner kept it after
-reviewing the captures.
-
-*Curated 2026-08-23, the same day:* the owner supplied seven Kenney packs and
-**twelve of the thirteen slots are now a curated subset of them (DECIDED)**. The
-swap cost no code: the role names held, and the only changes were sizes. What
-the curation model bought is visible in that fact.
-
-The packs are CC0 1.0 and live on the owner's machine; they have never been in
-this repository. Kenney *requests* that whole packs not be redistributed, which
-is not a licence term but is honoured by construction: only individually chosen,
-role-named sprites are committed, and the **contact sheets are never committed**,
-because a whole pack rearranged into sheets is still the whole pack. The tooling
-that made choosing possible — `art/contact_sheet.py` to see a pack,
-`art/role_sheet.py` to see one slot's shortlist, `art/kenney-manifest.json` to
-record what each region is and which one the owner picked, `art/extract.py` to
-cut the picks — writes everything but the manifest into `target/`.
-
-Two things this session fixed in place, both worth keeping: classification is
-**on demand** (only regions a slot actually needed are labelled; the rest are
-recorded as unclassified with their extent, because labelling a whole pack is
-hours spent on tags nobody will query), and the manifest is metadata rather than
-art, so committing it is what makes looking at a pack a one-time cost. It lives
-with giri until a second game wants it (second-consumer rule).
-
-The generated path stays whole — `art/make_art.py` and the grids are still here,
-still run, and still fill the one slot no pack could: **no eye glyph exists in
-any of the seven packs**, so infamy keeps its generated icon rather than taking
-a substitute, which would have meant editing UI.md §2's signifier table. A
-stable signifier is not something an import gets to change.
-
-**Presentation is owned by `games/giri/UI.md`** (2026-08-23) — screens,
-signifiers, layout, readability floors, the display ladder, and the screenshot
-process all live there, and a change to any of them is a UI.md edit. What stays
-here is only what binds the UI to the game: what is previewed (the paragraph
-below, unchanged), invariant 2's inspectability, the asset policy and the
-curation model above, and the text constraints.
-
-**The resolution report is the story surface.** Every consequence is
-narrated mechanically, naming the rule inputs — as the game actually prints it,
-in the ASCII this section mandates:
-
-```text
-Bob killed Steve - desperation 8 >= 6, share 2->4, regard 0 < 2
-```
-
-*(Corrected 2026-08-22: this line was drafted as "Bob killed Steve — desperation
-8 ≥ 6, share 2→4, no regard", whose em dash, ≥ and → are three characters the
-5×7 atlas draws as boxes. The engine's font covers space through `~` and nothing
-else, and no assertion over drawn quads can see the difference — the string is
-the only instrument. Every line the game draws is ASCII, and `--verify` checks
-each one.)*
-
-In v1 this is debugging output promoted to UI; it is also how players learn the
-heuristics that invariant 2's endgame depends on. Flavor text can layer over it
-later; the arithmetic stays reachable (the game never hides).
-
-**Willingness is previewed; betrayal is not.** The preview shows each selected
-character's sum before commitment because refusal is *feedback* the player acts
-on (§5). Betrayal has no preview in v1: the player is shown every input to it —
-desperation and regard on the sheets, the pot and the cut on the job, and the
-constants themselves in a panel on screen — and does the arithmetic. That is
-what makes beat 2 a death the player *could foresee* rather than one the game
-warned them about, and it is inspectability rather than concealment (invariant
-2: nothing is hidden, and the game does not do the sum for you). A betrayal
-preview is a UI decision available any time, and would soften the second
-inversion.
-
-## 7a. The scaling contract (DECIDED 2026-08-23)
-
-**Scaling contract:** the game view scales uniformly with the window — aspect
-preserved, letterboxed, symmetric in both axes — down to a minimum scale.
-Vertical-only or horizontal-only distortion is a defect. UI.md §6 carries the
-reference resolution and the known browser defect to resolve.
-
-*Resolved 2026-08-23:* the defect was game-side. `Camera::height` is the game's
-and the driver stamps only `viewport`, so a game that names one height and
-leaves it there scales uniformly on a vertical shrink and not at all on a
-horizontal one. `src/scaling.rs` refits the height every frame from the
-viewport the driver last stamped, and `src/floors.rs` asserts the four claims
-the contract is — uniform, symmetric, whole, and clamped at the floor — at four
-surfaces.
-
-## 8. Verification (DECIDED in approach)
-
-Each beat is scripted end-to-end via `InputScript` in the prototype_kit
-pattern: drive assembly through the per-tick snapshot, assert on world state
-(deaths, infamy, regard edges, refusals, desperation trajectories) and on
-the null-backend transcript (sheets rendered, report shown). The tutorial
-is the test suite; the beats are the tuning constants' regression harness.
-Mutation round per practices §5.2 — break constants on purpose and check
-the beats notice. `tools/verify giri` needs no registration (ADR-0038).
+*Implemented (P1):* none of it — P1 retains §6's deterministic rule, and the
+one piece of groundwork laid is the stored margin. The deterministic model
+remains available as a tier-2 variant for comparison playtests once the
+ladder lands (§15).
 
 ## 8a. Tuning and playtesting (DECIDED 2026-08-24)
 
-*The mechanism below was PROPOSED when this section was drafted and is DECIDED
-as of 2026-08-24: the beat-boundary rule, the stamping, and the live menu are
-the ones built. `UI.md` §9a owns their presentation and §12 records what
-building them corrected.*
-
-Balance questions (§3.2's constants, beat difficulty, the heuristic-onset
+Balance questions (the constants, beat difficulty, the heuristic-onset
 point) are answered by playtesting, through two channels:
 
-**Agent self-playtest.** As with the Pong runs that tuned their own
-difficulty, agent sessions play giri via `InputScript` and sweep constants
-against the beats. The verify report includes the constants in effect for
-the run, so a tuning sweep is scriptable: same beat, varied weights,
-machine-readable outcomes.
+**Agent self-playtest.** Agent sessions play giri via `InputScript` and
+sweep constants against the beats. The verify report includes the constants
+in effect for the run, so a tuning sweep is scriptable: same beat, varied
+weights, machine-readable outcomes.
 
-**Human playtest with a live tuning menu.** A debug UI exposes the §3.2
-constants for on-the-fly adjustment — the owner demoing giri to another
-person adjusts weights without switching builds. Built with the same quads,
-sprite font, and pointer input as the rest of the game; no engine pull.
+**Human playtest with a live tuning menu.** A debug UI exposes every
+constant for on-the-fly adjustment. Built with the same quads, sprite font
+and pointer input as the rest of the game; no engine pull. Built 2026-08-24
+(`src/tuning.rs`); UI.md §9a owns its presentation.
 
-**The determinism interaction (the part that needs stating):** tuning
-constants are *simulation inputs* — replay state is a pure function of
-(beat state, assignments, constants). A constant silently changed mid-run
-would make the recording a lie. v1's resolution: **the tuning menu applies
-changes at beat boundaries — adjusting a constant restarts the current
-beat with the new values.** Beats are short puzzles, so this costs seconds
-and is actively useful (same beat, A/B'd across weights). The constants in
-effect are stamped into every recording and verify report, so any run
-remains exactly reproducible. This keeps the engine's replay contract
-untouched and needs no engine changes. If the sim phase ever wants
-*mid-run* tuning, constant-changes would have to enter the recorded stream
-like input does — that is an engine conversation (new recorded channel,
-own ADR) and is explicitly out of scope for v1.
+**The determinism interaction:** tuning constants are *simulation inputs* —
+replay state is a pure function of (beat state, assignments, constants). The
+menu applies changes **at beat boundaries** — adjusting a constant restarts
+the current beat with the new values — and the constants in effect are
+stamped into every recording and verify report, so any run remains exactly
+reproducible. Mid-run tuning would need constants to enter the recorded
+stream like input does — an engine conversation, explicitly out of scope.
 
-Playtesting instrumentation should also serve the heuristic-onset question
-(§11): logging what players inspect and how long assembly takes per beat is
-cheap, and is the only honest way to locate where evaluation gives way to
-heuristics — it varies per player; we look for the general point.
+Playtesting instrumentation serves the heuristic-onset question (§17):
+per-beat assembly duration and sheet-look counts are logged locally
+(`src/onset.rs`), nothing leaves the machine.
+
+*Implemented (P1):* the drawer covers the five v2 constants exactly as it
+covered v1's — it walks the constants module by design, so the new rows,
+stamp keys and `?constants=` keys appeared without the drawer being edited;
+the presets were re-derived for the wider set (`src/presets.rs`).
 
 ## 8b. Variants — how incompatible mechanics coexist (DECIDED 2026-08-23)
 
-Iteration on giri will produce mechanics that cannot all be true at once. Which
-mechanism carries a variant follows from **how deep the divergence goes**, in
-three tiers.
+Iteration on giri will produce mechanics that cannot all be true at once.
+Which mechanism carries a variant follows from **how deep the divergence
+goes**, in three tiers.
 
-**Tier 1 — different numbers: not a variant.** Same rules, different constants
-is a *tuning preset* — a named constants set, handled entirely by the §8a
-machinery (one constants module, stamped into recordings and reports, adjustable
-at beat boundaries). Never a flag, never a binary.
+**Tier 1 — different numbers: not a variant.** Same rules, different
+constants is a *tuning preset* — a named constants set, handled entirely by
+the §8a machinery (one constants module, stamped into recordings and
+reports, adjustable at beat boundaries). Never a flag, never a binary.
 
 **Tier 2 — different rules, same shape: one binary, variants as data.** A
 variant that swaps *which rule* fires at the decision function's moments — a
-different betrayal condition, package-deal bonds on, another bond-drift law —
-while keeping the beat format, the screen flow and the state shape, lives in the
-mainline crate as a `Variant` chosen at chain start.
+different betrayal condition, package-deal bonds on, another bond-drift law
+— while keeping the beat format, the screen flow and the state shape, lives
+in the mainline crate as a `Variant` chosen at chain start.
 
 Structural constraint, enforced by review: **variant selection happens in
 exactly one module**, which assembles the rule set at startup — never inline
-`if variant` branches through systems. One file states what every variant is,
-and the decision function stays one function receiving its rules. That is the
-same discipline §3.2 already imposes for the same reason: the moment the rule
-set is readable in one place, a variant is a thing you can reason about; spread
-across call sites it is a thing you can only test.
+`if variant` branches through systems. One file states what every variant
+is, and the decision function stays one function receiving its rules. That
+is the same discipline §6 already imposes for the same reason — and §4
+imposes it a third time, for traits.
 
-The variant id is a **simulation input** exactly as the tuning constants are:
-part of replay identity, stamped into every recording and verify report. Verify
-runs beats × variants the way §8a's mutation round sweeps constants. On the web,
-the variant picker sits at chain start, beside where the tuning menu lives.
+The variant id is a **simulation input** exactly as the tuning constants
+are: part of replay identity, stamped into every recording and verify
+report. Verify runs beats × variants the way §8a's mutation round sweeps
+constants. On the web, the variant picker sits at chain start, beside where
+the tuning menu lives.
 
-**Tier 3 — different loop, screens, or state shape: fork the crate.** When flags
-would lie about the divergence, the variant becomes `games/giri-<name>/` — a
-sibling workspace member, which ADR-0038 makes nearly free: it builds, verifies
-and publishes automatically, and gets its own playtest URL. Two disciplines keep
-forks honest:
+**Tier 3 — different loop, screens, or state shape: fork the crate.** When
+flags would lie about the divergence, the variant becomes
+`games/giri-<name>/` — a sibling workspace member, which ADR-0038 makes
+nearly free. Two disciplines keep forks honest: every fork carries a
+`VARIANT.md` stating the hypothesis it exists to test and what "decided"
+looks like, and forks are short-lived and few (at most ~2 alive); the loser
+moves to `attic/` with its verdict recorded.
 
-- Every fork carries a `VARIANT.md` stating the hypothesis it exists to test and
-  what "decided" looks like. A fork is an experiment with an exit, not a second
-  product.
-- Forks are short-lived and few (at most ~2 alive). When decided, the winning
-  mechanics merge into mainline giri and the losing fork moves to `attic/` — the
-  topology's built-in graveyard — with `VARIANT.md` updated to record the
-  verdict.
-
-**Deliberately deferred: a shared gameplay library.** Tier-3 forks duplicate code
-against mainline, and the tempting fix — a `games/giri-core` library crate — is a
-real topology question ADR-0038 has no story for (games depend only on the
-facade; a non-runnable directory under `games/` breaks the
-everything-under-`games`-is-a-game property). Fork short-livedness bounds the
-duplication. If a long-lived multi-variant future arrives, that is the driving
-use case for a games-shared-library ADR, and it is taken then, not now — the
-second-consumer rule, applied to infrastructure.
+**Deliberately deferred: a shared gameplay library** — the second-consumer
+rule, applied to infrastructure (the reasoning is unchanged from when this
+section was written; see the repository history for the long form).
 
 **Decision procedure, compressed:** only numbers → tier 1. Expressible as
 choosing rule implementations at startup, without touching beats, screens or
 state shape → tier 2. Anything deeper → tier 3.
 
-## 9. ECS representation (DECIDED 2026-08-22)
+## 9. Goals (DECIDED — the wonder layer; **P3**, design ahead)
 
-Characters are entities; scalar stats are components. **Regard edges are
-entities** — `RegardEdge { from: Entity, to: Entity, value }` — the clean
-ECS answer for sparse directed relations; queries over edges use the
-read-pass/write-pass pattern (ADR-0013). Game flow (beat index, phase) is a
-resource holding an explicit state machine. Facade-only, per ADR-0038 —
-nothing here needs engine internals or new engine features.
+Every character carries **one active goal**: discrete, named, stated in the
+game's own vocabulary, with visible progress on the sheet — a wonder track
+per person.
 
-## 10. Scope fences — what giri v1 does NOT do
+- **Templates, bound per character** (authoring economy): earn-N-for-self
+  (debt, dowry, stake) · erase-mark-M (clear her name) · complete-quest-Q
+  (see the Black Vault opened) · resolve-edge-with-P (settle the score,
+  repay the debt of gratitude) · accumulate-and-leave (retire wealthy). The
+  template set is data; new templates are design events.
+- **Completion mutates the sheet meaningfully** (DECIDED): trait rewrites
+  (*craven* → *steady*), desperation re-anchored or its source removed
+  outright (the debt paid is a pump deleted), marks erased (the only
+  eraser), bonds forged — the capstone events of history-as-progression.
+  **accumulate-and-leave completes and the character retires** — off the
+  roster, with a legacy (a recommended recruit, a parting gift, a guild
+  mark). A wonder whose payoff is losing the piece, on purpose.
+- **Goals can curdle** (DECIDED): failure conditions in the same vocabulary
+  (the creditor calls it in; the accuser dies un-confronted), mutating the
+  sheet darkly (the debt becomes *hunted*; the score becomes a trait). A
+  goal is stakes, not a savings account.
+- **Eagerness** (§6): quests advancing a goal pull that character in — they
+  join parties they would otherwise refuse. The player may exploit this; the
+  game notices (guild marks, §5 — OPEN how sharply).
+- Desperation differentiation falls out: the goal names *why* this character
+  is desperate, and two identical numbers become two different management
+  problems. (P1 already binds the source as flavor-plus-data, §3.)
 
-No traditional stats · no randomness · no hidden information · no sim or
-endless mode · no resolution failure · no audio, TTF, particles, gamepads ·
-no downloaded art ·
-no generated flavor text beyond mechanical narration · no player-reputation
-system (characters do not yet remember what *the player* did — OPEN below).
+## 10. The run (DECIDED in shape — **P3**, design ahead; supersedes the chain
+as the game's body)
 
-## 11. Open questions (future design sessions)
+giri v2 is an **open run**: rounds of quest selection → party assembly →
+resolution → consequences, against a **generated quest stream** drawn from
+quest templates — including **goal hooks** ("her accuser is garrisoned at
+the Watchtower"), which is what makes the stream a landscape rather than a
+job board (and gives the eventual overworld map destinations that matter).
 
-- Infamy's positive use (§4) — likely the first post-chain design question.
-- Failure semantics for the sim phase (§5).
-- Package-deal bonds (§3.3.4) — v1.1 candidate.
-- Grief: what a bonded survivor's desperation does, and whether grief and
-  greed should be distinguishable states. (Owner: liked, explicitly deferred
-  to later — do not design it into v1.)
-- **The player is a guild-master** (owner, 2026-08-22) — but theming is
-  secondary during prototyping and this frames rather than constrains. The
-  live long-term question underneath it stands: does the player become a
-  *legible actor* — do characters hold regard toward the player, remember
-  being sent to die, refuse the player? That question is the heart of the
-  complicity theme, for the sim phase.
-- Where heuristic play begins: acknowledged unanswerable a priori — it
-  varies per player. The goal is to identify a *general* onset point from
-  playtesting (see §8a instrumentation), and then to decide whether the
-  chain's difficulty curve should reach it by the final beats or only in
-  the sim.
+- **The roster exceeds the work, always** (DECIDED): more mouths than shares
+  is the standing pressure that makes every selection a portfolio decision
+  (§11).
+- **Recruitment**: a modest candidate stream (sheets visible — traits,
+  marks, goal; the initial-assessment moment the sheet exists for) refills
+  attrition from death and retirement. PROPOSED: candidates' quality and
+  kind react to guild marks (reserved hook, minimal v2).
+- Run length / end state: OPEN (survival? insolvency? a chain of guild
+  goals?). v2 ships as an endless run; the loss condition is designed after
+  the loop proves out.
+- The **beat chain becomes the harness**: beats 1–4 re-authored as seeded
+  scenarios (fixed roster, fixed seed) serving as tutorial and as the
+  verify/tuning regression set. Beats 5–15 as previously imagined are
+  **cancelled** — superseded by the run.
 
-## 12. Implementation notes — prototype #1 (2026-08-22)
+**Beat authoring (current, P1):** a beat = (initial roster state, dungeon(s),
+the intended dilemma in a sentence, expected-outcome assertions), plus the
+`send` field naming the party the verify scenario assembles. The chain lives
+in `src/chain.rs` as data and is read by no code that names a beat number.
+*Implemented (P1):* beats 1–4 re-authored minimally onto the v2 machinery —
+same dilemmas, new causes (§18 lists every assertion that moved and why).
 
-Written when the first slice landed (`games/giri/`, the social model, beats
-1–4). Everything here is a place where implementing the document changed it;
-the changes are inline above and this is the index.
+## 11. The portfolio economy (DECIDED in shape)
 
-- **§3.2** now states the desperation floor, the per-run reading of bond drift,
-  and the roster order at both levels of the betrayal loop. All three were
-  ambiguities rather than disagreements — the formulas do not decide them and an
-  implementation must.
-- **§6** now names the fifth beat field the verify scenario needs (`send`) and
-  says where the chain lives.
-- **§7**'s example narration line was not ASCII and the same section requires
-  ASCII; corrected, with the reason.
-- **§7** now says explicitly that betrayal is not previewed, which the section
-  left open and beat 2 depends on.
-- **§3.1**'s "wealth may stay implicit in v1" was taken the other way: wealth is
-  a component, it accumulates shares, and it is on every sheet. Implicit wealth
-  would have made the payout arithmetic unreadable to a player, and invariant 2
-  says a number that decides an outcome is a number on screen.
-- **§8a**'s tuning menu is not built (next session), but its two prerequisites
-  are: every constant is one `Tuning` resource, and the set in effect is stamped
-  into the UI and into every verify report. The menu bolts onto that, and the
-  beat-boundary rule §8a settles is already how the game restarts a beat.
+Each job has a **pot**, split among surviving participants after the
+player's stated cut — fixed pot + division among survivors is what makes
+desperate betrayal *economically rational*. The designed-dilemma knob
+survives from v1: a job that requires N but pays fewer than N worthwhile
+shares. Non-participants don't profit, so their desperation rises each round
+— the roster decays toward willingness, and refusal is always temporary.
 
-## 13. Implementation notes — the tuning drawer (2026-08-24)
+The long-term axis is **people plus goals** — no separate meta-currency:
 
-§8a's menu is built (`src/tuning.rs`), and §8b's tier 1 with it
-(`src/presets.rs`). Nothing in this document changed except §8a's status; what
-follows is what building it settled that the document left open.
+- **Investment**: history writes value — bonds from shared work, *reliable*
+  marks from clean jobs. Taking the unproven kid on the wrong job is how she
+  becomes somebody: worse odds today, better roster tomorrow.
+- **Upkeep**: v1's hunger rule stands — the unfed get hungrier — now with
+  **explicit per-character wealth** as the buffer (how many benched rounds
+  until dangerous). The player's treasury (the cut) can be **spent into
+  people**: wages/gifts that reduce desperation and count toward earn-goals
+  (P3). Farms versus wonders: feeding everyone is the farm; Rena's freedom
+  is the pyramid.
+- **Shaping**: which jobs you give which people decides which marks and
+  traits they accumulate — the guild's character is the sum of what you made
+  its people do.
 
-- **A preset is a `Tuning` with a name on it, and that is the whole of tier 1.**
-  §8b says a tuning preset is "never a flag, never a binary"; the shape that
-  makes that true is a table the drawer *walks*, so a preset added is a row added
-  and no code anywhere names one. `DEFAULT` is `Tuning::SHIPPED` by reference,
-  because two spellings of the shipped set is one spelling that can go stale.
-- **The stepper rows are walked off the constants module too**, so a constant
-  added to `Tuning` grows a row in the drawer, a key in the compact stamp, and a
-  key `?constants=` accepts, without any of the three being edited. Beats 5–15
-  will add beats and may add constants; this is the half that does not need a
-  second visit when they do.
-- **"Apply at a beat boundary" is one action, not two.** Swapping the resource
-  and restarting the beat happen in one function and neither is reachable without
-  the other, because a swap without a restart is exactly the recording that lies
-  which §8a's resolution exists to prevent. `src/restart.rs` asserts the claim
-  the resolution rests on: a beat played out after an apply is byte-identical to
-  the same beat played from the start at those constants — and, so the comparison
-  is an instrument rather than a tautology, that the same beat resolves
-  *differently* at the shipped set.
-- **The pending set is UI state and the active set is simulation state**, and the
-  drawer reads the active one from the world's `Tuning` resource rather than a
-  copy beside it — so the numbers it stamps cannot drift from the numbers the
-  decision function reads. That is the one property the whole feature stands on.
-- **§11's instrumentation is two counters and a log line** (`src/onset.rs`):
-  assembly duration in ticks from the first roster interaction to SEND, and the
-  number of arrivals of the pointer on a sheet. Arrivals rather than time spent,
-  because every sheet is always on screen (invariant 2) and there is no inspect
-  verb to count. Ticks rather than a clock, per invariant 5.
-- **Not a deviation, recorded because it is a choice the document leaves open:**
-  the drawer's steppers and its `?constants=` links accept 0 to 12, which is a
-  bound on the *tuning surface* rather than on the type — the mutation round
-  still moves a constant to 99 and the floor to −99, and has to, because a
-  perturbation has to be one nobody would plausibly author.
-- **Not deviations, recorded because they are choices the document leaves open:**
-  the chain loops back to beat 1 from the completion screen rather than ending
-  (a playtest convenience); a beat's dungeons are a list with a selectable row
-  even though every beat here offers one, so a multi-dungeon beat needs no
-  systems work; and the tutorial's rosters and pots are authored numbers, chosen
-  to make each beat exactly computable from the sheets.
+*Implemented (P1):* wealth is a per-character component, earned from shares,
+displayed on every sheet; the hunger rule's economics drive desperation
+exactly as in v1. Treasury spending is P3.
+
+## 12. Presentation (DECIDED sequencing — the owner's flag)
+
+v2 asks the player to track much more, and the defense is layered:
+
+1. **Caps at the source** (§3) — the sheet is bounded by design.
+2. **Verdict + reasons-as-words** (§6) — the surface shows judgments and
+   causes, not sums. This is display-ladder rung 3, reached by mechanics.
+3. **Sequencing (DECIDED)**: P1 ships v2 mechanics under *interim
+   presentation* — existing UI patterns extended without craft (trait chips,
+   mark lines; the goal track when P3 lands), **still bound by the
+   readability floors and the signifier table** (ugly is acceptable;
+   unreadable is a regression against shipped assertions). One thing was NOT
+   deferrable and shipped with P1: **the verdict-and-reasons line** — it is
+   how v2 is playtestable at all. Immediately after the owner's first
+   playtest, a **dedicated UI/UX design session** (working agreement 8:
+   mockup-first) designs the real presentation, briefed by the owner's "what
+   did I reach for and not find" notes. Polish implementation follows it.
+
+Everything below carries from v1 unchanged in force:
+
+**Presentation is owned by `games/giri/UI.md`** — screens, signifiers,
+layout, readability floors, the display ladder, and the screenshot process.
+What stays here is only what binds the UI to the game: what is previewed,
+invariant 2's inspectability, the asset policy and curation model, and the
+text constraints.
+
+**Text: the engine's built-in `ctx.text`** — the embedded 5×7 monospace
+atlas (printable ASCII + fallback box, explicit `\n`). ASCII-only names and
+copy, monospace, no engine wrapping. giri remains the likeliest first
+customer for the TTF menu item; that revisit is a menu pull and an ADR
+(PROPOSED).
+
+**Assets: curated or generated, never downloaded.** The curation model in
+full: role-named lowercase `snake_case` files, a committed import script,
+`assets/CREDITS.md` naming source and license per file, license check
+against repository visibility before any purchased asset is committed, PNGs
+at or under 2048 per axis. Twelve of thirteen slots are a curated subset of
+the owner's Kenney packs (2026-08-23); the eye is generated
+(`art/make_art.py`); contact sheets are never committed. The manifest and
+tooling live with giri until a second game wants them.
+
+**The resolution report is the story surface.** Every consequence is
+narrated mechanically, naming the rule inputs, in ASCII the atlas can draw:
+
+```text
+Bob killed Steve - desperation 8 >= 6, share 2->4, regard 0 < 2
+Bob is marked comrade-killer - a witnessed kill is public
+```
+
+Flavor text can layer over it later; the arithmetic stays reachable.
+
+**Willingness is previewed; betrayal is not.** The preview shows each
+character's verdict and leading reason before commitment because refusal is
+*feedback* the player acts on (§7). Betrayal has no preview in P1: every
+input to it is on the sheets and in the drawer, and the player does the
+arithmetic — beat 2 stays a death the player *could foresee*. The ladder era
+replaces this stance with §8's foreshadowing bands, which are that preview,
+made qualitative.
+
+## 12a. The scaling contract (DECIDED 2026-08-23)
+
+The game view scales uniformly with the window — aspect preserved,
+letterboxed, symmetric in both axes — down to a minimum scale.
+Vertical-only or horizontal-only distortion is a defect. UI.md §6 carries
+the reference resolution; `src/scaling.rs` refits the camera every frame and
+`src/floors.rs` asserts the contract's four claims at four surfaces.
+
+## 13. ECS representation (DECIDED 2026-08-22, extended P1)
+
+Characters are entities; per-character state is components (desperation,
+source, wealth, traits, marks, clean-job count). **Regard edges are
+entities** — `RegardEdge { from, to, value }` — the clean ECS answer for
+sparse directed relations; queries use the read-pass/write-pass pattern
+(ADR-0013). Game flow (beat index, phase) is a resource holding an explicit
+state machine. Facade-only, per ADR-0038 — nothing here needs engine
+internals or new engine features.
+
+## 14. Verification and tuning under seeds
+
+**Now (P1, deterministic):** each beat is scripted end-to-end via
+`InputScript`; assertions cover world state (deaths, marks, regard edges,
+verdicts, margins, reasons, desperation and wealth trajectories, clean-job
+counts) and the null-backend transcript (sheets rendered, report shown). The
+tutorial is the test suite; the beats are the tuning constants' regression
+harness; the mutation round perturbs every constant and demands a beat or
+contract notice. **The reasons-as-words surface is itself verifiable**: the
+transcript asserts that every rendered verdict carries at least one reason,
+and the floors apply to every new chip and line.
+
+**Under seeds (P2, design ahead):**
+
+- Scenario assertions run at **fixed seed**: exact outcomes, as today.
+- New: **distribution sweeps** — N seeds over a scenario, asserting rates in
+  bands (skims common, murders rare, the powder-keg party betrays within X%
+  of runs). The mutation round extends naturally: perturb a curve, watch a
+  band break.
+- The tuning drawer grows to cover the new constants and curve parameters;
+  presets become genuinely interesting (a CUTTHROAT world is a probability
+  regime). `?constants=` links carry reproductions; reproductions carry
+  seeds.
+
+## 15. Phases (each phase = one handoff, one session)
+
+- **P1 — People** *(this build)*: traits (data vocabulary + function
+  modifiers), marks replacing infamy, explicit wealth, willingness v2 with
+  verdict + margin + reasons-as-words (interim rendering), door rule intact.
+  Deterministic betrayal temporarily retained. Beats re-authored minimally
+  to stay green.
+- **P2 — Risk**: seeded RNG enters (engine `Rng`); strain; the betrayal
+  ladder with marks/edges/biography writes; foreshadowing bands;
+  distribution sweeps in verify; drawer covers the new constants. The
+  deterministic model remains available as a tier-2 variant for comparison
+  playtests.
+- **P3 — Wants and the run**: goals (templates, progress, completion
+  mutations, curdling, retirement/legacy, eagerness); the open run
+  (generated stream with goal hooks, recruitment, roster > work; treasury
+  spending). Beats 1–4 finalized as seeded tutorial scenarios.
+- **UI design session** after the P2-or-P3 playtest (owner's call on
+  timing), then the presentation implementation session it specifies.
+
+Each phase lands green (floors, verify, screenshots-viewed) and playable;
+the owner playtests between phases and redirects.
+
+## 16. Scope fences — what this phase does NOT do
+
+No traditional stats · no randomness in P1 (P2's seeds come through the
+engine `Rng` only) · no hidden information · no betrayal ladder, strain
+consumption, goals, eagerness, recruitment, or open run yet · no resolution
+failure · no audio, TTF, particles, gamepads · no downloaded art · no
+generated flavor text beyond mechanical narration · no player-reputation
+system (guild marks are a reserved hook).
+
+## 17. Open questions
+
+- Run end-state and loss condition (§10).
+- Guild marks' sharpness — when does the player's own conduct gate content,
+  and do characters hold regard toward the player (the complicity /
+  legible-actor question, now with a mechanism ready for it).
+- Hidden/discovered traits — reserved variant experiments (DECIDED to
+  reserve; tier-2/3 per §8b when tried).
+- Mark decay for minor marks; multiple goals per character (post-v2 — the
+  one-goal cap is deliberate for now).
+- The overworld map (UI.md's ideal quest screen) — the goal-hooked stream is
+  its content model; the camera work waits for the UI era.
+- Grief (v1's open question, still liked, still deferred).
+- Where heuristic play begins: located from playtesting (§8a's
+  instrumentation), not a priori.
+
+## 18. Implementation notes — P1, the People slice (2026-08-26)
+
+Everything here is a place where implementing this document decided
+something it left open, or moved a number the tutorial asserted. The changes
+are inline above; this is the index.
+
+- **§4**: nine traits ship, not twelve — the register's eight plus
+  *upright*. The pot-affinity reading of *greedy* ("pot terms weigh double")
+  became "the pot term exists through traits" because P1's base pot weight
+  is zero (§6's first implementation note); when a base pull is tuned in,
+  greedy doubling it becomes literal again.
+- **§5**: mark base reactions are per *tone* (`mark_dark`, `mark_light`),
+  with per-kind character coming from the trait×mark table — two constants
+  the drawer can sweep instead of seven, and the table stays the place a
+  mark's personality lives. *Kept-the-line* and the remaining dark marks
+  have no P1 writer; they exist as authored backstory and table columns so
+  the ladder writes into a vocabulary that already reacts.
+- **§6**: the verdict boundary is `reluctant_below` (shipped 2), so a margin
+  of 0 — Tim's met price — is *reluctant*, which is beat 4's new texture.
+  The reason vocabulary's templates are shorter than this document's
+  examples ("needs the money") because the party card wraps at sixteen
+  columns and the floors bind (UI.md §7).
+- **Beats, every assertion that moved**: Steve's willingness 1 → 5 (the pot
+  now pulls him — greedy, share 4); Bob's beat-2 willingness 8 → 10 (share
+  2); Alex's authored desperation 2 → 3 and his willingness stays 2 (the
+  comrade-killer reaction −1 replaced the v1 gap −1... at his new need);
+  Alex's end desperation is 0 in both versions; Tim's refusals stay −2 and
+  his beat-4 price stays 0, now produced by upright × comrade-killer (−3)
+  against the same desperations; Bob's beat-4 willingness 4 → 7 (pot 3);
+  every `Infamy` assertion became a mark assertion (beat 2: Bob has
+  comrade-killer; beat 4: Bob reaches *reliable* at his second clean job,
+  which is new coverage, not migration). The kill line's narration is
+  byte-identical to v1's.
+- **Clean-job continuity is authored**: beat 4 starts Bob at one clean job —
+  beat 3's — because each beat's roster is authored state; the counter is
+  data like everything else on the sheet.
+- **The eye signifier** now means reputation marks (UI.md §2 updated);
+  trait chips borrow category icons from the existing five (interim, the UI
+  session designs real ones).

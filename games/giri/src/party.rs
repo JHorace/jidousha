@@ -1,16 +1,23 @@
-//! The party strip: always present, one card per roster character, with the
-//! status-line grammar UI.md §4 states (UI.md §4).
+//! The party strip: always present, one card per roster character — the sheet
+//! view, at v2's interim presentation (UI.md §4, §13).
+//!
+//! **The v2 card is the v2 sheet**: portrait, name, desperation with its
+//! source, wealth, trait chips (icon + name), reputation marks as lines,
+//! regard edges, and the **verdict-and-reasons status line** — the one piece
+//! of presentation DESIGN §12 says ships with the mechanics, because it is
+//! how v2 is playtestable at all. The numeric sums moved behind inspection
+//! (the toast and the info panel carry the margin); the card carries the
+//! judgment and its leading cause as words.
 //!
 //! **Dead characters stay on the roster** — grayed, skull-marked, unclickable.
-//! Memory is a signifier, and the one state a game would otherwise quietly drop
-//! is the one invariant 2 most wants kept (UI.md §2).
+//! Memory is a signifier (UI.md §2).
 //!
-//! **The status line says exactly one of four things**, and the door decides
-//! which: `in - <sum>` for a member, and for a non-member `would join - <sum>`,
-//! `refuses - <sum>`, or `<NAME> blocks - <blocker's sum>`. All four come out
-//! of `model::Admission` and `model::Willingness`, so the strip, the info
-//! panel's can't-join list, the bounce toast and the log are one sentence
-//! written once.
+//! **The status line says exactly one of these**, and the door decides which:
+//! `in - <reason>` for a member, and for a non-member `would join - <reason>`,
+//! `reluctant - <reason>`, `refuses - <reason>`, or `<NAME> blocks -
+//! <blocker's reason>`. All of them come out of `willing::Admission` and
+//! `willing::Willingness`, so the strip, the info panel's can't-join list, the
+//! bounce toast and the log are one sentence written once.
 
 use jidousha::prelude::*;
 
@@ -26,6 +33,11 @@ fn status_columns() -> usize {
     columns(layout::party_card(0).size().x - 12.0, theme::SMALL)
 }
 
+/// How far a mark or regard row may run beside its icon.
+fn line_columns() -> usize {
+    columns(layout::party_card(0).size().x - 38.0, theme::SMALL)
+}
+
 /// One stat, and the icon that has to be beside it (UI.md §7's redundancy
 /// floor).
 ///
@@ -39,30 +51,20 @@ pub struct Stat {
     pub value: TextRun,
 }
 
-/// The three stats on one card: desperation, infamy, wealth.
+/// The two stats on one card: desperation and wealth.
 ///
-/// Centred as a group, so they read as one row rather than as three things
-/// that happen to be near each other. **Wealth is here because DESIGN §12 puts
-/// it there** — it accumulates shares and it decides nothing a player can see
-/// unless it is on screen, and invariant 2 says a number that decides an
-/// outcome is a number on screen. UI.md §4 names two stats; where the two
-/// documents meet, DESIGN wins.
+/// **The eye is gone from this row** — the v1 public scalar is retired (DESIGN
+/// §5) and what everyone knows is the mark lines below. Wealth stays because
+/// invariant 2 says a number that decides an outcome is a number on screen.
 pub fn stats_of(card: Rect, member: &Member, lit: bool) -> Vec<Stat> {
-    let style = theme::text(theme::SMALL, theme::INK);
     let icon = 16.0;
     let gap = 3.0;
-    let between = 10.0;
+    let between = 12.0;
     let shown = [
         (Art::Flame, format!("{}", member.desperation), theme::EMBER),
-        (Art::Eye, format!("{}", member.infamy), theme::INFAMY),
         (Art::Coin, format!("{}", member.wealth), theme::GOLD),
     ];
-    let width: f32 = shown
-        .iter()
-        .map(|(_, value, _)| icon + gap + style.width_of(value) + between)
-        .sum::<f32>()
-        - between;
-    let mut x = card.center().x - width * 0.5;
+    let mut x = card.min.x + pcard::RIGHT_COL;
     let top = card.min.y + pcard::STATS_TOP;
     let mut out = Vec::new();
     for (art, value, color) in shown {
@@ -105,7 +107,23 @@ pub fn regard_line(social: &Social, who: Entity) -> String {
     }
 }
 
-/// The status line for one character (UI.md §4's grammar, exactly).
+/// A character's marks, as one line — what everyone knows (DESIGN §5).
+pub fn marks_line(member: &Member) -> String {
+    if member.marks.is_empty() {
+        "no marks".to_owned()
+    } else {
+        member
+            .marks
+            .iter()
+            .map(|mark| mark.name())
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+}
+
+/// The status line UI.md §4 states the grammar of: the verdict, and the
+/// leading reason as words (DESIGN §6, §12 — the line that ships with the
+/// mechanics).
 pub fn status_line(member: &Member, preview: &Preview, in_party: bool) -> String {
     if !member.alive {
         return "gone".to_owned();
@@ -117,7 +135,7 @@ pub fn status_line(member: &Member, preview: &Preview, in_party: bool) -> String
             .find(|entry| entry.who == member.entity)
             .map_or_else(
                 || "in".to_owned(),
-                |entry| format!("in - {}", entry.arithmetic()),
+                |entry| format!("in - {}", entry.top_reason()),
             );
     }
     preview
@@ -138,13 +156,14 @@ pub fn strip(flow: &Flow, social: &Social, preview: &Preview) -> Panel {
         let card = layout::party_card(index);
         let in_party = flow.party.contains(&member.entity);
         let lit = member.alive;
+        let dim_icon = Color::rgb(0.42, 0.41, 0.48);
 
+        // --- the header block: portrait left, name/stats/source beside it ---
         let face = Art::portrait_for(member.name, member.roster_index);
-        let width = face.size_at(pcard::PORTRAIT_SCALE).x;
         panel.icon(
             IconRun::new(
                 Vec2::new(
-                    card.center().x - width * 0.5,
+                    card.min.x + pcard::PORTRAIT_LEFT,
                     card.min.y + pcard::PORTRAIT_TOP,
                 ),
                 face,
@@ -165,8 +184,9 @@ pub fn strip(flow: &Flow, social: &Social, preview: &Preview) -> Panel {
                 2.0,
             ));
         }
+        let col = card.min.x + pcard::RIGHT_COL;
         panel.text(TextRun::new(
-            crate::ui::centered(card, member.name, theme::BODY, card.min.y + pcard::NAME_TOP),
+            Vec2::new(col, card.min.y + pcard::NAME_TOP),
             member.name,
             theme::BODY,
             if lit { theme::INK } else { theme::FAINT },
@@ -175,24 +195,73 @@ pub fn strip(flow: &Flow, social: &Social, preview: &Preview) -> Panel {
             panel.icon(stat.icon);
             panel.text(stat.value);
         }
-        // The edges, with the heart beside them.
-        let edges = regard_line(social, member.entity);
+        // The source: why the flame burns (DESIGN §3). One row, authored to
+        // fit the header column.
+        panel.text(TextRun::new(
+            Vec2::new(col, card.min.y + pcard::SOURCE_TOP),
+            member.source,
+            theme::SMALL,
+            if lit { theme::DIM } else { theme::FAINT },
+        ));
+
+        // --- trait chips: icon + name, one row per trait (UI.md §13) --------
+        let mut y = card.min.y + pcard::TRAITS_TOP;
+        for trait_id in &member.traits {
+            let def = trait_id.def();
+            panel.icon(
+                IconRun::new(Vec2::new(card.min.x + 6.0, y), def.icon, 2.0).tinted(if lit {
+                    Color::WHITE
+                } else {
+                    dim_icon
+                }),
+            );
+            panel.text(TextRun::new(
+                Vec2::new(card.min.x + 26.0, y + 2.0),
+                def.name,
+                theme::SMALL,
+                if lit { theme::INK } else { theme::FAINT },
+            ));
+            y += pcard::TRAIT_PITCH;
+        }
+        y += 4.0;
+
+        // --- marks: the eye and what everyone knows -------------------------
         panel.icon(
-            IconRun::new(
-                Vec2::new(card.min.x + 6.0, card.min.y + pcard::REGARD_TOP),
-                Art::Heart,
-                2.0,
-            )
-            .tinted(if lit {
+            IconRun::new(Vec2::new(card.min.x + 6.0, y), Art::Eye, 2.0).tinted(if lit {
                 Color::WHITE
             } else {
-                Color::rgb(0.42, 0.41, 0.48)
+                dim_icon
             }),
         );
-        let mut y = card.min.y + pcard::REGARD_TOP + 1.0;
-        for row in wrap(&edges, columns(card.size().x - 32.0, theme::SMALL)).lines() {
+        let marked = !member.marks.is_empty();
+        for row in wrap(&marks_line(member), line_columns()).lines() {
             panel.text(TextRun::new(
-                Vec2::new(card.min.x + 26.0, y),
+                Vec2::new(card.min.x + 26.0, y + 2.0),
+                row,
+                theme::SMALL,
+                if !lit {
+                    theme::FAINT
+                } else if marked {
+                    theme::MARK
+                } else {
+                    theme::FAINT
+                },
+            ));
+            y += theme::SMALL + 2.0;
+        }
+        y += 4.0;
+
+        // --- the edges, with the heart beside them ---------------------------
+        panel.icon(
+            IconRun::new(Vec2::new(card.min.x + 6.0, y), Art::Heart, 2.0).tinted(if lit {
+                Color::WHITE
+            } else {
+                dim_icon
+            }),
+        );
+        for row in wrap(&regard_line(social, member.entity), line_columns()).lines() {
+            panel.text(TextRun::new(
+                Vec2::new(card.min.x + 26.0, y + 2.0),
                 row,
                 theme::SMALL,
                 if lit { theme::REGARD } else { theme::FAINT },
@@ -200,6 +269,7 @@ pub fn strip(flow: &Flow, social: &Social, preview: &Preview) -> Panel {
             y += theme::SMALL + 2.0;
         }
 
+        // --- the verdict and its reason, pinned at the card's foot -----------
         let line = status_line(member, preview, in_party);
         let color = status_color(member, preview, in_party);
         let mut y = card.min.y + pcard::STATUS_TOP;
@@ -225,7 +295,7 @@ pub fn status_color(member: &Member, preview: &Preview, in_party: bool) -> Color
     if in_party {
         // A member who has gone negative since they joined - a bonded partner
         // was removed - reads in ember and stays in the party. The door does
-        // not ask twice (DESIGN §3.2), and the number saying so is on the card.
+        // not ask twice (DESIGN §6), and the line saying so is on the card.
         return match preview
             .entries
             .iter()

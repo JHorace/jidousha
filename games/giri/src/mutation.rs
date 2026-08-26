@@ -85,16 +85,22 @@ pub fn mutation_round(checks: &mut Checks) -> String {
 /// What each constant is moved to, and why that value has to matter.
 fn perturbation(field: Field) -> i32 {
     match field {
-        // No gap costs anything: Tim stops refusing Bob.
-        Field::KInf => 0,
         // Nobody is ever desperate enough: Bob does not kill Steve.
         Field::KKill => 99,
-        // Everybody is loyal enough: the same killing does not happen.
+        // Nobody is ever loyal enough: the report's own boundary moves.
         Field::KLoyal => 99,
+        // The reluctant band vanishes: Tim's price is met without a flinch.
+        Field::ReluctantBelow => 0,
+        // A dark mark repels nobody: Tim stops refusing Bob.
+        Field::MarkDark => 0,
+        // A light mark pulls nobody.
+        Field::MarkLight => 0,
+        // The pot pulls nobody: Steve's willingness loses its share term.
+        Field::PotPull => 0,
+        // Reliability is unreachable: Bob's second clean job writes nothing.
+        Field::ReliableAfter => 99,
         // A clean job leaves no bond behind.
         Field::BondGain => 0,
-        // A witnessed kill stays private.
-        Field::InfamyPerKill => 0,
         // Witnesses hold nothing against the killer.
         Field::WitnessGrudge => 0,
         // Being bonded to the victim adds nothing.

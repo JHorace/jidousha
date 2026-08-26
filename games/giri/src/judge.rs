@@ -1,5 +1,6 @@
-//! Judging one played beat: its `Expect` list against the world, its door
-//! probes against the door rule, and its screens against the frame.
+//! Judging one played beat's world: its `Expect` list, its door probes, and
+//! the reasons behind every rendered verdict. The screens-versus-frame half
+//! lives in `frames.rs`.
 //!
 //! The halves are separate because they fail for different reasons and are run
 //! at different times: the mutation round judges the world only, because a
@@ -7,15 +8,15 @@
 //! are a thousand frames to allocate (FINDINGS G-004).
 
 use jidousha::prelude::*;
-use jidousha::testing::{BackendTextureId, FrameRecord};
 
 use crate::beats::{BeatSpec, CHAIN, Expect};
-use crate::checks::{Checks, near};
+use crate::checks::Checks;
 use crate::constants::Tuning;
 use crate::flow::Stage;
-use crate::model::{Social, willingness};
+use crate::model::Social;
 use crate::verify::BeatRun;
-use crate::{layout, party, screens, theme, ui};
+use crate::willing::willingness;
+use crate::{layout, party};
 
 /// Resolve a beat's authored names against the world it produced.
 fn entities(social: &Social, names: &[&str]) -> Option<Vec<Entity>> {
@@ -32,14 +33,25 @@ fn entities(social: &Social, names: &[&str]) -> Option<Vec<Entity>> {
 /// own answer back.
 pub fn judge_world(checks: &mut Checks, spec: &BeatSpec, run: &BeatRun, tuning: &Tuning) {
     let beat = run.index + 1;
+    // The beat's own job is part of the question (DESIGN §6: willingness
+    // takes the quest); every assembly-moment claim is asked against it.
+    let job = spec.dungeons.first();
+    let ask = |who: &str, party: &[&str]| {
+        let who_entity = run.at_assembly.by_name(who).map(|member| member.entity)?;
+        let party = entities(&run.at_assembly, party)?;
+        Some(willingness(
+            &run.at_assembly,
+            tuning,
+            who_entity,
+            &party,
+            job,
+        ))
+    };
     for expect in spec.expect {
         match *expect {
             Expect::Refuses { who, party } | Expect::Joins { who, party } => {
                 let wants_join = matches!(expect, Expect::Joins { .. });
-                let (Some(who_entity), Some(party)) = (
-                    run.at_assembly.by_name(who).map(|member| member.entity),
-                    entities(&run.at_assembly, party),
-                ) else {
+                let Some(answer) = ask(who, party) else {
                     checks.require(
                         false,
                         "a beat names somebody its roster does not have",
@@ -47,7 +59,6 @@ pub fn judge_world(checks: &mut Checks, spec: &BeatSpec, run: &BeatRun, tuning: 
                     );
                     continue;
                 };
-                let answer = willingness(&run.at_assembly, tuning, who_entity, &party);
                 checks.require(
                     answer.joins() == wants_join,
                     if wants_join {
@@ -55,14 +66,11 @@ pub fn judge_world(checks: &mut Checks, spec: &BeatSpec, run: &BeatRun, tuning: 
                     } else {
                         "somebody the beat says refuses came anyway"
                     },
-                    format!("beat {beat}: {who} - {}", answer.arithmetic()),
+                    format!("beat {beat}: {who} - {}", answer.breakdown()),
                 );
             }
             Expect::WillingnessIs { who, party, total } => {
-                let (Some(who_entity), Some(party)) = (
-                    run.at_assembly.by_name(who).map(|member| member.entity),
-                    entities(&run.at_assembly, party),
-                ) else {
+                let Some(answer) = ask(who, party) else {
                     checks.require(
                         false,
                         "a beat names somebody its roster does not have",
@@ -70,13 +78,64 @@ pub fn judge_world(checks: &mut Checks, spec: &BeatSpec, run: &BeatRun, tuning: 
                     );
                     continue;
                 };
-                let answer = willingness(&run.at_assembly, tuning, who_entity, &party);
                 checks.require(
-                    answer.total == total,
+                    answer.margin == total,
                     "a willingness the beat states exactly came out somewhere else",
                     format!(
                         "beat {beat}: {who} - {} , and the beat says {total}",
-                        answer.arithmetic()
+                        answer.breakdown()
+                    ),
+                );
+            }
+            Expect::VerdictIs {
+                who,
+                party,
+                verdict,
+            } => {
+                let Some(answer) = ask(who, party) else {
+                    checks.require(
+                        false,
+                        "a beat names somebody its roster does not have",
+                        format!("beat {beat} expects {who} and a party of {party:?}"),
+                    );
+                    continue;
+                };
+                checks.require(
+                    answer.verdict == verdict,
+                    "a verdict the beat states exactly came out somewhere else",
+                    format!(
+                        "beat {beat}: {who}'s verdict is {:?} at {} and the beat says \
+                         {verdict:?}",
+                        answer.verdict,
+                        answer.breakdown()
+                    ),
+                );
+            }
+            Expect::TopReason {
+                who,
+                party,
+                fragment,
+            } => {
+                let Some(answer) = ask(who, party) else {
+                    checks.require(
+                        false,
+                        "a beat names somebody its roster does not have",
+                        format!("beat {beat} expects {who} and a party of {party:?}"),
+                    );
+                    continue;
+                };
+                checks.require(
+                    answer.top_reason().contains(fragment),
+                    "the leading reason is not the one the beat is about",
+                    format!(
+                        "beat {beat}: {who}'s top reason is {:?} and the beat wants \
+                         {fragment:?} in it (all: {:?})",
+                        answer.top_reason(),
+                        answer
+                            .reasons
+                            .iter()
+                            .map(crate::willing::Reason::text)
+                            .collect::<Vec<_>>()
                     ),
                 );
             }
@@ -118,17 +177,52 @@ pub fn judge_world(checks: &mut Checks, spec: &BeatSpec, run: &BeatRun, tuning: 
                 );
                 shows_stat(checks, run, who, 0, value, "desperation");
             }
-            Expect::Infamy { who, value } => {
+            Expect::HasMark { who, mark } | Expect::LacksMark { who, mark } => {
+                let wants = matches!(expect, Expect::HasMark { .. });
                 let member = run.after.by_name(who);
+                let worn = member.is_some_and(|member| member.marks.contains(&mark));
                 checks.require(
-                    member.is_some_and(|member| member.infamy == value),
-                    "an infamy ended somewhere the beat does not expect",
+                    member.is_some() && worn == wants,
+                    if wants {
+                        "a mark the beat writes is not on the sheet"
+                    } else {
+                        "a mark the beat forbids was written anyway"
+                    },
                     format!(
-                        "beat {beat}: {who} ends at {}, and the beat says {value}",
-                        member.map_or(-1, |member| member.infamy)
+                        "beat {beat}: {who} ends wearing {:?}, and the beat says {mark:?} is \
+                         {}on it",
+                        member
+                            .map(|member| member.marks.clone())
+                            .unwrap_or_default(),
+                        if wants { "" } else { "not " },
                     ),
                 );
-                shows_stat(checks, run, who, 1, value, "infamy");
+                // And the sheet says so, which is invariant 2: what everyone
+                // knows is a line on the card.
+                if let Some(member) = member {
+                    let line = party::marks_line(member);
+                    checks.require(
+                        line.contains(mark.name()) == wants,
+                        "the party card's mark line does not carry what the sheet knows",
+                        format!(
+                            "beat {beat}: {who}'s mark line is {line:?} and {:?} should \
+                             {}be in it",
+                            mark.name(),
+                            if wants { "" } else { "not " },
+                        ),
+                    );
+                }
+            }
+            Expect::CleanJobs { who, value } => {
+                let member = run.after.by_name(who);
+                checks.require(
+                    member.is_some_and(|member| member.clean_jobs == value),
+                    "a clean-job count ended somewhere the beat does not expect",
+                    format!(
+                        "beat {beat}: {who} ends at {}, and the beat says {value}",
+                        member.map_or(-1, |member| member.clean_jobs)
+                    ),
+                );
             }
             Expect::Wealth { who, value } => {
                 let member = run.after.by_name(who);
@@ -140,7 +234,7 @@ pub fn judge_world(checks: &mut Checks, spec: &BeatSpec, run: &BeatRun, tuning: 
                         member.map_or(-1, |member| member.wealth)
                     ),
                 );
-                shows_stat(checks, run, who, 2, value, "wealth");
+                shows_stat(checks, run, who, 1, value, "wealth");
             }
             Expect::Regard { from, to, value } => {
                 let (Some(from_entity), Some(to_entity)) = (
@@ -188,6 +282,7 @@ pub fn judge_world(checks: &mut Checks, spec: &BeatSpec, run: &BeatRun, tuning: 
     }
 
     judge_door(checks, run);
+    judge_reasons(checks, run);
 
     // The party the send verb saw is in roster order, which is the order
     // betrayal is evaluated in - so a party left in click order is a party
@@ -243,7 +338,59 @@ pub fn judge_world(checks: &mut Checks, spec: &BeatSpec, run: &BeatRun, tuning: 
     );
 }
 
-/// **The door rule, as the player meets it** (DESIGN §3.2).
+/// **Every rendered verdict carries at least one reason** (DESIGN §14).
+///
+/// Asked of the staged board's `Preview` — the same resource the strip draws
+/// from, and `judge_frames` proves the strip's rows reach the frame glyph for
+/// glyph — so a verdict whose reason vanished would fail here before anybody
+/// noticed a silent card. Both halves: the answer has reasons, and the status
+/// line the card renders carries the leading one as words.
+fn judge_reasons(checks: &mut Checks, run: &BeatRun) {
+    let beat = run.index + 1;
+    for entry in &run.ready.entries {
+        checks.require(
+            !entry.reasons.is_empty(),
+            "a member's verdict rendered with no reason behind it",
+            format!(
+                "beat {beat}: {}'s answer is {}",
+                entry.name,
+                entry.breakdown()
+            ),
+        );
+        if let Some(member) = run.at_assembly.member(entry.who) {
+            let line = party::status_line(member, &run.ready, true);
+            checks.require(
+                line.contains(&entry.top_reason()),
+                "a member's status line does not carry their leading reason",
+                format!(
+                    "beat {beat}: {}'s card says {line:?} and the reason is {:?}",
+                    entry.name,
+                    entry.top_reason()
+                ),
+            );
+        }
+    }
+    for (who, door) in &run.ready.doors {
+        let answer = match door {
+            crate::willing::Admission::Admitted(entry)
+            | crate::willing::Admission::Refuses(entry) => entry,
+            crate::willing::Admission::Blocked { willingness, .. } => willingness,
+        };
+        let line = door.status_line();
+        checks.require(
+            !answer.reasons.is_empty() && line.contains(&answer.top_reason()),
+            "a door answer rendered without its leading reason",
+            format!(
+                "beat {beat}: {}'s status line is {line:?} and the answer behind it says \
+                 {:?}",
+                run.at_assembly.name(*who),
+                answer.top_reason()
+            ),
+        );
+    }
+}
+
+/// **The door rule, as the player meets it** (DESIGN §6).
 ///
 /// Both probes are the same two people in the two possible orders, so what is
 /// checked is the rule's order-symmetry rather than one outcome twice: with the
@@ -345,203 +492,5 @@ fn describe(run: &BeatRun, who: &str) -> String {
                 .killed_by
                 .map_or("?", |killer| run.after.name(killer))
         ),
-    }
-}
-
-/// How many of a row's glyphs were drawn, counted inside the row's own box.
-///
-/// `ctx.text` puts the top-left of the first character's *cell* at `at` and
-/// advances along the row, so a run's glyphs share `bounds().min.y` and span
-/// exactly `width_of(text)`. Counting *inside that span* rather than "everything
-/// to the right of it" is what lets two runs share a row - the status bar puts
-/// four on one - without either counting the other's characters.
-pub fn glyph_run(frame: &FrameRecord, font: BackendTextureId, run: &ui::TextRun) -> usize {
-    let box_ = run.bounds();
-    frame
-        .quads()
-        .iter()
-        .filter(|quad| {
-            quad.texture == font
-                && near(quad.bounds().min.y, box_.min.y)
-                // Half a world unit of slack on each side: a row's own glyphs
-                // span exactly `width_of(text)` in exact arithmetic, and
-                // whether the last one lands a hair over is a rounding question
-                // no assertion should turn on. One glyph is nine units wide, so
-                // this cannot swallow a neighbouring row's first character.
-                && quad.bounds().min.x >= box_.min.x - 0.5
-                && quad.bounds().max.x <= box_.max.x + 0.5
-        })
-        .count()
-}
-
-/// Judge what a beat's screens drew.
-///
-/// Every screen is asked the same question — is every row of what this screen
-/// *says* on the frame, all of it — against `screens::content`, which is the
-/// same function the draw system renders. One layout, two readers.
-pub fn judge_frames(checks: &mut Checks, run: &BeatRun) {
-    let beat = run.index + 1;
-    for (mode, frame, flow, social, preview) in [
-        (
-            "the board with the quest taken",
-            &run.board_frame,
-            &run.board_flow,
-            &run.at_assembly,
-            &run.board_preview,
-        ),
-        (
-            "the board with the party staged",
-            &run.ready_frame,
-            &run.ready_flow,
-            &run.at_assembly,
-            &run.ready,
-        ),
-        (
-            "the resolution takeover",
-            &run.report_frame,
-            &run.report_flow,
-            &run.after,
-            &run.report_preview,
-        ),
-    ] {
-        let Some(frame) = frame else { continue };
-        let panel = screens::content(flow, social, preview, &run.tuning);
-        for text_run in &panel.runs {
-            let drawn = glyph_run(frame, run.font, text_run);
-            checks.require(
-                drawn == text_run.text.chars().count(),
-                "a row of a screen is not drawn as the string it is",
-                format!(
-                    "beat {beat}, {mode}: {:?} at ({:.1}, {:.1}) is {} characters and {drawn} \
-                     glyphs landed in its box",
-                    text_run.text,
-                    text_run.at.x,
-                    text_run.at.y,
-                    text_run.text.chars().count(),
-                ),
-            );
-        }
-        for icon in &panel.icons {
-            let covered = frame.quads().iter().any(|quad| {
-                quad.texture != run.font
-                    && near(quad.bounds().min.x, icon.at.x)
-                    && near(quad.bounds().min.y, icon.at.y)
-            });
-            checks.require(
-                covered,
-                "an icon a screen says it draws is not on the frame",
-                format!(
-                    "beat {beat}, {mode}: {:?} at ({:.1}, {:.1}) has no quad",
-                    icon.art, icon.at.x, icon.at.y
-                ),
-            );
-        }
-    }
-
-    // --- a card's edge says whether its character is in (UI.md §2) --------
-    //
-    // Two channels for one fact: the status line says "in" and the border says
-    // it again in teal. Asserted because a border is the one signifier no
-    // string check can see, and because the colour is what a player reads at a
-    // glance while the arithmetic is what they read on purpose.
-    if let Some(frame) = &run.ready_frame {
-        let quads = frame.quads();
-        for member in &run.at_assembly.members {
-            let card = layout::party_card(member.roster_index);
-            let edge = quads
-                .iter()
-                .find(|quad| {
-                    quad.texture != run.font
-                        && near(quad.bounds().min.x, card.min.x)
-                        && near(quad.bounds().min.y, card.min.y)
-                        && quad.bounds().size().y < 4.0
-                })
-                .map(|quad| quad.tint);
-            let inside = run.ready_flow.party.contains(&member.entity);
-            let wanted = if inside {
-                theme::REGARD
-            } else if member.alive {
-                theme::BORDER
-            } else {
-                theme::RULE
-            };
-            checks.require(
-                edge == Some(wanted),
-                "a party card's edge does not say whether its character is in",
-                format!(
-                    "beat {beat}: {} is {}in the party and the card's top edge is {edge:?}, \
-                     wanted {wanted:?}",
-                    member.name,
-                    if inside { "" } else { "not " }
-                ),
-            );
-        }
-    }
-
-    // --- the send verb exists only while a quest is taken (UI.md §3) -------
-    if let Some(frame) = &run.board_frame {
-        let button = layout::send_button();
-        // *Either* face colour: a button that exists and is disabled is the
-        // state UI.md §3 asks for once a quest is taken and the party is still
-        // short, and looking only for the live gold would call that absent.
-        let drawn = frame.quads().iter().any(|quad| {
-            quad.texture != run.font
-                && (quad.tint == theme::GOLD || quad.tint == theme::BUTTON_DEAD)
-                && near(quad.bounds().min.x, button.min.x)
-                && near(quad.bounds().min.y, button.min.y)
-        });
-        checks.require(
-            drawn == run.board_flow.taken.is_some(),
-            "the send verb's presence does not follow whether a quest is taken",
-            format!(
-                "beat {beat}: a quest is {}taken and the button face is {}drawn; UI.md §3 says \
-                 it exists only while one is",
-                if run.board_flow.taken.is_some() {
-                    ""
-                } else {
-                    "not "
-                },
-                if drawn { "" } else { "not " },
-            ),
-        );
-        // And it is disabled with a stated reason rather than silently dead.
-        checks.require(
-            run.board_preview.can_send || !run.board_preview.blocked.is_empty(),
-            "the send verb is disabled without saying why",
-            format!(
-                "beat {beat}: the gate cannot send and its stated reason is {:?}",
-                run.board_preview.blocked
-            ),
-        );
-    }
-
-    // --- the takeover replaces the board entirely (UI.md §3) ---------------
-    if let Some(frame) = &run.report_frame {
-        let middle = layout::design().center();
-        let front = frame.covering(middle).into_iter().next();
-        checks.require(
-            front.is_some_and(|quad| {
-                quad.tint == theme::SCRIM || quad.texture == run.font || quad.tint == theme::BAR
-            }),
-            "the resolution screen does not replace the board it took over",
-            format!(
-                "beat {beat}: the front-most quad at the middle of the screen is {:?}; the \
-                 takeover is a full-screen replacement, not a panel over a board",
-                front.map(|quad| quad.tint)
-            ),
-        );
-        let cards = frame
-            .quads()
-            .iter()
-            .filter(|quad| quad.tint == theme::BAR)
-            .count();
-        checks.require(
-            cards >= run.report_flow.events.len(),
-            "the resolution screen drew fewer event cards than the run produced",
-            format!(
-                "beat {beat}: {} events and {cards} card fills",
-                run.report_flow.events.len()
-            ),
-        );
     }
 }

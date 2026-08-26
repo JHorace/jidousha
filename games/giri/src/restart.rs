@@ -413,8 +413,8 @@ fn replay_identity(checks: &mut Checks, run: &DrawerRun) {
     );
 }
 
-/// A roster as the numbers on its sheets, for comparing two runs.
-fn sheet(social: &Social) -> Vec<(&'static str, bool, i32, i32, i32)> {
+/// A roster as its sheets read, for comparing two runs.
+fn sheet(social: &Social) -> Vec<(&'static str, bool, i32, i32, i32, String)> {
     social
         .members
         .iter()
@@ -423,8 +423,9 @@ fn sheet(social: &Social) -> Vec<(&'static str, bool, i32, i32, i32)> {
                 member.name,
                 member.alive,
                 member.desperation,
-                member.infamy,
                 member.wealth,
+                member.clean_jobs,
+                crate::party::marks_line(member),
             )
         })
         .collect()

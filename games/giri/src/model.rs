@@ -1,26 +1,25 @@
-//! The social model: what a character is, what regard is, and the one decision
-//! function that fires at three moments (DESIGN.md §3).
+//! The social state: what a character is, and the one snapshot every decision
+//! reads (DESIGN.md §3).
 //!
-//! Characters are entities and their scalars are components; **regard edges are
-//! entities too** — `RegardEdge { from, to, value }` — which is the ECS answer
-//! for a sparse directed relation (DESIGN §9). Every query over them is
-//! read-pass then write-pass: collect what is needed into a `Social` snapshot,
-//! drop the query, then apply.
+//! Characters are entities and their state is components; **regard edges are
+//! entities too** — `RegardEdge { from, to, value }` — the ECS answer for a
+//! sparse directed relation (DESIGN §13). Every query over them is read-pass
+//! then write-pass: collect what is needed into a `Social` snapshot, drop the
+//! query, then apply.
 //!
-//! Everything below the snapshot is a **free function of plain data**. Nothing
-//! here touches a `World`, which is what lets the UI's willingness preview and
-//! the resolution call the same `willingness` — the preview cannot disagree
-//! with the simulation because there is only one of it — and what lets
-//! `--verify` ask the contracts directly instead of hoping a played beat
-//! reaches them.
+//! v2 splits the vocabulary from the state: `traits.rs` owns what a trait or a
+//! mark *is*, `willing.rs` owns the decision function that reads them, and
+//! this file owns what a character *has* — desperation and its source, wealth,
+//! traits, marks, the clean-job count, and the edges. The v1 public scalar is
+//! gone (DESIGN §5: marks replace it).
 //!
-//! No randomness anywhere. v1's outcome is a pure function of (beat state,
-//! player assignments, tuning constants); the engine's `Rng` resource exists
-//! and giri never reads it.
+//! No randomness anywhere. P1's outcome is a pure function of (beat state,
+//! player assignments, tuning constants); the engine's `Rng` exists and giri
+//! never reads it — seeds enter with P2, via the engine `Rng` only.
 
 use jidousha::prelude::*;
 
-use crate::constants::Tuning;
+use crate::traits::{MarkId, TraitId};
 
 /// A character, and where they sit in the beat's roster.
 ///
@@ -36,20 +35,40 @@ pub struct Character {
 }
 impl Component for Character {}
 
-/// Need. The willingness override and the betrayal motive.
+/// Need. The willingness opener and the betrayal motive.
 #[derive(Clone, Copy, Debug)]
 pub struct Desperation(pub i32);
 impl Component for Desperation {}
 
-/// Public knowledge: the global projection of witnessed acts.
+/// Why the need presses — bound at character generation (DESIGN §3).
+///
+/// Flavor-plus-data this phase: the goal machinery that makes a source
+/// mechanical is P3, and the sheet showing *why* two identical numbers are two
+/// different problems is what the field buys now.
 #[derive(Clone, Copy, Debug)]
-pub struct Infamy(pub i32);
-impl Component for Infamy {}
+pub struct Source(pub &'static str);
+impl Component for Source {}
 
 /// What profit accumulates into.
 #[derive(Clone, Copy, Debug)]
 pub struct Wealth(pub i32);
 impl Component for Wealth {}
+
+/// Who this character is: at most `TRAIT_CAP` ids from the vocabulary.
+#[derive(Clone, Debug, Default)]
+pub struct Traits(pub Vec<TraitId>);
+impl Component for Traits {}
+
+/// What everyone knows this character did (DESIGN §5). Plural, earned, hard
+/// to lose — no eraser exists until goals land (P3).
+#[derive(Clone, Debug, Default)]
+pub struct Marks(pub Vec<MarkId>);
+impl Component for Marks {}
+
+/// Clean jobs walked away from, counting toward the *reliable* mark.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CleanJobs(pub i32);
+impl Component for CleanJobs {}
 
 /// A character who was killed, and by whom.
 ///
@@ -79,7 +98,7 @@ pub struct RegardEdge {
 impl Component for RegardEdge {}
 
 /// One character, read out of the world.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct Member {
     /// The entity it was read from.
     pub entity: Entity,
@@ -89,10 +108,16 @@ pub struct Member {
     pub roster_index: usize,
     /// Need.
     pub desperation: i32,
-    /// Public reputation.
-    pub infamy: i32,
+    /// Why the need presses.
+    pub source: &'static str,
     /// Accumulated profit.
     pub wealth: i32,
+    /// Who they are.
+    pub traits: Vec<TraitId>,
+    /// What everyone knows.
+    pub marks: Vec<MarkId>,
+    /// Clean jobs, counting toward *reliable*.
+    pub clean_jobs: i32,
     /// Whether they are still alive.
     pub alive: bool,
     /// Who killed them, if they are not.
@@ -101,8 +126,8 @@ pub struct Member {
 
 /// The whole social state, read out of the world once.
 ///
-/// The read pass of the read-pass/write-pass pattern: every decision below
-/// takes one of these and no world at all.
+/// The read pass of the read-pass/write-pass pattern: every decision takes one
+/// of these and no world at all.
 #[derive(Clone, Debug, Default)]
 pub struct Social {
     /// Every character, in roster order.
@@ -120,56 +145,46 @@ impl Social {
     /// `world.view()`; a Draw system already holds one as `ctx.world`
     /// (ADR-0039).
     pub fn read(world: &WorldView<'_>) -> Self {
-        let rows: Vec<(Entity, Character, i32, i32, i32)> = world
-            .query::<(&Character, &Desperation, &Infamy, &Wealth)>()
-            .map(|(entity, character, desperation, infamy, wealth)| {
-                (entity, *character, desperation.0, infamy.0, wealth.0)
+        let mut members: Vec<Member> = world
+            .query::<(&Character, &Desperation, &Source, &Wealth)>()
+            .map(|(entity, character, desperation, source, wealth)| Member {
+                entity,
+                name: character.name,
+                roster_index: character.roster_index,
+                desperation: desperation.0,
+                source: source.0,
+                wealth: wealth.0,
+                traits: Vec::new(),
+                marks: Vec::new(),
+                clean_jobs: 0,
+                alive: true,
+                killed_by: None,
             })
             .collect();
-        let dead: Vec<(Entity, Entity)> = rows
-            .iter()
-            .filter_map(|(entity, ..)| {
-                world
-                    .find_component::<Dead>(*entity)
-                    .map(|dead| (*entity, dead.killed_by))
-            })
-            .collect();
-        let edges = world
-            .query::<&RegardEdge>()
-            .map(|(_, edge)| *edge)
-            .collect();
-        Self::assemble(rows, &dead, edges)
-    }
-
-    fn assemble(
-        rows: Vec<(Entity, Character, i32, i32, i32)>,
-        dead: &[(Entity, Entity)],
-        edges: Vec<RegardEdge>,
-    ) -> Self {
-        let mut members: Vec<Member> = rows
-            .into_iter()
-            .map(|(entity, character, desperation, infamy, wealth)| {
-                let killed_by = dead
-                    .iter()
-                    .find(|(who, _)| *who == entity)
-                    .map(|(_, killer)| *killer);
-                Member {
-                    entity,
-                    name: character.name,
-                    roster_index: character.roster_index,
-                    desperation,
-                    infamy,
-                    wealth,
-                    alive: killed_by.is_none(),
-                    killed_by,
-                }
-            })
-            .collect();
+        for member in &mut members {
+            if let Some(traits) = world.find_component::<Traits>(member.entity) {
+                member.traits = traits.0.clone();
+            }
+            if let Some(marks) = world.find_component::<Marks>(member.entity) {
+                member.marks = marks.0.clone();
+            }
+            if let Some(jobs) = world.find_component::<CleanJobs>(member.entity) {
+                member.clean_jobs = jobs.0;
+            }
+            if let Some(dead) = world.find_component::<Dead>(member.entity) {
+                member.alive = false;
+                member.killed_by = Some(dead.killed_by);
+            }
+        }
         // Query order is deterministic but not sorted, and betrayal is
         // evaluated in *roster* order, so the sort is load-bearing rather than
         // cosmetic (docs/api: rely on "the same run twice yields the same
         // order", never on "the first one out is the one I spawned first").
         members.sort_by_key(|member| member.roster_index);
+        let edges = world
+            .query::<&RegardEdge>()
+            .map(|(_, edge)| *edge)
+            .collect();
         Self { members, edges }
     }
 
@@ -188,7 +203,8 @@ impl Social {
         self.members.iter().find(|member| member.name == name)
     }
 
-    /// `regard(from -> to)`. Absent is zero.
+    /// `regard(from -> to)`. Absent is zero. Raw — the traits weigh it in
+    /// `willing.rs`, and the betrayal rule reads it unweighted, as v1 did.
     pub fn regard(&self, from: Entity, to: Entity) -> i32 {
         self.edges
             .iter()
@@ -201,9 +217,22 @@ impl Social {
         self.member(who).map_or(0, |member| member.desperation)
     }
 
-    /// Public reputation.
-    pub fn infamy(&self, who: Entity) -> i32 {
-        self.member(who).map_or(0, |member| member.infamy)
+    /// Who they are. Empty for an entity that is not a character.
+    pub fn traits(&self, who: Entity) -> Vec<TraitId> {
+        self.member(who)
+            .map_or_else(Vec::new, |member| member.traits.clone())
+    }
+
+    /// What everyone knows about them.
+    pub fn marks(&self, who: Entity) -> Vec<MarkId> {
+        self.member(who)
+            .map_or_else(Vec::new, |member| member.marks.clone())
+    }
+
+    /// Whether they wear this mark.
+    pub fn marked(&self, who: Entity, mark: MarkId) -> bool {
+        self.member(who)
+            .is_some_and(|member| member.marks.contains(&mark))
     }
 
     /// Everyone still alive, in roster order.
@@ -213,220 +242,6 @@ impl Social {
             .filter(|member| member.alive)
             .map(|member| member.entity)
             .collect()
-    }
-
-    /// `incompat(c, m) = K_inf * max(0, infamy(m) - infamy(c))`.
-    ///
-    /// What a stranger's *worse* reputation costs. A character with infamy of
-    /// their own has no gap to mind, which is the whole of why Alex joins Bob
-    /// and Tim does not.
-    pub fn incompat(&self, tuning: &Tuning, who: Entity, other: Entity) -> i32 {
-        tuning.k_inf * (self.infamy(other) - self.infamy(who)).max(0)
-    }
-}
-
-/// One partymate's contribution to a willingness sum.
-#[derive(Clone, Copy, Debug)]
-pub struct MemberTerm {
-    /// Who the term is about.
-    pub member: Entity,
-    /// `regard(c -> m)`.
-    pub regard: i32,
-    /// `incompat(c, m)`, subtracted.
-    pub incompat: i32,
-}
-
-/// A character's answer to "will you join this party", with its arithmetic.
-///
-/// The arithmetic is carried rather than recomputed because the UI shows the
-/// refusal's terms and the simulation gates on the total: one call, one answer,
-/// and no way for the preview to say something the resolution disagrees with.
-#[derive(Clone, Debug)]
-pub struct Willingness {
-    /// Who was asked.
-    pub who: Entity,
-    /// Their name.
-    pub name: &'static str,
-    /// The desperation that opened the sum.
-    pub desperation: i32,
-    /// The sum of regard toward the rest of the party.
-    pub regard_total: i32,
-    /// The sum of incompatibility with the rest of the party.
-    pub incompat_total: i32,
-    /// `desperation + regard_total - incompat_total`.
-    pub total: i32,
-    /// One term per other party member, in roster order.
-    pub terms: Vec<MemberTerm>,
-}
-
-impl Willingness {
-    /// Joins iff willingness >= 0.
-    pub fn joins(&self) -> bool {
-        self.total >= 0
-    }
-
-    /// The sum as the UI and the report print it.
-    ///
-    /// Handed back as a string so a check can ask the game for the exact text
-    /// it draws: no assertion over drawn quads can see a wrong character.
-    ///
-    /// **The compact form is the only form** (UI.md §5, rung 1: "the status
-    /// line shows the raw sum"). A party card is fourteen columns wide, so a
-    /// spelled-out `des 5 + regard 2 - incompat 4 = 3` wraps to three lines and
-    /// a second, shorter spelling for the card would be two strings for one
-    /// number - which is how a preview starts disagreeing with a report. The
-    /// per-member breakdown lives in `terms`, and UI.md §5's rung 2 is where it
-    /// reaches the surface.
-    pub fn arithmetic(&self) -> String {
-        format!(
-            "{}{:+}-{} = {}",
-            self.desperation, self.regard_total, self.incompat_total, self.total
-        )
-    }
-}
-
-/// The answer at the door (DESIGN §3.2, the door rule).
-///
-/// Joining is gated **in both directions**: the newcomer has to consent, and
-/// no incumbent's willingness may go negative. The two failures are different
-/// things to a player - one is somebody saying no, the other is somebody
-/// already inside saying no on their behalf - so they are different variants
-/// rather than one bool, and each carries the arithmetic the UI names its
-/// reason with.
-#[derive(Clone, Debug)]
-pub enum Admission {
-    /// Both directions consent; the candidate is in.
-    Admitted(Willingness),
-    /// Rule 1: the newcomer will not come. Their sum.
-    Refuses(Willingness),
-    /// Rule 2: an incumbent would go negative and blocks the arrival.
-    Blocked {
-        /// Who is blocking.
-        blocker: Entity,
-        /// Their name, for the line that says so.
-        name: &'static str,
-        /// **The blocker's** sum, not the newcomer's - it is their objection.
-        willingness: Willingness,
-    },
-}
-
-impl Admission {
-    /// Whether the candidate may be added.
-    pub fn admitted(&self) -> bool {
-        matches!(self, Admission::Admitted(_))
-    }
-
-    /// The status line UI.md §4 states for a character who is not in the party.
-    ///
-    /// Exactly one of three, and the grammar is the specification's: a bounced
-    /// click surfaces this same string in the toast and in the log, so the
-    /// card, the toast and the log cannot describe one refusal three ways.
-    pub fn status_line(&self) -> String {
-        match self {
-            Admission::Admitted(entry) => format!("would join - {}", entry.arithmetic()),
-            Admission::Refuses(entry) => format!("refuses - {}", entry.arithmetic()),
-            Admission::Blocked {
-                name, willingness, ..
-            } => format!("{name} blocks - {}", willingness.arithmetic()),
-        }
-    }
-
-    /// The toast a bounced click raises, naming who and why.
-    pub fn bounce(&self, candidate: &str) -> Option<String> {
-        match self {
-            Admission::Admitted(_) => None,
-            Admission::Refuses(entry) => Some(format!(
-                "{candidate} refuses this company - {}",
-                entry.arithmetic()
-            )),
-            Admission::Blocked {
-                name, willingness, ..
-            } => Some(format!(
-                "{name} will not work with {candidate} - {}",
-                willingness.arithmetic()
-            )),
-        }
-    }
-}
-
-/// **The door** (DESIGN §3.2): may `candidate` be added to `party`?
-///
-/// ```text
-/// admit(c, P) iff willingness(c, P + {c}) >= 0
-///             and for every m in P: willingness(m, P + {c}) >= 0
-/// ```
-///
-/// Order-symmetric about who is at the door, which is the rule's whole point:
-/// Tim in the party blocks Bob by the same numbers that make Tim refuse when
-/// Bob is in the party first. Incumbents are walked in roster order so the
-/// *named* blocker is stable - two incumbents could both object, and a UI that
-/// named whichever the query happened to hand back first would name a different
-/// one on a different day.
-///
-/// **Consent is evaluated at the door only.** Nothing re-runs this when a
-/// member leaves, so removing a bonded partner can leave a member behind whose
-/// willingness is now negative. That is decided (owner, 2026-08-23): blocking
-/// is more legible than members walking out, and party state staying monotonic
-/// under the player's own actions is worth more than the drama.
-pub fn admit(social: &Social, tuning: &Tuning, candidate: Entity, party: &[Entity]) -> Admission {
-    let mut with = party.to_vec();
-    if !with.contains(&candidate) {
-        with.push(candidate);
-    }
-    let newcomer = willingness(social, tuning, candidate, &with);
-    if !newcomer.joins() {
-        return Admission::Refuses(newcomer);
-    }
-    for member in &social.members {
-        if !party.contains(&member.entity) || member.entity == candidate {
-            continue;
-        }
-        let incumbent = willingness(social, tuning, member.entity, &with);
-        if !incumbent.joins() {
-            return Admission::Blocked {
-                blocker: member.entity,
-                name: member.name,
-                willingness: incumbent,
-            };
-        }
-    }
-    Admission::Admitted(newcomer)
-}
-
-/// **Willingness** (DESIGN §3.2, first firing moment): character `who` asked to
-/// join `party`.
-///
-/// ```text
-/// willingness(c, P) = desperation(c) + sum regard(c->m) - sum incompat(c, m)
-/// joins iff willingness >= 0
-/// ```
-///
-/// The sum runs over the party *other than* `c`; both self-terms are zero
-/// either way (`regard(c->c)` is absent, and `incompat(c, c)` is `K_inf` times
-/// `max(0, 0)`), so this is DESIGN's formula and not a variant of it.
-pub fn willingness(social: &Social, tuning: &Tuning, who: Entity, party: &[Entity]) -> Willingness {
-    let mut terms = Vec::new();
-    for member in &social.members {
-        if member.entity == who || !party.contains(&member.entity) {
-            continue;
-        }
-        terms.push(MemberTerm {
-            member: member.entity,
-            regard: social.regard(who, member.entity),
-            incompat: social.incompat(tuning, who, member.entity),
-        });
-    }
-    let desperation = social.desperation(who);
-    let regard_total: i32 = terms.iter().map(|term| term.regard).sum();
-    let incompat_total: i32 = terms.iter().map(|term| term.incompat).sum();
-    Willingness {
-        who,
-        name: social.name(who),
-        desperation,
-        regard_total,
-        incompat_total,
-        total: desperation + regard_total - incompat_total,
-        terms,
     }
 }
 
@@ -458,7 +273,8 @@ pub struct Betrayal {
     pub regard: i32,
 }
 
-/// **Betrayal** (DESIGN §3.2, second firing moment), evaluated in roster order.
+/// **Betrayal** (DESIGN §6's retained v1 rule, deterministic for P1 and
+/// scheduled for replacement by the ladder in P2 — kept, not polished).
 ///
 /// ```text
 /// betray(c, t) iff desperation(c) >= K_kill
@@ -466,17 +282,13 @@ pub struct Betrayal {
 ///            and regard(c->t) < K_loyal
 /// ```
 ///
-/// **The order is the party's roster order, and it decides outcomes**, so it is
-/// stated here and tested directly in `verify.rs` rather than left to whatever
-/// a query hands back. `c` walks the party in roster order and, for each `c`,
-/// `t` walks it in roster order too; a kill takes effect immediately, so the
-/// share arithmetic every later evaluation sees is the one the earlier kills
-/// left. A character killed before their own turn never evaluates — which is
-/// the whole of why the order matters when two desperate characters are in one
-/// party.
+/// The order is the party's roster order at both levels, kills take effect
+/// immediately, and a character killed before their own turn never evaluates.
+/// The margin `willing.rs` computes is **not** an input here — strain becomes
+/// a betrayal input only when the ladder lands (P2).
 pub fn betrayals(
     social: &Social,
-    tuning: &Tuning,
+    tuning: &crate::constants::Tuning,
     party: &[Entity],
     pot: i32,
     cut: i32,
