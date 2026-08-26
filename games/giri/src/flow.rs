@@ -22,8 +22,10 @@ use crate::model::{
     Admission, Character, Desperation, Infamy, RegardEdge, Social, Wealth, Willingness, admit,
     willingness,
 };
+use crate::onset::{Card, Onset};
 use crate::resolve::{DriftLine, EventCard, apply, resolve};
-use crate::{layout, sprites};
+use crate::tuning::Tuner;
+use crate::{layout, onset, sprites};
 
 /// Which screen the player is on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -80,6 +82,11 @@ pub struct Flow {
     pub log_open: bool,
     /// The transient message, if one is up.
     pub toast: Option<Toast>,
+    /// The tuning drawer's state — pending constants and all (`tuning.rs`).
+    /// **UI state**: the active constants are the `Tuning` resource.
+    pub tuner: Tuner,
+    /// This beat's playtest counters (`onset.rs`).
+    pub onset: Onset,
 }
 impl Resource for Flow {}
 
@@ -99,6 +106,8 @@ impl Default for Flow {
             log: Vec::new(),
             log_open: false,
             toast: None,
+            tuner: Tuner::default(),
+            onset: Onset::default(),
         }
     }
 }
@@ -321,6 +330,14 @@ pub fn load_beat(world: &mut World, index: usize) {
     flow.resolved = None;
     flow.log_open = false;
     flow.toast = None;
+    // A restart is a fresh assembly to measure, whether it came from finishing
+    // the last beat or from an APPLY. The drawer's own state - open, pending,
+    // and a fault nobody has acknowledged - survives it: pending persists until
+    // applied or overwritten by a preset (UI.md §12), and `tuning::apply` puts
+    // the drawer back up after calling this.
+    flow.onset = Onset::default();
+    flow.tuner.open = false;
+    flow.tuner.hover = None;
 }
 
 /// The pointer, which is the whole of the player's input (DESIGN §7).
@@ -374,13 +391,37 @@ fn board_input(world: &mut World, at: Vec2, tick: u64, clicked: bool) {
         .spec()
         .map_or(0, |beat| beat.dungeons.len());
 
-    // Hover first, every tick, click or no click.
-    let peek = (0..offered.min(layout::QUEST_SLOTS)).find(|index| {
-        let card = layout::quest_card(*index);
-        card.contains(at) && Some(*index) != world.resource::<Flow>().taken
-    });
-    world.resource_mut::<Flow>().peek = peek;
-    if !clicked {
+    // The tuning drawer first, and every tick: it covers the board while it is
+    // open, so what it does not want is the only thing anything under it gets
+    // (`tuning::handle_pointer` says which).
+    let taken_by_tuner = crate::tuning::handle_pointer(world, at, tick, clicked);
+
+    // Hover next, every tick, click or no click.
+    let over_quest =
+        (0..offered.min(layout::QUEST_SLOTS)).find(|index| layout::quest_card(*index).contains(at));
+    let over_person = social
+        .members
+        .iter()
+        .position(|member| layout::party_card(member.roster_index).contains(at));
+    // What the pointer is on, for the playtest counters. Nothing is on a sheet
+    // while the drawer covers the board - the sheet is not visible to look at.
+    let on = if taken_by_tuner {
+        None
+    } else {
+        over_quest
+            .map(Card::Quest)
+            .or(over_person.map(Card::Person))
+    };
+    {
+        let taken = world.resource::<Flow>().taken;
+        let flow = world.resource_mut::<Flow>();
+        // A taken quest does not peek: the panel is locked to it (UI.md §3). It
+        // is still a card the pointer can be on, which is why the look counter
+        // above is not derived from the peek.
+        flow.peek = over_quest.filter(|index| !taken_by_tuner && Some(*index) != taken);
+        flow.onset.look(on);
+    }
+    if !clicked || taken_by_tuner {
         return;
     }
 
@@ -394,6 +435,9 @@ fn board_input(world: &mut World, at: Vec2, tick: u64, clicked: bool) {
     if layout::log_button().contains(at) {
         let flow = world.resource_mut::<Flow>();
         flow.log_open = true;
+        // The other drawer gives way, for the reason `tuning::handle_pointer`
+        // states: one board, one drawer.
+        flow.tuner.open = false;
         return;
     }
 
@@ -431,6 +475,9 @@ fn board_input(world: &mut World, at: Vec2, tick: u64, clicked: bool) {
             // memory is a signifier (UI.md §2).
             return;
         }
+        // Assembly starts at the first roster interaction, bounced or not: a
+        // click that the door refused is still the player having started.
+        world.resource_mut::<Flow>().onset.touch(tick);
         let party = world.resource::<Flow>().party.clone();
         if let Some(position) = party.iter().position(|entity| *entity == member.entity) {
             let flow = world.resource_mut::<Flow>();
@@ -460,12 +507,12 @@ fn board_input(world: &mut World, at: Vec2, tick: u64, clicked: bool) {
 
     // The send verb, which exists only while a quest is taken.
     if taken.is_some() && layout::send_button().contains(at) {
-        send(world, &social, &tuning);
+        send(world, &social, &tuning, tick);
     }
 }
 
 /// Run the taken quest, if the gate allows it, and go to the takeover.
-fn send(world: &mut World, social: &Social, tuning: &Tuning) {
+fn send(world: &mut World, social: &Social, tuning: &Tuning, tick: u64) {
     let (party, quest, index) = {
         let flow = world.resource::<Flow>();
         let Some(index) = flow.taken else {
@@ -480,6 +527,17 @@ fn send(world: &mut World, social: &Social, tuning: &Tuning) {
     if !ready.can_send {
         return;
     }
+    // The playtest counters, before the beat's state moves under them. Logged
+    // and printed, and that is the whole of where they go (`onset.rs`).
+    let fixed_dt = world.resource::<Time>().fixed_dt;
+    let measured = world.resource::<Flow>().onset.line(tick, fixed_dt);
+    if onset::playing() {
+        println!(
+            "[giri] beat {} - {measured}",
+            world.resource::<Flow>().beat + 1
+        );
+    }
+    world.resource_mut::<Flow>().note(measured);
     let resolution = resolve(social, tuning, &quest, &party);
     apply(world, &resolution);
     let survivors: Vec<&str> = resolution

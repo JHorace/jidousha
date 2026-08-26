@@ -185,6 +185,55 @@ visibility before any purchased asset is committed.
 forecast; the sizes now in the files are in §10's asset-slot amendment, which
 supersedes them.)*
 
+## 9a. The tuning drawer (design session, 2026-08-24)
+
+DESIGN §8a owns the *mechanism* — constants are simulation inputs, changes land
+at beat boundaries, everything is stamped. This section owns its presentation.
+
+The board's status bar carries a TUNE button (ghost style, beside the LOG
+handle). It toggles a drawer over the board — gold-bordered, to say "dev
+surface", the same pixel language as everything else.
+
+Contents, top to bottom:
+
+- **Preset row**: one button per committed preset. Presets are tier-1 of
+  DESIGN §8b — named constants sets — and live as *data* beside the constants
+  module, not as code; `DEFAULT` is the shipped values. Clicking a preset loads
+  it into the pending state.
+- **One stepper row per constant**, every constant in the module — name, −,
+  value, + (touch-friendly targets; the readability floors of §7 apply to the
+  drawer like any screen). Pointing at a row gives that constant's one-line
+  meaning. A pending value that differs from the active one renders gold.
+- **APPLY**, disabled when pending equals active. Applying commits the pending
+  set **at a beat boundary: the current beat restarts with the new values**
+  (DESIGN §8a's determinism resolution), with a toast saying so and a log line
+  recording the applied stamp.
+- **A note** stating the beat-restart semantics and that every recording and
+  verify report is stamped with the constants in effect.
+- **The stamp line**: the active constants, compact, always visible while the
+  drawer is open.
+
+Rules: the drawer edits a *pending* copy — nothing changes mid-beat, ever; the
+active constants are the ones stamped; closing the drawer without applying
+discards nothing (pending persists until applied or overwritten by a preset).
+The drawer is reachable on every platform the game runs on — no query params, no
+flags; giri is a prototype and its tuning surface is part of the product
+(invariant 2's spirit: the machinery is inspectable).
+
+**Shareable constants (web)**: the page accepts a `?constants=` query parameter
+(compact `k_inf:2,k_kill:6,...` form) applied at startup before the first beat
+and reflected in the drawer and the stamp. This makes a tuning configuration a
+URL — a playtest link that carries its weights, and a repro link when a
+playtester reports a feel. Unknown keys and out-of-range values are rejected
+loudly on the page (placeholder-policy spirit), not silently clamped.
+
+**Heuristic-onset instrumentation** (the DESIGN §11 open question's data source):
+the run log gains, per beat, the assembly duration (first roster interaction →
+SEND) and the count of sheet-inspection interactions. Local and printable; no
+telemetry, nothing leaves the machine. The tuning drawer is the natural neighbour
+because both serve playtesting, but the instrumentation records regardless of
+whether the drawer was ever opened.
+
 ## 10. Amendments from the implementing session (2026-08-23)
 
 Sections 1–9 above are the design session's document, verbatim. Everything
@@ -280,3 +329,57 @@ no code changed to receive it beyond the sizes below.
   in any of the owner's seven packs, so infamy keeps its generated violet icon
   rather than taking a substitute that would have meant editing §2. A stable
   signifier is not something an import gets to change.
+
+## 12. Amendments from the tuning session (2026-08-24)
+
+§9a is the design session's amendment, merged above. Everything below is a
+correction building it forced, recorded here rather than left in a pull request
+nobody reads twice.
+
+- **§9a's drawer is the log drawer's rectangle, not the info column.** The
+  amendment puts it over the info-panel column, which is 296x276. Ten constants
+  at §7's 32x32 target floor is 320 reference pixels of steppers *alone*, before
+  the preset row, the APPLY verb, the note and the stamp — the column fits six
+  constants and nothing else. The drawer is therefore the shape the log drawer
+  already is (the board's own width, from the status bar to the party strip),
+  with three columns of stepper rows, and the gold border is what says which
+  drawer it is. Where a mechanical floor and a placement meet, the floor wins;
+  the pixel language did not have to change to obey it, because a drawer over
+  the board was already in it.
+- **The TUNE handle sits beside the LOG handle**, not beside the gold counter.
+  Same reason §10 moved the log handle: the status bar is where this game's
+  secondary, always-available controls live, and two drawer handles that are the
+  same kind of control belong together.
+- **Two drawers, one board.** Opening either closes the other. Both cover the
+  same rectangle, and a click landing in both is a click that has to choose.
+- **The drawer is opaque where the log drawer is a scrim.** At the scrim's alpha
+  the board reads straight through twenty rows of small type. The mockup's own
+  drawer is opaque panel colour for the same reason.
+- **Hover text is a hint row, not a tooltip.** §9a asks for hover text on each
+  constant and §2 asks for it on each stat icon; the engine draws quads and a
+  sprite font and has no tooltip. The drawer's answer is one row above the note:
+  point at a stepper row and it says what that constant does. The row has three
+  other tenants in priority order — a refused `?constants=`, the sentence the
+  last APPLY raised (the board's own toast is behind the drawer and unreadable
+  while it is open), then the meaning, then how to get one.
+- **A link that carries constants opens the drawer on them**, accepted as well
+  as refused. §9a asks only that a refusal be loud, but an accepted link has the
+  same problem in the other direction: a playtest link whose weights live only in
+  the URL is a link nobody checked. One click closes it.
+- **The stepper range is 0 to 12**, and it is the drawer's and the link's rather
+  than the simulation's — the mutation round deliberately moves a constant to 99
+  and the floor to −99, which is what makes a perturbation a perturbation. A
+  stepper at either end stops; a `?constants=` past either end is refused by
+  name, never clamped.
+- **`DEFAULT` is `Tuning::SHIPPED` by reference**, and the mockup's own `DEFAULT`
+  column is not carried over: the mockup's set is the mockup's toy, the four
+  beats are authored against the module's, and a DEFAULT button that restored
+  different numbers would be a button that lies. `CUTTHROAT` and `GENTLE` are the
+  mockup's, term for term; the two constants the mockup has no term for
+  (`bonded_grudge`, `desperation_floor`) follow the shipped set's own relations,
+  with the reasoning in `src/presets.rs`.
+- **§8's capture set gains a seventh PNG and no eighth**: the drawer at the
+  reference surface, with a preset pending so the gold dirty state is in the
+  picture. It gets no narrow capture — it is a dev surface rather than a screen
+  mode, and its rows are the smallest type in the game, so a 600x540 copy would
+  be the one picture in the set nobody could read.

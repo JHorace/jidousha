@@ -27,7 +27,10 @@ use crate::constants::Tuning;
 use crate::flow::{Flow, Preview, Stage, StartAt};
 use crate::judge::{judge_frames, judge_world};
 use crate::model::Social;
-use crate::{capture, contracts, floors, layout, library, mutation, scaling, sprites};
+use crate::{
+    capture, contracts, floors, layout, library, links, mutation, onset, restart, scaling, sprites,
+    tuning,
+};
 
 /// The surface the reference run draws at: UI.md §6's reference resolution,
 /// doubled, which is the window the game opens.
@@ -191,6 +194,9 @@ pub struct Bounce {
 pub struct BeatRun {
     /// Which beat.
     pub index: usize,
+    /// The constants the run was played with — what every screen it recorded is
+    /// stamped with, and what a floor or a judge has to rebuild a screen from.
+    pub tuning: Tuning,
     /// The social state the beat was authored with, read after Startup.
     pub at_assembly: Social,
     /// The social state the dungeon left behind.
@@ -285,6 +291,7 @@ pub fn play_at(index: usize, tuning: Tuning, record: bool, viewport: PhysicalSiz
         .map_or(BackendTextureId(0), FrameRecorder::font_texture);
     let mut run = BeatRun {
         index,
+        tuning,
         at_assembly: Social::default(),
         after: Social::default(),
         refusal: None,
@@ -433,6 +440,7 @@ pub fn run() -> ExitCode {
         judge_world(&mut checks, spec, &played, &tuning);
         judge_frames(&mut checks, &played);
         floors::judge(&mut checks, &played);
+        onset::judge(&mut checks, &played);
         runs.push(played);
     }
     let Some(last) = runs.last() else {
@@ -462,7 +470,14 @@ pub fn run() -> ExitCode {
         .fold(f32::MAX, f32::min);
 
     floors::layout_floors(&mut checks);
+    floors::tuner_floors(&mut checks);
     let scaling_report = floors::scaling_contract(&mut checks);
+
+    // --- the tuning drawer: one scripted session, read four ways ----------
+    let drawer = restart::drawer_run(true);
+    restart::judge(&mut checks, &drawer);
+    floors::judge_tuner(&mut checks, &drawer);
+    links::link_contracts(&mut checks);
 
     // --- the schedule order, which nothing else can see -------------------
     let order = &last.schedule;
@@ -533,7 +548,7 @@ pub fn run() -> ExitCode {
     // --- and the round that says whether any of it is an instrument -------
     let mutations = mutation::mutation_round(&mut checks);
     // --- the pictures a person looks at -----------------------------------
-    let captured = capture::capture_screens(&mut checks, &runs, tuning);
+    let captured = capture::capture_screens(&mut checks, &runs, tuning, &drawer);
 
     let verdict = checks.verdict();
     println!(
@@ -563,6 +578,14 @@ pub fn run() -> ExitCode {
             },
         );
     }
+    println!(
+        "  tuning drawer: applied {} at beat {} - {} steppers, {} presets, stamp {}",
+        tuning::name_of(&drawer.applied).unwrap_or("a hand-stepped set"),
+        restart::BEAT + 1,
+        floors::tuner_targets().len() - crate::presets::PRESETS.len() - 1,
+        crate::presets::PRESETS.len(),
+        drawer.applied_active.stamp(),
+    );
     println!("  closest quad to the design edge: {clearance:.2} world units");
     println!("  scaling: {scaling_report}");
     println!("  mutation round: {mutations}");

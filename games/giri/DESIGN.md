@@ -385,7 +385,12 @@ is the test suite; the beats are the tuning constants' regression harness.
 Mutation round per practices §5.2 — break constants on purpose and check
 the beats notice. `tools/verify giri` needs no registration (ADR-0038).
 
-## 8a. Tuning and playtesting (DECIDED in intent, PROPOSED in mechanism)
+## 8a. Tuning and playtesting (DECIDED 2026-08-24)
+
+*The mechanism below was PROPOSED when this section was drafted and is DECIDED
+as of 2026-08-24: the beat-boundary rule, the stamping, and the live menu are
+the ones built. `UI.md` §9a owns their presentation and §12 records what
+building them corrected.*
 
 Balance questions (§3.2's constants, beat difficulty, the heuristic-onset
 point) are answered by playtesting, through two channels:
@@ -538,6 +543,45 @@ the changes are inline above and this is the index.
   are: every constant is one `Tuning` resource, and the set in effect is stamped
   into the UI and into every verify report. The menu bolts onto that, and the
   beat-boundary rule §8a settles is already how the game restarts a beat.
+
+## 13. Implementation notes — the tuning drawer (2026-08-24)
+
+§8a's menu is built (`src/tuning.rs`), and §8b's tier 1 with it
+(`src/presets.rs`). Nothing in this document changed except §8a's status; what
+follows is what building it settled that the document left open.
+
+- **A preset is a `Tuning` with a name on it, and that is the whole of tier 1.**
+  §8b says a tuning preset is "never a flag, never a binary"; the shape that
+  makes that true is a table the drawer *walks*, so a preset added is a row added
+  and no code anywhere names one. `DEFAULT` is `Tuning::SHIPPED` by reference,
+  because two spellings of the shipped set is one spelling that can go stale.
+- **The stepper rows are walked off the constants module too**, so a constant
+  added to `Tuning` grows a row in the drawer, a key in the compact stamp, and a
+  key `?constants=` accepts, without any of the three being edited. Beats 5–15
+  will add beats and may add constants; this is the half that does not need a
+  second visit when they do.
+- **"Apply at a beat boundary" is one action, not two.** Swapping the resource
+  and restarting the beat happen in one function and neither is reachable without
+  the other, because a swap without a restart is exactly the recording that lies
+  which §8a's resolution exists to prevent. `src/restart.rs` asserts the claim
+  the resolution rests on: a beat played out after an apply is byte-identical to
+  the same beat played from the start at those constants — and, so the comparison
+  is an instrument rather than a tautology, that the same beat resolves
+  *differently* at the shipped set.
+- **The pending set is UI state and the active set is simulation state**, and the
+  drawer reads the active one from the world's `Tuning` resource rather than a
+  copy beside it — so the numbers it stamps cannot drift from the numbers the
+  decision function reads. That is the one property the whole feature stands on.
+- **§11's instrumentation is two counters and a log line** (`src/onset.rs`):
+  assembly duration in ticks from the first roster interaction to SEND, and the
+  number of arrivals of the pointer on a sheet. Arrivals rather than time spent,
+  because every sheet is always on screen (invariant 2) and there is no inspect
+  verb to count. Ticks rather than a clock, per invariant 5.
+- **Not a deviation, recorded because it is a choice the document leaves open:**
+  the drawer's steppers and its `?constants=` links accept 0 to 12, which is a
+  bound on the *tuning surface* rather than on the type — the mutation round
+  still moves a constant to 99 and the floor to −99, and has to, because a
+  perturbation has to be one nobody would plausibly author.
 - **Not deviations, recorded because they are choices the document leaves open:**
   the chain loops back to beat 1 from the completion screen rather than ending
   (a playtest convenience); a beat's dungeons are a list with a selectable row

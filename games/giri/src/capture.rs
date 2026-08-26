@@ -87,7 +87,17 @@ fn chosen(runs: &[BeatRun]) -> Vec<(&'static str, usize)> {
 }
 
 /// Render every screen mode at both sizes and write them out.
-pub fn capture_screens(checks: &mut Checks, runs: &[BeatRun], tuning: Tuning) -> String {
+///
+/// The tuning drawer joins them as a seventh picture, at the reference surface
+/// only: it is a dev surface rather than a screen mode, its rows are the
+/// smallest type in the game, and a 600x540 capture of it would be the one
+/// picture in the set nobody could read (UI.md §12).
+pub fn capture_screens(
+    checks: &mut Checks,
+    runs: &[BeatRun],
+    tuning: Tuning,
+    drawer: &crate::restart::DrawerRun,
+) -> String {
     let mut wanted: Vec<Wanted> = Vec::new();
     for (mode, beat) in chosen(runs) {
         // Reference comes from the run already played; the narrow set is a
@@ -113,6 +123,17 @@ pub fn capture_screens(checks: &mut Checks, runs: &[BeatRun], tuning: Tuning) ->
                 font: narrow.font,
             });
         }
+    }
+
+    // Last, so the headline `capture:` line - the one `tools/verify` reads and
+    // reprints - stays the board a person recognises.
+    if let Some(frame) = &drawer.pending_frame {
+        wanted.push(Wanted {
+            name: "tuning-reference".to_owned(),
+            surface: verify::HEADLESS_VIEWPORT,
+            frame: frame.clone(),
+            font: drawer.font,
+        });
     }
 
     let Some(first) = wanted.first() else {
