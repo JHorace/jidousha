@@ -1,21 +1,21 @@
-//! The questions a played beat never asks, and the round that says whether any
-//! of the asking is an instrument.
+//! The questions a played beat never asks — the decision function and the
+//! resolution on rosters built for the case.
 //!
-//! Three groups:
+//! Three groups live across three files:
 //!
-//! - **the battery** - the decision function asked directly, on rosters built
-//!   for the case: the roster-order betrayal that decides who kills whom, the
-//!   surviving witness no tutorial beat produces, the two dungeon predicates no
-//!   tutorial beat uses, and the arithmetic at the boundaries of all three
-//!   clauses. A run only tests the states it reaches, and the margins a correct
-//!   game rests on are exactly the states it never reaches.
-//! - **the printable check** - the font covers space through `~` and draws
-//!   everything else as a box at exactly a letter's advance, so no assertion
-//!   over drawn quads can see a wrong character. The string is the only
-//!   instrument, and prose is the habit that produces an em dash.
-//! - **the mutation round** - every constant in `constants.rs` perturbed in
-//!   turn, demanding that some beat or contract notices. A beat that passes
-//!   under a mutated constant is a vacuous assertion.
+//! - **this file** — the split at its edges, the roster-order betrayal, the
+//!   surviving witness no tutorial beat produces, the mark the murder writes,
+//!   the dungeon predicates, and the send gate's states. A run only tests the
+//!   states it reaches, and the margins a correct game rests on are exactly
+//!   the states it never reaches.
+//! - **`judgment.rs`** — willingness v2's own battery: trait modifiers, the
+//!   trait x mark table (attraction included), verdict boundaries, and the
+//!   reasons vocabulary.
+//! - **`door.rs`** — the door rule, both directions and both failures.
+//!
+//! The mutation round runs all three with every constant perturbed in turn;
+//! a beat or contract that passes under a mutated constant is a vacuous
+//! assertion, and the round is the only thing that says which a check is.
 
 use jidousha::prelude::*;
 
@@ -24,24 +24,29 @@ use crate::checks::Checks;
 use crate::constants::Tuning;
 use crate::flow::assess;
 use crate::model::{
-    Character, Desperation, Infamy, RegardEdge, Social, Wealth, betrayals, share_each, willingness,
+    Character, CleanJobs, Desperation, Marks, RegardEdge, Social, Source, Traits, Wealth,
+    betrayals, share_each,
 };
 use crate::resolve::resolve;
+use crate::traits::{MarkId, TraitId};
 
-/// A roster built for one question: `(name, desperation, infamy)` in roster
-/// order, then the edges between them by index.
+/// A roster built for one question: `(name, desperation, traits, marks)` in
+/// roster order, then the edges between them by index.
 pub(crate) fn bench(
-    rows: &[(&'static str, i32, i32)],
+    rows: &[(&'static str, i32, &'static [TraitId], &'static [MarkId])],
     edges: &[(usize, usize, i32)],
 ) -> (World, Vec<Entity>) {
     let mut world = World::new();
     let mut ids = Vec::new();
-    for (roster_index, (name, desperation, infamy)) in rows.iter().enumerate() {
+    for (roster_index, (name, desperation, traits, marks)) in rows.iter().enumerate() {
         let entity = world.spawn();
         world.insert(entity, Character { name, roster_index });
         world.insert(entity, Desperation(*desperation));
-        world.insert(entity, Infamy(*infamy));
+        world.insert(entity, Source("the bench"));
         world.insert(entity, Wealth(0));
+        world.insert(entity, Traits(traits.to_vec()));
+        world.insert(entity, Marks(marks.to_vec()));
+        world.insert(entity, CleanJobs(0));
         ids.push(entity);
     }
     for (from, to, value) in edges.iter().copied() {
@@ -58,6 +63,26 @@ pub(crate) fn bench(
     (world, ids)
 }
 
+/// Set one bench character's clean-job count after the fact.
+pub(crate) fn set_clean_jobs(world: &mut World, who: Entity, count: i32) {
+    if let Some(jobs) = world.find_component_mut::<CleanJobs>(who) {
+        jobs.0 = count;
+    }
+}
+
+/// A dungeon for a bench, with everything visible and nothing required.
+pub(crate) fn bench_job(headcount: usize, pot: i32, cut: i32) -> crate::beats::Dungeon {
+    crate::beats::Dungeon {
+        name: "the bench",
+        blurb: "a roster built for one question",
+        icon: QuestIcon::Cave,
+        headcount,
+        pot,
+        cut,
+        requires: Requirement::AnyParty,
+    }
+}
+
 /// The bench a surviving witness needs: a killer past `K_kill`, a victim with
 /// nothing protecting them, and a third the killer is loyal enough to spare.
 ///
@@ -71,18 +96,16 @@ fn bench_kill(
     if bonded_to_victim {
         edges.push((2, 1, 2));
     }
-    let (world, ids) = bench(&[("Kil", 8, 0), ("Vic", 0, 0), ("Wit", 0, 0)], &edges);
+    let (world, ids) = bench(
+        &[
+            ("Kil", 8, &[], &[]),
+            ("Vic", 0, &[], &[]),
+            ("Wit", 0, &[], &[]),
+        ],
+        &edges,
+    );
     let social = Social::read(&world.view());
-    let dungeon = crate::beats::Dungeon {
-        name: "the bench",
-        blurb: "a roster built for one question",
-        icon: QuestIcon::Cave,
-        headcount: 3,
-        pot: 12,
-        cut: 0,
-        requires: Requirement::AnyParty,
-    };
-    let outcome = resolve(&social, tuning, &dungeon, &ids);
+    let outcome = resolve(&social, tuning, &bench_job(3, 12, 0), &ids);
     (social, ids, outcome)
 }
 
@@ -104,85 +127,16 @@ pub fn battery(checks: &mut Checks, tuning: &Tuning) {
         );
     }
 
-    // --- willingness: a bond outranks public information ---------------
-    let (world, ids) = bench(&[("Clean", 1, 0), ("Known", 0, 3)], &[]);
-    let social = Social::read(&world.view());
-    let answer = willingness(&social, tuning, ids[0], &ids);
-    checks.require(
-        answer.total == 1 - tuning.k_inf * 3 && !answer.joins(),
-        "an infamy gap no longer gates a cleaner character",
-        format!("Clean says {}", answer.arithmetic()),
-    );
-    let (world, ids) = bench(&[("Clean", 1, 0), ("Known", 0, 3)], &[(0, 1, 5)]);
-    let social = Social::read(&world.view());
-    let answer = willingness(&social, tuning, ids[0], &ids);
-    checks.require(
-        answer.joins() && answer.regard_total == 5,
-        "a bond no longer overrides the infamy gap it is supposed to outweigh",
-        format!(
-            "Clean says {} with a regard of 5 in hand",
-            answer.arithmetic()
-        ),
-    );
-    // And the reverse direction is untouched, which is what "directed" means.
-    checks.require(
-        answer
-            .terms
-            .iter()
-            .map(|term| term.member)
-            .collect::<Vec<_>>()
-            == vec![ids[1]],
-        "a willingness sum names the wrong partymates",
-        format!(
-            "Clean's sum has {} term(s) and the party is 2 including Clean",
-            answer.terms.len()
-        ),
-    );
-    let back = willingness(&social, tuning, ids[1], &ids);
-    checks.require(
-        back.regard_total == 0,
-        "regard is being read as symmetric",
-        format!(
-            "Known says {} about a party they hold nothing about",
-            back.arithmetic()
-        ),
-    );
-
-    // A gap only ever costs the cleaner character. `incompat` is
-    // `max(0, .)`-clamped, so the known name standing next to a clean one gets
-    // nothing for it - drop the clamp and a reputation becomes a recruiting
-    // bonus, which no beat above would notice.
-    let (world, ids) = bench(&[("Clean", 0, 0), ("Known", 0, 5)], &[]);
-    let social = Social::read(&world.view());
-    let downhill = social.incompat(tuning, ids[1], ids[0]);
-    checks.require(
-        downhill == 0,
-        "standing next to a cleaner name pays an infamous character",
-        format!(
-            "incompat(Known, Clean) is {downhill} across a gap of -5; incompat is clamped at \
-             zero and only ever costs the cleaner of the two"
-        ),
-    );
-    checks.require(
-        social.incompat(tuning, ids[0], ids[1]) == tuning.k_inf * 5,
-        "the gap stopped costing the cleaner character",
-        format!(
-            "incompat(Clean, Known) is {} across a gap of 5 at a K_inf of {}",
-            social.incompat(tuning, ids[0], ids[1]),
-            tuning.k_inf
-        ),
-    );
-
     // --- betrayal: roster order decides who kills whom ------------------
     //
     // Two characters, identical numbers, both past `K_kill` and both better off
     // alone. Nothing but the stated order separates them, and reversing it
     // reverses the outcome - which is the whole reason the order is stated.
     for reversed in [false, true] {
-        let rows: &[(&str, i32, i32)] = if reversed {
-            &[("Second", 8, 0), ("First", 8, 0)]
+        let rows: &[(&'static str, i32, &'static [TraitId], &'static [MarkId])] = if reversed {
+            &[("Second", 8, &[], &[]), ("First", 8, &[], &[])]
         } else {
-            &[("First", 8, 0), ("Second", 8, 0)]
+            &[("First", 8, &[], &[]), ("Second", 8, &[], &[])]
         };
         let (world, ids) = bench(rows, &[]);
         let social = Social::read(&world.view());
@@ -202,7 +156,13 @@ pub fn battery(checks: &mut Checks, tuning: &Tuning) {
     }
     // Each clause on its own, because a rule that fires when any one of three
     // holds passes every test where all three do.
-    let (world, ids) = bench(&[("Calm", tuning.k_kill - 1, 0), ("Other", 0, 0)], &[]);
+    let (world, ids) = bench(
+        &[
+            ("Calm", tuning.k_kill - 1, &[], &[]),
+            ("Other", 0, &[], &[]),
+        ],
+        &[],
+    );
     let social = Social::read(&world.view());
     checks.require(
         betrayals(&social, tuning, &ids, 6, 2).is_empty(),
@@ -214,7 +174,7 @@ pub fn battery(checks: &mut Checks, tuning: &Tuning) {
         ),
     );
     let (world, ids) = bench(
-        &[("Loyal", 9, 0), ("Friend", 0, 0)],
+        &[("Loyal", 9, &[], &[]), ("Friend", 0, &[], &[])],
         &[(0, 1, tuning.k_loyal)],
     );
     let social = Social::read(&world.view());
@@ -226,7 +186,7 @@ pub fn battery(checks: &mut Checks, tuning: &Tuning) {
             tuning.k_loyal, tuning.k_loyal
         ),
     );
-    let (world, ids) = bench(&[("Broke", 9, 0), ("Other", 0, 0)], &[]);
+    let (world, ids) = bench(&[("Broke", 9, &[], &[]), ("Other", 0, &[], &[])], &[]);
     let social = Social::read(&world.view());
     checks.require(
         betrayals(&social, tuning, &ids, 2, 2).is_empty(),
@@ -258,6 +218,28 @@ pub fn battery(checks: &mut Checks, tuning: &Tuning) {
                 outcome.betrayals.len(),
                 outcome.survivors.len()
             ),
+        );
+        // The murder writes the mark - the reputation system's pen (DESIGN
+        // §5), where v1 moved a public scalar.
+        checks.require(
+            outcome
+                .mark_writes
+                .iter()
+                .any(|(who, mark)| *who == ids[0] && *mark == MarkId::ComradeKiller),
+            "a witnessed kill did not write the comrade-killer mark",
+            format!(
+                "the {label} run wrote {:?}; the killer's sheet is where everyone learns \
+                 what he is",
+                outcome.mark_writes
+            ),
+        );
+        checks.require(
+            outcome
+                .lines
+                .iter()
+                .any(|line| line.contains("marked comrade-killer")),
+            "the report does not narrate the mark the kill wrote",
+            format!("the {label} run's narration is {:?}", outcome.lines),
         );
     }
     let drop_of = |outcome: &crate::resolve::Resolution, ids: &[Entity]| {
@@ -303,15 +285,6 @@ pub fn battery(checks: &mut Checks, tuning: &Tuning) {
         ),
     );
     checks.require(
-        outcome.infamy_changes.first().map(|(_, _, after)| *after) == Some(tuning.infamy_per_kill),
-        "a witnessed kill did not become public",
-        format!(
-            "the killer's infamy ended at {:?}, wanted {}",
-            outcome.infamy_changes.first().map(|(_, _, after)| *after),
-            tuning.infamy_per_kill
-        ),
-    );
-    checks.require(
         outcome
             .lines
             .iter()
@@ -332,9 +305,8 @@ pub fn battery(checks: &mut Checks, tuning: &Tuning) {
                 .collect::<Vec<_>>(),
         ),
     );
-    // A betrayal ends the bonding: nobody got closer on a job somebody died on.
-    // Asked of the edges rather than of the narration, because the witness's
-    // own line has the word "bonded" in it for the opposite reason.
+    // A betrayal ends the bonding: nobody got closer on a job somebody died on
+    // - and nobody's clean-job count moved either.
     let gained: Vec<i32> = outcome
         .regard_changes
         .iter()
@@ -345,6 +317,15 @@ pub fn battery(checks: &mut Checks, tuning: &Tuning) {
         gained.is_empty(),
         "survivors bonded over a job somebody was killed on",
         format!("regard rose by {gained:?} on a run with a killing in it"),
+    );
+    checks.require(
+        outcome.clean_job_changes.is_empty(),
+        "a job somebody was killed on counted as clean",
+        format!(
+            "the clean-job counts moved: {:?}; the reliable count is for jobs everyone \
+             walked away from",
+            outcome.clean_job_changes
+        ),
     );
     // The floor: a full share against no need at all leaves nothing below zero.
     let witness_drift = outcome
@@ -363,22 +344,28 @@ pub fn battery(checks: &mut Checks, tuning: &Tuning) {
     let _ = (plain_social, social);
 
     // --- the dungeon predicates no tutorial beat uses -------------------
-    let (world, ids) = bench(&[("Clean", 0, 0), ("Known", 0, 4)], &[]);
+    //
+    // v1's known-face predicates migrated to marks: a job that needs a known
+    // face needs a dark mark on somebody (DESIGN §5).
+    let (world, ids) = bench(
+        &[
+            ("Clean", 0, &[], &[]),
+            ("Known", 0, &[], &[MarkId::ComradeKiller]),
+            ("Bright", 0, &[], &[MarkId::Reliable]),
+        ],
+        &[],
+    );
     let social = Social::read(&world.view());
     for (requirement, party, want) in [
         (Requirement::AnyParty, &ids[..], true),
-        (
-            Requirement::AtLeastOneInfamous { at_least: 3 },
-            &ids[..],
-            true,
-        ),
-        (
-            Requirement::AtLeastOneInfamous { at_least: 3 },
-            &ids[..1],
-            false,
-        ),
-        (Requirement::NoInfamous { at_least: 3 }, &ids[..1], true),
-        (Requirement::NoInfamous { at_least: 3 }, &ids[..], false),
+        (Requirement::NeedsDarkMark, &ids[..2], true),
+        (Requirement::NeedsDarkMark, &ids[..1], false),
+        // A light mark is not a dark one: reliable does not open the
+        // underworld's door.
+        (Requirement::NeedsDarkMark, &ids[2..], false),
+        (Requirement::NoDarkMarks, &ids[..1], true),
+        (Requirement::NoDarkMarks, &ids[2..], true),
+        (Requirement::NoDarkMarks, &ids[..2], false),
     ] {
         let met = requirement.met(&social, party);
         checks.require(
@@ -393,16 +380,17 @@ pub fn battery(checks: &mut Checks, tuning: &Tuning) {
     }
 
     // --- the gate, including the states play does not stop on -----------
-    let (world, ids) = bench(&[("Clean", 1, 0), ("Known", 0, 3)], &[]);
+    let (world, ids) = bench(
+        &[
+            ("Clean", 1, &[], &[]),
+            ("Known", 1, &[], &[MarkId::ComradeKiller]),
+        ],
+        &[],
+    );
     let social = Social::read(&world.view());
     let two_of_three = crate::beats::Dungeon {
-        name: "the bench",
-        blurb: "a roster built for one question",
-        icon: QuestIcon::Cave,
-        headcount: 3,
-        pot: 12,
-        cut: 0,
-        requires: Requirement::NoInfamous { at_least: 3 },
+        requires: Requirement::NoDarkMarks,
+        ..bench_job(3, 12, 0)
     };
     let gate = assess(&social, tuning, &ids, Some(&two_of_three));
     checks.require(
@@ -425,42 +413,22 @@ pub fn battery(checks: &mut Checks, tuning: &Tuning) {
         !gate.can_send
             && gate.headcount_ok
             && !gate.requirement_ok
-            && gate.blocked == "a known face in the party",
+            && gate.blocked == "a dark mark in the party",
         "a party that breaks the dungeon's predicate is not blocked by it",
         format!("the gate said {:?}", gate.blocked),
     );
     let open = crate::beats::Dungeon {
         requires: Requirement::AnyParty,
+        headcount: 1,
         ..three
     };
-    let gate = assess(
-        &social,
-        tuning,
-        &ids[1..],
-        Some(&crate::beats::Dungeon {
-            headcount: 1,
-            ..open
-        }),
-    );
+    let gate = assess(&social, tuning, &ids[1..], Some(&open));
     checks.require(
-        gate.can_send && gate.blocked.is_empty(),
+        gate.can_send && gate.all_willing && gate.blocked.is_empty(),
         "a one-member party that satisfies everything cannot be sent",
         format!("the gate said {:?}", gate.blocked),
     );
-    let gate = assess(
-        &social,
-        tuning,
-        &ids[1..],
-        Some(&crate::beats::Dungeon {
-            headcount: 1,
-            ..open
-        }),
-    );
-    checks.require(
-        gate.can_send && gate.all_willing && gate.blocked.is_empty(),
-        "a party that satisfies everything cannot be sent",
-        format!("the gate said {:?}", gate.blocked),
-    );
 
+    crate::judgment::battery(checks, tuning);
     crate::door::door(checks, tuning);
 }

@@ -1,4 +1,4 @@
-//! Every tuning constant giri has, in one place (DESIGN.md §3.2).
+//! Every tuning constant giri has, in one place (DESIGN.md §6).
 //!
 //! The social model's whole vocabulary of weights lives here and nowhere else:
 //! a system that wants `K_kill` reads it off the `Tuning` resource rather than
@@ -14,11 +14,11 @@
 //! `headless(..)` builds a fresh game per candidate and `Startup` takes
 //! whatever the harness left in the world. `docs/api/jidousha-testing.md`
 //! makes the trade explicit — a game with two numbers should stay with
-//! constants; this one has ten and its verify mode sweeps them every run.
+//! constants; this one has thirteen and its verify mode sweeps them every run.
 //!
-//! **Three readers, one set of names.** `Field::name` is the name DESIGN §3.2
-//! gives a constant, and it is the only name there is: the drawer's rows print
-//! it, `stamp` writes it lowercased into the compact form a recording and a
+//! **Three readers, one set of names.** `Field::name` is the name DESIGN gives
+//! a constant, and it is the only name there is: the drawer's rows print it,
+//! `stamp` writes it lowercased into the compact form a recording and a
 //! `?constants=` link carry, and `parse` reads that form back by matching it
 //! case-insensitively. A second table of URL keys would be a second name per
 //! constant, and the day they disagreed the link would load a set the stamp
@@ -28,29 +28,36 @@ use jidousha::prelude::*;
 
 /// The social model's weights — one struct, one shipped set.
 ///
-/// Names follow DESIGN §3.2 exactly: `K_inf`, `K_kill`, `K_loyal`, and the
-/// drift magnitudes. Integers, not floats: every beat is meant to be exactly
-/// computable by a player with the sheets in front of them, and a claim like
-/// "desperation 8 reaches 6" is a claim about integers. It is also what makes
-/// the assertions in `--verify` exact rather than approximate.
+/// Names follow DESIGN §6. Integers, not floats: every beat is meant
+/// to be exactly computable by a player with the sheets in front of them, and
+/// a claim like "desperation 8 reaches 6" is a claim about integers. It is
+/// also what makes the assertions in `--verify` exact rather than approximate.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Tuning {
-    /// `K_inf` — how much one point of infamy *gap* costs a character's
-    /// willingness. `incompat(c, m) = K_inf * max(0, infamy(m) - infamy(c))`.
-    pub k_inf: i32,
     /// `K_kill` — the desperation at or above which betrayal is on the table.
     pub k_kill: i32,
     /// `K_loyal` — the regard at or above which a character will not betray.
     pub k_loyal: i32,
+    /// The verdict boundary (DESIGN §6): a non-negative margin below this is
+    /// *reluctant* — in, but barely, and P2's strain reads exactly that.
+    pub reluctant_below: i32,
+    /// What one dark mark costs a stranger's willingness, before traits.
+    pub mark_dark: i32,
+    /// What one light mark earns it, before traits.
+    pub mark_light: i32,
+    /// How hard one gold of promised share pulls, per point of a trait's pot
+    /// affinity. The pot enters willingness only through traits in P1
+    /// (DESIGN §6).
+    pub pot_pull: i32,
+    /// Clean jobs it takes to be marked *reliable* (DESIGN §5).
+    pub reliable_after: i32,
     /// What a clean shared success adds to regard, both ways, per surviving pair.
     pub bond_gain: i32,
-    /// What a witnessed kill adds to the killer's *public* infamy.
-    pub infamy_per_kill: i32,
     /// What a surviving witness's regard toward the killer drops by.
     pub witness_grudge: i32,
     /// The extra drop when that witness had positive regard for the victim.
     ///
-    /// Bonds propagate consequences (DESIGN §3.3.3): harm to someone you are
+    /// Bonds propagate consequences (DESIGN §6): harm to someone you are
     /// bonded to is a grudge against whoever did it, on top of the witness's.
     pub bonded_grudge: i32,
     /// What a round of not profiting adds to desperation.
@@ -61,9 +68,9 @@ pub struct Tuning {
     ///
     /// Not in DESIGN's formulas, and needed the moment `desperation_fall`
     /// exceeds a character's desperation: without it a profitable round leaves
-    /// a character at -2, and `willingness = -2 + 0 - 0` refuses a job with no
-    /// infamy gap and nothing else wrong with it. At the floor a character
-    /// still takes a clean job (0 >= 0) and nothing that costs them.
+    /// a character at -2, and a willingness of -2 refuses a job with nothing
+    /// else wrong with it. At the floor a character still takes a clean job
+    /// (0 >= 0) and nothing that costs them.
     pub desperation_floor: i32,
 }
 
@@ -83,11 +90,14 @@ impl Tuning {
     /// What the game ships with — the set the four tutorial beats are authored
     /// against, and the set every verify run stamps into its report.
     pub const SHIPPED: Self = Self {
-        k_inf: 1,
         k_kill: 6,
         k_loyal: 2,
+        reluctant_below: 2,
+        mark_dark: 1,
+        mark_light: 1,
+        pot_pull: 1,
+        reliable_after: 2,
         bond_gain: 1,
-        infamy_per_kill: 3,
         witness_grudge: 2,
         bonded_grudge: 2,
         desperation_rise: 2,
@@ -95,30 +105,35 @@ impl Tuning {
         desperation_floor: 0,
     };
 
-    /// The constants in effect, as the two lines the UI and every verify report
-    /// print (DESIGN §8a: a run is only reproducible if it says what it ran
-    /// with).
+    /// The constants in effect, as the lines the drawer's stamp and every
+    /// verify report print (DESIGN §8a: a run is only reproducible if it says
+    /// what it ran with).
     ///
     /// A function rather than a `format!` at each site so a check can ask the
     /// game for the exact text it draws: the font draws an unknown character as
     /// a box at a letter's width, so no assertion over drawn quads can see a
     /// wrong one and the string itself is the only instrument.
     pub fn readout(&self) -> String {
-        // Four short lines rather than two long ones: the readout sits in the
-        // roster column, and a line wider than the column runs under the panel
-        // beside it. Nothing asserts a column width for it - the bounds check
-        // sees the camera's edge and this never reaches it - so the width is
-        // kept here, where the string is.
+        // Six short lines rather than two long ones: the readout sits under the
+        // drawer's third stepper column, which is 264 reference pixels wide,
+        // and a line wider than the column runs into the prose band beside it.
+        // Nothing asserts a column width for it, so the width is kept here,
+        // where the string is.
         format!(
-            "K_inf {}  K_kill {}  K_loyal {}\n\
-             bond +{}  infamy/kill +{}\n\
+            "K_kill {}  K_loyal {}\n\
+             reluctant {}  pot {}\n\
+             dark {}  light {}\n\
+             reliable {}  bond +{}\n\
              witness {}  bonded {}\n\
              rise +{}  fall -{}  floor {}",
-            self.k_inf,
             self.k_kill,
             self.k_loyal,
+            self.reluctant_below,
+            self.pot_pull,
+            self.mark_dark,
+            self.mark_light,
+            self.reliable_after,
             self.bond_gain,
-            self.infamy_per_kill,
             -self.witness_grudge,
             -self.bonded_grudge,
             self.desperation_rise,
@@ -127,16 +142,19 @@ impl Tuning {
         )
     }
 
-    /// One field, by the name DESIGN §3.2 gives it — so a sweep, a mutation
-    /// round and (next session) the tuning menu can walk the set rather than
-    /// naming ten fields in three places.
+    /// One field, by the name DESIGN gives it — so a sweep, a mutation round
+    /// and the tuning menu can walk the set rather than naming thirteen fields
+    /// in three places.
     pub fn field_mut(&mut self, field: Field) -> &mut i32 {
         match field {
-            Field::KInf => &mut self.k_inf,
             Field::KKill => &mut self.k_kill,
             Field::KLoyal => &mut self.k_loyal,
+            Field::ReluctantBelow => &mut self.reluctant_below,
+            Field::MarkDark => &mut self.mark_dark,
+            Field::MarkLight => &mut self.mark_light,
+            Field::PotPull => &mut self.pot_pull,
+            Field::ReliableAfter => &mut self.reliable_after,
             Field::BondGain => &mut self.bond_gain,
-            Field::InfamyPerKill => &mut self.infamy_per_kill,
             Field::WitnessGrudge => &mut self.witness_grudge,
             Field::BondedGrudge => &mut self.bonded_grudge,
             Field::DesperationRise => &mut self.desperation_rise,
@@ -158,7 +176,7 @@ impl Tuning {
     }
 
     /// The whole set on one line, in the compact form a link carries and a log
-    /// line records: `k_inf:1,k_kill:6,...` (UI.md §12).
+    /// line records: `k_kill:6,k_loyal:2,...` (UI.md §12).
     ///
     /// `readout` is the same fact laid out for a person to read in a column;
     /// this is the same fact laid out for a URL and for `parse` to read back.
@@ -253,18 +271,17 @@ impl ConstantsError {
     /// What the page says: what happened, and what to write instead.
     ///
     /// ASCII and one line, because it is drawn with the same font every other
-    /// string is (DESIGN §7) and the drawer gives it two wrapped rows.
+    /// string is (DESIGN §12) and the drawer gives it two wrapped rows.
     pub fn message(&self) -> String {
         match self {
             ConstantsError::Empty => {
-                "?constants= was empty - write it as k_inf:1,k_kill:6 or leave it off".to_owned()
+                "?constants= was empty - write it as k_kill:6,k_loyal:2 or leave it off".to_owned()
             }
             ConstantsError::Pair(term) => format!(
                 "?constants= term {term:?} has no ':' - each term is a name, a colon, a number"
             ),
             ConstantsError::UnknownKey(key) => format!(
-                "?constants= names {key:?}, which is not a constant - the names are {}",
-                Field::keys()
+                "?constants= names {key:?}, which is not a constant - the drawer lists every name"
             ),
             ConstantsError::Repeated(key) => {
                 format!("?constants= gives {key:?} twice - name each constant once")
@@ -284,16 +301,22 @@ impl ConstantsError {
 /// Which tuning constant, by name.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Field {
-    /// `K_inf`.
-    KInf,
     /// `K_kill`.
     KKill,
     /// `K_loyal`.
     KLoyal,
+    /// The reluctant verdict's boundary.
+    ReluctantBelow,
+    /// A dark mark's base cost.
+    MarkDark,
+    /// A light mark's base pull.
+    MarkLight,
+    /// The pot's pull per share gold, through traits.
+    PotPull,
+    /// Clean jobs to a *reliable* mark.
+    ReliableAfter,
     /// The clean-success bond.
     BondGain,
-    /// The killer's infamy.
-    InfamyPerKill,
     /// The witness's grudge.
     WitnessGrudge,
     /// The bonded witness's extra grudge.
@@ -309,11 +332,14 @@ pub enum Field {
 impl Field {
     /// Every field, in declaration order — what a sweep walks.
     pub const ALL: &'static [Field] = &[
-        Field::KInf,
         Field::KKill,
         Field::KLoyal,
+        Field::ReluctantBelow,
+        Field::MarkDark,
+        Field::MarkLight,
+        Field::PotPull,
+        Field::ReliableAfter,
         Field::BondGain,
-        Field::InfamyPerKill,
         Field::WitnessGrudge,
         Field::BondedGrudge,
         Field::DesperationRise,
@@ -321,14 +347,17 @@ impl Field {
         Field::DesperationFloor,
     ];
 
-    /// The name DESIGN §3.2 gives this constant.
+    /// The name DESIGN gives this constant.
     pub fn name(self) -> &'static str {
         match self {
-            Field::KInf => "K_inf",
             Field::KKill => "K_kill",
             Field::KLoyal => "K_loyal",
+            Field::ReluctantBelow => "reluctant_below",
+            Field::MarkDark => "mark_dark",
+            Field::MarkLight => "mark_light",
+            Field::PotPull => "pot_pull",
+            Field::ReliableAfter => "reliable_after",
             Field::BondGain => "bond_gain",
-            Field::InfamyPerKill => "infamy_per_kill",
             Field::WitnessGrudge => "witness_grudge",
             Field::BondedGrudge => "bonded_grudge",
             Field::DesperationRise => "desperation_rise",
@@ -339,7 +368,7 @@ impl Field {
 
     /// The same name, lowercased — what a stamp writes and a link carries.
     ///
-    /// Derived rather than tabled: `K_inf` and `k_inf` are one name in two
+    /// Derived rather than tabled: `K_kill` and `k_kill` are one name in two
     /// cases, and a second table would be a second name (see the module
     /// header).
     pub fn key(self) -> String {
@@ -354,15 +383,6 @@ impl Field {
             .find(|field| field.name().eq_ignore_ascii_case(key))
     }
 
-    /// Every key, for the message a rejected link prints.
-    pub fn keys() -> String {
-        Field::ALL
-            .iter()
-            .map(|field| field.key())
-            .collect::<Vec<_>>()
-            .join(", ")
-    }
-
     /// What this constant does, in one line — the drawer's hover text
     /// (UI.md §12).
     ///
@@ -371,11 +391,14 @@ impl Field {
     /// drawer's hint row has.
     pub fn meaning(self) -> &'static str {
         match self {
-            Field::KInf => "what one point of infamy gap costs willingness",
             Field::KKill => "desperation at which betrayal is on the table",
             Field::KLoyal => "regard at which a partymate is safe",
+            Field::ReluctantBelow => "margins under this join reluctantly",
+            Field::MarkDark => "what one dark mark costs a stranger",
+            Field::MarkLight => "what one light mark earns with strangers",
+            Field::PotPull => "pull per share gold, through pot traits",
+            Field::ReliableAfter => "clean jobs it takes to be marked reliable",
             Field::BondGain => "regard a clean shared job leaves, both ways",
-            Field::InfamyPerKill => "public infamy a witnessed kill adds",
             Field::WitnessGrudge => "regard a witness drops toward the killer",
             Field::BondedGrudge => "the extra drop if they loved the victim",
             Field::DesperationRise => "desperation a round without profit adds",

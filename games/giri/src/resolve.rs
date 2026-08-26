@@ -1,4 +1,4 @@
-//! Resolution: what a dungeon does to the people sent into it (DESIGN.md §5).
+//! Resolution: what a dungeon does to the people sent into it (DESIGN.md §7).
 //!
 //! One pure function of `(social snapshot, tuning, dungeon, party)`, producing
 //! a `Resolution` — every consequence as data, plus the mechanical narration
@@ -9,25 +9,27 @@
 //! never reaches — a surviving witness to a killing, a party of five with two
 //! desperate members — without scripting a beat to produce them.
 //!
-//! **The stated order** (DESIGN §5): requirements are checked at assembly, so a
+//! **The stated order** (DESIGN §7): requirements are checked at assembly, so a
 //! party that arrives here succeeds; then betrayal evaluation in roster order,
-//! then payout, then bond drift, then round-end desperation drift. v1 has no
-//! resolution failure.
+//! then payout, then bond drift and clean-job counting, then round-end
+//! desperation drift. v1 has no resolution failure.
+//!
+//! **The resolution is the reputation system's pen** (DESIGN §5, §12): a murder
+//! writes the *comrade-killer* mark where v1 moved a public scalar, and
+//! enough clean jobs write *reliable*. Witness grudges are unchanged — regard
+//! is what *this* character feels; marks are what everyone knows.
 
 use jidousha::prelude::*;
 
 use crate::beats::Dungeon;
 use crate::constants::Tuning;
 use crate::model::{
-    Betrayal, Dead, Desperation, Infamy, RegardEdge, Social, Wealth, betrayals, share_each,
+    Betrayal, CleanJobs, Dead, Desperation, Marks, RegardEdge, Social, Wealth, betrayals,
+    share_each,
 };
+use crate::traits::MarkId;
 
 // ── what a resolution *is*: the record the write pass and the screens read ──
-//
-// These live here rather than in `model.rs` because `resolve` is the only thing
-// that builds them, and because they are the shape of an outcome rather than
-// the shape of the world. `model.rs` owns state and the decision function; this
-// file owns what one dungeon did with them.
 
 /// One regard edge moving, and why.
 #[derive(Clone, Copy, Debug)]
@@ -74,8 +76,8 @@ pub enum DriftTone {
     Relief,
     /// A regard edge moving.
     Regard,
-    /// An infamy moving.
-    Infamy,
+    /// A mark being written.
+    Mark,
 }
 
 /// One line of the drift ledger.
@@ -100,13 +102,15 @@ pub struct Resolution {
     pub payouts: Vec<(Entity, i32)>,
     /// Every edge that moved.
     pub regard_changes: Vec<RegardChange>,
-    /// Every infamy that moved: who, from, to.
-    pub infamy_changes: Vec<(Entity, i32, i32)>,
+    /// Every mark written: who, and what everyone now knows.
+    pub mark_writes: Vec<(Entity, MarkId)>,
+    /// Every clean-job count that moved: who, from, to.
+    pub clean_job_changes: Vec<(Entity, i32, i32)>,
     /// Every desperation that moved: who, from, to.
     pub desperation_changes: Vec<(Entity, i32, i32)>,
     /// The mechanical narration, one line per consequence.
     ///
-    /// The ASCII story surface DESIGN §7 mandates, and what the log drawer and
+    /// The ASCII story surface DESIGN §12 mandates, and what the log drawer and
     /// every `Expect::ReportSays` read. The takeover draws `events` and `drift`
     /// instead — the same consequences, laid out rather than listed — so the
     /// two are built together from one pass and cannot describe different runs.
@@ -138,6 +142,9 @@ pub fn resolve(
     ));
 
     // --- betrayal, in roster order -----------------------------------
+    //
+    // The v1 deterministic rule, retained for P1 (DESIGN §15) and replaced by
+    // the seeded ladder in P2. The willingness margin is not an input here.
     out.betrayals = betrayals(social, tuning, party, dungeon.pot, dungeon.cut);
     for Betrayal {
         killer,
@@ -203,11 +210,12 @@ pub fn resolve(
             if survivor_count == 1 { "" } else { "s" },
         ));
     }
-    // --- bond drift ---------------------------------------------------
+    // --- bond drift and the clean-job count ---------------------------
     //
     // "Shared success without betrayal raises mutual regard between all
-    // surviving pairs" (DESIGN §3.2). Read per *run* rather than per pair: a
-    // job somebody was killed on is not a job the survivors got closer on.
+    // surviving pairs" (DESIGN §6). Read per *run* rather than per pair: a
+    // job somebody was killed on is not a job the survivors got closer on —
+    // and not a job anybody's clean-job count moves for either.
     if out.betrayals.is_empty() {
         let survivors = out.survivors.clone();
         for (index, first) in survivors.iter().copied().enumerate() {
@@ -231,29 +239,54 @@ pub fn resolve(
                 });
             }
         }
+        // The counting is the light side's pen (DESIGN §5): enough clean jobs
+        // and everyone knows this one comes back clean.
+        for member in survivors {
+            let before = social.member(member).map_or(0, |member| member.clean_jobs);
+            let after = before + 1;
+            out.clean_job_changes.push((member, before, after));
+            if after >= tuning.reliable_after && !social.marked(member, MarkId::Reliable) {
+                write_mark(&mut out, social, member, MarkId::Reliable);
+                out.lines.push(format!(
+                    "{} is marked reliable - {after} clean jobs",
+                    names(member)
+                ));
+                out.events.push(EventCard {
+                    kind: EventKind::Word,
+                    text: format!("{} is somebody you can send now.", names(member)),
+                    sub: Some(format!(
+                        "marked reliable - {after} clean jobs walked away from clean"
+                    )),
+                });
+            }
+        }
     }
 
     // --- what a betrayal costs the betrayer ---------------------------
     for betrayal in out.betrayals.clone() {
-        let before = social.infamy(betrayal.killer);
-        let after = before + tuning.infamy_per_kill;
-        out.infamy_changes.push((betrayal.killer, before, after));
-        out.lines.push(format!(
-            "{}'s infamy {}->{} - a witnessed kill is public",
-            names(betrayal.killer),
-            before,
-            after
-        ));
-        out.events.push(EventCard {
-            kind: EventKind::Word,
-            text: format!("Word gets out about {}.", names(betrayal.killer)),
-            sub: Some(format!(
-                "infamy {before}->{after} - every witness holds it against them personally"
-            )),
-        });
+        // The murder writes the mark (DESIGN §5): qualitative, public, and on
+        // the sheet from here on. Written once — a mark is a fact, not a
+        // counter.
+        if !social.marked(betrayal.killer, MarkId::ComradeKiller)
+            && !out
+                .mark_writes
+                .iter()
+                .any(|(who, mark)| *who == betrayal.killer && *mark == MarkId::ComradeKiller)
+        {
+            write_mark(&mut out, social, betrayal.killer, MarkId::ComradeKiller);
+            out.lines.push(format!(
+                "{} is marked comrade-killer - a witnessed kill is public",
+                names(betrayal.killer)
+            ));
+            out.events.push(EventCard {
+                kind: EventKind::Word,
+                text: format!("Word gets out about {}.", names(betrayal.killer)),
+                sub: Some("marked comrade-killer - every sheet shows it from here on".to_owned()),
+            });
+        }
         // Each surviving witness holds it against the killer personally, and
         // holds it harder if they were bonded to the victim: relationships are
-        // what make events travel (DESIGN §3.3.3).
+        // what make events travel (DESIGN §6).
         for witness in out.survivors.clone() {
             if witness == betrayal.killer {
                 continue;
@@ -289,15 +322,6 @@ pub fn resolve(
                 ),
             });
         }
-        out.drift.push(DriftLine {
-            tone: DriftTone::Infamy,
-            text: format!(
-                "{} infamy {}->{}",
-                names(betrayal.killer),
-                social.infamy(betrayal.killer),
-                social.infamy(betrayal.killer) + tuning.infamy_per_kill
-            ),
-        });
     }
 
     // The payout is the last card, after what the killing cost: a player reads
@@ -319,7 +343,7 @@ pub fn resolve(
     //
     // Every living roster member, not only the party: non-participants do not
     // profit, so the roster decays toward willingness and refusal is always
-    // temporary (DESIGN §4).
+    // temporary (DESIGN §11).
     for member in &social.members {
         if !member.alive || out.betrayals.iter().any(|b| b.victim == member.entity) {
             continue;
@@ -358,6 +382,15 @@ pub fn resolve(
         }
     }
     out
+}
+
+/// Record a mark being written, with its ledger line.
+fn write_mark(out: &mut Resolution, social: &Social, who: Entity, mark: MarkId) {
+    out.mark_writes.push((who, mark));
+    out.drift.push(DriftLine {
+        tone: DriftTone::Mark,
+        text: format!("{} marked {}", social.name(who), mark.name()),
+    });
 }
 
 /// What `from` thinks of `to` right now, counting changes this resolution has
@@ -400,9 +433,16 @@ pub fn apply(world: &mut World, resolution: &Resolution) {
             },
         );
     }
-    for (who, _, after) in resolution.infamy_changes.iter().copied() {
-        if let Some(infamy) = world.find_component_mut::<Infamy>(who) {
-            infamy.0 = after;
+    for (who, mark) in resolution.mark_writes.iter().copied() {
+        if let Some(marks) = world.find_component_mut::<Marks>(who)
+            && !marks.0.contains(&mark)
+        {
+            marks.0.push(mark);
+        }
+    }
+    for (who, _, after) in resolution.clean_job_changes.iter().copied() {
+        if let Some(jobs) = world.find_component_mut::<CleanJobs>(who) {
+            jobs.0 = after;
         }
     }
     for (who, _, after) in resolution.desperation_changes.iter().copied() {
@@ -417,7 +457,7 @@ pub fn apply(world: &mut World, resolution: &Resolution) {
 
 /// Write one directed edge, creating the edge entity if the pair had none.
 ///
-/// Read pass then write pass (DESIGN §9): the query that finds the edge borrows
+/// Read pass then write pass (DESIGN §13): the query that finds the edge borrows
 /// the world, so what it finds is collected and the query dropped before
 /// anything is written.
 fn set_regard(world: &mut World, from: Entity, to: Entity, value: i32) {

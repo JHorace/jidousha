@@ -9,9 +9,10 @@ is ground truth for the rules that outlive it.
 
 Ground truth artifact: `giri-mockup.html` (attached to the polish handoff;
 hosted copy at https://claude.ai/code/artifact/f434ea34-9c1f-4983-b630-984c51003054).
-The mockup's JS runs the real DESIGN §3.2 formulas — use it as a behavioral
-reference for UI reactions, not as code to port (the Rust simulation already
-exists and is canonical).
+The mockup's JS runs v1's decision-function formulas — a behavioral
+reference for UI reactions, not code to port (the Rust simulation is
+canonical). DESIGN v2 §6 superseded those formulas (see §13); the UI design
+session after the P1 playtest produces the v2 mockup.
 
 ## 1. Principles
 
@@ -30,7 +31,7 @@ exists and is canonical).
    primary channel.
 4. **Pixel art, nearest-neighbour.** The engine samples nearest with no
    filtering; all art is pixel art rendered at integer multiples where
-   possible. The owner's curated library supplies final art (DESIGN §7
+   possible. The owner's curated library supplies final art (DESIGN §12
    curation model); script-generated placeholders stand in until then.
 
 ## 2. Signifier vocabulary
@@ -40,7 +41,7 @@ Stable mappings — changing one is a UI.md edit, not an ad-hoc choice:
 | Signifier | Meaning | Color role |
 |---|---|---|
 | flame icon | desperation | ember `#d4553a` |
-| eye icon | infamy | violet `#9b6dd6` |
+| eye icon | reputation marks (category icon, interim) | violet `#9b6dd6` |
 | heart icon | regard (bond/grudge) | teal `#4fae8f` |
 | coin icon | gold / payout | gold `#e0b34a` |
 | skull icon | death / betrayal | bone `#e8ddc4` |
@@ -99,15 +100,21 @@ entries. Secondary by design; nothing appears only in the log.
 
 ## 4. The party strip
 
-Always visible on the board (small version). One card per roster character:
-portrait, name, flame+value, eye+value, and a status line. Status line
-states, for a non-member, exactly one of: `would join · <arithmetic>`,
-`refuses · <arithmetic>`, or `<NAME> blocks · <blocker's arithmetic>`; for a
-member: `in · <arithmetic>`. Clicking toggles membership under the DESIGN
-door rule (newcomer willing + no incumbent veto); a bounced click surfaces
-the refusing/blocking arithmetic in a transient toast and in the log. The
-willingness preview and the simulation call one function (DESIGN invariant;
-ADR-0039's `World::view` is the mechanism).
+Always visible on the board (small version). One card per roster character —
+the v2 sheet at interim presentation (§13): portrait; name; flame+value with
+the desperation's *source* under it; coin+value (wealth); trait chips (icon
++ name, one row per trait, at most three); reputation marks as lines beside
+the eye; regard edges beside the heart; and the **verdict-and-reasons status
+line**. The status line states, for a non-member, exactly one of:
+`would join - <reason>`, `reluctant - <reason>`, `refuses - <reason>`, or
+`<NAME> blocks - <blocker's reason>`; for a member: `in - <reason>`. The
+reason is the leading cause from the fixed vocabulary (DESIGN §6); the
+margin sits one step behind the card — in the bounce toast and the info
+panel's can't-join list, in parentheses. Clicking toggles membership under
+the DESIGN door rule (newcomer willing + no incumbent veto); a bounced click
+surfaces the verdict, reason and margin in a transient toast and in the log.
+The willingness preview and the simulation call one function (DESIGN
+invariant; ADR-0039's `World::view` is the mechanism).
 
 ## 5. The display ladder (decided trajectory, one rung at a time)
 
@@ -177,7 +184,7 @@ Current script-generated placeholders and their eventual replacements:
 4 dungeon icons (12×12 → library equivalents, one per quest type); 4
 portraits (16×16 → library characters; portraits must remain unique per
 character); 5 stat/event icons (8×8–10×10; keep meanings per §2). Import
-per DESIGN §7's curation model: role-named lowercase snake_case files,
+per DESIGN §12's curation model: role-named lowercase snake_case files,
 committed import script, `CREDITS.md`, license check against repo
 visibility before any purchased asset is committed.
 
@@ -227,7 +234,7 @@ URL — a playtest link that carries its weights, and a repro link when a
 playtester reports a feel. Unknown keys and out-of-range values are rejected
 loudly on the page (placeholder-policy spirit), not silently clamped.
 
-**Heuristic-onset instrumentation** (the DESIGN §11 open question's data source):
+**Heuristic-onset instrumentation** (the DESIGN §17 open question's data source):
 the run log gains, per beat, the assembly duration (first roster interaction →
 SEND) and the count of sheet-inspection interactions. Local and printable; no
 telemetry, nothing leaves the machine. The tuning drawer is the natural neighbour
@@ -241,7 +248,7 @@ below is a correction the implementation forced, recorded here rather than
 left in a pull request nobody reads twice. Each says what changed and why.
 
 - **§4, the party card carries three stats, not two.** Desperation and infamy
-  are joined by wealth, with the coin. DESIGN §12 puts wealth on every sheet
+  are joined by wealth, with the coin. DESIGN (v1 §12; v2 §11) puts wealth on every sheet
   and invariant 2 says a number that decides an outcome is a number on
   screen; where the two documents meet, DESIGN wins.
 - **§4, the party card also carries the character's regard edges**, with the
@@ -383,3 +390,49 @@ nobody reads twice.
   picture. It gets no narrow capture — it is a dev surface rather than a screen
   mode, and its rows are the smallest type in the game, so a 600x540 copy would
   be the one picture in the set nobody could read.
+
+## 13. Amendments from the P1 mechanics session (2026-08-26)
+
+DESIGN v2 landed (traits, marks, wealth, willingness with verdict + reasons)
+under the *interim presentation* its §12 sequencing prescribes: existing UI
+patterns extended without craft, still bound by §7's floors and §2's
+signifier table. Everything below is what that session changed in this
+document's domain, recorded here rather than left in a pull request nobody
+reads twice.
+
+- **§2's eye now signifies reputation marks.** Infamy the number is retired
+  (DESIGN §5), and the eye — still the one generated icon, still violet —
+  is the marks' *category* icon for the interim: it heads the mark line on
+  every card and rides every mark ledger row. §11's note that "the eye is
+  infamy's icon" describes the sessions it dates from. The real per-mark
+  iconography is the UI design session's to invent.
+- **Trait chips borrow category icons.** Nine traits, five icon roles: a
+  chip is an icon plus its name, and the icon is the closest existing
+  signifier (coin for the money-minded, heart for the bonded, flame for the
+  fearful, skull for the grim, eye for the principled). Two channels per
+  §1's floor — the name is what disambiguates. Real trait icons are the UI
+  session's.
+- **§5's shipped rung moved, by owner decision.** The v2 design session
+  (2026-08-24, DESIGN §12) is the recorded decision §5 requires: the status
+  line's surface is now the *verdict and its leading reason as words* —
+  rung 3's shape, reached early because the mechanics demanded it — and the
+  raw sum left the card. The margin stays one step deep (bounce toast and
+  can't-join lines carry it in parentheses; invariant 2 holds). Rung 2's
+  per-member stack exists as data (`willing::MemberTerm`) and remains the
+  hover-unfold candidate for the sim era.
+- **The party card grew and was re-laid.** 170x176 (was 164 tall), cards at
+  y360, the portrait at the left edge with name, stats and the desperation
+  source in a column beside it; trait chips, the mark line and the regard
+  line flow below; the status line is pinned at the card's foot with a
+  three-row budget. The reason strings are the longest text in the game
+  now, and every one is authored to wrap inside sixteen columns at §7's
+  12px floor — the floors bind the vocabulary, not the other way round.
+- **The tuning drawer holds thirteen constants**: five stepper rows per
+  column (was four), pitch 34, and APPLY moved up beside the preset row —
+  the fifth row took the band it sat in. The stamp readout is six short
+  lines under the third column; the hint/note band sits below the steppers
+  and stops short of the stamp's column. All §7 floors still hold (the
+  steppers stay exactly 32x32).
+- **The capture set is unchanged in shape** (three modes x two sizes, plus
+  the drawer): the P1 screens replaced their v1 counterparts in the same
+  seven files.

@@ -1,5 +1,5 @@
 //! The scaling contract: uniform fit, letterboxed, symmetric, with a floor
-//! (UI.md §6; DESIGN §7a).
+//! (UI.md §6; DESIGN §12a).
 //!
 //! **What the engine gives, and what it leaves to the game.** `Camera::height`
 //! is the world span the surface is *tall*, and the width follows the window's

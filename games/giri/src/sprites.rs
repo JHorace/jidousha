@@ -2,7 +2,7 @@
 //!
 //! **The role is the contract, not the picture.** Every asset is named for
 //! what it *means* — `icon_flame` is desperation, `portrait_tim` is Tim — so a
-//! library replaces the files by name and no code here changes (DESIGN §7's
+//! library replaces the files by name and no code here changes (DESIGN §12's
 //! curation model; UI.md §9's asset slots). Nothing is downloaded:
 //! the owner supplies a pack and a committed script curates from it, or
 //! `art/make_art.py` writes a PNG from committed grids — and `assets/CREDITS.md`
@@ -11,10 +11,11 @@
 //! That claim was tested on 2026-08-23: the owner's Kenney packs replaced twelve
 //! of the thirteen slots and **no code here changed except the texel sizes in
 //! `LIBRARY`**. Which pack region fills which role is
-//! `art/kenney-manifest.json`; the thirteenth slot, the infamy eye, is still
-//! generated from the grids in `art/sprite_defs.py`, because no eye glyph exists
-//! in any of the packs. Both paths stay live, and a change to how giri looks is
-//! a change to whichever of the two owns the slot.
+//! `art/kenney-manifest.json`; the thirteenth slot, the eye (reputation marks
+//! since v2 — UI.md §2), is still generated from the grids in
+//! `art/sprite_defs.py`, because no eye glyph exists in any of the packs. Both
+//! paths stay live, and a change to how giri looks is a change to whichever of
+//! the two owns the slot.
 //!
 //! **The art is a directory, and the directory is giri's own.**
 //! `games/giri/assets/` is this crate's asset root: the game loads from it
@@ -63,7 +64,7 @@ pub enum Art {
     QuestVault,
     /// Desperation.
     Flame,
-    /// Infamy.
+    /// Reputation marks — what everyone knows.
     Eye,
     /// Gold, and every payout.
     Coin,

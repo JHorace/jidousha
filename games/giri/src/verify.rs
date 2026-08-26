@@ -1,6 +1,6 @@
 //! `--verify`: the chain, played by a script, asserted on, and photographed.
 //!
-//! The beats are the test suite (DESIGN §8). Each one is driven end to end
+//! The beats are the test suite (DESIGN §14). Each one is driven end to end
 //! through `InputScript` - the same pointer a person uses, at the same
 //! rectangles - and judged three ways: on world state, on the null-backend
 //! transcript, and against UI.md §7's readability floors.
@@ -25,7 +25,8 @@ use crate::beats::{BeatSpec, CHAIN, Expect};
 use crate::checks::{Checks, fail, greater, one_line};
 use crate::constants::Tuning;
 use crate::flow::{Flow, Preview, Stage, StartAt};
-use crate::judge::{judge_frames, judge_world};
+use crate::frames::judge_frames;
+use crate::judge::judge_world;
 use crate::model::Social;
 use crate::{
     capture, contracts, floors, layout, library, links, mutation, onset, restart, scaling, sprites,
@@ -135,7 +136,7 @@ fn plan_for(spec: &BeatSpec, viewport: PhysicalSize) -> Plan {
         refusal_at = Some(tick);
         refusal_name = Some(refuser);
         tick += 1;
-        // Take it back: a refusal is feedback, not a failure (DESIGN §5).
+        // Take it back: a refusal is feedback, not a failure (DESIGN §7).
         script = click_at(script, &mut tick, other_card);
     }
 
@@ -543,6 +544,8 @@ pub fn run() -> ExitCode {
     // --- the art library, and every string the game draws -----------------
     library::library(&mut checks);
     library::printable_strings(&mut checks);
+    // --- the people vocabulary's own shape: caps, names, table cells ------
+    crate::traits::vocabulary(&mut checks);
     // --- the contracts a played beat never reaches ------------------------
     contracts::battery(&mut checks, &tuning);
     // --- and the round that says whether any of it is an instrument -------

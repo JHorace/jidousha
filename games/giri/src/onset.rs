@@ -1,7 +1,7 @@
 //! Heuristic-onset instrumentation: how long a beat took to assemble, and how
-//! much of it was spent looking (DESIGN §11's open question, UI.md §12).
+//! much of it was spent looking (DESIGN §17's open question, UI.md §12).
 //!
-//! DESIGN §11 says where heuristic play begins is unanswerable a priori and has
+//! DESIGN §17 says where heuristic play begins is unanswerable a priori and has
 //! to be *located* from playtesting. §8a says the cheap instrument is "what
 //! players inspect and how long assembly takes per beat". This is that
 //! instrument and nothing more: two counters, one log line at SEND, and a
@@ -120,7 +120,7 @@ pub fn judge(checks: &mut Checks, run: &BeatRun) {
             false,
             "a beat was sent and the run log recorded nothing about the assembly",
             format!(
-                "beat {beat}'s log is {:?}; DESIGN §11's onset question is answered from this \
+                "beat {beat}'s log is {:?}; DESIGN §17's onset question is answered from this \
                  line and nothing else writes it",
                 run.report_flow.log
             ),

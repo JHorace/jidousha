@@ -1,31 +1,42 @@
-//! The puzzle chain, as data (DESIGN.md §6).
+//! What a beat is, as data (DESIGN.md §10, §13): the authoring types, the
+//! dungeon predicates, and the assertion vocabulary. The chain itself is
+//! `chain.rs`, re-exported here so every reader keeps one path to it.
 //!
 //! A beat is `(initial roster state, dungeon(s), the intended dilemma stated in
 //! a sentence, expected-outcome assertions)` and **nothing else** — no code, no
-//! system, no branch anywhere that names a beat number. Beats 5+ are authored
-//! by adding a `BeatSpec` to `CHAIN` below; that is the whole of what this
-//! separation buys, and it is the reason the composition predicates in
-//! `Requirement` exist before a beat uses one.
+//! system, no branch anywhere that names a beat number.
 //!
 //! The fourth field is the verify scenario: `verify.rs` plays each beat through
 //! `InputScript` and evaluates its `Expect` list against the world. So the
-//! numbers below are simultaneously the tutorial and the tuning constants'
-//! regression harness — a constant that stops producing these outcomes fails
-//! the run.
+//! numbers in the chain are simultaneously the tutorial and the tuning
+//! constants' regression harness — a constant that stops producing these
+//! outcomes fails the run.
 
 use crate::model::Social;
+use crate::traits::{MarkId, MarkTone, TraitId};
+use crate::willing::Verdict;
 
-/// A character's authored starting state.
+pub use crate::chain::CHAIN;
+
+/// A character's authored starting state — the sheet, at the beat's opening.
 #[derive(Clone, Copy, Debug)]
 pub struct CharSpec {
-    /// The name. ASCII, because the engine's font is (DESIGN §7).
+    /// The name. ASCII, because the engine's font is (DESIGN §12).
     pub name: &'static str,
     /// Need at the start of the beat.
     pub desperation: i32,
-    /// Public reputation at the start of the beat.
-    pub infamy: i32,
+    /// Why the need presses — bound at generation (DESIGN §3). Short, because
+    /// the sheet's source row is one card column wide.
+    pub source: &'static str,
     /// Accumulated profit at the start of the beat.
     pub wealth: i32,
+    /// Who they are: at most `traits::TRAIT_CAP` ids, validated in
+    /// `traits::vocabulary`.
+    pub traits: &'static [TraitId],
+    /// What everyone already knows about them.
+    pub marks: &'static [MarkId],
+    /// Clean jobs already walked away from, counting toward *reliable*.
+    pub clean_jobs: i32,
 }
 
 /// An authored regard edge: `from` thinks `value` of `to`.
@@ -41,55 +52,49 @@ pub struct EdgeSpec {
 
 /// What a dungeon asks of a party beyond its headcount.
 ///
-/// The growth axis (DESIGN §5): predicates come from the social vocabulary
-/// rather than from combat stats. The two beyond `AnyParty` are unused by the
-/// tutorial beats and exercised directly in `verify.rs` — a contract a played
-/// beat never reaches is still a contract, and asking it directly is cheaper
-/// than authoring a beat to reach it.
+/// The growth axis (DESIGN §5): predicates come from the social vocabulary.
+/// v1's known-face predicates migrated to marks — a job that needs a known
+/// face is a job that needs a **dark mark** on somebody in the party (the
+/// underworld register, DESIGN §5). The two beyond `AnyParty` are unused by
+/// the tutorial beats and exercised directly in `judgment.rs` — a contract a
+/// played beat never reaches is still a contract.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Requirement {
     /// Headcount only.
     AnyParty,
-    /// At least one member whose infamy reaches `at_least` — the underworld
-    /// track's shape (DESIGN §4, OPEN): a job that needs a known face.
-    AtLeastOneInfamous {
-        /// The infamy that counts as a known face.
-        at_least: i32,
-    },
-    /// Nobody whose infamy reaches `at_least` — a job that cannot be seen with
-    /// a known face.
-    NoInfamous {
-        /// The infamy that counts as a known face.
-        at_least: i32,
-    },
+    /// At least one member wearing a dark mark — the underworld track's shape.
+    NeedsDarkMark,
+    /// Nobody wearing a dark mark — a job that cannot be seen with one.
+    NoDarkMarks,
 }
 
 impl Requirement {
     /// Whether `party` satisfies this predicate.
     pub fn met(self, social: &Social, party: &[jidousha::prelude::Entity]) -> bool {
+        let dark = |entity: &jidousha::prelude::Entity| {
+            social
+                .marks(*entity)
+                .iter()
+                .any(|mark| mark.tone() == MarkTone::Dark)
+        };
         match self {
             Requirement::AnyParty => true,
-            Requirement::AtLeastOneInfamous { at_least } => party
-                .iter()
-                .any(|member| social.infamy(*member) >= at_least),
-            Requirement::NoInfamous { at_least } => {
-                party.iter().all(|member| social.infamy(*member) < at_least)
-            }
+            Requirement::NeedsDarkMark => party.iter().any(dark),
+            Requirement::NoDarkMarks => !party.iter().any(dark),
         }
     }
 
     /// Why a party fails this predicate, as the send verb states it (UI.md §3).
     ///
-    /// The reason a button is disabled, not the requirement it is about —
-    /// "no known face in the party" rather than "at least one member of
-    /// infamy 3+". A player who has read the panel knows the requirement; what
-    /// they need from the button is which way theirs falls short.
+    /// The reason a button is disabled, not the requirement it is about. A
+    /// player who has read the panel knows the requirement; what they need
+    /// from the button is which way theirs falls short.
     pub fn shortfall(self) -> &'static str {
         match self {
             // Unreachable: a predicate every party meets is never the reason.
             Requirement::AnyParty => "nothing",
-            Requirement::AtLeastOneInfamous { .. } => "no known face in the party",
-            Requirement::NoInfamous { .. } => "a known face in the party",
+            Requirement::NeedsDarkMark => "no dark mark in the party",
+            Requirement::NoDarkMarks => "a dark mark in the party",
         }
     }
 
@@ -97,12 +102,8 @@ impl Requirement {
     pub fn describe(self) -> String {
         match self {
             Requirement::AnyParty => "anyone who will come".to_owned(),
-            Requirement::AtLeastOneInfamous { at_least } => {
-                format!("at least one member of infamy {at_least}+")
-            }
-            Requirement::NoInfamous { at_least } => {
-                format!("nobody of infamy {at_least}+")
-            }
+            Requirement::NeedsDarkMark => "somebody wearing a dark mark".to_owned(),
+            Requirement::NoDarkMarks => "nobody wearing a dark mark".to_owned(),
         }
     }
 }
@@ -126,7 +127,7 @@ pub enum QuestIcon {
 
 /// A job: what it asks for, what it pays, and what the player keeps.
 ///
-/// Everything visible before assembly, like everything else (DESIGN §5).
+/// Everything visible before assembly, like everything else (DESIGN §7).
 #[derive(Clone, Copy, Debug)]
 pub struct Dungeon {
     /// What it is called.
@@ -147,8 +148,9 @@ pub struct Dungeon {
 
 /// A claim about what a beat does, checked by `--verify`.
 ///
-/// `Refuses` and `Joins` are claims about the *assembly* moment — the social
-/// state the beat was authored with. Everything else is a claim about the world
+/// `Refuses`, `Joins`, `WillingnessIs`, `VerdictIs` and `TopReason` are claims
+/// about the *assembly* moment — the social state the beat was authored with,
+/// against the beat's own job. Everything else is a claim about the world
 /// after the dungeon resolved.
 #[derive(Clone, Copy, Debug)]
 pub enum Expect {
@@ -166,7 +168,7 @@ pub enum Expect {
         /// The party, by name.
         party: &'static [&'static str],
     },
-    /// `who`'s willingness for that party is exactly `total`.
+    /// `who`'s margin for that party is exactly `total`.
     ///
     /// The sharper form of the two above, and the one a beat wants when the
     /// answer sits on the boundary: "Tim joins" passes at +7 as happily as at
@@ -176,8 +178,29 @@ pub enum Expect {
         who: &'static str,
         /// The party, by name.
         party: &'static [&'static str],
-        /// The exact sum.
+        /// The exact margin.
         total: i32,
+    },
+    /// `who`'s verdict for that party is exactly this (DESIGN §6): a beat
+    /// about reluctance has to say so, or the reluctant band could vanish and
+    /// every joins/refuses claim would still pass.
+    VerdictIs {
+        /// The character asked.
+        who: &'static str,
+        /// The party, by name.
+        party: &'static [&'static str],
+        /// The judgment.
+        verdict: Verdict,
+    },
+    /// `who`'s leading reason for that party contains this text — the words a
+    /// player reads, asserted as words (DESIGN §14).
+    TopReason {
+        /// The character asked.
+        who: &'static str,
+        /// The party, by name.
+        party: &'static [&'static str],
+        /// A fragment of the fixed-vocabulary string.
+        fragment: &'static str,
     },
     /// `victim` is dead, killed by `by`.
     Killed {
@@ -198,11 +221,26 @@ pub enum Expect {
         /// The exact value.
         value: i32,
     },
-    /// `who`'s infamy ends the beat at `value`.
-    Infamy {
+    /// `who` ends the beat wearing this mark (DESIGN §5).
+    HasMark {
         /// The character.
         who: &'static str,
-        /// The exact value.
+        /// The mark.
+        mark: MarkId,
+    },
+    /// `who` ends the beat *not* wearing it — the half that catches a mark
+    /// written too eagerly.
+    LacksMark {
+        /// The character.
+        who: &'static str,
+        /// The mark.
+        mark: MarkId,
+    },
+    /// `who`'s clean-job count ends the beat at `value`.
+    CleanJobs {
+        /// The character.
+        who: &'static str,
+        /// The exact count.
         value: i32,
     },
     /// `who`'s wealth ends the beat at `value`.
@@ -223,7 +261,7 @@ pub enum Expect {
     },
     /// Some line of the resolution report contains this text.
     ///
-    /// The report is the story surface (DESIGN §7) and its arithmetic is what a
+    /// The report is the story surface (DESIGN §12) and its arithmetic is what a
     /// player learns the rules from, so the narration is asserted rather than
     /// assumed: a beat that produces the right world state and describes it
     /// wrongly has broken the half of the game a player reads.
@@ -249,7 +287,7 @@ pub struct BeatSpec {
     pub dungeons: &'static [Dungeon],
     /// The party the verify run assembles, by name - the intended solution.
     ///
-    /// Part of the fourth field (DESIGN §6: "the verify scenario"), not of the
+    /// Part of the fourth field (DESIGN §10: "the verify scenario"), not of the
     /// rules: nothing in the game reads it, and a player is free to send
     /// anything the gate allows.
     pub send: &'static [&'static str],
@@ -263,296 +301,3 @@ impl BeatSpec {
         self.roster.iter().position(|spec| spec.name == name)
     }
 }
-
-/// The chain. Win is completing it.
-///
-/// Beats 1-4 are the owner's tutorial, verbatim (DESIGN §6): Steve; Bob kills
-/// Steve; Tim refuses / Alex joins; Tim's price is met. Beats 5+ are the next
-/// session's, and are added here and nowhere else.
-pub const CHAIN: &[BeatSpec] = &[
-    BeatSpec {
-        title: "Steve",
-        dilemma: "One name on the roster, one job, and nothing in the way of it.",
-        teaches: "a sheet, a job, and what a share does to need",
-        roster: &[CharSpec {
-            name: "Steve",
-            desperation: 1,
-            infamy: 0,
-            wealth: 0,
-        }],
-        edges: &[],
-        dungeons: &[Dungeon {
-            name: "the sewer job",
-            blurb: "A starter job. One warm body will do.",
-            icon: QuestIcon::Cave,
-            headcount: 1,
-            pot: 6,
-            cut: 2,
-            requires: Requirement::AnyParty,
-        }],
-        send: &["Steve"],
-        expect: &[
-            Expect::Joins {
-                who: "Steve",
-                party: &["Steve"],
-            },
-            Expect::WillingnessIs {
-                who: "Steve",
-                party: &["Steve"],
-                total: 1,
-            },
-            Expect::Survives { who: "Steve" },
-            Expect::Wealth {
-                who: "Steve",
-                value: 4,
-            },
-            // 1 - 3, floored at 0: the share paid off more need than he had.
-            Expect::Desperation {
-                who: "Steve",
-                value: 0,
-            },
-            Expect::ReportSays {
-                fragment: "Steve takes 4",
-            },
-        ],
-    },
-    BeatSpec {
-        title: "Bob kills Steve",
-        dilemma: "The vault needs two. Bob is desperate enough that one of them \
-                  comes back, and you can read that off the sheets before you send them.",
-        teaches: "the pot is the motive: a fixed pot split among survivors",
-        roster: &[
-            CharSpec {
-                name: "Bob",
-                desperation: 8,
-                infamy: 0,
-                wealth: 0,
-            },
-            CharSpec {
-                name: "Steve",
-                desperation: 1,
-                infamy: 0,
-                wealth: 0,
-            },
-        ],
-        edges: &[],
-        dungeons: &[Dungeon {
-            name: "the deep vault",
-            blurb: "Two go down. What comes back up is their business.",
-            icon: QuestIcon::Vault,
-            headcount: 2,
-            pot: 6,
-            cut: 2,
-            requires: Requirement::AnyParty,
-        }],
-        send: &["Bob", "Steve"],
-        expect: &[
-            Expect::Joins {
-                who: "Bob",
-                party: &["Bob", "Steve"],
-            },
-            Expect::Joins {
-                who: "Steve",
-                party: &["Bob", "Steve"],
-            },
-            Expect::Killed {
-                victim: "Steve",
-                by: "Bob",
-            },
-            Expect::Survives { who: "Bob" },
-            Expect::Wealth {
-                who: "Bob",
-                value: 4,
-            },
-            Expect::Infamy {
-                who: "Bob",
-                value: 3,
-            },
-            // 8 - 3: a full share, and he is still the most desperate name here.
-            Expect::Desperation {
-                who: "Bob",
-                value: 5,
-            },
-            // Steve is dead, so no drift touches him.
-            Expect::Desperation {
-                who: "Steve",
-                value: 1,
-            },
-            Expect::ReportSays {
-                fragment: "Bob killed Steve - desperation 8 >= 6, share 2->4, regard 0 < 2",
-            },
-        ],
-    },
-    BeatSpec {
-        title: "Tim refuses, Alex joins",
-        dilemma: "Bob is known now, and the road needs two. Tim will not stand \
-                  next to a name worse than his own; Alex has one of his own.",
-        teaches: "infamy is a gap, not a level: it gates whoever is cleaner",
-        roster: &[
-            CharSpec {
-                name: "Bob",
-                desperation: 4,
-                infamy: 3,
-                wealth: 0,
-            },
-            CharSpec {
-                name: "Tim",
-                desperation: 1,
-                infamy: 0,
-                wealth: 0,
-            },
-            CharSpec {
-                name: "Alex",
-                desperation: 2,
-                infamy: 3,
-                wealth: 0,
-            },
-        ],
-        edges: &[],
-        dungeons: &[Dungeon {
-            name: "the long road",
-            blurb: "Two sets of hands, a long walk, and a pot that splits.",
-            icon: QuestIcon::Tower,
-            headcount: 2,
-            pot: 8,
-            cut: 2,
-            requires: Requirement::AnyParty,
-        }],
-        send: &["Bob", "Alex"],
-        expect: &[
-            // 1 - 1*(3-0) = -2, against either infamous name.
-            Expect::Refuses {
-                who: "Tim",
-                party: &["Bob", "Tim"],
-            },
-            Expect::WillingnessIs {
-                who: "Tim",
-                party: &["Bob", "Tim"],
-                total: -2,
-            },
-            Expect::Refuses {
-                who: "Tim",
-                party: &["Alex", "Tim"],
-            },
-            // 2 - 1*max(0, 3-3) = 2: no gap, so no objection.
-            Expect::Joins {
-                who: "Alex",
-                party: &["Bob", "Alex"],
-            },
-            Expect::WillingnessIs {
-                who: "Alex",
-                party: &["Bob", "Alex"],
-                total: 2,
-            },
-            Expect::Survives { who: "Bob" },
-            Expect::Survives { who: "Alex" },
-            Expect::Wealth {
-                who: "Bob",
-                value: 3,
-            },
-            // A clean job bonds the pair, both ways.
-            Expect::Regard {
-                from: "Bob",
-                to: "Alex",
-                value: 1,
-            },
-            Expect::Regard {
-                from: "Alex",
-                to: "Bob",
-                value: 1,
-            },
-            Expect::Desperation {
-                who: "Bob",
-                value: 1,
-            },
-            Expect::Desperation {
-                who: "Alex",
-                value: 0,
-            },
-            // Tim sat the round out, which is what raises his price.
-            Expect::Desperation {
-                who: "Tim",
-                value: 3,
-            },
-            Expect::ReportSays {
-                fragment: "Bob and Alex bond",
-            },
-        ],
-    },
-    BeatSpec {
-        title: "Tim's price is met",
-        dilemma: "The same road, the same gap, and a Tim who sat out a round. \
-                  Everyone has a price; his is a desperation of three.",
-        teaches: "refusal is temporary - the roster decays toward willingness",
-        roster: &[
-            CharSpec {
-                name: "Bob",
-                desperation: 4,
-                infamy: 3,
-                wealth: 0,
-            },
-            CharSpec {
-                name: "Tim",
-                desperation: 3,
-                infamy: 0,
-                wealth: 0,
-            },
-        ],
-        edges: &[],
-        dungeons: &[Dungeon {
-            name: "the second road",
-            blurb: "The same road again, and a hungrier man to walk it.",
-            icon: QuestIcon::Crypt,
-            headcount: 2,
-            pot: 8,
-            cut: 2,
-            requires: Requirement::AnyParty,
-        }],
-        send: &["Bob", "Tim"],
-        expect: &[
-            // 3 - 1*(3-0) = 0, and 0 >= 0 joins. The boundary is the beat.
-            Expect::Joins {
-                who: "Tim",
-                party: &["Bob", "Tim"],
-            },
-            Expect::WillingnessIs {
-                who: "Tim",
-                party: &["Bob", "Tim"],
-                total: 0,
-            },
-            // And the other way round, which is the half a beat forgets: Bob
-            // is the *more* infamous of the two, so standing next to Tim costs
-            // him nothing - and pays him nothing either. Without this the
-            // clamp in `incompat` can be dropped and every beat still passes.
-            Expect::WillingnessIs {
-                who: "Bob",
-                party: &["Bob", "Tim"],
-                total: 4,
-            },
-            Expect::Survives { who: "Tim" },
-            Expect::Survives { who: "Bob" },
-            Expect::Wealth {
-                who: "Tim",
-                value: 3,
-            },
-            Expect::Regard {
-                from: "Bob",
-                to: "Tim",
-                value: 1,
-            },
-            Expect::Regard {
-                from: "Tim",
-                to: "Bob",
-                value: 1,
-            },
-            Expect::Desperation {
-                who: "Tim",
-                value: 0,
-            },
-            Expect::Desperation {
-                who: "Bob",
-                value: 1,
-            },
-        ],
-    },
-];

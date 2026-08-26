@@ -1,15 +1,17 @@
-//! giri - an auto-battler where the pieces have interests (prototype #1).
+//! giri - an auto-battler where the pieces have interests (v2, phase P1).
 //!
 //! The player assembles a party from a roster and resolution is automatic:
 //! there is no attack verb, and the only verbs there are are social. Roster
-//! members consent, refuse, betray, bond and remember. `DESIGN.md` beside this
-//! file is the whole design; `src/model.rs` is the social model it describes,
-//! `src/beats.rs` is the puzzle chain as data, and `src/verify.rs` is the
-//! tutorial run as a test suite.
+//! members consent, refuse, betray, bond and remember - and since v2 they are
+//! somebody: traits, reputation marks, a reason in words for every verdict.
+//! `DESIGN.md` beside this file is the whole design; `src/model.rs` holds the
+//! state, `src/willing.rs` the decision function, `src/chain.rs` the tutorial
+//! as data, and `src/verify.rs` the tutorial run as a test suite.
 //!
-//! Pointer only. No assets, no audio, no randomness of any kind - v1's outcome
-//! is a pure function of (authored beat state, player assignments, tuning
-//! constants), which is what makes every beat exactly assertable.
+//! Pointer only. No audio, and no randomness in P1 - the outcome is a pure
+//! function of (authored beat state, player assignments, tuning constants),
+//! which is what makes every beat exactly assertable. Seeds enter with P2,
+//! via the engine `Rng` only.
 //!
 //! Play it:  `cargo run -p giri`
 //! On the web: `tools/build-web giri && tools/serve-web giri`
@@ -23,13 +25,16 @@ use jidousha::prelude::*;
 mod beats;
 mod board;
 mod capture;
+mod chain;
 mod checks;
 mod constants;
 mod contracts;
 mod door;
 mod floors;
 mod flow;
+mod frames;
 mod judge;
+mod judgment;
 mod layout;
 mod library;
 mod links;
@@ -45,10 +50,12 @@ mod scaling;
 mod screens;
 mod sprites;
 mod theme;
+mod traits;
 mod tuning;
 mod ui;
 mod verify;
 mod web;
+mod willing;
 
 use beats::Dungeon;
 use constants::Tuning;
