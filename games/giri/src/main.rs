@@ -32,17 +32,23 @@ mod flow;
 mod judge;
 mod layout;
 mod library;
+mod links;
 mod model;
 mod mutation;
+mod onset;
 mod party;
+mod presets;
 mod resolution;
 mod resolve;
+mod restart;
 mod scaling;
 mod screens;
 mod sprites;
 mod theme;
+mod tuning;
 mod ui;
 mod verify;
+mod web;
 
 use beats::Dungeon;
 use constants::Tuning;
@@ -98,12 +104,27 @@ pub fn register(app: &mut App) {
 /// Startup: the camera, the tuning constants, and the first beat.
 fn open_the_chain(world: &mut World) {
     // Whatever a harness left in the world before the first tick, or the set
-    // the game ships with. A sweep, the mutation round and (next session) the
-    // live tuning menu all enter here.
-    let tuning = world
-        .find_resource::<Tuning>()
-        .copied()
-        .unwrap_or(Tuning::SHIPPED);
+    // the game ships with. A sweep, the mutation round and the live tuning
+    // menu all enter here.
+    let planted = world.find_resource::<Tuning>().copied();
+    // **Before the first beat**, which is what makes `?constants=` a simulation
+    // input rather than a mid-run change (DESIGN §8a). A harness that planted a
+    // set wins over the page: `--verify` is not a browser, and a sweep asking
+    // for one set and getting another would be a sweep of the wrong thing.
+    let asked = planted.is_none().then(web::constants).flatten();
+    let carried = asked.is_some();
+    let (tuning, fault) = match asked {
+        Some(Ok(parsed)) => {
+            // Accepted links say so: a link is a claim about what a playtest
+            // ran with, and the console is where somebody checks it without
+            // opening the drawer (DESIGN §8a: a run is reproducible only if it
+            // says what it ran with).
+            println!("[giri] ?constants= accepted - {}", parsed.stamp());
+            (parsed, None)
+        }
+        Some(Err(error)) => (Tuning::SHIPPED, Some(error.message())),
+        None => (planted.unwrap_or(Tuning::SHIPPED), None),
+    };
     world.insert_resource(tuning);
     let start = world
         .find_resource::<StartAt>()
@@ -124,6 +145,22 @@ fn open_the_chain(world: &mut World) {
     world.insert_resource(Preview::default());
     flow::install_art(world);
     flow::load_beat(world, start.0);
+
+    // The drawer starts holding what is in effect, so nothing is pending before
+    // the player has touched anything.
+    //
+    // **A link that carries constants opens the drawer on them** - accepted or
+    // refused. A refused one has to be loud on the page (UI.md §12) and an
+    // accepted one has the same problem in the other direction: a playtest link
+    // whose weights are only in the URL is a link nobody checked. One click
+    // closes it, and the constants it was carrying are the ones on screen.
+    let flow = world.resource_mut::<Flow>();
+    flow.tuner.pending = tuning;
+    flow.tuner.open = carried;
+    if let Some(fault) = fault {
+        eprintln!("[giri] {fault}");
+        flow.tuner.fault = Some(fault);
+    }
 }
 
 /// A job, as the dungeon panel states it: what it takes, what it holds, and

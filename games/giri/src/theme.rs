@@ -70,6 +70,9 @@ pub const GHOST: Color = hex(0x262238);
 pub const SELECT_RING: Color = GOLD;
 /// The scrim the log drawer and the resolution takeover lay over the board.
 pub const SCRIM: Color = Color::rgba(0.055, 0.051, 0.09, 0.96);
+/// The tuning drawer's border: gold, held back, so the one drawer that changes
+/// what the simulation reads says which drawer it is (UI.md §12).
+pub const TUNE_EDGE: Color = Color::rgba(0.878, 0.702, 0.290, 0.55);
 
 /// Draw bands. Named once so no bare `layer: 1` appears at a call site.
 pub mod layers {

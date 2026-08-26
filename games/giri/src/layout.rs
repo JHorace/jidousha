@@ -106,6 +106,143 @@ pub fn log_panel() -> Rect {
     Rect::from_min_size(Vec2::new(0.0, 36.0), Vec2::new(DESIGN_W, 308.0))
 }
 
+// ── the tuning drawer (UI.md §12) ──────────────────────────────────────────
+
+/// The drawer's handle, in the status bar beside the log's.
+///
+/// The mockup puts it beside the gold counter; here it sits with the other
+/// drawer handle, because they are the same kind of control and the bar is
+/// where this game's secondary, always-available controls live (§10's log-handle
+/// amendment, applied to the second drawer).
+pub fn tune_button() -> Rect {
+    Rect::from_min_size(Vec2::new(656.0, 2.0), Vec2::new(80.0, 32.0))
+}
+
+/// The tuning drawer: the log drawer's rectangle, exactly.
+///
+/// **Not the info column the mockup uses**, and the reason is the readability
+/// floor rather than taste: ten constants at UI.md §7's 32x32 target floor is
+/// 320 reference pixels of steppers alone, and the info column is 276 tall.
+/// Three columns of rows in a drawer the width of the board fit with room for
+/// the note and the stamp; the info column fits six constants and a scrollbar.
+/// A drawer is already this game's shape for "an overlay over the board" and
+/// the gold border is what says which drawer this one is (UI.md §12).
+pub fn tuner_panel() -> Rect {
+    log_panel()
+}
+
+/// How many stepper rows a column holds before the next one starts.
+pub const TUNER_ROWS: usize = 4;
+const TUNER_COL_X: f32 = 28.0;
+const TUNER_COL_PITCH: f32 = 312.0;
+const TUNER_ROW_Y: f32 = 112.0;
+const TUNER_ROW_PITCH: f32 = 36.0;
+/// How wide a stepper's - and + are, on both axes. The smallest target in the
+/// game, and exactly UI.md §7's floor.
+const TUNER_STEP: f32 = 32.0;
+/// How far into a row the - sits: the width the constant's longest name needs.
+/// `desperation_floor` is seventeen characters, which is 158.7 units at
+/// `theme::SMALL` - so 164 leaves the name clear of the button.
+const TUNER_NAME_W: f32 = 164.0;
+/// The gap the value sits in, between the two buttons.
+const TUNER_VALUE_W: f32 = 36.0;
+
+/// The top-left of stepper row `index`, laid out down a column and then across.
+fn tuner_row_origin(index: usize) -> Vec2 {
+    let column = index / TUNER_ROWS;
+    let row = index % TUNER_ROWS;
+    Vec2::new(
+        TUNER_COL_X + column as f32 * TUNER_COL_PITCH,
+        TUNER_ROW_Y + row as f32 * TUNER_ROW_PITCH,
+    )
+}
+
+/// Where stepper row `index`'s name is drawn.
+pub fn tuner_name(index: usize) -> Vec2 {
+    tuner_row_origin(index) + Vec2::new(0.0, 10.0)
+}
+
+/// The - of stepper row `index`.
+pub fn tuner_minus(index: usize) -> Rect {
+    Rect::from_min_size(
+        tuner_row_origin(index) + Vec2::new(TUNER_NAME_W, 0.0),
+        Vec2::splat(TUNER_STEP),
+    )
+}
+
+/// The + of stepper row `index`.
+pub fn tuner_plus(index: usize) -> Rect {
+    Rect::from_min_size(
+        tuner_row_origin(index) + Vec2::new(TUNER_NAME_W + TUNER_STEP + TUNER_VALUE_W, 0.0),
+        Vec2::splat(TUNER_STEP),
+    )
+}
+
+/// The gap between them, where the value is centred.
+pub fn tuner_value(index: usize) -> Rect {
+    Rect::from_min_size(
+        tuner_row_origin(index) + Vec2::new(TUNER_NAME_W + TUNER_STEP, 0.0),
+        Vec2::new(TUNER_VALUE_W, TUNER_STEP),
+    )
+}
+
+/// The whole of stepper row `index` — what a hover is tested against, so that
+/// pointing anywhere along a row gives that constant's one-line meaning.
+pub fn tuner_row(index: usize) -> Rect {
+    Rect::from_min_size(
+        tuner_row_origin(index),
+        Vec2::new(TUNER_NAME_W + 2.0 * TUNER_STEP + TUNER_VALUE_W, TUNER_STEP),
+    )
+}
+
+/// The label in front of the preset row.
+pub fn tuner_presets_label() -> Vec2 {
+    Vec2::new(TUNER_COL_X, tuner_preset(0).min.y + 10.0)
+}
+
+/// Preset button `index`.
+pub fn tuner_preset(index: usize) -> Rect {
+    Rect::from_min_size(
+        Vec2::new(112.0 + index as f32 * 128.0, 72.0),
+        Vec2::new(120.0, 32.0),
+    )
+}
+
+/// The commit verb.
+pub fn tuner_apply() -> Rect {
+    Rect::from_min_size(Vec2::new(TUNER_COL_X, 264.0), Vec2::new(120.0, 32.0))
+}
+
+/// The drawer's title.
+pub fn tuner_title() -> Vec2 {
+    Vec2::new(TUNER_COL_X, 50.0)
+}
+
+/// The prose band under the steppers: the hint row first, then the note.
+///
+/// One band with two tenants in order rather than two fixed slots, because the
+/// hint is one line for a constant's meaning and three for a refused
+/// `?constants=` — and a note pinned under the taller case would sit in a hole
+/// on every other frame.
+pub fn tuner_hint() -> Vec2 {
+    Vec2::new(164.0, 266.0)
+}
+
+/// How wide the hint and the note may run before they wrap.
+///
+/// The stamp moved up beside the last stepper column, which is what gives this
+/// band the whole width of the drawer: a constant's meaning fits on one line
+/// here and wrapped to three in the column the stamp used to leave.
+pub fn tuner_prose_width() -> f32 {
+    DESIGN_W - 28.0 - tuner_hint().x
+}
+
+/// The stamp: the constants actually in effect, always visible while the drawer
+/// is open (UI.md §12). Under the last stepper column, which is short.
+pub fn tuner_stamp() -> Vec2 {
+    Vec2::new(652.0, 190.0)
+}
+
 /// Where log line `index` is drawn inside the drawer.
 pub fn log_row(index: usize) -> Vec2 {
     Vec2::new(28.0, 76.0 + index as f32 * 20.0)

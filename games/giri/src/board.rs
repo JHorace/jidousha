@@ -378,13 +378,31 @@ pub fn log(flow: &Flow) -> Panel {
             theme::FAINT,
         ));
     }
-    for (index, line) in flow.log.iter().take(layout::LOG_ROWS).enumerate() {
-        panel.text(TextRun::over(
-            layout::log_row(index),
-            line.clone(),
-            theme::SMALL,
-            theme::DIM,
-        ));
+    // **Wrapped, and the drawer's budget is rows rather than entries.** A log
+    // entry used to be assumed to fit one row, which held while every entry was
+    // a sentence about one click; the line an APPLY writes carries the whole
+    // constants stamp and is three times the drawer's width. An entry that ran
+    // off the side would be drawn outside the design rect, which is a failure
+    // the bounds check only sees on a frame that has the drawer open.
+    let mut row = 0;
+    for line in &flow.log {
+        for piece in wrap(
+            line,
+            columns(layout::log_panel().size().x - 56.0, theme::SMALL),
+        )
+        .lines()
+        {
+            if row >= layout::LOG_ROWS {
+                return panel;
+            }
+            panel.text(TextRun::over(
+                layout::log_row(row),
+                piece,
+                theme::SMALL,
+                theme::DIM,
+            ));
+            row += 1;
+        }
     }
     panel
 }

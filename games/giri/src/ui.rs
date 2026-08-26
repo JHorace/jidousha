@@ -158,24 +158,50 @@ impl Panel {
     }
 }
 
-/// Break `text` into lines of at most `columns` characters, on spaces.
+/// Break `text` into lines of at most `columns` characters, on spaces — and
+/// through a word that is longer than the column on its own.
 ///
 /// `ctx.text` does not wrap - `\n` is the only line break there is - so a game
 /// that draws a generated sentence wraps it itself or draws it off the side of
-/// the world. A word longer than the column is left long rather than split:
-/// giri's vocabulary has no such word, and a hyphenation rule nobody exercises
-/// is a rule nobody checks.
+/// the world.
+///
+/// **The over-long word is split rather than left long, and that rule was paid
+/// for.** It used to say the opposite, on the grounds that giri's vocabulary had
+/// no such word; the constants stamp is one -
+/// `k_inf:1,k_kill:5,k_loyal:4,...` is a hundred and forty-five characters with
+/// no space in it - and the line an APPLY raises ran a third of the way off the
+/// screen before a hand playtest saw it. A wrapper whose contract is "no line is
+/// wider than the column" has to be true of every string, because the string
+/// that breaks it is always the one added after the rule was written.
 pub fn wrap(text: &str, columns: usize) -> String {
+    let columns = columns.max(1);
     let mut lines: Vec<String> = Vec::new();
     let mut line = String::new();
     for word in text.split_whitespace() {
         if !line.is_empty() && line.chars().count() + 1 + word.chars().count() > columns {
             lines.push(std::mem::take(&mut line));
         }
-        if !line.is_empty() {
+        // Split through, in column-wide pieces, when the word cannot fit a line
+        // of its own. The break falls where it falls: a stamp is machine text,
+        // and a hyphen inserted into one is a character `parse` would refuse.
+        let mut rest: &str = word;
+        if rest.chars().count() > columns {
+            if !line.is_empty() {
+                lines.push(std::mem::take(&mut line));
+            }
+            while rest.chars().count() > columns {
+                let cut = rest
+                    .char_indices()
+                    .nth(columns)
+                    .map_or(rest.len(), |(index, _)| index);
+                let (head, tail) = rest.split_at(cut);
+                lines.push(head.to_owned());
+                rest = tail;
+            }
+        } else if !line.is_empty() {
             line.push(' ');
         }
-        line.push_str(word);
+        line.push_str(rest);
     }
     if !line.is_empty() {
         lines.push(line);

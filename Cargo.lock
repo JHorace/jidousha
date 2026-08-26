@@ -513,6 +513,7 @@ name = "giri"
 version = "0.1.0"
 dependencies = [
  "jidousha",
+ "web-sys",
 ]
 
 [[package]]

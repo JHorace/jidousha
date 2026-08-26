@@ -10,6 +10,10 @@ nobody fixes, and the PR body is not somewhere anybody reads twice.
 neither was `docs/internal/` or any ADR but 0038. Each entry below is therefore
 a question the four documents were actually asked.
 
+Eight entries over four sessions: four from the first slice, two from the
+presentation rebuild, one from the curation session, and one from the tuning
+session (2026-08-24). The first four are resolved; G-007 and G-008 are open.
+
 Four from the first slice, then two more from the presentation rebuild
 (2026-08-23), which was the first session to give giri art and a scaling
 contract. Both new ones are about the same half-hour: a game with its own
@@ -337,3 +341,61 @@ The finding exists so that the second game to curate a pack promotes this rather
 than rewriting it — at which point the natural home is a `tools/` image module,
 and `strip_background`'s flood-fill-not-key rule is the part that must survive
 the move.
+
+## From the tuning session (2026-08-24)
+
+Same reading discipline: `docs/api/` (all four) and `crates/jidousha/examples/`
+only. This session built DESIGN §8a's live tuning drawer, its presets, its
+`?constants=` links and §11's instrumentation. One finding, and it is the first
+in this file that made giri name a crate other than the facade.
+
+### G-008 — a game cannot read the parameters its own page was opened with
+
+Class: api · Game: giri · Documents: `jidousha-api.md` (`GameConfig`, `run`,
+`asset_source`) · Fixed in: not fixed; worked around in `games/giri/src/web.rs`
+
+UI.md §9a makes a tuning configuration a URL: `?constants=k_inf:2,k_kill:6` is a
+playtest link that carries its weights and a repro link when a playtester reports
+a feel. The parameter has to be read once, before the first beat, because a
+constant that arrived after it would be a constant that changed mid-run — which
+is the one thing DESIGN §8a exists to prevent.
+
+There is no way to read it. The facade's whole launch surface is
+`GameConfig { title, window_size, .. }` and `run(config, setup)`; `App` offers
+`add_system` and nothing else, so a game cannot even plant a resource before
+`Startup` from the windowed path. `std::env::args()` is the native answer and is
+empty on `wasm32-unknown-unknown`. Nothing in the four documents mentions the
+page's query string at all.
+
+What makes this more than an absence is that **the engine reads the same query
+string already**: `?frametime=1` is documented in `jidousha-api.md`'s own frame
+pacing passage, and `?renderscale=` landed beside it. So the mechanism exists,
+one layer down, and exposes neither the values nor a way to ask for one. A game
+author reading the documents finds a page that already parses parameters and no
+parameter of their own.
+
+The workaround is `web-sys`, target-gated to wasm32, four lines in
+`src/web.rs`: `window()?.location().search()`. It works, it adds no crate to
+`Cargo.lock` (`web-sys`, `js-sys` and `wasm-bindgen` are all already there at
+these versions for the engine's own platform layer, so the delta is one edge),
+and it is the first time a game under `games/` has named a dependency that is not
+the facade. `tools/check-game-deps` is satisfied — the rule it enforces is about
+*engine* crates — but the spirit of ADR-0038 is that the facade is the whole API
+a game gets, and this is a game reaching around it for something the platform
+layer already has.
+
+Two shapes would close it, and they are separable:
+
+- **The small one**: `Launch` (or a field on the existing input resources) — the
+  page's query parameters as a `&str` or a key lookup, empty on native. One
+  resource, and the engine already parses the string it would come from.
+- **The general one**: a documented way for a game to receive *anything* before
+  `Startup` on the windowed path. `headless(..)` has this — a harness plants
+  resources and `Startup` reads them, which is how giri's own verify mode passes
+  a beat index and a constants set — and `run(..)` has no equivalent. The
+  asymmetry is invisible until a game wants its scripted path and its played path
+  to take the same input, which is exactly what a shareable tuning link is.
+
+Native is deliberately not given an equivalent, and that is a game-side decision
+rather than a gap: the drawer is reachable on every platform (UI.md §9a), and a
+`--constants` flag would be a second way to do a thing that already has one.

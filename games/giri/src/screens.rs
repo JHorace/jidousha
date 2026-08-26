@@ -9,10 +9,12 @@
 
 use jidousha::prelude::*;
 
+use crate::constants::{Field, Tuning};
 use crate::flow::{Flow, Preview, Stage};
 use crate::model::Social;
+use crate::presets::PRESETS;
 use crate::ui::{self, Panel};
-use crate::{board, layout, party, resolution, theme};
+use crate::{board, layout, party, resolution, theme, tuning};
 
 /// Everything the board says, as data.
 pub fn board_content(flow: &Flow, social: &Social, preview: &Preview) -> Panel {
@@ -23,17 +25,17 @@ pub fn board_content(flow: &Flow, social: &Social, preview: &Preview) -> Panel {
     panel.absorb(party::strip(flow, social, preview));
     panel.absorb(party::send(flow, preview));
     panel.absorb(party::toast(flow));
-    panel.text(ui::TextRun::new(
-        ui::centered(
-            layout::log_button(),
-            "LOG",
+    for (rect, label) in [
+        (layout::log_button(), "LOG"),
+        (layout::tune_button(), "TUNE"),
+    ] {
+        panel.text(ui::TextRun::new(
+            ui::centered(rect, label, theme::SMALL, rect.min.y + 10.0),
+            label,
             theme::SMALL,
-            layout::log_button().min.y + 10.0,
-        ),
-        "LOG",
-        theme::SMALL,
-        theme::DIM,
-    ));
+            theme::DIM,
+        ));
+    }
     panel
 }
 
@@ -43,12 +45,18 @@ pub fn board_content(flow: &Flow, social: &Social, preview: &Preview) -> Panel {
 /// on those two screens the board is not built at all. A board drawn behind an
 /// opaque overlay is invisible and still on the frame, which costs a draw and -
 /// worse - puts a second row of glyphs on every row an assertion counts.
-pub fn content(flow: &Flow, social: &Social, preview: &Preview) -> Panel {
+/// `tuning` is the **active** set, read from the world's resource by every
+/// caller — the drawer's stamp and its dirty highlight are only true if the
+/// numbers they are compared against are the ones the simulation reads.
+pub fn content(flow: &Flow, social: &Social, preview: &Preview, tuning: &Tuning) -> Panel {
     match flow.stage {
         Stage::Board => {
             let mut panel = board_content(flow, social, preview);
             if flow.log_open {
                 panel.absorb(board::log(flow));
+            }
+            if flow.tuner.open {
+                panel.absorb(tuning::drawer(flow, tuning));
             }
             panel
         }
@@ -121,6 +129,7 @@ pub fn draw_board(ctx: &mut DrawCtx) {
         ui::ghost_button(ctx, layout::release_button(), theme::layers::PIECE - 1);
     }
     ui::ghost_button(ctx, layout::log_button(), theme::layers::PIECE - 1);
+    ui::ghost_button(ctx, layout::tune_button(), theme::layers::PIECE - 1);
 
     // the party strip
     let strip = layout::party_strip();
@@ -181,6 +190,7 @@ pub fn draw_overlay(ctx: &mut DrawCtx) {
                 theme::layers::OVERLAY,
             );
         }
+        Stage::Board if flow.tuner.open => draw_tuner(ctx, &flow),
         Stage::Board => {}
         Stage::Resolution | Stage::Complete => {
             ui::fill(
@@ -210,11 +220,42 @@ pub fn draw_overlay(ctx: &mut DrawCtx) {
     }
 }
 
+/// The tuning drawer's chrome: the same drawer the log is, in gold.
+///
+/// **The gold border is the whole difference in the pixel language** — a drawer
+/// over the board, and the one colour reserved for the player's own interests
+/// saying that this one is a dev surface (UI.md §12).
+fn draw_tuner(ctx: &mut DrawCtx, flow: &Flow) {
+    let active = *ctx.world.resource::<Tuning>();
+    let panel = layout::tuner_panel();
+    // **Opaque, where the log drawer is a scrim.** The log is a glance at
+    // something the board also says; the drawer is twenty rows of small type
+    // over a board full of small type, and at the scrim's alpha the board reads
+    // straight through it. The mockup's own drawer is this colour for the same
+    // reason.
+    ui::fill(ctx, panel, theme::BAR, theme::layers::OVERLAY);
+    ui::border(ctx, panel, theme::TUNE_EDGE, 2.0, theme::layers::OVERLAY);
+    for index in 0..PRESETS.len() {
+        ui::ghost_button(ctx, layout::tuner_preset(index), theme::layers::OVERLAY + 1);
+    }
+    for index in 0..Field::ALL.len() {
+        ui::ghost_button(ctx, layout::tuner_minus(index), theme::layers::OVERLAY + 1);
+        ui::ghost_button(ctx, layout::tuner_plus(index), theme::layers::OVERLAY + 1);
+    }
+    ui::button(
+        ctx,
+        layout::tuner_apply(),
+        tuning::dirty(&flow.tuner.pending, &active),
+        theme::layers::OVERLAY + 1,
+    );
+}
+
 /// Every string and every icon of the current screen, drawn.
 pub fn draw_content(ctx: &mut DrawCtx) {
     let flow = ctx.world.resource::<Flow>().clone();
     let preview = ctx.world.resource::<Preview>().clone();
+    let tuning = *ctx.world.resource::<Tuning>();
     let social = Social::read(&ctx.world);
-    let panel = content(&flow, &social, &preview);
+    let panel = content(&flow, &social, &preview, &tuning);
     ui::draw(ctx, &panel);
 }

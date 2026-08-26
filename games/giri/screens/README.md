@@ -18,6 +18,12 @@ change.
 | `board-narrow.png` | the same board | 600x540 |
 | `staged-narrow.png` | the same staged board | 600x540 |
 | `resolution-narrow.png` | the same takeover | 600x540 |
+| `tuning-reference.png` | the tuning drawer, a preset pending | 1920x1080 |
+
+The tuning drawer has no narrow capture, and that is a decision rather than an
+omission: it is a dev surface rather than a screen mode, its stepper rows are
+the smallest type in the game, and at 600x540 the one picture of it would be the
+one nobody in this set could read (UI.md §12).
 
 The narrow set exists to catch scaling regressions (UI.md §6): the whole
 960x540 design has to be on screen, uniformly scaled, letterboxed symmetrically.

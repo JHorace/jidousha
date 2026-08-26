@@ -11,7 +11,7 @@
 
 use crate::beats::CHAIN;
 use crate::checks::Checks;
-use crate::constants::Tuning;
+use crate::constants::{Field, Tuning};
 use crate::flow::{Flow, Preview};
 use crate::model::Social;
 use crate::screens;
@@ -181,7 +181,7 @@ pub fn printable_strings(checks: &mut Checks) {
                 &played.report_preview,
             ),
         ] {
-            for text in screens::content(flow, social, preview).strings() {
+            for text in screens::content(flow, social, preview, &played.tuning).strings() {
                 note(format!("beat {beat}'s {mode}"), text.to_owned());
             }
         }
@@ -191,8 +191,36 @@ pub fn printable_strings(checks: &mut Checks) {
         let mut opened = played.report_flow.clone();
         opened.log_open = true;
         opened.stage = crate::flow::Stage::Board;
-        for text in screens::content(&opened, &played.after, &played.report_preview).strings() {
+        for text in screens::content(
+            &opened,
+            &played.after,
+            &played.report_preview,
+            &played.tuning,
+        )
+        .strings()
+        {
             note(format!("beat {beat}'s log drawer"), text.to_owned());
+        }
+        // The tuning drawer, with a hovered row and a pending set that differs
+        // from the active one, so its two conditional rows are on the list too
+        // (a constant's meaning, and the sentence an APPLY raises).
+        let mut tuner = played.report_flow.clone();
+        tuner.stage = crate::flow::Stage::Board;
+        tuner.log_open = false;
+        tuner.tuner.open = true;
+        tuner.tuner.hover = Field::ALL.first().copied();
+        tuner.tuner.pending = crate::presets::PRESETS
+            .last()
+            .map_or(played.tuning, |preset| preset.tuning);
+        for text in screens::content(
+            &tuner,
+            &played.after,
+            &played.report_preview,
+            &played.tuning,
+        )
+        .strings()
+        {
+            note(format!("beat {beat}'s tuning drawer"), text.to_owned());
         }
         for bounce in [&played.refusal, &played.veto].into_iter().flatten() {
             if let Some(toast) = &bounce.toast {
@@ -212,8 +240,20 @@ pub fn printable_strings(checks: &mut Checks) {
         stage: crate::flow::Stage::Complete,
         ..Flow::default()
     };
-    for text in screens::content(&done, &Social::default(), &Preview::default()).strings() {
+    for text in screens::content(
+        &done,
+        &Social::default(),
+        &Preview::default(),
+        &Tuning::SHIPPED,
+    )
+    .strings()
+    {
         note("the end of the chain".to_owned(), text.to_owned());
+    }
+    // Every reason a `?constants=` link is refused, since each is a string the
+    // page draws and none is reachable by playing (UI.md §12).
+    for message in crate::links::refusals() {
+        note("a refused ?constants=".to_owned(), message);
     }
     for (what, text) in &strings {
         let stray = text

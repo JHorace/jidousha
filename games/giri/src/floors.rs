@@ -20,6 +20,7 @@
 use jidousha::prelude::*;
 
 use crate::checks::{Checks, greater};
+use crate::flow::Flow;
 use crate::model::Member;
 use crate::verify::{BeatRun, inside};
 use crate::{layout, party, scaling, screens, theme, verify};
@@ -40,7 +41,76 @@ pub fn targets() -> Vec<(&'static str, Rect)> {
     out.push(("the send verb", layout::send_button()));
     out.push(("the release control", layout::release_button()));
     out.push(("the log drawer's handle", layout::log_button()));
+    out.push(("the tuning drawer's handle", layout::tune_button()));
     out
+}
+
+/// Every rectangle the tuning drawer answers a click in.
+///
+/// **A set of its own, and not part of `targets`**, because the drawer covers
+/// the board: a stepper sitting over a quest card is the drawer working, and
+/// folding the two sets together would make the overlap floor report the
+/// covering as a collision. The 32x32 floor applies to both sets identically,
+/// and these are the smallest targets in the game — twenty steppers at exactly
+/// the floor (UI.md §12).
+pub fn tuner_targets() -> Vec<(String, Rect)> {
+    let mut out: Vec<(String, Rect)> = Vec::new();
+    for (index, preset) in crate::presets::PRESETS.iter().enumerate() {
+        out.push((
+            format!("the {} preset", preset.name),
+            layout::tuner_preset(index),
+        ));
+    }
+    for (index, field) in crate::constants::Field::ALL.iter().copied().enumerate() {
+        out.push((format!("{}'s -", field.name()), layout::tuner_minus(index)));
+        out.push((format!("{}'s +", field.name()), layout::tuner_plus(index)));
+    }
+    out.push(("the APPLY verb".to_owned(), layout::tuner_apply()));
+    out
+}
+
+/// UI.md §7's floors over the tuning drawer, which no played beat opens.
+pub fn tuner_floors(checks: &mut Checks) {
+    let drawer = layout::tuner_panel();
+    for (what, rect) in tuner_targets() {
+        let size = rect.size();
+        checks.require(
+            !greater(theme::MIN_TARGET, size.x) && !greater(theme::MIN_TARGET, size.y),
+            "a clickable target is smaller than the readability floor allows",
+            format!(
+                "{what} is {:.0}x{:.0} reference pixels and UI.md §7's floor is {}x{}",
+                size.x,
+                size.y,
+                theme::MIN_TARGET,
+                theme::MIN_TARGET
+            ),
+        );
+        checks.require(
+            inside(drawer, rect),
+            "a tuning control is outside the drawer that holds it",
+            format!("{what} is {rect:?} and the drawer is {drawer:?}"),
+        );
+    }
+    let controls = tuner_targets();
+    for (index, (what, rect)) in controls.iter().enumerate() {
+        for (other_what, other) in controls.iter().skip(index + 1) {
+            checks.require(
+                !rect.overlaps(*other),
+                "two tuning controls overlap",
+                format!("{what} at {rect:?} overlaps {other_what} at {other:?}"),
+            );
+        }
+    }
+    // The drawer's handle is on the board and the drawer is not: a handle under
+    // its own drawer is a drawer that cannot be closed.
+    checks.require(
+        !layout::tune_button().overlaps(drawer),
+        "the tuning drawer covers its own handle",
+        format!(
+            "the handle is {:?} and the drawer is {drawer:?}",
+            layout::tune_button()
+        ),
+    );
 }
 
 /// The floors that are questions about the layout alone.
@@ -214,6 +284,130 @@ pub fn scaling_contract(checks: &mut Checks) -> String {
     notes.join(", ")
 }
 
+/// The floors over the drawer as it is actually drawn — the same three the
+/// board gets, on the one screen no played beat reaches.
+pub fn judge_tuner(checks: &mut Checks, run: &crate::restart::DrawerRun) {
+    // Four screens, and three of them are on no frame the session photographed:
+    //
+    // - the drawer as the session photographed it;
+    // - the drawer just after an APPLY, whose hint row carries the whole
+    //   constants stamp - a hundred and forty-five characters with no space in
+    //   it, and the longest single row this game ever draws;
+    // - the drawer as a refused `?constants=` leaves it, carrying the list of
+    //   every key;
+    // - the *log* drawer with that same stamp in it, because the applied line
+    //   goes to the log as well and the log drawer has a width of its own.
+    //
+    // The second and the fourth are here because a hand playtest found the
+    // stamp running a third of the way off the screen, on exactly the two
+    // screens nothing was checking.
+    let mut refused = run.pending.clone();
+    refused.tuner.fault = crate::links::refusals().into_iter().max_by_key(String::len);
+    let mut logged = run.applied_flow.clone();
+    logged.tuner.open = false;
+    logged.log_open = true;
+    // And the board with both drawers closed and the APPLY toast still up: the
+    // toast lands in the dilemma band, which is the shortest band on the board.
+    let mut toasted = run.applied_flow.clone();
+    toasted.tuner.open = false;
+    for flow in [&run.pending, &run.applied_flow, &refused, &logged, &toasted] {
+        judge_drawer_screen(checks, run, flow);
+    }
+    judge_drawer_frame(checks, run);
+}
+
+fn judge_drawer_screen(checks: &mut Checks, run: &crate::restart::DrawerRun, flow: &Flow) {
+    let panel = screens::content(
+        flow,
+        &run.pending_social,
+        &run.pending_preview,
+        &run.pending_active,
+    );
+    // Which drawer is up decides what an overlay row owes: the one it is in,
+    // and - for the tuning drawer, whose controls only exist while it is open -
+    // the steppers it must not lie across.
+    let (what, drawer) = if flow.tuner.open {
+        ("the tuning drawer", Some(layout::tuner_panel()))
+    } else if flow.log_open {
+        ("the log drawer", Some(layout::log_panel()))
+    } else {
+        ("the board after an APPLY", None)
+    };
+    for text in &panel.runs {
+        checks.require(
+            !greater(theme::MIN_TEXT, text.size),
+            "a row of text is smaller than the readability floor allows",
+            format!(
+                "{what}: {:?} is set at {:.1} reference pixels and UI.md §7's floor is {:.0}",
+                text.text,
+                text.size,
+                theme::MIN_TEXT
+            ),
+        );
+        checks.require(
+            inside(layout::design(), text.bounds()),
+            "a row of text runs off the design rect",
+            format!("{what}: {:?} occupies {:?}", text.text, text.bounds()),
+        );
+        // The board's own rows are behind the open drawer, and they are judged
+        // against the board's controls in `judge`. What is left is the drawer's
+        // own text, and the two things it owes: staying inside the drawer, and
+        // not lying across a control.
+        let Some(drawer) = drawer else { continue };
+        if text.layer != theme::layers::OVERLAY_TEXT {
+            continue;
+        }
+        checks.require(
+            inside(drawer, text.bounds()),
+            "a row of a drawer is drawn outside it",
+            format!(
+                "{what}: {:?} occupies {:?} and the drawer is {drawer:?}",
+                text.text,
+                text.bounds()
+            ),
+        );
+        if !flow.tuner.open {
+            continue;
+        }
+        for (control, target) in tuner_targets() {
+            if !text.bounds().overlaps(target) {
+                continue;
+            }
+            checks.require(
+                inside(target, text.bounds()),
+                "a row of text lies across a control it is not the label of",
+                format!(
+                    "{what}: {:?} at {:?} crosses {control} at {target:?}",
+                    text.text,
+                    text.bounds()
+                ),
+            );
+        }
+    }
+}
+
+/// The smallest glyph actually on the frame, which the layout cannot give: the
+/// drawer is where the smallest type in the game is.
+fn judge_drawer_frame(checks: &mut Checks, run: &crate::restart::DrawerRun) {
+    if let Some(frame) = &run.pending_frame {
+        let smallest = frame
+            .quads()
+            .iter()
+            .filter(|quad| quad.texture == run.font)
+            .map(|quad| quad.bounds().size().y)
+            .fold(f32::MAX, f32::min);
+        checks.require(
+            smallest == f32::MAX || !greater(theme::MIN_TEXT - 0.01, smallest),
+            "a glyph was drawn below the readability floor",
+            format!(
+                "the shortest glyph quad with the tuning drawer open is {smallest:.2} \
+                 reference pixels and the floor is {:.0}",
+                theme::MIN_TEXT
+            ),
+        );
+    }
+}
+
 /// The floors that need a played beat and its frames.
 pub fn judge(checks: &mut Checks, run: &BeatRun) {
     let beat = run.index + 1;
@@ -239,7 +433,7 @@ pub fn judge(checks: &mut Checks, run: &BeatRun) {
             &run.report_preview,
         ),
     ] {
-        let panel = screens::content(flow, social, preview);
+        let panel = screens::content(flow, social, preview, &run.tuning);
         for text in &panel.runs {
             checks.require(
                 !greater(theme::MIN_TEXT, text.size),
@@ -302,7 +496,7 @@ pub fn judge(checks: &mut Checks, run: &BeatRun) {
             &run.ready,
         ),
     ] {
-        let panel = screens::content(flow, social, preview);
+        let panel = screens::content(flow, social, preview, &run.tuning);
         for text in &panel.runs {
             for (what, target) in targets() {
                 if !text.bounds().overlaps(target) {
