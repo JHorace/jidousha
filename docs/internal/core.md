@@ -415,8 +415,11 @@ frame:
   `examples/prototype_kit` are the worked examples, and pong's verify report and
   captured frame are byte-identical across the change.
 
-  The observation that prompted all of this, and the reading still outstanding on
-  it, are in `docs/internal/frame-pacing.md`.
+  The observation that prompted all of this is in
+  `docs/internal/frame-pacing.md`, which is now closed and parked: the defect
+  turned out to be a browser presentation bug on one platform, and interpolation
+  is correct and was never going to fix it. It stays because it is right under
+  every hypothesis that *was* a pacing problem.
 
 - **The catch-up bound is real and it lives in two places, both `MAX_FRAME =
   0.25s`**: `FrameClock::frame` (jidousha-platform `clock.rs`) clamps what the

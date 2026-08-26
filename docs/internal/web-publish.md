@@ -190,8 +190,10 @@ One `index.html` template, self-contained (no external CDN dependencies):
   input — which is also why its readings are kept short enough to fit without
   scrolling rather than relying on a scrollbar nobody can reach.
 - Why it exists and what its readings mean, hypothesis by hypothesis:
-  `docs/internal/frame-pacing.md`, which is where the owner's reading of it gets
-  written down.
+  `docs/internal/frame-pacing.md` — which is also the worked example of this
+  overlay doing its job, over four rounds of readings, and is now closed and
+  parked with the defect characterised as a browser bug rather than an engine
+  one.
 - `serve-web --check` has a third pass for it (§1). That pass can require more
   than "the overlay appeared": the check browser is deliberately
   software-rendering (`--use-angle=swiftshader`, because a runner has no GPU),
