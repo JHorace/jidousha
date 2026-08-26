@@ -14,7 +14,8 @@
 //! `headless(..)` builds a fresh game per candidate and `Startup` takes
 //! whatever the harness left in the world. `docs/api/jidousha-testing.md`
 //! makes the trade explicit — a game with two numbers should stay with
-//! constants; this one has thirteen and its verify mode sweeps them every run.
+//! constants; this one has twenty-three and its verify mode sweeps them every
+//! run.
 //!
 //! **Three readers, one set of names.** `Field::name` is the name DESIGN gives
 //! a constant, and it is the only name there is: the drawer's rows print it,
@@ -72,6 +73,37 @@ pub struct Tuning {
     /// else wrong with it. At the floor a character still takes a clean job
     /// (0 >= 0) and nothing that costs them.
     pub desperation_floor: i32,
+    /// What a reluctant (or since-departed-below-zero) door margin adds to
+    /// pressure (DESIGN §7a). Pressing reluctant people is priced in risk.
+    pub strain_reluctant: i32,
+    /// What an eager margin takes off pressure — the glad-to-be-here discount.
+    pub strain_eager: i32,
+    /// The margin above which a join counts as eager. Between
+    /// `reluctant_below` and this is comfortable: strain zero.
+    pub eager_above: i32,
+    /// Pressure per point of desperation (DESIGN §7a: desperation x a weight).
+    pub hunger_weight: i32,
+    /// Pressure per gold a member would gain if one fewer split the pot — the
+    /// opportunity term: the pot's size relative to the share, and the party's
+    /// size, in one number.
+    pub opportunity_pull: i32,
+    /// The band cutoff: a party whose highest pressure reaches this reads
+    /// *uneasy* (DESIGN §7a).
+    pub uneasy_at: i32,
+    /// The band cutoff a party reads *powder keg* at — **and the murder
+    /// floor**: the murder rung is structurally unavailable below this
+    /// pressure (DESIGN §8). One constant, so the warning and the gate cannot
+    /// disagree.
+    pub powder_keg_at: i32,
+    /// The occurrence die: a member betrays when a roll of `0..this` lands
+    /// under their pressure less `occurrence_calm`.
+    pub occurrence_die: i32,
+    /// The pressure the occurrence roll forgives — below it nobody rolls at
+    /// all, which is what keeps a calm party's betrayals rare rather than
+    /// merely less common.
+    pub occurrence_calm: i32,
+    /// Twelfths of the pot a sabotage destroys (the named fraction, DESIGN §8).
+    pub sabotage_loss: i32,
 }
 
 impl Resource for Tuning {}
@@ -103,6 +135,16 @@ impl Tuning {
         desperation_rise: 2,
         desperation_fall: 3,
         desperation_floor: 0,
+        strain_reluctant: 3,
+        strain_eager: 2,
+        eager_above: 4,
+        hunger_weight: 1,
+        opportunity_pull: 1,
+        uneasy_at: 4,
+        powder_keg_at: 8,
+        occurrence_die: 12,
+        occurrence_calm: 2,
+        sabotage_loss: 6,
     };
 
     /// The constants in effect, as the lines the drawer's stamp and every
@@ -125,7 +167,11 @@ impl Tuning {
              dark {}  light {}\n\
              reliable {}  bond +{}\n\
              witness {}  bonded {}\n\
-             rise +{}  fall -{}  floor {}",
+             rise +{}  fall -{}  floor {}\n\
+             strain +{} -{}  eager >{}\n\
+             hunger x{}  gain x{}\n\
+             uneasy {}  keg {}\n\
+             die {}  calm {}  loss {}/12",
             self.k_kill,
             self.k_loyal,
             self.reluctant_below,
@@ -139,6 +185,16 @@ impl Tuning {
             self.desperation_rise,
             self.desperation_fall,
             self.desperation_floor,
+            self.strain_reluctant,
+            self.strain_eager,
+            self.eager_above,
+            self.hunger_weight,
+            self.opportunity_pull,
+            self.uneasy_at,
+            self.powder_keg_at,
+            self.occurrence_die,
+            self.occurrence_calm,
+            self.sabotage_loss,
         )
     }
 
@@ -160,6 +216,16 @@ impl Tuning {
             Field::DesperationRise => &mut self.desperation_rise,
             Field::DesperationFall => &mut self.desperation_fall,
             Field::DesperationFloor => &mut self.desperation_floor,
+            Field::StrainReluctant => &mut self.strain_reluctant,
+            Field::StrainEager => &mut self.strain_eager,
+            Field::EagerAbove => &mut self.eager_above,
+            Field::HungerWeight => &mut self.hunger_weight,
+            Field::OpportunityPull => &mut self.opportunity_pull,
+            Field::UneasyAt => &mut self.uneasy_at,
+            Field::PowderKegAt => &mut self.powder_keg_at,
+            Field::OccurrenceDie => &mut self.occurrence_die,
+            Field::OccurrenceCalm => &mut self.occurrence_calm,
+            Field::SabotageLoss => &mut self.sabotage_loss,
         }
     }
 
@@ -327,6 +393,26 @@ pub enum Field {
     DesperationFall,
     /// The floor.
     DesperationFloor,
+    /// The reluctant margin's pressure.
+    StrainReluctant,
+    /// The eager margin's pressure discount.
+    StrainEager,
+    /// The eager boundary.
+    EagerAbove,
+    /// Pressure per point of desperation.
+    HungerWeight,
+    /// Pressure per gold of betrayal gain.
+    OpportunityPull,
+    /// The calm/uneasy band cutoff.
+    UneasyAt,
+    /// The uneasy/powder-keg band cutoff, and the murder floor.
+    PowderKegAt,
+    /// The occurrence roll's die.
+    OccurrenceDie,
+    /// The pressure the occurrence roll forgives.
+    OccurrenceCalm,
+    /// The sabotage's pot damage, in twelfths.
+    SabotageLoss,
 }
 
 impl Field {
@@ -345,6 +431,16 @@ impl Field {
         Field::DesperationRise,
         Field::DesperationFall,
         Field::DesperationFloor,
+        Field::StrainReluctant,
+        Field::StrainEager,
+        Field::EagerAbove,
+        Field::HungerWeight,
+        Field::OpportunityPull,
+        Field::UneasyAt,
+        Field::PowderKegAt,
+        Field::OccurrenceDie,
+        Field::OccurrenceCalm,
+        Field::SabotageLoss,
     ];
 
     /// The name DESIGN gives this constant.
@@ -363,6 +459,16 @@ impl Field {
             Field::DesperationRise => "desperation_rise",
             Field::DesperationFall => "desperation_fall",
             Field::DesperationFloor => "desperation_floor",
+            Field::StrainReluctant => "strain_reluctant",
+            Field::StrainEager => "strain_eager",
+            Field::EagerAbove => "eager_above",
+            Field::HungerWeight => "hunger_weight",
+            Field::OpportunityPull => "opportunity_pull",
+            Field::UneasyAt => "uneasy_at",
+            Field::PowderKegAt => "powder_keg_at",
+            Field::OccurrenceDie => "occurrence_die",
+            Field::OccurrenceCalm => "occurrence_calm",
+            Field::SabotageLoss => "sabotage_loss",
         }
     }
 
@@ -404,6 +510,16 @@ impl Field {
             Field::DesperationRise => "desperation a round without profit adds",
             Field::DesperationFall => "desperation a paid survivor sheds",
             Field::DesperationFloor => "how low desperation is allowed to go",
+            Field::StrainReluctant => "pressure a reluctant join carries in",
+            Field::StrainEager => "pressure an eager join leaves outside",
+            Field::EagerAbove => "margins above this join eagerly",
+            Field::HungerWeight => "pressure per point of desperation",
+            Field::OpportunityPull => "pressure per gold one death would gain",
+            Field::UneasyAt => "party pressure at which the band is uneasy",
+            Field::PowderKegAt => "powder-keg cutoff, and the murder floor",
+            Field::OccurrenceDie => "the die a betrayal rolls against pressure",
+            Field::OccurrenceCalm => "pressure the occurrence roll forgives",
+            Field::SabotageLoss => "twelfths of the pot a sabotage destroys",
         }
     }
 }

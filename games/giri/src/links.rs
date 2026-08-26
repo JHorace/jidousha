@@ -70,6 +70,44 @@ pub fn link_contracts(checks: &mut Checks) {
             Tuning::MAX + 1
         ),
     );
+
+    // --- the rest of the repro-link family (DESIGN §8e, §12) ---------------
+    // `?seed=`: a whole number in, the same number out; anything else refused
+    // by name, never guessed at.
+    checks.require(
+        crate::web::parse_seed("7") == Ok(7) && crate::web::parse_seed(" 42 ") == Ok(42),
+        "a plain ?seed= does not parse to itself",
+        format!("7 parsed as {:?}", crate::web::parse_seed("7")),
+    );
+    for bad in ["seven", "-1", "1.5", ""] {
+        checks.require(
+            crate::web::parse_seed(bad).is_err(),
+            "a bad ?seed= was not refused",
+            format!("{bad:?} parsed as {:?}", crate::web::parse_seed(bad)),
+        );
+    }
+    // `?variant=`: every id round-trips through its own key, case-insensitive,
+    // and a name that is not a variant is refused with the whole list.
+    for id in crate::variant::VariantId::ALL.iter().copied() {
+        checks.require(
+            crate::web::parse_variant(id.key()) == Ok(id)
+                && crate::web::parse_variant(&id.key().to_ascii_uppercase()) == Ok(id),
+            "a variant key does not round-trip through ?variant=",
+            format!(
+                "{:?} parsed as {:?}",
+                id.key(),
+                crate::web::parse_variant(id.key())
+            ),
+        );
+    }
+    let unknown = crate::web::parse_variant("chaos");
+    checks.require(
+        unknown
+            .as_ref()
+            .is_err_and(|message| message.contains("ladder")),
+        "an unknown ?variant= is not refused with the list of real ids",
+        format!("\"chaos\" parsed as {unknown:?}"),
+    );
 }
 
 /// Every refusal, as (the link that earns it, the refusal it earns).
@@ -112,8 +150,15 @@ fn refused() -> Vec<(&'static str, ConstantsError)> {
 /// The message each refusal prints, for the printable-strings check: every one
 /// of them is a string the page draws (`library::printable_strings`).
 pub fn refusals() -> Vec<String> {
-    refused()
+    let mut out: Vec<String> = refused()
         .into_iter()
         .map(|(_, error)| error.message())
-        .collect()
+        .collect();
+    if let Err(message) = crate::web::parse_seed("seven") {
+        out.push(message);
+    }
+    if let Err(message) = crate::web::parse_variant("chaos") {
+        out.push(message);
+    }
+    out
 }

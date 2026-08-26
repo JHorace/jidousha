@@ -14,6 +14,7 @@ use crate::flow::{Flow, Preview, Stage};
 use crate::model::Social;
 use crate::presets::PRESETS;
 use crate::ui::{self, Panel};
+use crate::variant::VariantId;
 use crate::{board, layout, party, resolution, theme, tuning};
 
 /// Everything the board says, as data.
@@ -48,7 +49,13 @@ pub fn board_content(flow: &Flow, social: &Social, preview: &Preview) -> Panel {
 /// `tuning` is the **active** set, read from the world's resource by every
 /// caller — the drawer's stamp and its dirty highlight are only true if the
 /// numbers they are compared against are the ones the simulation reads.
-pub fn content(flow: &Flow, social: &Social, preview: &Preview, tuning: &Tuning) -> Panel {
+pub fn content(
+    flow: &Flow,
+    social: &Social,
+    preview: &Preview,
+    tuning: &Tuning,
+    variant: VariantId,
+) -> Panel {
     match flow.stage {
         Stage::Board => {
             let mut panel = board_content(flow, social, preview);
@@ -56,7 +63,7 @@ pub fn content(flow: &Flow, social: &Social, preview: &Preview, tuning: &Tuning)
                 panel.absorb(board::log(flow));
             }
             if flow.tuner.open {
-                panel.absorb(tuning::drawer(flow, tuning));
+                panel.absorb(tuning::drawer(flow, tuning, variant));
             }
             panel
         }
@@ -242,6 +249,13 @@ fn draw_tuner(ctx: &mut DrawCtx, flow: &Flow) {
         ui::ghost_button(ctx, layout::tuner_minus(index), theme::layers::OVERLAY + 1);
         ui::ghost_button(ctx, layout::tuner_plus(index), theme::layers::OVERLAY + 1);
     }
+    for index in 0..VariantId::ALL.len() {
+        ui::ghost_button(
+            ctx,
+            layout::variant_button(index),
+            theme::layers::OVERLAY + 1,
+        );
+    }
     ui::button(
         ctx,
         layout::tuner_apply(),
@@ -255,7 +269,12 @@ pub fn draw_content(ctx: &mut DrawCtx) {
     let flow = ctx.world.resource::<Flow>().clone();
     let preview = ctx.world.resource::<Preview>().clone();
     let tuning = *ctx.world.resource::<Tuning>();
+    let variant = ctx
+        .world
+        .find_resource::<VariantId>()
+        .copied()
+        .unwrap_or_default();
     let social = Social::read(&ctx.world);
-    let panel = content(&flow, &social, &preview, &tuning);
+    let panel = content(&flow, &social, &preview, &tuning, variant);
     ui::draw(ctx, &panel);
 }

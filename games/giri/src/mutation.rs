@@ -30,9 +30,19 @@ pub fn mutation_round(checks: &mut Checks) -> String {
         let mut beat_failures = 0;
         for index in 0..CHAIN.len() {
             let mut probe = Checks::default();
+            // Both rule sets (DESIGN §8e): the v1 constants are the
+            // deterministic beats' to notice, the pressure and band constants
+            // are the ladder beats' — a perturbed cutoff must break a band.
             let played = play(index, mutated, false);
+            let deterministic = crate::verify::play_variant(
+                index,
+                mutated,
+                crate::variant::VariantId::Deterministic,
+                false,
+            );
             if let Some(spec) = CHAIN.get(index) {
                 judge_world(&mut probe, spec, &played, &mutated);
+                judge_world(&mut probe, spec, &deterministic, &mutated);
             }
             beat_failures += probe.failures();
         }
@@ -111,5 +121,26 @@ fn perturbation(field: Field) -> i32 {
         Field::DesperationFall => 0,
         // Desperation falls through the floor into refusing clean work.
         Field::DesperationFloor => -99,
+        // A reluctant join carries a riot in: beat 4's quiet seed erupts.
+        Field::StrainReluctant => 99,
+        // Eagerness buys total calm: beat 2's powder keg goes out.
+        Field::StrainEager => 99,
+        // Everybody with any margin is eager: beat 3's pressures drop.
+        Field::EagerAbove => 0,
+        // Hunger stops pressing: every ladder pressure loses its spine.
+        Field::HungerWeight => 0,
+        // The pot stops tempting.
+        Field::OpportunityPull => 0,
+        // Nothing ever reads uneasy: beat 3's band assert breaks.
+        Field::UneasyAt => 99,
+        // The powder keg is unreachable: beat 2's murder cannot happen.
+        Field::PowderKegAt => 99,
+        // The die vanishes: nobody ever rolls, so beat 2's murder is off.
+        Field::OccurrenceDie => 0,
+        // The roll forgives everything: same effect, other constant.
+        Field::OccurrenceCalm => 12,
+        // The fraction pins to the drawer's ceiling: the pot is destroyed
+        // whole, and the battery's fixed-seed sabotage arithmetic breaks.
+        Field::SabotageLoss => 99,
     }
 }

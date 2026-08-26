@@ -65,6 +65,12 @@ pub fn tuner_targets() -> Vec<(String, Rect)> {
         out.push((format!("{}'s -", field.name()), layout::tuner_minus(index)));
         out.push((format!("{}'s +", field.name()), layout::tuner_plus(index)));
     }
+    for (index, id) in crate::variant::VariantId::ALL.iter().enumerate() {
+        out.push((
+            format!("the {} variant", id.key()),
+            layout::variant_button(index),
+        ));
+    }
     out.push(("the APPLY verb".to_owned(), layout::tuner_apply()));
     out
 }
@@ -322,6 +328,7 @@ fn judge_drawer_screen(checks: &mut Checks, run: &crate::restart::DrawerRun, flo
         &run.pending_social,
         &run.pending_preview,
         &run.pending_active,
+        crate::variant::VariantId::default(),
     );
     // Which drawer is up decides what an overlay row owes: the one it is in,
     // and - for the tuning drawer, whose controls only exist while it is open -
@@ -433,7 +440,7 @@ pub fn judge(checks: &mut Checks, run: &BeatRun) {
             &run.report_preview,
         ),
     ] {
-        let panel = screens::content(flow, social, preview, &run.tuning);
+        let panel = screens::content(flow, social, preview, &run.tuning, run.variant);
         for text in &panel.runs {
             checks.require(
                 !greater(theme::MIN_TEXT, text.size),
@@ -496,7 +503,7 @@ pub fn judge(checks: &mut Checks, run: &BeatRun) {
             &run.ready,
         ),
     ] {
-        let panel = screens::content(flow, social, preview, &run.tuning);
+        let panel = screens::content(flow, social, preview, &run.tuning, run.variant);
         for text in &panel.runs {
             for (what, target) in targets() {
                 if !text.bounds().overlaps(target) {

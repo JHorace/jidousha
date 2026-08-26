@@ -79,12 +79,18 @@ pub fn takeover(flow: &Flow) -> Panel {
             theme::GOLD,
         ));
     }
-    let banner = "- CLEARED -";
+    // A failed quest says so, loudly, in the cost colour: P2's one failure
+    // path (a desertion left the job short) is never quiet (DESIGN §8c).
+    let (banner, banner_tone) = if flow.failed {
+        ("- THE JOB FELL APART -", theme::EMBER)
+    } else {
+        ("- CLEARED -", theme::GOOD)
+    };
     panel.text(TextRun::over(
         crate::ui::centered(layout::takeover(), banner, theme::HEAD, head.y + 74.0),
         banner,
         theme::HEAD,
-        theme::GOOD,
+        banner_tone,
     ));
 
     // --- the event cards ---------------------------------------------------
@@ -188,8 +194,9 @@ pub fn complete() -> Panel {
         theme::GOOD,
     ));
     let body = wrap(
-        "Four beats, no dice, and nothing hidden. Everything that happened was on the \
-         sheets before you pressed send.",
+        "Four jobs, and nothing hidden: every number the dice rolled against was on the \
+         sheets before you pressed send, and the seed is in the log if you want the same \
+         story twice.",
         columns(560.0, theme::BODY),
     );
     let mut y = 210.0;

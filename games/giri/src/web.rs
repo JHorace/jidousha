@@ -18,6 +18,7 @@
 //! location itself. That is FINDINGS G-008, and this is its workaround.
 
 use crate::constants::{ConstantsError, Tuning};
+use crate::variant::VariantId;
 
 /// The set the page asked for, if it asked for one.
 ///
@@ -26,6 +27,43 @@ use crate::constants::{ConstantsError, Tuning};
 /// rather than clamped.
 pub fn constants() -> Option<Result<Tuning, ConstantsError>> {
     query_value("constants").map(|value| Tuning::SHIPPED.parse(&value))
+}
+
+/// The session seed the page asked for with `?seed=` (DESIGN §12): every beat
+/// then rolls at this seed instead of its authored one — a repro link is
+/// `?constants=...&seed=...`. Refused loudly, never guessed at.
+pub fn seed() -> Option<Result<u64, String>> {
+    query_value("seed").map(|value| parse_seed(&value))
+}
+
+/// The `?seed=` grammar, split out so `links.rs` can hold it to its refusals
+/// without a browser.
+pub fn parse_seed(value: &str) -> Result<u64, String> {
+    let value = value.trim();
+    value.parse::<u64>().map_err(|_| {
+        format!("?seed= was given {value:?}, which is not a whole number - write ?seed=7")
+    })
+}
+
+/// The variant the page asked for with `?variant=` (DESIGN §8b: the variant id
+/// is a simulation input, and the link family carries it).
+pub fn variant() -> Option<Result<VariantId, String>> {
+    query_value("variant").map(|value| parse_variant(&value))
+}
+
+/// The `?variant=` grammar, one refusal that names every id there is.
+pub fn parse_variant(value: &str) -> Result<VariantId, String> {
+    VariantId::find(value).ok_or_else(|| {
+        format!(
+            "?variant= was given {:?}, which is not a variant - the ids are {}",
+            value.trim(),
+            VariantId::ALL
+                .iter()
+                .map(|variant| variant.key())
+                .collect::<Vec<_>>()
+                .join(" and ")
+        )
+    })
 }
 
 /// The value of one query parameter of the page this is running on.

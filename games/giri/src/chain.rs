@@ -6,13 +6,21 @@
 //! them changed underneath: Bob's public name is a *comrade-killer mark*
 //! rather than a public number, Tim's refusal is his *upright* trait meeting
 //! that mark through the reaction table, and the pot pulls the greedy through
-//! their trait. The assertions migrated with the machinery (marks, verdicts
-//! and reasons where the public scalar's numbers were), and every change is listed
-//! in the PR that landed this file.
+//! their trait.
+//!
+//! **P2: every beat carries a fixed seed and two assertion lists.** `expect`
+//! is v1's list, judged under the `deterministic` variant it asserts; `ladder`
+//! is the same beat at its authored seed under the shipped rule set — beat 2's
+//! murder still happens (the seed is data, picked so the tutorial's story
+//! survives the dice), beat 3 teaches the ladder's common rung instead of a
+//! quiet walk, and beat 4's powder-keg chip warns about a murder that, this
+//! time, does not come. The copy addresses somebody who has never seen the
+//! game (the tutorial is the players' docs/api — agreement 10).
 //!
 //! Beats 5+ are added here and nowhere else; no code names a beat number.
 
 use crate::beats::{BeatSpec, CharSpec, Dungeon, Expect, QuestIcon, Requirement};
+use crate::pressure::Band;
 use crate::traits::{MarkId, TraitId};
 use crate::willing::Verdict;
 
@@ -20,8 +28,9 @@ use crate::willing::Verdict;
 pub const CHAIN: &[BeatSpec] = &[
     BeatSpec {
         title: "Steve",
-        dilemma: "One name on the roster, one job, and nothing in the way of it.",
-        teaches: "a sheet, a job, and what a share does to need",
+        dilemma: "Steve wants work and the sewer wants a body. Click the job card to \
+                  take the job, click Steve's card to add him, then press SEND PARTY.",
+        teaches: "the flame on a sheet is need, and a paid job feeds it",
         roster: &[CharSpec {
             name: "Steve",
             desperation: 1,
@@ -34,7 +43,7 @@ pub const CHAIN: &[BeatSpec] = &[
         edges: &[],
         dungeons: &[Dungeon {
             name: "the sewer job",
-            blurb: "A starter job. One warm body will do.",
+            blurb: "One person, easy coin. Everybody comes home from this one.",
             icon: QuestIcon::Cave,
             headcount: 1,
             pot: 6,
@@ -42,6 +51,7 @@ pub const CHAIN: &[BeatSpec] = &[
             requires: Requirement::AnyParty,
         }],
         send: &["Steve"],
+        seed: 1,
         expect: &[
             Expect::Joins {
                 who: "Steve",
@@ -87,12 +97,44 @@ pub const CHAIN: &[BeatSpec] = &[
                 fragment: "Steve takes 4",
             },
         ],
+        // A party of one has nobody to betray: the ladder rolls nothing, and
+        // the beat resolves exactly as v1 did — at any seed, which is why this
+        // one is not delicate about its number.
+        ladder: &[
+            // Eager (margin 5) buys off the fat-pot temptation almost whole:
+            // -2 + 1 need + 2 greedy = 1.
+            Expect::PressureIs {
+                who: "Steve",
+                total: 1,
+            },
+            Expect::BandIs { band: Band::Calm },
+            Expect::Survives { who: "Steve" },
+            Expect::Wealth {
+                who: "Steve",
+                value: 4,
+            },
+            Expect::CleanJobs {
+                who: "Steve",
+                value: 1,
+            },
+            Expect::Desperation {
+                who: "Steve",
+                value: 0,
+            },
+            Expect::ReportSays {
+                fragment: "the party read calm",
+            },
+            Expect::ReportSays {
+                fragment: "Steve takes 4",
+            },
+        ],
     },
     BeatSpec {
         title: "Bob kills Steve",
-        dilemma: "The vault needs two. Bob is desperate enough that one of them \
-                  comes back, and you can read that off the sheets before you send them.",
-        teaches: "the pot is the motive: a fixed pot split among survivors",
+        dilemma: "This vault needs two, and the chip under the party will read POWDER \
+                  KEG: Bob's need beside that pot is how people die. Send them anyway \
+                  - and read what it cost.",
+        teaches: "the pot is the motive: fewer survivors means bigger shares",
         roster: &[
             CharSpec {
                 name: "Bob",
@@ -124,6 +166,7 @@ pub const CHAIN: &[BeatSpec] = &[
             requires: Requirement::AnyParty,
         }],
         send: &["Bob", "Steve"],
+        seed: 60,
         expect: &[
             Expect::Joins {
                 who: "Bob",
@@ -175,12 +218,60 @@ pub const CHAIN: &[BeatSpec] = &[
                 fragment: "marked comrade-killer",
             },
         ],
+        // The same murder, told by the dice the seed fixes: Bob stands at the
+        // powder-keg cutoff exactly (-2 eager + 8 need + 2 opportunity), the
+        // chip says so before SEND, and at this seed the occurrence roll lands
+        // under his pressure and the severity roll finds the summit.
+        ladder: &[
+            Expect::PressureIs {
+                who: "Bob",
+                total: 8,
+            },
+            Expect::PressureIs {
+                who: "Steve",
+                total: 3,
+            },
+            Expect::BandIs {
+                band: Band::PowderKeg,
+            },
+            Expect::Killed {
+                victim: "Steve",
+                by: "Bob",
+            },
+            Expect::Survives { who: "Bob" },
+            Expect::Wealth {
+                who: "Bob",
+                value: 4,
+            },
+            Expect::HasMark {
+                who: "Bob",
+                mark: MarkId::ComradeKiller,
+            },
+            Expect::Desperation {
+                who: "Bob",
+                value: 5,
+            },
+            Expect::Desperation {
+                who: "Steve",
+                value: 1,
+            },
+            Expect::ReportSays {
+                fragment: "the party read powder keg",
+            },
+            Expect::ReportSays {
+                fragment: "Bob killed Steve - pressure 8 at powder keg",
+            },
+            Expect::ReportSays {
+                fragment: "marked comrade-killer",
+            },
+        ],
     },
     BeatSpec {
         title: "Tim refuses, Alex joins",
-        dilemma: "Bob wears what he did, and the road needs two. Tim will not \
-                  stand next to a dark mark; Alex needs the winter paid for.",
-        teaches: "marks are public and traits decide who minds them",
+        dilemma: "Bob's sheet now says what he did, and Tim will not stand next to it - \
+                  click Tim to hear him say so. Alex minds it less than he minds a thin \
+                  winter: send Bob and Alex.",
+        teaches: "marks are public, and traits decide who minds them",
         roster: &[
             CharSpec {
                 name: "Bob",
@@ -213,7 +304,7 @@ pub const CHAIN: &[BeatSpec] = &[
         edges: &[],
         dungeons: &[Dungeon {
             name: "the long road",
-            blurb: "Two sets of hands, a long walk, and a pot that splits.",
+            blurb: "Two pairs of hands and a long walk. The pot splits when they get back.",
             icon: QuestIcon::Tower,
             headcount: 2,
             pot: 8,
@@ -221,6 +312,7 @@ pub const CHAIN: &[BeatSpec] = &[
             requires: Requirement::AnyParty,
         }],
         send: &["Bob", "Alex"],
+        seed: 0,
         expect: &[
             // 1 need - 3 reaction (a dark mark at 1, and upright minds it 2
             // more). v1's -2, produced by the trait x mark table.
@@ -303,12 +395,79 @@ pub const CHAIN: &[BeatSpec] = &[
                 fragment: "Bob and Alex bond",
             },
         ],
+        // The ladder's common rung, taught early: at this seed Bob skims -
+        // greedy under an uneasy pressure of 7 - and Alex walks home shorted.
+        // Small betrayals are what teach the odds (DESIGN §8).
+        ladder: &[
+            Expect::PressureIs {
+                who: "Bob",
+                total: 7,
+            },
+            Expect::PressureIs {
+                who: "Alex",
+                total: 6,
+            },
+            Expect::BandIs { band: Band::Uneasy },
+            Expect::Survives { who: "Bob" },
+            Expect::Survives { who: "Alex" },
+            // The skim's arithmetic: a share of 3 off the top, then 3 gold
+            // split 2 ways - Bob 4, Alex 1.
+            Expect::Wealth {
+                who: "Bob",
+                value: 4,
+            },
+            Expect::Wealth {
+                who: "Alex",
+                value: 1,
+            },
+            Expect::HasMark {
+                who: "Bob",
+                mark: MarkId::Skimmer,
+            },
+            // The shorted hold it against him; nobody bonds on a robbed job.
+            Expect::Regard {
+                from: "Alex",
+                to: "Bob",
+                value: -1,
+            },
+            Expect::Regard {
+                from: "Bob",
+                to: "Alex",
+                value: 0,
+            },
+            Expect::CleanJobs {
+                who: "Bob",
+                value: 0,
+            },
+            Expect::Desperation {
+                who: "Bob",
+                value: 1,
+            },
+            Expect::Desperation {
+                who: "Alex",
+                value: 0,
+            },
+            Expect::Desperation {
+                who: "Tim",
+                value: 3,
+            },
+            Expect::ReportSays {
+                fragment: "Bob skimmed the pot - pressure 7",
+            },
+            Expect::ReportSays {
+                fragment: "marked skimmer",
+            },
+            Expect::ReportSays {
+                fragment: "the party read uneasy",
+            },
+        ],
     },
     BeatSpec {
         title: "Tim's price is met",
-        dilemma: "The same road, the same mark, and a Tim who sat out a round. \
-                  Everyone has a price; his is a desperation of three.",
-        teaches: "refusal is temporary - the roster decays toward willingness",
+        dilemma: "The same road, and Tim is hungrier for having sat out. Click him: the \
+                  same company he refused is now barely worth bearing - and pressing \
+                  reluctant people is what the chip prices in.",
+        teaches: "refusal is temporary - need rises every round a person sits out",
         roster: &[
             CharSpec {
                 name: "Bob",
@@ -340,6 +499,7 @@ pub const CHAIN: &[BeatSpec] = &[
             requires: Requirement::AnyParty,
         }],
         send: &["Bob", "Tim"],
+        seed: 4,
         expect: &[
             // 3 need - 3 reaction = 0, and 0 >= 0 joins. The boundary is the
             // beat — and under the reluctant band it now has a name.
@@ -413,6 +573,56 @@ pub const CHAIN: &[BeatSpec] = &[
             Expect::Desperation {
                 who: "Bob",
                 value: 1,
+            },
+            Expect::ReportSays {
+                fragment: "marked reliable",
+            },
+        ],
+        // The warning that does not come true: a reluctant Tim under a fat pot
+        // stands at pressure 9, the chip says powder keg — and at this seed
+        // both rolls miss, the job runs clean, and the reliable mark lands
+        // exactly as under v1. A powder keg is a probability, not a promise.
+        ladder: &[
+            Expect::PressureIs {
+                who: "Tim",
+                total: 9,
+            },
+            Expect::PressureIs {
+                who: "Bob",
+                total: 7,
+            },
+            Expect::BandIs {
+                band: Band::PowderKeg,
+            },
+            Expect::Survives { who: "Tim" },
+            Expect::Survives { who: "Bob" },
+            Expect::Wealth {
+                who: "Tim",
+                value: 3,
+            },
+            Expect::HasMark {
+                who: "Bob",
+                mark: MarkId::Reliable,
+            },
+            Expect::CleanJobs {
+                who: "Bob",
+                value: 2,
+            },
+            Expect::Regard {
+                from: "Tim",
+                to: "Bob",
+                value: 1,
+            },
+            Expect::Desperation {
+                who: "Tim",
+                value: 0,
+            },
+            Expect::Desperation {
+                who: "Bob",
+                value: 1,
+            },
+            Expect::ReportSays {
+                fragment: "the party read powder keg",
             },
             Expect::ReportSays {
                 fragment: "marked reliable",

@@ -436,3 +436,58 @@ reads twice.
 - **The capture set is unchanged in shape** (three modes x two sizes, plus
   the drawer): the P1 screens replaced their v1 counterparts in the same
   seven files.
+
+## 14. Amendments from the P2 mechanics session (2026-08-26)
+
+The Risk slice (DESIGN §§7a, 8, 8c–8f) landed under the same *interim
+presentation* rules as P1: existing patterns extended without craft, still
+bound by §7's floors and §2's signifier table. Everything below is what that
+session changed in this document's domain.
+
+- **The party band chip** (DESIGN §7a's foreshadowing obligation): on the
+  party strip's label row, left of nothing it collides with, visible
+  whenever a quest is taken and the party has anybody in it — which is
+  before SEND, always. It is the skull (the betrayal signifier — the chip
+  is about what the party might do, not about need) plus the band as words:
+  `the party reads calm / uneasy / powder keg`. Colour is the second
+  channel: calm in the joined teal, uneasy in plain ink, powder keg in
+  ember. Gold stays reserved. The chip draws only under a rule set that
+  foreshadows (the ladder); the deterministic variant keeps v1's
+  no-preview stance (DESIGN §8e). Derivation is one function shared with
+  the rolls — the chip cannot disagree with the dice.
+- **Trait chips carry hover text** (the P1-playtest warm-up): pointing at a
+  chip row puts that trait's one-line behavioral description in the note
+  band under the dilemma — the same slot the beat's lesson uses, in the
+  priority order toast > trait line > lesson. One line, gist not
+  interaction list, stranger-facing, ASCII (`TraitDef::line`; the
+  vocabulary check enforces shape and length).
+- **The tuning drawer covers the whole screen below the status bar.**
+  Twenty-three constants at §7's 32x32 target floor need eight stepper
+  rows a column, and the board band holds six; the party strip is not
+  information a tuning session needs (the drawer edits a pending copy and
+  nothing moves mid-beat), so the drawer took its band too. Same gold
+  border, same opaque fill. Where a mechanical floor and a placement meet,
+  the floor wins — §12's own rule, applied to §12's own surface.
+- **The drawer gained the variant picker and a longer stamp.** The picker
+  (DESIGN §8b: "the variant picker sits at chain start, beside where the
+  tuning menu lives") is a labelled row of ghost buttons under the
+  steppers; the active variant reads in gold; picking the other one
+  restarts the chain from the top, with a toast and a log line saying so.
+  The stamp block under the third column now ends with `variant <id> -
+  seed <n>` — a recording says everything it ran with (DESIGN §8d).
+- **The resolution takeover can now say a job failed** (DESIGN §8c): the
+  banner reads `- THE JOB FELL APART -` in ember when a desertion left the
+  quest short, and the payout card says nobody gets paid and why. Betrayal
+  event cards — every rung, not only murder — are skull-marked ember cards
+  with the roll's arithmetic in small text, per §3's established shape.
+- **Per-beat seed and variant lines join the log**: every beat load writes
+  `variant <id> - seed <n>`, so the log drawer is a repro surface. The
+  page accepts `?seed=` and `?variant=` beside `?constants=`; refusals are
+  loud, named, and land in the drawer's hint row, and an accepted link
+  opens the drawer on its stamp — both halves of §12's rule, extended to
+  the whole family.
+- **§8's capture set is unchanged in count** (three modes x two sizes plus
+  the drawer), but the staged board is captured from a **powder-keg
+  assembly** when the chain has one — the chip at its loudest is the
+  screen the foreshadowing obligation is judged on — and the resolution
+  capture is a betrayal report.

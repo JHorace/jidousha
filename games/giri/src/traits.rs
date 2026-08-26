@@ -62,6 +62,9 @@ pub struct TraitDef {
     pub id: TraitId,
     /// The display name, ASCII lowercase — what the chip says.
     pub name: &'static str,
+    /// One behavioral line — the gist of who this is, never the interaction
+    /// list (UI.md §14; stranger-facing copy). Shown on trait-chip hover.
+    pub line: &'static str,
     /// The chip's icon: a *category* icon from the existing library, per the
     /// interim rules (UI.md §13) — the UI session designs real ones.
     pub icon: Art,
@@ -84,6 +87,7 @@ pub const TRAITS: &[TraitDef] = &[
     TraitDef {
         id: TraitId::Greedy,
         name: "greedy",
+        line: "the money talks louder than the company",
         icon: Art::Coin,
         bond_num: 1,
         bond_den: 1,
@@ -94,6 +98,7 @@ pub const TRAITS: &[TraitDef] = &[
     TraitDef {
         id: TraitId::Loyal,
         name: "loyal",
+        line: "holds hard to the people they trust",
         icon: Art::Heart,
         bond_num: 2,
         bond_den: 1,
@@ -104,6 +109,7 @@ pub const TRAITS: &[TraitDef] = &[
     TraitDef {
         id: TraitId::Proud,
         name: "proud",
+        line: "won't stand next to a thief",
         icon: Art::Eye,
         bond_num: 1,
         bond_den: 1,
@@ -114,6 +120,7 @@ pub const TRAITS: &[TraitDef] = &[
     TraitDef {
         id: TraitId::Craven,
         name: "craven",
+        line: "runs when it turns dangerous",
         icon: Art::Flame,
         bond_num: 1,
         bond_den: 1,
@@ -124,6 +131,7 @@ pub const TRAITS: &[TraitDef] = &[
     TraitDef {
         id: TraitId::Vengeful,
         name: "vengeful",
+        line: "never lets a wrong go",
         icon: Art::Skull,
         bond_num: 1,
         bond_den: 1,
@@ -134,6 +142,7 @@ pub const TRAITS: &[TraitDef] = &[
     TraitDef {
         id: TraitId::Pious,
         name: "pious",
+        line: "counts sins, not their size",
         icon: Art::Eye,
         bond_num: 1,
         bond_den: 1,
@@ -144,6 +153,7 @@ pub const TRAITS: &[TraitDef] = &[
     TraitDef {
         id: TraitId::Pragmatic,
         name: "pragmatic",
+        line: "prefers a known quantity to a stranger",
         icon: Art::Coin,
         bond_num: 1,
         bond_den: 1,
@@ -154,6 +164,7 @@ pub const TRAITS: &[TraitDef] = &[
     TraitDef {
         id: TraitId::Cold,
         name: "cold",
+        line: "feelings weigh little, either way",
         icon: Art::Skull,
         bond_num: 1,
         bond_den: 2,
@@ -164,6 +175,7 @@ pub const TRAITS: &[TraitDef] = &[
     TraitDef {
         id: TraitId::Upright,
         name: "upright",
+        line: "won't work with criminals",
         icon: Art::Eye,
         bond_num: 1,
         bond_den: 1,
@@ -382,6 +394,19 @@ pub fn vocabulary(checks: &mut Checks) {
                     .all(|glyph| glyph.is_ascii_lowercase() || glyph == '-'),
             "a trait's name is not chip-shaped ASCII",
             format!("TRAITS[{index}] is named {:?}", def.name),
+        );
+        checks.require(
+            !def.line.is_empty()
+                && def.line.chars().all(|glyph| (' '..='~').contains(&glyph))
+                && def.line.chars().count() <= 56,
+            "a trait's description is not one stranger-facing ASCII line",
+            format!(
+                "{:?}'s line is {:?} ({} chars); one behavioral line, ASCII, short enough \
+                 for the note band (UI.md §14)",
+                def.id,
+                def.line,
+                def.line.chars().count()
+            ),
         );
         checks.require(
             def.bond_den > 0 && def.grudge_den > 0,

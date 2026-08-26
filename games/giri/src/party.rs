@@ -143,6 +143,17 @@ pub fn status_line(member: &Member, preview: &Preview, in_party: bool) -> String
         .map_or_else(|| "waiting".to_owned(), |door| door.status_line())
 }
 
+/// What colour a band reads in: calm in the joined teal, uneasy in plain ink,
+/// powder keg in ember — the cost colour, because that is what it threatens
+/// (UI.md §14).
+pub fn band_color(band: crate::pressure::Band) -> Color {
+    match band {
+        crate::pressure::Band::Calm => theme::REGARD,
+        crate::pressure::Band::Uneasy => theme::INK,
+        crate::pressure::Band::PowderKeg => theme::EMBER,
+    }
+}
+
 /// The whole strip.
 pub fn strip(flow: &Flow, social: &Social, preview: &Preview) -> Panel {
     let mut panel = Panel::default();
@@ -152,6 +163,21 @@ pub fn strip(flow: &Flow, social: &Social, preview: &Preview) -> Panel {
         theme::SMALL,
         theme::DIM,
     ));
+    // The party band chip (DESIGN §7a): the foreshadowing, before SEND. The
+    // skull is the betrayal signifier and the colour says it again — two
+    // channels (UI.md §1). Derived from the same pressures the resolution's
+    // rolls consume; `Preview::band` is `None` under a rule set that does not
+    // foreshadow, and while no quest is taken.
+    if let Some(band) = preview.band {
+        let color = band_color(band);
+        panel.icon(IconRun::new(layout::band_chip_icon(), Art::Skull, 2.0).tinted(color));
+        panel.text(TextRun::new(
+            layout::band_chip_text(),
+            format!("the party reads {}", band.word()),
+            theme::SMALL,
+            color,
+        ));
+    }
     for (index, member) in social.members.iter().enumerate() {
         let card = layout::party_card(index);
         let in_party = flow.party.contains(&member.entity);

@@ -29,6 +29,27 @@ use crate::model::{
 };
 use crate::resolve::resolve;
 use crate::traits::{MarkId, TraitId};
+use crate::variant::VariantId;
+
+/// Resolve a bench under the deterministic variant — v1's rule, which is what
+/// most of this battery asserts. The dice are handed in and never read: the
+/// deterministic arm draws nothing, and `battery` proves that directly.
+pub(crate) fn resolve_v1(
+    social: &Social,
+    tuning: &Tuning,
+    dungeon: &crate::beats::Dungeon,
+    party: &[Entity],
+) -> crate::resolve::Resolution {
+    let mut rng = Rng::from_seed(0);
+    resolve(
+        social,
+        tuning,
+        VariantId::Deterministic,
+        dungeon,
+        party,
+        &mut rng,
+    )
+}
 
 /// A roster built for one question: `(name, desperation, traits, marks)` in
 /// roster order, then the edges between them by index.
@@ -105,7 +126,7 @@ fn bench_kill(
         &edges,
     );
     let social = Social::read(&world.view());
-    let outcome = resolve(&social, tuning, &bench_job(3, 12, 0), &ids);
+    let outcome = resolve_v1(&social, tuning, &bench_job(3, 12, 0), &ids);
     (social, ids, outcome)
 }
 
@@ -392,13 +413,25 @@ pub fn battery(checks: &mut Checks, tuning: &Tuning) {
         requires: Requirement::NoDarkMarks,
         ..bench_job(3, 12, 0)
     };
-    let gate = assess(&social, tuning, &ids, Some(&two_of_three));
+    let gate = assess(
+        &social,
+        tuning,
+        VariantId::default(),
+        &ids,
+        Some(&two_of_three),
+    );
     checks.require(
         !gate.can_send && !gate.headcount_ok && gate.blocked == "need 1 more",
         "an under-filled party is not blocked by the headcount it is short of",
         format!("the gate said {:?}", gate.blocked),
     );
-    let gate = assess(&social, tuning, &ids[..1], Some(&two_of_three));
+    let gate = assess(
+        &social,
+        tuning,
+        VariantId::default(),
+        &ids[..1],
+        Some(&two_of_three),
+    );
     checks.require(
         !gate.can_send && gate.blocked == "need 2 more",
         "the headcount is reported before the predicate that also fails",
@@ -408,7 +441,7 @@ pub fn battery(checks: &mut Checks, tuning: &Tuning) {
         headcount: 2,
         ..two_of_three
     };
-    let gate = assess(&social, tuning, &ids, Some(&three));
+    let gate = assess(&social, tuning, VariantId::default(), &ids, Some(&three));
     checks.require(
         !gate.can_send
             && gate.headcount_ok
@@ -422,13 +455,75 @@ pub fn battery(checks: &mut Checks, tuning: &Tuning) {
         headcount: 1,
         ..three
     };
-    let gate = assess(&social, tuning, &ids[1..], Some(&open));
+    let gate = assess(
+        &social,
+        tuning,
+        VariantId::default(),
+        &ids[1..],
+        Some(&open),
+    );
     checks.require(
         gate.can_send && gate.all_willing && gate.blocked.is_empty(),
         "a one-member party that satisfies everything cannot be sent",
         format!("the gate said {:?}", gate.blocked),
     );
 
+    // --- the deterministic variant is preserved, not reimplemented ----------
+    //
+    // Two claims: it never reads the dice (two far-apart seeds, identical
+    // resolution), and the ladder is replay-exact (one seed twice, identical
+    // resolution).
+    let (world, ids) = bench(
+        &[
+            ("Hot", 9, &[], &[]),
+            ("Vic", 0, &[], &[]),
+            ("Wit", 0, &[], &[]),
+        ],
+        &[],
+    );
+    let social = Social::read(&world.view());
+    let job = bench_job(3, 12, 0);
+    let mut rng_a = Rng::from_seed(3);
+    let mut rng_b = Rng::from_seed(987_654_321);
+    let det_a = resolve(
+        &social,
+        tuning,
+        VariantId::Deterministic,
+        &job,
+        &ids,
+        &mut rng_a,
+    );
+    let det_b = resolve(
+        &social,
+        tuning,
+        VariantId::Deterministic,
+        &job,
+        &ids,
+        &mut rng_b,
+    );
+    checks.require(
+        det_a.lines == det_b.lines && !det_a.betrayals.is_empty(),
+        "the deterministic variant's outcome moved with the seed",
+        format!(
+            "seed 3 narrates {:?} and seed 987654321 narrates {:?}; v1's rule reads no dice",
+            det_a.lines, det_b.lines
+        ),
+    );
+    let mut rng_c = Rng::from_seed(11);
+    let mut rng_d = Rng::from_seed(11);
+    let lad_c = resolve(&social, tuning, VariantId::Ladder, &job, &ids, &mut rng_c);
+    let lad_d = resolve(&social, tuning, VariantId::Ladder, &job, &ids, &mut rng_d);
+    checks.require(
+        lad_c.lines == lad_d.lines,
+        "the ladder is not replay-exact at a fixed seed",
+        format!(
+            "seed 11 twice narrated {:?} and then {:?}",
+            lad_c.lines, lad_d.lines
+        ),
+    );
+
+    crate::pressure::battery(checks, tuning);
+    crate::ladder::battery(checks, tuning);
     crate::judgment::battery(checks, tuning);
     crate::door::door(checks, tuning);
 }

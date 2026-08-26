@@ -145,7 +145,13 @@ pub fn door(checks: &mut Checks, tuning: &Tuning) {
         party.push(candidate);
     }
     let departed = vec![ids[0], ids[2]];
-    let gate = assess(&social, tuning, &departed, Some(&bench_job(2, 8, 0)));
+    let gate = assess(
+        &social,
+        tuning,
+        crate::variant::VariantId::default(),
+        &departed,
+        Some(&bench_job(2, 8, 0)),
+    );
     let anchor = gate.entries.first().map(|entry| entry.margin);
     checks.require(
         anchor.is_some_and(|total| total < 0),

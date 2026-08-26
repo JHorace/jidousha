@@ -43,6 +43,9 @@ pub const PRESETS: &[Preset] = &[
     // sooner, loyalty has to be twice as strong to stop it, a paid job relieves
     // almost nothing, everybody who watched holds it against you, a dark mark
     // costs double, the pot shouts, and *reliable* takes three clean jobs.
+    // The P2 half follows the same intent: pressed people crack sooner (a
+    // reluctant join carries more in, the roll forgives nothing), the bands
+    // trip earlier, and a sabotage guts the pot.
     Preset {
         name: "CUTTHROAT",
         tuning: Tuning {
@@ -59,11 +62,23 @@ pub const PRESETS: &[Preset] = &[
             desperation_rise: 2,
             desperation_fall: 1,
             desperation_floor: 0,
+            strain_reluctant: 4,
+            strain_eager: 1,
+            eager_above: 5,
+            hunger_weight: 1,
+            opportunity_pull: 2,
+            uneasy_at: 3,
+            powder_keg_at: 6,
+            occurrence_die: 12,
+            occurrence_calm: 0,
+            sabotage_loss: 9,
         },
     },
     // Room to breathe: nobody is desperate enough to turn until 8, a job pays
     // the need down three points, bonds form twice as fast, a light mark
-    // counts double, and one clean job is enough to be marked reliable.
+    // counts double, and one clean job is enough to be marked reliable. The
+    // P2 half breathes too: eagerness buys real calm, the roll forgives more,
+    // the powder keg is further away, and a sabotage stings instead of guts.
     Preset {
         name: "GENTLE",
         tuning: Tuning {
@@ -80,6 +95,16 @@ pub const PRESETS: &[Preset] = &[
             desperation_rise: 1,
             desperation_fall: 3,
             desperation_floor: 0,
+            strain_reluctant: 2,
+            strain_eager: 3,
+            eager_above: 3,
+            hunger_weight: 1,
+            opportunity_pull: 1,
+            uneasy_at: 5,
+            powder_keg_at: 10,
+            occurrence_die: 12,
+            occurrence_calm: 3,
+            sabotage_loss: 3,
         },
     },
 ];

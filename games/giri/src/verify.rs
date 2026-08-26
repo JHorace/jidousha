@@ -24,13 +24,14 @@ use jidousha::testing::{BackendTextureId, FrameRecord, FrameRecorder, InputScrip
 use crate::beats::{BeatSpec, CHAIN, Expect};
 use crate::checks::{Checks, fail, greater, one_line};
 use crate::constants::Tuning;
-use crate::flow::{Flow, Preview, Stage, StartAt};
+use crate::flow::{Flow, Preview, SessionSeed, Stage, StartAt};
 use crate::frames::judge_frames;
 use crate::judge::judge_world;
 use crate::model::Social;
+use crate::variant::VariantId;
 use crate::{
     capture, contracts, floors, layout, library, links, mutation, onset, restart, scaling, sprites,
-    tuning,
+    sweep, tuning,
 };
 
 /// The surface the reference run draws at: UI.md §6's reference resolution,
@@ -198,6 +199,12 @@ pub struct BeatRun {
     /// The constants the run was played with — what every screen it recorded is
     /// stamped with, and what a floor or a judge has to rebuild a screen from.
     pub tuning: Tuning,
+    /// The rule set it ran under — which decides which assertion list judges
+    /// it (DESIGN §8e), and part of the run's replay identity.
+    pub variant: VariantId,
+    /// The seed its dice were fixed to — the beat's authored seed unless the
+    /// caller overrode it.
+    pub seed: u64,
     /// The social state the beat was authored with, read after Startup.
     pub at_assembly: Social,
     /// The social state the dungeon left behind.
@@ -262,28 +269,60 @@ fn names(social: &Social, party: &[Entity]) -> Vec<&'static str> {
     party.iter().map(|entity| social.name(*entity)).collect()
 }
 
-/// Play one beat through the script, with `tuning` in effect.
+/// Play one beat through the script, with `tuning` in effect — under the
+/// shipped rule set at the beat's authored seed.
 ///
 /// `record` off is the mutation round's shape: the world assertions are the
 /// ones a perturbed constant is judged on, and a thousand unread frames are a
 /// thousand frames to allocate (FINDINGS G-004).
 pub fn play(index: usize, tuning: Tuning, record: bool) -> BeatRun {
-    play_at(index, tuning, record, HEADLESS_VIEWPORT)
+    play_at(
+        index,
+        tuning,
+        VariantId::default(),
+        None,
+        record,
+        HEADLESS_VIEWPORT,
+    )
 }
 
-/// The same, on a surface of a stated size — what the narrow capture set runs.
-pub fn play_at(index: usize, tuning: Tuning, record: bool, viewport: PhysicalSize) -> BeatRun {
+/// The same, under a stated rule set (DESIGN §8e: verify runs the beats under
+/// both).
+pub fn play_variant(index: usize, tuning: Tuning, variant: VariantId, record: bool) -> BeatRun {
+    play_at(index, tuning, variant, None, record, HEADLESS_VIEWPORT)
+}
+
+/// The whole shape: rule set, seed override, surface. What the narrow capture
+/// set and the determinism probe run.
+pub fn play_at(
+    index: usize,
+    tuning: Tuning,
+    variant: VariantId,
+    seed: Option<u64>,
+    record: bool,
+    viewport: PhysicalSize,
+) -> BeatRun {
     let Some(spec) = CHAIN.get(index) else {
         fail(
             "a beat was asked for that the chain does not have",
             &format!("beat {index} of {}", CHAIN.len()),
         );
     };
+    let seed_used = seed.unwrap_or(spec.seed);
     let plan = plan_for(spec, viewport);
-    let mut sim = headless(crate::config(), crate::register);
+    // The scenario's seed rides in on `GameConfig::seed` (DESIGN §12) and is
+    // re-fixed at the beat boundary by `load_beat`, which is the same number
+    // by construction here: one sim, one scenario.
+    let config = GameConfig {
+        seed: seed_used,
+        ..crate::config()
+    };
+    let mut sim = headless(config, crate::register);
     // Before Startup, which is what `open_the_chain` reads them with.
     sim.world_mut().insert_resource(tuning);
     sim.world_mut().insert_resource(StartAt(index));
+    sim.world_mut().insert_resource(variant);
+    sim.world_mut().insert_resource(SessionSeed(seed));
     sim.world_mut().insert_resource(scaling::Surface(viewport));
 
     let mut recorder = record.then(|| FrameRecorder::new(viewport));
@@ -293,6 +332,8 @@ pub fn play_at(index: usize, tuning: Tuning, record: bool, viewport: PhysicalSiz
     let mut run = BeatRun {
         index,
         tuning,
+        variant,
+        seed: seed_used,
         at_assembly: Social::default(),
         after: Social::default(),
         refusal: None,
@@ -443,7 +484,16 @@ pub fn run() -> ExitCode {
         floors::judge(&mut checks, &played);
         onset::judge(&mut checks, &played);
         runs.push(played);
+        // The same beat under the deterministic variant, judged on v1's own
+        // assertion list (DESIGN §8e: the beats run under both rule sets, and
+        // the preserved rule keeps its preserved assertions).
+        let deterministic = play_variant(index, tuning, VariantId::Deterministic, false);
+        judge_world(&mut checks, spec, &deterministic, &tuning);
     }
+    // Willingness stays deterministic under any seed (DESIGN §12): the same
+    // beat at two far-apart seeds answers every door and every margin
+    // identically — the dice decide outcomes, never judgments.
+    willingness_ignores_the_seed(&mut checks, tuning);
     let Some(last) = runs.last() else {
         fail(
             "the chain has no beats",
@@ -548,6 +598,8 @@ pub fn run() -> ExitCode {
     crate::traits::vocabulary(&mut checks);
     // --- the contracts a played beat never reaches ------------------------
     contracts::battery(&mut checks, &tuning);
+    // --- the distribution sweeps (DESIGN §8f): seeds by the hundred --------
+    let sweeps = sweep::run(&mut checks, &tuning);
     // --- and the round that says whether any of it is an instrument -------
     let mutations = mutation::mutation_round(&mut checks);
     // --- the pictures a person looks at -----------------------------------
@@ -566,9 +618,11 @@ pub fn run() -> ExitCode {
     for (index, run) in runs.iter().enumerate() {
         let spec = CHAIN.get(index).map_or("?", |spec| spec.title);
         println!(
-            "  beat {} {spec:?}: {} frames, {} report rows, {} event cards, {} dead, \
-             door probes {}",
+            "  beat {} {spec:?}: variant {} seed {}, {} frames, {} report rows, {} event \
+             cards, {} dead, door probes {}",
             index + 1,
+            run.variant.key(),
+            run.seed,
             run.frames,
             run.report.len(),
             run.report_flow.events.len(),
@@ -581,12 +635,15 @@ pub fn run() -> ExitCode {
             },
         );
     }
+    println!("{sweeps}");
     println!(
-        "  tuning drawer: applied {} at beat {} - {} steppers, {} presets, stamp {}",
+        "  tuning drawer: applied {} at beat {} - {} steppers, {} presets, {} variants, \
+         stamp {}",
         tuning::name_of(&drawer.applied).unwrap_or("a hand-stepped set"),
         restart::BEAT + 1,
-        floors::tuner_targets().len() - crate::presets::PRESETS.len() - 1,
+        floors::tuner_targets().len() - crate::presets::PRESETS.len() - VariantId::ALL.len() - 1,
         crate::presets::PRESETS.len(),
+        VariantId::ALL.len(),
         drawer.applied_active.stamp(),
     );
     println!("  closest quad to the design edge: {clearance:.2} world units");
@@ -597,6 +654,63 @@ pub fn run() -> ExitCode {
         print!("{}", frame.transcript());
     }
     verdict
+}
+
+/// **Willingness is deterministic under any seed** (DESIGN §12): the whole
+/// assembly surface — every member's margin, verdict and reasons, every door
+/// answer, the band and the pressures — is identical at two seeds chosen far
+/// apart. The dice choose outcomes; they never touch a judgment.
+fn willingness_ignores_the_seed(checks: &mut Checks, tuning: Tuning) {
+    let index = CHAIN.len().saturating_sub(3).min(1);
+    let first = play_at(
+        index,
+        tuning,
+        VariantId::default(),
+        Some(7),
+        false,
+        HEADLESS_VIEWPORT,
+    );
+    let second = play_at(
+        index,
+        tuning,
+        VariantId::default(),
+        Some(7_777_777),
+        false,
+        HEADLESS_VIEWPORT,
+    );
+    let surface =
+        |run: &BeatRun| {
+            let mut rows: Vec<String> = run
+                .ready
+                .entries
+                .iter()
+                .map(|entry| format!("{} {} {:?}", entry.name, entry.breakdown(), entry.verdict))
+                .collect();
+            rows.extend(run.ready.doors.iter().map(|(who, door)| {
+                format!("{} {}", run.at_assembly.name(*who), door.status_line())
+            }));
+            rows.extend(
+                run.ready
+                    .pressures
+                    .iter()
+                    .map(|pressure| format!("{:?}", (pressure.margin, pressure.total))),
+            );
+            rows.push(format!("{:?}", run.ready.band));
+            rows
+        };
+    checks.require(
+        surface(&first) == surface(&second),
+        "the seed reached the willingness surface",
+        format!(
+            "beat {} at seed {} assembles as {:?} and at seed {} as {:?}; no Rng read may \
+             happen outside resolution",
+            index + 1,
+            first.seed,
+            surface(&first),
+            second.seed,
+            surface(&second),
+        ),
+    );
 }
 
 /// Every screen mode a capture set covers, and the frame each comes from.

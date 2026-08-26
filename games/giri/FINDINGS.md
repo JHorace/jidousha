@@ -10,9 +10,11 @@ nobody fixes, and the PR body is not somewhere anybody reads twice.
 neither was `docs/internal/` or any ADR but 0038. Each entry below is therefore
 a question the four documents were actually asked.
 
-Eight entries over four sessions: four from the first slice, two from the
-presentation rebuild, one from the curation session, and one from the tuning
-session (2026-08-24). The first four are resolved; G-007 and G-008 are open.
+Nine entries over six sessions: four from the first slice, two from the
+presentation rebuild, one from the curation session, one from the tuning
+session (2026-08-24), none from the P1 mechanics session, and one from the P2
+mechanics session (2026-08-26). The first four are resolved; G-007, G-008 and
+G-009 are open.
 
 Four from the first slice, then two more from the presentation rebuild
 (2026-08-23), which was the first session to give giri art and a scaling
@@ -413,3 +415,37 @@ new components are the same ECS shapes G-001's fix serves, the new screens are
 the same `Panel`-as-data pattern, the wider tuning set was picked up by the
 drawer because it walks the constants module, and no engine call was added or
 changed. First time this line has been true.
+
+## From the P2 mechanics session (2026-08-26)
+
+Same reading discipline: `docs/api/` (all four) and `crates/jidousha/examples/`
+only. This session implemented DESIGN v2's Risk slice — seeded randomness,
+pressure and strain, the betrayal ladder, the variant machinery, distribution
+sweeps — and asked the documents one question they answer only by omission.
+
+### G-009 — nothing says whether a game may re-seed the engine `Rng`, and per-scenario seeding needs to
+
+Class: docs · Game: giri · Documents: `jidousha-api.md` (Reference: `Rng`,
+`GameConfig`; Concepts: the resource table) · Open
+
+DESIGN §8d wants every beat to be a *scenario*: a pure function of (scenario,
+choices, constants, variant, seed), whatever was played before it. One windowed
+session spans many scenarios, and the `Rng` the engine inserts is seeded once,
+from `GameConfig::seed`, before the first tick — so by beat 2 the generator's
+state is a function of how many draws beat 1 made, and a beat's outcome would
+depend on history the stamp does not record.
+
+The build re-seeds at every beat boundary with
+`world.insert_resource(Rng::from_seed(seed))`, and it works: `insert_resource`
+replaces, `Rng::from_seed` is public, and replay identity holds (the drawer's
+APPLY-restart comparison and the fixed-seed beats both pass). But no document
+says a game may *replace* a resource the engine itself inserted, or what the
+engine assumes about the `Rng` it put there. The resource table says who
+inserts each resource and never who may overwrite one; the `Rng` entry says
+"seeded from `GameConfig::seed`", which the replacement quietly falsifies for
+the rest of the run. If replacing engine resources is legitimate, one sentence
+at the resource table would make this pattern safe to teach; if it is not, a
+`Rng::reseed(&mut self, seed)` (or a documented per-scenario idiom) is the
+missing surface. Until one of those exists, every game with more than one
+scenario per session will either re-derive this workaround or ship
+history-dependent "fixed" seeds.

@@ -13,7 +13,7 @@ change.
 | File | Screen | Surface |
 |---|---|---|
 | `board-reference.png` | the board, a quest taken, nobody staged | 1920x1080 |
-| `staged-reference.png` | the board, party staged, send live | 1920x1080 |
+| `staged-reference.png` | the board, a powder-keg party staged, band chip up | 1920x1080 |
 | `resolution-reference.png` | the resolution takeover, with a betrayal in it | 1920x1080 |
 | `board-narrow.png` | the same board | 600x540 |
 | `staged-narrow.png` | the same staged board | 600x540 |

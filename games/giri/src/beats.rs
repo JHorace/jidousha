@@ -13,6 +13,7 @@
 //! outcomes fails the run.
 
 use crate::model::Social;
+use crate::pressure::Band;
 use crate::traits::{MarkId, MarkTone, TraitId};
 use crate::willing::Verdict;
 
@@ -269,6 +270,24 @@ pub enum Expect {
         /// The fragment.
         fragment: &'static str,
     },
+    /// The staged party's band chip reads exactly this (DESIGN §7a) — an
+    /// assembly-moment claim about the surface the foreshadowing lives on.
+    /// Only meaningful under a rule set that foreshadows, so it belongs on
+    /// the `ladder` list.
+    BandIs {
+        /// The band.
+        band: Band,
+    },
+    /// `who`'s pressure against the staged party is exactly `total` — the
+    /// number the occurrence roll consumes, hand-computed from the sheet and
+    /// the constants. The instrument that catches any pressure-model constant
+    /// moving.
+    PressureIs {
+        /// The member.
+        who: &'static str,
+        /// The exact pressure.
+        total: i32,
+    },
 }
 
 /// One authored dilemma.
@@ -291,8 +310,19 @@ pub struct BeatSpec {
     /// rules: nothing in the game reads it, and a player is free to send
     /// anything the gate allows.
     pub send: &'static [&'static str],
-    /// What playing it correctly produces.
+    /// The beat's fixed seed (DESIGN §12): the dice this scenario rolls when
+    /// no `?seed=` overrides it. Authored data, like the roster — chosen so
+    /// the ladder tells this beat's story, and any other seed is a legal
+    /// playthrough rather than the tutorial's.
+    pub seed: u64,
+    /// What playing it correctly produces **under the deterministic variant**
+    /// — v1's assertions, preserved with the rule they assert.
     pub expect: &'static [Expect],
+    /// What playing it at the fixed seed produces **under the ladder**
+    /// (DESIGN §8e: the ladder beats are fixed-seed). Assembly-moment claims
+    /// from `expect` hold under both variants and are re-judged there;
+    /// resolution claims live here, per rule set.
+    pub ladder: &'static [Expect],
 }
 
 impl BeatSpec {

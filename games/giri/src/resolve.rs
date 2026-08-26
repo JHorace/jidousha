@@ -1,33 +1,42 @@
-//! Resolution: what a dungeon does to the people sent into it (DESIGN.md §7).
+//! Resolution: what a dungeon does to the people sent into it (DESIGN.md §7,
+//! §8).
 //!
-//! One pure function of `(social snapshot, tuning, dungeon, party)`, producing
-//! a `Resolution` — every consequence as data, plus the mechanical narration
-//! the report draws. Nothing here touches the world; `apply` is the write pass
-//! that does, and it only copies numbers the function already decided.
+//! One pure function of `(social snapshot, tuning, variant, dungeon, party,
+//! rng)`, producing a `Resolution` — every consequence as data, plus the
+//! mechanical narration the report draws. Nothing here touches the world;
+//! `apply` is the write pass that does, and it only copies numbers the
+//! function already decided.
 //!
-//! That split is what lets `--verify` ask the model questions a played beat
-//! never reaches — a surviving witness to a killing, a party of five with two
-//! desperate members — without scripting a beat to produce them.
+//! **The betrayal rule is the variant's** (DESIGN §8b, §8e): `variant::events`
+//! hands back one event list whichever rule set the chain was started under —
+//! the seeded ladder, or v1's deterministic rule preserved verbatim. This is
+//! the **only place the `Rng` is read** in the whole game: the rolls happen
+//! inside the ladder's event function and nowhere else, which is what keeps
+//! willingness deterministic under any seed.
 //!
-//! **The stated order** (DESIGN §7): requirements are checked at assembly, so a
-//! party that arrives here succeeds; then betrayal evaluation in roster order,
-//! then payout, then bond drift and clean-job counting, then round-end
-//! desperation drift. v1 has no resolution failure.
+//! **The stated order** (DESIGN §7): requirements are checked at assembly, so
+//! a party that arrives here starts its quest; then betrayal events in roster
+//! order against start-of-resolution state; then the desertion re-evaluation
+//! (an abandoned quest can now fail — P2's one new failure path, and it is
+//! loud); then payout through the skim and sabotage arithmetic; then bond
+//! drift and clean-job counting (a quest with any betrayal in it bonds
+//! nobody); then marks, grudges and round-end desperation drift.
 //!
-//! **The resolution is the reputation system's pen** (DESIGN §5, §12): a murder
-//! writes the *comrade-killer* mark where v1 moved a public scalar, and
-//! enough clean jobs write *reliable*. Witness grudges are unchanged — regard
-//! is what *this* character feels; marks are what everyone knows.
+//! **The resolution is the reputation system's pen** (DESIGN §5, §8): every
+//! rung writes its mark — *skimmer*, *deserter*, *saboteur*, *comrade-killer*
+//! — and its regard edges, and narrates every number it read.
 
 use jidousha::prelude::*;
 
 use crate::beats::Dungeon;
 use crate::constants::Tuning;
+use crate::ladder::{self, Rung, RungEvent};
 use crate::model::{
-    Betrayal, CleanJobs, Dead, Desperation, Marks, RegardEdge, Social, Wealth, betrayals,
-    share_each,
+    Betrayal, CleanJobs, Dead, Desperation, Marks, RegardEdge, Social, Wealth, share_each,
 };
+use crate::pressure;
 use crate::traits::MarkId;
+use crate::variant::VariantId;
 
 // ── what a resolution *is*: the record the write pass and the screens read ──
 
@@ -47,7 +56,7 @@ pub struct RegardChange {
 /// What an event card on the resolution screen is about (UI.md §3).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EventKind {
-    /// A betrayal: skull-marked, ember-bordered.
+    /// A betrayal: skull-marked, ember-bordered — any rung of the ladder.
     Kill,
     /// Money changing hands: coin-marked.
     Coin,
@@ -94,10 +103,19 @@ pub struct DriftLine {
 pub struct Resolution {
     /// The party, in roster order.
     pub party: Vec<Entity>,
-    /// Who came back.
+    /// Who came back **with a share coming**: the party less the murdered and
+    /// the deserters. A deserter is alive and unpaid; a victim is neither.
     pub survivors: Vec<Entity>,
-    /// Every killing, in the order they were evaluated.
+    /// Every betrayal event, in the order the rule produced them.
+    pub rungs: Vec<RungEvent>,
+    /// Every killing, in the order they were evaluated — the murder events'
+    /// v1-shaped record, which is what the write pass reads `Dead` from.
     pub betrayals: Vec<Betrayal>,
+    /// Whether the quest failed — a desertion left it short (DESIGN §8c).
+    pub failed: bool,
+    /// What the player's cut actually was: the stated cut, or nothing from a
+    /// failed job.
+    pub cut_taken: i32,
     /// What each survivor took.
     pub payouts: Vec<(Entity, i32)>,
     /// Every edge that moved.
@@ -122,14 +140,21 @@ pub struct Resolution {
 }
 
 /// Run a dungeon. `party` is in roster order.
+///
+/// The `rng` is read only by the ladder variant's rolls, inside
+/// `variant::events`; the deterministic variant never draws, so its outcome is
+/// v1's exactly, whatever the seed.
 pub fn resolve(
     social: &Social,
     tuning: &Tuning,
+    variant: VariantId,
     dungeon: &Dungeon,
     party: &[Entity],
+    rng: &mut Rng,
 ) -> Resolution {
     let mut out = Resolution {
         party: party.to_vec(),
+        cut_taken: dungeon.cut,
         ..Resolution::default()
     };
     let names = |entity: Entity| social.name(entity);
@@ -141,45 +166,181 @@ pub fn resolve(
         party.len()
     ));
 
-    // --- betrayal, in roster order -----------------------------------
+    // --- the pressures, and the band the chip promised --------------------
     //
-    // The v1 deterministic rule, retained for P1 (DESIGN §15) and replaced by
-    // the seeded ladder in P2. The willingness margin is not an input here.
-    out.betrayals = betrayals(social, tuning, party, dungeon.pot, dungeon.cut);
-    for Betrayal {
-        killer,
-        victim,
-        desperation,
-        share_before,
-        share_after,
-        regard,
-    } in out.betrayals.iter().copied()
-    {
+    // The same `pressure::party` the strip's chip read before SEND, on the
+    // same snapshot — one source, so the warning and the roll cannot disagree
+    // (DESIGN §7a).
+    let pressures = pressure::party(social, tuning, party, dungeon);
+    if variant.foreshadows() {
+        let band = pressure::party_band(tuning, &pressures);
         out.lines.push(format!(
-            "{} killed {} - desperation {} >= {}, share {}->{}, regard {} < {}",
-            names(killer),
-            names(victim),
-            desperation,
-            tuning.k_kill,
-            share_before,
-            share_after,
-            regard,
-            tuning.k_loyal,
+            "the party read {} - highest pressure {}",
+            band.word(),
+            pressures.iter().map(|p| p.total).max().unwrap_or(0),
         ));
-        // The same killing as a card: the sentence a player reads, and the
-        // three clauses that produced it in small text under it (UI.md §3).
-        out.events.push(EventCard {
-            kind: EventKind::Kill,
-            text: format!("{} turned on {}.", names(killer), names(victim)),
-            sub: Some(format!(
-                "desperation {desperation} >= {} - regard {regard} < {} - share {share_before}g \
-                 -> {share_after}g",
-                tuning.k_kill, tuning.k_loyal
-            )),
-        });
+    }
+
+    // --- betrayal, in roster order (the variant's rule) --------------------
+    out.rungs = crate::variant::events(variant, social, tuning, dungeon, party, &pressures, rng);
+
+    // Walk the events once to name each one and keep the running membership
+    // the murder arithmetic reads. Rolls used start-of-resolution state; what
+    // shrinks here is only who is still standing in the room.
+    let mut murdered: Vec<Entity> = Vec::new();
+    let mut deserters: Vec<Entity> = Vec::new();
+    let mut skimmers: Vec<Entity> = Vec::new();
+    let mut saboteurs: Vec<Entity> = Vec::new();
+    let mut present: Vec<Entity> = party.to_vec();
+    for event in out.rungs.clone() {
+        match event.rung {
+            Rung::Murder => {
+                let Some(victim) = event.victim else { continue };
+                let record = event.v1.unwrap_or_else(|| {
+                    // The ladder's murder: same writes as v1, and the share
+                    // numbers the narration quotes are the ones the killer saw.
+                    let count = i32::try_from(present.len()).unwrap_or(i32::MAX);
+                    Betrayal {
+                        killer: event.who,
+                        victim,
+                        desperation: social.desperation(event.who),
+                        share_before: share_each(dungeon.pot, dungeon.cut, count),
+                        share_after: share_each(dungeon.pot, dungeon.cut, count - 1),
+                        regard: event.victim_regard,
+                    }
+                });
+                murdered.push(victim);
+                present.retain(|entity| *entity != victim);
+                if event.rolled.is_some() {
+                    // The ladder's line names the roll; the writes below are
+                    // v1's unchanged.
+                    out.lines.push(format!(
+                        "{} killed {} - pressure {} at powder keg, roll {} of {}, regard {} \
+                         < {}, share {}->{}",
+                        names(record.killer),
+                        names(victim),
+                        event.pressure.total,
+                        event.rolled.unwrap_or(0),
+                        event.die,
+                        record.regard,
+                        tuning.k_loyal,
+                        record.share_before,
+                        record.share_after,
+                    ));
+                    out.events.push(EventCard {
+                        kind: EventKind::Kill,
+                        text: format!("{} turned on {}.", names(record.killer), names(victim)),
+                        sub: Some(format!(
+                            "pressure {} - roll {} of {} - regard {} < {} - share {}g -> {}g",
+                            event.pressure.total,
+                            event.rolled.unwrap_or(0),
+                            event.die,
+                            record.regard,
+                            tuning.k_loyal,
+                            record.share_before,
+                            record.share_after,
+                        )),
+                    });
+                } else {
+                    // v1's line, byte for byte — the deterministic variant is
+                    // preserved, not reimplemented.
+                    out.lines.push(format!(
+                        "{} killed {} - desperation {} >= {}, share {}->{}, regard {} < {}",
+                        names(record.killer),
+                        names(victim),
+                        record.desperation,
+                        tuning.k_kill,
+                        record.share_before,
+                        record.share_after,
+                        record.regard,
+                        tuning.k_loyal,
+                    ));
+                    out.events.push(EventCard {
+                        kind: EventKind::Kill,
+                        text: format!("{} turned on {}.", names(record.killer), names(victim)),
+                        sub: Some(format!(
+                            "desperation {} >= {} - regard {} < {} - share {}g -> {}g",
+                            record.desperation,
+                            tuning.k_kill,
+                            record.regard,
+                            tuning.k_loyal,
+                            record.share_before,
+                            record.share_after,
+                        )),
+                    });
+                }
+                out.betrayals.push(record);
+            }
+            Rung::Abandon => {
+                deserters.push(event.who);
+                present.retain(|entity| *entity != event.who);
+                out.lines.push(format!(
+                    "{} walked out mid-quest - pressure {}, roll {} of {}",
+                    names(event.who),
+                    event.pressure.total,
+                    event.rolled.unwrap_or(0),
+                    event.die,
+                ));
+                out.events.push(EventCard {
+                    kind: EventKind::Kill,
+                    text: format!("{} walked out mid-quest.", names(event.who)),
+                    sub: Some(format!(
+                        "pressure {} - roll {} of {} - no share, and the job re-counts its \
+                         hands",
+                        event.pressure.total,
+                        event.rolled.unwrap_or(0),
+                        event.die,
+                    )),
+                });
+            }
+            Rung::Skim => {
+                skimmers.push(event.who);
+                out.lines.push(format!(
+                    "{} skimmed the pot - pressure {}, roll {} of {}",
+                    names(event.who),
+                    event.pressure.total,
+                    event.rolled.unwrap_or(0),
+                    event.die,
+                ));
+                out.events.push(EventCard {
+                    kind: EventKind::Kill,
+                    text: format!("{} skimmed the pot.", names(event.who)),
+                    sub: Some(format!(
+                        "pressure {} - roll {} of {} - a share off the top before the split",
+                        event.pressure.total,
+                        event.rolled.unwrap_or(0),
+                        event.die,
+                    )),
+                });
+            }
+            Rung::Sabotage => {
+                saboteurs.push(event.who);
+                let damage = ladder::sabotage_damage(tuning, dungeon.pot);
+                out.lines.push(format!(
+                    "{} soured the job - pressure {}, roll {} of {}, the pot loses {} of {}",
+                    names(event.who),
+                    event.pressure.total,
+                    event.rolled.unwrap_or(0),
+                    event.die,
+                    damage,
+                    dungeon.pot,
+                ));
+                out.events.push(EventCard {
+                    kind: EventKind::Kill,
+                    text: format!("{} soured the job.", names(event.who)),
+                    sub: Some(format!(
+                        "pressure {} - roll {} of {} - the pot loses {damage}g of {}g",
+                        event.pressure.total,
+                        event.rolled.unwrap_or(0),
+                        event.die,
+                        dungeon.pot,
+                    )),
+                });
+            }
+        }
     }
     // Absence of an event is also information (UI.md §3).
-    if out.betrayals.is_empty() {
+    if out.rungs.is_empty() {
         out.events.push(EventCard {
             kind: EventKind::Word,
             text: "No blood spilled. Everyone walked back out.".to_owned(),
@@ -189,34 +350,75 @@ pub fn resolve(
     out.survivors = party
         .iter()
         .copied()
-        .filter(|member| {
-            !out.betrayals
-                .iter()
-                .any(|betrayal| betrayal.victim == *member)
-        })
+        .filter(|member| !murdered.contains(member) && !deserters.contains(member))
         .collect();
 
-    // --- payout -------------------------------------------------------
-    let survivor_count = i32::try_from(out.survivors.len()).unwrap_or(i32::MAX);
-    let share = share_each(dungeon.pot, dungeon.cut, survivor_count);
-    for member in out.survivors.iter().copied() {
-        out.payouts.push((member, share));
+    // --- the desertion re-evaluation (DESIGN §8c) --------------------------
+    //
+    // The quest's success re-evaluates against the remaining party: headcount
+    // and predicates, with the murdered still counted — they did the work
+    // before they died, which is v1's own semantics kept.
+    let remaining: Vec<Entity> = party
+        .iter()
+        .copied()
+        .filter(|member| !deserters.contains(member))
+        .collect();
+    out.failed = !deserters.is_empty()
+        && (remaining.len() < dungeon.headcount || !dungeon.requires.met(social, &remaining));
+    if out.failed {
+        out.cut_taken = 0;
         out.lines.push(format!(
-            "{} takes {} - {} split {} way{}",
-            names(member),
-            share,
-            (dungeon.pot - dungeon.cut).max(0),
-            survivor_count,
-            if survivor_count == 1 { "" } else { "s" },
+            "{} failed - {} of {} hands left to finish it",
+            dungeon.name,
+            remaining.len(),
+            dungeon.headcount,
         ));
+    }
+
+    // --- payout, through the sabotage and the skim -------------------------
+    let damage = i32::try_from(saboteurs.len()).unwrap_or(i32::MAX)
+        * ladder::sabotage_damage(tuning, dungeon.pot);
+    let pot_after = (dungeon.pot - damage).max(0);
+    let survivor_count = i32::try_from(out.survivors.len()).unwrap_or(i32::MAX);
+    let skimmer_count = i32::try_from(skimmers.len()).unwrap_or(i32::MAX);
+    let (share, skim) = if out.failed {
+        (0, 0)
+    } else {
+        ladder::skim_shares(pot_after, dungeon.cut, survivor_count, skimmer_count)
+    };
+    if !out.failed {
+        for member in out.survivors.iter().copied() {
+            let skimmed = skimmers.contains(&member);
+            let amount = share + if skimmed { skim } else { 0 };
+            out.payouts.push((member, amount));
+            if skimmed {
+                out.lines.push(format!(
+                    "{} takes {} - a split of {} plus the {} they skimmed",
+                    names(member),
+                    amount,
+                    share,
+                    skim,
+                ));
+            } else {
+                out.lines.push(format!(
+                    "{} takes {} - {} split {} way{}",
+                    names(member),
+                    amount,
+                    (pot_after - dungeon.cut - skim * skimmer_count).max(0),
+                    survivor_count,
+                    if survivor_count == 1 { "" } else { "s" },
+                ));
+            }
+        }
     }
     // --- bond drift and the clean-job count ---------------------------
     //
     // "Shared success without betrayal raises mutual regard between all
     // surviving pairs" (DESIGN §6). Read per *run* rather than per pair: a
-    // job somebody was killed on is not a job the survivors got closer on —
-    // and not a job anybody's clean-job count moves for either.
-    if out.betrayals.is_empty() {
+    // job somebody was killed, robbed or walked out on is not a job the
+    // survivors got closer on — and not a job anybody's clean-job count moves
+    // for either.
+    if out.rungs.is_empty() && !out.failed {
         let survivors = out.survivors.clone();
         for (index, first) in survivors.iter().copied().enumerate() {
             for second in survivors.iter().copied().skip(index + 1) {
@@ -263,6 +465,82 @@ pub fn resolve(
     }
 
     // --- what a betrayal costs the betrayer ---------------------------
+    //
+    // The lower rungs first, in event order: the mark, and the regard of the
+    // people it wronged. Murder's block below is v1's, unchanged.
+    for event in out.rungs.clone() {
+        let (mark, wronged): (MarkId, Vec<Entity>) = match event.rung {
+            // The shorted: everybody still splitting the pot.
+            Rung::Skim => (
+                MarkId::Skimmer,
+                out.survivors
+                    .iter()
+                    .copied()
+                    .filter(|member| *member != event.who)
+                    .collect(),
+            ),
+            // Those left holding the job.
+            Rung::Abandon => (
+                MarkId::Deserter,
+                out.survivors
+                    .iter()
+                    .copied()
+                    .filter(|member| *member != event.who)
+                    .collect(),
+            ),
+            Rung::Sabotage => (
+                MarkId::Saboteur,
+                out.survivors
+                    .iter()
+                    .copied()
+                    .filter(|member| *member != event.who)
+                    .collect(),
+            ),
+            Rung::Murder => continue,
+        };
+        if !social.marked(event.who, mark)
+            && !out
+                .mark_writes
+                .iter()
+                .any(|(who, written)| *who == event.who && *written == mark)
+        {
+            write_mark(&mut out, social, event.who, mark);
+            out.lines.push(format!(
+                "{} is marked {} - {}",
+                names(event.who),
+                mark.name(),
+                match event.rung {
+                    Rung::Skim => "a shorted split is public",
+                    Rung::Abandon => "an empty place in the line is public",
+                    _ => "a soured job is public",
+                },
+            ));
+        }
+        let drop = event.rung.def().grudge;
+        if drop > 0 {
+            for holder in wronged {
+                let before = current_regard(&out, social, holder, event.who);
+                push_regard(&mut out, social, holder, event.who, -drop);
+                out.lines.push(format!(
+                    "{} holds it against {} - regard {}->{}",
+                    names(holder),
+                    names(event.who),
+                    before,
+                    before - drop,
+                ));
+                out.drift.push(DriftLine {
+                    tone: DriftTone::Regard,
+                    text: format!(
+                        "{}: regard toward {} {}->{}",
+                        names(holder),
+                        names(event.who),
+                        before,
+                        before - drop
+                    ),
+                });
+            }
+        }
+    }
     for betrayal in out.betrayals.clone() {
         // The murder writes the mark (DESIGN §5): qualitative, public, and on
         // the sheet from here on. Written once — a mark is a fact, not a
@@ -324,28 +602,53 @@ pub fn resolve(
         }
     }
 
-    // The payout is the last card, after what the killing cost: a player reads
-    // the column in the order the rules fired, and the money is what the whole
-    // column was for.
-    out.events.push(EventCard {
-        kind: EventKind::Coin,
-        text: format!("Your cut: {}g. Each survivor takes {share}g.", dungeon.cut),
-        sub: Some(format!(
-            "pot {}g - cut {}g = {}g split {survivor_count} way{}",
-            dungeon.pot,
-            dungeon.cut,
-            (dungeon.pot - dungeon.cut).max(0),
-            if survivor_count == 1 { "" } else { "s" },
-        )),
-    });
+    // The payout is the last card, after what the betrayals cost: a player
+    // reads the column in the order the rules fired, and the money is what the
+    // whole column was for.
+    if out.failed {
+        out.events.push(EventCard {
+            kind: EventKind::Coin,
+            text: "The job fell apart. Nobody gets paid.".to_owned(),
+            sub: Some(format!(
+                "abandoned mid-quest - {} of {} hands left to finish it",
+                remaining.len(),
+                dungeon.headcount,
+            )),
+        });
+    } else {
+        out.events.push(EventCard {
+            kind: EventKind::Coin,
+            text: format!("Your cut: {}g. Each survivor takes {share}g.", dungeon.cut),
+            sub: Some(if damage > 0 || skimmer_count > 0 {
+                format!(
+                    "pot {}g - spoiled {damage}g - skimmed {}g - cut {}g = {}g split \
+                     {survivor_count} way{}",
+                    dungeon.pot,
+                    skim * skimmer_count,
+                    dungeon.cut,
+                    (pot_after - dungeon.cut - skim * skimmer_count).max(0),
+                    if survivor_count == 1 { "" } else { "s" },
+                )
+            } else {
+                format!(
+                    "pot {}g - cut {}g = {}g split {survivor_count} way{}",
+                    dungeon.pot,
+                    dungeon.cut,
+                    (dungeon.pot - dungeon.cut).max(0),
+                    if survivor_count == 1 { "" } else { "s" },
+                )
+            }),
+        });
+    }
 
     // --- round-end desperation drift ----------------------------------
     //
     // Every living roster member, not only the party: non-participants do not
     // profit, so the roster decays toward willingness and refusal is always
-    // temporary (DESIGN §11).
+    // temporary (DESIGN §11). A deserter is alive, unpaid, and gets hungrier —
+    // their hunger still rises (DESIGN §8c).
     for member in &social.members {
-        if !member.alive || out.betrayals.iter().any(|b| b.victim == member.entity) {
+        if !member.alive || murdered.contains(&member.entity) {
             continue;
         }
         let profited = out
@@ -361,6 +664,8 @@ pub fn resolve(
         out.desperation_changes.push((member.entity, before, after));
         let why = if profited {
             "profited"
+        } else if deserters.contains(&member.entity) {
+            "walked out empty-handed"
         } else if party.contains(&member.entity) {
             "came back empty"
         } else {
