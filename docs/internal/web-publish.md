@@ -152,8 +152,10 @@ One `index.html` template, self-contained (no external CDN dependencies):
     *from* the median, so on the defective browser it read 12 Hz on a 240 Hz
     display and had nothing left to be surprised by). Past **2.5×** of that
     period, **and** past a thirtieth of a second in absolute terms, over a
-    window of at least **60 frames**, the warning box says so and names the
-    render scale below. The three numbers, and why each: 2.5× sits well above a
+    window of at least **60 frames**, the warning box says so and offers the
+    render scale below as a test — "if that helps, the cost is per rendered
+    pixel; if it changes nothing, try a smaller window" — rather than as a fix,
+    for the reason frame-pacing.md §5.5 records. The three numbers, and why each: 2.5× sits well above a
     healthy browser under load (Chrome measured 1.02× of its own quickest tenth)
     and well below the defect (Firefox, 5.2×); the absolute floor is what stops
     the ratio firing on a browser that is merely *fast* — 2.5× of a 240Hz period
@@ -200,12 +202,21 @@ One `index.html` template, self-contained (no external CDN dependencies):
   and *which* verdict it reaches is not a thing to assert — what the pass
   asserts is that the classifier ran and reached one of its three, because a
   detector that throws is a detector that silently stops warning anybody.
-- **Render scale** (`?renderscale=0.5`): the one thing a playtester on a browser
-  with a slow presentation path can do about it from a URL. It clamps the
-  canvas's **backing store** — the page renders that fraction of the device
-  pixels the window has, and the browser upscales. Half the linear scale is a
-  quarter of the pixels, and on a presentation path that costs per pixel that is
-  most of the cost.
+- **Render scale** (`?renderscale=0.5`): it clamps the canvas's **backing
+  store** — the page renders that fraction of the device pixels the window has,
+  and the browser upscales. Half the linear scale is a quarter of the pixels.
+  - **It is a mitigation, and it is a diagnostic, and the second one is why it
+    earns its place.** Where a frame's cost is per *rendered* pixel it helps, and
+    that is measured rather than assumed: on a CPU-rasterizing browser at a
+    fractional device pixel ratio, a 50.00ms median fell to 33.40ms; at ratio 1
+    it turned a 16.50–33.40ms spread with 15% two-tick frames into a flat
+    16.50–16.80ms with 1%. Where the cost is *not* per rendered pixel it does
+    nothing — and because it moves the backing store while leaving the window
+    alone, "it did nothing" is a reading, not a disappointment: it says the cost
+    is somewhere a smaller canvas cannot reach. That is exactly what it said on
+    the defect this was built for (frame-pacing.md §5.5), and it is what the
+    overlay's warning now presents it as: a test with two informative answers,
+    not a fix.
   - CONTRACT: **presentation-only, and that is a three-part promise.** The scale
     multiplies the surface size, the camera viewport that follows it, and
     pointer positions — *together*. So world-space rendering is unchanged, the

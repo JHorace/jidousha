@@ -1,13 +1,14 @@
 # Frame pacing on the web — an open investigation
 
-Status: **diagnosed, mechanism identified; one measurement outstanding.** This
-note holds one observed defect, the ranked hypotheses for it, the instrument
-built to tell them apart, two rounds of owner readings, and the verdict they
-carry (§5). The cause is `DMABUF_WEBGL` blocked by Mozilla's own blocklist,
-forcing a per-pixel copy of every frame (§5.4); what is not yet established is
-that this is the *dominant* cost rather than one of several. **This note closes
-when §5.5's one reading lands** — not before, and it says so rather than
-guessing.
+Status: **defect characterised, mechanism still open; one reading outstanding.**
+This note holds one observed defect, the ranked hypotheses for it, the
+instrument built to tell them apart, three rounds of owner readings, and what
+they have and have not settled (§5). Settled: what the defect *is*, that all
+three §3 hypotheses are wrong, and — from two experiments that vary different
+things — that **the cost tracks window size, not canvas resolution** (§5.5). Not
+settled: the mechanism. Two candidates have been proposed and both refuted, and
+the surviving three are in §5.5. **This note closes when §5.6's one reading
+lands** — not before, and it says so rather than guessing.
 
 Inherits: the frame-clock contract (ADR-0005), the loop and its catch-up bound
 (core.md §7), the playtest page shell (web-publish.md §2), no retained render
@@ -261,16 +262,25 @@ path, WebRender composites the whole window itself rather than handing surfaces
 to KDE, so the copy has nowhere cheap to land.
 
 **And the multiplier is the display.** 3840×2160 at a device pixel ratio of
-~1.46 means a near-fullscreen canvas is several megapixels of *device* pixels,
-every one of them going through that copy. This is not a browser being slow in
-general; it is a browser paying a per-pixel tax on an unusually large number of
-pixels. A 4K screen is where this defect goes from "measurable" to "12fps".
+~1.46 means a near-fullscreen window is several megapixels, every one of them
+paying whatever the per-frame tax turns out to be. A 4K screen is where this
+defect goes from "measurable" to "12fps". This paragraph survives round 3
+unchanged — it was always about *how many pixels*, and round 3 only moved
+*which* pixels: the window's, not the canvas's.
 
 **Confidence.** This is a mechanism the machine's own feature log states as
 fact — `DMABUF_WEBGL: blocked` is a reading, not an inference. What remains
 inferred is that this blocked row is *the* dominant cost rather than one of
 several, and §5.5 has the one measurement that would settle it quantitatively.
 Treat it as: cause identified, magnitude unconfirmed.
+
+> **Superseded, 2026-08-26.** That measurement was taken and the prediction
+> failed: `?renderscale=0.5` changed the median frame time by nothing at all.
+> The blocked row is real and is **not** the dominant cost. Read the rest of
+> this subsection as the reasoning that was available before round 3, kept
+> because the reading it was built on (§5.3) is still good and because two
+> refuted mechanisms in a row is worth being able to see. **§5.5 is the current
+> state.**
 
 #### Two things that are not the defect
 
@@ -309,53 +319,152 @@ believe.
 **And a mitigation a playtester can reach.** `?renderscale=0.5`
 (web-publish.md §2) renders a quarter of the device pixels and lets the browser
 upscale — presentation-only, so world space, the letterbox contract
-(games/giri/UI.md §6), input mapping and the simulation are all untouched. On a
-path whose cost is a per-pixel copy this is close to the whole cost, and §5.3's
-1.46 device pixel ratio on a 4K panel is why it has so much to give back. It is
+(games/giri/UI.md §6), input mapping and the simulation are all untouched. It is
 opt-in: no deployed build's default behavior changed, and a default cap on
 device pixel ratio would be a decision needing an ADR rather than a quiet edit.
 
-### 5.5 Still open — one measurement
+> **Corrected, 2026-08-26.** "A mitigation" is what this was landed as and it is
+> not what it is *here* — round 3 measured no effect on this defect. It is a
+> mitigation where a frame costs per rendered pixel, and on this browser it is
+> instead the experiment that proved the cost is elsewhere. §5.5 has both, and
+> the overlay now offers it as a test rather than as a fix.
 
-Step 1 reported (§5.3). Step 2 is retired as moot (§5.4). What is left is step 3,
-and it has been promoted: it is no longer only a validation of the mitigation,
-it is the **quantitative test of the mechanism**, because a per-pixel copy makes
-a prediction nothing else here does.
+### 5.5 Round 3 — the mitigation did nothing, and that is the finding
 
-**With the defect present, in Firefox, load `?frametime=1&renderscale=0.5` and
-report the overlay.** If the dominant cost is a per-pixel copy, a quarter of the
-pixels should move the median frame time by close to a factor of four — from
-~83ms toward ~21ms, bounded below by whatever fixed per-frame cost is left. The
-overlay's own `scale` line reports the backing store it actually got, so the
-reading is self-describing.
+Owner, **2026-08-26**, on the PR-69 preview deploy (not production — the change
+was not merged, and this is the build that carries it):
 
-- **Roughly 4× better** ⇒ the mechanism in §5.4 is confirmed in magnitude as
-  well as in kind, and this note closes.
-- **Barely better** ⇒ the blocked `DMABUF_WEBGL` row is real but is not the
-  dominant cost, and something else on that path is. The note stays open and
-  §5.4's confidence paragraph is what gets revised.
+> Changing the renderscale doesn't meaningfully affect frame time. The median
+> remains around 83ms.
 
-Two optional readings, if they are cheap and only if they are:
+§5.4 predicted ~4×. It got 1×. **The prediction failed, and the mechanism goes
+with it.**
 
-- **A second window size**, with the overlay median at each and the device-pixel
-  counts from its `scale` line. Two points give the scaling exponent, and the
-  mechanism predicts linear in pixel area. This is the window-shrink experiment
-  §5.1 records, made into a number.
-- **Un-blocklisting `DMABUF_WEBGL`**, if this build offers a way to override
-  gfxInfo for that entry, would be the direct test. Mozilla bug **1924578** is
-  the entry to read first — it says who the blocklist is protecting and from
-  what, and "the crash it was added to prevent" is a real possible answer to
-  "why not just turn it on".
+#### First, what this is not
 
-Whoever reads that reply writes it into §5.4, marks the magnitude confirmed or
-revises it, and closes this note.
+Two boring explanations, both eliminated before touching the verdict:
+
+- **The preview was serving the change.** CI run 32923303364 on head `f2a66d0`
+  is green, deploy included, and `f2a66d0` carries the `?renderscale=` code from
+  `b204ab9`.
+- **The parameter works at this machine's device pixel ratio.** The one variable
+  in §5.3 never reproduced was the fractional DPR — KDE at ~1.46, where a
+  rounding or resize-feedback bug could plausibly hide. Driven locally at
+  `--force-device-scale-factor=1.4634146341463414`: the backing store went
+  **1174×667 → 587×334**, exactly 0.50×, with the device-pixel box unchanged at
+  1174×667. No bug there.
+- Still worth one line from the owner: the overlay's own **`scale`** reading from
+  the failing run. It reports the backing store as measured, so it is the direct
+  witness that the parameter took. Everything below assumes it did; if it reads
+  `1.00x`, this section is void and the question is why.
+
+#### What the null result rules out
+
+The two experiments now vary two different things, and only one of them matters:
+
+| experiment | canvas backing-store pixels | window / composited pixels | result |
+|---|---|---|---|
+| shrink the window (§5.1) | fewer | **fewer** | **much better** |
+| `?renderscale=0.5` (here) | **fewer** | same | **no change** |
+
+Read together: **the per-frame cost is not a function of the size of the WebGL
+drawing buffer. It is a function of the size of the window.** The browser is
+upscaling a quarter-sized buffer to the same window and paying the same price.
+
+That **demotes `DMABUF_WEBGL`**. The blocklist row (§5.3) is still a fact, and a
+forced copy of the WebGL buffer is still real — but it is not the dominant cost,
+because a copy of a quarter as much data would have shown up. §5.4's confidence
+paragraph said this was the branch to take if the prediction failed, and it is
+the branch that happened.
+
+#### What is still standing
+
+Three candidates fit "cost proportional to window area, indifferent to canvas
+resolution", and this note is **not** going to pick between them by reasoning:
+
+1. **The compositor's own present path.** `WEBRENDER_COMPOSITOR` is blocklisted
+   (§5.3), so WebRender composites the whole window itself and presents one
+   window-sized framebuffer per frame — over Wayland, on the NVIDIA proprietary
+   driver, whose EGL extension list is EGLStream-shaped. If that present is the
+   slow step, nothing inside the window can matter.
+2. **The WebGL→compositor copy, done at composited size.** `DMABUF_WEBGL`
+   blocked still forces a copy; if it happens *after* the upscale, its cost is
+   window-sized and `?renderscale=` cannot reach it. This keeps §5.4's row as
+   the cause and only changes where it is paid.
+3. **The upscale itself.** Blitting 587×334 to a window-sized surface may cost
+   what drawing at window size costs, which would make the parameter unable to
+   help here *by construction* rather than by pointing elsewhere.
+
+(1) and (3) say the defect is not WebGL-specific. (2) says it is. That is a
+sharp, cheap distinction, and §5.6 is how to make it.
+
+#### What this does to the deliverables
+
+**The measured slow-presentation warning is unaffected and was right.** It fires
+on this browser at 5.2× and stays quiet on Chrome at 1.02×. Nothing here touches
+it.
+
+**`?renderscale=` survives, with its claim corrected.** It was landed as a
+mitigation and documented as one; on this defect it mitigates nothing, and that
+sentence is now wrong wherever it appears. What it actually is:
+
+- a **mitigation** where a frame's cost is per rendered pixel — measured, on a
+  CPU-rasterizing browser at this same fractional DPR, at a median of 50.00ms
+  down to 33.40ms, and at DPR 1 turning a 16.50–33.40ms spread with 15% two-tick
+  frames into a flat 16.50–16.80ms with 1%;
+- a **discriminator**, which is the more valuable half and is only visible in
+  hindsight: it moves the backing store and leaves the window alone, so a slow
+  browser that shrugs at it has told you the cost is somewhere a smaller canvas
+  cannot reach. That is exactly the reading this round produced, and it is worth
+  more than the 4× would have been.
+
+The overlay's warning now offers it as a **test** rather than as a fix, and says
+what each answer means. Nothing else about the seam changes: it is still opt-in,
+still presentation-only, still off by default.
+
+**And the honest note about how this went.** Two mechanisms proposed, two
+refuted — the first by a reading from outside the page (§5.3), the second by its
+own prediction failing (here). The instrument was right every time; the
+inferences drawn from it were not. That is the correct ratio for a note that
+insisted on readings over guesses, and the guesses are labelled as such above so
+that the third one is read the same way.
+
+### 5.6 Still open — one page that is not this game
+
+Do **not** run another `?renderscale=` variant; that variable is spent. The next
+reading has to separate "this browser is slow at WebGL" from "this browser is
+slow at presenting a window this size", and it takes one tab:
+
+1. **Open a non-WebGL page at the same window size, on the same display**, and
+   watch whether it is also janky — a long text page scrolled continuously is
+   enough; anything with no `<canvas>` in it. Then shrink the window and watch
+   again.
+   - **Ordinary pages are also slow, and shrinking helps** ⇒ candidate 1: the
+     defect is the compositor/present path and has nothing to do with WebGL or
+     with this engine. That is the end of the engine's involvement, and this note
+     closes as "not ours, recorded".
+   - **Ordinary pages are fine and only the WebGL page is slow** ⇒ candidate 2
+     or 3: the WebGL→compositor handoff, at composited size. `DMABUF_WEBGL` is
+     back in the frame and Mozilla bug **1924578** is the thing to read.
+2. **Optional, and only if step 1 says "WebGL-specific":** any other WebGL page
+   at the same window size — a `?frametime=1` page from another site, or any
+   WebGL demo. If those are slow too, it is the browser and not this engine's
+   use of it, which is worth knowing before anything is changed here.
+3. **Optional, cheap, and useful either way:** the overlay median at two window
+   sizes with the `scale` line's device-pixel box at each. Window area is now the
+   variable that *does* matter, so two points give its exponent.
+
+Whoever reads that reply writes it into §5.5, picks between the candidates, and
+closes this note — or hands it to Mozilla, which for candidate 1 is where it
+belongs.
 
 > **Verdict:** _a presentation-path defect in Firefox — ~12fps on hardware that
-> does ~238fps in Chrome, cost scaling with pixel area. Hypothesis 2 is dead;
-> hypothesis 1 is dead for compositing and unanswerable from a renderer string
-> that stock Firefox spoofs; interpolation was never going to fix it. The
-> cross-GPU mechanism is refuted — WebGL and compositing are both on the RTX
-> 5090. The mechanism is `DMABUF_WEBGL` blocked by Mozilla's blocklist
-> (bug 1924578), forcing a per-pixel copy of every frame, multiplied by a 4K
-> panel at a 1.46 device pixel ratio. Cause identified; magnitude unconfirmed,
-> and §5.5 is the one reading that settles it._
+> does ~238fps in Chrome. Hypothesis 2 is dead; hypothesis 1 is dead for
+> compositing and unanswerable from a renderer string that stock Firefox spoofs;
+> interpolation was never going to fix it. Two mechanisms have been proposed and
+> both refuted: cross-GPU transfer by `about:support` (WebGL is on the RTX
+> 5090), and a per-pixel copy of the WebGL buffer by its own prediction failing
+> — `?renderscale=0.5` changed nothing. What the two experiments together
+> establish is sharper than either: **the cost tracks window size, not canvas
+> resolution.** §5.6's one non-WebGL page decides whether this is the engine's
+> problem at all._

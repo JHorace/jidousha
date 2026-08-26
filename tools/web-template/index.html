@@ -21,13 +21,23 @@
   Presentation seam: `?renderscale=0.5` renders at half the device resolution
   and lets the browser upscale (web-publish.md §2). Opt-in, presentation-only —
   world space, the letterbox and where a click lands are all unchanged, and the
-  page simply asks for fewer pixels. It is what a playtester on a browser with a
-  slow presentation path can do about it without setting an environment
-  variable, and the overlay's slow-presentation warning names it. The parameter
-  is read on the *engine* side (jidousha-platform's web/render_scale.rs) rather
-  than here, because the canvas's backing store is written by wgpu from the size
-  the surface is configured with; the overlay reports what the page ended up
-  with, which is the honest half of it to keep on this side.
+  page simply asks for fewer pixels.
+
+  It is two things, and the second one outlived the first. It is a *mitigation*
+  where the cost of a frame is per rendered pixel — measured, on a CPU-rasterizing
+  browser, at 50.00ms median down to 33.40ms. And it is a *discriminator*: it
+  moves the backing store and leaves the window alone, so a browser that is slow
+  and does not care about it is telling you the cost is somewhere a smaller
+  canvas cannot reach. On the defect this whole overlay was built for it did
+  exactly that — nothing at all — and that null result is what frame-pacing.md
+  §5.5 now turns on. The warning presents it as a test, not as a fix, for that
+  reason.
+
+  The parameter is read on the *engine* side (jidousha-platform's
+  web/render_scale.rs) rather than here, because the canvas's backing store is
+  written by wgpu from the size the surface is configured with; the overlay
+  reports what the page ended up with, which is the honest half of it to keep on
+  this side.
 
   Reserved seam (deferred, do not build yet): the "download recording" button
   lands here once the input recording buffer is reachable from the page
@@ -494,8 +504,10 @@
                 "ms refresh period (" +
                 pace.ratio.toFixed(1) +
                 "x) — no pacing logic makes a page this slow look smooth\n" +
-                "add &renderscale=0.5 to this URL: a quarter of the device " +
-                "pixels, and nothing about the game changes",
+                "try &renderscale=0.5 — a quarter of the device pixels, game " +
+                "unchanged. If that helps, the cost is per rendered pixel; if it " +
+                "changes nothing, try a smaller window instead. Which of the two " +
+                "it is is the useful half of a bug report",
             );
           }
           warning.textContent = messages.join("\n\n");
