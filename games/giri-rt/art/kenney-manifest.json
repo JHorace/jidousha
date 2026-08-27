@@ -1,0 +1,734 @@
+{
+  "readme": [
+    "What has been looked at in the owner's Kenney packs, and what each region is.",
+    "",
+    "This is metadata, not art: it names regions of packs that live on the owner's",
+    "machine and never enter this repository. Committing it is what makes looking at",
+    "a pack a one-time cost -- the next curation session reads this instead of",
+    "re-rendering and re-reading contact sheets.",
+    "",
+    "Classification is ON DEMAND. Only regions relevant to giri's thirteen asset",
+    "slots (UI.md section 9) are classified; everything else is listed under",
+    "'unclassified' with its extent, so a later session knows what was skipped",
+    "rather than guessing it was empty. Labelling a whole pack would be hours spent",
+    "on tags nobody will query.",
+    "",
+    "It lives with giri until a second game wants it (second-consumer rule).",
+    "",
+    "Regenerate contact sheets with art/contact_sheet.py; sheets are never",
+    "committed -- a whole pack rearranged into sheets is still the whole pack.",
+    "",
+    "Every pack is CC0 1.0 (each pack's own License.txt, quoted in assets/CREDITS.md).",
+    "Kenney *requests* that whole packs not be redistributed; that is not a licence",
+    "term, and the curation model honours it by construction."
+  ],
+  "classified_on": "2026-08-23",
+  "packs": {
+    "micro-roguelike": {
+      "name": "Micro Roguelike (1.3)",
+      "created": "01-11-2021",
+      "url": "https://kenney.nl",
+      "licence": "CC0 1.0",
+      "layout": "individual PNGs",
+      "source": "Tiles/Colored",
+      "texels": [
+        8,
+        8
+      ],
+      "cells": 160,
+      "note": "Clean transparent-background silhouettes at 8x8 -- giri's stat icons are drawn at exactly this size.",
+      "dir": "Micro Roguelike"
+    },
+    "tiny-dungeon": {
+      "name": "Tiny Dungeon (1.0)",
+      "created": "05-07-2022",
+      "url": "https://kenney.nl",
+      "licence": "CC0 1.0",
+      "layout": "individual PNGs",
+      "source": "Tiles",
+      "texels": [
+        16,
+        16
+      ],
+      "cells": 132,
+      "note": "Head-and-shoulders character busts at 16x16, plus full-bleed dungeon tiles.",
+      "dir": "Tiny Dungeon"
+    },
+    "roguelike-characters": {
+      "name": "Roguelike Characters pack (2.0)",
+      "created": "20-05-2015",
+      "url": "https://kenney.nl",
+      "licence": "CC0 1.0",
+      "layout": "tilesheet",
+      "source": "Spritesheet/roguelikeChar_transparent.png",
+      "texels": [
+        16,
+        16
+      ],
+      "spacing": 1,
+      "grid": [
+        54,
+        12
+      ],
+      "cells": 648,
+      "note": "Mostly a modular paper doll -- torsos, helmets, weapons as separate cells. Only the assembled busts listed below are usable as a portrait without compositing.",
+      "dir": "Roguelike Characters Pack"
+    },
+    "1-bit-pack": {
+      "name": "1-Bit Pack (1.2)",
+      "created": "09-11-2021",
+      "url": "https://kenney.nl",
+      "licence": "CC0 1.0",
+      "layout": "tilesheet",
+      "source": "Tilesheet/colored-transparent.png",
+      "texels": [
+        16,
+        16
+      ],
+      "spacing": 1,
+      "grid": [
+        49,
+        22
+      ],
+      "cells": 1078,
+      "note": "Two-tone. Swept for an eye glyph (see 'gaps'); nothing else classified -- the palette does not sit with the coloured packs.",
+      "dir": "1-Bit Pack"
+    },
+    "cartography-pack": {
+      "name": "Cartography Pack (1.0)",
+      "created": "16-06-2020",
+      "url": "https://kenney.nl",
+      "licence": "CC0 1.0",
+      "layout": "individual PNGs",
+      "source": "PNG/Default",
+      "texels": [
+        64,
+        64
+      ],
+      "cells": 83,
+      "note": "Descriptive filenames (tower, graveyard, mine, chest) that read like giri's quest types -- but 64x64 into a 72-unit slot is a fractional scale, which UI.md section 1.4 forbids. Excluded from candidates for that reason alone; recorded here so the next session does not re-derive it.",
+      "dir": "Cartography Pack"
+    },
+    "generic-items": {
+      "name": "Generic Items #1",
+      "url": "https://kenney.nl",
+      "licence": "CC0 1.0",
+      "layout": "individual PNGs",
+      "source": "PNG/Colored",
+      "cells": 163,
+      "note": "Roughly 75x86 and painterly, not pixel art. Not classified: nothing at giri's sizes.",
+      "dir": "Generic Items"
+    },
+    "platformer-characters-1": {
+      "name": "Platformer Characters 1 (1.0)",
+      "url": "https://kenney.nl",
+      "licence": "CC0 1.0",
+      "layout": "individual PNGs",
+      "source": "PNG",
+      "cells": 171,
+      "note": "Large multi-frame animation sheets. Not classified: nothing at giri's sizes.",
+      "dir": "Platformer Characters 1"
+    }
+  },
+  "gaps": [
+    {
+      "role": "icon_eye",
+      "finding": "No eye glyph exists in any of the seven packs.",
+      "looked_at": "All 160 Micro Roguelike tiles, all 132 Tiny Dungeon tiles, all 83 Cartography filenames, and the 1-Bit Pack's symbol band (cells 661-1077, which holds its UI glyphs). The 1-Bit cells that read as eyes at thumbnail size (705-717) are targeting reticles.",
+      "consequence": "UI.md section 2 fixes 'eye icon = infamy' as a stable signifier; changing it is a UI.md edit and the owner's call, not an import detail. The slot therefore keeps its generated icon unless the owner decides otherwise -- import_pack.py's partial-library path is exactly this case."
+    }
+  ],
+  "chosen": {
+    "_note": [
+      "What the owner picked, 2026-08-23, from the shortlists in target/giri-art/.",
+      "Role -> manifest entry id. null means the role keeps its generated art.",
+      "This is the curation record: art/extract.py reads it to stage role-named PNGs,",
+      "and import_pack.py copies those into assets/. Re-running both reproduces the",
+      "committed library from the owner's packs exactly.",
+      "Portrait assignment to characters is by temperament, not by any described",
+      "appearance -- DESIGN gives the four no faces, only social roles. Swapping two",
+      "portraits is a one-line edit here plus a re-run."
+    ],
+    "portrait_bob": "tinydungeon:87",
+    "portrait_alex": "tinydungeon:84",
+    "portrait_tim": "tinydungeon:96",
+    "portrait_steve": "tinydungeon:112",
+    "quest_cave": "microrl:117",
+    "quest_crypt": "microrl:121",
+    "quest_tower": "microrl:118",
+    "quest_vault": "tinydungeon:89",
+    "icon_flame": "microrl:136",
+    "icon_coin": "microrl:130",
+    "icon_skull": "microrl:116",
+    "icon_heart": "microrl:102",
+    "icon_eye": null
+  },
+  "entries": [
+    {
+      "id": "microrl:102",
+      "pack": "micro-roguelike",
+      "index": 102,
+      "file": "tile_0102.png",
+      "tags": [
+        "heart",
+        "full",
+        "red"
+      ],
+      "candidate_for": [
+        "icon_heart"
+      ],
+      "description": "A filled red heart, flat -- no highlight."
+    },
+    {
+      "id": "microrl:101",
+      "pack": "micro-roguelike",
+      "index": 101,
+      "file": "tile_0101.png",
+      "tags": [
+        "heart",
+        "half"
+      ],
+      "candidate_for": [
+        "icon_heart"
+      ],
+      "description": "A heart filled on the left half only, grey outline on the right."
+    },
+    {
+      "id": "microrl:100",
+      "pack": "micro-roguelike",
+      "index": 100,
+      "file": "tile_0100.png",
+      "tags": [
+        "heart",
+        "empty",
+        "outline"
+      ],
+      "candidate_for": [
+        "icon_heart"
+      ],
+      "description": "An empty grey heart outline."
+    },
+    {
+      "id": "microrl:116",
+      "pack": "micro-roguelike",
+      "index": 116,
+      "file": "tile_0116.png",
+      "tags": [
+        "skull",
+        "death",
+        "bone"
+      ],
+      "candidate_for": [
+        "icon_skull"
+      ],
+      "description": "A bone-white skull, two dark sockets, jaw implied by one notch."
+    },
+    {
+      "id": "microrl:136",
+      "pack": "micro-roguelike",
+      "index": 136,
+      "file": "tile_0136.png",
+      "tags": [
+        "fire",
+        "flame"
+      ],
+      "candidate_for": [
+        "icon_flame"
+      ],
+      "description": "A flame: red outer tongues over a yellow core."
+    },
+    {
+      "id": "microrl:137",
+      "pack": "micro-roguelike",
+      "index": 137,
+      "file": "tile_0137.png",
+      "tags": [
+        "fire",
+        "brazier",
+        "torch"
+      ],
+      "candidate_for": [
+        "icon_flame"
+      ],
+      "description": "A small flame seated in a dark brazier cup."
+    },
+    {
+      "id": "tinydungeon:29",
+      "pack": "tiny-dungeon",
+      "index": 29,
+      "file": "tile_0029.png",
+      "tags": [
+        "fire",
+        "flame",
+        "tile"
+      ],
+      "candidate_for": [
+        "icon_flame"
+      ],
+      "description": "A tall red-to-yellow flame set in a stone alcove; a full-bleed tile, not a silhouette."
+    },
+    {
+      "id": "microrl:130",
+      "pack": "micro-roguelike",
+      "index": 130,
+      "file": "tile_0130.png",
+      "tags": [
+        "coin",
+        "gold",
+        "disc"
+      ],
+      "candidate_for": [
+        "icon_coin"
+      ],
+      "description": "A thick gold coin seen face-on, darker rim at the lower left."
+    },
+    {
+      "id": "microrl:131",
+      "pack": "micro-roguelike",
+      "index": 131,
+      "file": "tile_0131.png",
+      "tags": [
+        "gem",
+        "medallion",
+        "gold"
+      ],
+      "candidate_for": [
+        "icon_coin"
+      ],
+      "description": "An ornate gold-and-red medallion, symmetrical."
+    },
+    {
+      "id": "microrl:132",
+      "pack": "micro-roguelike",
+      "index": 132,
+      "file": "tile_0132.png",
+      "tags": [
+        "gems",
+        "gold",
+        "scattered"
+      ],
+      "candidate_for": [
+        "icon_coin"
+      ],
+      "description": "Three small gold diamonds, scattered -- reads as loose treasure rather than one coin."
+    },
+    {
+      "id": "microrl:89",
+      "pack": "micro-roguelike",
+      "index": 89,
+      "file": "tile_0089.png",
+      "tags": [
+        "amulet",
+        "necklace",
+        "gold"
+      ],
+      "candidate_for": [
+        "icon_coin"
+      ],
+      "description": "A gold necklace with a pink pendant."
+    },
+    {
+      "id": "microrl:117",
+      "pack": "micro-roguelike",
+      "index": 117,
+      "file": "tile_0117.png",
+      "tags": [
+        "cave",
+        "entrance",
+        "arch"
+      ],
+      "candidate_for": [
+        "quest_cave"
+      ],
+      "description": "A cave mouth: a red-brown hillside with a dark arch cut into it."
+    },
+    {
+      "id": "microrl:119",
+      "pack": "micro-roguelike",
+      "index": 119,
+      "file": "tile_0119.png",
+      "tags": [
+        "cave",
+        "entrance",
+        "arch"
+      ],
+      "candidate_for": [
+        "quest_cave"
+      ],
+      "description": "The same cave mouth in a darker, redder rock, with a wider opening."
+    },
+    {
+      "id": "tinydungeon:9",
+      "pack": "tiny-dungeon",
+      "index": 9,
+      "file": "tile_0009.png",
+      "tags": [
+        "cave",
+        "doorway",
+        "tile"
+      ],
+      "candidate_for": [
+        "quest_cave"
+      ],
+      "description": "A dark doorway over a dirt floor, framed in stone; a full-bleed tile."
+    },
+    {
+      "id": "microrl:121",
+      "pack": "micro-roguelike",
+      "index": 121,
+      "file": "tile_0121.png",
+      "tags": [
+        "grave",
+        "headstone",
+        "crypt"
+      ],
+      "candidate_for": [
+        "quest_crypt"
+      ],
+      "description": "A rounded grey headstone with two carved lines, standing on a base."
+    },
+    {
+      "id": "microrl:120",
+      "pack": "micro-roguelike",
+      "index": 120,
+      "file": "tile_0120.png",
+      "tags": [
+        "grave",
+        "cross",
+        "crypt"
+      ],
+      "candidate_for": [
+        "quest_crypt"
+      ],
+      "description": "A plain grey grave cross."
+    },
+    {
+      "id": "tinydungeon:64",
+      "pack": "tiny-dungeon",
+      "index": 64,
+      "file": "tile_0064.png",
+      "tags": [
+        "grave",
+        "cross",
+        "crypt"
+      ],
+      "candidate_for": [
+        "quest_crypt"
+      ],
+      "description": "A stone grave cross with a shadowed base, on transparency."
+    },
+    {
+      "id": "microrl:118",
+      "pack": "micro-roguelike",
+      "index": 118,
+      "file": "tile_0118.png",
+      "tags": [
+        "tower",
+        "castle",
+        "battlements"
+      ],
+      "candidate_for": [
+        "quest_tower"
+      ],
+      "description": "A squat grey tower with three battlements and a dark doorway."
+    },
+    {
+      "id": "tinydungeon:41",
+      "pack": "tiny-dungeon",
+      "index": 41,
+      "file": "tile_0041.png",
+      "tags": [
+        "gate",
+        "portcullis",
+        "tile"
+      ],
+      "candidate_for": [
+        "quest_tower",
+        "quest_vault"
+      ],
+      "description": "A raised portcullis in an orange-lit stone frame; a full-bleed tile."
+    },
+    {
+      "id": "microrl:122",
+      "pack": "micro-roguelike",
+      "index": 122,
+      "file": "tile_0122.png",
+      "tags": [
+        "chest",
+        "treasure",
+        "vault"
+      ],
+      "candidate_for": [
+        "quest_vault"
+      ],
+      "description": "A closed treasure chest, orange body with a dark band."
+    },
+    {
+      "id": "tinydungeon:89",
+      "pack": "tiny-dungeon",
+      "index": 89,
+      "file": "tile_0089.png",
+      "tags": [
+        "chest",
+        "open",
+        "treasure"
+      ],
+      "candidate_for": [
+        "quest_vault"
+      ],
+      "description": "An open chest showing a pale gold interior."
+    },
+    {
+      "id": "tinydungeon:90",
+      "pack": "tiny-dungeon",
+      "index": 90,
+      "file": "tile_0090.png",
+      "tags": [
+        "chest",
+        "closed",
+        "treasure"
+      ],
+      "candidate_for": [
+        "quest_vault"
+      ],
+      "description": "A closed banded chest with a grey lock plate."
+    },
+    {
+      "id": "tinydungeon:84",
+      "pack": "tiny-dungeon",
+      "index": 84,
+      "file": "tile_0084.png",
+      "tags": [
+        "portrait",
+        "wizard",
+        "purple"
+      ],
+      "candidate_for": [
+        "portrait"
+      ],
+      "description": "A wizard: purple pointed hat and robe, long white beard."
+    },
+    {
+      "id": "tinydungeon:87",
+      "pack": "tiny-dungeon",
+      "index": 87,
+      "file": "tile_0087.png",
+      "tags": [
+        "portrait",
+        "viking",
+        "horned"
+      ],
+      "candidate_for": [
+        "portrait"
+      ],
+      "description": "A horned-helmed warrior with a heavy brown beard."
+    },
+    {
+      "id": "tinydungeon:96",
+      "pack": "tiny-dungeon",
+      "index": 96,
+      "file": "tile_0096.png",
+      "tags": [
+        "portrait",
+        "knight",
+        "helm"
+      ],
+      "candidate_for": [
+        "portrait"
+      ],
+      "description": "A knight in a closed grey helm, face fully hidden."
+    },
+    {
+      "id": "tinydungeon:99",
+      "pack": "tiny-dungeon",
+      "index": 99,
+      "file": "tile_0099.png",
+      "tags": [
+        "portrait",
+        "woman",
+        "purple"
+      ],
+      "candidate_for": [
+        "portrait"
+      ],
+      "description": "A long-haired woman, strawberry blonde, in a purple dress."
+    },
+    {
+      "id": "tinydungeon:100",
+      "pack": "tiny-dungeon",
+      "index": 100,
+      "file": "tile_0100.png",
+      "tags": [
+        "portrait",
+        "elder",
+        "grey"
+      ],
+      "candidate_for": [
+        "portrait"
+      ],
+      "description": "A grey-haired elder in a pale hood."
+    },
+    {
+      "id": "tinydungeon:112",
+      "pack": "tiny-dungeon",
+      "index": 112,
+      "file": "tile_0112.png",
+      "tags": [
+        "portrait",
+        "ranger",
+        "green"
+      ],
+      "candidate_for": [
+        "portrait"
+      ],
+      "description": "A bearded ranger in a green headband."
+    },
+    {
+      "id": "tinydungeon:85",
+      "pack": "tiny-dungeon",
+      "index": 85,
+      "file": "tile_0085.png",
+      "tags": [
+        "portrait",
+        "youth",
+        "plain"
+      ],
+      "candidate_for": [
+        "portrait"
+      ],
+      "description": "A young brown-haired man in a plain white shirt."
+    },
+    {
+      "id": "tinydungeon:86",
+      "pack": "tiny-dungeon",
+      "index": 86,
+      "file": "tile_0086.png",
+      "tags": [
+        "portrait",
+        "bald",
+        "gaunt"
+      ],
+      "candidate_for": [
+        "portrait"
+      ],
+      "description": "A bald, gaunt, hollow-eyed man in a brown apron."
+    },
+    {
+      "id": "roguelikechar:271",
+      "pack": "roguelike-characters",
+      "index": 271,
+      "rect": [
+        17,
+        85,
+        16,
+        16
+      ],
+      "tags": [
+        "portrait",
+        "elder",
+        "teal"
+      ],
+      "candidate_for": [
+        "portrait"
+      ],
+      "description": "A white-haired elder in a teal wrap. Older, flatter Kenney palette."
+    },
+    {
+      "id": "roguelikechar:325",
+      "pack": "roguelike-characters",
+      "index": 325,
+      "rect": [
+        17,
+        102,
+        16,
+        16
+      ],
+      "tags": [
+        "portrait",
+        "viking",
+        "beard"
+      ],
+      "candidate_for": [
+        "portrait"
+      ],
+      "description": "A heavily bearded man in teal, arms bare. Older, flatter Kenney palette."
+    },
+    {
+      "id": "roguelikechar:486",
+      "pack": "roguelike-characters",
+      "index": 486,
+      "rect": [
+        0,
+        153,
+        16,
+        16
+      ],
+      "tags": [
+        "portrait",
+        "woman",
+        "red-hair"
+      ],
+      "candidate_for": [
+        "portrait"
+      ],
+      "description": "A red-haired woman in orange. Older, flatter Kenney palette."
+    },
+    {
+      "id": "roguelikechar:594",
+      "pack": "roguelike-characters",
+      "index": 594,
+      "rect": [
+        0,
+        187,
+        16,
+        16
+      ],
+      "tags": [
+        "portrait",
+        "wizard",
+        "white"
+      ],
+      "candidate_for": [
+        "portrait"
+      ],
+      "description": "A white-robed wizard holding a staff, with a shield. Older, flatter Kenney palette."
+    }
+  ],
+  "unclassified": [
+    {
+      "pack": "micro-roguelike",
+      "ranges": "0-87, 90-99, 103-115, 123-129, 133-135, 138-159",
+      "note": "Walls, floors, doors, monsters, weapons, trees, water. Looked at on contact sheets; not labelled, because no giri slot asks for them."
+    },
+    {
+      "pack": "tiny-dungeon",
+      "ranges": "0-8, 10-28, 30-40, 42-63, 65-83, 88, 91-95, 97-98, 101-111, 113-131",
+      "note": "Dungeon walls, floors, doors, props, weapons, potions, and the remaining character busts. Looked at; not labelled."
+    },
+    {
+      "pack": "roguelike-characters",
+      "ranges": "everything except the assembled busts listed above",
+      "note": "Modular paper-doll parts (torsos, helmets, weapons, shields) plus blanks. Assembled busts are 0, 1, 54, 55, 108, 109 (bare bodies), 270, 271, 324, 325, 378, 379, 432, 433, 486, 487, 540, 541, 594, 595; only four are classified above, as portrait candidates."
+    },
+    {
+      "pack": "1-bit-pack",
+      "ranges": "all 1078",
+      "note": "Swept visually for an eye glyph only (see 'gaps'). Nothing classified."
+    },
+    {
+      "pack": "cartography-pack",
+      "ranges": "all 83",
+      "note": "Filenames read; excluded on the 64x64 scaling ground recorded in its pack note."
+    },
+    {
+      "pack": "generic-items",
+      "ranges": "all 163",
+      "note": "Not at giri's sizes."
+    },
+    {
+      "pack": "platformer-characters-1",
+      "ranges": "all 171",
+      "note": "Not at giri's sizes."
+    }
+  ]
+}
