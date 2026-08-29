@@ -356,12 +356,13 @@ a `z`, and a game with a stack of UI inside one band writes
 `ctx.line` each submit exactly one; `ctx.circle` submits **sixteen**, a fan of
 wedges around the centre, and that count is fixed rather than scaled by radius.
 `ctx.text` submits one quad per character, **spaces included** — each exactly
-`size` tall and `size * 7 / 9` wide, laid out from its top-left corner, with `\n`
-the only exception, counting as a line break and submitting nothing. So a
-26-character line with six spaces in it is 26 quads, and that is a contract you
-can assert an exact count against rather than a coincidence: a space is one of
-the ninety-five printable ASCII characters the font covers, with a blank cell of
-its own.
+`size` tall, laid out from its top-left corner, with `\n` the only exception,
+counting as a line break and submitting nothing. So a 26-character line with six
+spaces in it is 26 quads, and that is a contract you can assert an exact count
+against rather than a coincidence: a space is a character the font covers, with a
+blank cell of its own. How *wide* each one is depends on the face — in the
+built-in font every character is `size * 7 / 9`, and in a loaded one it is the
+character's own — which is what `TextStyle::measure` is for, below.
 
 **Text's vertical metric, exactly, because every vertical number in a game's
 layout rests on it.** `at` is the top-left of the first character's *cell*, not
@@ -374,6 +375,63 @@ well as the total; the total alone would not tell you where line two begins. Y i
 down, so later lines are at larger `y`, and the number to solve for when you want
 a line's *bottom* to clear something is `at.y = bottom - size` — the whole of
 `size`, not half of it and not the height of a capital.
+
+**Measure text; never count characters times a width.** `style.measure(text)`
+gives the box the pen sweeps — `size.x` is the widest line, `size.y` is the whole
+block, `lines` is how many — and `style.width_of(text)` is that width on its own,
+which is the number the centring idiom wants:
+
+```rust
+let line = "PAUSED";
+ctx.text(Vec2::new(at.x - style.width_of(line) * 0.5, at.y), line, style);
+```
+
+The other direction has two answers, because there are two questions.
+`style.fits_in(text, width)` is how many leading characters of *this* string fit
+— the tight answer, for a string you have. `style.columns_in(width)` is how many
+characters of **any** string fit, measured with the face's widest character, so
+it holds whatever the string turns out to say; use it when you are about to
+generate one. Both round down and neither ever overruns.
+
+```rust
+let notice = "the vault refuses a party that is already carrying";
+let fitted = style.fits_in(notice, 300.0);
+notice.chars().take(fitted).collect()
+```
+
+**A real typeface is an asset, and a weight is a face.** `TextStyle::face` is
+`Face::BUILT_IN` unless you say otherwise: that is the compiled-in five-by-seven
+bitmap, and it works on the first frame of a program, before anything has loaded,
+on a machine where nothing ever will. For real type, load a `.ttf` with
+`load_bytes` and hand the bytes to `Fonts`, which is a resource like `Assets`:
+
+```rust
+let bytes = world.resource::<Assets>().bytes_of(handle)?.to_vec();
+let fonts = world.resource_mut::<Fonts>();
+match fonts.try_create_face("Fira Sans", &bytes) {
+    Ok(face) => Some(face),
+    // A `FontError` is a fact about the file, not a mistake at the call.
+    Err(error) => {
+        eprintln!("{error}");
+        None
+    }
+}
+```
+
+`bytes_of` is `None` until the load resolves, so the face is built on the tick
+the file arrives and not before — the store never reports ready for bytes it does
+not have, which is what makes this the right moment. Keep the `Face` in a
+resource of your own and put it in the styles you draw with; it is `Copy`, so a
+style holding one is still a `Copy` struct you can build in a constant-ish helper
+and pass around by value.
+
+Regular and bold are two files and therefore two faces — there is no `weight` on
+a style, because a style that could name a weight its face does not have would
+have to lie about it. Coverage is **ASCII and Latin-1**; anything outside it, or
+anything the face itself lacks, draws a visible box rather than a gap or a panic.
+`examples/text` is the specimen sheet: both faces, three sizes, the measured box,
+the fitted column and the coverage row, with its `--verify` asserting the
+readability floors against measured extents.
 
 So a circle costs sixteen rectangles and a score line costs one per digit — worth
 knowing before a frame has three hundred of them, and worth knowing when you
@@ -1580,6 +1638,52 @@ let mut sim = headless(GameConfig::default(), |app| {
 });
 ```
 
+#### `Face`
+
+Which typeface a style draws in.
+
+```rust
+pub struct Face(pub(super) Kind);
+// Clone Copy Debug PartialEq
+
+impl Face {
+    pub const BUILT_IN: Face = Face(Kind::BuiltIn);  // The engine's own font: monospace, five texels by seven, no assets
+    // What this face is called — `"built-in"`, or the name it was created with
+    pub fn name(&self) -> &str;
+    pub fn atlas_texture(&self, size: f32) -> TextureId;  // Which texture this face's glyphs sample at a line height of `size`
+}
+```
+
+#### `FontError`
+
+What went wrong turning bytes into a face.
+
+```rust
+pub struct FontError;
+// Clone Debug PartialEq Eq Display
+```
+
+#### `Fonts`
+
+Every typeface a game has loaded.
+
+```rust
+pub struct Fonts;
+// Debug
+
+impl Fonts {
+    pub fn new() -> Self;  // An empty store
+    pub fn try_create_face(&mut self, name: &str, ttf: &[u8]) -> Result<Face, FontError>;  // Parse `ttf` into a face this store keeps, or say why it could not
+    pub fn faces(&self) -> &[Face];  // Every face created here, in creation order
+}
+```
+
+```rust
+let mut fonts = Fonts::new();
+let body = fonts.try_create_face("Fira Sans", bytes)?;
+let style = TextStyle { face: body, size: 18.0, ..TextStyle::default() };
+```
+
 #### `PhysicalSize`
 
 The size of a surface or a texture, in physical pixels.
@@ -1652,22 +1756,38 @@ fn draw_the_game(ctx: &mut DrawCtx, transform: &Transform, sprite: &Sprite) {
 }
 ```
 
+#### `TextExtents`
+
+How big a laid-out string is.
+
+```rust
+pub struct TextExtents {
+    // Width of the widest line, and height of the whole block, in world units
+    pub size: Vec2,
+    pub lines: usize,  // How many lines it is — one more than the number of `\n`s
+}
+// Clone Copy Debug PartialEq
+```
+
 #### `TextStyle`
 
-How a line of text is drawn — monospace over the ninety-five printable ASCII characters, space through `~`, every one of them advancing 7/9 of `size`, with anything outside that range drawn as a visible box rather than skipped.
+How a line of text is drawn: in a `Face`, at a size, in a color, at a depth.
 
 ```rust
 pub struct TextStyle {
+    pub face: Face,  // Which typeface
     pub size: f32,  // One line's height in world units — a glyph quad, top to bottom
     pub color: Color,  // Multiplied into the glyphs, which are white
     pub depth: Depth,  // Where in the draw order, same as every other immediate primitive
 }
 // Clone Copy Debug PartialEq
-// Default = TextStyle { size: 1.0, color: Color::WHITE, depth: Depth::default() }
+// Default = TextStyle { face: Face::BUILT_IN, size: 1.0, color: Color::WHITE, depth: Depth::default() }
 
 impl TextStyle {
-    pub fn width_of(&self, text: &str) -> f32;  // In world units — its widest line only, so a block centres crooked
-    pub fn columns_in(&self, width: f32) -> usize;  // How many characters of this size fit across `width` world units
+    pub fn measure(&self, text: &str) -> TextExtents;  // How big `text` is when drawn in this style, in world units
+    pub fn width_of(&self, text: &str) -> f32;  // The width of the widest line, in world units
+    pub fn columns_in(&self, width: f32) -> usize;  // How many characters of **any** string fit across `width` world units
+    pub fn fits_in(&self, text: &str, width: f32) -> usize;  // How many leading characters of `text` fit across `width` world units
 }
 ```
 
@@ -1675,7 +1795,7 @@ impl TextStyle {
 let style = TextStyle {
     size: 1.5,                 // one line is 1.5 world units tall
     color: Color::WHITE,
-    ..TextStyle::default()
+    ..TextStyle::default()     // the built-in face, in the middle of the order
 };
 ```
 

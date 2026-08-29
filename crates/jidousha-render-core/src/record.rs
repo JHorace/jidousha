@@ -106,6 +106,41 @@ impl FrameRecorder {
     ///
     /// A game with no `Assets` resource is a game with no assets, and this does
     /// nothing rather than complaining about it.
+    ///
+    /// **A fixed number of ticks is not a loading gate, and writing one is how a
+    /// check becomes flaky.** On native the file is read on a thread of its own,
+    /// so how many ticks it takes is a fact about the disk and the scheduler
+    /// rather than about the game: the same check here resolved a font in 242
+    /// ticks on a warm cache and had not resolved it in 600 on a cold one. A
+    /// loop of `for tick in 1..=8` passes on the machine it was written on and
+    /// fails on the runner, and the failure looks like the *asset* being wrong
+    /// rather than the wait being short.
+    ///
+    /// So loop until what you are waiting for is there, with a cap so a run that
+    /// will never get it says so instead of hanging:
+    ///
+    /// ```no_run
+    /// # use jidousha_core::{GameConfig, HeadlessSim, headless};
+    /// # use jidousha_assets::Assets;
+    /// # use jidousha_render_core::{FrameRecorder, PhysicalSize};
+    /// # fn example(sim: &mut HeadlessSim, recorder: &mut FrameRecorder) -> u64 {
+    /// const MAX_TICKS: u64 = 200_000;
+    /// let mut ticks = 0;
+    /// while ticks < MAX_TICKS {
+    ///     ticks += 1;
+    ///     recorder.settle_assets(sim, ticks);
+    ///     sim.tick();
+    ///     if sim.world().resource::<Assets>().all_ready() {
+    ///         break;
+    ///     }
+    /// }
+    /// ticks
+    /// # }
+    /// ```
+    ///
+    /// A headless tick costs microseconds, so a cap that looks absurd is under a
+    /// second of budget. `examples/text`'s `--verify` is the worked case, and it
+    /// reports the count it took and what the store said if it ran out.
     pub fn settle_assets(&mut self, sim: &mut HeadlessSim, tick: u64) {
         let Some(assets) = sim.world_mut().find_resource_mut::<Assets>() else {
             return;

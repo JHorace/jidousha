@@ -270,9 +270,13 @@ Implemented (R2):
   previously said `{ size_world_units, color, layer, z }`, which predates
   public-api.md §3 making `Depth` the one depth argument every immediate
   primitive takes. Corrected at R3, in favour of the higher-precedence doc.)
-- Explicit non-goals for v1: TTF rendering, shaping, wrapping, non-ASCII beyond
-  Latin-1. Real typography is a future subsystem; this is for scores, debug
-  readouts, and prototype UI.
+- Explicit non-goals for v1: shaping, wrapping, non-ASCII beyond Latin-1. Real
+  typography is a future subsystem; this is for scores, debug readouts, and
+  prototype UI. **TTF rendering was on this list and is not any more** — it was
+  named as the likeliest first pull, the pull happened, and ADR-0042 is where it
+  went. What that decision did *not* move is the rest of the list: there is
+  still no shaping, no wrapping, no bidirectional text, and nothing past
+  Latin-1.
 
 Implemented (R3):
 
@@ -329,6 +333,72 @@ Implemented (R3):
   an id reserved below `1 << 32`. Asset ids pack a generation of at least one
   into their high half, so the whole low range belongs to the renderer's own
   textures and can never collide.
+
+### 6a. Loaded typefaces (ADR-0042)
+
+A game that wants real type loads a `.ttf` and gets a `Face`; a style names one;
+everything else about drawing text is unchanged. The whole of it, in the order a
+frame touches it:
+
+- **A face is built from bytes, not from a path.** `Assets::load_bytes` fetches
+  the file and `Fonts::try_create_face(name, bytes)` parses it. The seam is
+  there rather than inside `Assets` for two reasons: `ab_glyph` stays a
+  render-core dependency and never reaches the asset crate, and the never-lies
+  contract (assets.md §3) does the work for free — a store that reports `Ready`
+  has the bytes, so a face is made of a real file or is not made.
+- **Metrics live in the face, in line units.** One unit is one line, which is
+  what `TextStyle::size` means, so a face measures the same at every size and a
+  size is one multiplication away at the point of use. This is what lets
+  `TextStyle::measure` be a method on a `Copy` style with no store in reach —
+  and a game's layout module, which has no world, is exactly where measuring
+  happens (ADR-0042's "why a face is never freed").
+- **The raster size is `round(size)` texels, clamped to 6–64.** One texel per
+  world unit. Not camera-derived, on purpose: the camera's viewport describes the
+  window, and an atlas that depended on it would be an atlas that differed
+  between two machines running the same game.
+- **The atlas is a 16×12 grid of uniform cells, one texture per (face, raster
+  size).** 192 cells: printable ASCII, the Latin-1 supplement, and the fallback
+  box. At the 64-texel cap the whole atlas is comfortably inside the 2048×2048
+  the WebGL2 envelope guarantees (§8), which is the constraint that sets the cap.
+- **A quad is cut to its own glyph across, and to the cell down.** Every glyph is
+  a full line tall, so a run of text has one top edge and one baseline; across,
+  a quad spans only the columns its glyph inks. Uniform-width quads would make
+  every character as wide as the face's widest, and a floor asking whether a row
+  fits a panel would measure an `M` where an `i` is.
+- **The texture id is arithmetic**: `2 + face_id * 128 + px`, below the `1 << 32`
+  line asset ids can never reach (§5). So the draw path names an atlas without
+  consulting anything and without mutating anything — including an atlas that
+  does not exist yet.
+- **The upload happens between the draw and the plan.** `upload_text_atlases`
+  scans the frame's quads for atlas ids the table does not have, rasterizes them
+  and registers them. That is the only window: before the draw, nothing knows
+  which faces at which sizes this frame wants; after `plan_frame`, every id has
+  already been resolved to a backend id. The driver and `FrameRecorder` both do
+  it, in that position, for the same reason they build the texture table the same
+  way — a verification that drew a different frame from the game would assert
+  about nothing (§9).
+- **An atlas that has not been built resolves to the placeholder**, like any
+  texture that is not there. There is no state where text silently draws nothing.
+- **Coverage is ASCII plus Latin-1, and everything else is the box.** A character
+  outside the range, or one the face itself does not have, draws the same hollow
+  rectangle the built-in font draws — never a panic, never a skipped character.
+  The face records which glyphs it actually has at parse time, so "the font does
+  not have this" and "this is not Latin-1" get the same visible answer.
+- **A weight is a face.** Regular and bold are separate files with separate
+  outlines, and there is no `Weight` on a style — a style that could name a
+  weight its face does not have would have to lie about it (ADR-0042).
+
+The invariant holding the two halves together is that **the atlas layout is
+computed the same way in two places** — where the texels are made, and where a
+quad's corners and UVs are worked out — and they agree because both call the
+same functions rather than each rounding for itself. `font/ttf.rs`'s unit tests
+assert it directly: at eight raster sizes, no glyph inks a texel outside the
+window its quad samples.
+
+What a check asks: `face.atlas_texture(style.size)` is the engine texture id, and
+`FrameRecorder::texture` resolves it — so the quads sampling it are that face's
+glyphs at that size, exactly as `font_texture()` answers for the built-in one.
+`examples/text` is the worked case, floors and all.
 
 ## 7. Backend interface (the seam)
 

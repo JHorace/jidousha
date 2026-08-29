@@ -13,8 +13,9 @@ use crate::backend::{RenderBackend, TextureDesc};
 use crate::plan::TextureTable;
 use jidousha_core::PhysicalSize;
 
+use super::Face;
+use super::style::Kind;
 use super::ttf::{self, FontError, MAX_PX, TtfFace};
-use super::{Face, Kind};
 
 /// The first texture id a loaded face's atlas can take.
 ///
@@ -43,7 +44,7 @@ pub(super) fn atlas_texture(face_id: u32, px: u32) -> TextureId {
 /// Which face and raster size an atlas id names, if it names one at all.
 fn atlas_of(id: TextureId) -> Option<(u32, u32)> {
     let bits = id.bits();
-    if bits < ATLAS_BASE || bits >= 1 << 32 {
+    if !(ATLAS_BASE..1 << 32).contains(&bits) {
         return None;
     }
     let offset = bits - ATLAS_BASE;
@@ -180,7 +181,7 @@ pub fn upload_text_atlases(
             // which is the right answer and the one §5 already gives.
             continue;
         };
-        if px < ttf::MIN_PX || px > MAX_PX {
+        if !(ttf::MIN_PX..=MAX_PX).contains(&px) {
             continue;
         }
         let (width, height) = ttf::atlas_px(face, px);
@@ -188,7 +189,7 @@ pub fn upload_text_atlases(
             &TextureDesc {
                 size: PhysicalSize::new(width, height),
             },
-            &ttf::atlas_texels(face, px),
+            &super::raster::atlas_texels(face, px),
         );
         textures.register(quad.texture, uploaded);
     }

@@ -65,8 +65,20 @@ fn draw(
     (quads, backend, textures)
 }
 
+/// The committed font file at `path`.
+///
+/// Panics with the path rather than with a `Result`'s `Debug`, because the only
+/// way this fails is that a file this repository is supposed to carry is not
+/// carried — and the fix is to look at that path.
+fn read(path: &str) -> Vec<u8> {
+    match std::fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(error) => panic!("the committed font at {path} could not be read: {error}"),
+    }
+}
+
 fn fira() -> (Fonts, Face) {
-    let bytes = std::fs::read(REGULAR).expect("the committed regular weight is readable");
+    let bytes = read(REGULAR);
     let mut fonts = Fonts::new();
     let face = match fonts.try_create_face("Fira Sans", &bytes) {
         Ok(face) => face,
@@ -82,7 +94,7 @@ fn a_face_loads_from_the_family_this_repository_ships() {
     // (ADR-0042; `CREDITS.md` names them).
     let mut fonts = Fonts::new();
     for (name, path) in [("Fira Sans", REGULAR), ("Fira Sans Bold", BOLD)] {
-        let bytes = std::fs::read(path).expect("committed and readable");
+        let bytes = read(path);
         match fonts.try_create_face(name, &bytes) {
             Ok(face) => assert_eq!(face.name(), name),
             Err(error) => panic!("{error}"),

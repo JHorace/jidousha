@@ -143,6 +143,15 @@ Implemented (A0):
   time with §9 errors: max 2048×2048 (renderer §8 envelope; the error message
   names the file, its size, and the limit).
 - `load_bytes` hands back raw `Vec<u8>` for anything else a game invents.
+- CONTRACT: **a font is bytes, and stays bytes here.** A `.ttf` is loaded with
+  `load_bytes` and parsed by `Fonts::try_create_face` in the renderer, so
+  `ab_glyph` is never a dependency of this crate and this crate never learns what
+  a glyph is (ADR-0042). The never-lies rule above is what makes that seam safe
+  rather than merely tidy: a face can only be built from bytes the store said it
+  had, so there is no state in which a game holds a face with no file behind it.
+  The engine's own family is committed at `assets/fonts/`, with its licence
+  beside it and an entry in `CREDITS.md` — a font the build downloads is a font
+  the store can lie about.
 
 ## 4. Determinism: when "ready" happens
 

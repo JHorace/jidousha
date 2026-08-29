@@ -202,13 +202,14 @@ a `z`, and a game with a stack of UI inside one band writes
 `ctx.line` each submit exactly one; `ctx.circle` submits **sixteen**, a fan of
 wedges around the centre, and that count is fixed rather than scaled by radius.
 `ctx.text` submits one quad per character, **spaces included** — each exactly
-`size` tall and `size * 7 / 9` wide, laid out from its top-left corner, with `\n`
-the only exception, counting as a line break and submitting nothing. So a
-26-character line with six spaces in it is 26 quads, and that is a contract you
-can assert an exact count against rather than a coincidence: a space is one of
-the ninety-five printable ASCII characters the font covers, with a blank cell of
-its own.
-<!-- asserted-by: a_circle_covers_a_disc_and_not_its_bounding_box, text_becomes_one_quad_per_character_from_the_font_atlas, text_advances_by_one_cell_per_character -->
+`size` tall, laid out from its top-left corner, with `\n` the only exception,
+counting as a line break and submitting nothing. So a 26-character line with six
+spaces in it is 26 quads, and that is a contract you can assert an exact count
+against rather than a coincidence: a space is a character the font covers, with a
+blank cell of its own. How *wide* each one is depends on the face — in the
+built-in font every character is `size * 7 / 9`, and in a loaded one it is the
+character's own — which is what `TextStyle::measure` is for, below.
+<!-- asserted-by: a_circle_covers_a_disc_and_not_its_bounding_box, text_becomes_one_quad_per_character_from_the_font_atlas, text_advances_by_one_cell_per_character, text_in_a_loaded_face_is_one_quad_per_character_on_that_faces_atlas -->
 
 **Text's vertical metric, exactly, because every vertical number in a game's
 layout rests on it.** `at` is the top-left of the first character's *cell*, not
@@ -222,6 +223,74 @@ down, so later lines are at larger `y`, and the number to solve for when you wan
 a line's *bottom* to clear something is `at.y = bottom - size` — the whole of
 `size`, not half of it and not the height of a capital.
 <!-- asserted-by: a_second_line_starts_exactly_one_size_below_the_first_with_no_leading, text_sits_where_it_says_it_does_and_measures_what_it_occupies -->
+
+**Measure text; never count characters times a width.** `style.measure(text)`
+gives the box the pen sweeps — `size.x` is the widest line, `size.y` is the whole
+block, `lines` is how many — and `style.width_of(text)` is that width on its own,
+which is the number the centring idiom wants:
+
+```rust
+# use jidousha::prelude::*;
+# fn draw(ctx: &mut DrawCtx, at: Vec2, style: TextStyle) {
+let line = "PAUSED";
+ctx.text(Vec2::new(at.x - style.width_of(line) * 0.5, at.y), line, style);
+# }
+```
+
+The other direction has two answers, because there are two questions.
+`style.fits_in(text, width)` is how many leading characters of *this* string fit
+— the tight answer, for a string you have. `style.columns_in(width)` is how many
+characters of **any** string fit, measured with the face's widest character, so
+it holds whatever the string turns out to say; use it when you are about to
+generate one. Both round down and neither ever overruns.
+
+```rust
+# use jidousha::prelude::*;
+# fn fit(style: TextStyle) -> String {
+let notice = "the vault refuses a party that is already carrying";
+let fitted = style.fits_in(notice, 300.0);
+notice.chars().take(fitted).collect()
+# }
+```
+<!-- asserted-by: the_column_count_never_overruns_and_the_line_fit_is_tight, a_proportional_face_measures_narrow_characters_narrowly -->
+
+**A real typeface is an asset, and a weight is a face.** `TextStyle::face` is
+`Face::BUILT_IN` unless you say otherwise: that is the compiled-in five-by-seven
+bitmap, and it works on the first frame of a program, before anything has loaded,
+on a machine where nothing ever will. For real type, load a `.ttf` with
+`load_bytes` and hand the bytes to `Fonts`, which is a resource like `Assets`:
+
+```rust
+# use jidousha::prelude::*;
+# fn load(world: &mut World, handle: BytesHandle) -> Option<Face> {
+let bytes = world.resource::<Assets>().bytes_of(handle)?.to_vec();
+let fonts = world.resource_mut::<Fonts>();
+match fonts.try_create_face("Fira Sans", &bytes) {
+    Ok(face) => Some(face),
+    // A `FontError` is a fact about the file, not a mistake at the call.
+    Err(error) => {
+        eprintln!("{error}");
+        None
+    }
+}
+# }
+```
+
+`bytes_of` is `None` until the load resolves, so the face is built on the tick
+the file arrives and not before — the store never reports ready for bytes it does
+not have, which is what makes this the right moment. Keep the `Face` in a
+resource of your own and put it in the styles you draw with; it is `Copy`, so a
+style holding one is still a `Copy` struct you can build in a constant-ish helper
+and pass around by value.
+
+Regular and bold are two files and therefore two faces — there is no `weight` on
+a style, because a style that could name a weight its face does not have would
+have to lie about it. Coverage is **ASCII and Latin-1**; anything outside it, or
+anything the face itself lacks, draws a visible box rather than a gap or a panic.
+`examples/text` is the specimen sheet: both faces, three sizes, the measured box,
+the fitted column and the coverage row, with its `--verify` asserting the
+readability floors against measured extents.
+<!-- asserted-by: a_face_loads_from_the_family_this_repository_ships, every_latin_1_character_draws_and_a_stray_codepoint_draws_a_box, one_atlas_per_size_and_the_same_one_twice -->
 
 So a circle costs sixteen rectangles and a score line costs one per digit — worth
 knowing before a frame has three hundred of them, and worth knowing when you
