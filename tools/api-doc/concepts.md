@@ -411,6 +411,39 @@ placeholder: if `Assets::status` says `Ready`, the texture is there.
 mid-tick. A tap that begins and ends between two frames still produces both
 edges, because edges are recorded rather than inferred from a difference.
 
+**A game written for a mouse is already playable by touch.** The engine puts
+the first finger down onto the primary pointer — `input.pointer().screen`
+follows it, and `PointerButton::Primary` is pressed for as long as it is on the
+glass — so `just_pressed(PointerButton::Primary)` is a tap and a drag is a
+drag, with nothing to write. The rule is *first finger down wins, and does not
+hand over*: a second finger never moves the pointer, and when the mirrored
+finger lifts the button releases rather than jumping to whatever else is down.
+
+Read `input.touches()` when a *second* finger means something. It is at most
+four `Touch` values — `MAX_TOUCHES` — each with a `TouchId` slot that is stable
+for the life of that touch, a `TouchPhase` (`Began`, `Moved`, `Ended`,
+`Cancelled`), and a `screen` position in the same pixels the pointer is in. A
+finger that is down and not new this tick reports `Moved`, whether it moved or
+not, so the list is what is on the glass rather than what changed. `Cancelled`
+is worth telling apart from `Ended`: the system took the touch away — a
+notification, a browser gesture, the window losing focus — so a drag that was
+cancelled should be undone rather than committed. A fifth finger is dropped,
+like a key the engine does not name.
+
+```rust
+fn pinch(world: &mut World) {
+    let Some(input) = world.find_resource::<Input>() else { return };
+    let [first, second] = input.touches() else { return };
+    let apart = (first.screen - second.screen).length();
+    // ... and the game decides what two fingers that far apart mean.
+    let _ = apart;
+}
+```
+
+Gestures themselves — pinch, pan, long-press — are the game's, not the
+engine's: what arrives is raw touches, and what a swipe means differs between
+one game and the next.
+
 **Coordinates are Y-down**: `+X` is right, `+Y` is *down*, and everything is in
 world units, not pixels. The camera is `height` world units tall and as wide as
 the window's aspect makes it. `Camera::world_to_screen` and `screen_to_world`

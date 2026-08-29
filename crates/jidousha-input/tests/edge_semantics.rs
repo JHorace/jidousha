@@ -11,7 +11,10 @@ mod support;
 
 use std::collections::BTreeMap;
 
-use jidousha_input::{InputEvent, InputSnapshot, Key, PointerId, SnapshotBuilder};
+use jidousha_input::{
+    InputEvent, InputSnapshot, Key, MAX_TOUCHES, PointerButton, PointerId, SnapshotBuilder,
+    TouchPhase,
+};
 use support::{ALPHABET, Expected, Reference, Step, generate};
 
 /// How many independent streams to run, and how long each one is.
@@ -227,6 +230,11 @@ fn the_generated_streams_reach_the_states_that_make_this_worth_running() {
     let mut empty_frames = 0;
     let mut focus_losses = 0;
     let mut multi_key_ticks = 0;
+    let mut touch_begins = 0;
+    let mut touch_ends = 0;
+    let mut touch_cancels = 0;
+    let mut full_glass = 0;
+    let mut mirrored_presses = 0;
 
     for seed in 0..STREAMS {
         let steps = generate(seed, STREAM_LENGTH);
@@ -248,6 +256,27 @@ fn the_generated_streams_reach_the_states_that_make_this_worth_running() {
             if snapshot.held_keys().len() > 1 {
                 multi_key_ticks += 1;
             }
+            for touch in snapshot.touches() {
+                match touch.phase {
+                    TouchPhase::Began => touch_begins += 1,
+                    TouchPhase::Ended => touch_ends += 1,
+                    TouchPhase::Cancelled => touch_cancels += 1,
+                    TouchPhase::Moved => {}
+                }
+            }
+            if snapshot.touches().len() == MAX_TOUCHES {
+                full_glass += 1;
+            }
+            // The mirror, observed from the outside: a tick that begins a touch
+            // and presses the primary button is the whole promise of §3a.
+            if snapshot.pointers()[0].just_pressed(PointerButton::Primary)
+                && snapshot
+                    .touches()
+                    .iter()
+                    .any(|touch| touch.phase == TouchPhase::Began)
+            {
+                mirrored_presses += 1;
+            }
         }
     }
 
@@ -256,6 +285,14 @@ fn the_generated_streams_reach_the_states_that_make_this_worth_running() {
     assert!(empty_frames > 0, "no frame ever ran zero ticks");
     assert!(focus_losses > 0, "focus was never lost");
     assert!(multi_key_ticks > 0, "two keys were never held at once");
+    assert!(touch_begins > 0, "no finger ever landed");
+    assert!(touch_ends > 0, "no finger ever lifted");
+    assert!(touch_cancels > 0, "no touch was ever cancelled");
+    assert!(full_glass > 0, "the four-touch bound was never reached");
+    assert!(
+        mirrored_presses > 0,
+        "no touch ever mirrored onto the cursor"
+    );
     assert!(
         ALPHABET.len() > 1,
         "the alphabet must have room for collisions"

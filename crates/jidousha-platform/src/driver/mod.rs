@@ -261,6 +261,21 @@ fn window_attributes(config: &GameConfig) -> winit::window::WindowAttributes {
 /// disagreed with its CSS would be stretched by the browser, and the game would
 /// be drawn at one size and displayed at another. The camera decides how much
 /// world is on screen on both targets, which is why this costs a game nothing.
+///
+/// **`with_prevent_default` is stated rather than inherited**, and it is what
+/// stops a tap arriving twice. A browser that sees a touch nobody cancelled
+/// synthesizes a `mousedown`/`mouseup`/`click` after it, for pages written
+/// before touch existed; with this on, winit calls `preventDefault()` on
+/// `touchstart` and `pointerdown` and the browser synthesizes nothing. It is
+/// `true` by default in winit today, which is exactly why it is written here:
+/// a default is somebody else's decision to change, and the one bug this
+/// prevents — every tap firing twice — is invisible on a desktop and obvious
+/// only on the owner's phone (input.md §3a, web-publish.md §2a).
+///
+/// It is one of two halves. The other is `touch-action: none` on the canvas,
+/// in `tools/web-template/index.html`: without it the browser treats a drag as
+/// a page scroll and takes the touch stream away mid-gesture, which arrives
+/// here as a cancellation and reads to a game as a finger that vanished.
 #[cfg(target_arch = "wasm32")]
 fn window_attributes(config: &GameConfig) -> winit::window::WindowAttributes {
     use winit::platform::web::WindowAttributesExtWebSys;
@@ -268,6 +283,7 @@ fn window_attributes(config: &GameConfig) -> winit::window::WindowAttributes {
     Window::default_attributes()
         .with_title(config.title)
         .with_append(true)
+        .with_prevent_default(true)
 }
 
 /// Whether an event asked the loop to stop.
@@ -337,6 +353,15 @@ impl Driver {
                     id: PointerId::PRIMARY,
                     lines: translate::scroll_lines(*delta),
                 });
+            }
+            // Touch, on a phone, a tablet, or a laptop's touchscreen. The
+            // *mirror* — first finger down also being the cursor and a primary
+            // press — is not here: it is in `SnapshotBuilder`, above this seam,
+            // so it is one rule that is recorded and replayed rather than a
+            // platform habit (input.md §3a, ADR-0043).
+            WindowEvent::Touch(touch) => {
+                self.input
+                    .record(translate::touch(touch, self.render_scale));
             }
 
             // Everything else winit reports is not input: file drops, IME,
@@ -508,6 +533,76 @@ mod tests {
         for button in PointerButton::ALL {
             assert!(!pointer(&driver).held(*button), "{button:?}");
         }
+    }
+
+    /// What the touch list looked like on the last tick that ran.
+    fn touches(driver: &Driver) -> Vec<jidousha_input::Touch> {
+        driver
+            .simulation
+            .world()
+            .resource::<Input>()
+            .touches()
+            .to_vec()
+    }
+
+    /// A winit touch event, as a phone would deliver it.
+    fn touch_event(id: u64, phase: winit::event::TouchPhase, x: f64, y: f64) -> WindowEvent {
+        WindowEvent::Touch(winit::event::Touch {
+            device_id: DeviceId::dummy(),
+            phase,
+            location: PhysicalPosition::new(x, y),
+            force: None,
+            id,
+        })
+    }
+
+    #[test]
+    fn a_tap_reaches_the_next_tick_as_a_touch_and_as_a_click() {
+        // The whole of the mobile story, through the real arm: a finger lands,
+        // and simulation sees both a touch it can read and a cursor it already
+        // knew how to read (input.md §3a).
+        let mut driver = driver();
+        driver.on_window_event(&touch_event(
+            7,
+            winit::event::TouchPhase::Started,
+            120.0,
+            240.0,
+        ));
+        driver.frame(frames_worth(1));
+
+        let landed = touches(&driver);
+        assert_eq!(landed.len(), 1);
+        assert_eq!(landed[0].phase, jidousha_input::TouchPhase::Began);
+        assert_eq!(landed[0].screen, Vec2::new(120.0, 240.0));
+        assert_eq!(pointer(&driver).screen, Vec2::new(120.0, 240.0));
+        assert!(pointer(&driver).just_pressed(PointerButton::Primary));
+
+        driver.on_window_event(&touch_event(
+            7,
+            winit::event::TouchPhase::Ended,
+            120.0,
+            240.0,
+        ));
+        driver.frame(frames_worth(1));
+        assert_eq!(
+            touches(&driver)[0].phase,
+            jidousha_input::TouchPhase::Ended,
+            "the lift"
+        );
+        assert!(pointer(&driver).just_released(PointerButton::Primary));
+    }
+
+    #[test]
+    fn a_finger_the_window_never_saw_land_is_ignored() {
+        // A phone can report a move for a touch that started elsewhere — on a
+        // page the player scrolled, over a button that took the gesture. The
+        // engine follows the fingers it was told about and no others.
+        let mut driver = driver();
+        driver.on_window_event(&touch_event(3, winit::event::TouchPhase::Moved, 90.0, 90.0));
+        driver.frame(frames_worth(1));
+        assert!(touches(&driver).is_empty());
+        assert_eq!(pointer(&driver).screen, Vec2::ZERO);
+        assert!(!pointer(&driver).held(PointerButton::Primary));
     }
 
     #[test]

@@ -18,6 +18,9 @@ and drew, loads it again with `?panic=1` and asserts the panic overlay rendered
 the full §9 message, and loads it a third time with `?frametime=1` and asserts
 the frame-pacing overlay came up, classified the renderer and reached a measured
 verdict on how this browser presents (web-publish.md §2, §6 W0 exit criteria).
+The first pass also asserts the page's half of touch — `touch-action: none` on
+the canvas (web-publish.md §2a) — which is a grep, because this browser has no
+fingers and the tap itself is a person's job.
 
 The third pass has a property the other two do not: this browser is *deliberately*
 software-rendering — `--use-angle=swiftshader`, because a CI runner has no GPU —
@@ -355,6 +358,35 @@ def check_runs(browser: str, port: int, example: str) -> int:
             f"look at {shot.relative_to(REPO_ROOT)} and {log.relative_to(REPO_ROOT)}",
         )
     print(f"[serve-web] PASS — {example} started and drew in a browser")
+
+    return check_touch_rules(dom, example)
+
+
+def check_touch_rules(dom: str, example: str) -> int:
+    """The page's half of touch is still on the page (web-publish.md §2a).
+
+    A grep, and deliberately so. What a *person* has to check — that a tap
+    lands where the finger is and lands once — needs a finger, and this
+    browser has none: Chromium is driven here by command-line flags, with no
+    channel to dispatch input, and a synthetic touch dispatched by a page
+    script produces none of the compatibility mouse events the real thing
+    does. So the last mile stays a person with a phone (input.md §3a), and
+    what CI can hold onto is that the rule which cannot be fixed engine-side
+    is present: without `touch-action: none` the browser takes the gesture
+    and the drag becomes a page scroll, whatever the engine does about it.
+    """
+    canvas_rule = re.search(r"\bcanvas\s*\{(.*?)\}", dom, re.S)
+    if canvas_rule is None or "touch-action: none" not in canvas_rule.group(1):
+        return fail(
+            f"{example}'s canvas does not say `touch-action: none`",
+            "the page shell's canvas rule is missing it, or there is no canvas rule",
+            "tools/web-template/index.html lost the line, or the page was built "
+            "from a template that never had it",
+            "restore `touch-action: none` on the canvas — without it a drag "
+            "scrolls the page and the browser cancels the touch mid-gesture "
+            "(web-publish.md §2a)",
+        )
+    print("[serve-web] PASS — the canvas leaves touch to the engine (touch-action: none)")
     return 0
 
 

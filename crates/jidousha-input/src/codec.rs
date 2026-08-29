@@ -1,8 +1,8 @@
 //! Snapshots as bytes: the format recordings are made of.
 //!
 //! Key types: `DecodeError`.
-//! Depends on: `key`, `pointer`, `snapshot`. Must never depend on: `serde` or
-//! any derive-based serializer — see ADR-0014.
+//! Depends on: `key`, `pointer`, `touch`, `snapshot`. Must never depend on:
+//! `serde` or any derive-based serializer — see ADR-0014.
 //! INVARIANT: byte-stable across platforms and builds. Every integer is
 //! little-endian and fixed-width, every float is written as its IEEE bits, and
 //! every list is canonical. Two machines encoding equal snapshots produce
@@ -10,7 +10,12 @@
 //! (input.md §5).
 //! INVARIANT: decoding is strict. Anything that would not re-encode to the
 //! bytes it came from is refused, so `decode(encode(x)) == x` and
-//! `encode(decode(b)) == b` both hold.
+//! `encode(decode(b)) == b` both hold — for the version this build writes.
+//! A **version 1** snapshot, written before touch existed, still decodes: to
+//! the same value it always meant, with no touches. Re-encoding it produces
+//! version 2 bytes, because the encoder has one output and it is the current
+//! format. That is the price of "old recordings keep replaying" and it is the
+//! whole of it (input.md §5, ADR-0043).
 
 use core::fmt;
 
@@ -20,13 +25,27 @@ use jidousha_core::message;
 use crate::key::Key;
 use crate::pointer::{PointerButton, PointerId, PointerState};
 use crate::snapshot::InputSnapshot;
+use crate::touch::{MAX_TOUCHES, Touch, TouchId, TouchList, TouchPhase};
 
 /// Marks the bytes as ours, so a wrong file fails as a wrong file.
 const MAGIC: [u8; 4] = *b"JDIN";
 
 /// The format version. Bump when the layout changes; a decoder refuses what it
 /// does not know rather than misreading it.
-const VERSION: u16 = 1;
+///
+/// **2 adds the touch list** and changes nothing before it, which is what makes
+/// reading version 1 a matter of stopping early rather than of a second parser
+/// (ADR-0043). New snapshots are written at 2 and an older engine refuses them
+/// by number — a recording made here replays here, said out loud rather than
+/// discovered.
+const VERSION: u16 = 2;
+
+/// The oldest version this build reads. Everything from here to [`VERSION`] is
+/// the same bytes with fewer fields on the end.
+const OLDEST_VERSION: u16 = 1;
+
+/// The first version that carries a touch list.
+const FIRST_TOUCH_VERSION: u16 = 2;
 
 /// Why a snapshot could not be read.
 ///
@@ -42,6 +61,13 @@ pub enum DecodeError {
         /// The version the bytes claim.
         found: u16,
     },
+    /// A touch phase code this build has never heard of.
+    UnknownTouchPhase {
+        /// The code found.
+        code: u8,
+    },
+    /// More touches than the format has room for, or a slot outside it.
+    MalformedTouches,
     /// The bytes ran out before the value did.
     Truncated {
         /// How many bytes were needed at that point.
@@ -88,8 +114,18 @@ impl fmt::Display for DecodeError {
             ),
             DecodeError::UnsupportedVersion { found } => (
                 format!("input snapshot version {found} cannot be read"),
-                format!("this build reads version {VERSION}"),
+                format!("this build reads versions {OLDEST_VERSION} to {VERSION}"),
                 "the recording was made by a newer engine",
+            ),
+            DecodeError::UnknownTouchPhase { code } => (
+                format!("unknown touch phase code {code}"),
+                "the code is not in this build's TouchPhase enum".to_owned(),
+                "the recording was made by a newer engine, or the bytes are corrupt",
+            ),
+            DecodeError::MalformedTouches => (
+                "the touch list is malformed".to_owned(),
+                format!("a snapshot carries at most {MAX_TOUCHES} touches, in slot order"),
+                "the bytes were written by something other than this encoder",
             ),
             DecodeError::Truncated { needed, available } => (
                 "input snapshot ends early".to_owned(),
@@ -123,7 +159,8 @@ impl fmt::Display for DecodeError {
             ),
             DecodeError::MalformedPointers => (
                 "the pointer list is malformed".to_owned(),
-                "a snapshot carries the primary pointer first, then touches in id order".to_owned(),
+                "a snapshot carries the primary pointer first, then any others in id order"
+                    .to_owned(),
                 "the bytes were written by something other than this encoder",
             ),
         };
@@ -165,6 +202,22 @@ impl InputSnapshot {
             write_buttons(&mut out, &pointer.pressed);
             write_buttons(&mut out, &pointer.released);
         }
+
+        // Version 2's addition, and it is on the end because that is what
+        // "additive" costs: everything above decodes identically at either
+        // version, so reading an old snapshot is reading this file and
+        // stopping here (ADR-0043).
+        let touches = self.touches.as_slice();
+        // A `u8` count for a list that cannot exceed four. The bound is the
+        // contract; spending four bytes to say "one" would be pretending it
+        // is not.
+        out.push(u8::try_from(touches.len()).unwrap_or(u8::MAX));
+        for touch in touches {
+            out.push(touch.id.slot());
+            out.push(touch.phase.code());
+            out.extend_from_slice(&touch.screen.x.to_bits().to_le_bytes());
+            out.extend_from_slice(&touch.screen.y.to_bits().to_le_bytes());
+        }
         out
     }
 
@@ -182,7 +235,7 @@ impl InputSnapshot {
             return Err(DecodeError::NotASnapshot);
         }
         let version = reader.u16()?;
-        if version != VERSION {
+        if !(OLDEST_VERSION..=VERSION).contains(&version) {
             return Err(DecodeError::UnsupportedVersion { found: version });
         }
 
@@ -217,6 +270,14 @@ impl InputSnapshot {
             return Err(DecodeError::MalformedPointers);
         }
 
+        // A version-1 snapshot ends where version 2 starts its touch list, and
+        // means what it always meant: nobody was touching anything.
+        let touches = if version >= FIRST_TOUCH_VERSION {
+            reader.touches()?
+        } else {
+            TouchList::new()
+        };
+
         let left = reader.bytes.len() - reader.at;
         if left > 0 {
             return Err(DecodeError::TrailingBytes { count: left });
@@ -226,6 +287,7 @@ impl InputSnapshot {
             pressed,
             released,
             pointers,
+            touches,
             window_focused,
         })
     }
@@ -305,6 +367,41 @@ impl<'a> Reader<'a> {
         Ok(keys)
     }
 
+    fn touches(&mut self) -> Result<TouchList, DecodeError> {
+        let count = self.u8()?;
+        if usize::from(count) > MAX_TOUCHES {
+            return Err(DecodeError::MalformedTouches);
+        }
+        let mut touches = TouchList::new();
+        let mut last: Option<TouchId> = None;
+        for _ in 0..count {
+            let slot = self.u8()?;
+            let Some(id) = TouchId::find_by_slot(slot) else {
+                return Err(DecodeError::MalformedTouches);
+            };
+            let code = self.u8()?;
+            let Some(phase) = TouchPhase::find_by_code(code) else {
+                return Err(DecodeError::UnknownTouchPhase { code });
+            };
+            // Slot order with no duplicates, for the same reason the key list
+            // is sorted: it is what makes two equal snapshots equal bytes.
+            if last.is_some_and(|last| last >= id) {
+                return Err(DecodeError::NotCanonical { list: "touches" });
+            }
+            last = Some(id);
+            let x = self.f32("touch x")?;
+            let y = self.f32("touch y")?;
+            if !touches.push(Touch {
+                id,
+                phase,
+                screen: Vec2::new(x, y),
+            }) {
+                return Err(DecodeError::MalformedTouches);
+            }
+        }
+        Ok(touches)
+    }
+
     fn buttons(&mut self, list: &'static str) -> Result<Vec<PointerButton>, DecodeError> {
         let count = self.u8()?;
         let mut buttons = Vec::new();
@@ -326,6 +423,15 @@ impl<'a> Reader<'a> {
 mod tests {
     use super::*;
     use crate::builder::{InputEvent, SnapshotBuilder};
+    use crate::touch::FingerId;
+
+    /// Where a snapshot's touch count sits: the whole encoding, minus the
+    /// list. Written as an offset from the end so that adding a field before
+    /// it moves the tests rather than silently retargeting them.
+    fn touch_count_at(bytes: &[u8], touches: usize) -> usize {
+        // Each touch is a slot byte, a phase byte and two floats.
+        bytes.len() - 1 - touches * 10
+    }
 
     fn a_busy_snapshot() -> InputSnapshot {
         let mut builder = SnapshotBuilder::new();
@@ -343,6 +449,16 @@ mod tests {
         builder.record(InputEvent::Scrolled {
             id: PointerId::PRIMARY,
             lines: -2.5,
+        });
+        builder.record(InputEvent::Touched {
+            finger: FingerId::from_platform(11),
+            phase: TouchPhase::Began,
+            screen: Vec2::new(12.0, 34.5),
+        });
+        builder.record(InputEvent::Touched {
+            finger: FingerId::from_platform(12),
+            phase: TouchPhase::Began,
+            screen: Vec2::new(600.0, 480.0),
         });
         builder.first_tick_snapshot()
     }
@@ -454,6 +570,126 @@ mod tests {
         assert_eq!(
             InputSnapshot::try_decode(&snapshot.encode()),
             Err(DecodeError::MalformedPointers)
+        );
+    }
+
+    #[test]
+    fn a_snapshot_with_touches_survives_both_round_trips() {
+        // The addition is only additive if it round-trips like everything else
+        // that was already here.
+        let snapshot = a_busy_snapshot();
+        assert_eq!(snapshot.touches().len(), 2, "the fixture has fingers on it");
+        let bytes = snapshot.encode();
+        assert_eq!(InputSnapshot::try_decode(&bytes), Ok(snapshot));
+        let Ok(decoded) = InputSnapshot::try_decode(&bytes) else {
+            panic!("just encoded");
+        };
+        assert_eq!(decoded.encode(), bytes);
+    }
+
+    #[test]
+    fn a_version_one_snapshot_still_decodes_and_means_no_touches() {
+        // The compatibility promise, at the level of one snapshot: everything
+        // before the touch list is byte-identical, so an old snapshot is this
+        // one with the reading stopped early (ADR-0043). `tests/old_recordings.rs`
+        // makes the same check against a file a pre-touch build actually wrote.
+        let mut snapshot = a_busy_snapshot();
+        let current = snapshot.encode();
+        let mut old = current[..touch_count_at(&current, 2)].to_vec();
+        old[4] = 1;
+        old[5] = 0;
+
+        snapshot.touches = TouchList::new();
+        assert_eq!(InputSnapshot::try_decode(&old), Ok(snapshot));
+    }
+
+    #[test]
+    fn a_version_one_snapshot_re_encodes_as_version_two() {
+        // Stated rather than discovered: the byte round trip holds for what
+        // this build writes, and reading an old snapshot is an upgrade. A
+        // recording replayed through this engine and written back out is a
+        // version 2 recording.
+        let current = a_busy_snapshot().encode();
+        let mut old = current[..touch_count_at(&current, 2)].to_vec();
+        old[4] = 1;
+        old[5] = 0;
+        let Ok(decoded) = InputSnapshot::try_decode(&old) else {
+            panic!("version 1 is readable");
+        };
+        let again = decoded.encode();
+        assert_ne!(again, old);
+        assert_eq!(&again[4..6], VERSION.to_le_bytes(), "written at version 2");
+        assert_eq!(&again[..4], &old[..4], "and it is the same format");
+    }
+
+    #[test]
+    fn a_touch_phase_code_this_build_does_not_know_is_refused() {
+        let snapshot = a_busy_snapshot();
+        let mut bytes = snapshot.encode();
+        // The first touch's phase byte follows the count and its slot.
+        let at = touch_count_at(&bytes, 2) + 2;
+        bytes[at] = 99;
+        assert_eq!(
+            InputSnapshot::try_decode(&bytes),
+            Err(DecodeError::UnknownTouchPhase { code: 99 })
+        );
+    }
+
+    #[test]
+    fn more_touches_than_the_format_holds_is_refused() {
+        // The bound is the contract, so the decoder is where a file that does
+        // not respect it stops — not a `Vec` that quietly grows.
+        let snapshot = a_busy_snapshot();
+        let mut bytes = snapshot.encode();
+        let at = touch_count_at(&bytes, 2);
+        bytes[at] = u8::try_from(MAX_TOUCHES + 1).unwrap_or(u8::MAX);
+        assert_eq!(
+            InputSnapshot::try_decode(&bytes),
+            Err(DecodeError::MalformedTouches)
+        );
+    }
+
+    #[test]
+    fn a_touch_in_a_slot_the_format_does_not_have_is_refused() {
+        let snapshot = a_busy_snapshot();
+        let mut bytes = snapshot.encode();
+        let at = touch_count_at(&bytes, 2) + 1;
+        bytes[at] = 9;
+        assert_eq!(
+            InputSnapshot::try_decode(&bytes),
+            Err(DecodeError::MalformedTouches)
+        );
+    }
+
+    #[test]
+    fn touches_out_of_slot_order_are_refused() {
+        // Canonical order is what makes equal snapshots equal bytes, and the
+        // touch list is canonical the same way the key list is.
+        let snapshot = a_busy_snapshot();
+        let mut bytes = snapshot.encode();
+        let first = touch_count_at(&bytes, 2) + 1;
+        bytes[first] = 1;
+        bytes[first + 10] = 0;
+        assert_eq!(
+            InputSnapshot::try_decode(&bytes),
+            Err(DecodeError::NotCanonical { list: "touches" })
+        );
+    }
+
+    #[test]
+    fn a_nan_touch_position_is_refused() {
+        let Some(id) = TouchId::find_by_slot(0) else {
+            panic!("the format has a slot 0");
+        };
+        let mut snapshot = InputSnapshot::new();
+        snapshot.touches.push(Touch {
+            id,
+            phase: TouchPhase::Began,
+            screen: Vec2::new(0.0, f32::INFINITY),
+        });
+        assert_eq!(
+            InputSnapshot::try_decode(&snapshot.encode()),
+            Err(DecodeError::NotFinite { field: "touch y" })
         );
     }
 

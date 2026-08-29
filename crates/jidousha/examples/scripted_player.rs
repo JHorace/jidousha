@@ -20,13 +20,17 @@
 //! screen pixels and a game states its targets in world units, so the click has
 //! to be converted — and converted through the camera the frame is drawn with,
 //! viewport included. `click_a_world_target` is that worked end to end, with
-//! the result read back off a recorded frame's transcript.
+//! the result read back off a recorded frame's transcript — and then played a
+//! second time with a **finger**, which is the same game with nothing changed
+//! (input.md §3a).
 //!
 //! Run it: `cargo run -p jidousha --example scripted_player`
 
 use jidousha::prelude::*;
 // Driving input is a testing facility, not something a shipped game does.
-use jidousha::testing::{FrameRecorder, InputEvent, InputScript, InputSnapshot, SnapshotBuilder};
+use jidousha::testing::{
+    FingerId, FrameRecorder, InputEvent, InputScript, InputSnapshot, SnapshotBuilder,
+};
 
 /// Where the player is, in world units.
 #[derive(Clone, Copy, Debug)]
@@ -476,4 +480,58 @@ fn click_a_world_target() {
         "expected `{expected}` — the button is not where the game says it is:\n{transcript}"
     );
     println!("pointer: the button is lit, and the frame agrees\n{transcript}");
+
+    // ---- and now the same game, with a thumb -------------------------------
+    //
+    // Not one line of `press_the_button` changes. The engine mirrors the first
+    // finger down onto the primary pointer — its position, and a `Primary`
+    // press — so a game written for a mouse is playable on a phone
+    // (input.md §3a). A check drives that the way a touchscreen does: touch
+    // events through a `SnapshotBuilder`, which is where the mirror lives.
+    let mut sim = headless(
+        GameConfig {
+            title: "touch target",
+            ..GameConfig::default()
+        },
+        |app| {
+            app.add_system(Startup, install_the_panel);
+            app.add_system(Update, press_the_button);
+        },
+    );
+    let mut builder = SnapshotBuilder::new();
+    let thumb = FingerId::from_platform(0);
+    for tick in 1..=TICKS {
+        // Land on the button, drag a little, lift: what a tap actually is.
+        match tick {
+            10 => builder.record(InputEvent::Touched {
+                finger: thumb,
+                phase: TouchPhase::Began,
+                screen: aim,
+            }),
+            12 => builder.record(InputEvent::Touched {
+                finger: thumb,
+                phase: TouchPhase::Moved,
+                screen: aim + Vec2::new(2.0, 1.0),
+            }),
+            14 => builder.record(InputEvent::Touched {
+                finger: thumb,
+                phase: TouchPhase::Ended,
+                screen: aim + Vec2::new(2.0, 1.0),
+            }),
+            _ => {}
+        }
+        sim.world_mut()
+            .insert_resource(Input::new(builder.first_tick_snapshot()));
+        sim.tick();
+    }
+
+    let panel = *sim.world().resource::<Panel>();
+    assert!(
+        panel.pressed,
+        "the tap at {aim:?} did not reach a button at {:?} — the first finger \
+         down is supposed to be the cursor",
+        button()
+    );
+    assert_eq!(panel.missed, 0, "one tap, and it landed once");
+    println!("touch: the same button, pressed with a finger and no code change");
 }

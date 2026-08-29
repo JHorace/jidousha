@@ -19,7 +19,10 @@ use jidousha_core::math::Vec2;
 use jidousha_core::{
     Component, GameConfig, HeadlessSim, Resource, Rng, Startup, Time, Update, World, headless,
 };
-use jidousha_input::{AssetReady, Input, InputScript, Key, PointerButton, Recording, TickRecord};
+use jidousha_input::{
+    AssetReady, FingerId, Input, InputEvent, InputScript, Key, PointerButton, Recording,
+    SnapshotBuilder, TickRecord, TouchPhase,
+};
 
 /// How long the scripted session runs.
 const TICKS: u64 = 120;
@@ -62,15 +65,30 @@ fn set_the_scene(world: &mut World) {
 /// exactly the game a recording has to reproduce, and one that ignored it would
 /// pass this test without the readiness records doing anything.
 fn play(world: &mut World) {
-    let (left, right, fire, clicked) = {
+    let (left, right, fire, clicked, fingers) = {
         let Some(input) = world.find_resource::<Input>() else {
             return;
         };
+        // Every finger, where it is and what it is doing, folded into one
+        // number. A recording that lost a touch — or reported it in a
+        // different slot, or a tick later — makes a different world here,
+        // which is what turns the round trip below into a claim.
+        let fingers: u32 = input
+            .touches()
+            .iter()
+            .map(|touch| {
+                u32::from(touch.phase.code())
+                    .wrapping_mul(31)
+                    .wrapping_add(u32::from(touch.id.slot()))
+                    .wrapping_add(touch.screen.x as u32)
+            })
+            .sum();
         (
             input.held(Key::A),
             input.held(Key::D),
             input.just_pressed(Key::Space),
             input.pointer().just_pressed(PointerButton::Primary),
+            fingers,
         )
     };
     let ready = {
@@ -100,6 +118,11 @@ fn play(world: &mut World) {
         // The failed load is observable too, and drives a different branch.
         for (_, wander) in world.query_mut::<&mut Wander>() {
             wander.0 = wander.0.wrapping_mul(3).wrapping_add(1);
+        }
+    }
+    if fingers != 0 {
+        for (_, wander) in world.query_mut::<&mut Wander>() {
+            wander.0 = wander.0.wrapping_add(fingers);
         }
     }
 
@@ -171,6 +194,60 @@ fn script() -> InputScript {
         .click(PointerButton::Primary, 31)
 }
 
+/// The touch session's fingers: what each one does, and when.
+///
+/// A drag with a second finger joining it, a tap inside a single frame, a
+/// cancellation, and a fifth finger the engine is documented to drop — chosen
+/// so that a recording which quietly re-slotted or re-ordered touches would
+/// produce a different world rather than the same one (input.md §3a).
+const FINGERS: &[(u64, u64, TouchPhase, f32)] = &[
+    (10, 1, TouchPhase::Began, 100.0),
+    (10, 6, TouchPhase::Moved, 140.0),
+    (11, 8, TouchPhase::Began, 600.0),
+    (10, 14, TouchPhase::Moved, 190.0),
+    (10, 20, TouchPhase::Ended, 210.0),
+    (12, 26, TouchPhase::Began, 320.0),
+    (12, 26, TouchPhase::Ended, 322.0),
+    (11, 30, TouchPhase::Cancelled, 600.0),
+    (13, 34, TouchPhase::Began, 44.0),
+    (14, 34, TouchPhase::Began, 55.0),
+    (15, 34, TouchPhase::Began, 66.0),
+    (16, 34, TouchPhase::Began, 77.0),
+    (17, 34, TouchPhase::Began, 88.0),
+    (13, 40, TouchPhase::Ended, 44.0),
+    (14, 41, TouchPhase::Ended, 55.0),
+    (15, 42, TouchPhase::Ended, 66.0),
+    (16, 43, TouchPhase::Ended, 77.0),
+];
+
+/// One tick of the touch session's input, through the builder a real
+/// touchscreen goes through.
+///
+/// DELIBERATE: not `InputScript`. A script is a plan of keys and clicks fixed
+/// before the run (ADR-0019) and it has no touch vocabulary; adding one would
+/// be a second place the touch rules live. The builder *is* the path a phone
+/// takes, so a session driven this way is the session a phone would record.
+fn touch_snapshot(builder: &mut SnapshotBuilder, tick: u64) -> jidousha_input::InputSnapshot {
+    for (finger, at, phase, x) in FINGERS {
+        if *at == tick {
+            builder.record(InputEvent::Touched {
+                finger: FingerId::from_platform(*finger),
+                phase: *phase,
+                screen: Vec2::new(*x, 200.0 + *x * 0.5),
+            });
+        }
+    }
+    // A key as well, so the touch session is not a special case of a session
+    // with no keyboard in it.
+    if tick == 12 {
+        builder.record(InputEvent::KeyPressed(Key::D));
+    }
+    if tick == 24 {
+        builder.record(InputEvent::KeyReleased(Key::D));
+    }
+    builder.first_tick_snapshot()
+}
+
 fn new_sim(source: impl jidousha_assets::ByteSource) -> HeadlessSim {
     let mut sim = headless(
         GameConfig {
@@ -214,6 +291,49 @@ fn record() -> (Recording, Vec<u64>) {
             .insert_resource(Input::new(snapshot.clone()));
         sim.tick();
 
+        recording.push(TickRecord {
+            tick,
+            input: snapshot,
+            readiness,
+        });
+    }
+    let trace = sim.world().resource::<Trace>().0.clone();
+    (recording, trace)
+}
+
+/// Play the touch session, writing down everything that happened.
+///
+/// `touching` is what makes the negative control possible: with it false the
+/// same run happens with no fingers on the glass, and the traces must differ —
+/// otherwise the round trip below would be proving nothing about touch.
+fn record_touches(touching: bool) -> (Recording, Vec<u64>) {
+    let mut sim = new_sim(scripted_store());
+    let mut builder = SnapshotBuilder::new();
+    let mut recording = Recording::new(SEED, GameConfig::default().fixed_dt);
+
+    for tick in 1..=TICKS {
+        let assets = match sim.world_mut().find_resource_mut::<Assets>() {
+            Some(assets) => assets,
+            None => panic!("the store is inserted before the first tick"),
+        };
+        assets.commit(tick);
+        let readiness: Vec<AssetReady> = assets
+            .resolved()
+            .iter()
+            .map(|resolution| AssetReady {
+                request: resolution.request.bits(),
+                arrived: resolution.arrived,
+            })
+            .collect();
+
+        let snapshot = if touching {
+            touch_snapshot(&mut builder, tick)
+        } else {
+            touch_snapshot(&mut SnapshotBuilder::new(), 0)
+        };
+        sim.world_mut()
+            .insert_resource(Input::new(snapshot.clone()));
+        sim.tick();
         recording.push(TickRecord {
             tick,
             input: snapshot,
@@ -356,4 +476,56 @@ fn the_same_script_records_the_same_bytes_twice() {
     // Byte-stability, the property that lets a recording be checked in and
     // diffed (input.md §5).
     assert_eq!(record().0.encode(), record().0.encode());
+}
+
+#[test]
+fn a_session_played_with_fingers_replays_to_the_same_world_every_tick() {
+    // The touch half of the I2 criterion: a mobile playtest is a recording
+    // like any other, and it replays like one (ADR-0043).
+    let (recording, recorded) = record_touches(true);
+    let replayed = replay(&recording);
+    assert_eq!(recorded.len(), TICKS as usize);
+    for (tick, (a, b)) in recorded.iter().zip(&replayed).enumerate() {
+        assert_eq!(a, b, "worlds diverged at tick {}", tick + 1);
+    }
+}
+
+#[test]
+fn a_touch_session_replays_the_same_after_a_round_trip_through_bytes() {
+    // Through the file, which is the artifact a playtester sends back.
+    let (recording, recorded) = record_touches(true);
+    let Ok(from_bytes) = Recording::try_decode(&recording.encode()) else {
+        panic!("what was just written must read back");
+    };
+    assert_eq!(replay(&from_bytes), recorded);
+}
+
+#[test]
+fn the_touches_are_what_made_that_session_that_session() {
+    // The negative control, in the shape this file already uses for asset
+    // readiness: if the fingers did not change the world, replaying them
+    // correctly would be trivially true. They do, so it is not.
+    let (with_fingers, touched) = record_touches(true);
+    let (without, untouched) = record_touches(false);
+    assert_ne!(touched, untouched, "the fingers changed the game");
+    assert_ne!(
+        with_fingers.encode(),
+        without.encode(),
+        "and they are in the file"
+    );
+    assert!(
+        with_fingers
+            .ticks()
+            .iter()
+            .any(|record| !record.input.touches().is_empty()),
+        "the recording carries touches at all"
+    );
+}
+
+#[test]
+fn a_touch_session_records_the_same_bytes_twice() {
+    assert_eq!(
+        record_touches(true).0.encode(),
+        record_touches(true).0.encode()
+    );
 }

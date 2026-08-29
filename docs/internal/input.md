@@ -1,7 +1,8 @@
 # Input system — design and contracts
 
-Status: **living doc for `jidousha-input`; I0, I1 and I2 implemented — the
-crate's v1 scope is complete.** Sections carry `Implemented (IN)` notes where
+Status: **living doc for `jidousha-input`; I0, I1, I2 and I3 implemented — the
+crate's v1 scope is complete, and touch (I3) is the first thing added after
+it.** Sections carry `Implemented (IN)` notes where
 code exists; everything else is design ahead of the code. **CONTRACT** items are
 binding and tested.
 
@@ -12,9 +13,11 @@ conventions), error taxonomy (core §9).
 
 In scope (v1): keyboard (physical keys), pointer (position, buttons, scroll,
 multi-pointer-shaped), edge semantics, focus-loss policy, recording/replay,
-verify scripting. Out of scope (deferred): gamepads (needs a dep — own decision
-later), text/IME input, action mapping / rebinding, cursor capture & relative
-mouse mode, clipboard.
+verify scripting. Added post-v1: **touch** — a bounded list of fingers and the
+mirror that puts the first of them on the cursor (§3a, ADR-0043). Out of scope
+(deferred): gamepads (needs a dep — own decision later), text/IME input, action
+mapping / rebinding, cursor capture & relative mouse mode, clipboard, gesture
+recognition (game-side until a second game wants the same one).
 
 ---
 
@@ -165,6 +168,100 @@ at the point it knows which camera it means, which is the sanctioned conversion
 survives a split screen. The sketch above is corrected to match, and
 `PointerState` carries a `DELIBERATE:` tag pointing at the ADR.
 
+## 3a. Touch
+
+**Implemented (I3), ADR-0043.** Touch is snapshot data like everything else,
+and the first finger down is also the cursor.
+
+```rust
+pub const MAX_TOUCHES: usize = 4;
+
+pub struct Touch {
+    pub id: TouchId,        // which slot, stable for the life of this touch
+    pub phase: TouchPhase,  // Began | Moved | Ended | Cancelled
+    pub screen: Vec2,       // the same pixels PointerState::screen is in (§3)
+}
+
+input.touches() -> &[Touch]   // at most MAX_TOUCHES, in slot order
+```
+
+- CONTRACT: **the touch list is a fixed structure, bounded at four.** A
+  snapshot is written to disk sixty times a second and its size is part of the
+  format; a fifth finger is *dropped* at the builder, the same documented
+  boundary as a key the `Key` enum does not name. The decoder refuses a file
+  claiming more, so the bound cannot arrive from outside either.
+- CONTRACT: **the mirror.** The first finger to land while nothing is mirrored
+  takes the primary pointer — its position, and a `PointerButton::Primary`
+  press for as long as it is down. *First active touch wins, and does not hand
+  over*: a second finger never moves the pointer, and when the mirrored finger
+  ends the button is released rather than handed to whatever is still on the
+  glass. Every game that reads `input.pointer()` is therefore playable by touch
+  with no change, which is the whole reason the rule exists.
+- The mirror is applied **where the event is recorded**, in `SnapshotBuilder`,
+  not where the snapshot is read. That makes a mirrored press an ordinary
+  pointer edge — spent once, absent from a catch-up tick, released on focus
+  loss — rather than a second set of rules that could disagree with §2's; and
+  it puts the mirror *in* the recording, so a replay re-reads it rather than
+  re-deciding what an old session's fingers should have meant. ADR-0043 records
+  the declined alternative (mirroring on read) and why.
+- **Slots, not platform ids.** A platform names fingers however it likes —
+  winit counts in `u64`, a browser in `i32` — so an `InputEvent::Touched`
+  carries an opaque `FingerId` and the *builder* assigns the engine's own
+  `TouchId`: the lowest free slot, held for the life of that touch, released
+  when it ends. Slot 0 is whoever is in slot 0 now, not the first finger of the
+  session. This assignment is above the winit seam for the reason the edge
+  rules are (§6): it is a contract, and behind the seam it would be testable on
+  native only, through a real touchscreen, and not at all on wasm CI.
+- **`Moved` is the resting phase.** A finger that is down and not new this tick
+  reports `Moved`, whether it travelled or not, so `touches()` is what is on
+  the glass rather than what changed — a game reading it needs no state of its
+  own to know a finger is still there. A fifth phase for "still down" would be
+  a distinction nobody branches on, carried in every recording forever.
+- **`Cancelled` is not `Ended`.** The system took the touch away: a
+  notification shade, a gesture the browser claimed, the window losing focus. A
+  drag that was cancelled should be undone rather than committed, and a game
+  that treats the two alike will commit a drag the player never finished.
+- **A touch that lands and lifts inside one frame reports `Began` on that tick
+  and `Ended` on the next.** One entry per touch per tick has room for one
+  phase, and §2 refuses to lose the second edge, so it is owed rather than
+  dropped. The *mirrored* click is a press and a release on the same tick,
+  which is what the pointer already did for a mouse tap inside one frame.
+- Catch-up ticks (§2) report every touch still being followed, as `Moved`, at
+  its last known position — state, no edges. An owed end waits for the next
+  first tick rather than firing on a tick that is defined to have no edges.
+- Focus loss (§4) **cancels every touch** and frees the mirror; the mirrored
+  button is released by the same synthesis that releases everything else. The
+  platform's own cancellations, arriving afterwards, change nothing — the
+  engine is no longer following those fingers.
+- **Touch did not become a second pointer.** `PointerId::touch` has existed
+  since I0 as ADR-0005's headroom, and this was the moment to use it; it stayed
+  unused, and ADR-0043 says why. A pointer has no phase and no bound, a touch
+  has both, and a mirror that had to choose among four pointers would be
+  choosing among four *cursors*. `pointers()` remains what it was.
+- **Gestures are the game's.** Pinch, pan and long-press are what a game makes
+  of raw touches; what a swipe means differs between one game and the next. A
+  shared helper waits for a second consumer (practices' second-consumer rule).
+
+**What the platform contributes** is one table and one multiplication:
+`WindowEvent::Touch` → `InputEvent::Touched`, with the position scaled by the
+render scale exactly as a cursor position is (§3, web-publish.md §2). Getting
+that wrong on the pointer misplaces a click; getting it wrong here misplaces
+every tap, on the only target where anybody taps.
+
+**On the web, the browser must not mirror too.** A page that leaves touch alone
+gets compatibility mouse events synthesized after every tap — `mousedown`,
+`mouseup`, `click` — for the benefit of pages written before touch existed. Two
+things stop that reaching a game as a second press, and both are written down
+where they live: winit's `prevent_default`, stated by the driver rather than
+inherited, which cancels `touchstart` and `pointerdown` so the browser
+synthesizes nothing; and `touch-action: none` on the canvas
+(`tools/web-template/index.html`), without which the browser treats a drag as a
+page scroll and takes the touch stream away mid-gesture. There is a third,
+structural reason it cannot happen: the engine listens to no legacy mouse
+event at all — winit's web backend binds pointer events and routes
+`pointerType == "touch"` to its touch path — so a compatibility `click` has
+nowhere to arrive. web-publish.md §2a is the page half.
+
 ## 4. Focus loss and window edge cases
 
 - CONTRACT: on focus loss (alt-tab, browser tab switch), the engine
@@ -224,6 +321,30 @@ number, the snapshot, and the asset readiness that resolved on it.
   `Ready` vs `Failed` and *when* (assets §4); the bytes are not in the recording
   and should not be — a recording is a timeline, not an archive of everybody's
   art.
+
+**Versions, and what compatibility costs** (I3, ADR-0043). There are two version
+numbers and they answer different questions. The recording's own (`JDRC`) is
+about the *stream* — header, tick records, the readiness interleave — and touch
+changed none of it, so it stays at 1: bumping it would refuse every existing
+file to announce a change that is not in that layer. The snapshot's (`JDIN`) is
+about what one tick holds, and it went to **2**, with the touch list on the end
+and nothing before it moved.
+
+- CONTRACT: **a recording written before touch existed still replays.** A
+  version 1 snapshot is a version 2 snapshot read to where it stops, and it
+  means what it always meant: no fingers on the glass.
+  `crates/jidousha-input/tests/old_recordings.rs` replays a file the pre-touch
+  engine actually wrote — generated by that engine, not by this one's idea of
+  what it used to emit, because a fixture the new code generates agrees with the
+  new code by construction.
+- **A recording written by this engine replays only on this engine**, refused by
+  number (`DecodeError::UnsupportedVersion`) rather than misread. Said out loud
+  here rather than discovered on a playtester's machine.
+- **The byte round trip is a property of what this build writes.**
+  `encode(decode(b)) == b` holds for version 2 bytes; reading version 1 is an
+  *upgrade*, and writing that session back out produces version 2. So a
+  recording worth keeping is kept as the file it was written as, not as
+  whatever the newest engine re-encoded it to.
 
 - `tools/verify` scripting is a builder over the same types:
 
@@ -295,9 +416,10 @@ in — swapping W and S still reaches both, so only the order tells it apart.
 ## 6. Internals
 
 ```
-jidousha-input       Key/PointerButton/InputSnapshot/Input types; edge logic;
-                     recording format; InputScript. Pure, no platform deps,
-                     wasm-clean — tests run everywhere.
+jidousha-input       Key/PointerButton/Touch/InputSnapshot/Input types; edge
+                     logic; touch slots and the mirror; recording format;
+                     InputScript. Pure, no platform deps, wasm-clean — tests
+                     run everywhere.
 jidousha-platform    winit event loop → event accumulator → snapshot builder
                      (translation tables, scroll normalization, focus policy).
 ```
@@ -452,8 +574,46 @@ overlap contradictorily (hold 5..10 + release at 7) are a debug panic with the
   rather than weak assertions. A mutation that cannot be observed is usually
   telling you the code has no reader, not that the test is lazy.
 
+- **I3 — touch.** ✅ The bounded touch list, the slot assignment, the mirror,
+  the winit table, the web page's half, and an additive format bump
+  (§3a, ADR-0043).
+  Exit: a transcript test of the phase rules and the mirror; a record/replay
+  round trip carrying fingers; a pre-touch recording still replaying; the owner
+  tapping a deployed page on a real phone.
+
+  Delivered: `touch/` (the vocabulary and the tracker), the `Touched` arm of
+  `SnapshotBuilder` and its mirror, `codec`'s version 2,
+  `jidousha-platform`'s `translate::touch` and the driver's `WindowEvent::Touch`
+  arm, `tools/web-template`'s `touch-action: none`, and four test surfaces —
+  `tests/touch_transcript.rs` (the rules, as sequences a person can read),
+  `tests/old_recordings.rs` (a file the previous engine wrote),
+  `jidousha-platform/tests/record_replay.rs`'s touch session with its negative
+  control, and the property tests, which now generate touches too.
+
+  **The property tests were extended rather than duplicated**, and that was the
+  decision worth making. `tests/support/mod.rs`'s naive model grew a touch half
+  written in a deliberately different shape — a *queue* of owed phases per
+  finger, where the builder keeps "the phase to report, plus an end that may be
+  owed behind it". Two spellings of one rule is the only reason a reference
+  model earns its keep; a model that mirrored the implementation would agree
+  with it while both were wrong. The generator draws from six fingers for four
+  slots, so the dropped fifth happens on its own, and the coverage test asserts
+  that landings, lifts, cancellations, a full glass and a mirrored press are all
+  actually reached — 2000 streams that never put a finger down would pass
+  everything and mean nothing.
+
+  **What the examples say.** `examples/scripted_player` presses the same button
+  twice: once with `InputScript`'s mouse click, once with touch events through a
+  `SnapshotBuilder`, and the game between them is byte-identical. That is the
+  mirror stated as a check rather than as a paragraph. `examples/input_echo`
+  grew the touch readout and is the page to open on a phone.
+
 ## 9. Deferred (tracked, not designed)
 
 Gamepads (dep decision + ADR when taken) · text/IME · action mapping & rebinding
-· cursor capture / relative mode / pointer lock (web) · multi-touch gestures ·
-clipboard.
+· cursor capture / relative mode / pointer lock (web) · **multi-touch gestures**
+(pinch/pan/long-press: game-side until a second game wants the same one —
+ADR-0043) · touch in `InputScript` (the builder is the path a check takes today,
+§8's I3 note; a script would have to answer the phase question a second time,
+which is ADR-0019's argument again) · pen and stylus (winit reports pressure and
+tilt this engine does not carry) · clipboard.

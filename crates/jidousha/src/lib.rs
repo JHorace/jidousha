@@ -79,7 +79,12 @@ pub use jidousha_assets::{
 };
 
 // --- Input ------------------------------------------------------------------
-pub use jidousha_input::{Input, Key, PointerButton, PointerId, PointerState};
+// `Touch`, `TouchId`, `TouchPhase` and `MAX_TOUCHES` are here and `FingerId` is
+// not: a game *reads* touches and never names the finger a platform reported,
+// which is the checking surface's business (`testing`, below).
+pub use jidousha_input::{
+    Input, Key, MAX_TOUCHES, PointerButton, PointerId, PointerState, Touch, TouchId, TouchPhase,
+};
 
 /// One import, and a game has everything.
 ///
@@ -96,10 +101,11 @@ pub mod prelude {
     pub use crate::{
         App, AssetError, AssetFailure, AssetStatus, Assets, Bundle, BytesHandle, Camera, Color,
         Commands, Component, Depth, Draw, DrawCtx, Entity, EntityDeadError, Face, FontError, Fonts,
-        GameConfig, HeadlessSim, Input, Key, MemorySource, PhysicalSize, PointerButton, PointerId,
-        PointerState, Quad, Rect, Resource, Rng, RunError, Seconds, Sprite, Startup, Submissions,
-        Submit, TextExtents, TextStyle, TextureHandle, TextureId, Time, Transform, Update, With,
-        Without, World, WorldView, asset_source, draw_sprites, headless, message, run,
+        GameConfig, HeadlessSim, Input, Key, MAX_TOUCHES, MemorySource, PhysicalSize,
+        PointerButton, PointerId, PointerState, Quad, Rect, Resource, Rng, RunError, Seconds,
+        Sprite, Startup, Submissions, Submit, TextExtents, TextStyle, TextureHandle, TextureId,
+        Time, Touch, TouchId, TouchPhase, Transform, Update, With, Without, World, WorldView,
+        asset_source, draw_sprites, headless, message, run,
     };
 }
 
@@ -164,9 +170,13 @@ pub mod testing {
     // press has no such plan. They are the driver's own edge rules, so a
     // controller written this way is exercising the path a real keyboard takes
     // rather than a second one (ADR-0019).
+    // `FingerId` is here rather than in the game surface: it is the argument a
+    // check hands `InputEvent::Touched` when it drives synthetic touches, and a
+    // game never sees one — what a game reads is the engine's own `TouchId`
+    // slot (input.md §3a).
     pub use jidousha_input::{
-        AssetReady, DecodeError, Input, InputEvent, InputScript, InputSnapshot, Recording,
-        RecordingError, SnapshotBuilder, TickRecord,
+        AssetReady, DecodeError, FingerId, Input, InputEvent, InputScript, InputSnapshot,
+        Recording, RecordingError, SnapshotBuilder, TickRecord,
     };
     // `encode_png` here takes a captured frame (`RawImage`), which is what a
     // golden image or a `tools/verify` artifact is written from. Its inverse

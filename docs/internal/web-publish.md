@@ -32,7 +32,8 @@ tools/serve-web [<name>] [--check]
   local static server for dist/; MUST serve application/wasm correctly
   (implementation free; doctor verifies by fetching a .wasm and checking the
   Content-Type). --check drives a headless browser at /<name>/: once
-  asserting the page ran and drew, once at ?panic=1 asserting the panic
+  asserting the page ran and drew (and that the canvas still says
+  `touch-action: none`, §2a), once at ?panic=1 asserting the panic
   overlay rendered the full §9 text, once at ?frametime=1 asserting the
   frame-pacing overlay came up and classified the renderer (§2). Check
   artifacts go to target/web-check/, never into dist/ — dist is what deploys.
@@ -253,6 +254,50 @@ One `index.html` template, self-contained (no external CDN dependencies):
   wired to the input recording buffer (input §5) once I2 lands — turns remote
   playtesting into remote deterministic repro. Tracked here so the template
   leaves an obvious seam for it.
+
+## 2a. Touch: the page's half of it
+
+**Implemented with I3** (input.md §3a, ADR-0043). A phone is where this
+project's playtests happen, so a page that fights the browser over touch is a
+page nobody can play. Two lines of CSS and one window attribute are the whole
+of it, and each is here because leaving it out breaks something specific.
+
+- CONTRACT: **`touch-action: none` on the canvas.** Without it the browser owns
+  the gesture: a drag scrolls or zooms the page, and — worse than the scrolling
+  — the browser *takes the touch stream away* mid-gesture, which arrives in the
+  engine as a cancellation and reads to a game as a finger that vanished. This
+  is the one item that cannot be fixed engine-side: `preventDefault` on a
+  pointer event does not stop a scroll the browser has already decided to own.
+- CONTRACT: **no synthetic mouse double-fire.** A browser that sees an
+  uncancelled touch synthesizes `mousedown`/`mouseup`/`click` after it, for the
+  benefit of pages written before touch existed; a page that let those through
+  beside the engine's own mirror would fire every tap twice. Three things stop
+  it, and the engine leans on all three deliberately:
+  1. the driver states `with_prevent_default(true)` on the web window rather
+     than inheriting winit's default, so `touchstart` and `pointerdown` are
+     cancelled and the browser synthesizes nothing (winit 0.30 defaults to it
+     today; a default is somebody else's to change, and this bug is invisible
+     on a desktop);
+  2. winit's web backend routes `pointerType == "touch"` to its touch path, so
+     a touch never becomes a `CursorMoved` or a `MouseInput` in the vocabulary
+     the driver translates;
+  3. the engine binds **no legacy mouse event at all** — winit listens to
+     `pointerdown`/`pointermove`/`pointerup` and `wheel`, never `mousedown` or
+     `click` — so a compatibility event a browser fires anyway has nowhere to
+     arrive.
+
+  The mirror from finger to cursor is the engine's, in the snapshot builder,
+  where it is recorded and replayed (input.md §3a). Ours is the only mirror.
+- `user-select: none` and `-webkit-tap-highlight-color: transparent` are
+  comfort rather than contract: a long press on a game should not offer to copy
+  it, and a tap should not flash a grey box over the canvas.
+- **What `serve-web --check` cannot tell you.** The headless browser it drives
+  has no fingers; it can prove the page loads, draws and panics correctly, and
+  it cannot prove a tap feels right. The touch rules are checked where they
+  live — `jidousha-input`'s transcript and property tests, and the driver's
+  own — and the last mile is a person holding a phone. `input_echo` is the page
+  to open: put one finger down and the crosshair follows it, put a second down
+  and it does not.
 
 ## 3. Deploy targets and layout
 

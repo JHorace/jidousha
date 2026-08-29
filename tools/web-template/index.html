@@ -64,12 +64,26 @@
         flex-direction: column;
       }
       /* The canvas winit appends. Filling the body is what makes a resize a
-         real resize, which is the thing worth checking on this target. */
+         real resize, which is the thing worth checking on this target.
+
+         `touch-action: none` is the half of touch support that lives on this
+         page (web-publish.md §2a). Without it the browser owns the gesture: a
+         drag scrolls or zooms the page, and it takes the touch stream away
+         mid-drag — which reaches the engine as a cancellation and reads to a
+         game as a finger that vanished. The engine's half is winit's
+         `prevent_default`, which suppresses the compatibility mouse events a
+         browser otherwise synthesizes after a tap; between them, a tap is one
+         touch and nothing else. The two selection properties are comfort: a
+         long press on a game should not offer to copy it. */
       canvas {
         flex: 1 1 auto;
         display: block;
         width: 100%;
         min-height: 0;
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-tap-highlight-color: transparent;
       }
       #loading {
         flex: 1 1 auto;

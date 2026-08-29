@@ -550,6 +550,39 @@ placeholder: if `Assets::status` says `Ready`, the texture is there.
 mid-tick. A tap that begins and ends between two frames still produces both
 edges, because edges are recorded rather than inferred from a difference.
 
+**A game written for a mouse is already playable by touch.** The engine puts
+the first finger down onto the primary pointer — `input.pointer().screen`
+follows it, and `PointerButton::Primary` is pressed for as long as it is on the
+glass — so `just_pressed(PointerButton::Primary)` is a tap and a drag is a
+drag, with nothing to write. The rule is *first finger down wins, and does not
+hand over*: a second finger never moves the pointer, and when the mirrored
+finger lifts the button releases rather than jumping to whatever else is down.
+
+Read `input.touches()` when a *second* finger means something. It is at most
+four `Touch` values — `MAX_TOUCHES` — each with a `TouchId` slot that is stable
+for the life of that touch, a `TouchPhase` (`Began`, `Moved`, `Ended`,
+`Cancelled`), and a `screen` position in the same pixels the pointer is in. A
+finger that is down and not new this tick reports `Moved`, whether it moved or
+not, so the list is what is on the glass rather than what changed. `Cancelled`
+is worth telling apart from `Ended`: the system took the touch away — a
+notification, a browser gesture, the window losing focus — so a drag that was
+cancelled should be undone rather than committed. A fifth finger is dropped,
+like a key the engine does not name.
+
+```rust
+fn pinch(world: &mut World) {
+    let Some(input) = world.find_resource::<Input>() else { return };
+    let [first, second] = input.touches() else { return };
+    let apart = (first.screen - second.screen).length();
+    // ... and the game decides what two fingers that far apart mean.
+    let _ = apart;
+}
+```
+
+Gestures themselves — pinch, pan, long-press — are the game's, not the
+engine's: what arrives is raw touches, and what a swipe means differs between
+one game and the next.
+
 **Coordinates are Y-down**: `+X` is right, `+Y` is *down*, and everything is in
 world units, not pixels. The camera is `height` world units tall and as wide as
 the window's aspect makes it. `Camera::world_to_screen` and `screen_to_world`
@@ -1993,6 +2026,7 @@ impl Input {
     pub fn just_released(&self, key: Key) -> bool;  // Whether `key` came up this tick
     pub fn pointer(&self) -> &PointerState;  // The primary pointer — the mouse, or the first finger down
     pub fn pointers(&self) -> &[PointerState];  // Every pointer this tick
+    pub fn touches(&self) -> &[Touch];  // Every finger on the glass this tick, in slot order
     pub fn window_focused(&self) -> bool;  // Whether the window had focus this tick
     pub fn snapshot(&self) -> &InputSnapshot;  // The whole snapshot, for the recorder and for tests
 }
@@ -2047,6 +2081,14 @@ impl Key {
     pub fn find_by_code(code: u16) -> Option<Key>;
     pub fn name(self) -> &'static str;  // The variant's name, for messages and for `input_echo`
 }
+```
+
+#### `MAX_TOUCHES`
+
+How many touches a snapshot carries.
+
+```rust
+pub const MAX_TOUCHES: usize = 4;
 ```
 
 #### `PointerButton`
@@ -2108,6 +2150,61 @@ impl PointerState {
     pub fn held_buttons(&self) -> &[PointerButton];  // Every button down this tick, sorted
     pub fn pressed_buttons(&self) -> &[PointerButton];  // Every button that went down this tick, sorted
     pub fn released_buttons(&self) -> &[PointerButton];  // Every button that came up this tick, sorted
+}
+```
+
+#### `Touch`
+
+One finger, for one tick.
+
+```rust
+pub struct Touch {
+    pub id: TouchId,  // Which slot, stable for the life of this touch
+    pub phase: TouchPhase,  // What happened to it this tick
+    // Where it is, in pixels from the surface's top-left — the same space
+    // `PointerState::screen`(crate::PointerState::screen) is in, so
+    // `camera.screen_to_world` converts either one
+    pub screen: Vec2,
+}
+// Clone Copy Debug PartialEq
+```
+
+#### `TouchId`
+
+Which of the snapshot's touch slots a touch occupies.
+
+```rust
+pub struct TouchId(u8);
+// Clone Copy Debug PartialEq Eq PartialOrd Ord Hash Display
+
+impl TouchId {
+    pub fn slot(self) -> u8;  // Which slot, `0..``MAX_TOUCHES`
+}
+```
+
+#### `TouchPhase`
+
+What happened to a touch on this tick.
+
+```rust
+pub enum TouchPhase {
+    Began,  // The finger landed this tick
+    Moved,  // The finger is down — moved, or simply still there
+    Ended,  // The finger lifted this tick
+    // The system took the touch away this tick: a notification shade, a gesture
+    // the browser claimed, the window losing focus
+    Cancelled,
+}
+// Clone Copy Debug PartialEq Eq PartialOrd Ord Hash Display
+
+impl TouchPhase {
+    pub const ALL: &'static [TouchPhase] = &[ TouchPhase::Began, TouchPhase::Moved, TouchPhase::Ended, TouchPhase::Cancelled, ];  // Every phase, in declaration order
+    // Whether this phase ends the touch: it is the last tick the finger appears on
+    pub fn is_final(self) -> bool;
+    pub fn code(self) -> u8;  // This phase's wire code, as written into recordings
+    // The phase a wire code names, or `None` if this build has never heard of it
+    pub fn find_by_code(code: u8) -> Option<TouchPhase>;
+    pub fn name(self) -> &'static str;  // The variant's name, for messages
 }
 ```
 

@@ -1,10 +1,11 @@
 //! Everything the input system knows, on screen (input.md §8, I1).
 //!
-//! Press keys, move the mouse, click, scroll. This draws what arrived: the keys
-//! currently down, the last few edges with the tick they landed on, the
-//! pointer in both screen and world coordinates, its buttons, and how much the
-//! wheel has turned. It is the translation table's proof, and the thing to look
-//! at when a key does not do what a game expects.
+//! Press keys, move the mouse, click, scroll, or put fingers on the glass. This
+//! draws what arrived: the keys currently down, the last few edges with the
+//! tick they landed on, the pointer in both screen and world coordinates, its
+//! buttons, how much the wheel has turned, and every touch with its slot and
+//! phase. It is the translation table's proof, and the thing to look at when a
+//! key does not do what a game expects.
 //!
 //! Things worth trying, because each one is a rule the engine promises:
 //!
@@ -15,6 +16,13 @@
 //! - **Press a key your keyboard has and this engine does not** — a numpad key,
 //!   a media key. Nothing happens, which is a documented boundary rather than a
 //!   failure.
+//! - **Open it on a phone and tap.** The crosshair goes where your thumb goes
+//!   and turns red, because the first finger down is mirrored onto the primary
+//!   pointer — which is what makes a game written for a mouse playable with a
+//!   thumb (input.md §3a). Put a second finger down: it appears in the touch
+//!   list and the crosshair does *not* move to it.
+//! - **Put five fingers on the glass.** Four are reported; the fifth is dropped
+//!   at the documented bound, like a key the engine does not name.
 //!
 //! Run it: `cargo run -p jidousha --example input_echo`
 //! On the web: `tools/serve-web input_echo`
@@ -52,6 +60,10 @@ struct Echo {
     screen: Vec2,
     /// Which pointer buttons are down.
     buttons: Vec<String>,
+    /// One line per finger on the glass: slot, phase, position.
+    touches: Vec<String>,
+    /// Where each finger is and what it is doing, for the rings below.
+    points: Vec<(Vec2, TouchPhase)>,
     /// Whether the window has focus. Not input, but observable by simulation
     /// and therefore recorded (input.md §4).
     focused: bool,
@@ -132,11 +144,46 @@ fn watch_the_input(world: &mut World) {
     for button in pointer.released_buttons() {
         edges.push(format!("{tick:>5}  let   {button}"));
     }
+    // A touch is one entry with one phase per tick, so its edges are its
+    // phases: only the ones that are not "still down" are worth a log line.
+    for touch in input.touches() {
+        if touch.phase != TouchPhase::Moved {
+            edges.push(format!(
+                "{tick:>5}  {:<5} {}",
+                phase_word(touch.phase),
+                slot(touch.id)
+            ));
+        }
+    }
     if scroll != 0.0 {
         edges.push(format!("{tick:>5}  wheel {scroll:+.2} lines"));
     }
 
+    // The whole touch list, the way a game that cares about a second finger
+    // would read it. A game that does not care reads nothing here and is still
+    // playable by touch, because of the mirror above.
+    let touches: Vec<String> = input
+        .touches()
+        .iter()
+        .map(|touch: &Touch| {
+            format!(
+                "{} {:<9} ({:.0}, {:.0})",
+                slot(touch.id),
+                phase_word(touch.phase),
+                touch.screen.x,
+                touch.screen.y
+            )
+        })
+        .collect();
+    let points: Vec<(Vec2, TouchPhase)> = input
+        .touches()
+        .iter()
+        .map(|touch| (touch.screen, touch.phase))
+        .collect();
+
     let echo = world.resource_mut::<Echo>();
+    echo.touches = touches;
+    echo.points = points;
     echo.held = held;
     echo.buttons = buttons;
     echo.screen = screen;
@@ -146,6 +193,22 @@ fn watch_the_input(world: &mut World) {
     if echo.log.len() > LOG_LINES {
         let excess = echo.log.len() - LOG_LINES;
         echo.log.drain(..excess);
+    }
+}
+
+/// What to call a touch slot. Named rather than numbered on its own, because
+/// "touch 2" reads and "2" does not.
+fn slot(id: TouchId) -> String {
+    format!("touch {}", id.slot())
+}
+
+/// A phase, as a word short enough for a log column.
+fn phase_word(phase: TouchPhase) -> &'static str {
+    match phase {
+        TouchPhase::Began => "down",
+        TouchPhase::Moved => "moved",
+        TouchPhase::Ended => "up",
+        TouchPhase::Cancelled => "cancelled",
     }
 }
 
@@ -218,16 +281,29 @@ fn draw_the_readout(ctx: &mut DrawCtx) {
          screen ({:.0}, {:.0})\n\
          world  ({:+.2}, {:+.2})\n\
          scroll {:+.2} lines total\n\
-         focus  {}",
+         focus  {}\n\
+         touch  {} of {} \n\
+         {}",
         echo.screen.x,
         echo.screen.y,
         world.x,
         world.y,
         echo.scroll_total,
         if echo.focused { "yes" } else { "no" },
+        echo.touches.len(),
+        MAX_TOUCHES,
+        if echo.touches.is_empty() {
+            "       (no fingers on the glass)".to_owned()
+        } else {
+            echo.touches
+                .iter()
+                .map(|touch| format!("       {touch}"))
+                .collect::<Vec<String>>()
+                .join("\n")
+        },
     );
     ctx.text(Vec2::new(left, line), &clipped(&facts, columns), body);
-    line += body.size * 7.0;
+    line += body.size * (9.0 + echo.touches.len() as f32);
 
     ctx.text(Vec2::new(left, line), "recent edges", heading);
     line += heading.size * 1.6;
@@ -281,6 +357,18 @@ fn draw_the_pointer(ctx: &mut DrawCtx) {
         depth,
     );
     ctx.circle(at, 0.22, color, depth);
+
+    // One ring per finger, so a second touch is visible even though the
+    // crosshair stays on the first — which is the mirror rule, drawn.
+    for (screen, phase) in &echo.points {
+        let ring = camera.screen_to_world(*screen);
+        let tint = match phase {
+            TouchPhase::Began => Color::rgb(1.0, 0.9, 0.3),
+            TouchPhase::Moved => Color::rgba(0.5, 0.8, 1.0, 0.9),
+            TouchPhase::Ended | TouchPhase::Cancelled => Color::rgb(1.0, 0.4, 0.4),
+        };
+        ctx.circle(ring, 1.1, tint, Depth::layer(1));
+    }
 
     // A ring that grows with the wheel, so scrolling has somewhere to show.
     let radius = 1.6 + echo.scroll_total * 0.1;
