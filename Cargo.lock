@@ -680,6 +680,7 @@ dependencies = [
 name = "jidousha-render-core"
 version = "0.1.0"
 dependencies = [
+ "ab_glyph",
  "jidousha-assets",
  "jidousha-core",
 ]

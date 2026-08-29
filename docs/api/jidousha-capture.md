@@ -114,7 +114,7 @@ pub fn encode_png(image: &RawImage) -> Vec<u8>;
 
 #### `FONT_TEXTURE`
 
-The id every glyph quad samples.
+The id every built-in glyph quad samples.
 
 ```rust
 pub const FONT_TEXTURE: TextureId = TextureId::from_bits(1);
@@ -183,6 +183,14 @@ Hand every newly loaded texture to the backend, and record where it landed.
 
 ```rust
 pub fn upload_ready_textures(assets: &mut Assets, backend: &mut dyn RenderBackend, textures: &mut TextureTable);
+```
+
+#### `upload_text_atlases`
+
+Upload the atlas behind every glyph `quads` draws that is not on the GPU yet.
+
+```rust
+pub fn upload_text_atlases(faces: &[Face], quads: &[Quad], backend: &mut dyn RenderBackend, textures: &mut TextureTable);
 ```
 
 #### `WgpuBackend`

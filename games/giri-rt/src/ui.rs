@@ -318,6 +318,7 @@ pub fn draw(ctx: &mut DrawCtx, panel: &Panel, map: &crate::camera::UiMap) {
             run.at,
             &run.text,
             TextStyle {
+                face: Face::BUILT_IN,
                 size: run.size,
                 color: run.color,
                 depth: Depth::layer(run.layer),
@@ -333,6 +334,7 @@ pub fn draw(ctx: &mut DrawCtx, panel: &Panel, map: &crate::camera::UiMap) {
             map.to_world(run.at),
             &run.text,
             TextStyle {
+                face: Face::BUILT_IN,
                 size: run.size * map.scale,
                 color: run.color,
                 depth: Depth::layer(run.layer),

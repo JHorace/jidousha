@@ -19,7 +19,7 @@ use std::sync::Arc;
 use jidousha_core::{GameConfig, Simulation};
 use jidousha_input::{InputEvent, PointerId, SnapshotBuilder};
 use jidousha_render_core::{
-    Camera, PhysicalSize, RenderBackend, TextureTable, create_builtin_textures,
+    Camera, Face, PhysicalSize, RenderBackend, TextureTable, create_builtin_textures,
 };
 use jidousha_render_wgpu::WgpuBackend;
 use winit::application::ApplicationHandler;
@@ -65,6 +65,13 @@ pub(crate) struct Driver {
     /// the table is the thing that names them and inventing ids before they are
     /// created is how a driver ends up drawing whatever was uploaded first.
     textures: Option<TextureTable>,
+    /// Every typeface the game has loaded, copied out of the world each frame.
+    ///
+    /// The frame path needs this list *while* it holds the draw submissions,
+    /// and the submissions borrow the simulation the `Fonts` resource lives in.
+    /// A `Face` is a `Copy` name for outlines that live as long as the program
+    /// (renderer.md §6), so the copy is a few words and can never dangle.
+    faces: Vec<Face>,
     /// How big the window is, in pixels — the driver's answer, not the game's.
     ///
     /// Kept here rather than only written onto the camera when a resize event
@@ -99,6 +106,7 @@ impl Driver {
             window: None,
             backend: None,
             textures: None,
+            faces: Vec::new(),
             // Until `resumed` measures a real window. Sharing the camera's own
             // default keeps a headless run and a windowed one describing the
             // same screen until the window says otherwise.

@@ -10,11 +10,11 @@
 //! frame from the game would assert about nothing (renderer.md §9).
 
 use jidousha_assets::Assets;
-use jidousha_core::{HeadlessSim, PhysicalSize, message};
+use jidousha_core::{HeadlessSim, PhysicalSize, TextureId, message};
 
 use crate::backend::{BackendTextureId, RenderBackend};
 use crate::camera::Camera;
-use crate::font::FONT_TEXTURE;
+use crate::font::{FONT_TEXTURE, Face, Fonts, upload_text_atlases};
 use crate::null::{FrameRecord, NullBackend};
 use crate::plan::{TextureTable, plan_frame};
 use crate::textures::{create_builtin_textures, upload_ready_textures};
@@ -106,6 +106,41 @@ impl FrameRecorder {
     ///
     /// A game with no `Assets` resource is a game with no assets, and this does
     /// nothing rather than complaining about it.
+    ///
+    /// **A fixed number of ticks is not a loading gate, and writing one is how a
+    /// check becomes flaky.** On native the file is read on a thread of its own,
+    /// so how many ticks it takes is a fact about the disk and the scheduler
+    /// rather than about the game: the same check here resolved a font in 242
+    /// ticks on a warm cache and had not resolved it in 600 on a cold one. A
+    /// loop of `for tick in 1..=8` passes on the machine it was written on and
+    /// fails on the runner, and the failure looks like the *asset* being wrong
+    /// rather than the wait being short.
+    ///
+    /// So loop until what you are waiting for is there, with a cap so a run that
+    /// will never get it says so instead of hanging:
+    ///
+    /// ```no_run
+    /// # use jidousha_core::{GameConfig, HeadlessSim, headless};
+    /// # use jidousha_assets::Assets;
+    /// # use jidousha_render_core::{FrameRecorder, PhysicalSize};
+    /// # fn example(sim: &mut HeadlessSim, recorder: &mut FrameRecorder) -> u64 {
+    /// const MAX_TICKS: u64 = 200_000;
+    /// let mut ticks = 0;
+    /// while ticks < MAX_TICKS {
+    ///     ticks += 1;
+    ///     recorder.settle_assets(sim, ticks);
+    ///     sim.tick();
+    ///     if sim.world().resource::<Assets>().all_ready() {
+    ///         break;
+    ///     }
+    /// }
+    /// ticks
+    /// # }
+    /// ```
+    ///
+    /// A headless tick costs microseconds, so a cap that looks absurd is under a
+    /// second of budget. `examples/text`'s `--verify` is the worked case, and it
+    /// reports the count it took and what the store said if it ran out.
     pub fn settle_assets(&mut self, sim: &mut HeadlessSim, tick: u64) {
         let Some(assets) = sim.world_mut().find_resource_mut::<Assets>() else {
             return;
@@ -150,9 +185,21 @@ impl FrameRecorder {
                 .copied()
                 .unwrap_or_default()
         };
+        // Read before the draw, which borrows the sim for as long as its
+        // submissions live. A `Face` is a `Copy` name for outlines that live as
+        // long as the program, so the copy cannot go stale (renderer.md §6).
+        let faces: Vec<Face> = sim
+            .world()
+            .find_resource::<Fonts>()
+            .map(|fonts| fonts.faces().to_vec())
+            .unwrap_or_default();
         // Copied out because `draw` borrows the sim for as long as its
         // submissions live, and the plan outlives them.
         let quads = sim.draw().quads().to_vec();
+        // After the draw and before the plan, exactly as the driver does it:
+        // nothing knows which faces at which sizes a frame wants until the game
+        // has asked, and the plan resolves every texture id (renderer.md §6).
+        upload_text_atlases(&faces, &quads, &mut self.backend, &mut self.textures);
         let plan = plan_frame(&camera, &quads, &self.textures);
         if let Err(error) = self.backend.render(&plan) {
             panic!(
@@ -179,6 +226,22 @@ impl FrameRecorder {
         frame.clone()
     }
 
+    /// Which backend texture an engine texture id landed on.
+    ///
+    /// The general form of the question [`font_texture`](Self::font_texture)
+    /// answers, and the one a loaded typeface needs: a face is rasterized once
+    /// per size, so *"which of these quads is my heading?"* is
+    /// `recorder.texture(face.atlas_texture(style.size))` and the quads
+    /// sampling it are that face's glyphs at that size (renderer.md §6).
+    ///
+    /// An id nothing uploaded resolves to the placeholder, which is the same
+    /// answer the draw path gets and is what "the art is not there yet" looks
+    /// like from a check (renderer.md §5).
+    #[must_use]
+    pub fn texture(&self, id: TextureId) -> BackendTextureId {
+        self.textures.resolve(id)
+    }
+
     /// Which backend texture the engine's font atlas is on.
     ///
     /// The answer to *"is any of this text?"*: a quad sampling this id came
@@ -186,6 +249,11 @@ impl FrameRecorder {
     /// test had to rebuild the whole texture table against a throwaway backend
     /// to find out, because the id is assignment-ordered rather than fixed and
     /// the real table was long out of scope by assertion time.
+    ///
+    /// This is [`texture`](Self::texture)`(FONT_TEXTURE)`, and it stays because
+    /// the built-in font is the face a game draws in *before* it has one to
+    /// name — a check on a game with no assets should not have to name a
+    /// texture id to ask whether anything was written on the screen.
     #[must_use]
     pub fn font_texture(&self) -> BackendTextureId {
         self.textures.resolve(FONT_TEXTURE)

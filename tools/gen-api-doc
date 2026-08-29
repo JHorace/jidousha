@@ -137,6 +137,10 @@ CAPTURE_ITEMS = (
     "create_builtin_textures",
     "encode_png",
     "upload_ready_textures",
+    # A replay that has text in a loaded face has to build that face's atlases
+    # in the same order too, or the plan's ids name the wrong textures
+    # (ADR-0042). Same reasoning as `upload_ready_textures`, one line below it.
+    "upload_text_atlases",
 )
 
 # No tokenizer in the standard library, so this is the usual approximation:

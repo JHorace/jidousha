@@ -179,11 +179,13 @@ fn draw_the_readout(ctx: &mut DrawCtx) {
     let world = camera.screen_to_world(echo.screen);
 
     let heading = TextStyle {
+        face: Face::BUILT_IN,
         size: 0.9,
         color: Color::WHITE,
         depth: Depth::layer(1),
     };
     let body = TextStyle {
+        face: Face::BUILT_IN,
         size: 0.7,
         color: Color::rgba(0.65, 0.85, 1.0, 0.95),
         depth: Depth::layer(1),
@@ -238,6 +240,7 @@ fn draw_the_readout(ctx: &mut DrawCtx) {
         Vec2::new(left, line),
         &clipped(&log, columns),
         TextStyle {
+            face: Face::BUILT_IN,
             color: Color::rgba(1.0, 0.95, 0.7, 0.95),
             ..body
         },

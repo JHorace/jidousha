@@ -68,7 +68,10 @@ pub use jidousha_core::{
 
 // --- Render -----------------------------------------------------------------
 pub use jidousha_core::Transform;
-pub use jidousha_render_core::{Camera, PhysicalSize, Sprite, Submit, TextStyle, draw_sprites};
+pub use jidousha_render_core::{
+    Camera, Face, FontError, Fonts, PhysicalSize, Sprite, Submit, TextExtents, TextStyle,
+    draw_sprites,
+};
 
 // --- Assets -----------------------------------------------------------------
 pub use jidousha_assets::{
@@ -92,11 +95,11 @@ pub mod prelude {
     pub use crate::math::{Radians, Vec2, Vec3, atan2, rotate, sin_cos};
     pub use crate::{
         App, AssetError, AssetFailure, AssetStatus, Assets, Bundle, BytesHandle, Camera, Color,
-        Commands, Component, Depth, Draw, DrawCtx, Entity, EntityDeadError, GameConfig,
-        HeadlessSim, Input, Key, MemorySource, PhysicalSize, PointerButton, PointerId,
+        Commands, Component, Depth, Draw, DrawCtx, Entity, EntityDeadError, Face, FontError, Fonts,
+        GameConfig, HeadlessSim, Input, Key, MemorySource, PhysicalSize, PointerButton, PointerId,
         PointerState, Quad, Rect, Resource, Rng, RunError, Seconds, Sprite, Startup, Submissions,
-        Submit, TextStyle, TextureHandle, TextureId, Time, Transform, Update, With, Without, World,
-        WorldView, asset_source, draw_sprites, headless, message, run,
+        Submit, TextExtents, TextStyle, TextureHandle, TextureId, Time, Transform, Update, With,
+        Without, World, WorldView, asset_source, draw_sprites, headless, message, run,
     };
 }
 
@@ -211,6 +214,7 @@ pub mod testing {
         BackendTextureId, Batch, DrawnQuad, FONT_TEXTURE, FramePlan, FrameRecord, FrameRecorder,
         PhysicalSize, QuadVertex, RawImage, RenderBackend, RenderError, TextureTable,
         create_builtin_textures, encode_png, find_bounds, upload_ready_textures,
+        upload_text_atlases,
     };
 
     /// The renderer a golden image comes from.

@@ -904,6 +904,7 @@ fn draw_the_court(ctx: &mut DrawCtx) {
 fn draw_the_hud(ctx: &mut DrawCtx) {
     let state = *ctx.world.resource::<Match>();
     let score = TextStyle {
+        face: Face::BUILT_IN,
         size: SCORE_SIZE,
         color: Color::WHITE,
         depth: Depth::layer(layers::UI),
@@ -921,6 +922,7 @@ fn draw_the_hud(ctx: &mut DrawCtx) {
     ctx.text(Vec2::new(SCORE_GAP, SCORE_TOP), &right, score);
 
     let hint = TextStyle {
+        face: Face::BUILT_IN,
         size: HINT_SIZE,
         color: Color::rgba(1.0, 1.0, 1.0, 0.55),
         depth: Depth::layer(layers::UI),
@@ -931,11 +933,13 @@ fn draw_the_hud(ctx: &mut DrawCtx) {
         return;
     };
     let banner = TextStyle {
+        face: Face::BUILT_IN,
         size: BANNER_SIZE,
         color: Color::WHITE,
         depth: Depth::layer(layers::UI),
     };
     let under = TextStyle {
+        face: Face::BUILT_IN,
         size: BANNER_SIZE / 2.0,
         color: Color::rgba(1.0, 1.0, 1.0, 0.8),
         depth: Depth::layer(layers::UI),

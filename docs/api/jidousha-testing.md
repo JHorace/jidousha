@@ -873,6 +873,7 @@ impl FrameRecorder {
     // the top of every frame
     pub fn settle_assets(&mut self, sim: &mut HeadlessSim, tick: u64);
     pub fn draw(&mut self, sim: &mut HeadlessSim) -> FrameRecord;  // Run the game's Draw phase once and record the frame it produced
+    pub fn texture(&self, id: TextureId) -> BackendTextureId;  // Which backend texture an engine texture id landed on
     pub fn font_texture(&self) -> BackendTextureId;  // Which backend texture the engine's font atlas is on
     pub fn frames(&self) -> &[FrameRecord];  // Every frame recorded so far, oldest first
     pub fn transcript(&self) -> String;  // Every recorded frame as text, oldest first — not only the last

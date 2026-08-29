@@ -421,6 +421,7 @@ fn draw_the_readout(ctx: &mut DrawCtx) {
     // Centred, by measuring. `width_of` is exact — the font is monospace with
     // no kerning — so this lines up rather than nearly lines up.
     let score = TextStyle {
+        face: Face::BUILT_IN,
         size: 1.6,
         color: Color::WHITE,
         depth: Depth::layer(layers::UI),
@@ -435,6 +436,7 @@ fn draw_the_readout(ctx: &mut DrawCtx) {
     // A debug readout in the corner, one line per fact. Ticks rather than
     // seconds, because ticks are the canonical timeline (core.md §7).
     let readout = TextStyle {
+        face: Face::BUILT_IN,
         size: 0.7,
         color: Color::rgba(0.6, 0.9, 1.0, 0.9),
         depth: Depth::layer(layers::UI),
@@ -448,6 +450,7 @@ fn draw_the_readout(ctx: &mut DrawCtx) {
     // And the whole printable range, so the font is inspectable at a glance —
     // this is the picture that would show a broken glyph.
     let sample = TextStyle {
+        face: Face::BUILT_IN,
         size: 0.6,
         color: Color::rgba(1.0, 1.0, 1.0, 0.55),
         depth: Depth::layer(layers::UI),
