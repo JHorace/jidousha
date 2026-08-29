@@ -14,7 +14,7 @@ use jidousha_core::{HeadlessSim, PhysicalSize, message};
 
 use crate::backend::{BackendTextureId, RenderBackend};
 use crate::camera::Camera;
-use crate::font::FONT_TEXTURE;
+use crate::font::{FONT_TEXTURE, Face, Fonts, upload_text_atlases};
 use crate::null::{FrameRecord, NullBackend};
 use crate::plan::{TextureTable, plan_frame};
 use crate::textures::{create_builtin_textures, upload_ready_textures};
@@ -150,9 +150,21 @@ impl FrameRecorder {
                 .copied()
                 .unwrap_or_default()
         };
+        // Read before the draw, which borrows the sim for as long as its
+        // submissions live. A `Face` is a `Copy` name for outlines that live as
+        // long as the program, so the copy cannot go stale (renderer.md §6).
+        let faces: Vec<Face> = sim
+            .world()
+            .find_resource::<Fonts>()
+            .map(|fonts| fonts.faces().to_vec())
+            .unwrap_or_default();
         // Copied out because `draw` borrows the sim for as long as its
         // submissions live, and the plan outlives them.
         let quads = sim.draw().quads().to_vec();
+        // After the draw and before the plan, exactly as the driver does it:
+        // nothing knows which faces at which sizes a frame wants until the game
+        // has asked, and the plan resolves every texture id (renderer.md §6).
+        upload_text_atlases(&faces, &quads, &mut self.backend, &mut self.textures);
         let plan = plan_frame(&camera, &quads, &self.textures);
         if let Err(error) = self.backend.render(&plan) {
             panic!(

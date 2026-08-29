@@ -60,7 +60,7 @@ mod textures;
 
 pub use backend::{BackendTextureId, RawImage, RenderBackend, RenderError, TextureDesc};
 pub use camera::Camera;
-pub use font::{FONT_TEXTURE, TextStyle};
+pub use font::{FONT_TEXTURE, Face, FontError, Fonts, TextExtents, TextStyle, upload_text_atlases};
 pub use golden::{Comparison, Tolerance, compare, decode_png, diff_image, encode_png};
 // Defined in core, because `GameConfig::window_size` needs it and core depends
 // on no other jidousha crate. Re-exported here so the renderer's vocabulary

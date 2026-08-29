@@ -310,6 +310,7 @@ pub fn draw(ctx: &mut DrawCtx, panel: &Panel) {
             run.at,
             &run.text,
             TextStyle {
+                face: Face::BUILT_IN,
                 size: run.size,
                 color: run.color,
                 depth: Depth::layer(run.layer),

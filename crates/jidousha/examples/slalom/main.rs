@@ -485,6 +485,7 @@ fn draw_the_hud(ctx: &mut DrawCtx) {
     };
     let view = camera.visible_bounds();
     let style = TextStyle {
+        face: Face::BUILT_IN,
         size: 1.1,
         color: Color::rgba(0.85, 0.90, 1.0, 0.95),
         depth: Depth::layer(layers::UI),
@@ -501,6 +502,7 @@ fn draw_the_hud(ctx: &mut DrawCtx) {
         "A/D steer  the gates drift"
     };
     let hint_style = TextStyle {
+        face: Face::BUILT_IN,
         size: 0.72,
         ..style
     };

@@ -44,6 +44,7 @@ pub fn judge_chrome(checks: &mut Checks, run: &Conducted, shot: &Shot, what: &st
     let panel = screens::content(&shot.flow, &shot.sim, &shot.clock, &tuning);
     let style_width = |text: &str, size: f32| {
         TextStyle {
+            face: Face::BUILT_IN,
             size,
             ..TextStyle::default()
         }

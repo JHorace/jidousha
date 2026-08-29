@@ -10,7 +10,9 @@
 use jidousha_assets::Assets;
 use jidousha_core::{Seconds, Time, World};
 use jidousha_input::Input;
-use jidousha_render_core::{Camera, PhysicalSize, plan_frame, upload_ready_textures};
+use jidousha_render_core::{
+    Camera, Fonts, PhysicalSize, plan_frame, upload_ready_textures, upload_text_atlases,
+};
 
 use super::Driver;
 
@@ -52,6 +54,7 @@ impl Driver {
             backend,
             textures,
             viewport,
+            faces,
             ..
         } = self;
         simulation.advance(elapsed, |world: &mut World, index| {
@@ -90,13 +93,32 @@ impl Driver {
             *camera
         };
 
+        // Which faces a game has is world state, so it is read here — after
+        // the ticks that could have created one, and before the draw that
+        // borrows the simulation. Copied rather than borrowed, and only when
+        // the count changes: `Face` is a name for outlines that live as long as
+        // the program (renderer.md §6), so a stale copy cannot dangle and a
+        // frame that loaded nothing new allocates nothing.
+        if let Some(fonts) = simulation.world().find_resource::<Fonts>()
+            && fonts.faces().len() != faces.len()
+        {
+            faces.clear();
+            faces.extend_from_slice(fonts.faces());
+        }
+
         // Draw once per frame, however many ticks ran — including none
         // (core.md §7).
         let submissions = simulation.draw();
 
-        let (Some(backend), Some(textures)) = (backend, textures.as_ref()) else {
+        let (Some(backend), Some(textures)) = (backend, textures.as_mut()) else {
             return;
         };
+        // After the draw and before the plan, which is the only window there
+        // is: nothing knows which faces at which sizes a frame wants until the
+        // game has asked for them, and `plan_frame` resolves every texture id
+        // to a backend id, so an atlas uploaded after it would be resolved to
+        // the placeholder for a frame (renderer.md §5, §6).
+        upload_text_atlases(faces, submissions.quads(), backend.as_mut(), textures);
         let plan = plan_frame(&camera, submissions.quads(), textures);
         if let Err(error) = backend.render(&plan) {
             // A frame that cannot be drawn is not a reason to stop: the surface

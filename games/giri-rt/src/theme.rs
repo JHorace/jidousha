@@ -120,6 +120,7 @@ pub const MIN_TARGET: f32 = 32.0;
 /// A style at `size` in `color`, on the board's text band.
 pub fn text(size: f32, color: Color) -> TextStyle {
     TextStyle {
+        face: Face::BUILT_IN,
         size,
         color,
         depth: Depth::layer(layers::TEXT),

@@ -52,11 +52,12 @@ pub fn create_builtin_textures(backend: &mut dyn RenderBackend) -> TextureTable 
         },
         &placeholder_texels(),
     );
+    let (atlas_w, atlas_h, atlas_texels) = font::builtin_atlas();
     let atlas = backend.create_texture(
         &TextureDesc {
-            size: PhysicalSize::new(font::ATLAS_W, font::ATLAS_H),
+            size: PhysicalSize::new(atlas_w, atlas_h),
         },
-        &font::atlas_texels(),
+        &atlas_texels,
     );
     let mut table = TextureTable::new(white, placeholder);
     table.register(font::FONT_TEXTURE, atlas);

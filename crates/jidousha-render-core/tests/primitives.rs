@@ -10,7 +10,7 @@
 use jidousha_core::math::Vec2;
 use jidousha_core::{Color, Depth, Draw, DrawCtx, GameConfig, Rect, Transform, headless};
 use jidousha_render_core::{
-    Camera, FrameRecord, NullBackend, RenderBackend, Sprite, Submit, TextStyle,
+    Camera, Face, FrameRecord, NullBackend, RenderBackend, Sprite, Submit, TextStyle,
     create_builtin_textures, find_bounds, plan_frame,
 };
 
@@ -211,6 +211,7 @@ fn text_sits_where_it_says_it_does_and_measures_what_it_occupies() {
     // A game centres a score by measuring it, so the measurement has to agree
     // with where the glyphs actually land rather than approximate it.
     const STYLE: TextStyle = TextStyle {
+        face: Face::BUILT_IN,
         size: 2.0,
         color: Color::WHITE,
         depth: Depth { layer: 0, z: 0.0 },
@@ -241,6 +242,7 @@ fn a_second_line_starts_exactly_one_size_below_the_first_with_no_leading() {
     // The run inferred the spacing from recorded bounds and was right; this is
     // what keeps the sentence and the pen in step (e0-findings.md F-127).
     const STYLE: TextStyle = TextStyle {
+        face: Face::BUILT_IN,
         size: 2.0,
         color: Color::WHITE,
         depth: Depth { layer: 0, z: 0.0 },
@@ -290,6 +292,7 @@ fn text_is_tinted_by_its_style() {
             Vec2::ZERO,
             "x",
             TextStyle {
+                face: Face::BUILT_IN,
                 color: Color::RED,
                 ..TextStyle::default()
             },
@@ -310,6 +313,7 @@ fn a_sprite_and_a_line_of_text_are_two_batches_in_depth_order() {
             Vec2::ZERO,
             "hp",
             TextStyle {
+                face: Face::BUILT_IN,
                 depth: Depth::layer(1),
                 ..TextStyle::default()
             },
