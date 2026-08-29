@@ -10,7 +10,7 @@
 //! frame from the game would assert about nothing (renderer.md §9).
 
 use jidousha_assets::Assets;
-use jidousha_core::{HeadlessSim, PhysicalSize, message};
+use jidousha_core::{HeadlessSim, PhysicalSize, TextureId, message};
 
 use crate::backend::{BackendTextureId, RenderBackend};
 use crate::camera::Camera;
@@ -191,6 +191,22 @@ impl FrameRecorder {
         frame.clone()
     }
 
+    /// Which backend texture an engine texture id landed on.
+    ///
+    /// The general form of the question [`font_texture`](Self::font_texture)
+    /// answers, and the one a loaded typeface needs: a face is rasterized once
+    /// per size, so *"which of these quads is my heading?"* is
+    /// `recorder.texture(face.atlas_texture(style.size))` and the quads
+    /// sampling it are that face's glyphs at that size (renderer.md §6).
+    ///
+    /// An id nothing uploaded resolves to the placeholder, which is the same
+    /// answer the draw path gets and is what "the art is not there yet" looks
+    /// like from a check (renderer.md §5).
+    #[must_use]
+    pub fn texture(&self, id: TextureId) -> BackendTextureId {
+        self.textures.resolve(id)
+    }
+
     /// Which backend texture the engine's font atlas is on.
     ///
     /// The answer to *"is any of this text?"*: a quad sampling this id came
@@ -198,6 +214,11 @@ impl FrameRecorder {
     /// test had to rebuild the whole texture table against a throwaway backend
     /// to find out, because the id is assignment-ordered rather than fixed and
     /// the real table was long out of scope by assertion time.
+    ///
+    /// This is [`texture`](Self::texture)`(FONT_TEXTURE)`, and it stays because
+    /// the built-in font is the face a game draws in *before* it has one to
+    /// name — a check on a game with no assets should not have to name a
+    /// texture id to ask whether anything was written on the screen.
     #[must_use]
     pub fn font_texture(&self) -> BackendTextureId {
         self.textures.resolve(FONT_TEXTURE)

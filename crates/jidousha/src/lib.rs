@@ -214,6 +214,7 @@ pub mod testing {
         BackendTextureId, Batch, DrawnQuad, FONT_TEXTURE, FramePlan, FrameRecord, FrameRecorder,
         PhysicalSize, QuadVertex, RawImage, RenderBackend, RenderError, TextureTable,
         create_builtin_textures, encode_png, find_bounds, upload_ready_textures,
+        upload_text_atlases,
     };
 
     /// The renderer a golden image comes from.
