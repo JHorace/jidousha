@@ -130,13 +130,23 @@ fn main() {
 
     let time = sim.world().resource::<Time>();
     let alive = sim.world().entity_count();
+    // What the stores hold, which is the other half of the same question: one
+    // entity with three components counts three here and one above. Entities
+    // climbing means a spawner with no reaper; components climbing while
+    // entities hold steady means something is inserting onto the same entities
+    // over and over. The performance overlay reports both for that reason
+    // (`JIDOUSHA_FRAMETIME=2`).
+    let components = sim.world().component_count();
     let reaped = sim.world().resource::<Reaped>().0;
     println!(
-        "after {} ticks ({}): {alive} motes in the field, {reaped} reaped",
+        "after {} ticks ({}): {alive} motes in the field holding {components} \
+         components, {reaped} reaped",
         time.tick, time.elapsed
     );
 
     assert_eq!(time.tick, 60, "sixty ticks");
+    // Every mote carries a Position and a Velocity, and nothing else does.
+    assert_eq!(components, alive * 2, "two components to a mote");
     assert!(reaped > 0, "some motes should have left the field");
     assert!(alive > 0, "the field should not be empty");
 

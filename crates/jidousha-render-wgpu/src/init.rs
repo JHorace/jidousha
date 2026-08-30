@@ -221,7 +221,16 @@ impl Pending {
                         // adapter can do, clamped to what the weakest target
                         // supports, so a frame that works here works there
                         // (ADR-0003 §4, renderer.md §8).
-                        required_features: wgpu::Features::empty(),
+                        //
+                        // Plus timestamp queries **where this adapter already
+                        // has them**, which is what `optional_features` is: an
+                        // intersection, so the set asked for is never larger
+                        // than the set offered and this line cannot narrow the
+                        // devices the engine will run on. A device that does
+                        // not offer them is created exactly as it was before,
+                        // and the performance panel prints `gpu n/a`
+                        // (renderer.md §12a, frame-pacing.md §7).
+                        required_features: optional_features(&adapter),
                         required_limits: wgpu::Limits::downlevel_webgl2_defaults()
                             .using_resolution(adapter.limits()),
                         memory_hints: wgpu::MemoryHints::default(),
@@ -269,6 +278,25 @@ impl Pending {
             }
         }
     }
+}
+
+/// The features this engine will take if the adapter has them, and live
+/// without if it does not.
+///
+/// **An intersection, never a requirement.** `request_device` fails outright
+/// if `required_features` names anything the adapter lacks, so a feature asked
+/// for unconditionally is a feature that narrows the machines the engine runs
+/// on — which for a diagnostic would be the worst trade this project could
+/// make. Intersecting with `adapter.features()` makes the request "give me
+/// this if you already have it", and the answer is read back off the device
+/// rather than assumed.
+///
+/// One feature so far: `TIMESTAMP_QUERY`, which is what lets the performance
+/// panel print GPU milliseconds per frame instead of `gpu n/a`
+/// (frame-pacing.md §7). WebGL2 has none, so every web build takes the `n/a`
+/// path and nothing about it changes.
+pub(crate) fn optional_features(adapter: &wgpu::Adapter) -> wgpu::Features {
+    adapter.features() & wgpu::Features::TIMESTAMP_QUERY
 }
 
 /// The present mode this engine asks every windowed surface for.
@@ -404,6 +432,30 @@ mod tests {
                 "{never_waits:?} would leave the loop unbounded"
             );
         }
+    }
+
+    #[test]
+    fn nothing_optional_is_ever_asked_for_that_the_adapter_did_not_offer() {
+        // The whole safety of the optional-feature request, checked as
+        // arithmetic rather than against a device: whatever an adapter's set
+        // is, the intersection is a subset of it, so `request_device` can
+        // never fail because of this line. A machine with no timestamp support
+        // must create its device exactly as it did before (renderer.md §12a).
+        for offered in [
+            wgpu::Features::empty(),
+            wgpu::Features::TIMESTAMP_QUERY,
+            wgpu::Features::all_native_mask(),
+        ] {
+            let asked = offered & wgpu::Features::TIMESTAMP_QUERY;
+            assert!(
+                offered.contains(asked),
+                "{asked:?} would be asked of an adapter offering {offered:?}"
+            );
+        }
+        assert!(
+            (wgpu::Features::empty() & wgpu::Features::TIMESTAMP_QUERY).is_empty(),
+            "an adapter with nothing to offer is asked for nothing"
+        );
     }
 
     #[test]

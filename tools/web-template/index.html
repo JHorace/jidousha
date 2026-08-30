@@ -346,10 +346,21 @@
       // the wasm module; the engine's own clock is `jidousha-platform`'s and
       // real time reaches the simulation through one door (ADR-0005, core.md
       // §7). Nothing measured here can move a tick.
-      const frametimeRequested = () => {
+      //
+      // The switch has **levels**, and they are cumulative: `?frametime=1` is
+      // this panel, and `?frametime=2` is this panel plus the engine's own
+      // performance panel drawn inside the canvas (frame-pacing.md §7). The two
+      // sit in opposite corners and each shows what only it can see — the page
+      // measures the frames the browser actually presented, and the module
+      // measures sim ticks, uploads, GPU time and what it is holding, none of
+      // which is visible from out here. The contract above is why: the page
+      // does not call into the module to ask, so the module answers for itself.
+      const frametimeLevel = () => {
         const value = new URLSearchParams(location.search).get("frametime");
-        return value !== null && value !== "0" && value !== "false";
+        if (value === null || value === "0" || value === "false") return 0;
+        return value === "2" ? 2 : 1;
       };
+      const frametimeRequested = () => frametimeLevel() > 0;
 
       // The engine's numbers, mirrored here so the model below is the loop the
       // game is actually running (core.md §7). A copy, and knowingly: the page
@@ -542,7 +553,12 @@
           MAX_FRAME_S +
           "s ceiling) over these deltas.\n" +
           "?renderscale=0.5 draws a quarter of the pixels (presentation only).\n" +
-          "Firefox: about:support → Graphics → Compositing + GPU #1/#2.";
+          "Firefox: about:support → Graphics → Compositing + GPU #1/#2." +
+          (frametimeLevel() === 2
+            ? "\n?frametime=2: the engine draws its own performance panel in the " +
+              "canvas, top left — sim ticks, GPU time, and what it is holding. " +
+              "Those readings are not visible from this page."
+            : "");
 
         // A rolling window, so the panel describes the last few seconds rather
         // than averaging away the thing being looked for.

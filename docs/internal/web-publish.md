@@ -112,7 +112,8 @@ One `index.html` template, self-contained (no external CDN dependencies):
   engine rather than the page — same readings, same histogram buckets, plus a
   `pacing` line the page has no equivalent for (frame-pacing.md §6). The two
   switches accept the same shorthand on purpose: anything but `0` or `false` is
-  on. It answers the one
+  on, and **`2` is the same switch one level up** — see the level-2 note below
+  this list. It answers the one
   question a remote playtest cannot otherwise answer — "the ball is jumpy in my
   browser and smooth in yours, why" — with the facts that settle it:
   - a rolling histogram of `requestAnimationFrame` deltas (one-millisecond
@@ -192,6 +193,18 @@ One `index.html` template, self-contained (no external CDN dependencies):
   agree by hand) over the deltas it measured. The alternative, exporting a
   counter from the wasm side, would put a page-side reader on the simulation's
   timeline for a diagnostic, and that is the door this contract keeps shut.
+- **Level 2** (`?frametime=2`): this panel, **plus a second one the engine draws
+  inside the canvas**, top left (frame-pacing.md §7). Two panels, deliberately,
+  and the CONTRACT below is the reason: sim-tick time, texture uploads, entity
+  counts and GPU milliseconds are not visible from a page, and the page may not
+  call in to ask — so the module answers for itself, while this panel keeps the
+  presentation readings only it can take. The page's note says so at level 2, so
+  nobody has to work out why there are two. On the web the engine's panel reads
+  `cpu process n/a` (a page has no process counters), `gpu n/a` (WebGL2 has no
+  timestamp queries) and reports **wasm linear memory** — the module's page
+  count times 64KiB, not `performance.memory`. There is deliberately **no
+  snapshot key** on the web: a page has nowhere to write a file to, and the
+  browser's equivalent is a screenshot.
 - The panel takes **no pointer events**, so it can never shadow the game's own
   input — which is also why its readings are kept short enough to fit without
   scrolling rather than relying on a scrollbar nobody can reach.

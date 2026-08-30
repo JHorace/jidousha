@@ -82,9 +82,45 @@ impl FrameClock {
     }
 }
 
+/// Seconds since the Unix epoch, for naming a file.
+///
+/// DELIBERATE: the second reader of real time in the engine, and it is in this
+/// file so the module invariant above stays literally true — real time enters
+/// here and nowhere else. It is a *calendar* reading rather than a duration,
+/// which is why `FrameClock` cannot answer it: `Instant` has no epoch and no
+/// two runs agree on where its zero was.
+///
+/// The one caller is the performance overlay's snapshot key
+/// (`driver/overlay/snapshot.rs`), which uses it to name a file so a sequence
+/// of snapshots sorts into the order they were taken. Nothing simulation can
+/// observe reads this, and nothing ever will: a tick that saw the calendar
+/// would break the determinism contract on the first replay (ADR-0005).
+///
+/// Zero on a machine whose clock is set before 1970, which is a filename with a
+/// dull number in it rather than an error worth having.
+///
+/// Native only: the web build has no snapshot key, because it has nowhere to
+/// write a file to.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn stamp() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::SystemTime::UNIX_EPOCH)
+        .map_or(0, |since| since.as_secs())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn the_calendar_stamp_is_a_plausible_date_rather_than_zero() {
+        // A guard on the one place the engine reads a calendar: a stamp of zero
+        // would name every snapshot the same thing, and the failure would look
+        // like the snapshot key not working rather than like a clock question.
+        // 1_756_000_000 is 2025-08-24; any machine running this is past it.
+        assert!(stamp() > 1_756_000_000, "the machine's clock is not set");
+    }
 
     #[test]
     fn a_frame_is_never_longer_than_the_ceiling() {

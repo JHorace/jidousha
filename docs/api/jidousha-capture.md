@@ -144,6 +144,8 @@ pub trait RenderBackend {
     fn render(&mut self, plan: &FramePlan) -> Result<(), RenderError>;  // Draw one frame
     fn capture(&mut self) -> Result<RawImage, RenderError>;  // Read the last rendered frame back as pixels, for golden-image tests
     fn presentation(&self) -> Presentation;  // How this backend's frames reach the display, as of now
+    // What this backend is holding, and what it measured of its own last frame
+    fn stats(&self) -> BackendStats;
 }
 ```
 

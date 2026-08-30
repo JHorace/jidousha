@@ -7,9 +7,14 @@ Status: **two halves, and they are not the same kind of thing.**
   four triggers that would, and a separate session owns them.
 - **§6, native.** Live design documentation: how a windowed native run is paced,
   what the audit of 2026-08-30 found and fixed, and the `JIDOUSHA_FRAMETIME`
-  overlay. This is where a native pacing question is answered. It shares §2's
-  vocabulary and §4's instrument and shares none of §5's verdict — the web defect
-  is a browser's, and §6's was the engine's.
+  overlay at **level 1**. This is where a native pacing question is answered. It
+  shares §2's vocabulary and §4's instrument and shares none of §5's verdict —
+  the web defect is a browser's, and §6's was the engine's.
+- **§7, the performance panel.** The same switch at **level 2**, on both
+  targets: where a frame's milliseconds go, what the process and the GPU cost,
+  and what the engine is holding. §6's disciplines are law there — off unless
+  asked, drawn on a copy, never printed, sampled off the frame rather than per
+  frame — and §7 adds nothing that relaxes them.
 
 **The web half, in one paragraph.** Four rounds of readings (§5) settled what the
 defect is, killed all three §3 hypotheses, and refuted two proposed mechanisms.
@@ -28,7 +33,8 @@ would break it, the four triggers that reopen this, and the two readings and one
 seam design preserved so a future round resumes rather than restarts.
 
 **Read this note for**: how a native run's frames are paced and how to turn the
-readout on (§6 — start here for anything native); the shape of a browser
+readout on (§6 — start here for anything native); what a slow frame is *spent
+on*, and how to tell CPU-bound from GPU-bound from display-paced (§7); the shape of a browser
 presentation defect and how the `?frametime=1` overlay tells one from a pacing
 bug (§2, §3, §5.6); why the renderer string cannot be trusted in Firefox even on
 a stock profile (§5.2, §5.3); and what `?renderscale=` is actually for (§5.5).
@@ -768,7 +774,13 @@ JIDOUSHA_FRAMETIME=1 cargo run --release -p ninjo
 ```
 
 Off unless set — including unset, `0`, and `false` — which mirrors the web
-overlay's `?frametime=1` down to the shorthand it accepts. An **environment
+overlay's `?frametime=1` down to the shorthand it accepts. **`=2` is the same
+switch one level up**, and everything in this section is unchanged by it: level
+2 is this panel plus the performance sections §7 documents, never this panel
+rearranged. A value nobody planned for (`=3`, `=banana`) is level 1, because a
+diagnostic switch must not be the reason a game will not start; the panel's
+first line names the level it actually reached, which is where a typo is
+noticed. An **environment
 variable** rather than a `GameConfig` field or a flag, because the person who
 wants it is the person *running* a build somebody else shipped them: a config
 field needs a rebuild, and a flag would have to be plumbed through every game's
@@ -862,4 +874,265 @@ The overlay prints the mode rather than only the rate for exactly this reason �
 | the one place it becomes a `ControlFlow` | `driver/mod.rs::about_to_wait` |
 | the switch, the window, the readout text | `crates/jidousha-platform/src/driver/overlay.rs` — `SWITCH` |
 | the readout as quads | `crates/jidousha-render-core/src/overlay.rs` — `draw_readout` |
-| off-by-default, in pixels | `crates/jidousha/tests/frame_overlay.rs`, which writes `target/verify/overlay-{off,on}.png` |
+| off-by-default, in pixels | `crates/jidousha/tests/frame_overlay.rs`, which writes `target/verify/overlay-{off,on,perf}.png` |
+| the level-2 sections | §7 below, and `driver/overlay/{phases,process,memory,snapshot}.rs` |
+
+---
+
+## 7. The performance panel — `JIDOUSHA_FRAMETIME=2`
+
+Status: **live**, 2026-08-30. §6's overlay answers *how fast, and what is
+pacing it*. This answers the question a slow frame raises next: **what is it
+spent on, and is anything visibly growing** — the problems that are not obvious
+from looking at the picture.
+
+**The switch is §6's switch, one level up.** `JIDOUSHA_FRAMETIME=2` natively,
+`?frametime=2` on a page. Level 1 is unchanged, character for character; level 2
+is level 1 plus the sections below. Off unless set.
+
+```
+JIDOUSHA_FRAMETIME=2 cargo run --release -p ninjo
+```
+
+Everything §6.4 says the overlay deliberately does not do still holds, and the
+sections below inherit all of it rather than being exempted from any of it:
+
+- **it never prints.** No stderr, no log line, at any level;
+- **it is drawn after the Draw phase has closed**, onto a copy of the
+  submissions the world never sees — so a game's transcript, a recorded replay
+  and a `--verify` run are byte-identical with the panel off, at level 1, and at
+  level 2. A test asserts all three;
+- **it is printable ASCII only**, for the reason §6.4 gives;
+- **all sampling is draw-side.** Nothing here reads or writes simulation state;
+  the two world counters are read through `World`'s ordinary read paths at draw
+  time and nothing is written back;
+- **operating-system counters are read at 1Hz and cached**, never per frame; the
+  second is counted out of frame deltas the loop already produced, so no clock
+  is read for it.
+
+### 7.1 What it looks like
+
+Taken on this project's headless container — Xvfb, `lavapipe`, `window_clear` —
+which is why the numbers below are a software rasterizer's rather than a
+machine's anybody would play on:
+
+```
+jidousha performance: JIDOUSHA_FRAMETIME=2
+present   ~119.6 fps - median 8.36ms, mean 10.16ms
+spread    5.77ms .. 45.07ms over 240 frames
+pacing    vsync - the display sets the rate
+ticks/fr  0:579 (44%)  1:626 (47%)  2:99 (7%)  3+:22 (2%)
+frame deltas
+     7-8ms #################      58 (24%)
+     8-9ms ####################   71 (30%)
+    9-10ms ###########            37 (15%)
+    …
+frame breakdown  ms: median  p95  max
+  sim                             0.01    0.01    0.06
+  draw                            0.00    0.00    0.00
+  encode                          0.18    0.30    0.42
+  present ###############         6.17    7.64   10.83
+  sleep   #####                   1.93   21.43   37.37
+  busy    2% of a 8.36ms frame - 8.17ms of it waiting
+cpu       process 223% of one core
+gpu       median 4.94ms, p95 6.50ms over 240 frames
+memory    rss 125.1MB
+  renderer 0.0MB textures, 0.5MB buffers
+  world    0 entities, 0 components, 0 quads drawn
+snapshot  press F9 to write this panel under target/
+```
+
+### 7.2 The readings, one at a time
+
+Each entry: what it means, where it comes from, and where it is `n/a`.
+
+**`frame breakdown` — the anchor.** Milliseconds per frame in each of five
+buckets, as median, 95th percentile and worst over the same 240-frame window the
+histogram above it uses. Three numbers rather than one because a phase that is
+fine on every frame but one is a phase that *hitches*, and a median cannot say
+so.
+
+| bucket | what it is | where it comes from |
+|---|---|---|
+| `sim` | the frame's ticks, however many ran — including none | around `Simulation::advance` |
+| `draw` | the Draw phase: the game's submissions, and the camera and face bookkeeping either side | around `Simulation::draw` |
+| `encode` | turning submissions into a `FramePlan`: the asset commit, texture and text-atlas uploads, the overlay's own quads, `plan_frame` | the spans either side of the draw |
+| `present` | `RenderBackend::render` — the backend's command encoding, the submit, **and the block waiting for the display** | around the seam call |
+| `sleep` | everything else the frame contained: the pacer's `WaitUntil`, winit's dispatch, the operating system | **derived**: frame total minus the four measured |
+
+Two things about that table are deliberate and worth stating plainly.
+
+**`present` is one bucket, not two,** and the brief's "render-encode" and
+"present-wait" are the two halves of it. The seam is where the driver's reach
+stops: the backend acquires the surface, encodes, submits and blocks, and only
+the backend is inside that. Splitting it would mean a clock below the backend
+seam, and this engine has exactly one wall clock, in the platform crate
+(`clock.rs`, ADR-0005) — a second one in `jidousha-render-wgpu` would buy a
+column and cost the invariant that keeps determinism arguable. In practice the
+split is not needed to read the panel: on any surface that waits, the wait is
+nearly all of `present`, and the `encode` bucket beside it is the CPU-side cost
+of building a frame. A 16.7ms `present` next to a 0.2ms `encode` is a loop the
+display is pacing, and that is the reading.
+
+**`sleep` is derived, never measured.** It is the frame's own duration minus the
+four measured spans, so the five always add up to the frame and a mark that was
+never taken shows up as sleep rather than as time that vanished. The duration
+used is the elapsed time the *next* frame was given — that span runs from this
+frame's start to the next one's, which is the only honest total the four spans
+can be subtracted from. The consequence: the breakdown is one frame behind the
+pacing readings above it, which at four repaints a second nobody can see.
+
+**`busy` — the derived share.** `busy% = (frame − waits) / frame`, where the
+waits are `present` and `sleep`: the two buckets in which this thread is not
+running. **It is this thread's work, not the process's**, which is why the
+example above reads `busy 2%` beside `cpu 223% of one core`: lavapipe rasterizes
+on worker threads, so the main thread waits in `present` while the machine is
+flat out. That disagreement is a reading, not a fault — and on a real GPU the
+two converge.
+
+**`cpu` — the process's own share of one core.** Native only, sampled at 1Hz and
+cached in between. Linux reads `utime + stime` out of `/proc/self/stat` (the
+comm field is parenthesised and may contain spaces, so the parse cuts at the
+last `)` — everything after it is fixed-position); Windows reads
+`GetProcessTimes`. Both are hand-rolled per platform: they are two system calls,
+and `sysinfo` and its relatives bring a back-end tree to answer them
+(agent-practices §5.8). **Of one core, not of the machine** — a number over 100
+means more than a core's worth, which is the reading §6.5 turned on and which
+dividing by the core count would have hidden. A run younger than two samples
+reads `n/a`, because a percentage is a difference and one sample is not one. On
+the web it reads `n/a` outright: a page has no process counters, and `busy`
+above is the share that *is* answerable there.
+
+**`gpu` — milliseconds on the GPU, where the device will say.** `wgpu`'s
+`TIMESTAMP_QUERY` around the frame's main pass, median and p95 over the window.
+Asked for as an **optional** device feature — an intersection with what the
+adapter already offers — so a device that has no timestamps is created exactly
+as it was before and nothing about that run changes. Absent, it reads
+`gpu n/a - this device offers no timestamp queries`; never a zero, which would
+claim the GPU did the frame instantly on precisely the machines with no reading.
+WebGL2 has no timestamps at all, so every web build takes the `n/a` path.
+**Milliseconds, never a percentage**: GPU *utilization* needs vendor libraries
+this engine does not have, and one invented from a frame time would look like an
+answer without being one (renderer.md §12a).
+
+**`memory` — three tiers, and they do not add up.** They answer different
+questions and are only ever compared with themselves:
+
+1. **process** — resident set size, native, 1Hz. Linux `VmRSS` from
+   `/proc/self/status`; Windows `K32GetProcessMemoryInfo`'s working set. What
+   the operating system charges this program;
+2. **wasm linear memory** — on the web instead of the above: the module's page
+   count times 64KiB. **Not `performance.memory`**, which is Chrome-only,
+   reports the whole tab, and is quantised for fingerprinting reasons. Linear
+   memory only grows, so this is a high-water mark;
+3. **engine-tracked accounting** — every platform, and the **actionable** tier.
+   `renderer` is the backend's own running totals, counted at create and destroy
+   (renderer.md §12a): textures and atlases on one line, vertex and uniform
+   buffers on the other, because the two grow for different reasons. `world` is
+   the entity count, the component count across every store, and the quads the
+   game submitted this frame — the overlay's own quads excluded, since they go
+   on a copy the world never sees.
+
+The third tier is the one that catches a problem before it is visible. A
+resident set size that climbs is a fact with no address in it; a texture total
+that climbs is art nobody unloaded, an entity count that climbs is a spawner
+with no reaper, and a component count that climbs while entities hold steady is
+something inserting onto the same entities over and over. Those show up here
+long before RSS moves, because an allocator does not return pages promptly and a
+GPU's memory is not in RSS at all.
+
+**`snapshot` — one key, one file.** While the panel is up, **F9** writes the
+current panel to `target/jidousha-perf-<unix seconds>-<n>.txt`, one file per
+press, and the panel then names the file it wrote. It is the only file the
+overlay ever writes and it writes nothing without that press. The contents are
+exactly the panel's own text and nothing else — not JSON, not a table — so the
+numbers in a pull request and the numbers in the screenshot beside it cannot
+disagree. This is what feeds the before/after-numbers practice: press it,
+change something, press it again, paste both.
+
+The key is **observed, never consumed**: the press goes on to the game exactly
+as it would with the panel off, so a transcript and a replay are unaffected and
+a game that binds F9 to something keeps it. Auto-repeat never reaches it —
+`translate::key_event` drops repeats — so leaning on the key writes one file.
+
+**The asymmetry, stated:** there is **no snapshot key on the web**. A page has
+nowhere to write a file to, and the browser's equivalent of "save the panel" is
+a screenshot. The panel says so in place of the key.
+
+### 7.3 The recipe: which bound is this?
+
+Read three lines together — `busy`, `present`, `gpu` — and the answer falls out:
+
+| reading | what it is | what to do about it |
+|---|---|---|
+| `present` high, `gpu` low | **display pacing.** The loop is waiting for the refresh and the GPU has headroom. Nothing is wrong. | Nothing. Confirm the `pacing` line says `vsync`; if it says `immediate`, the wait is the loop's own cap and §6.3 explains it. |
+| `gpu` high, near the frame time | **GPU-bound.** The frame is waiting for work that is actually running. | Fewer pixels or fewer batches — `?renderscale=` on the web is the quickest test (web-publish.md §2). |
+| `busy` high, `gpu` low | **CPU-bound.** The loop fills the frame with its own work. | The breakdown says which bucket: `sim` is the game's systems, `draw` is its Draw phase, `encode` is uploads and plan-building. |
+| `busy` low, `present` low, `sleep` high | **capped, or idle.** Nothing is asking for the time. | Check the `pacing` line: a cap is `FALLBACK_CAP_HZ` doing its job (§6.3). |
+| any of the above, with `world` or `renderer` climbing steadily | **growth**, whatever the frame time says today. | The counter names the store; a leak that has not slowed anything down yet is the cheapest one to fix. |
+
+One caution the container taught: **`busy` and `cpu` measure different things**,
+and a software rasterizer separates them completely (see `busy` above). When
+they disagree, `busy` is this thread and `cpu` is every thread.
+
+### 7.4 What it costs
+
+An instrument that perturbs what it measures is the failure mode, so this is
+measured rather than asserted. Two figures, both from tests that print them
+(`driver/overlay/mod.rs` and `driver/frame.rs`), in a release build on this
+project's container:
+
+| | level 1 | level 2 |
+|---|---|---|
+| **the measuring** — rolling windows, the 1Hz sampler, the engine counters, the panel rebuilt four times a second | 1.84µs/frame | **3.28µs/frame** (+1.43µs) |
+| **end to end**, through a backend that draws nothing | 66.7µs/frame | **172µs/frame** |
+
+The second row is dominated by **drawing** the panel rather than by measuring
+anything: the readout is a quad per character, so level 2's twenty-odd lines are
+about four times level 1's five, and that difference goes through `plan_frame`
+and the backend like any other quad. On a real GPU it is one more batch of a few
+thousand vertices.
+
+The measuring itself is under two microseconds a frame added — about a hundredth
+of one percent of a 60Hz frame — and the disciplines that keep it there are
+structural rather than incidental: the operating system is asked once a second,
+the panel is composed four times a second, every engine counter is a running
+total something already maintains, and a run at level 1 or off takes no phase
+marks at all. Each of those has a test that fails if it stops being true.
+
+### 7.5 Where this lives
+
+| what | where |
+|---|---|
+| the switch, the levels, and what has been measured | `crates/jidousha-platform/src/driver/overlay/mod.rs` |
+| every line the panel says | `…/driver/overlay/panel.rs` |
+| the frame breakdown and its window | `…/driver/overlay/phases.rs` |
+| the process counters, per platform | `…/driver/overlay/process.rs` |
+| the three memory tiers | `…/driver/overlay/memory.rs` |
+| the snapshot key and its file | `…/driver/overlay/snapshot.rs` |
+| the phase marks, and the engine counters read at draw | `…/driver/frame.rs` |
+| the key tap, observed and not consumed | `…/driver/mod.rs` — `snapshot_key` |
+| the accounting and the GPU timer, below the seam | `crates/jidousha-render-wgpu/src/timing.rs`, `init.rs`, and renderer.md §12a |
+| the seam that carries them | `crates/jidousha-render-core/src/backend.rs` — `BackendStats` |
+| off / level 1 / level 2, in pixels | `crates/jidousha/tests/frame_overlay.rs` → `target/verify/overlay-{off,on,perf}.png` |
+| the web page's half of the switch | `tools/web-template/index.html`, and web-publish.md §2 |
+
+### 7.6 The web, and why there are two panels at level 2
+
+`?frametime=1` is the page's panel and stays the page's: it measures
+`requestAnimationFrame` from outside the wasm module, which is a better reading
+of *presentation* than anything inside the module can take, and its CONTRACT is
+that it never calls in (web-publish.md §2).
+
+That contract is exactly why level 2 needs a second panel. Sim ticks, texture
+uploads, entity counts and GPU timings are not visible from a page at all, and
+the page may not ask. So at `?frametime=2` the **engine** draws the performance
+sections into the canvas, top left, while the page's own panel keeps the pacing
+readings, top right. Each shows what only it can see; neither calls the other;
+the page's note says so, so nobody has to work out why there are two.
+
+The engine's web panel therefore omits the pacing block — one line points at the
+page's instead — and reads `cpu process n/a`, `gpu n/a` (WebGL2 has no
+timestamps) and `memory wasm linear …MB`. The breakdown, the busy share and the
+whole engine-tracked accounting tier are the same readings as on native, because
+they are the module's own.

@@ -60,7 +60,7 @@ mod submit;
 mod textures;
 
 pub use backend::{
-    BackendTextureId, Presentation, RawImage, RenderBackend, RenderError, TextureDesc,
+    BackendStats, BackendTextureId, Presentation, RawImage, RenderBackend, RenderError, TextureDesc,
 };
 pub use camera::Camera;
 pub use font::{FONT_TEXTURE, Face, FontError, Fonts, TextExtents, TextStyle, upload_text_atlases};

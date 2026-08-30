@@ -19,16 +19,18 @@ mod capture;
 mod color;
 mod init;
 mod pipeline;
+mod timing;
 
 use jidousha_render_core::{
-    BackendTextureId, FramePlan, PhysicalSize, Presentation, RawImage, RenderBackend, RenderError,
-    TextureDesc,
+    BackendStats, BackendTextureId, FramePlan, PhysicalSize, Presentation, RawImage, RenderBackend,
+    RenderError, TextureDesc,
 };
 
 use crate::capture::read_back;
 use crate::color::linear;
 use crate::init::{Gpu, Pending, Target, configure, offscreen_texture, presentation_of};
 use crate::pipeline::SpritePipeline;
+use crate::timing::GpuTimer;
 
 /// A renderer backed by wgpu.
 ///
@@ -44,6 +46,13 @@ pub struct WgpuBackend {
     /// This frame's vertex bytes, kept between frames so the allocation is not
     /// made sixty times a second.
     scratch: Vec<u8>,
+    /// Texture bytes on the GPU right now, maintained at create and destroy.
+    ///
+    /// A running total rather than a walk over `textures`, so the accounting
+    /// the performance panel reads costs a frame nothing (renderer.md §12a).
+    /// Texels held in a `Waiting` slot are **not** counted: they are on the
+    /// CPU heap until the device arrives, and this is the GPU's total.
+    texture_bytes: u64,
 }
 
 enum State {
@@ -60,12 +69,23 @@ enum State {
 struct Live {
     gpu: Gpu,
     pipeline: SpritePipeline,
+    /// The GPU-side stopwatch, on a device that granted timestamp queries.
+    ///
+    /// `None` everywhere else — WebGL2 has no timestamps at all and plenty of
+    /// native drivers decline them — and the panel says `gpu n/a` rather than
+    /// guessing (timing.rs, renderer.md §12a).
+    timer: Option<GpuTimer>,
 }
 
 /// One texture the engine asked for.
 enum Slot {
     /// Uploaded, with the bind group the pipeline draws it through.
-    Ready { bind_group: wgpu::BindGroup },
+    Ready {
+        bind_group: wgpu::BindGroup,
+        /// Kept for the accounting only: `destroy_texture` has to know how
+        /// many bytes to give back, and the bind group cannot be asked.
+        size: PhysicalSize,
+    },
     /// Asked for before the device arrived, and uploaded the moment it does.
     ///
     /// DELIBERATE: the texels are held rather than dropped, so
@@ -77,6 +97,23 @@ enum Slot {
     /// caller ask whether the device has arrived first, is an unwritten rule
     /// that would be forgotten exactly once.
     Waiting { desc: TextureDesc, texels: Vec<u8> },
+}
+
+impl Slot {
+    /// How big the texture in this slot is.
+    ///
+    /// A `Ready` slot no longer holds its description — the bind group is all
+    /// the pipeline needs — so the size is kept alongside it purely for the
+    /// accounting to give back on destroy (renderer.md §12a).
+    fn size(&self) -> PhysicalSize {
+        match self {
+            Slot::Ready { size, .. }
+            | Slot::Waiting {
+                desc: TextureDesc { size },
+                ..
+            } => *size,
+        }
+    }
 }
 
 /// Which backends to let wgpu choose from.
@@ -139,6 +176,7 @@ impl WgpuBackend {
             state: State::Starting(Box::new(Pending::new(&instance, surface, size))),
             textures: Vec::new(),
             scratch: Vec::new(),
+            texture_bytes: 0,
         })
     }
 
@@ -160,6 +198,7 @@ impl WgpuBackend {
             state: State::Starting(Box::new(Pending::offscreen(&instance, size))),
             textures: Vec::new(),
             scratch: Vec::new(),
+            texture_bytes: 0,
         }
     }
 
@@ -190,7 +229,20 @@ impl WgpuBackend {
                 // resize cannot invalidate it — and if that ever stopped being
                 // true, wgpu's validation would say so rather than draw wrong.
                 let pipeline = SpritePipeline::new(&gpu.device, gpu.target.format());
-                let live = Live { gpu, pipeline };
+                // Asked of the *device* rather than of the adapter: the
+                // request was an intersection (`init::optional_features`), so
+                // what was granted is the only thing that says whether a
+                // timestamp write is legal on this device.
+                let timer = gpu
+                    .device
+                    .features()
+                    .contains(wgpu::Features::TIMESTAMP_QUERY)
+                    .then(|| GpuTimer::new(&gpu.device, &gpu.queue));
+                let live = Live {
+                    gpu,
+                    pipeline,
+                    timer,
+                };
                 self.state = State::Running(Box::new(live));
                 self.upload_waiting();
                 Ok(())
@@ -258,12 +310,14 @@ fn upload(live: &Live, desc: &TextureDesc, texels: &[u8]) -> Slot {
     );
     Slot::Ready {
         bind_group: live.pipeline.bind_texture(&live.gpu.device, &texture),
+        size: desc.size,
     }
 }
 
 impl RenderBackend for WgpuBackend {
     fn create_texture(&mut self, desc: &TextureDesc, texels: &[u8]) -> BackendTextureId {
         let id = BackendTextureId(u32::try_from(self.textures.len()).unwrap_or(u32::MAX));
+        self.texture_bytes += texture_bytes(desc);
         let slot = match &self.state {
             State::Running(live) => upload(live, desc, texels),
             // No device yet. Hold the texels and upload them when there is one;
@@ -282,6 +336,14 @@ impl RenderBackend for WgpuBackend {
         // Slots are never reused: an id handed back after being destroyed
         // should stay dead, not quietly name whatever was uploaded next.
         if let Some(slot) = self.textures.get_mut(id.0 as usize) {
+            // The bytes come back only on the first destroy — a slot already
+            // `None` gives nothing, so a caller that destroys twice cannot
+            // drive the accounting below what the GPU is holding.
+            if let Some(size) = slot.as_ref().map(Slot::size) {
+                self.texture_bytes = self
+                    .texture_bytes
+                    .saturating_sub(texture_bytes(&TextureDesc { size }));
+            }
             *slot = None;
         }
     }
@@ -320,12 +382,20 @@ impl RenderBackend for WgpuBackend {
             state,
             textures,
             scratch,
+            ..
         } = self;
         let live = match state {
             State::Running(live) => live,
             State::Starting(_) => return Ok(()),
             State::Failed(error) => return Err(error.clone()),
         };
+
+        // Last frame's GPU reading, if it has finished coming back. Taken
+        // before anything this frame does, so a reading is at most a frame or
+        // two old and nothing here ever waits for one (timing.rs).
+        if let Some(timer) = &mut live.timer {
+            timer.collect(&live.gpu.device);
+        }
 
         // What to draw into, and what to hand back to the compositor after.
         // An offscreen target is always there; a surface has to be asked for,
@@ -407,7 +477,10 @@ impl RenderBackend for WgpuBackend {
                     },
                 })],
                 depth_stencil_attachment: None,
-                timestamp_writes: None,
+                // The one line the GPU reading hangs off, and it is `None` on
+                // every device that did not grant `TIMESTAMP_QUERY` — which is
+                // exactly the pass this engine drew before (timing.rs).
+                timestamp_writes: live.timer.as_ref().map(GpuTimer::writes),
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
@@ -415,7 +488,8 @@ impl RenderBackend for WgpuBackend {
             // In plan order, one draw call each. No sorting, no merging, no
             // skipping: those decisions were made in render-core.
             for (batch, range) in plan.batches.iter().zip(ranges) {
-                let Some(Some(Slot::Ready { bind_group })) = textures.get(batch.texture.0 as usize)
+                let Some(Some(Slot::Ready { bind_group, .. })) =
+                    textures.get(batch.texture.0 as usize)
                 else {
                     // An id the backend does not have. Either it was destroyed
                     // while still in a texture table, or it is still waiting for
@@ -435,7 +509,18 @@ impl RenderBackend for WgpuBackend {
                 pass.draw(range, 0..1);
             }
         }
+        // Resolved after the pass has ended and before the submit that carries
+        // it, so this frame's own two counters are the ones copied out.
+        let mapping = match &live.timer {
+            Some(timer) => timer.resolve(&mut encoder),
+            None => false,
+        };
         live.gpu.queue.submit(Some(encoder.finish()));
+        if let Some(timer) = &mut live.timer
+            && mapping
+        {
+            timer.start_map();
+        }
         if let Some(frame) = present {
             live.gpu.queue.present(frame);
         }
@@ -484,4 +569,36 @@ impl RenderBackend for WgpuBackend {
             State::Starting(_) | State::Failed(_) => Presentation::Offscreen,
         }
     }
+
+    fn stats(&self) -> BackendStats {
+        let (buffer_bytes, gpu_frame) = match &self.state {
+            State::Running(live) => (
+                live.pipeline.buffer_bytes()
+                    + live.timer.as_ref().map_or(0, GpuTimer::buffer_bytes),
+                live.timer.as_ref().and_then(GpuTimer::last),
+            ),
+            // No device, so nothing is on it. The textures already asked for
+            // are still counted above: they are bytes this backend is
+            // committed to putting on a GPU, and a total that jumped when the
+            // device arrived would read as a leak on the frame it landed.
+            State::Starting(_) | State::Failed(_) => (0, None),
+        };
+        BackendStats {
+            texture_bytes: self.texture_bytes,
+            buffer_bytes,
+            gpu_frame,
+        }
+    }
+}
+
+/// What a texture of this description occupies on the GPU, in bytes.
+///
+/// RGBA8 and nothing else (renderer.md §3), so four bytes a texel — the same
+/// arithmetic `NullBackend` does, because the accounting has to read the same
+/// on both backends for a transcript-tier test to be worth anything.
+///
+/// Mip levels are not in it because there are none: every texture this backend
+/// creates is `mip_level_count: 1`.
+fn texture_bytes(desc: &TextureDesc) -> u64 {
+    u64::from(desc.size.width) * u64::from(desc.size.height) * 4
 }

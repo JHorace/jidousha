@@ -1092,6 +1092,7 @@ impl World {
     pub fn query_mut<'w, Q: Query<'w>>(&'w mut self) -> QueryIterMut<'w, Q>;
     pub fn is_alive(&self, entity: Entity) -> bool;  // Whether `entity` is still live in this world
     pub fn entity_count(&self) -> usize;  // How many entities are alive
+    pub fn component_count(&self) -> usize;  // How many component values the world's stores hold between them
     pub fn component<T: Component>(&self, entity: Entity) -> &T;  // The `T` on `entity`, panicking if it has none
     pub fn component_mut<T: Component>(&mut self, entity: Entity) -> &mut T;  // The `T` on `entity` for modification, panicking if it has none
     pub fn find_component<T: Component>(&self, entity: Entity) -> Option<&T>;  // The `T` on `entity`, or `None` if it has none — or is not alive

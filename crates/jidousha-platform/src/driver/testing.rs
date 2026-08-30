@@ -8,8 +8,8 @@ use jidousha_assets::TextureData;
 use jidousha_core::{Draw, DrawCtx, GameConfig, Resource, Seconds, Update, World, build};
 use jidousha_input::{Input, Key};
 use jidousha_render_core::{
-    BackendTextureId, FramePlan, NullBackend, PhysicalSize, Presentation, RawImage, RenderBackend,
-    RenderError, TextureDesc, create_builtin_textures,
+    BackendStats, BackendTextureId, FramePlan, NullBackend, PhysicalSize, Presentation, RawImage,
+    RenderBackend, RenderError, TextureDesc, create_builtin_textures,
 };
 
 use super::Driver;
@@ -76,6 +76,9 @@ impl RenderBackend for SharedBackend {
         // as well as observed — the null backend's own answer is `Offscreen`
         // and never changes.
         self.presentation
+    }
+    fn stats(&self) -> BackendStats {
+        self.read(RenderBackend::stats)
     }
 }
 
