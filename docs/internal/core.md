@@ -416,7 +416,7 @@ frame:
   captured frame are byte-identical across the change.
 
   The observation that prompted all of this is in
-  `docs/internal/frame-pacing.md`, which is now closed and parked: the defect
+  `docs/internal/frame-pacing.md` §1–§5, which is closed and parked: the defect
   turned out to be a browser presentation bug on one platform, and interpolation
   is correct and was never going to fix it. It stays because it is right under
   every hypothesis that *was* a pacing problem.
@@ -434,6 +434,16 @@ frame:
   spent, so coming back does not lurch. Verified by
   `a_stalled_frame_is_clamped_instead_of_spiralling` and
   `a_frame_is_never_longer_than_the_ceiling`.
+
+- **How often a frame happens is a separate question, and it is not answered
+  here.** This loop shape is what one frame *does*; what decides when the next
+  one starts is the swap chain's present mode and winit's control flow, both in
+  `jidousha-platform`'s driver — **frame-pacing.md §6** is the whole of it,
+  including the `FALLBACK_CAP_HZ = 60` the loop applies to itself when the
+  surface will not vsync. Nothing that section describes touches anything above:
+  the timestep, the accumulator, `MAX_FRAME`, and the speed-invariance CONTRACT
+  below are all indifferent to how often a frame is drawn, which is exactly why
+  a presentation cap is allowed to exist and a simulation cap is not.
 
 - CONTRACT (the engine's central promise): **simulation state is a pure function
   of (seed, registered systems, per-tick input snapshots).** Native and web

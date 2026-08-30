@@ -143,6 +143,7 @@ pub trait RenderBackend {
     fn resize_surface(&mut self, size: PhysicalSize);  // The surface changed size
     fn render(&mut self, plan: &FramePlan) -> Result<(), RenderError>;  // Draw one frame
     fn capture(&mut self) -> Result<RawImage, RenderError>;  // Read the last rendered frame back as pixels, for golden-image tests
+    fn presentation(&self) -> Presentation;  // How this backend's frames reach the display, as of now
 }
 ```
 

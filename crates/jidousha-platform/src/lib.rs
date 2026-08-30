@@ -156,8 +156,14 @@ pub fn run(config: GameConfig, setup: impl FnOnce(&mut App)) -> Result<(), RunEr
             detail: error.to_string(),
         }
     })?;
-    // Poll rather than Wait: a game draws continuously, and `Wait` would idle
-    // until something happened to the window.
+    // The value the loop starts on, and the only one it has until there is a
+    // window: `Wait` — winit's default — would idle until something happened to
+    // the window, and a game draws continuously.
+    //
+    // From the first window onwards the driver sets this every iteration, out
+    // of what the surface says about how its frames reach the display: `Poll`
+    // while something else is doing the waiting, and a real sleep when nothing
+    // is (driver/pacing.rs, frame-pacing.md §6).
     event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
 
     run_app(event_loop, driver)

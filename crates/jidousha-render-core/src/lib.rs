@@ -51,6 +51,7 @@ mod camera;
 mod font;
 mod golden;
 mod null;
+pub mod overlay;
 mod plan;
 mod record;
 mod shapes;
@@ -58,7 +59,9 @@ mod sprite;
 mod submit;
 mod textures;
 
-pub use backend::{BackendTextureId, RawImage, RenderBackend, RenderError, TextureDesc};
+pub use backend::{
+    BackendTextureId, Presentation, RawImage, RenderBackend, RenderError, TextureDesc,
+};
 pub use camera::Camera;
 pub use font::{FONT_TEXTURE, Face, FontError, Fonts, TextExtents, TextStyle, upload_text_atlases};
 pub use golden::{Comparison, Tolerance, compare, decode_png, diff_image, encode_png};

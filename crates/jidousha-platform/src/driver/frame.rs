@@ -8,10 +8,11 @@
 //! tests below run a whole frame on a machine with no display and no GPU.
 
 use jidousha_assets::Assets;
-use jidousha_core::{Seconds, Time, World};
+use jidousha_core::{Quad, Seconds, Time, World};
 use jidousha_input::Input;
 use jidousha_render_core::{
-    Camera, Fonts, PhysicalSize, plan_frame, upload_ready_textures, upload_text_atlases,
+    Camera, Fonts, PhysicalSize, overlay::draw_readout, plan_frame, upload_ready_textures,
+    upload_text_atlases,
 };
 
 use super::Driver;
@@ -55,9 +56,11 @@ impl Driver {
             textures,
             viewport,
             faces,
+            pacing,
+            overlay,
             ..
         } = self;
-        simulation.advance(elapsed, |world: &mut World, index| {
+        let ticks = simulation.advance(elapsed, |world: &mut World, index| {
             let snapshot = if index == 0 {
                 input.first_tick_snapshot()
             } else {
@@ -113,13 +116,42 @@ impl Driver {
         let (Some(backend), Some(textures)) = (backend, textures.as_mut()) else {
             return;
         };
+
+        // How this frame reached the display, asked of the backend rather than
+        // assumed: it is what paces the *next* frame (frame-pacing.md §6) and
+        // what the overlay's pacing line prints. A backend with no device yet
+        // says `Offscreen`, which caps nothing — a startup polling for a GPU
+        // must not be slowed down.
+        let presentation = backend.presentation();
+        pacing.observe(presentation);
+        // The frame's reading, taken from numbers the driver already had: the
+        // duration the accumulator was given and the tick count it returned.
+        // No clock is read for this, so an overlay that is off costs a branch.
+        overlay.record(elapsed, ticks, presentation);
+
         // After the draw and before the plan, which is the only window there
         // is: nothing knows which faces at which sizes a frame wants until the
         // game has asked for them, and `plan_frame` resolves every texture id
         // to a backend id, so an atlas uploaded after it would be resolved to
         // the placeholder for a frame (renderer.md §5, §6).
         upload_text_atlases(faces, submissions.quads(), backend.as_mut(), textures);
-        let plan = plan_frame(&camera, submissions.quads(), textures);
+
+        // The overlay is appended *after* the Draw phase closed, to a copy the
+        // world never sees. That is the whole of its presentation-only promise:
+        // a game's submissions are what the game submitted, byte for byte,
+        // whether the overlay is on or off — so a recorded transcript and a
+        // replay are identical either way (frame-pacing.md §6). The copy is
+        // made only on the frames that draw one.
+        let with_overlay: Option<Vec<Quad>> = overlay.is_on().then(|| {
+            let mut quads = submissions.quads().to_vec();
+            draw_readout(&camera, overlay.readout(), &mut quads);
+            quads
+        });
+        let quads = match &with_overlay {
+            Some(quads) => quads.as_slice(),
+            None => submissions.quads(),
+        };
+        let plan = plan_frame(&camera, quads, textures);
         if let Err(error) = backend.render(&plan) {
             // A frame that cannot be drawn is not a reason to stop: the surface
             // usually comes back. Saying so once per occurrence beats silence
@@ -196,12 +228,15 @@ impl Driver {
 
 #[cfg(test)]
 mod tests {
+    use super::super::overlay::Overlay;
     use super::super::testing::*;
     use super::*;
     use jidousha_assets::{AssetStatus, MemorySource};
-    use jidousha_core::{Draw, Transform, math::Vec2};
+    use jidousha_core::{Color, Depth, Draw, DrawCtx, Rect, Transform, math::Vec2};
     use jidousha_input::{InputEvent, Key};
-    use jidousha_render_core::{NullBackend, Sprite, draw_sprites};
+    use jidousha_render_core::{
+        FONT_TEXTURE, NullBackend, Presentation, Sprite, Submit, draw_sprites,
+    };
 
     #[test]
     fn a_frames_edges_go_to_its_first_tick_and_no_other() {
@@ -516,6 +551,116 @@ mod tests {
             Camera::default().height,
             "everything the game did not ask about is still the default"
         );
+    }
+
+    /// A Draw system that puts one recognisable thing on screen.
+    fn draw_one_rectangle(ctx: &mut DrawCtx) {
+        ctx.rect(
+            Rect::from_center_size(Vec2::ZERO, Vec2::splat(2.0)),
+            Color::WHITE,
+            Depth::layer(0),
+        );
+    }
+
+    /// What the last frame drew, as `(texture, corners)` pairs in draw order.
+    fn drawn(backend: &SharedBackend) -> Vec<(jidousha_render_core::BackendTextureId, [Vec2; 4])> {
+        backend.read(|backend| {
+            let Some(frame) = backend.last_frame() else {
+                panic!("a frame was drawn");
+            };
+            frame
+                .quads()
+                .into_iter()
+                .map(|quad| (quad.texture, quad.corners))
+                .collect()
+        })
+    }
+
+    #[test]
+    fn a_run_that_did_not_ask_for_the_overlay_draws_exactly_what_the_game_submitted() {
+        // Off by default, checked where it matters — not "the switch defaults
+        // to false" but "the frame is the game's frame". This is the half of
+        // the promise a screenshot shows.
+        let (mut driver, backend) = driver_with_a_backend();
+        driver.simulation.add_system(Draw, draw_one_rectangle);
+        driver.frame(frames_worth(1));
+
+        let quads = drawn(&backend);
+        assert_eq!(quads.len(), 1, "one rectangle and nothing else: {quads:?}");
+        assert!(!driver.overlay.is_on());
+    }
+
+    #[test]
+    fn the_overlay_draws_over_the_frame_and_leaves_every_quad_under_it_alone() {
+        // The other half: switched on, the instrument is *added*. The game's
+        // own quad has to come through untouched and in the same place, because
+        // an overlay that moved the picture would be diagnosing itself.
+        let (mut off, off_backend) = driver_with_a_backend();
+        off.simulation.add_system(Draw, draw_one_rectangle);
+        off.frame(frames_worth(1));
+
+        let (mut on, on_backend) = driver_with_a_backend();
+        on.overlay = Overlay::new(true);
+        on.simulation.add_system(Draw, draw_one_rectangle);
+        on.frame(frames_worth(1));
+
+        let plain = drawn(&off_backend);
+        let with_overlay = drawn(&on_backend);
+        assert_eq!(
+            with_overlay[..plain.len()],
+            plain[..],
+            "the game's frame changed when the overlay came on"
+        );
+        assert!(
+            with_overlay.len() > plain.len(),
+            "the overlay drew nothing at all"
+        );
+        let glyphs = on
+            .textures
+            .as_ref()
+            .map(|textures| textures.resolve(FONT_TEXTURE));
+        assert!(
+            with_overlay[plain.len()..]
+                .iter()
+                .any(|(texture, _)| Some(*texture) == glyphs),
+            "the overlay drew a backdrop and no text"
+        );
+    }
+
+    #[test]
+    fn the_overlay_reads_the_tick_count_off_the_frame_it_is_describing() {
+        // The reading the web overlay has to model from deltas alone
+        // (frame-pacing.md §4). Here it comes back from `Simulation::advance`,
+        // and this is the wiring that carries it — a driver that passed the
+        // wrong number would produce a plausible, wrong panel.
+        let (mut driver, _backend) = driver_with_a_backend();
+        driver.overlay = Overlay::new(true);
+        driver.frame(frames_worth(3));
+        assert!(
+            driver.overlay.readout().contains("3+:1"),
+            "{}",
+            driver.overlay.readout()
+        );
+    }
+
+    #[test]
+    fn the_frame_tells_the_pacer_how_this_frame_reached_the_display() {
+        // The wiring the whole fix hangs off: without it the pacer keeps
+        // answering `Offscreen`, and a surface that never waits is never
+        // capped (frame-pacing.md §6).
+        for presentation in [
+            Presentation::Vsync,
+            Presentation::Mailbox,
+            Presentation::Immediate,
+        ] {
+            let (mut driver, _backend) = driver_presenting(presentation);
+            driver.frame(frames_worth(1));
+            assert_eq!(
+                driver.pacing.schedule(Seconds(0.0)) == super::super::pacing::Schedule::Now,
+                !presentation.needs_a_cap(),
+                "{presentation} was paced as if it were something else"
+            );
+        }
     }
 
     #[test]

@@ -19,7 +19,7 @@ use core::future::Future;
 use core::pin::Pin;
 use core::task::{Context, Poll, Waker};
 
-use jidousha_render_core::{PhysicalSize, RenderError};
+use jidousha_render_core::{PhysicalSize, Presentation, RenderError};
 
 /// A GPU that is ready to draw.
 pub(crate) struct Gpu {
@@ -271,13 +271,49 @@ impl Pending {
     }
 }
 
+/// The present mode this engine asks every windowed surface for.
+///
+/// **Vsync, explicitly.** wgpu's `get_default_config` takes the *first* mode the
+/// surface reports, and what that is depends entirely on the backend: DX12 lists
+/// `[Mailbox, Fifo, …]` and Vulkan hands back whatever order the driver's
+/// `vkGetPhysicalDeviceSurfacePresentModesKHR` happened to use — commonly
+/// `Immediate` first. Neither of those waits for the display, so the frame loop
+/// ran at whatever the machine could manage: a paused 2D prototype holding a
+/// core and a GPU at full tilt (frame-pacing.md §6). Fifo is the one mode every
+/// backend offers and the one that waits.
+///
+/// The fallback when a surface does not offer it lives above the seam, in the
+/// driver, because it is a decision about the *loop* rather than about the
+/// surface — this crate reports what it got and never paces anything
+/// (renderer.md §7).
+const WANTED_PRESENT_MODE: wgpu::PresentMode = wgpu::PresentMode::Fifo;
+
+/// What a configured surface's present mode means above the seam.
+///
+/// `FifoRelaxed` counts as vsync: it waits for the refresh like `Fifo` and only
+/// tears when a frame has already missed one, so the display is still what
+/// paces the loop. `AutoVsync` and `AutoNoVsync` are wgpu's "pick one for me"
+/// aliases and are never what this crate configured, but a match has to be
+/// total and guessing wrong in the safe direction means capping a loop that did
+/// not need it rather than letting a runaway through.
+pub(crate) fn presentation_of(mode: wgpu::PresentMode) -> Presentation {
+    match mode {
+        wgpu::PresentMode::Fifo | wgpu::PresentMode::FifoRelaxed | wgpu::PresentMode::AutoVsync => {
+            Presentation::Vsync
+        }
+        wgpu::PresentMode::Mailbox => Presentation::Mailbox,
+        wgpu::PresentMode::Immediate | wgpu::PresentMode::AutoNoVsync => Presentation::Immediate,
+    }
+}
+
 /// Set the surface up for the size it is now, and return what was chosen.
 ///
 /// The bulk of the configuration comes from wgpu's own default for this surface
-/// and adapter: which present mode, which alpha mode, how many frames of
-/// latency. Those are questions about the machine, and upstream answers them
-/// better than a guess here would — and answers them again when a new wgpu adds
-/// a field.
+/// and adapter: which alpha mode, how many frames of latency. Those are
+/// questions about the machine, and upstream answers them better than a guess
+/// here would — and answers them again when a new wgpu adds a field.
+///
+/// The present mode is the exception, and [`WANTED_PRESENT_MODE`] says why.
 pub(crate) fn configure(
     surface: &wgpu::Surface<'static>,
     adapter: &wgpu::Adapter,
@@ -308,6 +344,15 @@ pub(crate) fn configure(
     {
         config.format = srgb;
     }
+
+    // Vsync where the surface offers it, which in practice is everywhere:
+    // Vulkan requires FIFO of every conformant implementation, and wgpu's DX12,
+    // Metal and GL backends all list it. Where it is somehow absent, whatever
+    // the surface put first stands and `presentation` below reports it — the
+    // driver reads that and caps the loop itself (frame-pacing.md §6).
+    if capabilities.present_modes.contains(&WANTED_PRESENT_MODE) {
+        config.present_mode = WANTED_PRESENT_MODE;
+    }
     surface.configure(device, &config);
     Ok(config)
 }
@@ -332,6 +377,41 @@ mod tests {
     fn a_ready_future_resolves_on_the_first_poll() {
         let mut future = Box::pin(async { 7 });
         assert_eq!(poll_once(future.as_mut()), Some(7));
+    }
+
+    #[test]
+    fn only_the_modes_that_wait_for_the_display_are_reported_as_vsync() {
+        // The mapping the driver's cap hangs off. Getting `FifoRelaxed` wrong
+        // would cap a loop the display is already pacing; getting `Mailbox`
+        // wrong would leave the runaway this whole change is about
+        // (frame-pacing.md §6). `AutoNoVsync` is grouped with `Immediate`
+        // deliberately: the safe direction to guess is "cap it".
+        for waits in [
+            wgpu::PresentMode::Fifo,
+            wgpu::PresentMode::FifoRelaxed,
+            wgpu::PresentMode::AutoVsync,
+        ] {
+            assert_eq!(presentation_of(waits), Presentation::Vsync, "{waits:?}");
+            assert!(!presentation_of(waits).needs_a_cap(), "{waits:?}");
+        }
+        for never_waits in [
+            wgpu::PresentMode::Mailbox,
+            wgpu::PresentMode::Immediate,
+            wgpu::PresentMode::AutoNoVsync,
+        ] {
+            assert!(
+                presentation_of(never_waits).needs_a_cap(),
+                "{never_waits:?} would leave the loop unbounded"
+            );
+        }
+    }
+
+    #[test]
+    fn the_mode_this_engine_asks_for_is_the_one_that_waits() {
+        // A one-line guard on the constant itself, because the whole fix is
+        // that line and a change to it would otherwise only show up on a
+        // machine with a display.
+        assert_eq!(presentation_of(WANTED_PRESENT_MODE), Presentation::Vsync);
     }
 
     #[test]
