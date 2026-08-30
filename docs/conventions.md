@@ -117,3 +117,65 @@ the enforcement. Every entry here is assumed by all subsystem docs.
 - Format and taxonomy: core doc §9 (`[jidousha]` prefix, what/specifics/likely
   cause/fix, system name included). Applies to every crate, compile-time
   diagnostics (`on_unimplemented`) included.
+
+## Documents
+
+These are conventions about the repo's prose, and they exist for the same reason
+the ones above exist for its code: an agent acts on what it reads
+(agent-practices, meta-principle 3), so a document's *shape* is part of its
+correctness.
+
+### Living documents are rewritten state, not a log
+
+A living document — a game's `GDD.md` and `DESIGN.md`, a `docs/internal/<subsystem>.md`,
+this file — states what is true **now**, in the present tense, and is rewritten
+when the truth changes. It is not a record of how the truth got there. Three
+consequences:
+
+- **History belongs in git and in ADRs.** Git holds what changed and when; an ADR
+  holds why a decision went the way it did and what was rejected. Neither needs a
+  paragraph in the living document explaining that the section used to say
+  something else.
+- **A mark that says "this part is built" is state while the wave is live** — the
+  `*Implemented (wN):*` discipline a GDD's own header establishes earns its place
+  by saying what landed, where it lives, and where the build bent the shape above
+  it, which is exactly the thing a later session needs and cannot recover from
+  the code. It stops being state when the trail grows longer than the design it
+  annotates: several waves of marks on one section is archaeology, and the fix is
+  to rewrite the section as what the thing now is, with the trail left to git.
+- **Amendment narratives move out.** "This was originally X; after the P2
+  playtest we moved to Y" is an ADR's opening paragraph, not a living document's.
+  In the living document it costs every future reader the same paragraph and
+  teaches them a shape that is no longer the shape.
+
+A living document that grows monotonically is a document nobody finishes reading,
+which is the failure meta-principle 2 describes. **Shrinking one is real work with
+a real result**, and it is what the history-bleed sweep is for
+(`docs/templates/SANITATION.md`).
+
+### ADRs are never culled; their index is what you navigate
+
+The pile only grows, and that is correct — an ADR is the durable defense against a
+future session re-litigating a settled decision, and a deleted one stops defending.
+What keeps a growing pile navigable is two things, both owed at the moment an ADR
+lands:
+
+- **A status line that is current.** `Status: accepted · <date>`, or
+  `Status: **superseded by ADR-NNNN**` on the one that lost, with
+  `**supersedes ADR-NNNN**` on the one that won. Superseding is how an ADR
+  changes; editing an accepted one is banned (CLAUDE.md's never-list), so the
+  status mark is the only signal a reader gets that the decision moved.
+- **A row in `docs/adr/INDEX.md`** — number, title, status, and one line on what
+  it decided. The index lands in the **same commit** as the ADR, exactly as a
+  subsystem doc update lands with its code.
+
+**Navigation points at the index, never at the pile.** `CLAUDE.md`'s routing table
+sends a reader to `docs/adr/INDEX.md`; forty-plus filenames are not a table of
+contents, and an agent asked to "search `docs/adr/`" either reads too much or
+grep-guesses and misses the decision it was sent to find.
+
+*Enforcement:* the same-commit rule is a definition-of-done step and is not
+mechanized. That makes the index the repo's most rot-prone artifact by its own
+meta-principle 1, so it is standing scope for a doc-truth audit, and a check that
+compares the index's rows against `docs/adr/*.md` is the first thing a
+dead-weight sweep should be asked to build.

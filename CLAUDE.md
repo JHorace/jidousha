@@ -50,10 +50,12 @@ failure. Delete it in the commit that resolves the blockage.
 |---|---|
 | Start any implementation session | `docs/implementation-plan.md` (protocol + checklist) |
 | Modify any subsystem | `docs/internal/<subsystem>.md` |
-| Make or change a design decision | `docs/adr/` (search it — the decision may exist) |
+| Make or change a design decision | `docs/adr/INDEX.md` (the decision may exist; the index, not the pile) |
 | Add/change public API | `docs/conventions.md`, then the matching `examples/` file |
 | Write a game with the engine | `docs/api/` (all four files) and `examples/` ONLY — never `src/` |
-| Add or change a prototype under `games/` | ADR-0038, then the `make-game` skill |
+| Build a game, or land a wave or module into one | the `make-game` skill — it owns both session shapes (ADR-0038 for where a game lives) |
+| Run a maintenance/sanitation pass | `docs/templates/SANITATION.md` (typed, fenced, dispatched by ledger evidence) |
+| Find that a doc misled you | file it in the ledger — `docs/agent-practices.md` §2.5 |
 | Touch web build/deploy | `docs/internal/web-publish.md` |
 | Wonder why code looks wrong | The `DELIBERATE:` tag near it → linked ADR |
 
@@ -87,7 +89,8 @@ Never "clean up" code carrying a `DELIBERATE:` tag without reading its ADR.
 
 - Never add a second way to do something that already has one.
 - Never let a failure path do nothing.
-- Never edit an accepted ADR — supersede it.
+- Never edit an accepted ADR — supersede it, and land its `docs/adr/INDEX.md` row
+  in the same commit.
 - Never put engine internals in `docs/api/` (bar ADR-0025's three testing-doc words) or make examples depend on `src/` internals.
 - Never use `unwrap()`/`expect()` outside tests and examples.
 - Never delete or `#[ignore]` a test to get a green run.

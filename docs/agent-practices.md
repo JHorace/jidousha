@@ -12,7 +12,7 @@ Status: adopted at project start. Language assumed Rust; formalize in ADR-0001.
 
 ---
 
-## The two meta-principles
+## The meta-principles
 
 Every practice below derives from these. When a situation isn't covered, derive the answer
 from these.
@@ -28,6 +28,26 @@ A working agent pulls in perhaps 5% of the repo and must pick the right 5%. Ever
 therefore designed for discoverability and summary-first reading: greppable names, fixed-shape
 module headers, routing tables, small files. Completeness is worthless if the reader never
 finds the file.
+
+**3. The repo is the prompt.**
+Every file an agent reads is, functionally, part of its instructions. A human reader
+holds a repository at arm's length — they know the comment is old, they can see the
+example is from before the refactor, they discount the doc they remember arguing about.
+An agent has none of that. It reads the nearest working code and copies it; it reads
+prose and acts on it. So the blast radius of rot is *larger* here than in a
+human-maintained repo, not smaller, and it points forward: a stale exemplar does not
+merely mislead one reader, it seeds the next several files written in this codebase.
+
+Two consequences run through everything below. **Exemplar quality is load-bearing**
+(§5.1): the most-copyable code in the repo is the strongest instruction in it, so
+"is this still the pattern we want copied?" is a maintenance question with a real
+answer, and E0 found the answer to be *no* twice by accident (F-045, F-088 — worked
+examples teaching two spellings of one import, in a repo whose first convention is
+one way to do everything). And **a document that is wrong is worse than a document
+that is missing**, because the agent acts on it: F-055 is a doc comment that
+described the wrong method, which the generator carried faithfully into `docs/api/`
+and a human then paraphrased into the prose. Nothing was absent at any point in that
+chain. §2.5 is how this repo senses that class of failure.
 
 ---
 
@@ -111,7 +131,10 @@ the definition of done for any change to that subsystem.
 `docs/adr/NNNN-title.md` — short architecture decision records: context, decision,
 consequences, alternatives rejected. Written **at decision time**. ADRs are the only durable
 defense against a future session re-litigating a settled decision. Every `DELIBERATE:` tag
-points at one. ADRs are immutable once accepted; supersede, don't edit.
+points at one. ADRs are immutable once accepted; supersede, don't edit. They are
+never culled either, so what keeps the pile usable is `docs/adr/INDEX.md` — a row
+per record with its current status, landing in the same commit as the record, and
+the thing navigation points at (conventions, §Documents).
 
 *Enforcement:* doc-drift hook — if `src/<subsystem>/` changed and `docs/internal/<subsystem>.md`
 did not, the hook flags it (warning, not block; the agent must explicitly state "no doc
@@ -164,6 +187,54 @@ Agents *developing* the engine read `docs/internal/`. Agents *using* the engine 
 `docs/api/`. Never mix: internal details leaking into `docs/api/` waste the game agent's
 context and invite dependence on non-guaranteed behavior.
 
+### 2.5 The ledgers are the rot sensor
+
+The FINDINGS ledgers — `docs/internal/e0-findings.md` for the engine's own acceptance
+runs, `games/<name>/FINDINGS.md` for each game — are not a complaints box. They are the
+only instrument this repo has for detecting the failure meta-principle 3 describes, and
+an instrument only reads what it is given.
+
+**File a finding when a document misled you, not only when one was missing.** This is
+the rule that had to be said out loud, because the reflex is the opposite: a gap feels
+like the document's fault and a wrong answer feels like your own. It is the wrong way
+round. A missing answer costs a search; a wrong answer costs the search *plus*
+everything built on it before it was caught, and it is invisible afterwards because
+the workaround looks like a decision. When the fault is a doc that misled you, the
+entry says **what you did on its authority** before you found out — that sentence is
+what tells a maintainer whether the fix is a wording change or a check that pins the
+claim (§5.2's last paragraph is the shape of the check).
+
+`0 findings` is a real answer and is worth stating explicitly, with why it is true. A
+finding invented to fill the section is worse than an empty one; a session that reached
+for nothing new can say so in a sentence.
+
+**Maintenance is dispatched by the ledger, and it is typed and fenced.** A "let's tidy
+up" session is unbounded, and an unbounded session in an agent-developed repo is a
+behavior change waiting to be mistaken for housekeeping. So a sanitation pass names one
+of four types — **doc-truth audit** (verify a document's checkable claims against the
+code) · **exemplar audit** (is the most-copyable code still the pattern we want
+copied?) · **dead-weight sweep** (mechanical: clippy, unused deps, orphaned assets and
+links) · **history-bleed sweep** (living docs are rewritten state; §Documents in
+conventions) — and it names the ledger entries that dispatched it. Judgment passes are
+**report-first**: findings written before anything is edited, so what was considered and
+left alone is visible. Code-touching passes are **transcript-identical**: replay
+determinism (§5.6) makes "this changed nothing" machine-checkable, so it gets checked
+rather than claimed. Never judgment and mechanical work in the same session — the diff
+stops being reviewable when taste hides inside a lint fix.
+`docs/templates/SANITATION.md` is the handoff template; passes close waves, and the
+session that closes a wave is the one that asks for the pass.
+
+**No agent approves a pull request, ever.** Approval is the owner's, and an agent
+review that ends in an approval is a rubber stamp with a plausible voice. The one
+permitted review form is *narrow adversarial verification* — a fenced session that
+tries to break one specific claim and whose only output is FINDINGS entries — and it
+is warranted only when a wave gate has actually failed. A review nobody's failure
+motivated is a review nobody reads.
+
+*Enforcement:* the `make-game` skill's findings step and closing checklist (a session
+that skips them violates the skill); the SANITATION template's evidence slot, which
+cannot be filled without a ledger entry or a failed gate.
+
 ---
 
 ## 3. Skills (`.claude/skills/`)
@@ -179,8 +250,10 @@ stable, and a premature skill enforces a procedure about to change.
 
 - `add-subsystem` — scaffold module + tests + internal doc + ADR in the canonical shape.
 - `run-verification` — run and interpret the headless verification harness.
-- `make-game` — the flagship: how a game-building session uses the engine. Points at
-  `docs/api/` and `examples/`; owns the prototype workflow.
+- `make-game` — the flagship: how a game session uses the engine. Points at
+  `docs/api/` and `examples/`; owns both session shapes — a new prototype, and a
+  wave or module landing into a game that already runs — plus the findings a
+  session owes back (§2.5) and the closing checklist the owner loop runs on.
 
 **Form:** a checklist that points into repo docs rather than restating them. One source of
 truth. Skills live in `.claude/skills/` and version with the code, so an engine change and
@@ -203,11 +276,12 @@ CLAUDE.md            always-in-context router (≤150 lines, CI-enforced)
   commands/          repeated prompt shortcuts, if any emerge
 docs/
   adr/               numbered, immutable decision records
+    INDEX.md         what you navigate by; a row per ADR, landing with the ADR
   internal/          per-subsystem contributor docs (fixed shape, §2.2)
   api/               generated game-agent-facing reference (§2.3)
-  conventions.md     units, coordinates, naming vocabulary, error style
+  conventions.md     units, coordinates, naming vocabulary, error style, doc shape
   agent-practices.md this file
-  templates/         BLOCKED.md handoff template (§6.4)
+  templates/         BLOCKED.md (§6.4) · SANITATION.md handoff templates (§2.5)
 examples/            small canonical programs; compiled AND run in CI
 tools/
   doctor             environment self-diagnosis (§6.1) — build FIRST
