@@ -9,7 +9,9 @@ and is not re-counted here.
 **Reading discipline:** this fork was written from `docs/api/` (all four),
 `crates/jidousha/examples/`, and `games/giri/` (a game, not the engine). No
 file under `crates/*/src/` was opened, and neither was `docs/internal/` nor
-any ADR but 0038 and 0041 (both named by the handoff).
+any ADR but 0038 and 0041 (both named by the handoff). Wave 0b held the same
+line: `games/giri/` (the port source) and this crate, and nothing under
+`crates/*/src/`.
 
 One entry from the S1 session. Nothing else was asked of the documents that
 they did not answer: the Camera's pan/zoom, `visible_bounds`, the pointer's
@@ -39,3 +41,31 @@ coverage.
 Expected: guidance on what the bounds check becomes for a camera that
 roams. Happened: worked it out from the check's purpose; the workaround is
 three assertions rather than one. Owner: `jidousha-testing.md`.
+
+
+## Wave 0b (the people substrate) — **0 new findings**
+
+Said explicitly, because `0 findings` is a real answer and an unsaid one
+reads as a skipped step.
+
+Wave 0b reached for **no engine API that S1 had not already established**.
+The port was game logic — a registry, a vocabulary, three stores, an
+arithmetic — and everything it touched of the engine's surface (`Resource`,
+`headless`, `SnapshotBuilder`, `FrameRecorder`, the capture path,
+`TextStyle::width_of`) was already load-bearing in this crate and answered
+by the four documents when S1 asked. Nothing new was asked of them, so
+nothing new can be reported about them; a finding invented to fill this
+section would be worse than an empty one.
+
+**G-010 stays open.** The bounds check's stated form still assumes a camera
+that does not move, and this wave added map-space content — the cast's
+figures and names — which is culled the same way the terrain is and would
+fail the naive `contains_rect` reading for the same reason.
+
+One thing worth recording that is *not* a documents finding, because it is
+this game's decision and not the engine's: **`Sim::at_rest` had to stop
+meaning "the queue is empty"** the moment an ambient occurrence started
+rescheduling itself forever. The substrate's stopping condition was written
+when every occurrence belonged to a party. Any wave that adds a recurring
+ambient occurrence — needs ticking is the next one — meets the same fact, so
+it is written down here as well as at the site.

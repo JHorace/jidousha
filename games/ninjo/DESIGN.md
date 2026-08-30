@@ -301,6 +301,15 @@ license.**
   the parked P3 material (two-tier goals, two run modes). Only reached
   if the exit criteria in VARIANT.md are met.
 
+**S3 happened, and produced a game rather than a patch.** The exit criteria
+were met, the substrate was adopted, and the reintegration design is
+`GDD.md` — ninjo. The wave plan there supersedes the S-phases above from S3
+onward: S2's attention work is wave 0a, and giri's social systems return
+across waves 1–4 as want-mechanics rather than obligation-mechanics. The
+sections above stay as the substrate's own record and are still the
+authority on the grid, the clock, the scheduler and the pathfinder.
+`GDD.md` §3 marks what wave 0b built on top of them.
+
 ## 10. Open questions (deliberately deferred)
 
 Auto-pause defaults and feed layout (S2 mockup) · terrain-cost and
