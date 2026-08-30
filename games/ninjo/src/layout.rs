@@ -66,19 +66,125 @@ pub fn treasury_text_at() -> Vec2 {
     Vec2::new(472.0, 11.0)
 }
 
-/// The log drawer's handle, in the status bar.
-pub fn log_button() -> Rect {
+/// The feed drawer's handle, in the status bar.
+pub fn feed_button() -> Rect {
     Rect::from_min_size(Vec2::new(752.0, 2.0), Vec2::new(80.0, 32.0))
 }
 
-/// The tuning drawer's handle, beside the log's.
+/// The tuning drawer's handle, beside the feed's.
 pub fn tune_button() -> Rect {
     Rect::from_min_size(Vec2::new(656.0, 2.0), Vec2::new(80.0, 32.0))
 }
 
-/// The toast row, under the bar — a bounced order's arithmetic lands here.
+/// The auto-pause config drawer's handle, at the end of the row.
+pub fn modes_button() -> Rect {
+    Rect::from_min_size(Vec2::new(848.0, 2.0), Vec2::new(80.0, 32.0))
+}
+
+// ── the meters band: the aggregates for the glance (GDD §3) ────────────────
+
+/// The band the meter chips sit in, under the status bar.
+pub fn meters_band() -> Rect {
+    Rect::from_min_size(Vec2::new(0.0, 36.0), Vec2::new(DESIGN_W, 40.0))
+}
+
+/// Meter chip `index` — click it for the faces behind the count.
+pub fn meter_chip(index: usize) -> Rect {
+    Rect::from_min_size(
+        Vec2::new(16.0 + index as f32 * 158.0, 40.0),
+        Vec2::new(150.0, 32.0),
+    )
+}
+
+/// The rows inside a meter chip, from its top-left.
+pub mod mchip {
+    /// The icon's inset.
+    pub const ICON: f32 = 8.0;
+    /// The label's left.
+    pub const LABEL_X: f32 = 30.0;
+    /// The label's top.
+    pub const LABEL_TOP: f32 = 10.0;
+}
+
+/// The pause banner, under the meters — why the world stopped itself.
+pub fn banner_at() -> Vec2 {
+    Vec2::new(16.0, 82.0)
+}
+
+/// The toast row, under the banner — a bounced order's arithmetic lands here.
 pub fn toast_at() -> Vec2 {
-    Vec2::new(16.0, 44.0)
+    Vec2::new(16.0, 98.0)
+}
+
+// ── the faces list: what a meter chip opens into ───────────────────────────
+
+/// How many faces the list has room for.
+pub const FACE_ROWS: usize = 4;
+
+/// The panel a drilled meter chip opens.
+pub fn faces_panel() -> Rect {
+    Rect::from_min_size(Vec2::new(16.0, 116.0), Vec2::new(300.0, 184.0))
+}
+
+/// Its title row.
+pub fn faces_title() -> Vec2 {
+    Vec2::new(28.0, 124.0)
+}
+
+/// Face row `index` — click a face for that character's panel.
+pub fn faces_row(index: usize) -> Rect {
+    Rect::from_min_size(
+        Vec2::new(24.0, 140.0 + index as f32 * 36.0),
+        Vec2::new(284.0, 32.0),
+    )
+}
+
+// ── the character panel ────────────────────────────────────────────────────
+
+/// The panel a selected character opens.
+pub fn person_panel() -> Rect {
+    Rect::from_min_size(Vec2::new(600.0, 116.0), Vec2::new(344.0, 314.0))
+}
+
+/// Its close button.
+pub fn person_close() -> Rect {
+    Rect::from_min_size(Vec2::new(900.0, 122.0), Vec2::new(36.0, 32.0))
+}
+
+/// The rows inside the character panel, as offsets from the panel's top-left.
+pub mod sheet {
+    use jidousha::prelude::Vec2;
+
+    /// The portrait's inset.
+    pub const PORTRAIT: Vec2 = Vec2::new(12.0, 12.0);
+    /// Its scale (16 texels at 2 = 32 units).
+    pub const PORTRAIT_SCALE: f32 = 2.0;
+    /// Where the name sits.
+    pub const NAME: Vec2 = Vec2::new(52.0, 18.0);
+    /// The traits heading.
+    pub const TRAITS: Vec2 = Vec2::new(12.0, 56.0);
+    /// The first trait chip's icon.
+    pub const TRAIT_ICON: Vec2 = Vec2::new(12.0, 74.0);
+    /// And its name.
+    pub const TRAIT_NAME: Vec2 = Vec2::new(34.0, 76.0);
+    /// How far apart the trait rows are.
+    pub const TRAIT_PITCH: f32 = 20.0;
+    /// The wallet's coin.
+    pub const WALLET_ICON: Vec2 = Vec2::new(12.0, 148.0);
+    /// And its number.
+    pub const WALLET_TEXT: Vec2 = Vec2::new(34.0, 150.0);
+    /// The desperation flame.
+    pub const NEED_ICON: Vec2 = Vec2::new(12.0, 170.0);
+    /// And its number.
+    pub const NEED_TEXT: Vec2 = Vec2::new(34.0, 172.0);
+    /// The source line, wrapped.
+    pub const SOURCE: Vec2 = Vec2::new(12.0, 192.0);
+    /// What they are doing, wrapped.
+    pub const DOING: Vec2 = Vec2::new(12.0, 234.0);
+    /// Where they live.
+    pub const HOME: Vec2 = Vec2::new(12.0, 276.0);
+    /// How wide a wrapped row may run inside the panel.
+    pub const PROSE_W: f32 = 320.0;
 }
 
 // ── party strip ────────────────────────────────────────────────────────────
@@ -121,25 +227,119 @@ pub mod pchip {
     pub const STATUS_TOP: f32 = 20.0;
 }
 
-// ── log drawer ─────────────────────────────────────────────────────────────
+// ── the feed drawer: the event log, as a view ──────────────────────────────
 
-/// The log drawer, over the map and under the party strip.
-pub fn log_panel() -> Rect {
+/// The feed drawer, over the map and under the party strip. The config drawer
+/// uses the same rectangle: two drawers, one shape, never both open.
+pub fn feed_panel() -> Rect {
     Rect::from_min_size(Vec2::new(0.0, 36.0), Vec2::new(DESIGN_W, 448.0))
 }
 
-/// Where log line `index` is drawn inside the drawer.
-pub fn log_row(index: usize) -> Vec2 {
-    Vec2::new(28.0, 76.0 + index as f32 * 20.0)
+/// The drawer's own title row.
+pub fn feed_title() -> Vec2 {
+    Vec2::new(28.0, 50.0)
 }
 
-/// How many log rows the drawer has room for. Older entries stay in the
-/// resource and scroll off the view.
-pub const LOG_ROWS: usize = 19;
+/// The reason row, under the title and across the whole drawer — where an
+/// auto-pause says why, beside the entry that caused it.
+pub fn feed_reason() -> Vec2 {
+    Vec2::new(28.0, 76.0)
+}
 
-/// The drawer's own title row.
-pub fn log_title() -> Vec2 {
-    Vec2::new(28.0, 50.0)
+/// How wide the reason may run before it is clipped.
+pub const FEED_REASON_W: f32 = 908.0;
+
+/// The show-ignored toggle, for auditing what the config is hiding.
+pub fn feed_ignored_toggle() -> Rect {
+    Rect::from_min_size(Vec2::new(760.0, 42.0), Vec2::new(180.0, 32.0))
+}
+
+/// How many feed rows the drawer has room for. The same number as the shipped
+/// `feed_cap`, so the view and the drawer bound the feed at one place.
+pub const FEED_ROWS: usize = 10;
+
+/// Feed row `index` — click it to look at where it happened.
+pub fn feed_row(index: usize) -> Rect {
+    Rect::from_min_size(
+        Vec2::new(20.0, 94.0 + index as f32 * 34.0),
+        Vec2::new(920.0, 32.0),
+    )
+}
+
+/// The columns inside a feed row, as offsets from its top-left — the entry's
+/// anatomy: world timestamp, class chip, place tag, and the text under them.
+pub mod entry {
+    use jidousha::prelude::Vec2;
+
+    /// The world timestamp.
+    pub const STAMP: Vec2 = Vec2::new(8.0, 4.0);
+    /// The class chip's icon.
+    pub const CHIP_ICON: Vec2 = Vec2::new(90.0, 2.0);
+    /// The class chip's name.
+    pub const CHIP_NAME: Vec2 = Vec2::new(112.0, 4.0);
+    /// The place tag.
+    pub const PLACE: Vec2 = Vec2::new(252.0, 4.0);
+    /// The event's own sentence, on the second line.
+    pub const TEXT: Vec2 = Vec2::new(8.0, 18.0);
+    /// How wide that sentence may run.
+    pub const TEXT_W: f32 = 900.0;
+}
+
+/// How many notices the drawer's footer shows.
+pub const NOTICE_ROWS: usize = 2;
+
+/// The notices heading, under the feed.
+pub fn notices_title() -> Vec2 {
+    Vec2::new(28.0, 438.0)
+}
+
+/// Notice row `index`.
+pub fn notice_row(index: usize) -> Vec2 {
+    Vec2::new(28.0, 454.0 + index as f32 * 14.0)
+}
+
+// ── the auto-pause config drawer ───────────────────────────────────────────
+
+/// Its title row.
+pub fn modes_title() -> Vec2 {
+    Vec2::new(28.0, 46.0)
+}
+
+/// The note under the title.
+pub fn modes_note() -> Vec2 {
+    Vec2::new(28.0, 64.0)
+}
+
+/// How wide the drawer's prose may run.
+pub fn modes_prose_width() -> f32 {
+    DESIGN_W - 56.0
+}
+
+fn modes_row_origin(index: usize) -> Vec2 {
+    Vec2::new(28.0, 110.0 + index as f32 * 44.0)
+}
+
+/// The class chip's icon on config row `index`.
+pub fn modes_icon(index: usize) -> Vec2 {
+    modes_row_origin(index) + Vec2::new(0.0, 8.0)
+}
+
+/// The class's name on config row `index`.
+pub fn modes_name(index: usize) -> Vec2 {
+    modes_row_origin(index) + Vec2::new(24.0, 10.0)
+}
+
+/// The radio for mode `mode` on config row `index`.
+pub fn modes_radio(index: usize, mode: usize) -> Rect {
+    Rect::from_min_size(
+        Vec2::new(240.0 + mode as f32 * 108.0, modes_row_origin(index).y),
+        Vec2::new(100.0, 32.0),
+    )
+}
+
+/// The drawer's footer: what a change to this panel is.
+pub fn modes_footer() -> Vec2 {
+    Vec2::new(28.0, 348.0)
 }
 
 // ── the tuning drawer (giri's geometry, at the module's constants) ────────
@@ -151,10 +351,12 @@ pub fn tuner_panel() -> Rect {
 
 /// How many stepper rows a column holds before the next one starts.
 ///
-/// Nine, so wave 0b's seventeen constants are two columns rather than three —
-/// a third column would run under the stamp, and the stamp is the one thing in
+/// Ten, so wave 0a's nineteen constants are two columns rather than three — a
+/// third column would run under the stamp, and the stamp is the one thing in
 /// the drawer that has to stay legible while every other row is being moved.
-pub const TUNER_ROWS: usize = 9;
+/// The tenth row is what wave 0a's two attention constants cost; the prose
+/// band moved down to make room for it.
+pub const TUNER_ROWS: usize = 10;
 const TUNER_COL_X: f32 = 28.0;
 const TUNER_COL_PITCH: f32 = 312.0;
 const TUNER_ROW_Y: f32 = 110.0;
@@ -238,7 +440,7 @@ pub fn tuner_title() -> Vec2 {
 
 /// The prose band under the steppers: the hint row first, then the note.
 pub fn tuner_hint() -> Vec2 {
-    Vec2::new(TUNER_COL_X, 432.0)
+    Vec2::new(TUNER_COL_X, 462.0)
 }
 
 /// How wide the hint and the note may run before they wrap.

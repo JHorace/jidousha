@@ -13,11 +13,13 @@
 
 use jidousha::prelude::*;
 
+use crate::attention::{self, Mode};
 use crate::camera::UiMap;
 use crate::clock::{Clock, Rate, stamp};
 use crate::constants::Tuning;
-use crate::grid::Grid;
+use crate::grid::{Grid, Tile};
 use crate::lens::Lens;
+use crate::meters::{self, METERS};
 use crate::modules::ModuleSet;
 use crate::sim::Sim;
 use crate::tuning::Tuner;
@@ -37,18 +39,47 @@ pub struct Toast {
     pub until: u64,
 }
 
+/// The marker a click-to-focus leaves on the place it jumped to.
+///
+/// **Presentation, and nothing else**: a ring over a tile for a couple of
+/// seconds of wall time, so the eye can find what the camera just moved to.
+/// The simulation does not know it exists.
+#[derive(Clone, Copy, Debug)]
+pub struct Pulse {
+    /// The tile it rings.
+    pub tile: Tile,
+    /// The tick it stops being drawn.
+    pub until: u64,
+}
+
 /// The UI's state — none of it simulation state.
 #[derive(Clone, Debug, Default)]
 pub struct Flow {
     /// The party picked for dispatch, if one is.
     pub selected: Option<usize>,
-    /// The log, most recent first. Secondary by design; every event is also
-    /// in `Sim::events`, which is the record.
+    /// The notices trail, most recent first: what the *player* did, and what
+    /// bounced.
+    ///
+    /// **Not the feed.** The feed is a view of `Sim::events` and is derived
+    /// wherever it is drawn (`attention::feed`); this is the other thing — a
+    /// speed change, a refused order, a restart — none of which happened in
+    /// the world and none of which has a world-time or a place.
     pub log: Vec<String>,
-    /// How many sim events have been copied into the log so far.
-    pub logged_events: usize,
-    /// Whether the log drawer is open.
-    pub log_open: bool,
+    /// Whether the feed drawer is open.
+    pub feed_open: bool,
+    /// Whether the auto-pause config drawer is open.
+    pub modes_open: bool,
+    /// Whether the feed shows the classes the config ignores, dimmed — the
+    /// auditing setting, so a player can see what they told the world to
+    /// swallow.
+    pub show_ignored: bool,
+    /// Which meter chip has been drilled into, if one has.
+    pub drilled: Option<usize>,
+    /// Which character's panel is open, if one is. Also the map's selection
+    /// ring.
+    pub selected_person: Option<usize>,
+    /// The click-to-focus marker, if one is up.
+    pub pulse: Option<Pulse>,
     /// The transient message, if one is up.
     pub toast: Option<Toast>,
     /// The tuning drawer's state (`tuning.rs`).
@@ -60,9 +91,22 @@ pub struct Flow {
 impl Resource for Flow {}
 
 impl Flow {
-    /// Put a line at the top of the log.
+    /// Put a line at the top of the notices.
     pub fn note(&mut self, line: String) {
         self.log.insert(0, line);
+    }
+
+    /// Shut every drawer and every panel over the map.
+    ///
+    /// One place, because "a drawer and a panel are never both up" is a claim
+    /// the floors assert about *pairs of controls*, and the way to keep it
+    /// true is to have exactly one function that opens anything.
+    fn close_everything(&mut self) {
+        self.feed_open = false;
+        self.modes_open = false;
+        self.tuner.open = false;
+        self.drilled = None;
+        self.selected_person = None;
     }
 
     /// Raise a toast, and log the same sentence — nothing appears only in a
@@ -101,9 +145,10 @@ pub fn load_scenario(world: &mut World) {
     world.insert_resource(Clock::opening());
     let flow = world.resource_mut::<Flow>();
     flow.selected = None;
-    flow.log_open = false;
+    flow.close_everything();
     flow.toast = None;
-    flow.logged_events = 0;
+    flow.pulse = None;
+    flow.show_ignored = false;
     flow.seed = seed;
     let modules = world
         .find_resource::<ModuleSet>()
@@ -117,32 +162,6 @@ pub fn load_scenario(world: &mut World) {
         "seed {seed} - {} - the world opens paused; space runs it",
         modules.stamp()
     ));
-}
-
-/// Copy newly fired events into the log, newest first.
-///
-/// Registered after `sim::fire_due`, so a span's events land the tick they
-/// fire.
-pub fn collect_events(world: &mut World) {
-    let lines: Vec<String> = {
-        // The log is a screen, so it reads the world through the lens like
-        // every other one (`lens.rs`).
-        let lens = Lens::on(world.resource::<Sim>());
-        let from = world.resource::<Flow>().logged_events;
-        lens.events()[from..]
-            .iter()
-            .map(|event| event.line(&lens))
-            .collect()
-    };
-    if lines.is_empty() {
-        return;
-    }
-    let total = world.resource::<Sim>().events.len();
-    let flow = world.resource_mut::<Flow>();
-    for line in lines {
-        flow.note(line);
-    }
-    flow.logged_events = total;
 }
 
 /// Every input of a tick: speed, pan/zoom, and the pointer.
@@ -195,11 +214,15 @@ pub fn handle_input(world: &mut World) {
         }
     }
 
-    // A toast is transient by the clock, not by the next click.
+    // A toast and a focus pulse are both transient by the tick clock, not by
+    // the next click. Wall time, both of them: they are presentation.
     {
         let flow = world.resource_mut::<Flow>();
         if flow.toast.as_ref().is_some_and(|toast| tick >= toast.until) {
             flow.toast = None;
+        }
+        if flow.pulse.is_some_and(|pulse| tick >= pulse.until) {
+            flow.pulse = None;
         }
     }
 
@@ -217,16 +240,66 @@ pub fn handle_input(world: &mut World) {
         return;
     }
 
-    // The log drawer swallows clicks while it is open.
-    if world.resource::<Flow>().log_open {
-        world.resource_mut::<Flow>().log_open = false;
+    // The two attention drawers swallow clicks while they are open, exactly
+    // as the tuning drawer does: they cover the screen, and a click that fell
+    // through would act on a marker the player cannot see.
+    if world.resource::<Flow>().feed_open {
+        feed_click(world, at, tick);
         return;
     }
-    if layout::log_button().contains(at) {
-        let flow = world.resource_mut::<Flow>();
-        flow.log_open = true;
-        flow.tuner.open = false;
+    if world.resource::<Flow>().modes_open {
+        modes_click(world, at);
         return;
+    }
+    for (handle, open) in [
+        (layout::feed_button(), Drawer::Feed),
+        (layout::modes_button(), Drawer::Modes),
+    ] {
+        if !handle.contains(at) {
+            continue;
+        }
+        let flow = world.resource_mut::<Flow>();
+        flow.close_everything();
+        match open {
+            Drawer::Feed => flow.feed_open = true,
+            Drawer::Modes => flow.modes_open = true,
+        }
+        return;
+    }
+
+    // The meters band: a chip opens the faces behind its count, and a face
+    // opens that character.
+    for index in 0..METERS.len() {
+        if !layout::meter_chip(index).contains(at) {
+            continue;
+        }
+        let flow = world.resource_mut::<Flow>();
+        flow.drilled = (flow.drilled != Some(index)).then_some(index);
+        return;
+    }
+    if let Some(drilled) = world.resource::<Flow>().drilled {
+        let faces = {
+            let lens = Lens::on(world.resource::<Sim>());
+            meters::faces(&lens, drilled)
+        };
+        for (row, (who, _)) in faces.into_iter().take(layout::FACE_ROWS).enumerate() {
+            if layout::faces_row(row).contains(at) {
+                world.resource_mut::<Flow>().selected_person = Some(who);
+                return;
+            }
+        }
+        if layout::faces_panel().contains(at) {
+            return;
+        }
+    }
+    if world.resource::<Flow>().selected_person.is_some() {
+        if layout::person_close().contains(at) {
+            world.resource_mut::<Flow>().selected_person = None;
+            return;
+        }
+        if layout::person_panel().contains(at) {
+            return;
+        }
     }
 
     // The speed chips do what the keys do.
@@ -272,6 +345,27 @@ pub fn handle_input(world: &mut World) {
         return;
     }
 
+    // The map: a click on somebody standing at their home selects them, and
+    // opens their panel. Nobody stands on a location's tile (the registry
+    // asserts it), so this cannot swallow a dispatch.
+    {
+        let homes: Vec<(usize, crate::grid::Tile)> = {
+            let lens = Lens::on(world.resource::<Sim>());
+            (0..lens.people().len())
+                .filter(|index| lens.at_home(*index))
+                .filter_map(|index| lens.home(index).map(|tile| (index, tile)))
+                .collect()
+        };
+        for (index, home) in homes {
+            if !layout::home_rect(home).contains(at_world) {
+                continue;
+            }
+            let flow = world.resource_mut::<Flow>();
+            flow.selected_person = (flow.selected_person != Some(index)).then_some(index);
+            return;
+        }
+    }
+
     // The map: a click on a site's marker dispatches the picked party.
     for (site_index, site) in world.resource::<Sim>().sites.clone().iter().enumerate() {
         let marker = layout::marker_rect(crate::grid::LOCATIONS[site.location].tile);
@@ -283,28 +377,105 @@ pub fn handle_input(world: &mut World) {
     }
 }
 
+/// Which drawer a handle opens.
+#[derive(Clone, Copy, Debug)]
+enum Drawer {
+    /// The feed.
+    Feed,
+    /// The auto-pause config.
+    Modes,
+}
+
+/// A click inside the open feed drawer.
+///
+/// **Clicking an entry is click-to-focus**: the camera goes to the event's
+/// place and a pulse marker rings the tile for a couple of seconds. Both are
+/// presentation — the camera is not simulation state and neither is the
+/// marker — so a replay that watched somewhere else still runs the same world.
+fn feed_click(world: &mut World, at: Vec2, tick: u64) {
+    if layout::feed_ignored_toggle().contains(at) {
+        let flow = world.resource_mut::<Flow>();
+        flow.show_ignored = !flow.show_ignored;
+        return;
+    }
+    let tuning = *world.resource::<Tuning>();
+    let focus = {
+        let flow = world.resource::<Flow>();
+        let lens = Lens::on(world.resource::<Sim>());
+        let entries = attention::feed(&lens, flow.show_ignored, attention::feed_cap(&tuning));
+        (0..layout::FEED_ROWS)
+            .find(|row| layout::feed_row(*row).contains(at))
+            .and_then(|row| entries.get(row).copied())
+            .and_then(|entry| lens.events().get(entry.index).map(|event| event.tile))
+    };
+    let Some(tile) = focus else {
+        world.resource_mut::<Flow>().feed_open = false;
+        return;
+    };
+    world.resource_mut::<Camera>().center = tile.center();
+    let flow = world.resource_mut::<Flow>();
+    flow.feed_open = false;
+    flow.pulse = Some(Pulse {
+        tile,
+        until: tick + attention::pulse_ticks(&tuning),
+    });
+}
+
+/// A click inside the open auto-pause config drawer.
+///
+/// **The write goes into the simulation**, not into the UI: the config is sim
+/// state, so this click is a recorded input that changes what the world does,
+/// and a replay carries it (`attention.rs`).
+fn modes_click(world: &mut World, at: Vec2) {
+    for (row, class) in attention::EventClass::all().into_iter().enumerate() {
+        for (slot, mode) in Mode::ALL.iter().copied().enumerate() {
+            if !layout::modes_radio(row, slot).contains(at) {
+                continue;
+            }
+            world.resource_mut::<Sim>().attention.set(class, mode);
+            return;
+        }
+    }
+    // Anything that is not one of this drawer's own controls shuts it — the
+    // handle included, so the handle toggles. Exactly the feed's rule.
+    world.resource_mut::<Flow>().modes_open = false;
+}
+
 /// One speed change: `None` is the pause toggle, `Some` picks a rate and
 /// resumes.
+///
+/// **This is also where an auto-pause is acknowledged.** The world stopped
+/// itself and said why; the player's next speed input is them having read it,
+/// so the reason is cleared here and the next pause-class event can record a
+/// new one. A speed input that changes nothing says nothing: a player holding
+/// down `1` should not fill the notices with a rate it is already at.
 fn apply_speed(world: &mut World, tick: u64, change: Option<Rate>) {
     let clock = world.resource_mut::<Clock>();
-    let said = match change {
+    let (said, moved) = match change {
         None => {
             clock.paused = !clock.paused;
             if clock.paused {
-                "paused - the clock holds, orders still work".to_owned()
+                (
+                    "paused - the clock holds, orders still work".to_owned(),
+                    true,
+                )
             } else {
-                format!("running at {}", clock.rate.label())
+                (format!("running at {}", clock.rate.label()), true)
             }
         }
         Some(rate) => {
+            let moved = clock.paused || clock.rate != rate;
             clock.rate = rate;
             clock.paused = false;
-            format!("running at {}", rate.label())
+            (format!("running at {}", rate.label()), moved)
         }
     };
     let minutes = clock.minutes;
-    let flow = world.resource_mut::<Flow>();
-    flow.note(format!("{} - {said}", stamp(minutes)));
+    sim::acknowledge_pause(world.resource_mut::<Sim>());
+    if moved {
+        let flow = world.resource_mut::<Flow>();
+        flow.note(format!("{} - {said}", stamp(minutes)));
+    }
     let _ = tick;
 }
 

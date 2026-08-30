@@ -162,6 +162,63 @@ section left open.
 - Every module's capsule declares its `attention` cost; the feed is
   the budget's ledger.
 
+*Implemented (w0a):* all of it except the petition cards, which are wave
+1.3's to build to the anatomy recorded in §6 below. What the build decided
+that the mockup and this section left open:
+
+- **The event-class table is `src/attention.rs`**, one row per class carrying
+  id, colour role, icon role and the mode it opens on, and **nothing in the
+  game branches on a class id**: a screen asks the row how to draw it and the
+  scheduler asks the config what it does. A wave-1 class is a variant and a
+  row. S1's five classes are migrated onto it, so `EventClass` now lives
+  there rather than in `sim.rs`.
+- **The mockup's defaults, shipped**: movement (`departed`, `arrived`,
+  `work-began`, `returned`) is `ignore` because the map already shows motion;
+  `quest-complete` is `log`. **No class this build has opens on
+  pause-and-focus**, because the petition/consequence family that does is
+  wave 1.3 — so a shipped scenario never stops itself until the player asks
+  it to in the config panel, which is the mockup's answer rather than an
+  oversight. Wave 1.3's registrations are where the interrupting starts.
+- **The default modes are table data and not drawer rows**, which is the one
+  place the build bent the handoff. "Drawer-overridable" would have been a
+  second way to do a thing that already has one — the config panel is a live
+  override *and* a recorded input, where the drawer's would be a restart —
+  and it would have cost five stepper rows the drawer's two columns do not
+  have. The two attention constants that *are* drawer rows are `feed_cap`
+  and `pulse_tenths`.
+- **The feed is a view and has no state**: `attention::feed` derives its
+  entries from `Sim::events` every time it is asked, so there is nothing that
+  could be stale or disagree, and `flow.rs`'s event-copying system is gone
+  entirely. The old `Flow::log` survives as the *notices* trail — speed
+  changes, refused orders, restarts — which are the things that did not
+  happen in the world and have no world-time or place; it is drawn in a
+  separate band of the same drawer, and the one-source assertion is over the
+  feed alone.
+- **Auto-pause is a transition inside the scheduler.** `Sim::emit` records
+  the pause on the sim when a firing event's configured mode says so, and
+  `sim::fire_due` puts the clock at speed 0 in the same tick — no synthetic
+  input, so a replay reproduces the pause rather than a click nobody made.
+  The reason and the pause count are sim state; the player's next speed
+  input clears the reason. The first pause-class event of a crossed span is
+  the one that stops the world, and the rest of the span still fires: a pause
+  holds the future, never the present.
+- **The config is sim state**, written only by clicking a radio in the config
+  drawer, which is a recorded input like a speed change.
+- **The surfaces**: three drawers over one map now (feed, auto-pause config,
+  tuning), never two at once, and a click that is not one of a drawer's own
+  controls shuts it. Over the map: a meters band, a pause banner, the faces
+  list a chip opens, and one character's panel. `UI.md` §3a owns the shapes.
+- **Selection is presentation** — a click on a figure or a face row opens the
+  panel and rings the map sprite. **Tap works and this game wrote no touch
+  code**: the engine mirrors the first finger onto the primary pointer, and
+  `verify::touch_selects` asserts a finger on Steve's doorstep selects Steve
+  through the same hit-test a mouse uses.
+- **TTF was available and was not adopted.** The owner's verdict against
+  proportional display faces for dense information stands, and the feed is
+  the densest surface in the game; the built-in bitmap face is what every row
+  is measured and asserted at. The engine feature having landed is not a
+  reason to spend it here.
+
 ## 4. Shared state (deep specs)
 
 ### 4.1 Wealth (gold; the only v1 currency)
@@ -343,6 +400,12 @@ all walk the table, so nothing else changes.
   pressure params. The tutorial is the most-pinned scenario;
   freeplay is the least.
 - **Needs list**: kind, interval, base cost (v1: one row — coin).
+- **Petition card** (the anatomy, recorded by wave 0a's mockup for **wave
+  1.3 to build**; not built now): who is asking (portrait + name) + a trait
+  chip + the request text + the reward + a timer bar against the deadline +
+  the **declared consequence**, and an assign-picker carrying **willingness
+  hints** per candidate. The card is the petition's whole surface; the feed
+  entry for a voiced petition is what opens it.
 
 *Implemented (w0b): the trait row only.* Its modifier set is split by kind as
 this section says — bond and grudge multipliers plus the pot's pull for a
@@ -381,6 +444,15 @@ session per handoff stands)
   economy loop halves are one concern) → **1.3 petitions** → **1.4
   resolution** → **1.5 injector**. Each lands into a running world;
   owner sanity-plays between sessions but fun is not judged.
+  - **1.3** builds the petition card to §6's anatomy, and registers the
+    petition/consequence classes on `pause-and-focus` — the wave that makes
+    the world interrupt you at all.
+  - **1.5's starting calibration, from the wave-0a mockup**: the mockup
+    played best at roughly **twice** the first-guess event density. Land the
+    scenario and injector constants there rather than at the first guess and
+    tune down; a world that interrupts you twice as often as the drawing
+    board expected was the one that felt alive. It is a starting point for
+    the drawer, not a finding about the design.
 - **2 asks** → **MVP gate playtest.**
 - **3+** aspirations / threats / arrival (any order) → **4 parties**
   → knowledge when the experiment is wanted. Re-derive waves at each
@@ -390,7 +462,11 @@ session per handoff stands)
 
 - **Module-off matrix**: verify runs the full suite with each module
   individually disabled — green is the definition of modular.
-- **Speed-invariance sweep** (landed) over every new event source.
+- **Speed-invariance sweep** (landed) over every new event source, **and
+  over the auto-pauses**: the same three speed scripts under a config that
+  stops the world at every completion, resumed by the key the script is
+  already running at, must produce the identical transcript. A pause
+  stretches wall time and moves no world-time address.
 - **Economy sweeps**: ~200 idle-player seeds; wallet/treasury bands;
   nobody-starves-at-subsistence (the limp-floor as an assertion); a
   mutated wage or upkeep constant must break a band.
@@ -400,6 +476,22 @@ session per handoff stands)
   constants, variant, module set.
 - One-source checks: any warning surface asserted equal to its
   consequence's inputs (band-chip discipline, generalized).
+
+*Implemented (w0a):* the auto-pause battery is `src/pauses.rs` — the
+transition (the clock at speed 0 in the tick the event fired, at the event's
+own world-minute), the replay (the same recorded inputs, twice, to the tick),
+the config as the whole difference (the same script without the three clicks
+never stops and runs the authored timeline out), and the invariance sweep
+above. The feed's one-source claim is `attention::feed_is_a_view`: the feed
+equals the transcript filtered by the config, at both settings of the
+ignored toggle, with a check that the filter is hiding something so the
+assertion cannot pass vacuously. The floors bind the feed's rows, the meter
+chips, the config's radios and the character panel; the screenshot set is
+eight, and the photographed session is itself the auto-pause half of the
+invariance claim — it plays the config change, gets stopped four times and
+must still match the sweep's transcript exactly. The mutation round grew to
+nineteen constants and notices all of them; the two new ones are seen by
+`attention::judge_at`, written with shipped literals.
 
 *Implemented (w0b):* the module-off matrix (one pass, empty registry: it plants
 a `ModuleSet`, conducts a real run under it and asserts the world moved and
@@ -424,13 +516,16 @@ Economy sweeps wait for an economy; distribution sweeps wait for the ladder.
 ## 10. Confidence & open ledger
 
 Foundation: grid/clock/pathfinding **played**; people substrate
-**played** (in giri; ported and green here); attention **speculative**
-(mockup will raise to mocked). All modules **speculative** — correct
-and expected; wave gates convert speculation to played evidence one
+**played** (in giri; ported and green here); attention **built and
+owner-playable** — the mockup raised it to mocked and wave 0a landed it, and
+the played verdict is the owner's next playtest (does the world interrupt
+you at the right moments, and only those?). All modules **speculative** —
+correct and expected; wave gates convert speculation to played evidence one
 wave at a time.
 
-Open (deliberately): attention-mockup decisions (auto-pause defaults,
-feed layout, petition-card anatomy) · scorer cadence · **trait list
+Open (deliberately): the wave-1 class registrations and whether the mockup's
+defaults survive a real petition load (wave 0a shipped them; nothing this
+build has opens on pause) · scorer cadence · **trait list
 content, and the cast content beside it** — who ninjo's people are, how
 many of them, what they carry, and the portrait art more of them would
 need (wave 0b ships four and six placeholder trait rows) ·

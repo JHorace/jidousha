@@ -216,9 +216,12 @@ pub fn handle_pointer(world: &mut World, at: Vec2, tick: u64, clicked: bool) -> 
         flow.tuner.open = !flow.tuner.open;
         if flow.tuner.open {
             // Opening it is the acknowledgement a refused link was waiting
-            // for.
+            // for, and it shuts everything else: one surface at a time.
             flow.tuner.fault = None;
-            flow.log_open = false;
+            flow.feed_open = false;
+            flow.modes_open = false;
+            flow.drilled = None;
+            flow.selected_person = None;
         }
         return true;
     }

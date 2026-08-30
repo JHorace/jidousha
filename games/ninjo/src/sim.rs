@@ -15,13 +15,17 @@
 //! entry at a time, each at that terrain's cost. Smooth between-tile motion is
 //! derived at draw time (`screens.rs`) and never written back here.
 //!
-//! Events carry **world-time + place + class** (DESIGN §5): S1 shows them as
-//! a timestamped log, and S2 builds attention on exactly these addresses, so
-//! the class and the tile ride every entry even though only the log reads
-//! them yet.
+//! Events carry **world-time + place + class** (DESIGN §5), and wave 0a's
+//! attention machinery is built on exactly those addresses: the class table in
+//! `attention.rs` says what each class does to the player, the feed is a view
+//! of `Sim::events`, and **an event whose configured mode is pause-and-focus
+//! stops the clock from here** — a deterministic simulation transition in the
+//! tick the event fires, not a click nobody made, so a replay pauses the same
+//! way twice.
 
 use jidousha::prelude::*;
 
+use crate::attention::{Attention, EventClass, Mode, Pause};
 use crate::clock::{Clock, stamp};
 use crate::constants::Tuning;
 use crate::grid::{Grid, LOCATIONS, TOWN, Tile};
@@ -30,34 +34,6 @@ use crate::path::Route;
 use crate::people::{self, Character};
 use crate::sprites::Art;
 use crate::stores::{self, Shared};
-
-/// The five S1 event classes — the seed of S2's attention vocabulary.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum EventClass {
-    /// A party left the town for a site.
-    Departed,
-    /// A party reached its site.
-    Arrived,
-    /// Work began (same world-minute as the arrival, its own address).
-    WorkBegan,
-    /// The quest resolved — the stub success — and the pot paid.
-    QuestComplete,
-    /// The party is home.
-    Returned,
-}
-
-impl EventClass {
-    /// The class's name, for transcripts and the log.
-    pub fn name(self) -> &'static str {
-        match self {
-            EventClass::Departed => "departed",
-            EventClass::Arrived => "arrived",
-            EventClass::WorkBegan => "work-began",
-            EventClass::QuestComplete => "quest-complete",
-            EventClass::Returned => "returned",
-        }
-    }
-}
 
 /// One thing that happened, at a world-time, at a place.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -77,18 +53,25 @@ pub struct Event {
 }
 
 impl Event {
-    /// The log line: timestamp, party, note — mechanical narration.
+    /// What happened, as a sentence: who, and what they did. The feed draws
+    /// the world-time and the place in their own columns, so they are not in
+    /// here (`attention::place_tag` is the place).
     ///
-    /// Takes a [`Lens`] rather than the `Sim`, because the log is a screen:
+    /// Takes a [`Lens`] rather than the `Sim`, because the feed is a screen:
     /// a line naming a party the player has never seen is exactly the thing
     /// the lens exists to be able to withhold (GDD §3).
-    pub fn line(&self, lens: &Lens<'_>) -> String {
+    pub fn text(&self, lens: &Lens<'_>) -> String {
         format!(
-            "{} - {} {}",
-            stamp(self.minute),
+            "{} {}",
             lens.party(self.party).map_or("someone", |party| party.name),
             self.note
         )
+    }
+
+    /// The same with its world-time in front — one line, for a transcript or
+    /// a report that has no columns to put a stamp in.
+    pub fn line(&self, lens: &Lens<'_>) -> String {
+        format!("{} - {}", stamp(self.minute), self.text(lens))
     }
 }
 
@@ -257,6 +240,19 @@ pub struct Sim {
     /// grudges, marks (GDD §4). **In sim state, because replay is the
     /// contract** — see `stores.rs`.
     pub shared: Shared,
+    /// What each class of event does to the player's attention (GDD §3).
+    ///
+    /// **Sim state, not UI state**: the player changes it through recorded
+    /// input, and it changes what the world does — a replay that carried the
+    /// orders and not this would reproduce the journeys and not the pauses.
+    pub attention: Attention,
+    /// Why the world is stopped, when it stopped itself. Cleared by the
+    /// player's next speed input (`sim::acknowledge_pause`).
+    pub paused_by: Option<Pause>,
+    /// How many times the world has stopped itself — an assertable count, so
+    /// a check can say "this run auto-paused four times" rather than "it
+    /// paused at some point".
+    pub pauses: u64,
     queue: Vec<Occurrence>,
     next_seq: u64,
 }
@@ -397,6 +393,9 @@ impl Sim {
             events: Vec::new(),
             people,
             shared: Shared::opening(),
+            attention: Attention::opening(),
+            paused_by: None,
+            pauses: 0,
             queue: Vec::new(),
             next_seq: 0,
         };
@@ -428,7 +427,15 @@ impl Sim {
         self.queue.push(Occurrence { at, seq, kind });
     }
 
-    /// Record one event.
+    /// Record one event — and, when its class says so, stop the world.
+    ///
+    /// **The auto-pause lives here** because this is where an event becomes a
+    /// fact: the mode comes off the config (which came off the class table),
+    /// nothing in this function knows which class it is looking at, and the
+    /// clock is put at speed 0 by `fire_due` in the same tick. The *first*
+    /// pause-class event of a crossed span is the one that stops the world;
+    /// the rest of the span still fires, because their world-times have
+    /// already arrived and a pause holds the future, not the present.
     fn emit(&mut self, minute: u64, class: EventClass, party: usize, tile: Tile, note: String) {
         self.events.push(Event {
             minute,
@@ -438,7 +445,25 @@ impl Sim {
             location: crate::grid::location_at(tile),
             note,
         });
+        if self.attention.mode(class) == Mode::PauseAndFocus && self.paused_by.is_none() {
+            self.paused_by = Some(Pause {
+                event: self.events.len() - 1,
+                class,
+                minute,
+            });
+            self.pauses += 1;
+        }
     }
+}
+
+/// The player has seen why the world stopped: clear the reason.
+///
+/// Called by the one speed-input path (`flow::apply_speed`), so resuming and
+/// forgetting are one action — a reason that outlived its pause would make the
+/// banner lie, and a reason that stayed would stop the next auto-pause from
+/// being recorded.
+pub fn acknowledge_pause(sim: &mut Sim) {
+    sim.paused_by = None;
 }
 
 /// Why a dispatch was refused — surfaced as a toast, never silent.
@@ -563,7 +588,7 @@ pub fn fire_due(world: &mut World) {
             }
             best.map(|(slot, _, _)| slot)
         };
-        let Some(slot) = due else { return };
+        let Some(slot) = due else { break };
         let grid = world.resource::<Grid>().clone();
         let sim = world.resource_mut::<Sim>();
         let occurrence = sim.queue.remove(slot);
@@ -575,6 +600,14 @@ pub fn fire_due(world: &mut World) {
                 sim.schedule(occurrence.at + stores::drift_interval(&tuning), Occ::Drift);
             }
         }
+    }
+    // **The auto-pause, applied**: the world stopping itself is a simulation
+    // transition, so it happens here, in the tick the event fired, before
+    // anything draws. The clock is the speed, and speed 0 is the pause;
+    // nothing synthesises an input, which is what makes a replay reproduce
+    // the pause rather than reproduce a click.
+    if world.resource::<Sim>().paused_by.is_some() {
+        world.resource_mut::<Clock>().paused = true;
     }
 }
 

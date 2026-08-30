@@ -1,6 +1,8 @@
 //! The Draw systems: the map, the chrome over it, and the panels as data.
 //!
-//! One screen (the map), two drawers over it (log, tuning). `content` is the
+//! One screen (the map), three drawers over it (feed, auto-pause config,
+//! tuning) and the attention surfaces over the map itself (`panels.rs`).
+//! `content` is the
 //! whole of what the chrome and the map's labels say, as data — `verify.rs`
 //! and `floors.rs` read it, and `draw_content` is the only code that turns it
 //! into quads. The terrain and the party tokens are drawn here directly: the
@@ -11,6 +13,7 @@
 
 use jidousha::prelude::*;
 
+use crate::attention;
 use crate::camera::UiMap;
 use crate::clock::{Clock, Rate, stamp};
 use crate::constants::Tuning;
@@ -20,7 +23,7 @@ use crate::lens::Lens;
 use crate::sim::{Activity, Sim};
 use crate::sprites::Art;
 use crate::ui::{self, IconRun, Panel, TextRun};
-use crate::{layout, sim, theme, tuning};
+use crate::{layout, panels, sim, theme, tuning};
 
 /// The tiles the camera can currently see — the game-side culling (DESIGN
 /// §8): the map is the largest sprite count this engine has been asked for,
@@ -121,8 +124,9 @@ pub fn content(flow: &Flow, lens: &Lens<'_>, clock: &Clock, tuning: &Tuning) -> 
         theme::GOLD,
     ));
     for (rect, label) in [
-        (layout::log_button(), "LOG"),
+        (layout::feed_button(), "FEED"),
         (layout::tune_button(), "TUNE"),
+        (layout::modes_button(), "MODES"),
     ] {
         panel.text(TextRun::new(
             ui::centered(rect, label, theme::SMALL, rect.min.y + 10.0),
@@ -131,7 +135,13 @@ pub fn content(flow: &Flow, lens: &Lens<'_>, clock: &Clock, tuning: &Tuning) -> 
             theme::DIM,
         ));
     }
-    if let Some(toast) = &flow.toast {
+    // **Under an open drawer, the map's own chrome says nothing.** A drawer
+    // covers the screen, so a banner or a toast drawn beneath it is a row
+    // nobody can read lying across a control somebody can click — and the
+    // floors judge exactly that. The tuning drawer carries the toast in its
+    // own prose band, so nothing is lost by keeping quiet here.
+    let bare = !flow.feed_open && !flow.modes_open && !flow.tuner.open;
+    if bare && let Some(toast) = &flow.toast {
         panel.text(TextRun::new(
             layout::toast_at(),
             toast.text.clone(),
@@ -239,9 +249,17 @@ pub fn content(flow: &Flow, lens: &Lens<'_>, clock: &Clock, tuning: &Tuning) -> 
         panel.world_text(label);
     }
 
+    // --- the attention surfaces over the map (GDD §3, wave 0a) -------------
+    if bare {
+        panel.absorb(panels::glance(flow, lens));
+    }
+
     // --- drawers ------------------------------------------------------------
-    if flow.log_open {
-        panel.absorb(log_panel_content(flow));
+    if flow.feed_open {
+        panel.absorb(panels::feed_drawer(flow, lens, tuning));
+    }
+    if flow.modes_open {
+        panel.absorb(panels::modes_drawer(lens));
     }
     if flow.tuner.open {
         panel.absorb(tuning::drawer(flow, tuning));
@@ -252,26 +270,6 @@ pub fn content(flow: &Flow, lens: &Lens<'_>, clock: &Clock, tuning: &Tuning) -> 
 /// The chips' labels, in chip order.
 pub fn chip_labels() -> [&'static str; layout::CHIPS] {
     ["PAUSE", "1x", "2x", "4x"]
-}
-
-/// The log drawer's rows, as data.
-fn log_panel_content(flow: &Flow) -> Panel {
-    let mut panel = Panel::default();
-    panel.text(TextRun::over(
-        layout::log_title(),
-        "LOG - newest first - every event carries its world-time",
-        theme::SMALL,
-        theme::DIM,
-    ));
-    for (index, line) in flow.log.iter().take(layout::LOG_ROWS).enumerate() {
-        panel.text(TextRun::over(
-            layout::log_row(index),
-            line.clone(),
-            theme::SMALL,
-            theme::INK,
-        ));
-    }
-    panel
 }
 
 /// The terrain, drawn from the sim's own grid — the second reader of the one
@@ -298,9 +296,45 @@ pub fn draw_map(ctx: &mut DrawCtx) {
     let tuning = *ctx.world.resource::<Tuning>();
     let clock = ctx.world.resource::<Clock>();
     let now = clock.previous_reading + (clock.reading(&tuning) - clock.previous_reading) * alpha;
-    let flow = ctx.world.resource::<Flow>();
+    let flow = ctx.world.resource::<Flow>().clone();
     let gallery = ctx.world.resource::<crate::sprites::Gallery>().clone();
-    let lens = Lens::on(ctx.world.resource::<Sim>());
+    let sim = ctx.world.resource::<Sim>().clone();
+    let lens = Lens::on(&sim);
+
+    // The selection ring under a chosen character's figure, and the pulse a
+    // click-to-focus left on the place it jumped to. Both presentation: one is
+    // UI state, the other is a countdown in wall ticks, and the simulation
+    // reads neither.
+    if let Some(who) = flow.selected_person
+        && lens.at_home(who)
+        && let Some(home) = lens.home(who)
+    {
+        let ring = layout::home_rect(home);
+        ctx.rect(
+            Rect {
+                min: ring.min - Vec2::splat(3.0),
+                max: ring.max + Vec2::splat(3.0),
+            },
+            theme::GOLD,
+            Depth {
+                layer: theme::layers::MARKER,
+                z: -1.0,
+            },
+        );
+    }
+    if let Some(pulse) = flow.pulse {
+        let rect = pulse.tile.rect();
+        ui::border(
+            ctx,
+            Rect {
+                min: rect.min - Vec2::splat(8.0),
+                max: rect.max + Vec2::splat(8.0),
+            },
+            theme::GOLD,
+            2.0,
+            theme::layers::MAP_TEXT,
+        );
+    }
     for (index, party) in lens.parties().iter().enumerate() {
         let at = token_position(party, now)
             - Vec2::splat(layout::TOKEN * 0.5)
@@ -371,9 +405,73 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
             border(ctx, chip, theme::BORDER, theme::layers::PIECE);
         }
     }
-    for rect in [layout::log_button(), layout::tune_button()] {
+    for rect in [
+        layout::feed_button(),
+        layout::tune_button(),
+        layout::modes_button(),
+    ] {
         fill(ctx, rect, theme::GHOST, theme::layers::PIECE - 1);
         border(ctx, rect, theme::BORDER, theme::layers::PIECE - 1);
+    }
+
+    // The meters band, and one chip per registered aggregate.
+    fill(
+        ctx,
+        layout::meters_band(),
+        theme::STRIP,
+        theme::layers::PANEL,
+    );
+    let drilled = flow.drilled;
+    for index in 0..crate::meters::METERS.len() {
+        let chip = layout::meter_chip(index);
+        fill(ctx, chip, theme::PANEL, theme::layers::CARD);
+        border(
+            ctx,
+            chip,
+            if drilled == Some(index) {
+                theme::GOLD
+            } else {
+                theme::BORDER
+            },
+            theme::layers::CARD,
+        );
+    }
+    if drilled.is_some() {
+        fill(
+            ctx,
+            layout::faces_panel(),
+            theme::PANEL,
+            theme::layers::CARD,
+        );
+        border(
+            ctx,
+            layout::faces_panel(),
+            theme::BORDER,
+            theme::layers::CARD,
+        );
+        for row in 0..layout::FACE_ROWS {
+            border(
+                ctx,
+                layout::faces_row(row),
+                theme::GHOST,
+                theme::layers::PIECE - 1,
+            );
+        }
+    }
+    if flow.selected_person.is_some() {
+        fill(
+            ctx,
+            layout::person_panel(),
+            theme::PANEL,
+            theme::layers::CARD,
+        );
+        border(
+            ctx,
+            layout::person_panel(),
+            theme::GOLD,
+            theme::layers::CARD,
+        );
+        ghost(ctx, &map, layout::person_close());
     }
     for index in 0..sim_parties {
         let chip = layout::party_chip(index);
@@ -391,19 +489,59 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
     }
 
     // Drawers.
-    if flow.log_open {
+    if flow.feed_open || flow.modes_open {
         fill(
             ctx,
-            layout::log_panel(),
+            layout::feed_panel(),
             theme::SCRIM,
             theme::layers::OVERLAY,
         );
         border(
             ctx,
-            layout::log_panel(),
+            layout::feed_panel(),
             theme::BORDER,
             theme::layers::OVERLAY,
         );
+    }
+    if flow.feed_open {
+        ghost(ctx, &map, layout::feed_ignored_toggle());
+        let triggered = Lens::on(ctx.world.resource::<Sim>())
+            .pause()
+            .map(|pause| pause.event);
+        let entries = {
+            let sim = ctx.world.resource::<Sim>();
+            let lens = Lens::on(sim);
+            crate::attention::feed(&lens, flow.show_ignored, attention::feed_cap(&active))
+        };
+        for (row, entry) in entries.iter().take(layout::FEED_ROWS).enumerate() {
+            let rect = layout::feed_row(row);
+            fill(ctx, rect, theme::GHOST, theme::layers::OVERLAY);
+            // The entry an auto-pause fired on wears the gold: the reason line
+            // above and the row it names cannot point at two different things.
+            if triggered == Some(entry.index) {
+                border(ctx, rect, theme::GOLD, theme::layers::OVERLAY + 1);
+            }
+        }
+    }
+    if flow.modes_open {
+        let held: Vec<crate::attention::Mode> = {
+            let sim = ctx.world.resource::<Sim>();
+            let lens = Lens::on(sim);
+            crate::attention::EventClass::all()
+                .into_iter()
+                .map(|class| lens.attention().mode(class))
+                .collect()
+        };
+        for (row, mode_held) in held.into_iter().enumerate() {
+            for (slot, mode) in crate::attention::Mode::ALL.iter().copied().enumerate() {
+                let button = layout::modes_radio(row, slot);
+                if mode == mode_held {
+                    ui::button(ctx, map.to_world_rect(button), true, theme::layers::OVERLAY);
+                } else {
+                    ghost(ctx, &map, button);
+                }
+            }
+        }
     }
     if flow.tuner.open {
         fill(

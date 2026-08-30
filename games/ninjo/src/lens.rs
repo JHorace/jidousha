@@ -32,11 +32,13 @@
 //! [`Lens`] and no `Sim` at all, which is the structural half of the rule that
 //! this comment is the readable half of.
 
+use crate::attention::{Attention, Pause};
 use crate::constants::Tuning;
+use crate::grid::Tile;
 use crate::people::Character;
 use crate::sim::{Activity, Event, Party, Sim, Site};
 use crate::stores::{FactSet, Regarded};
-use crate::traits::{self, MarkId};
+use crate::traits::{self, MarkId, TraitId};
 
 /// One view of the world, for one observer.
 ///
@@ -91,6 +93,27 @@ impl<'a> Lens<'a> {
         &self.sim.events
     }
 
+    // ── the attention architecture (GDD §3) ──────────────────────────────
+
+    /// What each class of event currently does to the world.
+    ///
+    /// Read through the lens like everything else, because it is sim state:
+    /// the config panel shows what the *simulation* will do, never a copy of
+    /// it kept beside the screen.
+    pub fn attention(&self) -> &'a Attention {
+        &self.sim.attention
+    }
+
+    /// Why the world stopped itself, if it did.
+    pub fn pause(&self) -> Option<Pause> {
+        self.sim.paused_by
+    }
+
+    /// How many times the world has stopped itself.
+    pub fn pauses(&self) -> u64 {
+        self.sim.pauses
+    }
+
     // ── the people ───────────────────────────────────────────────────────
 
     /// Everyone in the settlement, in registry order.
@@ -106,6 +129,50 @@ impl<'a> Lens<'a> {
     /// A character's name, for a line that has to say who.
     pub fn name(&self, index: usize) -> &'a str {
         self.person(index).map_or("someone", |person| person.name)
+    }
+
+    /// What this character has in their purse (GDD §4.1).
+    pub fn wallet(&self, index: usize) -> i64 {
+        self.person(index).map_or(0, |person| person.wallet)
+    }
+
+    /// How hard the need presses on them.
+    pub fn desperation(&self, index: usize) -> i64 {
+        self.person(index).map_or(0, |person| person.desperation)
+    }
+
+    /// Why it presses — the sentence that makes two identical desperations two
+    /// different problems (GDD §3).
+    pub fn source(&self, index: usize) -> &'a str {
+        self.person(index).map_or("", |person| person.source)
+    }
+
+    /// What they carry, in the order the registry authored it.
+    pub fn traits(&self, index: usize) -> &'a [TraitId] {
+        self.person(index).map_or(&[], |person| &person.traits)
+    }
+
+    /// Where they live.
+    pub fn home(&self, index: usize) -> Option<Tile> {
+        self.person(index).map(|person| person.home)
+    }
+
+    /// What they are doing right now, as the character panel says it.
+    ///
+    /// Derived from the same facts the map draws them with: a character is at
+    /// home unless a party they field is out, and then they are doing what
+    /// that party is doing. Wave 1's autonomy gives them something of their
+    /// own to be doing and this answer grows a term; the panel does not.
+    pub fn activity_line(&self, index: usize) -> String {
+        match self
+            .sim
+            .parties
+            .iter()
+            .find(|party| party.member == index && party.activity != Activity::Idle)
+        {
+            Some(party) => format!("out with {} - {}", party.name, party.status()),
+            None => "at home, and nobody has asked them for anything".to_owned(),
+        }
     }
 
     /// Whether this character is standing at their home tile.
@@ -195,6 +262,18 @@ pub fn identity(checks: &mut crate::checks::Checks, tuning: &Tuning) {
     sim.shared.write_mark(b, MarkId::Skimmer);
     sim.shared.drift(tuning);
     sim.treasury = 137;
+    // And into the attention state, which is sim state for the same reason
+    // the stores are: a replay carries it.
+    sim.attention.set(
+        crate::attention::EventClass::Departed,
+        crate::attention::Mode::PauseAndFocus,
+    );
+    sim.paused_by = Some(crate::attention::Pause {
+        event: 0,
+        class: crate::attention::EventClass::Departed,
+        minute: 41,
+    });
+    sim.pauses = 3;
 
     let lens = Lens::on(&sim);
     checks.require(
@@ -222,6 +301,50 @@ pub fn identity(checks: &mut crate::checks::Checks, tuning: &Tuning) {
             sim.shared.drifts()
         ),
     );
+    // The attention architecture reads through the lens like everything else:
+    // the config panel shows what the *simulation* will do.
+    checks.require(
+        lens.attention() == &sim.attention
+            && lens.pause() == sim.paused_by
+            && lens.pauses() == sim.pauses,
+        "the knowledge lens does not hand back the attention state the world holds",
+        format!(
+            "the lens reads {} / {:?} / {} pauses and the world holds {} / {:?} / {}",
+            lens.attention().stamp(),
+            lens.pause(),
+            lens.pauses(),
+            sim.attention.stamp(),
+            sim.paused_by,
+            sim.pauses
+        ),
+    );
+    for who in 0..sim.people.len() {
+        let person = &sim.people[who];
+        checks.require(
+            lens.wallet(who) == person.wallet
+                && lens.desperation(who) == person.desperation
+                && lens.source(who) == person.source
+                && lens.traits(who) == person.traits.as_slice()
+                && lens.home(who) == Some(person.home),
+            "the knowledge lens does not hand back what a character has",
+            format!(
+                "{:?} reads {}g / desperation {} / {:?} through the lens and {}g / {} / {:?} \
+                 in the registry",
+                person.id,
+                lens.wallet(who),
+                lens.desperation(who),
+                lens.traits(who),
+                person.wallet,
+                person.desperation,
+                person.traits
+            ),
+        );
+        checks.require(
+            !lens.activity_line(who).is_empty(),
+            "the knowledge lens has nothing to say about what somebody is doing",
+            format!("{:?}'s activity line is empty", person.id),
+        );
+    }
     for from in 0..sim.people.len() {
         for to in
             std::iter::once(Regarded::Player).chain((0..sim.people.len()).map(Regarded::Person))

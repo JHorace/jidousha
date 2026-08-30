@@ -8,8 +8,10 @@
 //! seed-independence probe (no `Rng` read exists in S1), the one-grid
 //! two-readers assertion (every drawn tile against the sim's own grid), the
 //! token-position judge (the between-tile interpolation derived, never
-//! written back), the floors, the drawer session, the mutation round, and
-//! the captures a person looks at.
+//! written back), the attention batteries (the class table, the feed as a
+//! view of the transcript, the meters, and `pauses.rs`'s auto-pause claims),
+//! the floors, the drawer session, the mutation round, and the captures a
+//! person looks at.
 
 use std::process::ExitCode;
 
@@ -20,11 +22,10 @@ use crate::checks::{Checks, greater};
 use crate::constants::Tuning;
 use crate::grid::{LOCATIONS, Terrain, Tile};
 use crate::path::route;
-use crate::sim::Activity;
 use crate::sweep::{Act, Conducted, Directive, Photo, Session, When, conduct, transcript};
 use crate::{
-    camera, capture, floors, frames, grid, layout, lens, library, links, modules, mutation, people,
-    restart, screens, stores, sweep, theme, traits,
+    camera, capture, floors, grid, layout, lens, library, links, modules, mutation, people,
+    restart, screens, shots, stores, sweep, theme, traits,
 };
 
 /// The surface the reference run draws at: the 960x540 chrome design doubled,
@@ -35,29 +36,69 @@ pub const HEADLESS_VIEWPORT: PhysicalSize = crate::WINDOW;
 /// on purpose: horizontal shrink is the axis scaling defects live on.
 pub const NARROW_VIEWPORT: PhysicalSize = PhysicalSize::new(600, 540);
 
-/// The photographed session: the all-1x script, with the log drawer opened
-/// once the first quests have completed — the two screenshots the phase owes
-/// (parties mid-travel on different routes; the log after a completed quest).
+/// The photographed session: the all-1x script, played the way wave 0a's
+/// question is asked — the player tells the world that a completed quest is
+/// worth stopping for, and then gets stopped four times.
+///
+/// **It is the same orders as the sweep's baseline**, at the same world-
+/// minutes, so its transcript must come out identical: the auto-pauses stretch
+/// wall time and move no world-time address. `run` asserts exactly that, which
+/// makes this session the auto-pause half of the invariance claim as well as
+/// the source of every screenshot.
 pub fn photographed(viewport: PhysicalSize) -> Conducted {
-    let mut script: Vec<Directive> = vec![Directive {
-        when: When::Tick(5),
+    // The class the config panel is set to stop on, and where its radio is.
+    let pause_row = crate::attention::EventClass::QuestComplete.index();
+    let pause_slot = crate::attention::Mode::ALL
+        .iter()
+        .position(|mode| *mode == crate::attention::Mode::PauseAndFocus)
+        .unwrap_or(0);
+    let click_ui = |when: When, at: Vec2| Directive {
+        when,
+        what: Act::ClickUi(at),
+    };
+    let resume = |minute: u64, after: u64| Directive {
+        when: When::MinuteHeld { minute, after },
         what: Act::Tap(Key::Digit1),
-    }];
+    };
+    let mut script: Vec<Directive> = vec![
+        // The config, before the clock starts: a recorded input that changes
+        // what the world will do.
+        click_ui(When::Tick(12), layout::modes_button().center()),
+        click_ui(
+            When::Tick(16),
+            layout::modes_radio(pause_row, pause_slot).center(),
+        ),
+        click_ui(When::Tick(24), layout::modes_button().center()),
+        Directive {
+            when: When::Tick(28),
+            what: Act::Tap(Key::Digit1),
+        },
+    ];
     script.extend(sweep::order(8, 0, 0));
     script.extend(sweep::order(12, 1, 1));
     script.extend(sweep::order(20, 2, 2));
-    // Open the log once OWL's and CRANE's quests have completed, so the
-    // capture shows quest-complete lines; close it again before the second
-    // wave (a click anywhere closes the drawer).
-    script.push(Directive {
-        when: When::Minute(180),
-        what: Act::ClickUi(layout::log_button().center()),
-    });
-    script.push(Directive {
-        when: When::Minute(184),
-        what: Act::ClickUi(Vec2::new(480.0, 460.0)),
-    });
+    // Open the feed and leave it open across the first three completions, so
+    // the photograph at minute 161 catches the world stopped with its reason
+    // on screen. Every resume is the player pressing 1, which is what a
+    // player does; the world-times on the far side are unchanged.
+    script.push(click_ui(When::Minute(100), layout::feed_button().center()));
+    script.push(resume(161, 60));
+    script.push(resume(176, 20));
+    script.push(resume(222, 20));
+    script.push(click_ui(When::Minute(300), layout::feed_button().center()));
     script.extend(sweep::order(330, 0, 3));
+    script.push(resume(606, 20));
+    // Somebody to look at: Steve fields no party, so he is at his doorstep at
+    // every minute of this scenario.
+    let steve = people::roster()
+        .iter()
+        .position(|person| person.id == "steve")
+        .unwrap_or(0);
+    let doorstep = people::roster()[steve].home.center();
+    script.push(Directive {
+        when: When::Minute(640),
+        what: Act::ClickWorld(doorstep),
+    });
     let photos = [
         // The settlement before anything is dispatched: the whole cast
         // standing at their homes, named. Wave 0b's own exit picture - the
@@ -67,14 +108,28 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
             minute: 0,
             tick: 10,
         },
+        // The config panel, with the class the session will be stopped by
+        // set to pause.
+        Photo {
+            name: "modes",
+            minute: 0,
+            tick: 20,
+        },
         Photo {
             name: "map",
             minute: 40,
             tick: 0,
         },
+        // The feed, at the world-minute the world stopped itself.
         Photo {
-            name: "log",
-            minute: 181,
+            name: "feed",
+            minute: 161,
+            tick: 0,
+        },
+        // A character looked at, with the selection ring on their figure.
+        Photo {
+            name: "person",
+            minute: 645,
             tick: 0,
         },
     ];
@@ -387,64 +442,44 @@ pub fn run_camera(viewport: PhysicalSize) -> Camera {
     camera::camera_for(viewport)
 }
 
-/// **The tokens sit where the derivation says** (ADR-0041, DESIGN §3): the
-/// mid-travel frame carries a token-sized quad at each party's derived
-/// position — presentation read from discrete state, never written back.
-fn judge_tokens(checks: &mut Checks, shot: &sweep::Shot) {
-    let tuning = Tuning::SHIPPED;
-    let reading = shot.clock.reading(&tuning);
-    let mut travelling = 0;
-    for (index, party) in shot.sim.parties.iter().enumerate() {
-        if matches!(
-            party.activity,
-            Activity::Outbound { .. } | Activity::Homebound { .. }
-        ) {
-            travelling += 1;
-        }
-        let expected = screens::token_position(party, reading) - Vec2::splat(layout::TOKEN * 0.5)
-            + Vec2::new(index as f32 * 4.0, index as f32 * -4.0);
-        let drawn = shot.frame.quads().iter().any(|quad| {
-            let bounds = quad.bounds();
-            crate::checks::near(bounds.min.x, expected.x)
-                && crate::checks::near(bounds.min.y, expected.y)
-                && crate::checks::near(bounds.size().x, layout::TOKEN)
-        });
+/// **A tap is a click, and the engine did that** (`jidousha-api.md`: the
+/// first finger down is mirrored onto the primary pointer).
+///
+/// Verified rather than built: this game has no touch code at all, and the
+/// point of the check is that it does not need any — a finger landing on a
+/// character's figure selects them, through the same hit-test a mouse uses,
+/// with no `PointerMoved` and no `ButtonPressed` in the snapshot.
+fn touch_selects(checks: &mut Checks) {
+    let cast = people::roster();
+    let Some(steve) = cast.iter().position(|person| person.id == "steve") else {
         checks.require(
-            drawn,
-            "a party token is not drawn at its derived position",
-            format!(
-                "{}'s token should sit at ({:.1}, {:.1}) at clock reading {reading:.2} and no \
-                 token-sized quad does",
-                party.name, expected.x, expected.y
-            ),
+            false,
+            "the touch probe names somebody who is not in the roster",
+            "people::roster has no \"steve\"".to_owned(),
         );
-    }
+        return;
+    };
+    let script = [Directive {
+        when: When::Tick(5),
+        what: Act::TouchWorld(cast[steve].home.center()),
+    }];
+    let mut session = Session::plain(Tuning::SHIPPED, &script, 12);
+    session.stop_at_rest = false;
+    session.probe_ticks = &[10];
+    let conducted = conduct(&session);
+    let selected = conducted
+        .probe(10)
+        .and_then(|(_, flow, ..)| flow.selected_person);
     checks.require(
-        travelling >= 2,
-        "the mid-travel photograph does not show two parties on the road",
+        selected == Some(steve),
+        "a finger on a character's figure did not select them",
         format!(
-            "{travelling} of {} parties are travelling at the photographed minute; \
-             simultaneity is the point",
-            shot.sim.parties.len()
+            "after a touch at {:?}'s doorstep the panel is open on {:?}; the engine mirrors \
+             the first finger onto the primary pointer, so a tap is a click and this game \
+             writes no touch code",
+            cast[steve].name,
+            selected.map(|who| cast[who].name)
         ),
-    );
-    let routes: Vec<Option<Tile>> = shot
-        .sim
-        .parties
-        .iter()
-        .map(|party| match &party.activity {
-            Activity::Outbound { route, .. } => route.tiles.last().copied(),
-            _ => None,
-        })
-        .collect();
-    let distinct = routes
-        .iter()
-        .flatten()
-        .collect::<std::collections::BTreeSet<_>>();
-    checks.require(
-        distinct.len() >= 2,
-        "the two travelling parties are not on visibly different routes",
-        format!("outbound goals: {routes:?}"),
     );
 }
 
@@ -630,85 +665,16 @@ pub fn run() -> ExitCode {
             baseline.events.len()
         ),
     );
-    if let Some(shot) = photographed_run.photo("map") {
-        judge_terrain(&mut checks, &shot.frame, HEADLESS_VIEWPORT);
-        judge_tokens(&mut checks, shot);
-        frames::judge_chrome(&mut checks, &photographed_run, shot, "the mid-travel map");
-        floors::judge_frame_floor(
-            &mut checks,
-            photographed_run.font,
-            &shot.frame,
-            "the mid-travel map",
-        );
-    } else {
-        checks.require(
-            false,
-            "the mid-travel photograph was never taken",
-            "the conductor's photo schedule names minute 40".to_owned(),
-        );
-    }
-    if let Some(shot) = photographed_run.photo("log") {
-        checks.require(
-            shot.flow.log_open,
-            "the log photograph was taken with the drawer shut",
-            format!("log_open is {}", shot.flow.log_open),
-        );
-        let complete = shot.flow.log.iter().any(|line| line.contains("completed"));
-        checks.require(
-            complete,
-            "the log photograph carries no completed quest",
-            format!("the log at the photograph reads {:?}", shot.flow.log),
-        );
-        frames::judge_chrome(&mut checks, &photographed_run, shot, "the log drawer");
-    } else {
-        checks.require(
-            false,
-            "the log photograph was never taken",
-            "the conductor's photo schedule names minute 181".to_owned(),
-        );
-    }
-
-    // --- the settlement: the cast, at home, named --------------------------
-    if let Some(shot) = photographed_run.photo("settlement") {
-        let lens = lens::Lens::on(&shot.sim);
-        let away: Vec<&str> = (0..lens.people().len())
-            .filter(|index| !lens.at_home(*index))
-            .map(|index| lens.name(index))
-            .collect();
-        checks.require(
-            away.is_empty() && lens.people().len() == people::roster().len(),
-            "the settlement photograph does not show the whole cast at home",
-            format!(
-                "{away:?} are away at the photographed tick, and the frame shows {} of {} \
-                 people; nothing has been dispatched yet",
-                lens.people().len(),
-                people::roster().len()
-            ),
-        );
-        // Every figure and every name on the frame, at the position the panel
-        // says - the same judge the chrome gets, over map-space content.
-        frames::judge_chrome(&mut checks, &photographed_run, shot, "the settlement");
-        floors::judge_frame_floor(
-            &mut checks,
-            photographed_run.font,
-            &shot.frame,
-            "the settlement",
-        );
-        judge_terrain(&mut checks, &shot.frame, HEADLESS_VIEWPORT);
-    } else {
-        checks.require(
-            false,
-            "the settlement photograph was never taken",
-            "the conductor's photo schedule names tick 10, before the first dispatch".to_owned(),
-        );
-    }
+    shots::judge(&mut checks, &photographed_run, &tuning);
 
     // --- the culling, both ways --------------------------------------------
     culling_probe(&mut checks);
+    // --- and a tap, which the engine already made a click ------------------
+    touch_selects(&mut checks);
 
     // --- the layout floors --------------------------------------------------
     floors::layout_floors(&mut checks);
-    floors::tuner_floors(&mut checks);
+    floors::drawer_floors(&mut checks);
     floors::content_floors(&mut checks, &baseline);
     let ui_report = floors::uimap_contract(&mut checks);
 
@@ -743,9 +709,10 @@ pub fn run() -> ExitCode {
             "occurrences fire before the clock reaches them",
         ),
         (
+            "handle_input",
             "fire_due",
-            "collect_events",
-            "the log trails its events by a tick",
+            "a change to the auto-pause config lands a tick after the events it was meant \
+             to catch",
         ),
     ] {
         let (a, b) = (marks(first), marks(second));
@@ -777,6 +744,13 @@ pub fn run() -> ExitCode {
             ),
         );
     }
+
+    // --- the attention architecture (GDD §3, wave 0a) ----------------------
+    crate::attention::vocabulary(&mut checks);
+    crate::attention::judge_at(&mut checks, &tuning);
+    crate::attention::feed_is_a_view(&mut checks, &baseline);
+    crate::meters::registry(&mut checks, &tuning);
+    let pauses = crate::pauses::judge(&mut checks);
 
     // --- the people substrate: the vocabulary, the registry, the stores ----
     traits::vocabulary(&mut checks);
@@ -828,6 +802,13 @@ pub fn run() -> ExitCode {
         traits::MarkId::ALL.len(),
         traits::REACTIONS.len()
     );
+    println!(
+        "  attention: {} classes, {} meter chips, config {}",
+        crate::attention::CLASSES.len(),
+        crate::meters::METERS.len(),
+        crate::attention::Attention::opening().stamp()
+    );
+    println!("  auto-pause: {pauses}");
     println!("  module-off matrix: {matrix}");
     println!("  module set: {}", modules::ModuleSet::ALL.stamp());
     println!("  mutation round: {mutations}");

@@ -30,21 +30,88 @@ pub fn inside(area: Rect, bounds: Rect) -> bool {
         && bounds.max.y <= area.max.y + SLACK
 }
 
-/// Every rectangle a click does something in, with the name a message uses.
+/// Every rectangle a click does something in on the base screen, with the
+/// name a message uses.
+///
+/// **Everything that can be up at once**, including the faces list and the
+/// character panel: a drawer shuts both (`Flow::close_everything`), so these
+/// are exactly the controls that share a screen, and the overlap floor is
+/// about siblings.
 pub fn targets() -> Vec<(String, Rect)> {
     let mut out: Vec<(String, Rect)> = Vec::new();
     for (index, label) in screens::chip_labels().into_iter().enumerate() {
         out.push((format!("the {label} chip"), layout::speed_chip(index)));
     }
-    out.push(("the log drawer's handle".to_owned(), layout::log_button()));
+    out.push(("the feed drawer's handle".to_owned(), layout::feed_button()));
     out.push((
         "the tuning drawer's handle".to_owned(),
         layout::tune_button(),
+    ));
+    out.push((
+        "the auto-pause drawer's handle".to_owned(),
+        layout::modes_button(),
+    ));
+    for (index, spec) in crate::meters::METERS.iter().enumerate() {
+        out.push((
+            format!("the {} meter chip", spec.id),
+            layout::meter_chip(index),
+        ));
+    }
+    for index in 0..layout::FACE_ROWS {
+        out.push((format!("face row {index}"), layout::faces_row(index)));
+    }
+    out.push((
+        "the character panel's close".to_owned(),
+        layout::person_close(),
     ));
     for index in 0..Sim::opening(&Tuning::SHIPPED).parties.len() {
         out.push((format!("party chip {index}"), layout::party_chip(index)));
     }
     out
+}
+
+/// Every rectangle the feed drawer answers a click in.
+pub fn feed_targets() -> Vec<(String, Rect)> {
+    let mut out = vec![(
+        "the show-ignored toggle".to_owned(),
+        layout::feed_ignored_toggle(),
+    )];
+    for index in 0..layout::FEED_ROWS {
+        out.push((format!("feed row {index}"), layout::feed_row(index)));
+    }
+    out
+}
+
+/// Every rectangle the auto-pause config drawer answers a click in.
+pub fn modes_targets() -> Vec<(String, Rect)> {
+    let mut out = Vec::new();
+    for (row, class) in crate::attention::EventClass::all().into_iter().enumerate() {
+        for (slot, mode) in crate::attention::Mode::ALL.iter().copied().enumerate() {
+            out.push((
+                format!("{}'s {} radio", class.name(), mode.name()),
+                layout::modes_radio(row, slot),
+            ));
+        }
+    }
+    out
+}
+
+/// The controls that share this screen — whichever surface is up.
+///
+/// One function, because "a row of text may not lie across a control it is not
+/// the label of" is a question about *what is on screen together*, and a
+/// drawer covers everything under it.
+pub fn controls_for(flow: &Flow) -> Vec<(String, Rect)> {
+    if flow.tuner.open {
+        return tuner_targets();
+    }
+    if flow.feed_open {
+        return feed_targets();
+    }
+    if flow.modes_open {
+        return modes_targets();
+    }
+    targets()
 }
 
 /// Every rectangle the tuning drawer answers a click in — a set of its own,
@@ -129,10 +196,30 @@ pub fn layout_floors(checks: &mut Checks) {
     }
 }
 
-/// The floors over the tuning drawer's own controls.
-pub fn tuner_floors(checks: &mut Checks) {
-    let drawer = layout::tuner_panel();
-    for (what, rect) in tuner_targets() {
+/// The floors over every drawer's own controls: the tuning drawer's steppers,
+/// the feed's rows and toggle, and the config's radios.
+pub fn drawer_floors(checks: &mut Checks) {
+    for (drawer, controls, handle) in [
+        (
+            layout::tuner_panel(),
+            tuner_targets(),
+            layout::tune_button(),
+        ),
+        (layout::feed_panel(), feed_targets(), layout::feed_button()),
+        (
+            layout::feed_panel(),
+            modes_targets(),
+            layout::modes_button(),
+        ),
+    ] {
+        drawer_floor(checks, drawer, &controls, handle);
+    }
+}
+
+/// One drawer's controls against the floors.
+fn drawer_floor(checks: &mut Checks, drawer: Rect, controls: &[(String, Rect)], handle: Rect) {
+    for (what, rect) in controls {
+        let (what, rect) = (what.clone(), *rect);
         let size = rect.size();
         checks.require(
             !greater(theme::MIN_TARGET, size.x) && !greater(theme::MIN_TARGET, size.y),
@@ -151,7 +238,6 @@ pub fn tuner_floors(checks: &mut Checks) {
             format!("{what} is {rect:?} and the drawer is {drawer:?}"),
         );
     }
-    let controls = tuner_targets();
     for (index, (what, rect)) in controls.iter().enumerate() {
         for (other_what, other) in controls.iter().skip(index + 1) {
             checks.require(
@@ -162,12 +248,9 @@ pub fn tuner_floors(checks: &mut Checks) {
         }
     }
     checks.require(
-        !layout::tune_button().overlaps(drawer),
-        "the tuning drawer covers its own handle",
-        format!(
-            "the handle is {:?} and the drawer is {drawer:?}",
-            layout::tune_button()
-        ),
+        !handle.overlaps(drawer),
+        "a drawer covers its own handle",
+        format!("the handle is {handle:?} and the drawer is {drawer:?}"),
     );
 }
 
@@ -241,6 +324,11 @@ pub fn uimap_contract(checks: &mut Checks) -> String {
 }
 
 /// The screen states the content floors judge, built from a conducted run.
+///
+/// Every surface this build has, in the state that puts the most on it: the
+/// opening screen, the feed after a full run (with a pause reason showing and
+/// the ignored classes revealed), the auto-pause config, a character's panel
+/// beside a drilled meter chip, and the strip carrying a toast.
 pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clock)> {
     let opening = (
         "the opening screen",
@@ -248,20 +336,43 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
         Sim::opening(&Tuning::SHIPPED),
         Clock::opening(),
     );
-    // The end of the conducted run: full log, everything home.
-    let mut logged = Flow::default();
-    {
-        let lens = Lens::on(&baseline.sim);
-        for event in &baseline.events {
-            logged.note(event.line(&lens));
-        }
-    }
-    let mut log_open = logged.clone();
-    log_open.log_open = true;
+    // The end of the conducted run: notices written, everything home.
+    let mut played = Flow::default();
+    played.note("d1 11:42 - running at 4x".to_owned());
+    played.note("CRANE is out - only an idle party takes orders".to_owned());
     let mut ended_clock = Clock::opening();
     ended_clock.minutes = baseline.minutes;
+    // A world that stopped itself, with the feed open on the reason: the
+    // loudest the feed gets, and the state the pause screenshot is taken in.
+    let mut paused_sim = baseline.sim.clone();
+    paused_sim.attention.set(
+        crate::attention::EventClass::QuestComplete,
+        crate::attention::Mode::PauseAndFocus,
+    );
+    if let Some(event) = paused_sim
+        .events
+        .iter()
+        .position(|event| event.class == crate::attention::EventClass::QuestComplete)
+    {
+        paused_sim.paused_by = Some(crate::attention::Pause {
+            event,
+            class: crate::attention::EventClass::QuestComplete,
+            minute: paused_sim.events[event].minute,
+        });
+        paused_sim.pauses = 1;
+    }
+    let mut feed_open = played.clone();
+    feed_open.feed_open = true;
+    feed_open.show_ignored = true;
+    let mut modes_open = played.clone();
+    modes_open.modes_open = true;
+    // A character selected and a chip drilled: the two panels that share the
+    // base screen, both up at once.
+    let mut looked_at = played.clone();
+    looked_at.selected_person = Some(baseline.sim.people.len().saturating_sub(1));
+    looked_at.drilled = Some(0);
     // A toast up, a party picked — the strip's loudest state.
-    let mut toasted = logged.clone();
+    let mut toasted = played.clone();
     toasted.selected = Some(0);
     toasted.toast = Some(crate::flow::Toast {
         text: crate::sim::Refusal::NotIdle.message("CRANE", "the Black Vault"),
@@ -270,8 +381,20 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
     vec![
         opening,
         (
-            "the ended run with the log open",
-            log_open,
+            "the ended run with the feed open, mid-pause",
+            feed_open,
+            paused_sim.clone(),
+            ended_clock,
+        ),
+        (
+            "the auto-pause config",
+            modes_open,
+            paused_sim.clone(),
+            ended_clock,
+        ),
+        (
+            "a character looked at, beside a drilled chip",
+            looked_at,
             baseline.sim.clone(),
             ended_clock,
         ),
@@ -291,12 +414,12 @@ pub fn content_floors(checks: &mut Checks, baseline: &Conducted) {
     let tuning = Tuning::SHIPPED;
     for (what, flow, sim, clock) in content_states(baseline) {
         let panel = screens::content(&flow, &Lens::on(&sim), &clock, &tuning);
-        judge_panel(checks, &panel, what, flow.tuner.open);
+        judge_panel(checks, &panel, what, &controls_for(&flow));
     }
 }
 
 /// One panel against the floors.
-pub fn judge_panel(checks: &mut Checks, panel: &Panel, what: &str, tuner_open: bool) {
+pub fn judge_panel(checks: &mut Checks, panel: &Panel, what: &str, controls: &[(String, Rect)]) {
     let map_rect = crate::grid::grid().world_rect();
     for text in panel.runs.iter().chain(panel.world_runs.iter()) {
         checks.require(
@@ -317,17 +440,12 @@ pub fn judge_panel(checks: &mut Checks, panel: &Panel, what: &str, tuner_open: b
             format!("{what}: {:?} occupies {:?}", text.text, text.bounds()),
         );
         // Nothing lies across a control it is not the label of.
-        let controls: Vec<(String, Rect)> = if tuner_open {
-            tuner_targets()
-        } else {
-            targets()
-        };
         for (control, target) in controls {
-            if !text.bounds().overlaps(target) {
+            if !text.bounds().overlaps(*target) {
                 continue;
             }
             checks.require(
-                inside(target, text.bounds()),
+                inside(*target, text.bounds()),
                 "a row of text lies across a control it is not the label of",
                 format!(
                     "{what}: {:?} at {:?} crosses {control} at {target:?}",
@@ -444,7 +562,7 @@ pub fn judge_tuner_screen(checks: &mut Checks, drawer: &crate::restart::DrawerRu
             &Clock::opening(),
             &drawer.applied_active,
         );
-        judge_panel(checks, &panel, what, flow.tuner.open);
+        judge_panel(checks, &panel, what, &controls_for(flow));
     }
     // The refused-link state, staged: the longest refusal in the hint row.
     let mut refused = drawer.pending_flow.clone();
@@ -455,7 +573,12 @@ pub fn judge_tuner_screen(checks: &mut Checks, drawer: &crate::restart::DrawerRu
         &Clock::opening(),
         &drawer.pending_active,
     );
-    judge_panel(checks, &panel, "the drawer with a refused link", true);
+    judge_panel(
+        checks,
+        &panel,
+        "the drawer with a refused link",
+        &controls_for(&refused),
+    );
     if let Some(shot) = &drawer.shot {
         judge_frame_floor(checks, drawer.font, &shot.frame, "the tuning drawer");
     }
