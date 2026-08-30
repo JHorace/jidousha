@@ -12,10 +12,13 @@ subsystems (`docs/internal/<subsystem>.md`) or the decisions behind the rules
 
 ## 1. What it does
 
-Ten scripts, each answering one question (plus the web pipeline pair,
-`tools/build-web` and `tools/serve-web` — §3 and web-publish.md). All are
-Python 3.8+, standard library only — no third-party import, so they keep
-working when the package ecosystem is exactly what broke.
+Each script answers one question — the table below is the list, and the list is
+the count (plus the web pipeline pair, `tools/build-web` and `tools/serve-web`
+— §3 and web-publish.md). This sentence used to open with a number, which is a
+second place to keep the table right and had drifted by one since
+`tools/check-api-prose` landed; the table is the one place. All are Python 3.8+,
+standard library only — no third-party import, so they keep working when the
+package ecosystem is exactly what broke.
 
 | Script | Question | Exit codes |
 |---|---|---|
@@ -116,6 +119,22 @@ second mode would be a second way to do one thing.
   two statements move together — in particular the `verified ` prefix, which a
   game author cannot discover from anywhere else and whose absence is reported as
   a *tooling* fault rather than as their bug.
+
+  **One process, one verdict — however many passes the game runs inside it.**
+  `tools/verify` starts the game once, gives it `--verify`, and reads a single
+  `verified ` line; `tools/test` records one `game-verify:<name>` phase per game
+  and never one per pass. A game whose check is a *matrix* — ninjo runs its
+  suite once per module with that module alone switched off, plus an
+  everything-on baseline (its GDD §5 and §9; the table and the iteration are
+  `games/<name>/src/modules.rs` and its `verify::module_matrix`) — conducts every
+  pass itself and reports one verdict for all of them. Two consequences a game
+  author needs: the per-run timeout (`RUN_TIMEOUT_S`, 900s) covers the whole
+  matrix rather than one pass, so a matrix that grows a row grows against that
+  budget; and a failed pass has to name *itself* in its failure text, because
+  the report file records the run, not the pass. There is nothing to register on
+  this side — the tool does not know what a module is, and adding one is a row
+  in the game's own registry; the "a game is a game because of where it lives"
+  invariant below applies unchanged.
 
   **A verify mode collects its failures rather than exiting on the first**, since
   E0 run 5 (e0-findings.md F-061). `verify::run` returns an `ExitCode`; a `Checks`
