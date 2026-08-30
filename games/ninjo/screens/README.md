@@ -12,11 +12,16 @@ as the change.
 
 | File | Screen | Surface |
 |---|---|---|
+| `ninjo-settlement-reference.png` | the settlement at world-minute 0 — the whole cast standing at their home tiles, named, before anything is dispatched | 1920x1080 |
 | `ninjo-map-reference.png` | the map at world-minute 40 — three parties out, two mid-travel on visibly different routes | 1920x1080 |
 | `ninjo-log-reference.png` | the log drawer after the first quests completed, every row world-time stamped | 1920x1080 |
 | `ninjo-map-narrow.png` | the same map | 600x540 |
 | `ninjo-log-narrow.png` | the same log | 600x540 |
 | `ninjo-tuning-reference.png` | the tuning drawer, MIRE pending in gold, APPLY lit | 1920x1080 |
+
+The settlement shot is reference-only: it is a picture of *who is in the
+world*, and the scaling defects the narrow surface exists to catch are on
+the same chrome the map and log pairs already cover.
 
 The narrow set exists to catch scaling regressions — the chrome fits the
 view uniformly and centred (`camera::UiMap`), and a defect there is

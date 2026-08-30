@@ -40,17 +40,22 @@ mod flow;
 mod frames;
 mod grid;
 mod layout;
+mod lens;
 mod library;
 mod links;
+mod modules;
 mod mutation;
 mod path;
+mod people;
 mod presets;
 mod restart;
 mod screens;
 mod sim;
 mod sprites;
+mod stores;
 mod sweep;
 mod theme;
+mod traits;
 mod tuning;
 mod ui;
 mod verify;
@@ -124,6 +129,12 @@ fn open_the_world(world: &mut World) {
         None => planted.unwrap_or(Tuning::SHIPPED),
     };
     world.insert_resource(tuning);
+    // The module set is a simulation input like the constants: whatever a
+    // harness planted stands, and a played run has everything on. It rides
+    // every stamp (GDD §9).
+    if world.find_resource::<modules::ModuleSet>().is_none() {
+        world.insert_resource(modules::ModuleSet::ALL);
+    }
 
     // `?seed=` is the rest of the repro-link family — a simulation input,
     // read once. S1 never reads the Rng; the stamp is what the seed is for.

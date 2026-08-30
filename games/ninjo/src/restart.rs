@@ -134,6 +134,7 @@ pub fn drawer_run() -> DrawerRun {
     let probe_ticks = [OPENED_AT, PENDING_AT, APPLIED_AT];
     let conducted = conduct(&Session {
         tuning: Tuning::SHIPPED,
+        modules: crate::modules::ModuleSet::ALL,
         seed: None,
         directives: &script,
         photos: &photos,

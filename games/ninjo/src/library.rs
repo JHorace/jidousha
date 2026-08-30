@@ -9,7 +9,9 @@
 //! wrong is always the one added after the list.
 
 use crate::checks::Checks;
+use crate::constants::Tuning;
 use crate::grid::LOCATIONS;
+use crate::lens::Lens;
 use crate::sim::Sim;
 use crate::sprites::{self, Art};
 use crate::sweep::Conducted;
@@ -96,7 +98,8 @@ pub fn library(checks: &mut Checks) {
         }
         markers.push((spec.name, art));
     }
-    let parties = Sim::opening().parties;
+    let opening = Sim::opening(&Tuning::SHIPPED);
+    let parties = &opening.parties;
     for (index, party) in parties.iter().enumerate() {
         for other in parties.iter().skip(index + 1) {
             checks.require(
@@ -121,8 +124,7 @@ pub fn printable_strings(checks: &mut Checks, baseline: &Conducted) {
     let mut note = |what: String, text: String| strings.push((what, text));
 
     for (what, flow, sim, clock) in floors::content_states(baseline) {
-        for text in
-            screens::content(&flow, &sim, &clock, &crate::constants::Tuning::SHIPPED).all_strings()
+        for text in screens::content(&flow, &Lens::on(&sim), &clock, &Tuning::SHIPPED).all_strings()
         {
             note(format!("{what}'s screen"), text.to_owned());
         }
@@ -134,11 +136,12 @@ pub fn printable_strings(checks: &mut Checks, baseline: &Conducted) {
     tuner.tuner.pending = crate::presets::PRESETS
         .last()
         .map_or(crate::constants::Tuning::SHIPPED, |preset| preset.tuning);
+    let opening = Sim::opening(&Tuning::SHIPPED);
     for text in screens::content(
         &tuner,
-        &Sim::opening(),
+        &Lens::on(&opening),
         &crate::clock::Clock::opening(),
-        &crate::constants::Tuning::SHIPPED,
+        &Tuning::SHIPPED,
     )
     .all_strings()
     {
@@ -147,8 +150,11 @@ pub fn printable_strings(checks: &mut Checks, baseline: &Conducted) {
     for message in crate::links::refusals() {
         note("a refused link".to_owned(), message);
     }
-    for event in &baseline.events {
-        note("an event line".to_owned(), event.line(&baseline.sim));
+    {
+        let lens = Lens::on(&baseline.sim);
+        for event in &baseline.events {
+            note("an event line".to_owned(), event.line(&lens));
+        }
     }
     for refusal in [
         crate::sim::Refusal::NotIdle,
@@ -162,8 +168,22 @@ pub fn printable_strings(checks: &mut Checks, baseline: &Conducted) {
     }
     note("the opening stamp".to_owned(), clock::stamp(0));
     note("a late stamp".to_owned(), clock::stamp(baseline.minutes));
-    for quest in Sim::opening().sites.iter().flat_map(|site| &site.quests) {
+    for quest in opening.sites.iter().flat_map(|site| &site.quests) {
         note("a quest name".to_owned(), quest.name.to_owned());
+    }
+    // The people's own strings: names, ids, and the source lines that make two
+    // identical desperations two different problems.
+    for person in &opening.people {
+        note("a character's name".to_owned(), person.name.to_owned());
+        note("a character's id".to_owned(), person.id.to_owned());
+        note("a desperation source".to_owned(), person.source.to_owned());
+    }
+    for def in crate::traits::TRAITS {
+        note("a trait's name".to_owned(), def.name.to_owned());
+        note("a trait's description".to_owned(), def.line.to_owned());
+    }
+    for mark in crate::traits::MarkId::ALL.iter().copied() {
+        note("a mark's name".to_owned(), mark.name().to_owned());
     }
 
     for (what, text) in &strings {

@@ -25,6 +25,7 @@ use crate::clock::Clock;
 use crate::constants::Tuning;
 use crate::flow::{Flow, SessionSeed};
 use crate::grid::{LOCATIONS, Tile};
+use crate::modules::ModuleSet;
 use crate::sim::{Event, EventClass, Sim};
 use crate::{camera, layout, sim, sprites, verify};
 
@@ -153,6 +154,9 @@ impl Conducted {
 pub struct Session<'a> {
     /// The constants to plant.
     pub tuning: Tuning,
+    /// Which modules are on. The module-off matrix (GDD §9) is a list of
+    /// these; a played run uses `ModuleSet::ALL`.
+    pub modules: ModuleSet,
     /// The seed to plant (`None` runs at the authored zero).
     pub seed: Option<u64>,
     /// The script, in due order — the conductor consumes it front-first.
@@ -174,6 +178,7 @@ impl Session<'_> {
     pub fn plain(tuning: Tuning, directives: &[Directive], max_ticks: u64) -> Session<'_> {
         Session {
             tuning,
+            modules: ModuleSet::ALL,
             seed: None,
             directives,
             photos: &[],
@@ -193,6 +198,7 @@ pub fn conduct(session: &Session<'_>) -> Conducted {
     };
     let mut sim = headless(config, crate::register);
     sim.world_mut().insert_resource(session.tuning);
+    sim.world_mut().insert_resource(session.modules);
     sim.world_mut().insert_resource(SessionSeed(session.seed));
     sim.world_mut()
         .insert_resource(camera::Surface(session.viewport));

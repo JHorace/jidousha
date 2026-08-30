@@ -17,6 +17,8 @@ use crate::camera::UiMap;
 use crate::clock::{Clock, Rate, stamp};
 use crate::constants::Tuning;
 use crate::grid::Grid;
+use crate::lens::Lens;
+use crate::modules::ModuleSet;
 use crate::sim::Sim;
 use crate::tuning::Tuner;
 use crate::{camera, layout, sim, sprites, tuning};
@@ -92,9 +94,10 @@ pub fn load_scenario(world: &mut World) {
         .unwrap_or(0);
     // The Rng is re-seeded so the stamp is honest; S1 never reads it — the
     // plumbing stays for the phases that will (DESIGN §2).
+    let tuning = *world.resource::<Tuning>();
     world.insert_resource(Rng::from_seed(seed));
     world.insert_resource(crate::grid::grid());
-    world.insert_resource(Sim::opening());
+    world.insert_resource(Sim::opening(&tuning));
     world.insert_resource(Clock::opening());
     let flow = world.resource_mut::<Flow>();
     flow.selected = None;
@@ -102,8 +105,17 @@ pub fn load_scenario(world: &mut World) {
     flow.toast = None;
     flow.logged_events = 0;
     flow.seed = seed;
+    let modules = world
+        .find_resource::<ModuleSet>()
+        .copied()
+        .unwrap_or_default();
+    let flow = world.resource_mut::<Flow>();
+    // The stamp on the opening line carries seed and module set; the
+    // constants ride the drawer's own stamp, which is always on screen while
+    // it is open (GDD §9: stamps carry seed, constants, variant, module set).
     flow.note(format!(
-        "seed {seed} - the world opens paused; space runs it"
+        "seed {seed} - {} - the world opens paused; space runs it",
+        modules.stamp()
     ));
 }
 
@@ -113,11 +125,13 @@ pub fn load_scenario(world: &mut World) {
 /// fire.
 pub fn collect_events(world: &mut World) {
     let lines: Vec<String> = {
-        let sim = world.resource::<Sim>();
+        // The log is a screen, so it reads the world through the lens like
+        // every other one (`lens.rs`).
+        let lens = Lens::on(world.resource::<Sim>());
         let from = world.resource::<Flow>().logged_events;
-        sim.events[from..]
+        lens.events()[from..]
             .iter()
-            .map(|event| event.line(sim))
+            .map(|event| event.line(&lens))
             .collect()
     };
     if lines.is_empty() {

@@ -16,6 +16,7 @@ use crate::clock::{Clock, Rate, stamp};
 use crate::constants::Tuning;
 use crate::flow::Flow;
 use crate::grid::{Grid, LOCATIONS, TOWN, Tile};
+use crate::lens::Lens;
 use crate::sim::{Activity, Sim};
 use crate::sprites::Art;
 use crate::ui::{self, IconRun, Panel, TextRun};
@@ -76,7 +77,12 @@ pub fn token_position(party: &sim::Party, now: f32) -> Vec2 {
 
 /// Everything the screen says, as data: the chrome in UI units, the map's
 /// labels in world units.
-pub fn content(flow: &Flow, sim: &Sim, clock: &Clock, tuning: &Tuning) -> Panel {
+///
+/// **Takes a [`Lens`] and no `Sim`.** That is the structural half of the
+/// knowledge-lens rule (`lens.rs`): a screen cannot read around the lens
+/// because a screen has nothing else to read. When the knowledge module makes
+/// the lens conditional, this function does not change.
+pub fn content(flow: &Flow, lens: &Lens<'_>, clock: &Clock, tuning: &Tuning) -> Panel {
     let mut panel = Panel::default();
 
     // --- top bar ------------------------------------------------------------
@@ -110,7 +116,7 @@ pub fn content(flow: &Flow, sim: &Sim, clock: &Clock, tuning: &Tuning) -> Panel 
     panel.icon(IconRun::new(layout::treasury_icon_at(), Art::Coin, 2.0));
     panel.text(TextRun::new(
         layout::treasury_text_at(),
-        format!("{}g", sim.treasury),
+        format!("{}g", lens.treasury()),
         theme::HEAD,
         theme::GOLD,
     ));
@@ -141,7 +147,7 @@ pub fn content(flow: &Flow, sim: &Sim, clock: &Clock, tuning: &Tuning) -> Panel 
         theme::SMALL,
         theme::DIM,
     ));
-    for (index, party) in sim.parties.iter().enumerate() {
+    for (index, party) in lens.parties().iter().enumerate() {
         let chip = layout::party_chip(index);
         panel.icon(IconRun::new(
             chip.min + Vec2::splat(layout::pchip::PORTRAIT),
@@ -149,9 +155,11 @@ pub fn content(flow: &Flow, sim: &Sim, clock: &Clock, tuning: &Tuning) -> Panel 
             layout::pchip::PORTRAIT_SCALE,
         ));
         let picked = flow.selected == Some(index);
+        // The token carries a character's name: the party is a band somebody
+        // in the registry fields, and the face on the chip is their portrait.
         panel.text(TextRun::new(
             chip.min + Vec2::new(layout::pchip::NAME_X, layout::pchip::NAME_TOP),
-            party.name,
+            format!("{} - {}", party.name, lens.name(party.member)),
             theme::SMALL,
             if picked { theme::GOLD } else { theme::INK },
         ));
@@ -176,11 +184,7 @@ pub fn content(flow: &Flow, sim: &Sim, clock: &Clock, tuning: &Tuning) -> Panel 
         label.layer = theme::layers::MAP_TEXT;
         panel.world_text(label);
         if index != TOWN {
-            let open = sim
-                .sites
-                .iter()
-                .find(|site| site.location == index)
-                .map_or(0, |site| site.quests.len() - site.claimed);
+            let open = lens.open_quests(index);
             let line = match open {
                 0 => "dry".to_owned(),
                 1 => "1 quest".to_owned(),
@@ -204,6 +208,35 @@ pub fn content(flow: &Flow, sim: &Sim, clock: &Clock, tuning: &Tuning) -> Panel 
         );
         marker.layer = theme::layers::MARKER;
         panel.world_icon(marker);
+    }
+
+    // --- the cast, standing at their homes ---------------------------------
+    // Idle: autonomy is wave 1, so a character is at their home tile unless a
+    // party they field has them out (`Lens::at_home`, derived and never
+    // stored). Names ride along because a face with no name is a token, and
+    // the whole point of the people substrate is that these are people.
+    for (index, person) in lens.people().iter().enumerate() {
+        if !lens.at_home(index) {
+            continue;
+        }
+        let art = person.icon;
+        let mut figure = IconRun::new(
+            layout::home_rect(person.home).min,
+            art,
+            art.scale_across(layout::HOME),
+        );
+        figure.layer = theme::layers::MARKER;
+        panel.world_icon(figure);
+        let style = theme::text(theme::SMALL, theme::INK);
+        let width = style.width_of(person.name);
+        let mut label = TextRun::new(
+            layout::home_label(person.home, width),
+            person.name,
+            theme::SMALL,
+            theme::INK,
+        );
+        label.layer = theme::layers::MAP_TEXT;
+        panel.world_text(label);
     }
 
     // --- drawers ------------------------------------------------------------
@@ -267,8 +300,8 @@ pub fn draw_map(ctx: &mut DrawCtx) {
     let now = clock.previous_reading + (clock.reading(&tuning) - clock.previous_reading) * alpha;
     let flow = ctx.world.resource::<Flow>();
     let gallery = ctx.world.resource::<crate::sprites::Gallery>().clone();
-    let sim = ctx.world.resource::<Sim>();
-    for (index, party) in sim.parties.iter().enumerate() {
+    let lens = Lens::on(ctx.world.resource::<Sim>());
+    for (index, party) in lens.parties().iter().enumerate() {
         let at = token_position(party, now)
             - Vec2::splat(layout::TOKEN * 0.5)
             // Two parties on one tile stay two tokens: a draw-time nudge per
@@ -299,7 +332,7 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
     let flow = ctx.world.resource::<Flow>().clone();
     let clock = *ctx.world.resource::<Clock>();
     let active = *ctx.world.resource::<Tuning>();
-    let sim_parties = ctx.world.resource::<Sim>().parties.len();
+    let sim_parties = Lens::on(ctx.world.resource::<Sim>()).parties().len();
 
     let fill = |ctx: &mut DrawCtx, rect: Rect, color: Color, layer: i16| {
         ui::fill(ctx, map.to_world_rect(rect), color, layer);
@@ -422,6 +455,6 @@ pub fn draw_content(ctx: &mut DrawCtx) {
     let clock = *ctx.world.resource::<Clock>();
     let tuning = *ctx.world.resource::<Tuning>();
     let sim = ctx.world.resource::<Sim>().clone();
-    let panel = content(&flow, &sim, &clock, &tuning);
+    let panel = content(&flow, &Lens::on(&sim), &clock, &tuning);
     ui::draw(ctx, &panel, &map);
 }

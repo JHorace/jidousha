@@ -1,11 +1,12 @@
 //! The captured frames: the screenshots a person looks at (giri's capture
 //! path, re-aimed at the map).
 //!
-//! Five pictures: the mid-travel map and the log drawer, each at the
-//! reference surface and at a narrow one — the narrow set exists to catch
-//! scaling regressions, which are invisible to every assertion that is not
-//! about pixels — plus the tuning drawer at reference only (a dev surface
-//! whose rows are the smallest type in the game).
+//! Six pictures: the settlement before anything has been dispatched — the
+//! cast standing at their homes, named — then the mid-travel map and the log
+//! drawer, each at the reference surface and at a narrow one (the narrow set
+//! exists to catch scaling regressions, which are invisible to every
+//! assertion that is not about pixels), plus the tuning drawer at reference
+//! only (a dev surface whose rows are the smallest type in the game).
 //!
 //! A machine with no GPU is not a failure: every runner this project has is
 //! headless and some have no graphics stack at all.
@@ -55,6 +56,23 @@ pub fn capture_screens(
     drawer: &DrawerRun,
 ) -> String {
     let mut wanted: Vec<Wanted> = Vec::new();
+    // The settlement, at the reference surface only: it is a picture of who
+    // is in the world, and the narrow set exists to catch scaling defects,
+    // which the map and log pairs already cover on the same chrome.
+    if let Some(shot) = reference.photo("settlement") {
+        wanted.push(Wanted {
+            name: "settlement-reference".to_owned(),
+            surface: verify::HEADLESS_VIEWPORT,
+            frame: shot.frame.clone(),
+            font: reference.font,
+        });
+    } else {
+        checks.require(
+            false,
+            "the settlement capture was never photographed",
+            "the settlement photo is missing from the reference run".to_owned(),
+        );
+    }
     for name in ["map", "log"] {
         if let Some(shot) = reference.photo(name) {
             wanted.push(Wanted {

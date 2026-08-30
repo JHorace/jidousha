@@ -142,7 +142,7 @@ pub fn log_title() -> Vec2 {
     Vec2::new(28.0, 50.0)
 }
 
-// ── the tuning drawer (giri's geometry, at eight constants) ────────────────
+// ── the tuning drawer (giri's geometry, at the module's constants) ────────
 
 /// The tuning drawer: from under the status bar to the bottom of the screen.
 pub fn tuner_panel() -> Rect {
@@ -150,7 +150,11 @@ pub fn tuner_panel() -> Rect {
 }
 
 /// How many stepper rows a column holds before the next one starts.
-pub const TUNER_ROWS: usize = 8;
+///
+/// Nine, so wave 0b's seventeen constants are two columns rather than three —
+/// a third column would run under the stamp, and the stamp is the one thing in
+/// the drawer that has to stay legible while every other row is being moved.
+pub const TUNER_ROWS: usize = 9;
 const TUNER_COL_X: f32 = 28.0;
 const TUNER_COL_PITCH: f32 = 312.0;
 const TUNER_ROW_Y: f32 = 110.0;
@@ -243,9 +247,9 @@ pub fn tuner_prose_width() -> f32 {
 }
 
 /// The stamp: the constants actually in effect, always visible while the
-/// drawer is open. Beside the single stepper column, which is short.
+/// drawer is open. Right of the last stepper column, which ends at 604.
 pub fn tuner_stamp() -> Vec2 {
-    Vec2::new(400.0, 110.0)
+    Vec2::new(628.0, 110.0)
 }
 
 // ── the map's own geometry (world units, not UI units) ─────────────────────
@@ -267,3 +271,22 @@ pub fn marker_label(tile: crate::grid::Tile, width: f32) -> Vec2 {
 
 /// A party token's size, in world units (16 texels at scale 2).
 pub const TOKEN: f32 = 32.0;
+
+/// How big a character standing at their home tile is drawn, in world units —
+/// the same weight as a site marker, because a person is at least as much of
+/// a thing on the map as a hole in the ground is.
+///
+/// Not a click target: nobody may be clicked in wave 0b (autonomy is wave 1,
+/// sheets are wave 0a's attention work), so the 32x32 target floor does not
+/// bind here. The size is a signifier, not an affordance.
+pub const HOME: f32 = 32.0;
+
+/// A character's rectangle, centred over their home tile.
+pub fn home_rect(tile: crate::grid::Tile) -> Rect {
+    Rect::from_center_size(tile.center(), Vec2::splat(HOME))
+}
+
+/// Where a character's name starts, under them.
+pub fn home_label(tile: crate::grid::Tile, width: f32) -> Vec2 {
+    tile.center() + Vec2::new(-width * 0.5, HOME * 0.5 + 2.0)
+}

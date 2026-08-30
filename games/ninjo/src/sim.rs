@@ -25,8 +25,11 @@ use jidousha::prelude::*;
 use crate::clock::{Clock, stamp};
 use crate::constants::Tuning;
 use crate::grid::{Grid, LOCATIONS, TOWN, Tile};
+use crate::lens::Lens;
 use crate::path::Route;
+use crate::people::{self, Character};
 use crate::sprites::Art;
+use crate::stores::{self, Shared};
 
 /// The five S1 event classes — the seed of S2's attention vocabulary.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -75,13 +78,15 @@ pub struct Event {
 
 impl Event {
     /// The log line: timestamp, party, note — mechanical narration.
-    pub fn line(&self, sim: &Sim) -> String {
+    ///
+    /// Takes a [`Lens`] rather than the `Sim`, because the log is a screen:
+    /// a line naming a party the player has never seen is exactly the thing
+    /// the lens exists to be able to withhold (GDD §3).
+    pub fn line(&self, lens: &Lens<'_>) -> String {
         format!(
             "{} - {} {}",
             stamp(self.minute),
-            sim.parties
-                .get(self.party)
-                .map_or("someone", |party| party.name),
+            lens.party(self.party).map_or("someone", |party| party.name),
             self.note
         )
     }
@@ -157,11 +162,20 @@ pub enum Activity {
 }
 
 /// One party.
+///
+/// A party is fielded by one character (wave 0b's minimal wiring: the token
+/// carries a name and a face that belong to somebody in the registry). Who
+/// else is in it, and what their bonds do to its outcome, is the parties
+/// module — GDD §5, wave 4.
 #[derive(Clone, Debug)]
 pub struct Party {
     /// Its name, as the log and the strip print it.
     pub name: &'static str,
-    /// Its token's portrait.
+    /// The character who fields it, by registry index. They stand at their
+    /// home tile whenever this party is idle.
+    pub member: usize,
+    /// Its token's portrait — the member's own, so a face on the road and a
+    /// face at a doorstep are the same person.
     pub token: Art,
     /// The tile it is on — always exactly one.
     pub tile: Tile,
@@ -219,6 +233,10 @@ enum Occ {
         /// Which party.
         party: usize,
     },
+    /// Regard drifts toward its fact-set baseline, and reschedules itself
+    /// (GDD §4.2). Ambient: it emits no event, because nothing *happened* to
+    /// anybody — the feed is for things that did.
+    Drift,
 }
 
 /// The moving world, held as one resource.
@@ -233,6 +251,12 @@ pub struct Sim {
     /// Everything that has happened, in firing order — the log's source and
     /// the sweep's transcript.
     pub events: Vec<Event>,
+    /// Everyone in the settlement, in registry order (GDD §3).
+    pub people: Vec<Character>,
+    /// The shared state every module couples through: regard, bonds and
+    /// grudges, marks (GDD §4). **In sim state, because replay is the
+    /// contract** — see `stores.rs`.
+    pub shared: Shared,
     queue: Vec<Occurrence>,
     next_seq: u64,
 }
@@ -246,23 +270,39 @@ pub fn site_location(site: usize) -> usize {
 
 /// The authored parties: at least two, because simultaneity is the point
 /// (DESIGN §10) — this scenario fields three.
-fn authored_parties() -> Vec<Party> {
+fn authored_parties(people: &[Character]) -> Vec<Party> {
     let home = LOCATIONS[TOWN].tile;
-    [
-        ("OX", Art::PortraitBob),
-        ("OWL", Art::PortraitAlex),
-        ("CRANE", Art::PortraitTim),
-    ]
-    .into_iter()
-    .map(|(name, token)| Party {
-        name,
-        token,
-        tile: home,
-        activity: Activity::Idle,
-        quest: None,
-        home: None,
-    })
-    .collect()
+    [("OX", "bob"), ("OWL", "alex"), ("CRANE", "tim")]
+        .into_iter()
+        .map(|(name, member_id)| {
+            // The roster is the one list of people; a party names a member by
+            // the registry's own id, and a name the registry does not have is
+            // an authoring fault caught here rather than drawn as a blank.
+            let member = people
+                .iter()
+                .position(|person| person.id == member_id)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "{}",
+                        message(
+                            "a party is fielded by somebody who is not in the registry",
+                            &format!("{name} names the member {member_id:?}"),
+                            "sim::authored_parties and people::roster disagree about who exists",
+                            "fix the id, or add the character to people::roster",
+                        )
+                    )
+                });
+            Party {
+                name,
+                member,
+                token: people[member].icon,
+                tile: home,
+                activity: Activity::Idle,
+                quest: None,
+                home: None,
+            }
+        })
+        .collect()
 }
 
 /// The authored quests, one site per non-town location.
@@ -344,21 +384,37 @@ fn authored_sites() -> Vec<Site> {
 
 impl Sim {
     /// The scenario at its opening state.
-    pub fn opening() -> Self {
-        Self {
-            parties: authored_parties(),
+    ///
+    /// Takes the shipped constants because the drift cadence is one of them
+    /// and the first drift is scheduled here — an occurrence with a world-time
+    /// address, like everything else, so it is speed-invariant for free.
+    pub fn opening(tuning: &Tuning) -> Self {
+        let people = people::roster();
+        let mut sim = Self {
+            parties: authored_parties(&people),
             sites: authored_sites(),
             treasury: 0,
             events: Vec::new(),
+            people,
+            shared: Shared::opening(),
             queue: Vec::new(),
             next_seq: 0,
-        }
+        };
+        sim.schedule(stores::drift_interval(tuning), Occ::Drift);
+        sim
     }
 
-    /// Whether everything is home and nothing is scheduled — the world at
-    /// rest (the sweep's stopping condition).
+    /// Whether everything is home and nothing a party is waiting on is
+    /// scheduled — the world at rest (the sweep's stopping condition).
+    ///
+    /// **Ambient upkeep does not count.** Regard drift reschedules itself
+    /// forever, so a queue that has to be empty would mean the world was never
+    /// at rest once the people substrate landed. At rest means nobody is
+    /// abroad and nothing is going to move them.
     pub fn at_rest(&self) -> bool {
-        self.queue.is_empty()
+        self.queue
+            .iter()
+            .all(|occurrence| matches!(occurrence.kind, Occ::Drift))
             && self
                 .parties
                 .iter()
@@ -514,6 +570,10 @@ pub fn fire_due(world: &mut World) {
         match occurrence.kind {
             Occ::TileEntry { party } => tile_entry(sim, &grid, &tuning, occurrence.at, party),
             Occ::WorkDone { party } => work_done(sim, &grid, &tuning, occurrence.at, party),
+            Occ::Drift => {
+                sim.shared.drift(&tuning);
+                sim.schedule(occurrence.at + stores::drift_interval(&tuning), Occ::Drift);
+            }
         }
     }
 }

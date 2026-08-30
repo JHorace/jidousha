@@ -52,6 +52,32 @@ pub struct Tuning {
     pub speed_2x: i64,
     /// The 4x speed's per-tick accumulation.
     pub speed_4x: i64,
+
+    // ── the people substrate (GDD §4; wave 0b) ────────────────────────────
+    /// What one dark mark costs a stranger's reading of somebody, before
+    /// their traits weigh in.
+    pub mark_dark: i64,
+    /// And what one light mark earns it.
+    pub mark_light: i64,
+    /// How far a regard edge may run either way when the pair holds no facts.
+    pub regard_span: i64,
+    /// The floor a bond holds an edge at or above (GDD §4.2: a bond raises an
+    /// edge's floor).
+    pub bond_floor: i64,
+    /// How far below zero a grudge holds an edge's ceiling (a grudge lowers
+    /// the ceiling; the value is the depth, because the drawer's range starts
+    /// at zero).
+    pub grudge_ceiling: i64,
+    /// Shared successes a pair needs before a bond can be written.
+    pub bond_after: i64,
+    /// And the mutual regard both edges need at that moment. Both terms, or
+    /// no bond: the rule is repeated success *plus* high regard (GDD §4.3).
+    pub bond_regard: i64,
+    /// How far one drift moves an edge toward its fact-set baseline.
+    pub drift_step: i64,
+    /// World-hours between drifts. Slow is the design; the drawer's range is
+    /// small, so the cadence is stated in hours and floored at one.
+    pub drift_hours: i64,
 }
 
 impl Resource for Tuning {}
@@ -78,6 +104,15 @@ impl Tuning {
         speed_1x: 1,
         speed_2x: 2,
         speed_4x: 4,
+        mark_dark: 1,
+        mark_light: 1,
+        regard_span: 10,
+        bond_floor: 2,
+        grudge_ceiling: 2,
+        bond_after: 2,
+        bond_regard: 3,
+        drift_step: 1,
+        drift_hours: 4,
     };
 
     /// The constants in effect, as the lines the drawer's stamp and every
@@ -88,7 +123,12 @@ impl Tuning {
             "road {}  plains {}\n\
              forest {}  rough {}\n\
              minute {} ticks\n\
-             speeds {} / {} / {}",
+             speeds {} / {} / {}\n\
+             marks -{} / +{}\n\
+             regard span {}\n\
+             bond floor {}  ceil -{}\n\
+             bond after {} at {}\n\
+             drift {} per {}h",
             self.road_cost,
             self.plains_cost,
             self.forest_cost,
@@ -97,6 +137,15 @@ impl Tuning {
             self.speed_1x,
             self.speed_2x,
             self.speed_4x,
+            self.mark_dark,
+            self.mark_light,
+            self.regard_span,
+            self.bond_floor,
+            self.grudge_ceiling,
+            self.bond_after,
+            self.bond_regard,
+            self.drift_step,
+            self.drift_hours,
         )
     }
 
@@ -113,6 +162,15 @@ impl Tuning {
             Field::Speed1x => &mut self.speed_1x,
             Field::Speed2x => &mut self.speed_2x,
             Field::Speed4x => &mut self.speed_4x,
+            Field::MarkDark => &mut self.mark_dark,
+            Field::MarkLight => &mut self.mark_light,
+            Field::RegardSpan => &mut self.regard_span,
+            Field::BondFloor => &mut self.bond_floor,
+            Field::GrudgeCeiling => &mut self.grudge_ceiling,
+            Field::BondAfter => &mut self.bond_after,
+            Field::BondRegard => &mut self.bond_regard,
+            Field::DriftStep => &mut self.drift_step,
+            Field::DriftHours => &mut self.drift_hours,
         }
     }
 
@@ -266,6 +324,24 @@ pub enum Field {
     Speed2x,
     /// The 4x accumulation.
     Speed4x,
+    /// What a dark mark costs.
+    MarkDark,
+    /// What a light mark earns.
+    MarkLight,
+    /// The factless bound on a regard edge.
+    RegardSpan,
+    /// The floor a bond sets.
+    BondFloor,
+    /// The depth of the ceiling a grudge sets.
+    GrudgeCeiling,
+    /// Shared successes before a bond.
+    BondAfter,
+    /// Mutual regard needed with them.
+    BondRegard,
+    /// How far one drift moves an edge.
+    DriftStep,
+    /// World-hours between drifts.
+    DriftHours,
 }
 
 impl Field {
@@ -279,6 +355,15 @@ impl Field {
         Field::Speed1x,
         Field::Speed2x,
         Field::Speed4x,
+        Field::MarkDark,
+        Field::MarkLight,
+        Field::RegardSpan,
+        Field::BondFloor,
+        Field::GrudgeCeiling,
+        Field::BondAfter,
+        Field::BondRegard,
+        Field::DriftStep,
+        Field::DriftHours,
     ];
 
     /// The name DESIGN gives this constant.
@@ -292,6 +377,15 @@ impl Field {
             Field::Speed1x => "speed_1x",
             Field::Speed2x => "speed_2x",
             Field::Speed4x => "speed_4x",
+            Field::MarkDark => "mark_dark",
+            Field::MarkLight => "mark_light",
+            Field::RegardSpan => "regard_span",
+            Field::BondFloor => "bond_floor",
+            Field::GrudgeCeiling => "grudge_ceiling",
+            Field::BondAfter => "bond_after",
+            Field::BondRegard => "bond_regard",
+            Field::DriftStep => "drift_step",
+            Field::DriftHours => "drift_hours",
         }
     }
 
@@ -327,6 +421,15 @@ impl Field {
             Field::Speed1x => "clock accumulation per tick at 1x",
             Field::Speed2x => "clock accumulation per tick at 2x",
             Field::Speed4x => "clock accumulation per tick at 4x",
+            Field::MarkDark => "what a dark mark costs a stranger",
+            Field::MarkLight => "what a light mark earns one",
+            Field::RegardSpan => "how far regard runs with no facts",
+            Field::BondFloor => "the floor a bond holds an edge at",
+            Field::GrudgeCeiling => "how far a grudge caps an edge below 0",
+            Field::BondAfter => "shared successes before a bond",
+            Field::BondRegard => "mutual regard a bond also needs",
+            Field::DriftStep => "how far one drift moves an edge",
+            Field::DriftHours => "world-hours between regard drifts",
         }
     }
 }

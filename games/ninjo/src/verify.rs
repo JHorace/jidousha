@@ -23,8 +23,8 @@ use crate::path::route;
 use crate::sim::Activity;
 use crate::sweep::{Act, Conducted, Directive, Photo, Session, When, conduct, transcript};
 use crate::{
-    camera, capture, floors, frames, grid, layout, library, links, mutation, restart, screens,
-    sweep, theme,
+    camera, capture, floors, frames, grid, layout, lens, library, links, modules, mutation, people,
+    restart, screens, stores, sweep, theme, traits,
 };
 
 /// The surface the reference run draws at: the 960x540 chrome design doubled,
@@ -59,6 +59,14 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
     });
     script.extend(sweep::order(330, 0, 3));
     let photos = [
+        // The settlement before anything is dispatched: the whole cast
+        // standing at their homes, named. Wave 0b's own exit picture - the
+        // moment there are people in this world rather than tokens.
+        Photo {
+            name: "settlement",
+            minute: 0,
+            tick: 10,
+        },
         Photo {
             name: "map",
             minute: 40,
@@ -72,6 +80,7 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
     ];
     conduct(&Session {
         tuning: Tuning::SHIPPED,
+        modules: crate::modules::ModuleSet::ALL,
         seed: None,
         directives: &script,
         photos: &photos,
@@ -510,6 +519,91 @@ fn culling_probe(checks: &mut Checks) {
     );
 }
 
+/// **The module-off matrix** (GDD §9): the suite, once per module, with that
+/// module switched off. Green is the definition of modular.
+///
+/// The registry is empty in wave 0b, so the matrix is one pass — the
+/// everything-on baseline — and it runs it. That is deliberately not a skip:
+/// the harness plants a `ModuleSet` before `Startup`, conducts a real run
+/// under it, and asserts the world moved and came to rest, so wave 1.1's
+/// autonomy module lands into machinery that already works rather than into a
+/// second thing to get right in the same session.
+///
+/// **The baseline pass asserts the authored timeline; a module-off pass does
+/// not.** A module being off is *supposed* to change what happens — that is
+/// what a module is. What every pass owes is a world that runs: no panic, the
+/// script consumed, everything home at the end, and the shared state's own
+/// arithmetic intact under whatever is loaded.
+fn module_matrix(checks: &mut Checks) -> String {
+    let mut notes = Vec::new();
+    for (what, set) in modules::matrix() {
+        let script = sweep::speed_scripts().remove(1).1; // all-4x: the fast one
+        let mut session = Session::plain(Tuning::SHIPPED, &script, 25_000);
+        session.modules = set;
+        let conducted = conduct(&session);
+        checks.require(
+            conducted.sim.at_rest(),
+            "a module-off pass left the world still moving",
+            format!(
+                "with {what} ({}) the world had not come to rest after {} ticks",
+                set.stamp(),
+                conducted.ticks
+            ),
+        );
+        checks.require(
+            !conducted.events.is_empty(),
+            "a module-off pass produced a world where nothing happened",
+            format!(
+                "with {what} ({}) the transcript is empty; green means the world still \
+                 runs, not that it stopped having anything to run",
+                set.stamp()
+            ),
+        );
+        if set == modules::ModuleSet::ALL {
+            sweep::judge_orders(checks, &conducted, "the everything-on matrix pass");
+        }
+        traits::arithmetic(checks, &Tuning::SHIPPED);
+        stores::judge_at(checks, &Tuning::SHIPPED);
+        notes.push(format!("{what} ({} events)", conducted.events.len()));
+    }
+    format!(
+        "{} pass(es) over {} module(s): {}",
+        modules::matrix().len(),
+        modules::MODULES.len(),
+        notes.join(", ")
+    )
+}
+
+/// **Regard drift is on the one scheduler** (GDD §4.2), so its cadence is a
+/// world-time fact and not a tick fact — which means it is speed-invariant
+/// like everything else, and a conducted run's drift count is a literal.
+fn drift_cadence(checks: &mut Checks) {
+    let mut counts = Vec::new();
+    for (name, script) in sweep::speed_scripts() {
+        let conducted = conduct(&Session::plain(Tuning::SHIPPED, &script, 60_000));
+        counts.push((name, conducted.sim.shared.drifts(), conducted.minutes));
+    }
+    // The scenario runs to minute 702 and the shipped cadence is every four
+    // world-hours, so drift falls due at 240 and 480 and not again before the
+    // world comes to rest. A shipped literal, so `drift_hours` moving breaks
+    // it (the mutation round leans on that).
+    for (name, drifts, minutes) in &counts {
+        checks.require(
+            *drifts == 2,
+            "regard did not drift on the schedule the shipped cadence says",
+            format!(
+                "under {name} the world ran {minutes} world-minutes and drift ran {drifts}                  times; every four hours over 702 minutes is 2 (at 240 and 480)"
+            ),
+        );
+    }
+    let first = counts.first().map(|(_, drifts, _)| *drifts);
+    checks.require(
+        counts.iter().all(|(_, drifts, _)| Some(*drifts) == first),
+        "how often regard drifts depends on the speed the player watches at",
+        format!("the drift counts under the three speed scripts are {counts:?}"),
+    );
+}
+
 pub fn run() -> ExitCode {
     let mut checks = Checks::default();
     let tuning = Tuning::SHIPPED;
@@ -571,6 +665,41 @@ pub fn run() -> ExitCode {
             false,
             "the log photograph was never taken",
             "the conductor's photo schedule names minute 181".to_owned(),
+        );
+    }
+
+    // --- the settlement: the cast, at home, named --------------------------
+    if let Some(shot) = photographed_run.photo("settlement") {
+        let lens = lens::Lens::on(&shot.sim);
+        let away: Vec<&str> = (0..lens.people().len())
+            .filter(|index| !lens.at_home(*index))
+            .map(|index| lens.name(index))
+            .collect();
+        checks.require(
+            away.is_empty() && lens.people().len() == people::roster().len(),
+            "the settlement photograph does not show the whole cast at home",
+            format!(
+                "{away:?} are away at the photographed tick, and the frame shows {} of {} \
+                 people; nothing has been dispatched yet",
+                lens.people().len(),
+                people::roster().len()
+            ),
+        );
+        // Every figure and every name on the frame, at the position the panel
+        // says - the same judge the chrome gets, over map-space content.
+        frames::judge_chrome(&mut checks, &photographed_run, shot, "the settlement");
+        floors::judge_frame_floor(
+            &mut checks,
+            photographed_run.font,
+            &shot.frame,
+            "the settlement",
+        );
+        judge_terrain(&mut checks, &shot.frame, HEADLESS_VIEWPORT);
+    } else {
+        checks.require(
+            false,
+            "the settlement photograph was never taken",
+            "the conductor's photo schedule names tick 10, before the first dispatch".to_owned(),
         );
     }
 
@@ -649,6 +778,18 @@ pub fn run() -> ExitCode {
         );
     }
 
+    // --- the people substrate: the vocabulary, the registry, the stores ----
+    traits::vocabulary(&mut checks);
+    traits::arithmetic(&mut checks, &tuning);
+    people::registry(&mut checks, &tuning);
+    stores::judge_at(&mut checks, &tuning);
+    lens::identity(&mut checks, &tuning);
+    drift_cadence(&mut checks);
+
+    // --- the module scaffold, and the matrix it exists to be iterated by ----
+    modules::registry(&mut checks);
+    let matrix = module_matrix(&mut checks);
+
     // --- the art library, every string, and the link grammar ---------------
     library::library(&mut checks);
     library::printable_strings(&mut checks, &baseline);
@@ -668,12 +809,27 @@ pub fn run() -> ExitCode {
         baseline.minutes
     );
     println!(
+        "  stamp: seed 0, {}, {}",
+        tuning.stamp(),
+        modules::ModuleSet::ALL.stamp()
+    );
+    println!(
         "  constants in effect: {}",
         tuning.readout().replace('\n', "  ")
     );
     println!("  {sweep_summary}");
     println!("  seed 0 stamped; transcripts identical at seeds 7 and 7777777 (no Rng read in S1)");
     println!("  ui mapping: {ui_report}");
+    println!(
+        "  people: {} in the registry, {} traits over {} kinds, {} marks, {} reaction cells",
+        crate::people::roster().len(),
+        traits::TRAITS.len(),
+        traits::TraitKind::ALL.len(),
+        traits::MarkId::ALL.len(),
+        traits::REACTIONS.len()
+    );
+    println!("  module-off matrix: {matrix}");
+    println!("  module set: {}", modules::ModuleSet::ALL.stamp());
     println!("  mutation round: {mutations}");
     println!("{captured}");
     if let Some(shot) = photographed_run.photo("map") {

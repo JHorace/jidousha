@@ -6,9 +6,11 @@
 //! to `PRESETS` below, and the drawer grows a button for it because it walks
 //! this table rather than a list of its own.
 //!
-//! `DEFAULT` is `Tuning::SHIPPED` by reference rather than by transcription:
-//! two spellings of the shipped set is one spelling that can go stale, and
-//! the fixed verify scripts are authored against the one in `constants.rs`.
+//! **Every preset is `Tuning::SHIPPED` with the rows it means moved**, by
+//! functional update rather than by transcription: two spellings of the
+//! shipped set is one spelling that can go stale, the fixed verify scripts are
+//! authored against the one in `constants.rs`, and a constant added there
+//! reaches every preset without this file being edited.
 
 use crate::constants::Tuning;
 
@@ -36,14 +38,10 @@ pub const PRESETS: &[Preset] = &[
     Preset {
         name: "MIRE",
         tuning: Tuning {
-            road_cost: 2,
             plains_cost: 6,
             forest_cost: 11,
             rough_cost: 15,
-            minute_ticks: 30,
-            speed_1x: 1,
-            speed_2x: 2,
-            speed_4x: 4,
+            ..Tuning::SHIPPED
         },
     },
     // A faster wall clock: the same world at double pace, for a playtest
@@ -52,14 +50,10 @@ pub const PRESETS: &[Preset] = &[
     Preset {
         name: "BRISK",
         tuning: Tuning {
-            road_cost: 2,
-            plains_cost: 4,
-            forest_cost: 7,
-            rough_cost: 10,
-            minute_ticks: 30,
             speed_1x: 2,
             speed_2x: 4,
             speed_4x: 8,
+            ..Tuning::SHIPPED
         },
     },
 ];

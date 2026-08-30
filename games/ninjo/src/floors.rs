@@ -15,6 +15,7 @@ use crate::clock::Clock;
 use crate::constants::Tuning;
 use crate::flow::Flow;
 use crate::grid::LOCATIONS;
+use crate::lens::Lens;
 use crate::sim::Sim;
 use crate::sweep::Conducted;
 use crate::ui::Panel;
@@ -40,7 +41,7 @@ pub fn targets() -> Vec<(String, Rect)> {
         "the tuning drawer's handle".to_owned(),
         layout::tune_button(),
     ));
-    for index in 0..Sim::opening().parties.len() {
+    for index in 0..Sim::opening(&Tuning::SHIPPED).parties.len() {
         out.push((format!("party chip {index}"), layout::party_chip(index)));
     }
     out
@@ -108,7 +109,7 @@ pub fn layout_floors(checks: &mut Checks) {
             format!("chip {index} at {:?}", layout::speed_chip(index)),
         );
     }
-    for index in 0..Sim::opening().parties.len() {
+    for index in 0..Sim::opening(&Tuning::SHIPPED).parties.len() {
         checks.require(
             inside(layout::party_strip(), layout::party_chip(index)),
             "a party chip runs off the strip it belongs to",
@@ -244,14 +245,16 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
     let opening = (
         "the opening screen",
         Flow::default(),
-        Sim::opening(),
+        Sim::opening(&Tuning::SHIPPED),
         Clock::opening(),
     );
     // The end of the conducted run: full log, everything home.
     let mut logged = Flow::default();
-    for event in &baseline.events {
-        let line = event.line(&baseline.sim);
-        logged.note(line);
+    {
+        let lens = Lens::on(&baseline.sim);
+        for event in &baseline.events {
+            logged.note(event.line(&lens));
+        }
     }
     let mut log_open = logged.clone();
     log_open.log_open = true;
@@ -287,7 +290,7 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
 pub fn content_floors(checks: &mut Checks, baseline: &Conducted) {
     let tuning = Tuning::SHIPPED;
     for (what, flow, sim, clock) in content_states(baseline) {
-        let panel = screens::content(&flow, &sim, &clock, &tuning);
+        let panel = screens::content(&flow, &Lens::on(&sim), &clock, &tuning);
         judge_panel(checks, &panel, what, flow.tuner.open);
     }
 }
@@ -437,7 +440,7 @@ pub fn judge_tuner_screen(checks: &mut Checks, drawer: &crate::restart::DrawerRu
     for (what, flow) in tuning_states {
         let panel = screens::content(
             flow,
-            &drawer.applied_sim,
+            &Lens::on(&drawer.applied_sim),
             &Clock::opening(),
             &drawer.applied_active,
         );
@@ -448,7 +451,7 @@ pub fn judge_tuner_screen(checks: &mut Checks, drawer: &crate::restart::DrawerRu
     refused.tuner.fault = crate::links::refusals().into_iter().max_by_key(String::len);
     let panel = screens::content(
         &refused,
-        &drawer.applied_sim,
+        &Lens::on(&drawer.applied_sim),
         &Clock::opening(),
         &drawer.pending_active,
     );
