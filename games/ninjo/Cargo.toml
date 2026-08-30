@@ -1,0 +1,28 @@
+[package]
+name = "ninjo"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+# The facade is the whole API a game gets (ADR-0038). Naming any other
+# `jidousha-*` crate, at any depth, fails `tools/check-game-deps`.
+[dependencies]
+jidousha = { path = "../../crates/jidousha" }
+
+# The page's query string, for `?constants=` (UI.md §12). The facade has no
+# launch parameters — the engine reads `?frametime=` and `?renderscale=` off the
+# same page and exposes neither, and `std::env::args` is empty on wasm — so the
+# game reads the location itself (FINDINGS G-008). Web only: `src/web.rs` answers
+# `None` on native, where the drawer is the whole tuning path.
+#
+# No new crate reaches the tree: `web-sys` and its `js-sys`/`wasm-bindgen`
+# dependencies are already in Cargo.lock at these versions for the engine's own
+# wasm platform layer, and `cargo tree` for ninjo gains exactly the three edges
+# ninjo -> web-sys -> js-sys -> wasm-bindgen (+ wasm-bindgen-macro, once, rustversion),
+# all of them already resolved. The two features named are the two calls above.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-sys = { version = "0.3", features = ["Location", "Window"] }
+
+[lints]
+workspace = true
