@@ -8,8 +8,8 @@ use jidousha_assets::TextureData;
 use jidousha_core::{Draw, DrawCtx, GameConfig, Resource, Seconds, Update, World, build};
 use jidousha_input::{Input, Key};
 use jidousha_render_core::{
-    BackendTextureId, FramePlan, NullBackend, PhysicalSize, RawImage, RenderBackend, RenderError,
-    TextureDesc, create_builtin_textures,
+    BackendTextureId, FramePlan, NullBackend, PhysicalSize, Presentation, RawImage, RenderBackend,
+    RenderError, TextureDesc, create_builtin_textures,
 };
 
 use super::Driver;
@@ -21,24 +21,34 @@ use super::Driver;
 /// `NullBackend` behind a mutex and hands the same one back — which is what
 /// makes the frame path below checkable without a window or a GPU.
 #[derive(Clone)]
-pub(crate) struct SharedBackend(std::sync::Arc<std::sync::Mutex<NullBackend>>);
+pub(crate) struct SharedBackend {
+    inner: std::sync::Arc<std::sync::Mutex<NullBackend>>,
+    /// What this backend claims about how its frames reach a display.
+    ///
+    /// A `NullBackend` is always `Offscreen`, which is the honest answer for a
+    /// backend with no surface — and useless for testing the pacing decision,
+    /// which is a decision *about* surfaces. This is the one thing the shared
+    /// wrapper adds rather than forwards.
+    presentation: Presentation,
+}
 
 impl SharedBackend {
     pub(crate) fn new() -> Self {
-        Self(std::sync::Arc::new(std::sync::Mutex::new(
-            NullBackend::new(),
-        )))
+        Self {
+            inner: std::sync::Arc::new(std::sync::Mutex::new(NullBackend::new())),
+            presentation: Presentation::Offscreen,
+        }
     }
 
     pub(crate) fn read<T>(&self, question: impl FnOnce(&NullBackend) -> T) -> T {
-        let Ok(backend) = self.0.lock() else {
+        let Ok(backend) = self.inner.lock() else {
             panic!("a test thread panicked while holding the backend");
         };
         question(&backend)
     }
 
     pub(crate) fn write<T>(&mut self, action: impl FnOnce(&mut NullBackend) -> T) -> T {
-        let Ok(mut backend) = self.0.lock() else {
+        let Ok(mut backend) = self.inner.lock() else {
             panic!("a test thread panicked while holding the backend");
         };
         action(&mut backend)
@@ -61,12 +71,28 @@ impl RenderBackend for SharedBackend {
     fn capture(&mut self) -> Result<RawImage, RenderError> {
         self.write(NullBackend::capture)
     }
+    fn presentation(&self) -> Presentation {
+        // Whatever a test set, so the pacing decision can be driven from here
+        // as well as observed — the null backend's own answer is `Offscreen`
+        // and never changes.
+        self.presentation
+    }
 }
 
 /// A driver with a backend installed, as `resumed` would install a real one.
 pub(crate) fn driver_with_a_backend() -> (Driver, SharedBackend) {
+    driver_presenting(Presentation::Offscreen)
+}
+
+/// The same, with the backend claiming a particular presentation.
+///
+/// The pacing decision is read off the backend once a frame (frame-pacing.md
+/// §6), so this is how a test puts a driver on a surface that will not vsync
+/// without needing one.
+pub(crate) fn driver_presenting(presentation: Presentation) -> (Driver, SharedBackend) {
     let mut driver = driver();
     let mut backend = SharedBackend::new();
+    backend.presentation = presentation;
     driver.textures = Some(create_builtin_textures(&mut backend));
     driver.backend = Some(Box::new(backend.clone()));
     (driver, backend)

@@ -1,10 +1,10 @@
 //! The seam: what a render backend must do, stated in engine types only.
 //!
 //! Key types: `RenderBackend`, `BackendTextureId`, `TextureDesc`, `RawImage`,
-//! `RenderError`.
+//! `RenderError`, `Presentation`.
 //! Depends on: `jidousha-core`, `plan`. Must never depend on: `wgpu`, `ash`, or
 //! any graphics API (ADR-0003, CONTRACT).
-//! INVARIANT: five methods, and none of them takes a graphics type. Backends
+//! INVARIANT: six methods, and none of them takes a graphics type. Backends
 //! are dumb executors — sorting, batching, and every other decision happens
 //! above this line, which is what keeps the ash port and the WebGL2 fallback
 //! cheap (renderer.md §1, §7).
@@ -125,9 +125,78 @@ impl fmt::Display for RenderError {
 
 impl core::error::Error for RenderError {}
 
+/// How a backend's finished frames reach the display.
+///
+/// The **pacing** fact, and the only one above the seam: a frame loop that
+/// draws as fast as it can is correct on a swap chain that waits for the
+/// display and is a runaway on one that does not. The driver reads this once a
+/// frame and decides whether the display is pacing the loop or the loop has to
+/// pace itself (frame-pacing.md §6).
+///
+/// Engine words, not a graphics API's: these are the three things a swap chain
+/// can do with a finished frame, and every backend wgpu has — and ash will —
+/// expresses its own modes in exactly these terms (ADR-0003).
+///
+/// It is also the line the native overlay prints, which is why the variants are
+/// named rather than folded into a `bool`: "capped at 60fps because this
+/// surface will not vsync" and "presenting at the display's own rate" are
+/// different readings, and a playtester's report has to be able to say which.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Presentation {
+    /// Nothing is reaching a display: the GPU has not arrived yet, or this
+    /// backend draws into a texture nobody sees.
+    ///
+    /// Not a pacing failure — there is nothing to pace. A driver in this state
+    /// is either a few frames into startup, polling for a device it needs
+    /// promptly, or headless, where the loop belongs to a test.
+    Offscreen,
+    /// Every present waits for the display's next refresh.
+    ///
+    /// The display sets the pace. A loop that added a cap of its own would beat
+    /// against the refresh and drop frames on a rhythm nobody asked for, which
+    /// is why [`needs_a_cap`](Presentation::needs_a_cap) says no here.
+    Vsync,
+    /// The newest finished frame replaces whatever was queued for the display.
+    ///
+    /// Never tears, never waits: frames are drawn as fast as the machine will
+    /// draw them and most of them are thrown away. Smooth, and unbounded — a
+    /// paused 2D game will hold a core and a GPU at whatever they can manage.
+    Mailbox,
+    /// Frames go to the display the moment they are finished, tearing if that
+    /// lands mid-scan.
+    ///
+    /// Unbounded for the same reason [`Mailbox`](Presentation::Mailbox) is.
+    Immediate,
+}
+
+impl Presentation {
+    /// Whether the frame loop has to cap itself, because nothing else will.
+    ///
+    /// The **one** question the driver asks of this type. `Offscreen` answers
+    /// no deliberately: a startup that has not got a device yet needs to poll
+    /// for one promptly, and a headless run has no display to pace against.
+    #[must_use]
+    pub fn needs_a_cap(self) -> bool {
+        matches!(self, Presentation::Mailbox | Presentation::Immediate)
+    }
+}
+
+impl fmt::Display for Presentation {
+    /// What the overlay's pacing line calls this, in the vocabulary a bug
+    /// report can be searched for.
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
+            Presentation::Offscreen => "no surface yet",
+            Presentation::Vsync => "vsync",
+            Presentation::Mailbox => "mailbox",
+            Presentation::Immediate => "immediate",
+        })
+    }
+}
+
 /// What every render backend implements.
 ///
-/// Five methods. Growth beyond about eight is a design smell to resist: every
+/// Six methods. Growth beyond about eight is a design smell to resist: every
 /// method here is one more thing the ash port and the WebGL2 path must both
 /// get right (renderer.md §7).
 pub trait RenderBackend {
@@ -162,6 +231,20 @@ pub trait RenderBackend {
     ///
     /// If the backend cannot read back, or has nothing to read.
     fn capture(&mut self) -> Result<RawImage, RenderError>;
+
+    /// How this backend's frames reach the display, as of now.
+    ///
+    /// Asked once a frame rather than once at startup: a backend answers
+    /// [`Presentation::Offscreen`] until its device arrives, and the answer
+    /// afterwards is a property of the surface it ended up with rather than of
+    /// the one it asked for. The driver paces the loop on it (frame-pacing.md
+    /// §6).
+    ///
+    /// CONTRACT: a report, never a request. Nothing above the seam may set the
+    /// present mode — that is the backend's negotiation with the machine, and a
+    /// caller that could override it would be deciding for a driver it cannot
+    /// see.
+    fn presentation(&self) -> Presentation;
 }
 
 #[cfg(test)]
@@ -235,6 +318,41 @@ mod tests {
                 !messages[index + 1..].contains(message),
                 "two variants give the same diagnosis, so one of them is wrong: {message}"
             );
+        }
+    }
+
+    #[test]
+    fn only_the_modes_that_never_wait_ask_the_loop_for_a_cap() {
+        // The whole pacing decision, and the failure it exists to prevent: a
+        // surface that presents without waiting leaves nothing bounding the
+        // frame rate, so the loop bounds itself (frame-pacing.md §6). The two
+        // that must answer *no* are as load-bearing as the two that answer yes
+        // — a cap on top of vsync beats against the refresh, and a cap during
+        // startup slows the device handshake down.
+        assert!(Presentation::Mailbox.needs_a_cap());
+        assert!(Presentation::Immediate.needs_a_cap());
+        assert!(!Presentation::Vsync.needs_a_cap());
+        assert!(!Presentation::Offscreen.needs_a_cap());
+    }
+
+    #[test]
+    fn every_presentation_prints_a_name_a_bug_report_can_be_searched_for() {
+        // This string goes on the overlay's pacing line and into whatever a
+        // playtester pastes back. Two modes sharing a name would make the one
+        // reading that matters — "is this machine vsynced or not" —
+        // unanswerable from the report.
+        let names: Vec<String> = [
+            Presentation::Offscreen,
+            Presentation::Vsync,
+            Presentation::Mailbox,
+            Presentation::Immediate,
+        ]
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+        for (index, name) in names.iter().enumerate() {
+            assert!(!name.is_empty());
+            assert!(!names[index + 1..].contains(name), "two modes print {name}");
         }
     }
 

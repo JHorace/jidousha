@@ -12,7 +12,9 @@ use core::fmt::Write as _;
 use jidousha_core::math::Vec2;
 use jidousha_core::{Color, PhysicalSize, Rect};
 
-use crate::backend::{BackendTextureId, RawImage, RenderBackend, RenderError, TextureDesc};
+use crate::backend::{
+    BackendTextureId, Presentation, RawImage, RenderBackend, RenderError, TextureDesc,
+};
 use crate::plan::{Batch, FramePlan};
 
 /// One quad, read back out of a recorded frame.
@@ -376,6 +378,14 @@ impl RenderBackend for NullBackend {
         Err(RenderError::Unsupported {
             detail: "the null backend records frames and has no pixels to read back".to_owned(),
         })
+    }
+
+    fn presentation(&self) -> Presentation {
+        // Nothing is shown, so nothing is paced. The driver reads this as "do
+        // not cap", which is what a test wants: a test's loop is its own `for`,
+        // and a cap that made it wait would make every driver test sleep
+        // (frame-pacing.md §6).
+        Presentation::Offscreen
     }
 }
 

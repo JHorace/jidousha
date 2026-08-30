@@ -57,6 +57,21 @@ impl FrameClock {
         Seconds(elapsed.min(MAX_FRAME.as_f32()))
     }
 
+    /// How long since the mark the last [`frame`](FrameClock::frame) was
+    /// measured from — how much of this frame has been spent so far.
+    ///
+    /// Unclamped, and deliberately **not** a frame: nothing here is handed to
+    /// the accumulator and nothing simulation can see depends on it. It exists
+    /// for the presentation pacer, which has to answer "how much of the cap is
+    /// left" without reading a second clock of its own (frame-pacing.md §6).
+    ///
+    /// Reading it does not move the mark, so calling it twice in one frame
+    /// gives two answers about the same frame rather than splitting it in two.
+    #[must_use]
+    pub fn since_frame(&self) -> Seconds {
+        Seconds(Instant::now().duration_since(self.last).as_secs_f32())
+    }
+
     /// Forget the time that passed, without spending it.
     ///
     /// Called when the window comes back from being hidden or unfocused: the
@@ -84,6 +99,21 @@ mod tests {
     fn a_frame_is_never_negative() {
         let mut clock = FrameClock::new();
         assert!(clock.frame().as_f32() >= 0.0);
+    }
+
+    #[test]
+    fn what_a_frame_has_spent_so_far_is_not_clamped_and_does_not_spend_it() {
+        // Two claims, and the pacer depends on both. Unclamped, because a cap
+        // is compared against it and a clamped reading would say a stalled
+        // frame still had time left; and non-consuming, because the very next
+        // `frame()` is the one that feeds the accumulator.
+        let mut clock = FrameClock::new();
+        clock.last = Instant::now() - core::time::Duration::from_secs(60);
+        assert!(
+            clock.since_frame().as_f32() > MAX_FRAME.as_f32(),
+            "the ceiling belongs to `frame`, not to this"
+        );
+        assert_eq!(clock.frame(), MAX_FRAME, "and the mark had not moved");
     }
 
     #[test]

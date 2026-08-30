@@ -1,25 +1,37 @@
-# Frame pacing on the web — a closed investigation, parked
+# Frame pacing — the web investigation (parked), and how native paces frames
 
-Status: **parked by the owner, 2026-08-26 — not this engine's defect.** Four
-rounds of readings (§5) settled what the defect is, killed all three §3
-hypotheses, and refuted two proposed mechanisms. One survives every reading: **a
+Status: **two halves, and they are not the same kind of thing.**
+
+- **§1–§5, the web.** A closed investigation, **parked by the owner,
+  2026-08-26 — not this engine's defect.** Do not reopen it here; §5.7 holds the
+  four triggers that would, and a separate session owns them.
+- **§6, native.** Live design documentation: how a windowed native run is paced,
+  what the audit of 2026-08-30 found and fixed, and the `JIDOUSHA_FRAMETIME`
+  overlay. This is where a native pacing question is answered. It shares §2's
+  vocabulary and §4's instrument and shares none of §5's verdict — the web defect
+  is a browser's, and §6's was the engine's.
+
+**The web half, in one paragraph.** Four rounds of readings (§5) settled what the
+defect is, killed all three §3 hypotheses, and refuted two proposed mechanisms.
+One survives every reading: **a
 per-frame operation on the WebGL canvas sized by its displayed size rather than
 its backing store**, existing at all because Firefox blocklists the zero-copy
 WebGL path on this driver (§5.6). Ordinary pages at the same window size are
 fine, so it is WebGL-specific and not the compositor.
 
-**Nothing in this engine is at fault and no engine change was made or is
-indicated.** What the engine owed this defect was the ability to diagnose it from
+**Nothing in this engine is at fault there and no engine change was made or is
+indicated for it.** What the engine owed this defect was the ability to diagnose it from
 a URL on a machine nobody here can see, and §4's instrument plus this branch's
 two page-side changes delivered that. **The investigation is parked; the
 instrument is live.** §5.7 has the owner's reasoning, the `n = 1` caveat that
 would break it, the four triggers that reopen this, and the two readings and one
 seam design preserved so a future round resumes rather than restarts.
 
-**Read this note for**: the shape of a browser presentation defect and how the
-`?frametime=1` overlay tells one from a pacing bug (§2, §3, §5.6); why the
-renderer string cannot be trusted in Firefox even on a stock profile (§5.2,
-§5.3); and what `?renderscale=` is actually for (§5.5).
+**Read this note for**: how a native run's frames are paced and how to turn the
+readout on (§6 — start here for anything native); the shape of a browser
+presentation defect and how the `?frametime=1` overlay tells one from a pacing
+bug (§2, §3, §5.6); why the renderer string cannot be trusted in Firefox even on
+a stock profile (§5.2, §5.3); and what `?renderscale=` is actually for (§5.5).
 
 Inherits: the frame-clock contract (ADR-0005), the loop and its catch-up bound
 (core.md §7), the playtest page shell (web-publish.md §2), no retained render
@@ -656,3 +668,198 @@ things it produced are not:
 > strongly, while Linux and Wayland were simply never varied. §5.7 separates
 > those, and holds the four triggers that reopen it and the two readings that
 > would resume it._
+
+---
+
+## 6. Native — how frames are paced, and the audit that fixed it
+
+Status: **live.** §1–§5 above are a parked investigation into somebody else's
+browser. This section is the engine's own frame loop on native, and unlike that
+one it found a defect here and changed code. Nothing below reopens §5.
+
+### 6.1 The observation
+
+Owner, **2026-08-30**:
+
+> A native `ninjo` build revs my PC — in a way a paused pixel game must not.
+
+The half that makes it a defect rather than a preference is **paused**. `ninjo`
+pauses by having the simulation perform a pause; the picture then barely changes
+from frame to frame, and a machine audibly working for a still image is a machine
+doing work nobody asked for.
+
+### 6.2 What paces a native frame — the three places, audited
+
+A windowed run's rate is decided in three places and only three. Each was read
+rather than assumed.
+
+1. **The swap chain's present mode**, chosen when the surface is configured
+   (`jidousha-render-wgpu`'s `init::configure`). This is the one that can make
+   the loop wait for the display.
+2. **winit's control flow**, set by the driver every iteration
+   (`driver/mod.rs::about_to_wait`). `Poll` runs the next iteration at once;
+   `WaitUntil` sleeps the thread.
+3. **Whether anything busy-spins.** Nothing does, before or after: no loop in
+   this engine waits by re-reading a clock. The clock is read exactly twice a
+   frame — `FrameClock::frame` for the duration handed to the accumulator, and
+   `FrameClock::since_frame` for how much of the cap is left — and the waiting
+   is `ControlFlow::wait_duration`, which is winit sleeping the thread.
+
+**What (1) was doing, and it is the defect.** The surface was configured from
+`wgpu::Surface::get_default_config`, which takes `caps.present_modes.first()` —
+whatever the backend happens to list first, which is a different answer on every
+platform:
+
+| wgpu backend | first mode listed | waits for the display? |
+|---|---|---|
+| Vulkan (Linux, Android; Windows when chosen) | **whatever order the driver's `vkGetPhysicalDeviceSurfacePresentModesKHR` returns** | not reliably — measured `Immediate` on this project's Linux stack (§6.5) |
+| DX12 (the Windows default) | **`Mailbox`** (`present_modes = vec![Mailbox, Fifo, …]`) | **no** — wgpu maps it to `SyncInterval = 0` |
+| Metal | `Fifo` | yes |
+| GL (and so every web build) | `Fifo` | yes |
+
+So on the two platforms the owner's `ninjo` build can be running on, the swap
+chain did not wait — and with (2) set to `Poll` and a redraw asked for on every
+iteration, nothing else did either. **The loop drew as fast as the machine could
+draw, paused or not.** That is the revving.
+
+Note what is *not* implicated, exactly as in §2: the simulation. The fixed
+timestep, the accumulator, the speed-invariance contract and `MAX_FRAME`'s 0.25s
+catch-up clamp are untouched by everything below (core.md §7, ADR-0005). This is
+presentation, and a cap on the simulation would be a speed change rather than a
+pacing one.
+
+### 6.3 What it does now
+
+- **Vsync is asked for by name.** `init::configure` sets
+  `WANTED_PRESENT_MODE = wgpu::PresentMode::Fifo` whenever the surface offers it,
+  which is everywhere in practice: Vulkan requires FIFO of every conformant
+  implementation and wgpu's other three backends all list it. The display is then
+  the pace, so a 144Hz monitor still gets 144 frames a second — the fix bounds
+  waste, not frame rate.
+- **A fallback cap, for the surface that will not.** `driver/pacing.rs` holds
+  `FALLBACK_CAP_HZ = 60.0`, and it is applied only when the backend reports a
+  present mode that never waits. Sixty because that is `GameConfig::fixed_dt`'s
+  default tick rate and therefore the rate at which this engine's picture
+  actually changes; a cap under the tick rate would make every frame run two
+  ticks, which is §2's jump. A test asserts that relationship rather than
+  trusting the comment.
+- **The cap is a sleep.** `ControlFlow::wait_duration(cap − time this frame
+  already spent)`, so the loop sleeps the *remainder* of the period rather than a
+  whole period on top of the work, and winit still wakes it immediately on an
+  event — input latency is unchanged.
+- **The seam that carries the fact.** `RenderBackend::presentation` returns
+  `Presentation` — `Offscreen`, `Vsync`, `Mailbox`, `Immediate` — and
+  `Presentation::needs_a_cap()` is the whole decision. `Offscreen` answers *no*
+  on purpose: it is what a backend says while its device is still coming, and a
+  startup polling for a GPU must not be slowed down. This is a report, never a
+  request: nothing above the seam may set a present mode (renderer.md §7).
+
+**The web path is untouched.** Its GL surface lists `Fifo` first and was already
+getting it, so it reports `Vsync`, takes the `Poll` arm, and runs exactly the
+loop it ran before. §4's interpolation and the clamp stand.
+
+### 6.4 The native overlay — `JIDOUSHA_FRAMETIME`
+
+**The switch, exactly:** set the environment variable `JIDOUSHA_FRAMETIME` to
+anything other than `0` or `false`.
+
+```
+JIDOUSHA_FRAMETIME=1 cargo run --release -p ninjo
+```
+
+Off unless set — including unset, `0`, and `false` — which mirrors the web
+overlay's `?frametime=1` down to the shorthand it accepts. An **environment
+variable** rather than a `GameConfig` field or a flag, because the person who
+wants it is the person *running* a build somebody else shipped them: a config
+field needs a rebuild, and a flag would have to be plumbed through every game's
+own argument parsing, which `--verify` already owns (input.md §5).
+
+It draws a panel in the top-left corner of the window, over everything, in the
+engine's built-in font — so it needs no asset and works on a game's first frame:
+
+```
+jidousha frame pacing: JIDOUSHA_FRAMETIME=1
+present   ~59.5 fps - median 16.81ms, mean 17.50ms
+spread    16.73ms .. 64.89ms over 240 frames
+pacing    immediate - no vsync on this surface, so the loop is capped at 60 fps
+ticks/fr  0:1 (0%)  1:441 (96%)  2:15 (3%)  3+:1 (0%)
+frame deltas
+   16-17ms ####################  206 (86%)
+   17-18ms #                       3 (1%)
+   …
+```
+
+The same readings as the web panel, in the same one-millisecond histogram buckets
+so the two can be held side by side (web-publish.md §2) — and two of them are
+better here:
+
+- **`pacing`** is the line this overlay exists on native to print, and the web
+  has no equivalent: it is the present mode the surface was **actually configured
+  with**, plus the cap when one is being applied. "Is anything bounding this
+  frame rate, and what" is answerable off a screenshot.
+- **`ticks/fr`** is read off `Simulation::advance`'s return rather than modelled.
+  The page cannot see inside the wasm module and has to re-run the accumulator
+  over its own deltas (§4); a native run just asks.
+
+Three things it deliberately does not do:
+
+- **it never prints.** No log line, no stderr — a diagnostic that spammed a
+  terminal would be a second thing to turn off;
+- **it is drawn after the Draw phase has closed**, onto a copy of the
+  submissions the world never sees. So a game's transcript, a recorded replay and
+  a `--verify` run are byte-identical with the overlay on and off, which is what
+  makes it safe to leave in a shipped build;
+- **it is printable ASCII only.** The built-in font is ASCII 32–126 and draws a
+  visible fallback box for anything else (renderer.md §6), so the em dashes the
+  web panel uses would come out as boxes here. A test keeps that true.
+
+### 6.5 The readings
+
+Taken on this project's headless Linux container — Xvfb, `lavapipe` (a CPU
+rasterizer), a 1280×720 window running `examples/window_clear`, a scene that is
+static by construction. CPU is `utime + stime` out of `/proc`, over ten seconds
+after a five-second settle. **State the machine class, because it is not the
+owner's**: no GPU, and no display with a refresh rate.
+
+| build | `pacing` line | presented | CPU |
+|---|---|---|---|
+| **before** — surface as wgpu defaulted it, `ControlFlow::Poll` every iteration | `immediate` | ~181.7 fps | **150% of one core** |
+| **the cap alone** — same `immediate` surface, `FALLBACK_CAP_HZ` applied | `immediate — … capped at 60 fps` | ~59.5 fps | **34% of one core** |
+| **after** — vsync requested, cap available | `vsync` | ~188.3 fps | 148% of one core |
+
+Three things this says, and one it does not:
+
+1. **The defect reproduced.** wgpu's default configuration chose **`Immediate`**
+   on this machine's Vulkan surface — the row §6.2 predicted from wgpu-hal's
+   source, measured. A native build was presenting with no wait of any kind.
+2. **The cap does what it is for.** On that same uncapped surface, applying
+   `FALLBACK_CAP_HZ` took the loop from 182fps and 150% of a core to 59.5fps and
+   **34%** — a 4.4× reduction in CPU for a static scene, with `ticks/fr 1:96%`
+   confirming the simulation ran exactly as before.
+3. **Vsync is being asked for and granted.** The `pacing` line moves from
+   `immediate` to `vsync`, which is the fix.
+4. **What it does not show: the vsync saving.** The `after` row is still ~188fps
+   and ~148%, because **Xvfb has no refresh to wait for** — Mesa's X11 FIFO
+   presents immediately when the display server never blocks. On a real display
+   FIFO blocks in the swap-chain acquire and the loop's rate becomes the refresh
+   rate; this container cannot demonstrate that, and saying so is more useful
+   than a number that would not mean what it looked like. **The owner's own
+   before/after, with the overlay on, is the acceptance test** — row 2 is the
+   closest analogue available here, and it is the same mechanism.
+
+A note that follows from row 4 and is worth keeping: **`Fifo` is a request to
+wait, and a display server with nothing to wait for grants it without waiting.**
+The overlay prints the mode rather than only the rate for exactly this reason —
+`vsync` at 188fps is a fact about the display server, not a contradiction.
+
+### 6.6 Where this lives
+
+| what | where |
+|---|---|
+| the present mode asked for | `crates/jidousha-render-wgpu/src/init.rs` — `WANTED_PRESENT_MODE` |
+| the fact, above the seam | `crates/jidousha-render-core/src/backend.rs` — `Presentation`, `RenderBackend::presentation` |
+| the cap and the schedule | `crates/jidousha-platform/src/driver/pacing.rs` — `FALLBACK_CAP_HZ` |
+| the one place it becomes a `ControlFlow` | `driver/mod.rs::about_to_wait` |
+| the switch, the window, the readout text | `crates/jidousha-platform/src/driver/overlay.rs` — `SWITCH` |
+| the readout as quads | `crates/jidousha-render-core/src/overlay.rs` — `draw_readout` |
+| off-by-default, in pixels | `crates/jidousha/tests/frame_overlay.rs`, which writes `target/verify/overlay-{off,on}.png` |

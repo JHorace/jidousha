@@ -220,9 +220,15 @@ pub mod testing {
     // writing out by hand: a circle is sixteen wedges and a string is one quad
     // per character, so "how big is the thing that was drawn" is never a quad
     // anybody drew (e0-findings.md F-116, ADR-0032).
+    // `Presentation` is F-017's shape once more: `RenderBackend::presentation`
+    // returns it, so it is named by a signature in this surface and would
+    // otherwise be defined nowhere in it. A capture never has cause to *ask* —
+    // an offscreen backend is `Offscreen` and always will be — which is why no
+    // example names it; it is the windowed loop's reading, and the native
+    // frame-pacing overlay is where it is printed (frame-pacing.md §6).
     pub use jidousha_render_core::{
         BackendTextureId, Batch, DrawnQuad, FONT_TEXTURE, FramePlan, FrameRecord, FrameRecorder,
-        PhysicalSize, QuadVertex, RawImage, RenderBackend, RenderError, TextureTable,
+        PhysicalSize, Presentation, QuadVertex, RawImage, RenderBackend, RenderError, TextureTable,
         create_builtin_textures, encode_png, find_bounds, upload_ready_textures,
         upload_text_atlases,
     };

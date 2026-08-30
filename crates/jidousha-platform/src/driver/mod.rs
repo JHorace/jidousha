@@ -13,6 +13,13 @@
 //! itself — ticks, assets, drawing — is [`frame`], which names no winit type at
 //! all and is tested without a window. The split is by length (CLAUDE.md) and it
 //! falls here because this is where the platform actually ends.
+//!
+//! Two more halves hang off the same seam and for the same reason. [`pacing`]
+//! decides *how often* a frame may happen when the display will not decide it,
+//! and [`overlay`] is the instrument that says what is happening — both stated
+//! in engine types, both tested with no window and no GPU, and this module is
+//! the only place either becomes a `ControlFlow` or a quad (frame-pacing.md
+//! §6).
 
 use std::sync::Arc;
 
@@ -28,11 +35,15 @@ use winit::event_loop::ActiveEventLoop;
 use winit::window::{Window, WindowId};
 
 use crate::clock::FrameClock;
+use crate::driver::overlay::Overlay;
+use crate::driver::pacing::{Pacing, Schedule};
 use crate::error::RunError;
 use crate::translate;
 use crate::web::render_scale::{self, RenderScale};
 
 mod frame;
+mod overlay;
+mod pacing;
 #[cfg(test)]
 mod testing;
 
@@ -89,6 +100,15 @@ pub(crate) struct Driver {
     /// value that changed under the surface would be a resize nobody asked for.
     render_scale: RenderScale,
     clock: FrameClock,
+    /// How often a frame is allowed to start.
+    ///
+    /// Updated from the backend every frame and read in `about_to_wait`. It is
+    /// **presentation only**: the simulation's timestep is `Simulation`'s and
+    /// nothing here can move it (frame-pacing.md §6).
+    pacing: Pacing,
+    /// The frame-pacing instrument, off unless this run's environment asked for
+    /// it (`JIDOUSHA_FRAMETIME`, frame-pacing.md §6).
+    overlay: Overlay,
     input: SnapshotBuilder,
     /// Set when something went wrong badly enough to stop; `run` returns it.
     ///
@@ -113,6 +133,8 @@ impl Driver {
             viewport: Camera::default().viewport,
             render_scale: render_scale::requested(),
             clock: FrameClock::new(),
+            pacing: Pacing::new(),
+            overlay: Overlay::new(overlay::requested()),
             input: SnapshotBuilder::new(),
             #[cfg(not(target_arch = "wasm32"))]
             failure: None,
@@ -229,11 +251,34 @@ impl ApplicationHandler for Driver {
         }
     }
 
-    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        // Ask for the next frame as soon as this one is done: a game runs
-        // continuously rather than waiting for something to happen to it.
-        if let Some(window) = &self.window {
-            window.request_redraw();
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        // A game runs continuously rather than waiting for something to happen
+        // to it, so the next frame is always asked for — the only question is
+        // *when*, and `pacing` is what answers it.
+        //
+        // `Poll` is what this always did, and it is still right whenever
+        // something else is doing the waiting: a vsynced swap chain blocks in
+        // the acquire, which is the operating system sleeping the thread for
+        // us. It was wrong for the case wgpu's default configuration hands out
+        // on Windows and on many Linux drivers — a surface that never waits —
+        // where it meant a paused 2D game holding a core and a GPU at whatever
+        // the machine could manage (frame-pacing.md §6).
+        //
+        // The other arm is `WaitUntil`, never a spin: winit sleeps the thread
+        // and wakes it on the deadline or on an event, so input still arrives
+        // at once and a capped frame costs nothing while it waits.
+        let Some(window) = &self.window else {
+            return;
+        };
+        match self.pacing.schedule(self.clock.since_frame()) {
+            Schedule::Now => {
+                event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
+                window.request_redraw();
+            }
+            Schedule::Wait(remaining) => {
+                event_loop
+                    .set_control_flow(winit::event_loop::ControlFlow::wait_duration(remaining));
+            }
         }
     }
 }

@@ -128,6 +128,12 @@ TESTING_EXEMPT = {
     # road the document describes.
     "ReplaySource": "the asset half of the replay story; AssetReady is reachable and this is "
     "what consumes it",
+    # Named by `RenderBackend::presentation`, which is in this surface, and
+    # unanswerable from a capture: an offscreen backend presents to nothing and
+    # says `Offscreen` for ever. It is the *windowed* loop's reading — what
+    # paces the frame loop, and what the native frame-pacing overlay prints
+    # (frame-pacing.md §6) — and no example opens a window and is run.
+    "Presentation": "the windowed loop's reading; an offscreen capture is always Offscreen",
 }
 
 

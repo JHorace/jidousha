@@ -272,7 +272,18 @@ Implemented (R2):
   primitive takes. Corrected at R3, in favour of the higher-precedence doc.)
 - Explicit non-goals for v1: shaping, wrapping, non-ASCII beyond Latin-1. Real
   typography is a future subsystem; this is for scores, debug readouts, and
-  prototype UI. **TTF rendering was on this list and is not any more** — it was
+  prototype UI.
+- **`overlay::draw_readout` is engine-side, and is not a second way to draw
+  text.** `ctx.text` is still the one way a *game* draws a string, and the
+  facade does not re-export this. It is the same `layout` and the same
+  `glyph_quad` over the same built-in atlas, with two things a corner panel needs
+  and a game does not: an anchor in *screen* space (through
+  `Camera::screen_to_world`, so the block lands in the window's corner whatever
+  the camera is looking at) and a backdrop sized from `TextStyle::measure`. The
+  one caller is the platform driver's frame-pacing overlay (frame-pacing.md §6),
+  which is also why the panel is sized as a fraction of the window rather than in
+  world units — a readout whose size depended on the game's camera would be
+  unreadable in half of them. **TTF rendering was on this list and is not any more** — it was
   named as the likeliest first pull, the pull happened, and ADR-0042 is where it
   went. What that decision did *not* move is the rest of the list: there is
   still no shaping, no wrapping, no bidirectional text, and nothing past
@@ -412,6 +423,7 @@ pub trait RenderBackend {
     fn resize_surface(&mut self, size: PhysicalSize);
     fn render(&mut self, plan: &FramePlan) -> Result<(), RenderError>;
     fn capture(&mut self) -> Result<RawImage, RenderError>;   // offscreen readback, §9
+    fn presentation(&self) -> Presentation;                   // how frames reach the display
 }
 ```
 
@@ -427,6 +439,17 @@ pub trait RenderBackend {
   and everything in it are engine types. Shader source (WGSL today, SPIR-V under
   ash) is a backend-internal detail — render-core requests the "sprite pipeline"
   by name, never by source.
+- `presentation` is the sixth method and the newest (2026-08-30). It reports
+  which of `Offscreen` / `Vsync` / `Mailbox` / `Immediate` the surface was
+  configured with, because the *driver* has to know whether the display is
+  pacing the loop or the loop has to pace itself — a swap chain that never waits
+  left a paused 2D game drawing as fast as the machine could manage
+  (**frame-pacing.md §6**, which is where the whole native pacing story lives).
+  CONTRACT: a report, never a request. Nothing above the seam sets a present
+  mode; the backend negotiates it with the machine and says what it got. The
+  present mode this engine asks for is `Fifo`, in
+  `jidousha-render-wgpu`'s `init::configure`, and the fallback cap for a surface
+  that refuses it is in the platform crate, not here.
 
 Implemented (R2): the pipeline is one WGSL shader, one vertex format (position,
 uv, color — eight floats, 32 bytes), one uniform buffer holding the view-proj

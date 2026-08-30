@@ -107,7 +107,12 @@ One `index.html` template, self-contained (no external CDN dependencies):
   deployed build, and by `serve-web --check`'s second pass — and it ships in
   real games because a bug-reporting path nobody can test is a path that rots.
 - **Frame-pacing overlay** (`?frametime=1`): a page-side instrument, on every
-  deployed build, reachable by query parameter alone. It answers the one
+  deployed build, reachable by query parameter alone. **Native has its own**,
+  switched on with the `JIDOUSHA_FRAMETIME` environment variable and drawn by the
+  engine rather than the page — same readings, same histogram buckets, plus a
+  `pacing` line the page has no equivalent for (frame-pacing.md §6). The two
+  switches accept the same shorthand on purpose: anything but `0` or `false` is
+  on. It answers the one
   question a remote playtest cannot otherwise answer — "the ball is jumpy in my
   browser and smooth in yours, why" — with the facts that settle it:
   - a rolling histogram of `requestAnimationFrame` deltas (one-millisecond

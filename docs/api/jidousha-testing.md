@@ -1072,6 +1072,29 @@ impl PhysicalSize {
 }
 ```
 
+#### `Presentation`
+
+How a backend's finished frames reach the display.
+
+```rust
+pub enum Presentation {
+    // Nothing is reaching a display: the GPU has not arrived yet, or this backend
+    // draws into a texture nobody sees
+    Offscreen,
+    Vsync,  // Every present waits for the display's next refresh
+    // The newest finished frame replaces whatever was queued for the display
+    Mailbox,
+    // Frames go to the display the moment they are finished, tearing if that lands
+    // mid-scan
+    Immediate,
+}
+// Clone Copy Debug PartialEq Eq Display
+
+impl Presentation {
+    pub fn needs_a_cap(self) -> bool;  // Whether the frame loop has to cap itself, because nothing else will
+}
+```
+
 #### `QuadVertex`
 
 One vertex of an expanded quad.

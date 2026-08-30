@@ -21,12 +21,13 @@ mod init;
 mod pipeline;
 
 use jidousha_render_core::{
-    BackendTextureId, FramePlan, PhysicalSize, RawImage, RenderBackend, RenderError, TextureDesc,
+    BackendTextureId, FramePlan, PhysicalSize, Presentation, RawImage, RenderBackend, RenderError,
+    TextureDesc,
 };
 
 use crate::capture::read_back;
 use crate::color::linear;
-use crate::init::{Gpu, Pending, Target, configure, offscreen_texture};
+use crate::init::{Gpu, Pending, Target, configure, offscreen_texture, presentation_of};
 use crate::pipeline::SpritePipeline;
 
 /// A renderer backed by wgpu.
@@ -462,5 +463,25 @@ impl RenderBackend for WgpuBackend {
             });
         };
         read_back(&live.gpu.device, &live.gpu.queue, texture, *size)
+    }
+
+    fn presentation(&self) -> Presentation {
+        // What the surface was actually configured with, not what was asked
+        // for: `configure` requests Fifo and takes what it is given, and the
+        // driver's cap exists for exactly the case where those differ
+        // (init.rs's `WANTED_PRESENT_MODE`, frame-pacing.md §6).
+        //
+        // Everything that is not a live window says `Offscreen` — a device
+        // still on its way, a handshake that failed, and the offscreen target
+        // itself. None of them is presenting, and none of them wants the loop
+        // slowed down: a startup polls for its device, and a capture has no
+        // loop at all.
+        match &self.state {
+            State::Running(live) => match &live.gpu.target {
+                Target::Window { config, .. } => presentation_of(config.present_mode),
+                Target::Offscreen { .. } => Presentation::Offscreen,
+            },
+            State::Starting(_) | State::Failed(_) => Presentation::Offscreen,
+        }
     }
 }
