@@ -232,6 +232,19 @@ mockup-first treatment (agreement 8) after the owner has felt S1 run.
 - The S1 log must already carry class + place on every entry so S2 is
   a presentation layer over existing data, not a sim change.
 
+*Implemented (wave 0a, which is what S2 became — `GDD.md` §3 is the record):*
+the class table, the feed as a view of `Sim::events`, click-to-focus, the
+per-class config, the meters and the character panel. **One shape here was
+bent and it is worth stating in the substrate's own voice**: this section
+calls attention "a presentation layer over existing data", and the auto-pause
+half of it is not. A pause that only the screen knew about would be a replay
+divergence: the world would stop for one player and not for another off the
+same recorded inputs. So `Sim::emit` records the pause and `sim::fire_due`
+puts the clock at speed 0 in the same tick — a simulation transition, with
+the per-class config as sim state beside it. The rest of the section holds
+exactly as written: the feed, the focus and the pulse are presentation over
+addresses S1 already carried.
+
 ## 7. Verify — the world moves the same way twice
 
 - **The speed-invariance sweep** (the substrate's signature test): one
@@ -239,7 +252,11 @@ mockup-first treatment (agreement 8) after the owner has felt S1 run.
   world-times, run under several speed scripts (all-1x, all-4x, a
   mid-travel mix with pauses) — transcripts must contain **identical
   event sequences with identical world-time stamps**. A divergence is
-  the exact failure this design exists to prevent.
+  the exact failure this design exists to prevent. *(Wave 0a runs all three
+  a second time under a config that stops the world at every completion,
+  resumed by the key the script already runs at: an auto-pause must stretch
+  wall time and move no address, and the transcripts must come out the same
+  as the ones above.)*
 - Fixed-seed beats-style scripts: dispatch, assert arrival at the exact
   world-minute (the sum of terrain costs along the asserted path),
   assert pot paid, assert return.

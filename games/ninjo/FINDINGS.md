@@ -69,3 +69,39 @@ rescheduling itself forever. The substrate's stopping condition was written
 when every occurrence belonged to a party. Any wave that adds a recurring
 ambient occurrence — needs ticking is the next one — meets the same fact, so
 it is written down here as well as at the site.
+
+## Wave 0a (the attention architecture) — **1 new finding**
+
+Reading discipline held: `docs/api/` (all four), `crates/jidousha/examples/`,
+`games/giri/` and this crate. Nothing under `crates/*/src/`, `docs/internal/`
+or any ADR was opened.
+
+### G-011 — whether the first-finger-to-pointer mirror applies to a scripted snapshot is not stated
+
+Class: docs · Game: ninjo · Documents: `jidousha-api.md` ("a game written for
+a mouse is already playable by touch"), `jidousha-testing.md`
+(`InputEvent::Touched`, `SnapshotBuilder`) · Open
+
+The API document states the mirror as a property of the engine — "the engine
+puts the first finger down onto the primary pointer", so
+`just_pressed(PointerButton::Primary)` is a tap — and the testing document
+lists `InputEvent::Touched { finger, phase, screen }` among the events a
+`SnapshotBuilder` records. Neither says whether the mirror is applied when a
+*check* records a `Touched` event, or only by the platform layer on the way
+in. That is the difference between a check that can verify the claim and a
+check that cannot: if the mirror lived in the platform crate, a failing
+assertion would mean "the harness does not mirror" rather than "the game's
+hit-test is wrong", and there is no way to tell those apart from the
+documents.
+
+Expected: one sentence in the testing document saying that a recorded
+`Touched` produces the mirrored pointer in the snapshot the game reads.
+Happened: wrote the check and ran it to find out. It does mirror, and
+`verify::touch_selects` now asserts a finger on a character's figure selects
+them with no `PointerMoved` and no `ButtonPressed` in the snapshot — so the
+answer is recorded here, and the document is the place it belongs.
+Owner: `jidousha-testing.md`.
+
+**G-010 stays open** for the third wave running: the bounds check's stated
+form still assumes a camera that does not move, and wave 0a added more
+map-space content (the selection ring, the focus pulse) culled the same way.

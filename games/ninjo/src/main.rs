@@ -6,16 +6,20 @@
 //! has a world-time and a place, proved out under the name giri-rt and adopted
 //! here (`VARIANT.md` records that verdict).
 //!
-//! What runs today: wave 0b. The substrate's dispatch/travel/resolve loop, plus
-//! **the people substrate** - a character registry standing at its home tiles,
-//! the trait vocabulary, and the shared-state stores (regard, bonds and
-//! grudges, marks) that waves 1 and up write into. Autonomy, needs, petitions
-//! and asks are later waves; nobody decides anything for themselves yet.
+//! What runs today: waves 0b and 0a. The substrate's dispatch/travel/resolve
+//! loop, **the people substrate** - a character registry standing at its home
+//! tiles, the trait vocabulary, and the shared-state stores (regard, bonds and
+//! grudges, marks) - and **the attention architecture**: an event-class table,
+//! a feed that is a view of the sim's event log, per-class auto-pause the
+//! simulation performs itself, meters that open into faces, and a panel for
+//! one character. Autonomy, needs, petitions and asks are later waves; nobody
+//! decides anything for themselves yet.
 //!
 //! The seams this build exists to lay: `src/lens.rs` is the one read-path every
 //! screen goes through, `src/stores.rs` holds the shared state and the only
-//! functions that write it, `src/modules.rs` is the registry the module-off
-//! verify matrix iterates, and `src/sim.rs` is the one scheduler.
+//! functions that write it, `src/attention.rs` holds the class table nothing
+//! branches around, `src/modules.rs` is the registry the module-off verify
+//! matrix iterates, and `src/sim.rs` is the one scheduler.
 //!
 //! Pointer and keyboard. No audio. **No randomness**: the seed plumbing and
 //! stamps remain from giri, and no `Rng` read exists yet - verify asserts
@@ -30,6 +34,7 @@ use std::process::ExitCode;
 
 use jidousha::prelude::*;
 
+mod attention;
 mod camera;
 mod capture;
 mod checks;
@@ -43,13 +48,17 @@ mod layout;
 mod lens;
 mod library;
 mod links;
+mod meters;
 mod modules;
 mod mutation;
+mod panels;
 mod path;
+mod pauses;
 mod people;
 mod presets;
 mod restart;
 mod screens;
+mod shots;
 mod sim;
 mod sprites;
 mod stores;
@@ -87,11 +96,17 @@ pub fn config() -> GameConfig {
 /// `clock::remember` keeps the previous tick's reading before anything moves
 /// it (ADR-0041's idiom, applied to the clock); `flow::handle_input` turns
 /// the snapshot into orders **before** `clock::advance` carries the minutes,
-/// so an order given at minute M is dispatched at minute M; `sim::fire_due`
-/// runs after the advance and fires everything the span crossed, in
-/// world-time order; `flow::collect_events` copies the new events into the
-/// log the same tick. `verify.rs` asserts this order out of
+/// so an order given at minute M is dispatched at minute M — and so a change
+/// to the auto-pause config takes effect for the events firing this tick;
+/// `sim::fire_due` runs after the advance, fires everything the span crossed
+/// in world-time order, and stops the clock in the same tick when one of them
+/// is a pause-class event. `verify.rs` asserts this order out of
 /// `schedule_debug()`, because nothing but a reader protects it.
+///
+/// **There is no system that copies events anywhere.** The feed is a view of
+/// `Sim::events` built where it is drawn (`attention::feed`), which is what
+/// makes "the feed cannot disagree with the transcript" a fact about the code
+/// rather than a claim about a copy.
 pub fn register(app: &mut App) {
     app.add_system(Startup, open_the_world);
     app.add_system(Update, camera::fit);
@@ -99,7 +114,6 @@ pub fn register(app: &mut App) {
     app.add_system(Update, flow::handle_input);
     app.add_system(Update, clock::advance);
     app.add_system(Update, sim::fire_due);
-    app.add_system(Update, flow::collect_events);
     app.add_system(Draw, screens::draw_map);
     app.add_system(Draw, screens::draw_chrome);
     app.add_system(Draw, screens::draw_content);

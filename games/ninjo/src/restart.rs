@@ -308,7 +308,7 @@ fn replay_identity(checks: &mut Checks, run: &DrawerRun) {
     // at minute 6.
     checks.require(
         run.events.first().is_some_and(|event| {
-            event.minute == 6 && event.class == crate::sim::EventClass::Departed
+            event.minute == 6 && event.class == crate::attention::EventClass::Departed
         }) && run.events.len() == 5,
         "the post-apply dispatch did not run its whole loop",
         format!("the post-apply transcript is {:?}", transcript(&run.events)),

@@ -78,6 +78,18 @@ pub struct Tuning {
     /// World-hours between drifts. Slow is the design; the drawer's range is
     /// small, so the cadence is stated in hours and floored at one.
     pub drift_hours: i64,
+
+    // ── the attention architecture (GDD §3; wave 0a) ──────────────────────
+    /// How many entries the feed holds (`attention::feed`).
+    ///
+    /// The feed is a view of the event log, so this is a bound on the *view*
+    /// and never on the log: the transcript keeps everything, and the player
+    /// sees the newest this many.
+    pub feed_cap: i64,
+    /// How long a click-to-focus pulse marker lasts, in **tenths of a
+    /// wall-second** — presentation, so it is measured in wall time, and in
+    /// tenths because the drawer's range is small.
+    pub pulse_tenths: i64,
 }
 
 impl Resource for Tuning {}
@@ -113,6 +125,8 @@ impl Tuning {
         bond_regard: 3,
         drift_step: 1,
         drift_hours: 4,
+        feed_cap: 10,
+        pulse_tenths: 25,
     };
 
     /// The constants in effect, as the lines the drawer's stamp and every
@@ -128,7 +142,8 @@ impl Tuning {
              regard span {}\n\
              bond floor {}  ceil -{}\n\
              bond after {} at {}\n\
-             drift {} per {}h",
+             drift {} per {}h\n\
+             feed {}  pulse {}",
             self.road_cost,
             self.plains_cost,
             self.forest_cost,
@@ -146,6 +161,8 @@ impl Tuning {
             self.bond_regard,
             self.drift_step,
             self.drift_hours,
+            self.feed_cap,
+            self.pulse_tenths,
         )
     }
 
@@ -171,6 +188,8 @@ impl Tuning {
             Field::BondRegard => &mut self.bond_regard,
             Field::DriftStep => &mut self.drift_step,
             Field::DriftHours => &mut self.drift_hours,
+            Field::FeedCap => &mut self.feed_cap,
+            Field::PulseTenths => &mut self.pulse_tenths,
         }
     }
 
@@ -342,6 +361,10 @@ pub enum Field {
     DriftStep,
     /// World-hours between drifts.
     DriftHours,
+    /// How many entries the feed holds.
+    FeedCap,
+    /// How long a focus pulse lasts, in tenths of a second.
+    PulseTenths,
 }
 
 impl Field {
@@ -364,6 +387,8 @@ impl Field {
         Field::BondRegard,
         Field::DriftStep,
         Field::DriftHours,
+        Field::FeedCap,
+        Field::PulseTenths,
     ];
 
     /// The name DESIGN gives this constant.
@@ -386,6 +411,8 @@ impl Field {
             Field::BondRegard => "bond_regard",
             Field::DriftStep => "drift_step",
             Field::DriftHours => "drift_hours",
+            Field::FeedCap => "feed_cap",
+            Field::PulseTenths => "pulse_tenths",
         }
     }
 
@@ -430,6 +457,8 @@ impl Field {
             Field::BondRegard => "mutual regard a bond also needs",
             Field::DriftStep => "how far one drift moves an edge",
             Field::DriftHours => "world-hours between regard drifts",
+            Field::FeedCap => "how many entries the feed holds",
+            Field::PulseTenths => "focus pulse, in tenths of a second",
         }
     }
 }

@@ -16,9 +16,10 @@
 
 use jidousha::prelude::*;
 use jidousha::testing::{
-    BackendTextureId, FrameRecord, FrameRecorder, InputEvent, SnapshotBuilder,
+    BackendTextureId, FingerId, FrameRecord, FrameRecorder, InputEvent, SnapshotBuilder,
 };
 
+use crate::attention::EventClass;
 use crate::camera::UiMap;
 use crate::checks::Checks;
 use crate::clock::Clock;
@@ -26,7 +27,7 @@ use crate::constants::Tuning;
 use crate::flow::{Flow, SessionSeed};
 use crate::grid::{LOCATIONS, Tile};
 use crate::modules::ModuleSet;
-use crate::sim::{Event, EventClass, Sim};
+use crate::sim::{Event, Sim};
 use crate::{camera, layout, sim, sprites, verify};
 
 /// When a directive falls due.
@@ -60,6 +61,18 @@ pub enum Act {
     PointUi(Vec2),
     /// Move the pointer to a world point without clicking.
     PointWorld(Vec2),
+    /// **Tap a world point with a finger** — a touch down and a touch up, and
+    /// no pointer event at all.
+    ///
+    /// The engine mirrors the first finger onto the primary pointer
+    /// (`jidousha-api.md`: "a game written for a mouse is already playable by
+    /// touch"), so this exists to *verify* that claim over this game's own
+    /// hit-tests rather than to build anything: the game has no touch code.
+    TouchWorld(Vec2),
+    /// The down half of a [`Act::TouchWorld`], as the conductor microsteps it.
+    TouchDown(Vec2),
+    /// And the up half.
+    TouchUp(Vec2),
 }
 
 /// One scripted action at one moment.
@@ -269,6 +282,12 @@ pub fn conduct(session: &Session<'_>) -> Conducted {
                         steps.push(Act::PointWorld(at));
                         steps.push(Act::ClickWorld(at));
                     }
+                    Act::TouchWorld(at) => {
+                        steps.push(Act::TouchDown(at));
+                        steps.push(Act::TouchUp(at));
+                    }
+                    Act::TouchDown(at) => steps.push(Act::TouchDown(at)),
+                    Act::TouchUp(at) => steps.push(Act::TouchUp(at)),
                 }
                 next_directive += 1;
             }
@@ -291,6 +310,23 @@ pub fn conduct(session: &Session<'_>) -> Conducted {
                     id: PointerId::PRIMARY,
                     screen: world_camera.world_to_screen(at),
                 }),
+                // One finger, down and up. No `PointerMoved` and no
+                // `ButtonPressed`: whether those arrive is the engine's
+                // mirror, which is exactly what the check is asking about.
+                Act::TouchWorld(at) | Act::TouchDown(at) => {
+                    keyboard.record(InputEvent::Touched {
+                        finger: FingerId::from_platform(1),
+                        phase: TouchPhase::Began,
+                        screen: world_camera.world_to_screen(at),
+                    });
+                }
+                Act::TouchUp(at) => {
+                    keyboard.record(InputEvent::Touched {
+                        finger: FingerId::from_platform(1),
+                        phase: TouchPhase::Ended,
+                        screen: world_camera.world_to_screen(at),
+                    });
+                }
                 Act::ClickUi(_) | Act::ClickWorld(_) => {
                     keyboard.record(InputEvent::ButtonPressed {
                         id: PointerId::PRIMARY,
@@ -378,15 +414,40 @@ pub fn conduct(session: &Session<'_>) -> Conducted {
     }
 }
 
+/// The world-minutes this scenario's four quests resolve at.
+///
+/// Stated as literals because they are where an auto-pause on
+/// `quest-complete` stops the world, and a resume has to be addressed at one:
+/// the clock is holding, so a resume cannot be addressed by the clock
+/// (`When::MinuteHeld` counts ticks from the minute's first arrival). They are
+/// the same four minutes [`expected_events`] pins.
+pub const COMPLETIONS: [u64; 4] = [161, 176, 222, 606];
+
 /// The shared order script under one speed prologue: four dispatches at
-/// fixed world-minutes — three parties out at once, then a re-dispatch to
+/// fixed world-times — three parties out at once, then a re-dispatch to
 /// the barrier-detour site once OX is home.
-fn script_with(speed_prologue: &[Directive]) -> Vec<Directive> {
+///
+/// `resume_key` is `Some` for the auto-pause variant of the sweep: a tap of
+/// the script's own speed key a few ticks after each completion, which is the
+/// player pressing the key they were already at. It resumes a world that
+/// stopped itself and does nothing at all to a world that did not — which is
+/// what makes the two variants comparable.
+fn script_with(speed_prologue: &[Directive], resume_key: Option<Key>) -> Vec<Directive> {
+    let resume = |minute: u64| Directive {
+        when: When::MinuteHeld { minute, after: 20 },
+        what: Act::Tap(resume_key.unwrap_or(Key::Digit1)),
+    };
     let mut script = speed_prologue.to_vec();
     script.extend(order(8, 0, 0)); // OX to the Watchtower
     script.extend(order(12, 1, 1)); // OWL to the Deep Cave
     script.extend(order(20, 2, 2)); // CRANE to the Old Crypt
+    if resume_key.is_some() {
+        script.extend(COMPLETIONS[..3].iter().map(|minute| resume(*minute)));
+    }
     script.extend(order(330, 0, 3)); // OX again, to the Black Vault
+    if resume_key.is_some() {
+        script.push(resume(COMPLETIONS[3]));
+    }
     script
 }
 
@@ -395,10 +456,28 @@ fn script_with(speed_prologue: &[Directive]) -> Vec<Directive> {
 /// happens against a held clock, the orders-while-paused property run for
 /// real — and resumes 300 ticks later.
 pub fn speed_scripts() -> Vec<(&'static str, Vec<Directive>)> {
+    speed_scripts_with(false)
+}
+
+/// The same three, with a resume tap after each completion.
+///
+/// **For the auto-pause variant of the invariance sweep** (`pauses.rs`): under
+/// a config that stops the world on `quest-complete`, these are the scripts
+/// that let it start again, and the transcripts they produce must be identical
+/// to the ones above. A pause stretches wall time and moves no world-time
+/// address; that claim is what these exist to run.
+pub fn resuming_speed_scripts() -> Vec<(&'static str, Vec<Directive>)> {
+    speed_scripts_with(true)
+}
+
+fn speed_scripts_with(resuming: bool) -> Vec<(&'static str, Vec<Directive>)> {
     let tap = |when: When, key: Key| Directive {
         when,
         what: Act::Tap(key),
     };
+    // Each script resumes with the key it is already running at, so the
+    // auto-pause variant does not quietly become a different speed schedule.
+    let key = |script_key: Key| resuming.then_some(script_key);
     let mut mixed = vec![tap(When::Tick(5), Key::Digit2)];
     mixed.extend(order(8, 0, 0));
     mixed.extend(order(12, 1, 1));
@@ -412,10 +491,36 @@ pub fn speed_scripts() -> Vec<(&'static str, Vec<Directive>)> {
         Key::Space,
     ));
     mixed.push(tap(When::Minute(40), Key::Digit3));
+    if resuming {
+        mixed.extend(COMPLETIONS[..3].iter().map(|minute| {
+            tap(
+                When::MinuteHeld {
+                    minute: *minute,
+                    after: 20,
+                },
+                Key::Digit3,
+            )
+        }));
+    }
     mixed.extend(order(330, 0, 3));
+    if resuming {
+        mixed.push(tap(
+            When::MinuteHeld {
+                minute: COMPLETIONS[3],
+                after: 20,
+            },
+            Key::Digit3,
+        ));
+    }
     vec![
-        ("all-1x", script_with(&[tap(When::Tick(5), Key::Digit1)])),
-        ("all-4x", script_with(&[tap(When::Tick(5), Key::Digit3)])),
+        (
+            "all-1x",
+            script_with(&[tap(When::Tick(5), Key::Digit1)], key(Key::Digit1)),
+        ),
+        (
+            "all-4x",
+            script_with(&[tap(When::Tick(5), Key::Digit3)], key(Key::Digit3)),
+        ),
         ("mixed-pause", mixed),
     ]
 }

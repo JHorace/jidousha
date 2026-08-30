@@ -14,8 +14,9 @@ giri's text stands.
 
 ## 1. The one screen, and the two spaces
 
-giri had three screens; the substrate has **one** — the map — with the log
-drawer and the tuning drawer over it. Everything drawn lives in one of two
+giri had three screens; the substrate has **one** — the map — with three
+drawers over it (the feed, the auto-pause config, the tuning drawer) and,
+over the map itself, the attention surfaces §3a describes. Everything drawn lives in one of two
 spaces:
 
 - **World space**: the terrain tiles, the location markers and their
@@ -36,7 +37,11 @@ giri's colour roles stand. The changed and new rows:
 
 | Signifier | Meaning | Notes |
 |---|---|---|
-| heart icon | **the town — home base** | reassigned from regard, which the substrate does not have |
+| heart icon | **the town — home base**, and the `idle` meter chip | reassigned from regard, which the substrate does not have |
+| an event class's colour + icon | **what kind of thing happened** — one chip per class on every feed row | the pair is the row's two channels; both come off `attention::CLASSES` and nothing else names them |
+| the watchtower icon | the `away` meter chip | interim: no "out on the road" role exists in the curated set, and a thing that watches a road is the nearest one |
+| gold, on a feed row | **the entry an auto-pause fired on** | the same fact as the reason line above it, from `Lens::pause` |
+| a gold ring on a map figure | **the selected character** | the party token's own ring, reused for people |
 | portraits, on the map | **a character standing at their home tile** | one per person, at marker weight (32 world units), named underneath |
 | dungeon icons (cave/crypt/tower/vault) | one quest site each | unchanged in art, now map markers |
 | portraits | **party tokens** | one per party, unique, on the map and on the strip |
@@ -57,8 +62,8 @@ not a queue — the import path (`art/`) rode along from giri.
 - **Top bar** (always visible): title, the clock readout `d1 06:40`
   (integer world-minutes, days from one), the four speed chips
   `PAUSE 1x 2x 4x` (active in gold; they do exactly what space and 1/2/3
-  do), the treasury with its coin, and the TUNE and LOG handles in giri's
-  positions.
+  do), the treasury with its coin, and the TUNE, FEED and MODES handles in
+  giri's positions.
 - **The map**: terrain tiles culled to the camera; markers + labels + an
   open-quest count per site (`2 quests` / `1 quest` / `dry`); party tokens
   moving tile to tile, between-tile progress derived at draw time and never
@@ -66,12 +71,11 @@ not a queue — the import path (`art/`) rode along from giri.
   a gold ring.
 - **The cast, at home** (wave 0b): every character stands at their home
   tile with their name under them, unless a party they field is out. They
-  are **not click targets** — nobody may be clicked yet, because autonomy
-  is wave 1 and the character sheet is wave 0a's attention work — so the
-  32x32 target floor does not bind them; the size is a signifier, not an
-  affordance. What a person *has* (wallet, desperation and its source,
-  traits, marks) is deliberately not on screen: showing it is the
-  attention mockup's decision to make, not this session's.
+  are **click targets since wave 0a**: clicking a figure selects that person
+  and opens their panel (§3a), and the 32-world-unit figure meets the target
+  floor at the reference zoom exactly as a site marker does. What a person
+  *has* — wallet, desperation and its source, traits — is on their panel and
+  nowhere else.
 - **Party strip** (always visible): one chip per party — portrait, the
   party's name and the character who fields it (`OX - Bob`), and a
   one-line status (`idle in Ebisu` / `-> the Watchtower` /
@@ -83,18 +87,57 @@ not a queue — the import path (`art/`) rode along from giri.
 - **Pan/zoom**: arrows pan, `-`/`=` and the scroll wheel zoom; the camera
   clamps to the map and to a zoom range. All of it is input through the
   snapshot, none of it simulation state.
-- **Log drawer**: reverse-chronological, one row per event, every row
-  carrying its world-time stamp. Mechanical narration, ASCII, one row per
-  line — rows are authored to fit the drawer's ~99 columns.
-- **Tuning drawer**: giri's §12 rules verbatim, at the game's seventeen
-  constants — two columns of nine, with the stamp to the right of them —
-  and APPLY restarts the **scenario** (this game's boundary). The stamp
-  ends `seed <n>`. The variant picker is gone with the variant machinery.
-- **Trait chips are not drawn yet.** The vocabulary carries an interim icon
-  role per trait (a category icon from the existing library, giri's §13
-  rule), and a chip is specified as 16 units square — asserted at the data,
-  so a row cannot name a picture that would stretch or draw at a fraction.
-  What a chip *looks* like is the UI session's.
+- **Feed drawer**: §3a. It replaced wave 0b's log drawer, which was a copy
+  of the event list; the feed is a view of it.
+- **Tuning drawer**: giri's §12 rules verbatim, at the game's nineteen
+  constants — two columns of ten, with the stamp to the right of them — and
+  APPLY restarts the **scenario** (this game's boundary). The stamp ends
+  `seed <n>`. The variant picker is gone with the variant machinery.
+- **Trait chips are drawn on the character panel** (wave 0a), at the 16
+  units square the vocabulary specifies, in the interim category icon each
+  row carries (giri's §13 rule). What a chip *looks* like is still the UI
+  session's; where one appears is settled.
+
+## 3a. The attention surfaces (wave 0a)
+
+All of them are **interim UI under the standing law**, and all of them are
+laid out in `layout.rs` and asserted in `floors.rs` like every other row.
+
+- **The meters band**, under the top bar: one chip per registered aggregate
+  (`meters::METERS`), each an icon, a label and a count. **A chip colourises
+  only when its count is nonzero** — a zero is a chip you are allowed not to
+  look at. Clicking one opens the **faces list**: a panel of portraits, names
+  and the *reason* each is counted, never a bare number. Clicking a face
+  opens that character's panel.
+- **The pause banner**, under the meters: one line, gold, present only while
+  the world has stopped itself, saying the class, the place and what
+  happened. The same sentence appears in the feed's header when the drawer is
+  open (`attention::reason_line` — one source, two placements), and the
+  banner is the closed-drawer half.
+- **The feed drawer** (`FEED`): the sim's event log as a view, newest first,
+  bounded by `feed_cap`. One row per entry, and the row's anatomy is
+  **world timestamp · class chip · place tag · the sentence under them**. A
+  row is a 920x32 click target and clicking it moves the camera to the
+  event's place, leaves a pulse marker there for `pulse_tenths` tenths of a
+  second, and shuts the drawer. A `IGNORED: HIDDEN/SHOWN` toggle reveals the
+  classes the config swallows, dimmed, for auditing. Under the feed, a
+  **notices** band: the last two things the *player* did (a speed change, a
+  refused order, a restart) — kept apart from the feed on purpose, because
+  none of them happened in the world.
+- **The auto-pause config drawer** (`MODES`): one row per registered class,
+  each with its chip and three radios — `ignore` / `log` / `pause`. The write
+  goes into the simulation, and the footer says so.
+- **The character panel**: portrait, name, trait chips, wallet, desperation
+  and its source line, what they are doing, and where they live — every field
+  read through `lens.rs`. Opened by clicking a figure on the map or a face in
+  a list; a gold ring marks the figure. A close button, and a click elsewhere
+  on the map moves the selection rather than clearing it.
+- **Never two at once.** Opening any drawer shuts the others and closes both
+  over-the-map panels (`Flow::close_everything`), and a click that is not one
+  of the open drawer's own controls shuts it. Under an open drawer the map's
+  own chrome — the banner, the toast, the meters — draws nothing at all: a
+  row nobody can read lying across a control somebody can click is exactly
+  what the floors forbid.
 
 ## 4. Readability floors — what binds here
 
@@ -104,6 +147,13 @@ whose 32-world-unit rects meet the floor at the reference zoom where one
 world unit is one reference pixel); no interactive overlap; no text across
 a control it does not label; stat numbers carry their icon (the treasury's
 coin); ASCII everywhere.
+
+The floors bind **every** surface §3a adds: a feed row, a face row, a config
+radio, a meter chip and the character panel's close are all at or above the
+32x32 target floor, none of them overlaps another control that shares its
+screen, and every row of text is inside the surface that holds it.
+`floors::controls_for` is the one function that says which controls share a
+screen, so the overlap floor is asked about the right set.
 
 **The off-screen floor is restated for a camera that roams.** giri asserted
 every quad inside the design rect; a pan/zoom map legitimately draws
@@ -116,14 +166,25 @@ frame judges hold all three.
 
 ## 5. Screenshot process
 
-Six PNGs per verify run: **the settlement** at world-minute 0 (reference
-only — the whole cast standing at their homes, named, before anything is
-dispatched, which is wave 0b's own exit question), the mid-travel map and
-the log-after-a-quest each at the reference surface and at 600x540 narrow,
-and the tuning drawer (reference only, pending state showing gold). The
-mid-travel map is photographed with two parties on visibly different routes.
+Eight PNGs per verify run. Reference-only, because they are pictures of what
+is on screen rather than of how the chrome scales: **the settlement** at
+world-minute 0 (the whole cast standing at their homes, named, before
+anything is dispatched, which is wave 0b's own exit question), **the
+auto-pause config** with a class set to pause, and **a character's panel**
+with the selection ring on their figure. At both the reference surface and
+600x540 narrow: **the mid-travel map** (photographed with two parties on
+visibly different routes) and **the feed mid-pause** (the reason line
+showing, and the entry that stopped the world ringed in gold). Plus the
+tuning drawer (reference only, pending state showing gold).
+
 Committed copies live in `screens/`; the implementing agent opens and looks
 at every one before declaring done.
+
+**Text is the built-in bitmap face, deliberately.** The engine's TTF support
+landed before wave 0a and was not adopted: the owner's verdict is that
+proportional-heavy display faces are out for dense information, and the feed
+is the densest surface this game has. Every floor and every glyph-count
+assertion is stated against the five-by-seven face.
 
 ## 6. What binds a new surface
 
