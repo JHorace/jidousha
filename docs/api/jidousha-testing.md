@@ -775,6 +775,8 @@ Why a snapshot could not be read.
 pub enum DecodeError {
     NotASnapshot,  // The bytes do not begin with the format's magic number
     UnsupportedVersion { found: u16 },  // A version this build does not know how to read
+    UnknownTouchPhase { code: u8 },  // A touch phase code this build has never heard of
+    MalformedTouches,  // More touches than the format has room for, or a slot outside it
     Truncated { needed: usize, available: usize },  // The bytes ran out before the value did
     TrailingBytes { count: usize },  // Bytes remained after a complete snapshot
     UnknownKey { code: u16 },  // A key code this build has never heard of
@@ -818,6 +820,19 @@ pub fn find_bounds(quads: impl IntoIterator<Item = DrawnQuad>) -> Option<Rect>;
 let all_of_it = find_bounds(covering_the_ball).expect("something was drawn");
 assert_eq!(all_of_it, Rect { min: Vec2::new(-1.0, -1.0), max: Vec2::new(2.0, 1.0) });
 assert!(find_bounds(Vec::new()).is_none());
+```
+
+#### `FingerId`
+
+A platform's name for one finger.
+
+```rust
+pub struct FingerId(u64);
+// Clone Copy Debug PartialEq Eq PartialOrd Ord Hash Display
+
+impl FingerId {
+    pub fn from_platform(id: u64) -> FingerId;  // The finger a platform's identifier names
+}
 ```
 
 #### `FramePlan`
@@ -911,6 +926,7 @@ impl Input {
     pub fn just_released(&self, key: Key) -> bool;  // Whether `key` came up this tick
     pub fn pointer(&self) -> &PointerState;  // The primary pointer — the mouse, or the first finger down
     pub fn pointers(&self) -> &[PointerState];  // Every pointer this tick
+    pub fn touches(&self) -> &[Touch];  // Every finger on the glass this tick, in slot order
     pub fn window_focused(&self) -> bool;  // Whether the window had focus this tick
     pub fn snapshot(&self) -> &InputSnapshot;  // The whole snapshot, for the recorder and for tests
 }
@@ -936,6 +952,7 @@ pub enum InputEvent {
     PointerMoved { id: PointerId, screen: Vec2 },  // A pointer moved to a position, in pixels from the window's top-left
     ButtonPressed { id: PointerId, button: PointerButton },  // A pointer button went down
     ButtonReleased { id: PointerId, button: PointerButton },  // A pointer button came up
+    Touched { finger: FingerId, phase: TouchPhase, screen: Vec2 },  // A finger landed, moved, lifted, or was taken away
     Scrolled { id: PointerId, lines: f32 },  // The wheel turned, in lines — normalized by the platform layer
     FocusLost,  // The window lost focus
     FocusGained,  // The window got focus back
@@ -996,6 +1013,7 @@ impl InputSnapshot {
     pub fn pressed_keys(&self) -> &[Key];  // Keys that went down this tick, sorted
     pub fn released_keys(&self) -> &[Key];  // Keys that came up this tick, sorted
     pub fn pointers(&self) -> &[PointerState];  // Every pointer this tick
+    pub fn touches(&self) -> &[Touch];  // Every finger on the glass this tick, in slot order
     pub fn window_focused(&self) -> bool;  // Whether the window had focus this tick
     pub fn encode(&self) -> Vec<u8>;  // The snapshot as bytes
     pub fn try_decode(bytes: &[u8]) -> Result<InputSnapshot, DecodeError>;  // Read a snapshot back

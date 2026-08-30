@@ -143,7 +143,7 @@ impl InputScript {
     #[must_use]
     #[track_caller]
     pub fn pointer_at(mut self, tick: u64, screen: Vec2) -> Self {
-        crate::snapshot::expect_finite(screen, PointerId::PRIMARY);
+        crate::snapshot::expect_finite(screen, &PointerId::PRIMARY);
         self.add(Directive::PointerAt {
             tick,
             screen,

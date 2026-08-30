@@ -394,10 +394,15 @@ a row (stop rule printed, `failure-streak.json` count 2).
   root index instead of one page (§3a). `serve-web [<example>]` serves `dist/`
   and nothing else — whatever was built there, one page or either fleet —
   so what works locally is what works deployed. `--check` drives a headless
-  Chromium at the page twice: once to assert the module started and the canvas
-  was drawn on (screenshot → PNG decode), once with `?panic=1` to assert the
-  panic overlay rendered the full §9 text (web-publish.md §2). Its working
-  files go to `target/web-check/`, never into `dist/` — dist is what deploys.
+  Chromium at the page three times: once to assert the module started and the
+  canvas was drawn on (screenshot → PNG decode) and that the canvas still says
+  `touch-action: none` (web-publish.md §2a), once with `?panic=1` to assert the
+  panic overlay rendered the full §9 text, and once with `?frametime=1` to
+  assert the frame-pacing overlay came up and classified the renderer
+  (web-publish.md §2). The touch line is a grep and says so where it lives: the
+  browser has no fingers, so whether a tap *feels* right is a person's job with
+  a phone. Its working files go to `target/web-check/`, never into `dist/` —
+  dist is what deploys.
   Stdlib only, including the PNG decoder — forty lines of `zlib` and
   un-filtering, for the same reason the input codec is hand-written (ADR-0014).
 - **The deploy is two CI jobs and nothing local** (W1–W2, web-publish.md §4).

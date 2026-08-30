@@ -1,7 +1,7 @@
 //! The one value all input arrives in, and the resource games read it through.
 //!
 //! Key types: `InputSnapshot`, `Input`.
-//! Depends on: `key`, `pointer`, `jidousha-core` (for `Resource`).
+//! Depends on: `key`, `pointer`, `touch`, `jidousha-core` (for `Resource`).
 //! INVARIANT: a snapshot is the complete input truth for one tick and is plain
 //! data — no handles, no callbacks, nothing that means anything only while the
 //! platform is alive. Record it, replay it, and simulation cannot tell the
@@ -9,13 +9,15 @@
 //! INVARIANT: the key and button lists are canonical — sorted, no duplicates —
 //! so two snapshots meaning the same input *are* equal. Order within a tick is
 //! not observable to simulation (every query is by key), so canonicalizing
-//! loses nothing and keeps replay comparisons honest.
+//! loses nothing and keeps replay comparisons honest. The touch list is
+//! canonical the same way, in slot order.
 
 use jidousha_core::Resource;
 use jidousha_core::math::Vec2;
 
 use crate::key::Key;
 use crate::pointer::{PointerId, PointerState};
+use crate::touch::{Touch, TouchList};
 
 /// Everything the player did during one Update tick.
 ///
@@ -37,6 +39,10 @@ pub struct InputSnapshot {
     pub(crate) released: Vec<Key>,
     /// Every pointer. INVARIANT: index 0 is always the primary.
     pub(crate) pointers: Vec<PointerState>,
+    /// Fingers on the glass this tick. Canonical: slot order, no duplicates,
+    /// at most `MAX_TOUCHES`. A fixed structure, not a list that grows
+    /// (input.md §3a).
+    pub(crate) touches: TouchList,
     /// Whether the window had focus.
     pub(crate) window_focused: bool,
 }
@@ -57,6 +63,7 @@ impl InputSnapshot {
             pressed: Vec::new(),
             released: Vec::new(),
             pointers: vec![PointerState::new(PointerId::PRIMARY)],
+            touches: TouchList::new(),
             window_focused: true,
         }
     }
@@ -98,6 +105,12 @@ impl InputSnapshot {
     #[must_use]
     pub fn pointers(&self) -> &[PointerState] {
         &self.pointers
+    }
+
+    /// Every finger on the glass this tick, in slot order.
+    #[must_use]
+    pub fn touches(&self) -> &[Touch] {
+        self.touches.as_slice()
     }
 
     /// Whether the window had focus this tick.
@@ -179,6 +192,14 @@ impl Input {
     ///
     /// Always present: on a machine with no pointer at all it reports the
     /// origin and no buttons, which is what "nothing is happening" looks like.
+    ///
+    /// **The first finger down is here too.** The engine mirrors it onto this
+    /// pointer — its position, and a `Primary` press for as long as it is on
+    /// the glass — so a game written for a mouse is playable with a thumb
+    /// without a line of change. The rule is *first active touch wins, and
+    /// does not hand over*: a second finger never moves this pointer, and when
+    /// the mirrored finger lifts the button releases rather than jumping to
+    /// whatever else is down (input.md §3a, ADR-0043).
     #[must_use]
     pub fn pointer(&self) -> &PointerState {
         match self.snapshot.pointers.first() {
@@ -194,6 +215,31 @@ impl Input {
     #[must_use]
     pub fn pointers(&self) -> &[PointerState] {
         &self.snapshot.pointers
+    }
+
+    /// Every finger on the glass this tick, in slot order.
+    ///
+    /// Empty on a machine with no touchscreen, and empty on a tick where
+    /// nobody is touching one — a game that never calls this is still
+    /// playable by touch, because the first finger down is mirrored onto
+    /// [`pointer`](Input::pointer) as a position and a
+    /// [`PointerButton::Primary`](crate::PointerButton::Primary) press
+    /// (input.md §3a). Read this when a *second* finger means something.
+    ///
+    /// ```
+    /// # use jidousha_input::{Input, InputSnapshot, TouchPhase};
+    /// fn taps(input: &Input) -> usize {
+    ///     input
+    ///         .touches()
+    ///         .iter()
+    ///         .filter(|touch| touch.phase == TouchPhase::Began)
+    ///         .count()
+    /// }
+    /// # assert_eq!(taps(&Input::new(InputSnapshot::new())), 0);
+    /// ```
+    #[must_use]
+    pub fn touches(&self) -> &[Touch] {
+        self.snapshot.touches()
     }
 
     /// Whether the window had focus this tick.
@@ -248,8 +294,11 @@ pub(crate) fn pointer_mut(pointers: &mut Vec<PointerState>, id: PointerId) -> &m
     &mut pointers[index]
 }
 
-/// A pointer position the engine refuses to record.
-pub(crate) fn expect_finite(screen: Vec2, id: PointerId) {
+/// A pointer or touch position the engine refuses to record.
+///
+/// `what` is whichever of the two moved — a `PointerId` or a `FingerId` — so
+/// the message names the thing the platform reported rather than a category.
+pub(crate) fn expect_finite(screen: Vec2, what: &dyn core::fmt::Display) {
     if screen.x.is_finite() && screen.y.is_finite() {
         return;
     }
@@ -257,7 +306,7 @@ pub(crate) fn expect_finite(screen: Vec2, id: PointerId) {
         "{}",
         jidousha_core::message(
             &format!("pointer moved to a non-finite position: {screen:?}"),
-            &format!("pointer: {id}"),
+            &format!("pointer: {what}"),
             "the platform layer computed a position from a zero window size, or from an \
              uninitialized value",
             "clamp or drop the event at the platform boundary; a recording containing NaN \
@@ -315,6 +364,6 @@ mod tests {
     #[test]
     #[should_panic(expected = "non-finite position")]
     fn a_nan_pointer_position_is_refused() {
-        expect_finite(Vec2::new(f32::NAN, 0.0), PointerId::PRIMARY);
+        expect_finite(Vec2::new(f32::NAN, 0.0), &PointerId::PRIMARY);
     }
 }

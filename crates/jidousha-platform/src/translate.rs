@@ -1,6 +1,6 @@
 //! The only place winit's input vocabulary and the engine's both appear.
 //!
-//! Key types: `key`, `button`, `scroll_lines`, `key_event`.
+//! Key types: `key`, `button`, `scroll_lines`, `key_event`, `touch`.
 //! Depends on: `winit`, `jidousha-input`.
 //! INVARIANT (ADR-0004, input.md §6 CONTRACT): no winit type leaves this
 //! module. Everything above it speaks `InputEvent`, which is why the edge rules,
@@ -10,7 +10,7 @@
 //! build does not name is *dropped*, never guessed at; that is a documented
 //! boundary of the `Key` enum rather than a silent failure (input.md §2).
 
-use jidousha_input::{InputEvent, Key, PointerButton, PointerId};
+use jidousha_input::{FingerId, InputEvent, Key, PointerButton, PointerId, TouchPhase};
 use winit::dpi::PhysicalPosition;
 
 use crate::web::render_scale::RenderScale;
@@ -222,6 +222,40 @@ pub(crate) fn key_event(
     })
 }
 
+/// The engine event for one winit touch.
+///
+/// Total, unlike the tables above: winit's four phases and the engine's four
+/// phases are the same four, so there is nothing here to drop and nothing to
+/// guess at.
+///
+/// The position is scaled by the render scale for exactly the reason a cursor
+/// position is (`pointer_moved`, web-publish.md §2): a page opened with
+/// `?renderscale=` draws fewer device pixels than the window has, and a finger
+/// has to land where it looks like it landed. Getting this wrong on the
+/// pointer misplaces a click; getting it wrong here misplaces every tap, on
+/// the only target where anybody taps.
+///
+/// **The finger id is winit's, unchanged.** What it means is "the same finger
+/// as last time" and nothing else, which is all `FingerId` promises; the
+/// engine's own bounded slots are assigned above this seam, where they are
+/// testable without a touchscreen (input.md §3a).
+pub(crate) fn touch(touch: &winit::event::Touch, scale: RenderScale) -> InputEvent {
+    let factor = f64::from(scale.factor());
+    InputEvent::Touched {
+        finger: FingerId::from_platform(touch.id),
+        phase: match touch.phase {
+            winit::event::TouchPhase::Started => TouchPhase::Began,
+            winit::event::TouchPhase::Moved => TouchPhase::Moved,
+            winit::event::TouchPhase::Ended => TouchPhase::Ended,
+            winit::event::TouchPhase::Cancelled => TouchPhase::Cancelled,
+        },
+        screen: jidousha_core::math::Vec2::new(
+            (touch.location.x * factor) as f32,
+            (touch.location.y * factor) as f32,
+        ),
+    }
+}
+
 /// The engine event for a winit mouse button change, if there is one.
 pub(crate) fn button_event(state: ElementState, winit_button: MouseButton) -> Option<InputEvent> {
     let button = button(winit_button)?;
@@ -419,6 +453,82 @@ mod tests {
                 screen: jidousha_core::math::Vec2::new(6.25, 15.0),
             }
         );
+    }
+
+    /// A winit touch, at a position, for the tests below.
+    fn winit_touch(
+        id: u64,
+        phase: winit::event::TouchPhase,
+        x: f64,
+        y: f64,
+    ) -> winit::event::Touch {
+        winit::event::Touch {
+            device_id: winit::event::DeviceId::dummy(),
+            phase,
+            location: PhysicalPosition::new(x, y),
+            force: None,
+            id,
+        }
+    }
+
+    #[test]
+    fn every_winit_touch_phase_has_an_engine_phase() {
+        // The table is total, so this is a coverage check rather than a
+        // drop-what-we-cannot-name check: a phase that translated to the wrong
+        // one would make a tap look like a lift.
+        let cases = [
+            (winit::event::TouchPhase::Started, TouchPhase::Began),
+            (winit::event::TouchPhase::Moved, TouchPhase::Moved),
+            (winit::event::TouchPhase::Ended, TouchPhase::Ended),
+            (winit::event::TouchPhase::Cancelled, TouchPhase::Cancelled),
+        ];
+        for (from, want) in cases {
+            assert_eq!(
+                touch(&winit_touch(1, from, 0.0, 0.0), RenderScale::FULL),
+                InputEvent::Touched {
+                    finger: FingerId::from_platform(1),
+                    phase: want,
+                    screen: jidousha_core::math::Vec2::ZERO,
+                },
+                "{from:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_touch_arrives_in_the_surfaces_pixels_not_the_windows() {
+        // The same rule as the cursor, and it matters more here: the render
+        // scale only ever comes from a page URL, and a page is where the
+        // fingers are (web-publish.md §2).
+        let (half, _) = crate::web::render_scale::from_query("?renderscale=0.5");
+        assert_eq!(
+            touch(
+                &winit_touch(4, winit::event::TouchPhase::Started, 300.0, 500.0),
+                half
+            ),
+            InputEvent::Touched {
+                finger: FingerId::from_platform(4),
+                phase: TouchPhase::Began,
+                screen: jidousha_core::math::Vec2::new(150.0, 250.0),
+            }
+        );
+    }
+
+    #[test]
+    fn two_fingers_keep_two_identities() {
+        // winit's id is passed through, because "the same finger as last time"
+        // is the only thing the engine needs from it — and mapping it to a
+        // slot here would put the bound behind the seam, where wasm CI cannot
+        // reach it.
+        let first = touch(
+            &winit_touch(11, winit::event::TouchPhase::Started, 0.0, 0.0),
+            RenderScale::FULL,
+        );
+        let second = touch(
+            &winit_touch(12, winit::event::TouchPhase::Started, 0.0, 0.0),
+            RenderScale::FULL,
+        );
+        assert_ne!(first, second);
     }
 
     /// Every `KeyCode` this build translates, for the coverage tests above.

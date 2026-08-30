@@ -1,7 +1,7 @@
 //! Where raw events become one tick's truth: the edge rules, in one place.
 //!
 //! Key types: `InputEvent`, `SnapshotBuilder`.
-//! Depends on: `key`, `pointer`, `snapshot`. Must never depend on: `winit` —
+//! Depends on: `key`, `pointer`, `touch`, `snapshot`. Must never depend on: `winit` —
 //! the platform crate translates its events into [`InputEvent`] and nothing
 //! else crosses (ADR-0004, input.md §6).
 //! INVARIANT: edges are recorded data, never the difference between two ticks.
@@ -20,6 +20,7 @@ use jidousha_core::math::Vec2;
 use crate::key::Key;
 use crate::pointer::{PointerButton, PointerId, PointerState};
 use crate::snapshot::{InputSnapshot, expect_finite, insert_sorted, pointer_mut, remove_sorted};
+use crate::touch::{FingerId, TouchId, TouchPhase, TouchTracker};
 
 /// One thing that happened, in the engine's vocabulary.
 ///
@@ -53,6 +54,19 @@ pub enum InputEvent {
         /// Which button.
         button: PointerButton,
     },
+    /// A finger landed, moved, lifted, or was taken away.
+    ///
+    /// One variant with a phase rather than four events, because the snapshot
+    /// carries one phase per touch and two spellings of the same thing would
+    /// be two things to keep in step (conventions §1).
+    Touched {
+        /// Which finger, as the platform names it.
+        finger: FingerId,
+        /// What happened to it.
+        phase: TouchPhase,
+        /// Where it is, in pixels from the surface's top-left.
+        screen: Vec2,
+    },
     /// The wheel turned, in lines — normalized by the platform layer.
     Scrolled {
         /// Which pointer.
@@ -81,6 +95,16 @@ pub struct SnapshotBuilder {
     released: Vec<Key>,
     /// Every pointer, sorted by id, with this frame's edges on it.
     pointers: Vec<PointerState>,
+    /// Which finger is in which touch slot, and what each owes the next tick.
+    touches: TouchTracker,
+    /// The slot whose finger is currently driving the primary pointer, if any.
+    ///
+    /// The whole of the mirror rule is this field: it is set by the first
+    /// touch to land while it is empty, and cleared when that touch ends. No
+    /// other finger can take it, and no finger is promoted into it — so which
+    /// touch the cursor follows never depends on the order two events happened
+    /// to be delivered in (input.md §3a, ADR-0043).
+    mirror: Option<TouchId>,
     window_focused: bool,
 }
 
@@ -97,6 +121,8 @@ impl SnapshotBuilder {
             pressed: Vec::new(),
             released: Vec::new(),
             pointers: vec![PointerState::new(PointerId::PRIMARY)],
+            touches: TouchTracker::new(),
+            mirror: None,
             window_focused: true,
         }
     }
@@ -119,24 +145,93 @@ impl SnapshotBuilder {
                 remove_sorted(&mut self.held, &key);
             }
             InputEvent::PointerMoved { id, screen } => {
-                expect_finite(screen, id);
-                pointer_mut(&mut self.pointers, id).screen = screen;
+                expect_finite(screen, &id);
+                self.move_pointer(id, screen);
             }
-            InputEvent::ButtonPressed { id, button } => {
-                let pointer = pointer_mut(&mut self.pointers, id);
-                insert_sorted(&mut pointer.pressed, button);
-                insert_sorted(&mut pointer.held, button);
-            }
-            InputEvent::ButtonReleased { id, button } => {
-                let pointer = pointer_mut(&mut self.pointers, id);
-                insert_sorted(&mut pointer.released, button);
-                remove_sorted(&mut pointer.held, &button);
+            InputEvent::ButtonPressed { id, button } => self.press_button(id, button),
+            InputEvent::ButtonReleased { id, button } => self.release_button(id, button),
+            InputEvent::Touched {
+                finger,
+                phase,
+                screen,
+            } => {
+                expect_finite(screen, &finger);
+                // The tracker decides whether this event is one the engine is
+                // following at all — an unknown finger, a fifth one, a move
+                // after the lift — and the mirror only ever hears about the
+                // events that survived it.
+                let slot = match phase {
+                    TouchPhase::Began => self.touches.begin(finger, screen),
+                    TouchPhase::Moved => self.touches.moved(finger, screen),
+                    TouchPhase::Ended | TouchPhase::Cancelled => {
+                        self.touches.end(finger, phase, screen)
+                    }
+                };
+                if let Some(slot) = slot {
+                    self.mirror_touch(slot, phase, screen);
+                }
             }
             InputEvent::Scrolled { id, lines } => {
                 pointer_mut(&mut self.pointers, id).scroll += lines;
             }
             InputEvent::FocusLost => self.lose_focus(),
             InputEvent::FocusGained => self.window_focused = true,
+        }
+    }
+
+    /// Put a pointer somewhere.
+    fn move_pointer(&mut self, id: PointerId, screen: Vec2) {
+        pointer_mut(&mut self.pointers, id).screen = screen;
+    }
+
+    /// Press a pointer button, recording the edge.
+    fn press_button(&mut self, id: PointerId, button: PointerButton) {
+        let pointer = pointer_mut(&mut self.pointers, id);
+        insert_sorted(&mut pointer.pressed, button);
+        insert_sorted(&mut pointer.held, button);
+    }
+
+    /// Release a pointer button, recording the edge.
+    fn release_button(&mut self, id: PointerId, button: PointerButton) {
+        let pointer = pointer_mut(&mut self.pointers, id);
+        insert_sorted(&mut pointer.released, button);
+        remove_sorted(&mut pointer.held, &button);
+    }
+
+    /// Put the first active touch on the primary pointer.
+    ///
+    /// CONTRACT (input.md §3a, ADR-0043): **first active touch wins, and does
+    /// not hand over.** The first finger to land while nothing is mirrored
+    /// takes the cursor and presses `Primary`; every other finger is touch
+    /// data and nothing else. When the mirrored finger ends, the button
+    /// releases and the mirror is free again — the fingers still down are not
+    /// promoted, because a cursor that teleports to a finger the player has
+    /// been resting on the glass is worse than one that waits for the next
+    /// tap.
+    ///
+    /// It happens here, as the event is recorded, rather than as the snapshot
+    /// is built: the mirrored press is then an ordinary pointer edge and obeys
+    /// the ordinary edge rules — spent once, dropped on a catch-up tick,
+    /// released on focus loss — instead of being a second set of rules that
+    /// could disagree with them. It is also *in* the recording, so a replay
+    /// re-reads the mirror rather than re-deciding it.
+    fn mirror_touch(&mut self, slot: TouchId, phase: TouchPhase, screen: Vec2) {
+        if phase == TouchPhase::Began {
+            if self.mirror.is_some() {
+                return;
+            }
+            self.mirror = Some(slot);
+        } else if self.mirror != Some(slot) {
+            return;
+        }
+        self.move_pointer(PointerId::PRIMARY, screen);
+        match phase {
+            TouchPhase::Began => self.press_button(PointerId::PRIMARY, PointerButton::Primary),
+            TouchPhase::Moved => {}
+            TouchPhase::Ended | TouchPhase::Cancelled => {
+                self.release_button(PointerId::PRIMARY, PointerButton::Primary);
+                self.mirror = None;
+            }
         }
     }
 
@@ -166,6 +261,7 @@ impl SnapshotBuilder {
             pressed: core::mem::take(&mut self.pressed),
             released: core::mem::take(&mut self.released),
             pointers,
+            touches: self.touches.edges(),
             window_focused: self.window_focused,
         };
 
@@ -176,6 +272,9 @@ impl SnapshotBuilder {
             pointer.released.clear();
             pointer.scroll = 0.0;
         }
+        // A touch's phase is its edge, so it is spent the same way: a finished
+        // touch leaves the list, and one that landed settles into `Moved`.
+        self.touches.spend();
         snapshot
     }
 
@@ -201,6 +300,7 @@ impl SnapshotBuilder {
                     released: Vec::new(),
                 })
                 .collect(),
+            touches: self.touches.state(),
             window_focused: self.window_focused,
         }
     }
@@ -221,6 +321,13 @@ impl SnapshotBuilder {
                 insert_sorted(&mut pointer.released, button);
             }
         }
+        // Fingers are `Cancelled`, not `Ended`: they may well still be on the
+        // glass, and what the engine knows is that it stopped being told. The
+        // mirrored button was released by the loop above, so all that is left
+        // is to free the mirror — the finger that had it is gone as far as
+        // this window is concerned.
+        self.touches.cancel_all();
+        self.mirror = None;
     }
 }
 
