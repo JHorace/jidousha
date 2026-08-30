@@ -1,22 +1,29 @@
-//! giri-rt - the substrate: a world map, a clock, moving parties (S1).
+//! ninjo (人情) - the settlement, its people, and the world they live in.
 //!
-//! A tier-3 variant fork of giri (giri's DESIGN §8b; `VARIANT.md` beside this
-//! file states the hypothesis). The social layer is stubbed: parties travel,
-//! work, succeed and pay their pots. What this build exists to prove is the
-//! delivery structure - real time with pause over a tile map, where every
-//! event has a world-time and a place, and the same orders at the same
-//! world-times produce the same events under any speed script. `DESIGN.md` is
-//! the whole design; `src/sim.rs` holds the one scheduler, `src/clock.rs` the
-//! integer world clock, `src/sweep.rs` the speed-invariance sweep that is the
-//! phase's signature test.
+//! You are the head of a small settlement: responsible for everyone, in command
+//! of no one. `GDD.md` is the game's design; `DESIGN.md` is the substrate this
+//! build stands on - a real-time-with-pause tile world where every occurrence
+//! has a world-time and a place, proved out under the name giri-rt and adopted
+//! here (`VARIANT.md` records that verdict).
+//!
+//! What runs today: wave 0b. The substrate's dispatch/travel/resolve loop, plus
+//! **the people substrate** - a character registry standing at its home tiles,
+//! the trait vocabulary, and the shared-state stores (regard, bonds and
+//! grudges, marks) that waves 1 and up write into. Autonomy, needs, petitions
+//! and asks are later waves; nobody decides anything for themselves yet.
+//!
+//! The seams this build exists to lay: `src/lens.rs` is the one read-path every
+//! screen goes through, `src/stores.rs` holds the shared state and the only
+//! functions that write it, `src/modules.rs` is the registry the module-off
+//! verify matrix iterates, and `src/sim.rs` is the one scheduler.
 //!
 //! Pointer and keyboard. No audio. **No randomness**: the seed plumbing and
-//! stamps remain from giri, and no `Rng` read exists in S1 - verify asserts
+//! stamps remain from giri, and no `Rng` read exists yet - verify asserts
 //! the whole event transcript identical under far-apart seeds.
 //!
-//! Play it:  `cargo run -p giri-rt`
-//! On the web: `tools/build-web giri-rt && tools/serve-web giri-rt`
-//! Check it: `tools/verify giri-rt`
+//! Play it:  `cargo run -p ninjo`
+//! On the web: `tools/build-web ninjo && tools/serve-web ninjo`
+//! Check it: `tools/verify ninjo`
 #![allow(missing_docs)]
 
 use std::process::ExitCode;
@@ -61,7 +68,7 @@ pub const WINDOW: PhysicalSize = PhysicalSize::new(1920, 1080);
 /// is verified is what a person plays.
 pub fn config() -> GameConfig {
     GameConfig {
-        title: "giri-rt",
+        title: "ninjo",
         window_size: WINDOW,
         ..GameConfig::default()
     }
@@ -107,7 +114,7 @@ fn open_the_world(world: &mut World) {
     let mut faults: Vec<String> = Vec::new();
     let tuning = match asked {
         Some(Ok(parsed)) => {
-            println!("[giri-rt] ?constants= accepted - {}", parsed.stamp());
+            println!("[ninjo] ?constants= accepted - {}", parsed.stamp());
             parsed
         }
         Some(Err(error)) => {
@@ -123,7 +130,7 @@ fn open_the_world(world: &mut World) {
     if world.find_resource::<flow::SessionSeed>().is_none() {
         let seed = match web::seed() {
             Some(Ok(seed)) => {
-                println!("[giri-rt] ?seed= accepted - {seed}");
+                println!("[ninjo] ?seed= accepted - {seed}");
                 carried = true;
                 Some(seed)
             }
@@ -157,7 +164,7 @@ fn open_the_world(world: &mut World) {
     flow.tuner.open = carried;
     if !faults.is_empty() {
         for fault in &faults {
-            eprintln!("[giri-rt] {fault}");
+            eprintln!("[ninjo] {fault}");
         }
         flow.tuner.fault = Some(faults.join("  /  "));
         flow.tuner.open = true;
@@ -165,14 +172,14 @@ fn open_the_world(world: &mut World) {
 }
 
 fn main() -> ExitCode {
-    // `tools/verify giri-rt` runs this same binary with `--verify`: same
+    // `tools/verify ninjo` runs this same binary with `--verify`: same
     // systems, same config, no window, scripted input, and assertions instead
     // of a person.
     if std::env::args().any(|argument| argument == "--verify") {
         return verify::run();
     }
     println!(
-        "giri-rt - the world moves. space runs the clock, 1/2/3 set the speed, arrows pan, \
+        "ninjo - the world moves. space runs the clock, 1/2/3 set the speed, arrows pan, \
          -/= zoom. click an idle party on the strip, then a site on the map, and watch it \
          go. close the window to quit"
     );

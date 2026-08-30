@@ -1,4 +1,4 @@
-# giri-rt, S1 — what `docs/api/` cost
+# ninjo — what `docs/api/` cost
 
 The findings this build owes back, in the format `docs/internal/e0-findings.md`
 uses (`make-game` step 9). G-numbers continue giri's sequence (its
@@ -18,7 +18,7 @@ the capture path all worked as written.
 
 ### G-010 — the bounds check's stated form assumes a camera that does not move
 
-Class: docs · Game: giri-rt · Documents: `jidousha-testing.md` ("Assert that
+Class: docs · Game: ninjo (as giri-rt) · Documents: `jidousha-testing.md` ("Assert that
 nothing is drawn outside `Camera::visible_bounds()`") · Open
 
 The testing document presents the bounds assertion — every quad
@@ -31,7 +31,7 @@ and still fails `contains_rect`, and per-run text culling (a label is one
 outside. The check the situation actually wants is the inverse pair: nothing
 submitted that does not *overlap* the view (culling is honest), and the
 submitted count dropping when the view shrinks (culling is real).
-giri-rt ships that pair (`verify.rs::culling_probe`, UI.md §4); the
+ninjo ships that pair (`verify.rs::culling_probe`, UI.md §4); the
 document could name the adaptation the first time a scrolling game reaches
 it, because the naive reading is "skip the check", which drops real
 coverage.

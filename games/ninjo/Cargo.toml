@@ -1,5 +1,5 @@
 [package]
-name = "giri-rt"
+name = "ninjo"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -18,8 +18,8 @@ jidousha = { path = "../../crates/jidousha" }
 #
 # No new crate reaches the tree: `web-sys` and its `js-sys`/`wasm-bindgen`
 # dependencies are already in Cargo.lock at these versions for the engine's own
-# wasm platform layer, and `cargo tree` for giri gains exactly the three edges
-# giri -> web-sys -> js-sys -> wasm-bindgen (+ wasm-bindgen-macro, once, rustversion),
+# wasm platform layer, and `cargo tree` for ninjo gains exactly the three edges
+# ninjo -> web-sys -> js-sys -> wasm-bindgen (+ wasm-bindgen-macro, once, rustversion),
 # all of them already resolved. The two features named are the two calls above.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { version = "0.3", features = ["Location", "Window"] }

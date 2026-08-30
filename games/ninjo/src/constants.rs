@@ -1,4 +1,4 @@
-//! Every tuning constant giri-rt has, in one place (DESIGN.md §3, §4).
+//! Every tuning constant ninjo has, in one place (DESIGN.md §3, §4).
 //!
 //! The substrate's whole vocabulary of numbers lives here and nowhere else: a
 //! system that wants a terrain's movement cost reads it off the `Tuning`

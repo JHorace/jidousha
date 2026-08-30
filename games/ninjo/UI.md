@@ -1,8 +1,9 @@
-# giri-rt — UI specification
+# ninjo — UI specification
 
-Home: `games/giri-rt/UI.md`. Owns the fork's presentation: the map screen,
-its chrome, the signifiers, and the mechanical readability rules.
-`DESIGN.md` owns the rules of the world; where the two meet, DESIGN wins.
+Home: `games/ninjo/UI.md`. Owns the game's presentation: the map screen, its
+chrome, the signifiers, and the mechanical readability rules. `DESIGN.md`
+owns the rules of the world and `GDD.md` the rules of the game; where they
+meet, the design documents win.
 
 This file inherits giri's `games/giri/UI.md` wholesale — its principles
 (§1), its floors (§7), its screenshot process (§8), its tuning-drawer rules

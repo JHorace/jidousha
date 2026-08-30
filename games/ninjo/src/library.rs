@@ -1,5 +1,5 @@
 //! The art library and every string the game draws — the two contracts about
-//! what giri-rt *shows* that need no frame to check.
+//! what ninjo *shows* that need no frame to check.
 //!
 //! Both are walked rather than listed. The library is walked off `Art::ALL`,
 //! so a role added without a file is a failure rather than a magenta quad;

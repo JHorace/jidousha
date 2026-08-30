@@ -1,7 +1,7 @@
-# giri-rt — asset credits
+# ninjo — asset credits
 
 This directory is a verbatim copy of `games/giri/assets/` — the fork
-carries giri's curated library whole (giri-rt's VARIANT.md; the fork step
+carries giri's curated library whole (ninjo's VARIANT.md; the fork step
 of the S1 handoff). Every row below applies file for file; giri's art
 tooling rode along under `art/` for the same reason. The original header
 follows.

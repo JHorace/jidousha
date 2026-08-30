@@ -82,7 +82,7 @@ pub fn content(flow: &Flow, sim: &Sim, clock: &Clock, tuning: &Tuning) -> Panel 
     // --- top bar ------------------------------------------------------------
     panel.text(TextRun::new(
         layout::title_at(),
-        "giri-rt",
+        "ninjo",
         theme::HEAD,
         theme::INK,
     ));

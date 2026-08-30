@@ -1,10 +1,20 @@
-# giri-rt — the substrate (design session, 2026-08-27)
+# ninjo — the substrate (design session, 2026-08-27, as giri-rt)
 
-Design for a tier-3 variant fork of giri: a **real-time-with-pause,
-world-map substrate** that giri's social mechanics will reintegrate into
-once it proves out. This document becomes `games/giri-rt/DESIGN.md`
-(name owner-confirmed). Owner-approved direction; numeric values are
-drawer-tunable starting points.
+**Read `GDD.md` first.** That document is ninjo's design — the vision, the
+vocabulary, the shared-state specs, the module registry and the wave plan.
+This one is the **substrate's technical doc**: the tile world, the integer
+clock, the one scheduler, the pathfinder and the verify strategy the game
+stands on. The two are not merged on purpose — the GDD is what ninjo *is*,
+this is what the ground under it *does*, and a change to one is rarely a
+change to the other. Where the two disagree about a decided thing, the GDD
+wins; where the GDD leaves the substrate's mechanics unstated, this file is
+the record.
+
+Written as the design for a tier-3 variant fork of giri, under the name
+**giri-rt**, and kept in its own voice: the hypothesis it was written to
+test is CONFIRMED and the fork was adopted as ninjo (`VARIANT.md` records
+the verdict). Owner-approved direction; numeric values are drawer-tunable
+starting points.
 
 ## 0. Why this exists (the P2 verdict, recorded honestly)
 
@@ -40,7 +50,7 @@ places in continuous (pausable) time, and where events arrive as
 addressed moments rather than simultaneous table-rows, will make the
 *same* social machinery legible when it returns.
 
-**What giri-rt is**: the substrate only. A map, a clock, moving
+**What the substrate is**: the substrate only. A map, a clock, moving
 parties, arriving events, and the attention machinery (S2) that routes
 the player's eye. The social layer is stubbed: parties succeed, pots
 pay, nobody refuses, nobody betrays.
@@ -55,9 +65,11 @@ retires to `attic/` and we learn cheaply.
 
 ## 2. Fork mechanics (variants policy §8b, tier 3)
 
-- `games/giri-rt/` is a **crate fork** of `games/giri/`, carrying a
+- `games/ninjo/` (`games/giri-rt/` when this was written) is a **crate
+  fork** of `games/giri/`, carrying a
   `VARIANT.md` (hypothesis + exit criteria) per the policy. The two-alive
-  budget holds: giri mainline (parked but green) + giri-rt.
+  budget holds: giri mainline (parked but green) + the fork. Wave 0b closed
+  the variant out and the budget with it.
 - **Kept from giri**: the asset pipeline and Kenney art (CREDITS.md
   rides along), the floors and verify machinery, the screenshot process,
   the tuning drawer with `?constants=`/`?seed=` and the one-name-per-
@@ -70,7 +82,8 @@ retires to `attic/` and we learn cheaply.
   the code lives in giri mainline; the fork's diff should read as *the
   substrate*, not as giri-with-holes.
 - giri mainline is **not** touched. Its tests stay green; its published
-  page stays up. The fleet gains one published page: giri-rt.
+  page stays up. The fleet gains one published page: the fork's (`ninjo`
+  since wave 0b).
 
 ## 3. The sim model — a tile-grid world
 

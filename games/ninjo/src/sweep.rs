@@ -308,7 +308,7 @@ pub fn conduct(session: &Session<'_>) -> Conducted {
             let assets = sim.world_mut().resource_mut::<Assets>();
             if let Some(failure) = sprites::settle(assets).first() {
                 crate::checks::fail(
-                    "giri-rt's art did not load for a recorded run",
+                    "ninjo's art did not load for a recorded run",
                     &crate::checks::one_line(&failure.message()),
                 );
             }

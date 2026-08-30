@@ -1,13 +1,13 @@
 //! The palette and the type scale — UI.md §2's colour roles, once (UI.md §2).
 //!
-//! Every colour giri draws is named here and nowhere else, in the roles the
+//! Every colour ninjo draws is named here and nowhere else, in the roles the
 //! specification gives them rather than in the places they happen to be used:
 //! `EMBER` is "a refusal, a death, a cost", not "the colour of the party
 //! strip's third line". A role that appears twice on screen is one constant
 //! read twice, which is what makes "changing a signifier is a UI.md edit"
 //! (§2) a thing a reader can check.
 //!
-//! **Sizes are in reference pixels**, because giri's world unit *is* a
+//! **Sizes are in reference pixels**, because this game's world unit *is* a
 //! reference pixel (see `layout.rs`). So `SMALL` being 12 is literally UI.md
 //! §7's floor — "no text smaller than the equivalent of 12px at reference
 //! scale" — and `floors.rs` asserts it rather than trusting this comment.
@@ -109,7 +109,7 @@ pub mod layers {
 pub const HEAD: f32 = 13.0;
 /// Body text: everything a player reads a sentence of.
 pub const BODY: f32 = 13.0;
-/// The smallest text giri draws — UI.md §7's floor, exactly.
+/// The smallest text ninjo draws — UI.md §7's floor, exactly.
 pub const SMALL: f32 = 12.0;
 
 /// The floor itself, so the assertion and the scale read the same constant.

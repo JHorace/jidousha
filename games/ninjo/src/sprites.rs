@@ -1,4 +1,5 @@
-//! giri's art library: one role, one file, one handle (UI.md §2, §9).
+//! The art library, carried from giri: one role, one file, one handle (UI.md
+//! §2, §9).
 //!
 //! **The role is the contract, not the picture.** Every asset is named for
 //! what it *means* — `icon_flame` is desperation, `portrait_tim` is Tim — so a
@@ -8,17 +9,17 @@
 //! `art/make_art.py` writes a PNG from committed grids — and `assets/CREDITS.md`
 //! records the provenance of every one.
 //!
-//! That claim was tested on 2026-08-23: the owner's Kenney packs replaced twelve
+//! That claim was tested on 2026-08-23 in giri: the owner's Kenney packs replaced twelve
 //! of the thirteen slots and **no code here changed except the texel sizes in
 //! `LIBRARY`**. Which pack region fills which role is
 //! `art/kenney-manifest.json`; the thirteenth slot, the eye (reputation marks
 //! since v2 — UI.md §2), is still generated from the grids in
 //! `art/sprite_defs.py`, because no eye glyph exists in any of the packs. Both
-//! paths stay live, and a change to how giri looks is a change to whichever of
+//! paths stay live, and a change to how ninjo looks is a change to whichever of
 //! the two owns the slot.
 //!
-//! **The art is a directory, and the directory is giri's own.**
-//! `games/giri/assets/` is this crate's asset root: the game loads from it
+//! **The art is a directory, and the directory is this crate's own.**
+//! `games/ninjo/assets/` is that directory: the game loads from it
 //! through `asset_source` and the paths below are the same strings on native
 //! and on the web, because `tools/build-web` stages this directory under the
 //! game's page at the path it is named by (ADR-0040). Adding a picture is
@@ -74,13 +75,13 @@ pub enum Art {
     Heart,
 }
 
-/// giri-rt's asset root: this crate's own `assets/` directory.
+/// ninjo's asset root: this crate's own `assets/` directory.
 ///
 /// Named from the workspace root, which is where the native loader resolves it
 /// from and where `tools/build-web` mirrors it from under the page — one string
 /// on both platforms (assets.md §2 CONTRACT, ADR-0040). The files rode along
 /// from giri in the fork; `CREDITS.md` still names every one.
-pub const ASSET_ROOT: &str = "games/giri-rt/assets";
+pub const ASSET_ROOT: &str = "games/ninjo/assets";
 
 /// How many polls [`settle`] gives the loader before calling the art absent.
 ///
@@ -218,7 +219,7 @@ impl Art {
     }
 }
 
-/// The asset store giri loads from — the same one the game, the recorder and
+/// The asset store ninjo loads from — the same one the game, the recorder and
 /// the capture path build, so all three sample the same textures.
 ///
 /// One `asset_source` and no `cfg`: the platform crate picks the loader, and
@@ -266,7 +267,7 @@ pub fn settle(assets: &mut Assets) -> Vec<AssetFailure> {
     panic!(
         "{}",
         message(
-            "giri's art never finished loading",
+            "ninjo's art never finished loading",
             &format!("{SETTLE_POLLS} polls of the asset loader and something is still in flight"),
             "the loader thread stopped, or the filesystem is not answering",
             &format!(

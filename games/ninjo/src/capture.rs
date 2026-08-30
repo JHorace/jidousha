@@ -129,14 +129,14 @@ pub fn capture_screens(
     }
 
     let mut textures = create_builtin_textures(&mut gpu);
-    // giri-rt's own art, uploaded the way the driver uploads it, so the
+    // ninjo's own art, uploaded the way the driver uploads it, so the
     // plan's sprite ids name textures this backend has.
     let mut assets = sprites::store();
     let _gallery = sprites::Gallery::load(&mut assets);
     for failure in sprites::settle(&mut assets) {
         checks.require(
             false,
-            "giri-rt's art did not all resolve for the capture",
+            "ninjo's art did not all resolve for the capture",
             one_line(&failure.message()),
         );
     }
@@ -217,5 +217,5 @@ fn artifact_path(name: &str) -> PathBuf {
         .join("..")
         .join("target")
         .join("verify")
-        .join(format!("giri-rt-{name}.png"))
+        .join(format!("ninjo-{name}.png"))
 }

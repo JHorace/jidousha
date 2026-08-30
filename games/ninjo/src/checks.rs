@@ -57,7 +57,7 @@ fn complaint(what: &str, specifics: &str) -> String {
         what,
         specifics,
         "the game changed, or a tuning constant did",
-        "run `cargo run -p giri-rt` and play the scenario, then compare with the assertion above",
+        "run `cargo run -p ninjo` and play the scenario, then compare with the assertion above",
     )
 }
 

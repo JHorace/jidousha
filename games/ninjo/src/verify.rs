@@ -663,7 +663,7 @@ pub fn run() -> ExitCode {
 
     let verdict = checks.verdict();
     println!(
-        "verified giri-rt over {} conducted events, {} world-minutes of scenario",
+        "verified ninjo over {} conducted events, {} world-minutes of scenario",
         baseline.events.len(),
         baseline.minutes
     );
