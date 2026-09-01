@@ -66,14 +66,40 @@ impl Snapshots {
     /// wanted (no stream is ever printed to — frame-pacing.md §6).
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn write(&mut self, readout: &str) -> Option<std::path::PathBuf> {
+        use std::io::Write as _;
         if self.written >= LIMIT {
             return None;
         }
-        let path = std::path::Path::new(DIRECTORY).join(name(crate::clock::stamp(), self.written));
         std::fs::create_dir_all(DIRECTORY).ok()?;
-        std::fs::write(&path, body(readout)).ok()?;
-        self.written += 1;
-        Some(path)
+        let stamp = crate::clock::stamp();
+        // The index walks until it finds a name nothing is holding, and the
+        // file is created with `create_new` so finding it free and taking it
+        // are one step. A snapshot must never overwrite a snapshot: the
+        // timestamp has one-second granularity, so the second press of a
+        // before-and-after pair, a second run started inside the same second,
+        // or a second `Snapshots` in the same process would all otherwise land
+        // on the same path and silently replace the reading somebody wanted.
+        //
+        // Counting from zero rather than from `written` keeps the name saying
+        // what it means — the index breaks ties *within a second*, so a press
+        // in a later second is 000 again rather than carrying a running total.
+        for index in 0..LIMIT {
+            let path = std::path::Path::new(DIRECTORY).join(name(stamp, index));
+            match std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&path)
+            {
+                Ok(mut file) => {
+                    file.write_all(body(readout).as_bytes()).ok()?;
+                    self.written += 1;
+                    return Some(path);
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(_) => return None,
+            }
+        }
+        None
     }
 
     /// The web has no path to write to, so this never writes one.
@@ -120,6 +146,31 @@ fn body(readout: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn two_writers_in_the_same_second_do_not_land_on_one_file() {
+        // The regression this is here for: `Snapshots` counts its own presses,
+        // so two independent writers both began at index 000, and inside one
+        // second they wrote the same path — the second silently replacing the
+        // first. Two tests doing exactly that raced each other roughly one run
+        // in twelve (jidousha#83, found on a Windows runner).
+        let mut first = Snapshots::new();
+        let mut second = Snapshots::new();
+        let (Some(one), Some(two)) = (first.write("first writer"), second.write("second writer"))
+        else {
+            panic!("target/ is writable from a test run");
+        };
+        assert_ne!(one, two, "two writers took the same path");
+        assert_eq!(
+            std::fs::read_to_string(&one).ok(),
+            Some("first writer\n".into())
+        );
+        assert_eq!(
+            std::fs::read_to_string(&two).ok(),
+            Some("second writer\n".into())
+        );
+    }
 
     #[test]
     fn two_snapshots_in_the_same_second_are_two_files() {
