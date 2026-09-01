@@ -58,12 +58,33 @@ DIST = REPO_ROOT / "dist"
 CHECK_DIR = REPO_ROOT / "target" / "web-check"
 
 # How much *page* time the headless check lets run before dumping the DOM.
-# Small on purpose: the engine draws every frame, so virtual time is spent at
-# whatever rate the software rasterizer manages, and a large budget does not
-# finish. Enough for the module to load, ask for a GPU, and draw.
-CHECK_VIRTUAL_MS = 4000
+#
+# Small on purpose, and 4x smaller since it was measured. The engine draws
+# every frame, so page time is spent at whatever rate the software rasterizer
+# manages — and that rate is *noisy*, so the cost of a budget is not merely
+# high but unpredictable. Measured on `pong` in this project's container, four
+# runs each:
+#
+#     budget   wall time        what the check reads
+#      500ms   2.5 - 2.6s       every marker; pacing verdict only "sampling"
+#     1000ms   3.1 - 3.9s       every marker; pacing verdict "ok"
+#     2000ms   9.4 - 13.9s      same
+#     4000ms   11.6 - 18.1s     same
+#
+# Nothing above 1000ms buys a single additional assertion. It buys spread: the
+# same page, the same commit, the same machine ran the `run` pass in 7.5s and
+# in 30.4s at the old budget, and a CI runner sharing its cores has a longer
+# tail than that — which is how a page that was fine ran into `CHECK_TIMEOUT_S`
+# and reported itself as a hang (jidousha#80's merge, 2026-09-01).
+#
+# 1000ms rather than 500ms because at 500ms the frame-pacing classifier has not
+# seen its 60 frames and reports "sampling": the check accepts that, but a
+# detector that never reaches a verdict is a detector nothing is testing.
+CHECK_VIRTUAL_MS = 1000
 # The wall-clock ceiling on the browser itself, which is a different question
-# from how much page time it simulates.
+# from how much page time it simulates. With the budget above it is roughly 30x
+# the check's actual cost, which is the point: this ceiling should mean "the
+# page is broken", never "the runner was busy".
 CHECK_TIMEOUT_S = 120
 # How many lines of the browser's own stderr to quote when it hangs.
 #
