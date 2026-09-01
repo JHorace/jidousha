@@ -1,14 +1,23 @@
 # BLOCKED — human intervention needed
 
-CI's `web build` job has failed on **every run since `5f5f0dd`** — on `main` and on
-PR #80 — at one step: `tools/serve-web <page> --check`. Nothing else is red. The
-investigation below exonerates the code on five independent axes and localizes the
-fault to the headless browser on the runner, which cannot be reproduced from this
-container. It needs a decision that is not an agent's to make.
+CI's `web build` job fails **intermittently** at one step,
+`tools/serve-web <page> --check`, with a 120s "browser did not finish" timeout.
+Three of the four runs since `5f5f0dd` failed there; the fourth passed on
+unchanged code. Nothing else is ever red. The investigation below exonerates the
+code on five independent axes and localizes the fault to the headless browser on
+the runner, which cannot be reproduced from this container.
+
+**It is intermittent, not deterministic** — that is itself a finding, added
+2026-09-01 after PR #80's third run went green on a commit that touches only this
+file. Anything that would fail on every run is ruled out by it, and the remaining
+shape is a race or a hang on the runner's side. It also means a green run proves
+nothing: `main` is one push away from red again.
 
 **Consequence worth knowing first:** `deploy` has `needs: [… web]`, so a red web
 build blocks it. **Production has not deployed since `5f5f0dd`** — that run's
-`deploy web` job is `skipped`, and every run since has been too.
+`deploy web` job is `skipped`, and `main` has had no run since, so it is still
+red and production is still stale. (PR previews do deploy again once a PR run
+happens to go green, as #80's did.)
 
 ## What I need from you
 
@@ -17,13 +26,17 @@ Three candidates, in the order I would take them. All are CI/tooling changes, wh
 CLAUDE.md puts on the human side of the line ("Never … edit CI config … to route
 around a build failure"):
 
-1. **Preserve the evidence.** The `web build` job's artifact upload has no
-   `if: always()` and uploads only `dist/`. On exactly the runs that fail, the step
-   is skipped and `target/web-check/browser-*.log` (the browser's own stderr) and
-   `check-*.png` die with the runner. That is why three failures have produced no
-   diagnosis. Adding `if: always()` and `target/web-check/` to that step turns the
-   next failure into a diagnosable one. **This is the highest-value change and the
-   smallest.**
+1. **Preserve the evidence.** ~~The `web build` job's artifact upload has no
+   `if: always()`…~~ **Done, and it was worse than described** — on the branch
+   `claude/web-check-diagnostics-6tv4l7` (owner-authorized 2026-09-01). The check
+   wrote the browser's stderr *after* `subprocess.run` returned, which on a
+   timeout it never does, so a hung run left **no log at all**; and the file it
+   would have written lives outside `dist/`, which was the only thing collected.
+   That branch keeps the partial stderr, quotes its tail into the output, names
+   the pass that hung, line-buffers stdout so a hang prints live, and adds an
+   `if: failure()` upload of `target/web-check/`. **It changes nothing about what
+   the check accepts or how long it waits.** Merging it is what turns the next
+   failure into a diagnosable one.
 2. **Close the fleet coverage gap** (see "Why the PR passed" below), or accept it
    knowingly.
 3. Only then, if the hang is genuinely a slow-page problem rather than a browser
@@ -123,6 +136,10 @@ Identical on every failing run — `serve-web`'s own timeout, not an assertion:
 | [33333997211](https://github.com/JHorace/jidousha/actions/runs/33333997211) main | `5f5f0dd` | `pong` | **11.7s** | **1.9s** | **HANG >120s** |
 | [33337817620](https://github.com/JHorace/jidousha/actions/runs/33337817620) PR #80 | `6dd0e5f` | `prototype_kit` | **HANG >120s** | — | — |
 | same, re-run | `6dd0e5f` | `prototype_kit` | **HANG >120s** | — | — |
+| [33477406433](https://github.com/JHorace/jidousha/actions/runs/33477406433) PR #80 | `98d6eab` | `prototype_kit` | ok | ok | ok — **whole job green** |
+
+The last row is the same code as the two above it plus this file, and it passed.
+Three of four runs since `5f5f0dd` failed; one passed. Which pass dies varies too.
 
 </details>
 
@@ -213,10 +230,16 @@ failure is as opaque as these three.
 - **Branch** `claude/perf-panel-overlay-6tv4l7`, pushed, **clean**. The panel work
   is one commit, `6dd0e5f`; this file is the only thing on top of it. Per the
   template, delete it in the commit that resolves the blockage.
-- **PR #80** is open. Every check green except `web build`. Two comments on it
-  record the standing-down reasoning; the second is superseded by this document on
-  one point — it leaned on "`main` is red too", and the fleet gap above is the
-  better explanation.
+- **PR #80** is open and, as of 2026-09-01 06:29Z, **fully green** — all 13
+  checks, preview deployed. That is luck rather than a fix; see the intermittency
+  note at the top. Two comments on it record the standing-down reasoning; the
+  second is superseded by this document on two points — it leaned on "`main` is
+  red too" where the fleet gap is the better explanation, and it treated the
+  failure as persistent where it is intermittent.
+- **`claude/web-check-diagnostics-6tv4l7`** carries the instrumentation described
+  under "What I need from you". Branched off `main` at `5f5f0dd`, pushed, not yet
+  a PR. CI runs on `push: [main]` and `pull_request` only, so that branch alone
+  has never been exercised by CI.
 - **No production code was changed by this investigation.** The only edits were a
   temporary `git checkout --detach` to `aba6afa` and `5f5f0dd` to measure them, both
   reverted; the branch is back where it was.
