@@ -10,6 +10,7 @@ than imported by name.
 import contextlib
 import importlib.machinery
 import importlib.util
+import functools
 import io
 import json
 import re
@@ -43,6 +44,19 @@ build_web = load_tool("build-web")
 check_claude_md = load_tool("check-claude-md")
 dep_count = load_tool("dep-count")
 verify = load_tool("verify")
+
+
+@functools.lru_cache(maxsize=1)
+def workspace_targets():
+    """The workspace's playable pages, asked for once per process.
+
+    Five tests want them, and `build-web` answers by shelling out to `cargo
+    metadata`. On a Windows runner that is slow enough that five of them
+    together put the whole `tool-selftest` phase past its 120s budget
+    (jidousha#83). None of the five patches `REPO_ROOT` first, so they are all
+    asking the same question and one answer serves them.
+    """
+    return build_web.playable_targets()
 check_assets = load_tool("check-assets")
 gen_api_doc = load_tool("gen-api-doc")
 check_api_prose = load_tool("check-api-prose")
@@ -2505,7 +2519,7 @@ class BuildWebTest(unittest.TestCase):
     def test_every_native_only_exclusion_names_a_real_example(self):
         # The list must rot loudly: an entry for a renamed or deleted example
         # would silently exclude nothing while claiming to exclude something.
-        targets = build_web.playable_targets()
+        targets = workspace_targets()
         self.assertIsNotNone(targets)
         names = {name for _package, name, _kind in targets}
         for name in build_web.NATIVE_ONLY_EXAMPLES:
@@ -2881,7 +2895,7 @@ class GameToolingTest(unittest.TestCase):
     def test_the_example_allowlist_names_no_game(self):
         # A game name written into the allowlist would be the first breach of
         # the no-registration property: games come from the glob, always.
-        targets = build_web.playable_targets()
+        targets = workspace_targets()
         self.assertIsNotNone(targets)
         game_names = {name for _package, name, kind in targets if kind == "game"}
         self.assertEqual(game_names & set(build_web.RELEASE_EXAMPLES), set())
@@ -2889,7 +2903,7 @@ class GameToolingTest(unittest.TestCase):
     def test_every_allowlisted_example_names_a_real_web_example(self):
         # The allowlist must rot loudly: an entry for a renamed, deleted or
         # native-only example would quietly shrink the production page.
-        targets = build_web.playable_targets()
+        targets = workspace_targets()
         self.assertIsNotNone(targets)
         with contextlib.redirect_stdout(io.StringIO()):
             examples, _games = build_web.fleet(targets)
@@ -2929,7 +2943,7 @@ class GameToolingTest(unittest.TestCase):
         # A rename that left CONSOLE_EXAMPLES behind would not fail anything —
         # it would just stop matching, and the page would be asked to draw.
         # Better to hear about it here than in a red CI run.
-        targets = build_web.playable_targets()
+        targets = workspace_targets()
         self.assertIsNotNone(targets)
         names = {name for _package, name, _kind in targets}
         for console in sorted(build_web.CONSOLE_EXAMPLES):
@@ -2965,7 +2979,7 @@ class GameToolingTest(unittest.TestCase):
         self.assertIn("--all", workflow)
         self.assertIn("serve-web --check", workflow)
         self.assertIn("dist/fleet.txt", (REPO_ROOT / "tools/serve-web").read_text("utf-8"))
-        targets = build_web.playable_targets()
+        targets = workspace_targets()
         self.assertIsNotNone(targets)
         pages = {name for _package, name, _kind in targets}
         for name in sorted(pages):
