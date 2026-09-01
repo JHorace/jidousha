@@ -237,6 +237,29 @@ jobs:
           name: web-dist
           path: dist/
           if-no-files-found: error
+      # The browser's own evidence, kept only when something went wrong. A
+      # separate step rather than `if: always()` on the one above, so the
+      # deploy's artifact keeps its contract exactly (`web-dist`, and a missing
+      # dist/ is still an error) and this cannot add a second red to a run that
+      # already failed earlier — `warn`, because a build that died before the
+      # browser ran leaves nothing here to collect.
+      #
+      # Why it exists: three consecutive 120s browser hangs produced no
+      # diagnosis, because the log the check writes lives outside dist/ and
+      # nothing collected it (BLOCKED.md, 2026-09-01).
+      - name: keep the browser's log when the check fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-check-logs
+          # The logs and the screenshots, not the browser profiles beside them:
+          # the whole directory is 126MB and 1170 files of Chrome profile
+          # (measured, jidousha#81), and one of those entries is a socket the
+          # uploader cannot pack. What diagnoses a hang is six small files.
+          path: |
+            target/web-check/*.log
+            target/web-check/*.png
+          if-no-files-found: warn
 
   deploy:
     name: deploy web (production on main, preview on PRs)
