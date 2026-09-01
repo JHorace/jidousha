@@ -779,14 +779,24 @@
               render();
             }
           } else {
-            // Something on the panel from the first frame, so a page dumped by
-            // a headless browser is never dumped mid-"measuring…".
-            render();
             painted = now;
           }
           previous = now;
           requestAnimationFrame(onFrame);
         };
+        // Something on the panel before any frame, not from the first one. A
+        // page can be dumped having rendered *nothing*: a headless browser
+        // driven with `--virtual-time-budget` can spend the whole budget
+        // before servicing one `requestAnimationFrame`, and on a page that
+        // finishes instantly — a console example, which never opens a window —
+        // that is the common case, not the rare one. Tying the first paint to
+        // the first frame left the panel reading "measuring…" and the check
+        // reporting a missing reading, on whichever pages happened to lose the
+        // race (jidousha#83: loading_gate and vec2_tour on CI, neither of them
+        // locally). Rendering here makes it unconditional: every reading the
+        // panel can state without a frame is stated, and the frame-derived
+        // ones say "sampling…" honestly.
+        render();
         requestAnimationFrame(onFrame);
         console.log(
           "[jidousha] frame-pacing overlay on; WebGL renderer: " +
