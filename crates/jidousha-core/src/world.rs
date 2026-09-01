@@ -243,6 +243,23 @@ impl World {
         self.archetypes.entity_count()
     }
 
+    /// How many component values the world's stores hold between them.
+    ///
+    /// One entity with three components counts three. The pair of this and
+    /// [`entity_count`](World::entity_count) is what tells a leak apart from a
+    /// world that is simply busy: entities climbing means a spawner with no
+    /// reaper, and components climbing while entities hold steady means
+    /// something is inserting onto the same entities over and over.
+    ///
+    /// Cheap by construction — every row of an archetype carries one value per
+    /// column, so this is a sum of products rather than a walk over the data —
+    /// which is what makes it safe to ask once a frame from the performance
+    /// overlay (frame-pacing.md §7).
+    #[must_use]
+    pub fn component_count(&self) -> usize {
+        self.archetypes.component_count()
+    }
+
     /// The `T` on `entity`, panicking if it has none.
     ///
     /// # Panics

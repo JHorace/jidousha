@@ -16,6 +16,7 @@ use jidousha_render_core::{
 };
 
 use super::Driver;
+use super::overlay::{Engine, Phase, Spans};
 
 impl Driver {
     /// One rendered frame: catch simulation up to `elapsed` of real time, then
@@ -29,6 +30,15 @@ impl Driver {
     /// the first; the clock answers the second; and the tests below can answer
     /// it themselves, which is how this logic is checked without a window.
     pub(super) fn frame(&mut self, elapsed: Seconds) {
+        // The **previous** frame's breakdown, closed by this frame arriving:
+        // `elapsed` runs from that frame's start to now, so it is that frame's
+        // whole duration and the only total its four measured spans can be
+        // subtracted from without inventing anything. The breakdown is one
+        // frame behind the pacing readings beside it, which at four repaints a
+        // second nobody can see (frame-pacing.md §7).
+        let spans = core::mem::replace(&mut self.spans, Spans::new());
+        self.overlay.close_frame(elapsed, spans);
+
         self.settle_assets();
 
         // The frame's events belong to its first tick; the catch-up ticks
@@ -58,8 +68,24 @@ impl Driver {
             faces,
             pacing,
             overlay,
+            clock,
+            spans,
             ..
         } = self;
+        // Four extra clock reads a frame, and only when the sections that use
+        // them are on: `since_frame` does not move the frame's mark, so
+        // splitting a frame this way cannot spend it (clock.rs). The asset
+        // commit and the texture uploads it does are `Encode` — building this
+        // frame's picture — even though they ran first; a span is a sum, not a
+        // position in the frame.
+        let timed = overlay.wants_phases();
+        let mark = |phase: Phase, spans: &mut Spans| {
+            if timed {
+                spans.spent(phase, clock.since_frame());
+            }
+        };
+        mark(Phase::Encode, spans);
+
         let ticks = simulation.advance(elapsed, |world: &mut World, index| {
             let snapshot = if index == 0 {
                 input.first_tick_snapshot()
@@ -68,6 +94,7 @@ impl Driver {
             };
             world.insert_resource(Input::new(snapshot));
         });
+        mark(Phase::Sim, spans);
 
         // Read before drawing, which is both what the borrow checker wants and
         // what the phase means: Draw cannot change the world (ADR-0008), so the
@@ -109,9 +136,23 @@ impl Driver {
             faces.extend_from_slice(fonts.faces());
         }
 
+        // The world's own counters, read here rather than after the draw for
+        // one reason the borrow checker only echoes: the Draw phase cannot
+        // change the world (ADR-0008), so this reading and one taken after
+        // `draw` are the same numbers — and `draw` borrows the simulation the
+        // world lives in. Read-only, through `World`'s ordinary read paths, and
+        // never written back (frame-pacing.md §7).
+        let world_counters = if overlay.wants_phases() {
+            let world = simulation.world();
+            (world.entity_count(), world.component_count())
+        } else {
+            (0, 0)
+        };
+
         // Draw once per frame, however many ticks ran — including none
         // (core.md §7).
         let submissions = simulation.draw();
+        mark(Phase::Draw, spans);
 
         let (Some(backend), Some(textures)) = (backend, textures.as_mut()) else {
             return;
@@ -124,6 +165,17 @@ impl Driver {
         // must not be slowed down.
         let presentation = backend.presentation();
         pacing.observe(presentation);
+        // What the engine is holding, from the one place that can answer each
+        // half: the backend's own running totals across the seam, and the
+        // world's counters read a moment ago. Every one of them is a total
+        // something already maintains, so this is a read rather than a walk
+        // (renderer.md §12a).
+        overlay.observe(Engine {
+            backend: backend.stats(),
+            entities: world_counters.0,
+            components: world_counters.1,
+            quads: submissions.quads().len(),
+        });
         // The frame's reading, taken from numbers the driver already had: the
         // duration the accumulator was given and the tick count it returned.
         // No clock is read for this, so an overlay that is off costs a branch.
@@ -152,12 +204,18 @@ impl Driver {
             None => submissions.quads(),
         };
         let plan = plan_frame(&camera, quads, textures);
+        mark(Phase::Encode, spans);
         if let Err(error) = backend.render(&plan) {
             // A frame that cannot be drawn is not a reason to stop: the surface
             // usually comes back. Saying so once per occurrence beats silence
             // and beats quitting.
             crate::report::problem(&error.to_string());
         }
+        // `render` is where the loop waits for the display, and the seam is
+        // where the driver's reach stops — so this one span is the encode and
+        // the present-wait together, and the panel's doc section says which
+        // dominates it and when (phases.rs, frame-pacing.md §7).
+        mark(Phase::Present, spans);
     }
 
     /// Apply what finished loading, and put it on the GPU.
@@ -228,7 +286,7 @@ impl Driver {
 
 #[cfg(test)]
 mod tests {
-    use super::super::overlay::Overlay;
+    use super::super::overlay::{Level, Overlay};
     use super::super::testing::*;
     use super::*;
     use jidousha_assets::{AssetStatus, MemorySource};
@@ -600,7 +658,7 @@ mod tests {
         off.frame(frames_worth(1));
 
         let (mut on, on_backend) = driver_with_a_backend();
-        on.overlay = Overlay::new(true);
+        on.overlay = Overlay::new(Level::Pacing);
         on.simulation.add_system(Draw, draw_one_rectangle);
         on.frame(frames_worth(1));
 
@@ -628,13 +686,102 @@ mod tests {
     }
 
     #[test]
+    fn every_level_of_the_overlay_leaves_the_games_own_frame_byte_identical() {
+        // The whole promise, at every level of the switch: a transcript, a
+        // replay and a `--verify` run see the same submissions whether the
+        // panel is off, showing the pacing readings, or showing the performance
+        // sections (frame-pacing.md §7). Level 2 reads the world's counters and
+        // times four spans, and neither may move a quad.
+        let frame_of = |level| {
+            let (mut driver, backend) = driver_with_a_backend();
+            driver.overlay = Overlay::new(level);
+            driver.simulation.add_system(Draw, draw_one_rectangle);
+            for _ in 0..5 {
+                driver.frame(frames_worth(1));
+            }
+            (drawn(&backend), driver)
+        };
+        let (off, _) = frame_of(Level::Off);
+        let (pacing, _) = frame_of(Level::Pacing);
+        let (perf, perf_driver) = frame_of(Level::Perf);
+
+        assert_eq!(off.len(), 1, "one rectangle and nothing else: {off:?}");
+        assert_eq!(
+            pacing[..off.len()],
+            off[..],
+            "the game's frame changed at level 1"
+        );
+        assert_eq!(
+            perf[..off.len()],
+            off[..],
+            "the game's frame changed at level 2"
+        );
+        assert!(
+            perf.len() > pacing.len(),
+            "level 2 drew no more of a panel than level 1: {} vs {}",
+            perf.len(),
+            pacing.len()
+        );
+        assert!(
+            perf_driver.overlay.readout().contains("frame breakdown"),
+            "{}",
+            perf_driver.overlay.readout()
+        );
+    }
+
+    #[test]
+    fn the_performance_panel_reports_the_world_the_frame_actually_drew() {
+        // The accounting seam, through the driver: the counters on the panel
+        // are this world's, read at draw time, and they move when the world
+        // does. A panel wired to the wrong world would look perfectly plausible.
+        let (mut driver, _backend) = driver_with_a_backend();
+        driver.overlay = Overlay::new(Level::Perf);
+        driver.simulation.add_system(Draw, draw_one_rectangle);
+        for index in 0..4 {
+            let entity = driver.simulation.world_mut().spawn();
+            driver
+                .simulation
+                .world_mut()
+                .insert(entity, Transform::at(Vec2::splat(index as f32)));
+        }
+        // Past the panel's repaint period, which is a quarter second of frames:
+        // the numbers are for a person to read, so they are not rebuilt sixty
+        // times a second (overlay/mod.rs).
+        for _ in 0..20 {
+            driver.frame(frames_worth(1));
+        }
+        let readout = driver.overlay.readout();
+        assert!(readout.contains("4 entities"), "{readout}");
+        assert!(readout.contains("4 components"), "{readout}");
+        // One rectangle is one quad, and the panel's own quads are appended to
+        // a copy the world never sees — so they must not be counted here.
+        assert!(readout.contains("1 quads drawn"), "{readout}");
+    }
+
+    #[test]
+    fn the_frame_breakdown_accounts_for_the_whole_frame_it_describes() {
+        // The derived bucket, through the driver rather than in isolation: the
+        // four measured spans plus sleep are the frame, so a mark the driver
+        // forgot to take shows up as sleep rather than as time that vanished.
+        let (mut driver, _backend) = driver_with_a_backend();
+        driver.overlay = Overlay::new(Level::Perf);
+        for _ in 0..8 {
+            driver.frame(frames_worth(1));
+        }
+        let readout = driver.overlay.readout();
+        for bucket in ["sim", "draw", "encode", "present", "sleep", "busy"] {
+            assert!(readout.contains(bucket), "no {bucket} row: {readout}");
+        }
+    }
+
+    #[test]
     fn the_overlay_reads_the_tick_count_off_the_frame_it_is_describing() {
         // The reading the web overlay has to model from deltas alone
         // (frame-pacing.md §4). Here it comes back from `Simulation::advance`,
         // and this is the wiring that carries it — a driver that passed the
         // wrong number would produce a plausible, wrong panel.
         let (mut driver, _backend) = driver_with_a_backend();
-        driver.overlay = Overlay::new(true);
+        driver.overlay = Overlay::new(Level::Pacing);
         driver.frame(frames_worth(3));
         assert!(
             driver.overlay.readout().contains("3+:1"),
@@ -662,6 +809,94 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn the_panel_is_rebuilt_four_times_a_second_rather_than_once_a_frame() {
+        // The instrument-perturbation rule, as behaviour rather than as a
+        // timing. Composing the panel is string formatting, a sort of the
+        // window, and a percentile per bucket; doing it sixty times a second
+        // would put all of that inside every frame — and the numbers would
+        // strobe too fast to read (overlay/mod.rs's REPAINT_PERIOD).
+        let (mut driver, _backend) = driver_with_a_backend();
+        driver.overlay = Overlay::new(Level::Perf);
+        // A tenth of a second of frames, after the first one, which always
+        // repaints so a screenshot taken at launch says something.
+        driver.frame(frames_worth(1));
+        let first = driver.overlay.readout().to_owned();
+        for _ in 0..6 {
+            driver.frame(frames_worth(1));
+        }
+        assert_eq!(
+            driver.overlay.readout(),
+            first,
+            "the panel was rebuilt inside a quarter second"
+        );
+        for _ in 0..10 {
+            driver.frame(frames_worth(1));
+        }
+        assert_ne!(
+            driver.overlay.readout(),
+            first,
+            "a quarter second went by and the panel never caught up"
+        );
+    }
+
+    #[test]
+    fn the_performance_panel_costs_the_frame_it_measures_almost_nothing() {
+        // "An instrument that perturbs is the failure mode." This is the
+        // measurement, taken the only way it can be taken honestly: the same
+        // driver, the same scene, the same number of frames, run with the panel
+        // off and with it at level 2, on a backend that draws nothing so that
+        // what is left is the instrument.
+        //
+        // The bound is deliberately loose — twenty-five times what this costs
+        // in practice — because a threshold tight enough to be interesting on
+        // one machine is a flake on a loaded runner. What it catches is a
+        // *structural* mistake rather than a slow afternoon: sampling `/proc`
+        // every frame, or composing the panel every frame, would each land here.
+        let cost_of = |level| {
+            let (mut driver, _backend) = driver_with_a_backend();
+            driver.overlay = Overlay::new(level);
+            driver.simulation.add_system(Draw, draw_one_rectangle);
+            // Warm the allocations up, so the measurement is of steady state
+            // rather than of the first `String` the panel ever built.
+            for _ in 0..200 {
+                driver.frame(frames_worth(1));
+            }
+            let started = web_time::Instant::now();
+            for _ in 0..FRAMES_MEASURED {
+                driver.frame(frames_worth(1));
+            }
+            started.elapsed().as_secs_f64() / f64::from(FRAMES_MEASURED)
+        };
+        let off = cost_of(Level::Off);
+        let pacing = cost_of(Level::Pacing);
+        let perf = cost_of(Level::Perf);
+        let added = (perf - off) * 1e6;
+        println!(
+            "overlay overhead: off {:.1}us, level 1 {:.1}us (+{:.1}), level 2 {:.1}us (+{added:.1}) a frame",
+            off * 1e6,
+            pacing * 1e6,
+            (pacing - off) * 1e6,
+            perf * 1e6
+        );
+        // A tenth of the tick period the engine's picture actually changes at,
+        // stated against `fixed_dt` rather than as a bare number so the bound
+        // moves with the thing it is a share of.
+        let tenth_of_a_tick =
+            f64::from(jidousha_core::GameConfig::default().fixed_dt.as_f32()) * 1e6 / 10.0;
+        assert!(
+            added < tenth_of_a_tick,
+            "level 2 added {added:.1}us a frame against a {tenth_of_a_tick:.1}us bound, which is not an instrument that leaves what it measures alone"
+        );
+    }
+
+    /// How many frames the overhead measurement above times.
+    ///
+    /// Enough that the panel is rebuilt several times inside the window — a
+    /// measurement that never crossed a repaint would leave out the one part of
+    /// the instrument that is not a handful of additions.
+    const FRAMES_MEASURED: u32 = 2_000;
 
     #[test]
     fn a_long_stall_does_not_run_hundreds_of_ticks() {

@@ -267,6 +267,15 @@ impl SpritePipeline {
     }
 
     /// Set the pipeline up on a pass that is about to draw batches.
+    /// How many bytes of buffer this pipeline is holding on the GPU.
+    ///
+    /// The vertex buffer, which grows with the busiest frame the run has had,
+    /// and the camera uniform, which never does. Read once a frame by the
+    /// performance panel's accounting and by nothing else (renderer.md §12a).
+    pub(crate) fn buffer_bytes(&self) -> u64 {
+        self.vertices.size() + self.camera_buffer.size()
+    }
+
     pub(crate) fn bind(&self, pass: &mut wgpu::RenderPass<'_>) {
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &self.camera_bind_group, &[]);

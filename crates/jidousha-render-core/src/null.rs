@@ -13,7 +13,7 @@ use jidousha_core::math::Vec2;
 use jidousha_core::{Color, PhysicalSize, Rect};
 
 use crate::backend::{
-    BackendTextureId, Presentation, RawImage, RenderBackend, RenderError, TextureDesc,
+    BackendStats, BackendTextureId, Presentation, RawImage, RenderBackend, RenderError, TextureDesc,
 };
 use crate::plan::{Batch, FramePlan};
 
@@ -272,6 +272,13 @@ pub struct NullBackend {
     textures: Vec<(TextureDesc, Vec<u8>)>,
     destroyed: Vec<BackendTextureId>,
     surface: PhysicalSize,
+    /// Texture bytes held right now, maintained at create and destroy.
+    ///
+    /// A running total rather than a walk over `textures`, because that is the
+    /// shape the seam promises a backend answers in — and because this backend
+    /// is the one the accounting's tests are written against, so it has to be
+    /// the same shape the wgpu backend keeps (renderer.md §12a).
+    texture_bytes: u64,
 }
 
 impl NullBackend {
@@ -287,6 +294,7 @@ impl NullBackend {
             textures: Vec::new(),
             destroyed: Vec::new(),
             surface: PhysicalSize::new(1280, 720),
+            texture_bytes: 0,
         }
     }
 
@@ -352,6 +360,7 @@ impl NullBackend {
 
 impl RenderBackend for NullBackend {
     fn create_texture(&mut self, desc: &TextureDesc, texels: &[u8]) -> BackendTextureId {
+        self.texture_bytes += texture_bytes(desc);
         self.textures.push((*desc, texels.to_vec()));
         // Ids count up and are never reused: a test that draws with a stale id
         // should see the stale id, not something that quietly still works.
@@ -359,6 +368,16 @@ impl RenderBackend for NullBackend {
     }
 
     fn destroy_texture(&mut self, id: BackendTextureId) {
+        // Only the first destroy of an id gives its bytes back: the seam says
+        // drawing with a destroyed id is a contract violation, but calling
+        // `destroy_texture` twice is merely a caller being careless, and an
+        // accounting total that went negative because of it would be a worse
+        // reading than the leak it was watching for.
+        if !self.destroyed.contains(&id)
+            && let Some((desc, _)) = self.textures.get(id.0 as usize)
+        {
+            self.texture_bytes = self.texture_bytes.saturating_sub(texture_bytes(desc));
+        }
         self.destroyed.push(id);
     }
 
@@ -387,6 +406,26 @@ impl RenderBackend for NullBackend {
         // (frame-pacing.md §6).
         Presentation::Offscreen
     }
+
+    fn stats(&self) -> BackendStats {
+        BackendStats {
+            texture_bytes: self.texture_bytes,
+            // Nothing is packed for a GPU here — the plan is kept as it
+            // arrived — so there is no buffer to account for and no pass to
+            // time. Zero and `None` are the honest answers, not placeholders.
+            buffer_bytes: 0,
+            gpu_frame: None,
+        }
+    }
+}
+
+/// What a texture of this description occupies, in bytes.
+///
+/// RGBA8 and nothing else (renderer.md §3), so four bytes a texel with no
+/// format table to consult. `u64` because a 4096-square atlas is 64MiB and a
+/// run that loaded a few hundred of them would overflow a `u32`.
+fn texture_bytes(desc: &TextureDesc) -> u64 {
+    u64::from(desc.size.width) * u64::from(desc.size.height) * 4
 }
 
 #[cfg(test)]

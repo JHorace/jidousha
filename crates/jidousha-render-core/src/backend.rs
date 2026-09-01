@@ -1,17 +1,17 @@
 //! The seam: what a render backend must do, stated in engine types only.
 //!
 //! Key types: `RenderBackend`, `BackendTextureId`, `TextureDesc`, `RawImage`,
-//! `RenderError`, `Presentation`.
+//! `RenderError`, `Presentation`, `BackendStats`.
 //! Depends on: `jidousha-core`, `plan`. Must never depend on: `wgpu`, `ash`, or
 //! any graphics API (ADR-0003, CONTRACT).
-//! INVARIANT: six methods, and none of them takes a graphics type. Backends
+//! INVARIANT: seven methods, and none of them takes a graphics type. Backends
 //! are dumb executors — sorting, batching, and every other decision happens
 //! above this line, which is what keeps the ash port and the WebGL2 fallback
 //! cheap (renderer.md §1, §7).
 
 use core::fmt;
 
-use jidousha_core::PhysicalSize;
+use jidousha_core::{PhysicalSize, Seconds};
 
 use jidousha_core::message;
 
@@ -194,9 +194,51 @@ impl fmt::Display for Presentation {
     }
 }
 
+/// What a backend is holding, and what it measured of its own last frame.
+///
+/// The **accounting** report, and the second one above the seam after
+/// [`Presentation`]. It exists for the performance overlay's level-2 panel
+/// (frame-pacing.md §7): the two readings here are the two a backend is the
+/// only thing that can answer, and neither is knowable from above the seam.
+///
+/// CONTRACT: a report, never a request — like
+/// [`presentation`](RenderBackend::presentation). Nothing above the seam may
+/// allocate, free, or time anything through this; a backend that changed
+/// behavior because something asked for its stats would be an instrument
+/// perturbing what it measures.
+///
+/// Every field is what the backend *knows*, never an estimate: a backend that
+/// cannot time its GPU answers `None` rather than guessing, and the panel
+/// prints `gpu n/a` (renderer.md §12a).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct BackendStats {
+    /// Bytes of texture memory this backend is holding right now.
+    ///
+    /// Counted at [`create_texture`](RenderBackend::create_texture) and
+    /// [`destroy_texture`](RenderBackend::destroy_texture) from the sizes the
+    /// caller asked for, so it is a running total the backend already knows
+    /// rather than a walk over anything. The engine's own atlases are in here
+    /// like any other texture, because from this side that is what they are.
+    pub texture_bytes: u64,
+    /// Bytes of vertex and uniform buffer this backend is holding right now.
+    ///
+    /// Separate from the textures because they grow for different reasons: a
+    /// texture total that climbs is art nobody unloaded, and a buffer total
+    /// that climbs is a frame submitting more quads than the last one.
+    pub buffer_bytes: u64,
+    /// How long the GPU spent on the last frame's main pass.
+    ///
+    /// `None` where the device does not offer timestamp queries — WebGL2 has
+    /// none at all, and plenty of native drivers decline them. Milliseconds,
+    /// never a utilization percentage: a percentage needs vendor libraries
+    /// this engine does not have and would be a number that looked like an
+    /// answer without being one.
+    pub gpu_frame: Option<Seconds>,
+}
+
 /// What every render backend implements.
 ///
-/// Six methods. Growth beyond about eight is a design smell to resist: every
+/// Seven methods. Growth beyond about eight is a design smell to resist: every
 /// method here is one more thing the ash port and the WebGL2 path must both
 /// get right (renderer.md §7).
 pub trait RenderBackend {
@@ -245,6 +287,18 @@ pub trait RenderBackend {
     /// caller that could override it would be deciding for a driver it cannot
     /// see.
     fn presentation(&self) -> Presentation;
+
+    /// What this backend is holding, and what it measured of its own last
+    /// frame.
+    ///
+    /// Asked once a frame by the performance overlay and by nothing else
+    /// (frame-pacing.md §7). Cheap by construction: every field is a running
+    /// total the backend maintains as it works, so a backend that is asked
+    /// sixty times a second does no more work than one that is never asked.
+    ///
+    /// CONTRACT: a report, never a request, exactly as
+    /// [`presentation`](RenderBackend::presentation) is.
+    fn stats(&self) -> BackendStats;
 }
 
 #[cfg(test)]

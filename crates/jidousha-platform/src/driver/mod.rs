@@ -35,7 +35,7 @@ use winit::event_loop::ActiveEventLoop;
 use winit::window::{Window, WindowId};
 
 use crate::clock::FrameClock;
-use crate::driver::overlay::Overlay;
+use crate::driver::overlay::{Overlay, Spans};
 use crate::driver::pacing::{Pacing, Schedule};
 use crate::error::RunError;
 use crate::translate;
@@ -106,9 +106,16 @@ pub(crate) struct Driver {
     /// **presentation only**: the simulation's timestep is `Simulation`'s and
     /// nothing here can move it (frame-pacing.md §6).
     pacing: Pacing,
-    /// The frame-pacing instrument, off unless this run's environment asked for
-    /// it (`JIDOUSHA_FRAMETIME`, frame-pacing.md §6).
+    /// The frame-pacing and performance instrument, off unless this run's
+    /// environment asked for it (`JIDOUSHA_FRAMETIME`, frame-pacing.md §6, §7).
     overlay: Overlay,
+    /// Where this frame's milliseconds have gone so far.
+    ///
+    /// Filled in as the frame runs and handed to the overlay when the *next*
+    /// frame starts, because that is the first moment this frame's whole
+    /// duration is known. Left untouched at every level but 2, where the driver
+    /// takes no marks at all (frame-pacing.md §7).
+    spans: Spans,
     input: SnapshotBuilder,
     /// Set when something went wrong badly enough to stop; `run` returns it.
     ///
@@ -135,6 +142,7 @@ impl Driver {
             clock: FrameClock::new(),
             pacing: Pacing::new(),
             overlay: Overlay::new(overlay::requested()),
+            spans: Spans::new(),
             input: SnapshotBuilder::new(),
             #[cfg(not(target_arch = "wasm32"))]
             failure: None,
@@ -191,7 +199,26 @@ impl Driver {
         is_synthetic: bool,
     ) {
         if let Some(translated) = translate::key_event(physical_key, state, repeat, is_synthetic) {
+            self.snapshot_key(&translated);
             self.input.record(translated);
+        }
+    }
+
+    /// Write a snapshot if this event is the overlay's key.
+    ///
+    /// **Observed, never consumed.** The press goes on to `self.input` exactly
+    /// as it would with the overlay off, so a recorded transcript, a replay and
+    /// a `--verify` run are byte-identical whether or not somebody took a
+    /// snapshot mid-run — the same promise the drawn panel makes
+    /// (frame-pacing.md §7). A game that binds F9 to something keeps it.
+    ///
+    /// Auto-repeat never reaches here: `translate::key_event` drops repeats, so
+    /// a held key is one press and one file (input.md §2).
+    fn snapshot_key(&mut self, event: &InputEvent) {
+        if let InputEvent::KeyPressed(key) = event
+            && *key == overlay::SNAPSHOT_KEY
+        {
+            self.overlay.snapshot();
         }
     }
 }

@@ -137,6 +137,16 @@ impl Archetype {
         self.type_ids.binary_search(&type_id).is_ok()
     }
 
+    /// How many component values this archetype's rows hold in total.
+    ///
+    /// Every row of an archetype carries one value per column by construction,
+    /// so this is a multiplication rather than a walk — which is what makes
+    /// `World::component_count` cheap enough for a per-frame diagnostic to ask
+    /// once a frame (frame-pacing.md §7).
+    pub(crate) fn component_count(&self) -> usize {
+        self.entities.len() * self.columns.len()
+    }
+
     fn column_index(&self, type_id: TypeId) -> Option<usize> {
         self.type_ids.binary_search(&type_id).ok()
     }
@@ -239,6 +249,11 @@ impl Archetypes {
 
     pub(crate) fn entity_count(&self) -> usize {
         self.list.iter().map(Archetype::len).sum()
+    }
+
+    /// How many component values every archetype holds between them.
+    pub(crate) fn component_count(&self) -> usize {
+        self.list.iter().map(Archetype::component_count).sum()
     }
 
     fn find(&self, type_ids: &[TypeId]) -> Option<usize> {

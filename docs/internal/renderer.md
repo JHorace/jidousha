@@ -424,6 +424,7 @@ pub trait RenderBackend {
     fn render(&mut self, plan: &FramePlan) -> Result<(), RenderError>;
     fn capture(&mut self) -> Result<RawImage, RenderError>;   // offscreen readback, §9
     fn presentation(&self) -> Presentation;                   // how frames reach the display
+    fn stats(&self) -> BackendStats;                          // what it holds, and GPU ms, §12a
 }
 ```
 
@@ -450,6 +451,21 @@ pub trait RenderBackend {
   present mode this engine asks for is `Fifo`, in
   `jidousha-render-wgpu`'s `init::configure`, and the fallback cap for a surface
   that refuses it is in the platform crate, not here.
+- `stats` is the seventh and newest (2026-08-30). It reports a `BackendStats`:
+  `texture_bytes`, `buffer_bytes`, and `gpu_frame: Option<Seconds>`. Same
+  CONTRACT as `presentation` and for the same reason — **a report, never a
+  request**. Nothing above the seam allocates, frees or times anything through
+  it, and a backend must not behave differently because something asked. Both
+  halves are covered in **§12a** below; the one reader is the performance
+  overlay's level-2 panel (**frame-pacing.md §7**).
+
+  Two methods rather than one, and the reason is what each answers *about*.
+  `presentation` is a fact the driver **acts on** — it decides whether the loop
+  caps itself, and a frame is paced differently depending on the answer.
+  `stats` is a fact nothing acts on at all: it exists to be read by a person.
+  Folding them together would put a number the loop steers by in the same call
+  as a number nobody may steer by, and the next reader would have to work out
+  which was which.
 
 Implemented (R2): the pipeline is one WGSL shader, one vertex format (position,
 uv, color — eight floats, 32 bytes), one uniform buffer holding the view-proj
@@ -1090,6 +1106,72 @@ mergeable, tested, green CI on all three targets.
   here the code has a reader, and the reader has nothing to complain about yet.
   Deleting it would remove the only thing that would catch a backend reaching
   back into simulation, which is precisely the bug §1 exists to prevent.
+
+## 12a. Allocation accounting and the optional GPU timer (2026-08-30)
+
+Two backend facts the performance overlay needs and only a backend can answer.
+Both arrive through `stats` (§7) and neither changes a frame.
+
+**The allocation accounting seam.** `BackendStats::texture_bytes` and
+`buffer_bytes` are **running totals the backend maintains as it works**, not a
+walk over anything:
+
+- textures are counted in `create_texture` and given back in `destroy_texture`,
+  from the `TextureDesc` the caller passed. RGBA8 and nothing else (§3), so it
+  is four bytes a texel with no format table to consult and no mip levels to
+  add — every texture this engine creates is `mip_level_count: 1`. The built-in
+  white texel, the placeholder and the font atlas are in the total like any
+  other texture, because from this side that is exactly what they are;
+- **only the first destroy of an id gives its bytes back.** Drawing with a
+  destroyed id is a contract violation and stays one (§7); calling
+  `destroy_texture` twice is merely a caller being careless, and a total that
+  went negative because of it would be a worse reading than the leak it is
+  watching for;
+- buffers are the pipeline's vertex buffer — which grows with the busiest frame
+  the run has had — plus the camera uniform, plus the timer's two small
+  resolve buffers where there is a timer. Separate from the textures because
+  the two grow for different reasons: a texture total that climbs is art nobody
+  unloaded, and a buffer total that climbs is a frame submitting more quads
+  than the last one;
+- **texels waiting for a device are not counted.** A `Slot::Waiting` holds them
+  on the CPU heap until the GPU arrives (§5); this is the GPU's total, and one
+  that jumped on the frame the device landed would read as a leak.
+
+`NullBackend` keeps the same running total by the same arithmetic. That is what
+makes the accounting assertable on the transcript tier — the tier that runs on
+every machine, including the ones with no adapter (§9).
+
+**The optional timer.** `gpu_frame` is how long the GPU spent on the frame's
+main pass, in milliseconds, from `wgpu`'s `TIMESTAMP_QUERY`. Four things about
+it are load-bearing:
+
+1. **The feature is requested as an intersection, never as a requirement.**
+   `init::optional_features` is `adapter.features() & TIMESTAMP_QUERY`, so the
+   set asked for is never larger than the set offered and `request_device` can
+   never fail because of this line. A feature named unconditionally in
+   `required_features` would turn every machine without it into "no adapter",
+   which for a *diagnostic* would be the worst trade this project could make.
+   What was granted is read back off the **device**, not assumed from the
+   adapter.
+2. **Absence is `None`, and the panel prints `gpu n/a`.** Never a zero: a zero
+   reads as a GPU doing the frame in no time at all, on precisely the machines
+   where there is no reading. WebGL2 has no timestamps at all, so every web
+   build takes this path.
+3. **Nothing blocks.** The resolve is copied to a mappable buffer, mapped
+   asynchronously, and read on a later frame — so a reading is a frame or two
+   old, which is what a median over a window wants anyway. This is the opposite
+   of `capture.rs`, where blocking is the point because a golden image is a test
+   tier rather than part of a frame.
+4. **Milliseconds, never a percentage.** GPU *utilization* needs vendor
+   libraries (NVML and its equivalents) that this engine does not have and will
+   not take on for a panel. A percentage invented from a frame time would look
+   like an answer without being one.
+
+Where it lives: `crates/jidousha-render-wgpu/src/timing.rs` (the query set and
+the async readback), `init.rs` (`optional_features`), `pipeline.rs`
+(`buffer_bytes`), and `crates/jidousha-render-core/src/backend.rs`
+(`BackendStats`). Checked by `crates/jidousha-render-wgpu/tests/stats.rs`, which
+runs on any adapter and prints which of the two paths this machine took.
 
 ## 12. Deferred (tracked, not designed)
 

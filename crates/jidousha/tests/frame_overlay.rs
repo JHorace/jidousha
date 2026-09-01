@@ -1,14 +1,16 @@
-//! The frame-pacing overlay, in pixels: what it covers, and what it leaves alone.
+//! The performance overlay, in pixels: what it covers, and what it leaves alone.
 //!
-//! The native overlay is off unless `JIDOUSHA_FRAMETIME` asks for it
-//! (frame-pacing.md §6), and "off by default" is a claim about a *picture*
-//! rather than about a boolean. So this renders one scene twice through a real
-//! GPU — once as the game submitted it and once with the readout over it — and
-//! asks the two captures the two questions that matter: the overlay is visible
-//! where it draws, and nothing under it moved.
+//! The native overlay is off unless `JIDOUSHA_FRAMETIME` asks for it, and it
+//! has **levels** — 1 is the pacing panel, 2 adds the performance sections
+//! (frame-pacing.md §6, §7). "Off by default" is a claim about a *picture*
+//! rather than about a boolean, and so is "level 2 adds sections and moves
+//! nothing". So this renders one scene three times through a real GPU — as the
+//! game submitted it, with the level-1 readout over it, and with the level-2
+//! one — and asks the captures the questions that matter: each panel is visible
+//! where it draws, the bigger one covers more, and nothing under either moved.
 //!
-//! It also writes both captures to `target/verify/`, so the pair a change to
-//! this area has to be justified with is a command anyone can re-run rather
+//! It also writes all three captures to `target/verify/`, so the set a change
+//! to this area has to be justified with is a command anyone can re-run rather
 //! than a screenshot somebody took once.
 //!
 //! **No adapter is not a failure**, exactly as in `backend_agnostic.rs` and for
@@ -30,16 +32,42 @@ const SIZE: PhysicalSize = PhysicalSize::new(1280, 720);
 /// How many polls to give the GPU handshake before calling it absent.
 const HANDSHAKE_POLLS: usize = 10_000;
 
-/// What the panel says on a captured frame.
+/// What the level-1 panel says on a captured frame.
 ///
 /// A fixed string rather than a live reading: this test is about where the
 /// overlay lands and what it covers, and a capture whose text changed with the
 /// machine's frame rate would be a picture nobody could compare.
-const READOUT: &str = "jidousha frame pacing: JIDOUSHA_FRAMETIME=1\n\
-                       present   ~60.0 fps - median 16.67ms, mean 16.67ms\n\
-                       spread    16.41ms .. 17.02ms over 240 frames\n\
-                       pacing    vsync - the display sets the rate\n\
-                       ticks/fr  0:0 (0%)  1:240 (100%)  2:0 (0%)  3+:0 (0%)";
+const PACING_READOUT: &str = "jidousha frame pacing: JIDOUSHA_FRAMETIME=1\n\
+                              present   ~60.0 fps - median 16.67ms, mean 16.67ms\n\
+                              spread    16.41ms .. 17.02ms over 240 frames\n\
+                              pacing    vsync - the display sets the rate\n\
+                              ticks/fr  0:0 (0%)  1:240 (100%)  2:0 (0%)  3+:0 (0%)";
+
+/// What the level-2 panel says, in the same fixed-reading spirit.
+///
+/// Every section the performance panel adds, at plausible widths — the point of
+/// the capture is that the widest line still fits in the corner it is pinned to
+/// and that the block does not run off the frame (frame-pacing.md §7).
+const PERF_READOUT: &str = "jidousha performance: JIDOUSHA_FRAMETIME=2\n\
+                            present   ~60.0 fps - median 16.67ms, mean 16.67ms\n\
+                            spread    16.41ms .. 17.02ms over 240 frames\n\
+                            pacing    vsync - the display sets the rate\n\
+                            ticks/fr  0:0 (0%)  1:240 (100%)  2:0 (0%)  3+:0 (0%)\n\
+                            frame deltas\n\
+                            \x20 16-17ms ####################  240 (100%)\n\
+                            frame breakdown  ms: median  p95  max\n\
+                            \x20 sim                            0.31    0.55    1.20\n\
+                            \x20 draw                           0.12    0.20    0.44\n\
+                            \x20 encode                         0.08    0.14    0.30\n\
+                            \x20 present ###################   16.16   16.40   22.00\n\
+                            \x20 sleep                          0.00    0.00    0.00\n\
+                            \x20 busy    3% of a 16.67ms frame - 16.16ms of it waiting\n\
+                            cpu       process 41% of one core\n\
+                            gpu       median 2.10ms, p95 2.60ms over 240 frames\n\
+                            memory    rss 184.2MB\n\
+                            \x20 renderer 12.6MB textures, 0.4MB buffers\n\
+                            \x20 world    412 entities, 1236 components, 318 quads drawn\n\
+                            snapshot  press F9 to write this panel under target/";
 
 /// Where the pair is written, for a change to this area to be argued from.
 ///
@@ -114,8 +142,14 @@ fn offscreen() -> Option<WgpuBackend> {
     None
 }
 
-/// Render the scene once, with the overlay or without it, and read it back.
-fn capture(backend: &mut WgpuBackend, textures: &TextureTable, with_overlay: bool) -> Vec<u8> {
+/// Render the scene once, with a readout over it or without one, and read it
+/// back.
+fn capture(
+    backend: &mut WgpuBackend,
+    textures: &TextureTable,
+    readout: Option<&str>,
+    name: &str,
+) -> Vec<u8> {
     let mut simulation = headless(GameConfig::default(), |app| {
         app.add_system(Startup, set_the_camera);
         app.add_system(Draw, draw_the_scene);
@@ -126,8 +160,8 @@ fn capture(backend: &mut WgpuBackend, textures: &TextureTable, with_overlay: boo
     // The same composition the driver does: the game's submissions, then the
     // readout appended to a copy the world never sees (driver/frame.rs).
     let mut quads = simulation.draw().quads().to_vec();
-    if with_overlay {
-        draw_readout(&camera, READOUT, &mut quads);
+    if let Some(readout) = readout {
+        draw_readout(&camera, readout, &mut quads);
     }
     let plan = plan_frame(&camera, &quads, textures);
     if let Err(error) = backend.render(&plan) {
@@ -138,11 +172,6 @@ fn capture(backend: &mut WgpuBackend, textures: &TextureTable, with_overlay: boo
         Err(error) => panic!("an offscreen backend could not read itself back: {error}"),
     };
     let png = encode_png(&image);
-    let name = if with_overlay {
-        "overlay-on.png"
-    } else {
-        "overlay-off.png"
-    };
     let directory = artifacts();
     let path = directory.join(name);
     if std::fs::create_dir_all(&directory).is_ok() && std::fs::write(&path, &png).is_ok() {
@@ -151,22 +180,12 @@ fn capture(backend: &mut WgpuBackend, textures: &TextureTable, with_overlay: boo
     image.rgba
 }
 
-#[test]
-fn the_overlay_covers_its_own_corner_and_changes_no_pixel_outside_it() {
-    // The whole of "off by default" and "presentation only", as pixels. If the
-    // two captures differed anywhere but the corner the panel occupies, the
-    // instrument would be changing the thing it is there to measure.
-    let Some(mut backend) = offscreen() else {
-        return;
-    };
-    let textures = create_builtin_textures(&mut backend);
-    let plain = capture(&mut backend, &textures, false);
-    let with_overlay = capture(&mut backend, &textures, true);
-    assert_eq!(plain.len(), with_overlay.len());
-
-    // Where the two pictures differ, in pixels rather than in bytes — the
-    // question is "which part of the frame moved", and a byte index answers a
-    // different one.
+/// How two captures differ: how many pixels, and the furthest one from the
+/// corner the panel is pinned to.
+///
+/// In pixels rather than in bytes — the question is "which part of the frame
+/// moved", and a byte index answers a different one.
+fn difference(plain: &[u8], with_overlay: &[u8]) -> (usize, (usize, usize)) {
     let width = SIZE.width as usize;
     let mut differing = 0_usize;
     let mut worst = (0_usize, 0_usize);
@@ -180,22 +199,70 @@ fn the_overlay_covers_its_own_corner_and_changes_no_pixel_outside_it() {
             worst = worst.max((index / width, index % width));
         }
     }
+    (differing, worst)
+}
 
-    assert!(differing > 0, "the overlay was asked for and drew nothing");
-    // A panel of five lines at `READOUT_LINES_ON_SCREEN` is a real share of the
-    // frame; a handful of stray pixels would pass the check above while the
-    // readout was in fact off screen or scaled to nothing.
-    let share = differing as f32 / (plain.len() / 4) as f32;
-    assert!(
-        share > 0.01,
-        "only {share} of the frame changed, which is not a readable panel"
+#[test]
+fn every_level_of_the_overlay_covers_its_own_corner_and_no_pixel_outside_it() {
+    // The whole of "off by default", "presentation only" and "the levels are
+    // cumulative", as pixels. If a capture differed anywhere but the corner the
+    // panel occupies, the instrument would be changing the thing it is there to
+    // measure — and that has to hold at level 2, which draws four times as many
+    // lines as level 1 (frame-pacing.md §7).
+    let Some(mut backend) = offscreen() else {
+        return;
+    };
+    let textures = create_builtin_textures(&mut backend);
+    let plain = capture(&mut backend, &textures, None, "overlay-off.png");
+    let pacing = capture(
+        &mut backend,
+        &textures,
+        Some(PACING_READOUT),
+        "overlay-on.png",
     );
-    // …and every one of those pixels is in the corner the panel is pinned to.
-    // This is the presentation-only claim: the game's picture is where it was.
+    let perf = capture(
+        &mut backend,
+        &textures,
+        Some(PERF_READOUT),
+        "overlay-perf.png",
+    );
+    assert_eq!(plain.len(), pacing.len());
+    assert_eq!(plain.len(), perf.len());
+
+    let pixels = plain.len() / 4;
+    let width = SIZE.width as usize;
+    let mut covered = Vec::new();
+    for (level, capture) in [("1", &pacing), ("2", &perf)] {
+        let (differing, worst) = difference(&plain, capture);
+        assert!(
+            differing > 0,
+            "level {level} was asked for and drew nothing"
+        );
+        // A panel of five lines at `READOUT_LINES_ON_SCREEN` is a real share of
+        // the frame; a handful of stray pixels would pass the check above while
+        // the readout was in fact off screen or scaled to nothing.
+        let share = differing as f32 / pixels as f32;
+        assert!(
+            share > 0.01,
+            "level {level} changed only {share} of the frame, which is not a readable panel"
+        );
+        // …and every one of those pixels is in the corner the panel is pinned
+        // to. This is the presentation-only claim: the game's picture is where
+        // it was.
+        assert!(
+            worst.0 < SIZE.height as usize / 2 && worst.1 < width / 2,
+            "level {level} changed a pixel at row {}, column {} - outside the corner it draws in",
+            worst.0,
+            worst.1
+        );
+        covered.push(differing);
+    }
+    // Cumulative, in pixels: the performance panel is the pacing panel plus
+    // sections, so it cannot cover less of the frame than the pacing one.
     assert!(
-        worst.0 < SIZE.height as usize / 2 && worst.1 < width / 2,
-        "the overlay changed a pixel at row {}, column {} — outside the corner it draws in",
-        worst.0,
-        worst.1
+        covered[1] > covered[0],
+        "level 2 covered {} pixels against level 1's {}, so it drew no more of a panel",
+        covered[1],
+        covered[0]
     );
 }

@@ -26,6 +26,37 @@ fn a_spawned_entity_is_alive_and_counted() {
 }
 
 #[test]
+fn the_component_count_is_the_values_the_stores_hold_not_the_entities() {
+    // The counter the performance overlay reports beside `entity_count`
+    // (frame-pacing.md §7). It has to move when a component is inserted onto an
+    // entity that already exists, because "components climbing while entities
+    // hold steady" is the shape of a leak that an entity count alone cannot
+    // see.
+    let mut world = World::new();
+    assert_eq!(world.component_count(), 0, "an empty world holds nothing");
+
+    let entity = world.spawn();
+    assert_eq!(world.entity_count(), 1);
+    assert_eq!(world.component_count(), 0, "an entity with no components");
+
+    world.insert(entity, Position(1));
+    world.insert(entity, Velocity(2));
+    assert_eq!(world.entity_count(), 1, "still one entity");
+    // Three, not two, would mean an archetype counting a column it does not
+    // have; one would mean it counting entities under another name.
+    assert_eq!(world.component_count(), 2);
+
+    let second = world.spawn();
+    world.insert(second, Position(3));
+    assert_eq!(world.component_count(), 3, "across two archetypes");
+
+    world.remove::<Velocity>(entity);
+    assert_eq!(world.component_count(), 2, "removal gives one back");
+    world.despawn(entity);
+    assert_eq!(world.component_count(), 1, "and despawning gives the rest");
+}
+
+#[test]
 fn a_despawned_entity_is_no_longer_alive_or_counted() {
     let mut world = World::new();
     let entity = world.spawn();
