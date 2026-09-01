@@ -696,15 +696,26 @@ def check_frametime_overlay(browser: str, port: int, example: str) -> int:
     return 0
 
 
-def check(browser: str, port: int, example: str, windowed: bool = True) -> int:
-    """Three passes: the page runs (and draws); the forced panic reaches the
-    overlay; the frame-pacing overlay comes up and classifies the renderer.
+def check(
+    browser: str, port: int, example: str, windowed: bool = True, frametime: bool = True
+) -> int:
+    """The page runs (and draws); the forced panic reaches the overlay; the
+    frame-pacing overlay comes up and classifies the renderer.
 
     The first two need a `windowed` page — both the surface and the forced
     `?panic=1` live behind `platform::run()`, which a console example never
-    calls. The third does not: the frame-pacing overlay is the *page's*, and it
-    never calls into the module (web-publish.md §2), so it is the same contract
-    everywhere and is checked on every page.
+    calls.
+
+    `frametime` is a different axis, and the reason it can be turned off is
+    what that pass actually tests. The frame-pacing overlay is the **page
+    shell's**, and its CONTRACT is that it never calls into the wasm module
+    (web-publish.md §2): it reads `performance.now()` and
+    `requestAnimationFrame` and nothing else. Every assertion the pass makes —
+    the marker, the panel showing, the readings, the renderer classified, the
+    warning box — is therefore a property of one template that is identical on
+    every page. Running it per page tests one piece of JavaScript N times over.
+    Checking a fleet runs it once, on the lead; checking a single page by name
+    runs it, because then that page *is* the whole check.
     """
     step = check_runs(browser, port, example, windowed)
     if step != 0:
@@ -719,6 +730,8 @@ def check(browser: str, port: int, example: str, windowed: bool = True) -> int:
             "?panic=1 is raised inside platform::run(), which a console example "
             "never calls (checked on every windowed page)"
         )
+    if not frametime:
+        return 0
     return check_frametime_overlay(browser, port, example)
 
 
@@ -751,12 +764,20 @@ def built_fleet() -> "list[tuple[str, bool]] | None":
 def check_fleet(browser: str, port: int, pages: "list[tuple[str, bool]]") -> int:
     """Check every page of the built fleet; report every page that failed.
 
-    CONTRACT (web-publish.md §3a): what CI checks is what CI built, all of it.
-    A build that browser-checks only its first page cannot see a fault in any
-    other, and when the two fleets lead with different pages — as they do — a
-    page can reach production having never been checked at all. That is not
-    hypothetical: it is how a `web build` failure stayed invisible across a PR
-    and only appeared on `main` (jidousha#79 through #82, 2026-08-30/09-01).
+    CONTRACT (web-publish.md §3a): **every page this build produced proves it
+    runs, draws and panics.** A build that browser-checked only its first page
+    could not see a fault in any other, and because the two fleets lead with
+    different pages a page could reach production having never been checked at
+    all. That is not hypothetical: it is how a `web build` failure stayed
+    invisible across a PR and only appeared on `main` (jidousha#79 through #82,
+    2026-08-30/09-01).
+
+    The frame-pacing pass is the exception, and deliberately so: it runs on the
+    **lead page only**. That pass tests the page shell's overlay, which never
+    calls into the module (`check` says why at length), so it is the same
+    template on all of them and N launches of it buy nothing the first does
+    not. The per-page assertions — the ones the gap was actually about — are
+    the module's: it started, it drew, it panicked when asked.
 
     Failures do not stop the run. "One page is broken" and "every page is
     broken" call for completely different next moves, and the difference is
@@ -765,8 +786,14 @@ def check_fleet(browser: str, port: int, pages: "list[tuple[str, bool]]") -> int
     """
     failed = []
     for index, (page, windowed) in enumerate(pages, start=1):
+        lead = index == 1
         print(f"\n[serve-web] === {page} ({index} of {len(pages)}) ===")
-        if check(browser, port, page, windowed) != 0:
+        if not lead:
+            print(
+                "[serve-web] SKIP — ?frametime=1 is the page shell's overlay, "
+                f"the same on every page; checked on {pages[0][0]}, the lead"
+            )
+        if check(browser, port, page, windowed, frametime=lead) != 0:
             failed.append(page)
     print()
     if failed:

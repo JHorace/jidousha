@@ -52,8 +52,13 @@ tools/serve-web [<name>] [--check]
 - wasm size: log final .wasm size in CI; warn (not fail) over 5 MB — drift
   visibility per practices §5.8's spirit.
 - CONTRACT: **the check covers every page of whatever fleet was built**, not
-  just its first. `serve-web --check` reads `dist/fleet.txt` and runs all three
-  passes per page; nothing outside `tools/build-web` names a page. A check that
+  just its first. `serve-web --check` reads `dist/fleet.txt` and, per page,
+  asserts what only that page can prove: its module started, it drew, and it
+  panicked when asked. `?frametime=1` runs on the **lead page only** — that
+  pass tests the page shell's overlay, whose CONTRACT (§2) is that it never
+  calls into the module, so it is one template identical on every page and N
+  launches buy nothing the first does not. Nothing outside `tools/build-web`
+  names a page. A check that
   covered one page could not see a fault in any other, and because the two
   fleets lead with different pages (§3a) it meant the page production serves
   was never checked before a merge — a PR led with `prototype_kit`, `main` led
@@ -406,7 +411,10 @@ example and every game.
 - **The browser check follows the fleet, all of it.** `build-web` writes
   `dist/fleet.txt` — a line per page, the index's first link first — and
   `serve-web --check` runs every line, so neither fleet needs a page the other
-  lacks and neither has a page nothing checks. Checking only the *first* line
+  lacks and neither has a page nothing checks. Per page it asserts the
+  *module*: started, drew, panicked on demand. The frame-pacing pass is the
+  lead page's alone, because that overlay is the shell's and never calls into
+  the module (§2). Checking only the *first* line
   is what let a `pong` failure reach production: previews lead with
   `prototype_kit`, production leads with the allowlist's first example, so the
   page that deploys was never checked before merging (§1's CONTRACT records
@@ -464,7 +472,8 @@ edited). This section is where the decision lives.
   is the whole of CI's knowledge about fleets — it names neither an example nor
   a game. It then runs `tools/serve-web --check`, which browser-checks *every*
   page in `dist/fleet.txt` — so the check covers whichever fleet was built,
-  entirely, and the workflow still names no page (§3a). `timeout-minutes`
+  entirely, and the workflow still names no page (§3a). The `?frametime=1` pass
+  is the lead page's only; §3a says why. `timeout-minutes`
   bounds the loop: the failure it guards against is a hang, and a hang costs
   the check's own 120s ceiling on each page it touches.
 - Deploy job runs only after build+test jobs pass in the same workflow run.

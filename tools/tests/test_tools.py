@@ -2963,6 +2963,33 @@ class GameToolingTest(unittest.TestCase):
                     [("pong", True), ("vec2_tour", False), ("legacy", True)],
                 )
 
+    def test_the_frame_pacing_pass_runs_on_the_lead_page_alone(self):
+        # The overlay it drives is the page shell's and never calls into the
+        # wasm module (web-publish.md §2), so it is one template identical on
+        # every page: N launches of it buy nothing the first does not. What is
+        # per page — started, drew, panicked — still runs on all of them.
+        asked = []
+
+        def record(_browser, _port, page, windowed=True, frametime=True):
+            asked.append((page, frametime))
+            return 0
+
+        pages = [("prototype_kit", True), ("pong", True), ("giri", True)]
+        with unittest.mock.patch.object(serve_web, "check", record):
+            self.assertEqual(serve_web.check_fleet("browser", 8080, pages), 0)
+        self.assertEqual(
+            asked, [("prototype_kit", True), ("pong", False), ("giri", False)]
+        )
+
+    def test_a_page_checked_by_name_still_gets_every_pass(self):
+        # `serve-web <page> --check` is the local iteration path: there the
+        # named page is the whole check, so no pass is another page's job. The
+        # default carries that — only the fleet loop turns frametime off.
+        import inspect
+
+        default = inspect.signature(serve_web.check).parameters["frametime"].default
+        self.assertIs(default, True)
+
     def test_the_check_says_so_when_there_is_no_fleet_to_check(self):
         with tempfile.TemporaryDirectory() as scratch:
             with unittest.mock.patch.object(serve_web, "DIST", Path(scratch)):

@@ -232,6 +232,11 @@ jobs:
       # reads dist/fleet.txt, so this covers whichever fleet the step above
       # chose, and keeps covering it when a fleet's membership changes.
       #
+      # "Every page" means every page's *module*: it started, it drew, it
+      # panicked on demand. The ?frametime=1 pass runs on the lead page only,
+      # because the frame-pacing overlay is the page shell's and never calls
+      # into the module (web-publish.md §2) — the same template on all of them.
+      #
       # timeout-minutes because the failure mode this replaces was a *hang*: one
       # page hanging costs the check's own 120s ceiling, and the loop deliberately
       # does not stop at the first failure (one broken page and a wholly broken
