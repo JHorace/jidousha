@@ -90,6 +90,14 @@ def handler_for(directory: Path):
     class Handler(http.server.SimpleHTTPRequestHandler):
         """A static server that says as little as possible."""
 
+        # A connection that opens and then says nothing is reaped rather than
+        # waited on forever. Chrome preconnects: it opens sockets it may never
+        # send a request on, and the stdlib handler otherwise blocks in
+        # `handle_one_request` reading one of them with no timeout at all. Ten
+        # seconds is far longer than a real request off the loopback takes and
+        # far shorter than the check's own wall (`CHECK_TIMEOUT_S`).
+        timeout = 10
+
         def __init__(self, *args, **kwargs):
             super().__init__(*args, directory=str(directory), **kwargs)
 
@@ -113,10 +121,30 @@ def handler_for(directory: Path):
     return Handler
 
 
+class Server(socketserver.ThreadingTCPServer):
+    """One connection may not hold up another.
+
+    Threaded, and this is the second half of the hang fix — not a scalability
+    nicety for a server with one client. `socketserver.TCPServer` handles
+    connections strictly one at a time, and a browser is not one request at a
+    time: Chrome opens several sockets at once and preconnects sockets it may
+    never use. A single silent socket parked at the front of that queue blocks
+    every real fetch behind it, which is reproducible in one line — connect,
+    send nothing, and the next fetch never returns.
+
+    That is the shape of the CI hang. `--virtual-time-budget` does not expire
+    while a fetch is pending, so the wedged server stalled the page's own module
+    fetch, virtual time stopped, the DOM was never dumped, and the browser sat
+    silent to the 120s wall with nothing in its log to say why.
+    """
+
+    daemon_threads = True
+    allow_reuse_address = True
+
+
 def serve(port: int, directory: Path) -> socketserver.TCPServer:
     """Start the static server on a background thread."""
-    socketserver.TCPServer.allow_reuse_address = True
-    server = socketserver.TCPServer(("127.0.0.1", port), handler_for(directory))
+    server = Server(("127.0.0.1", port), handler_for(directory))
     threading.Thread(target=server.serve_forever, daemon=True).start()
     return server
 
@@ -276,9 +304,11 @@ def load_page(browser: str, url: str, tag: str) -> "tuple[str, Path, Path] | int
         # and a GPU process that exits during initialization.
         "--enable-unsafe-swiftshader",
         "--use-angle=swiftshader",
-        # Chrome's own background services, off — and this is the fix for the
-        # hang, not a tidy-up. `--virtual-time-budget` does not expire while a
-        # network request is pending, and a stock Chrome keeps making them:
+        # Chrome's own background services, off. One of two pending-fetch
+        # sources behind the hang — `Server` above is the other, and the one
+        # that survived these flags. `--virtual-time-budget` does not expire
+        # while a network request is pending, and a stock Chrome keeps making
+        # them:
         # measured on a CI runner (jidousha#81, 2026-09-01), the page finished
         # its whole job in 1.5s — module up, overlay on, renderer classified —
         # and the browser then sat for the remaining 118s retrying a GCM
