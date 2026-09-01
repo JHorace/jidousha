@@ -44,6 +44,13 @@ import time
 import zlib
 from pathlib import Path
 
+# Line-buffered from the first print, because the interesting failure is a
+# *hang*: a pipe is block-buffered by default, so on a run that times out CI
+# shows nothing until the process exits and the whole log lands at once, with
+# every line carrying the same timestamp. That is what made three consecutive
+# 120s failures unreadable — the log could not say how far the check had got.
+sys.stdout.reconfigure(line_buffering=True)
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DIST = REPO_ROOT / "dist"
 # The check's working files (browser profile, log, screenshots) live outside
@@ -58,6 +65,13 @@ CHECK_VIRTUAL_MS = 4000
 # The wall-clock ceiling on the browser itself, which is a different question
 # from how much page time it simulates.
 CHECK_TIMEOUT_S = 120
+# How many lines of the browser's own stderr to quote when it hangs.
+#
+# The log is written to `target/web-check/` either way, but a CI run whose
+# artifacts are not collected has only what was printed — so the tail goes into
+# the output too. Forty lines is enough to carry a stack, a GPU-process death or
+# a repeated warning, and short enough not to bury the §9 message above it.
+HUNG_LOG_LINES = 40
 
 
 def fail(what: str, specifics: str, cause: str, fix: str) -> int:
@@ -75,6 +89,14 @@ def handler_for(directory: Path):
 
     class Handler(http.server.SimpleHTTPRequestHandler):
         """A static server that says as little as possible."""
+
+        # A connection that opens and then says nothing is reaped rather than
+        # waited on forever. Chrome preconnects: it opens sockets it may never
+        # send a request on, and the stdlib handler otherwise blocks in
+        # `handle_one_request` reading one of them with no timeout at all. Ten
+        # seconds is far longer than a real request off the loopback takes and
+        # far shorter than the check's own wall (`CHECK_TIMEOUT_S`).
+        timeout = 10
 
         def __init__(self, *args, **kwargs):
             super().__init__(*args, directory=str(directory), **kwargs)
@@ -99,10 +121,30 @@ def handler_for(directory: Path):
     return Handler
 
 
+class Server(socketserver.ThreadingTCPServer):
+    """One connection may not hold up another.
+
+    Threaded, and this is the second half of the hang fix — not a scalability
+    nicety for a server with one client. `socketserver.TCPServer` handles
+    connections strictly one at a time, and a browser is not one request at a
+    time: Chrome opens several sockets at once and preconnects sockets it may
+    never use. A single silent socket parked at the front of that queue blocks
+    every real fetch behind it, which is reproducible in one line — connect,
+    send nothing, and the next fetch never returns.
+
+    That is the shape of the CI hang. `--virtual-time-budget` does not expire
+    while a fetch is pending, so the wedged server stalled the page's own module
+    fetch, virtual time stopped, the DOM was never dumped, and the browser sat
+    silent to the 120s wall with nothing in its log to say why.
+    """
+
+    daemon_threads = True
+    allow_reuse_address = True
+
+
 def serve(port: int, directory: Path) -> socketserver.TCPServer:
     """Start the static server on a background thread."""
-    socketserver.TCPServer.allow_reuse_address = True
-    server = socketserver.TCPServer(("127.0.0.1", port), handler_for(directory))
+    server = Server(("127.0.0.1", port), handler_for(directory))
     threading.Thread(target=server.serve_forever, daemon=True).start()
     return server
 
@@ -262,6 +304,33 @@ def load_page(browser: str, url: str, tag: str) -> "tuple[str, Path, Path] | int
         # and a GPU process that exits during initialization.
         "--enable-unsafe-swiftshader",
         "--use-angle=swiftshader",
+        # Chrome's own background services, off. One of two pending-fetch
+        # sources behind the hang — `Server` above is the other, and the one
+        # that survived these flags. `--virtual-time-budget` does not expire
+        # while a network request is pending, and a stock Chrome keeps making
+        # them:
+        # measured on a CI runner (jidousha#81, 2026-09-01), the page finished
+        # its whole job in 1.5s — module up, overlay on, renderer classified —
+        # and the browser then sat for the remaining 118s retrying a GCM
+        # registration against a deprecated endpoint on a backoff (+0s, +24s,
+        # +66s) and never dumped the DOM. The check timed out on a page that was
+        # already done.
+        #
+        # That is also why it was intermittent, and why no container here could
+        # reproduce it: where the request fails fast — an egress-blocked
+        # sandbox, say — nothing stays pending, virtual time expires and the
+        # page dumps. Where it reaches Google and retries, it does not.
+        "--disable-background-networking",
+        # And nothing else may reach the network either. The flag above stops
+        # the traffic CI caught in the act; this stops the *class*, because
+        # chasing Chrome's subsystems one at a time is a losing game — with
+        # background networking off, this container still logged 51 TLS
+        # handshake retries from something else, and the hang persisted.
+        # Resolving every name but the loopback to NOTFOUND makes such a
+        # request fail instantly instead of sitting pending, which is the only
+        # property that matters here. The page under test is served from
+        # 127.0.0.1 and is untouched.
+        "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1",
         "--enable-logging=stderr",
         "--v=0",
         f"--user-data-dir={profile}",
@@ -271,6 +340,10 @@ def load_page(browser: str, url: str, tag: str) -> "tuple[str, Path, Path] | int
         "--dump-dom",
         url,
     ]
+    # Announced before the browser starts, not after it returns: a pass that
+    # hangs has to name itself, and the only output a hung run produces is what
+    # was printed before it stopped.
+    print(f"[serve-web] pass {tag}: {url}")
     started = time.monotonic()
     try:
         proc = subprocess.run(
@@ -280,12 +353,31 @@ def load_page(browser: str, url: str, tag: str) -> "tuple[str, Path, Path] | int
             text=True,
             timeout=CHECK_TIMEOUT_S,
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as expired:
+        # Whatever the browser managed to say before the wall. `TimeoutExpired`
+        # carries the output captured so far, and this is the one path where it
+        # is the entire evidence — the success path below writes the log, so
+        # before this a hung run left no log at all.
+        partial = expired.stderr or ""
+        if isinstance(partial, bytes):
+            partial = partial.decode("utf-8", "replace")
+        log.write_text(partial, encoding="utf-8")
+        lines = partial.splitlines()
+        print(f"[serve-web] pass {tag} hung; browser said {len(lines)} line(s):")
+        for line in lines[-HUNG_LOG_LINES:]:
+            print(f"  | {line}")
+        if not lines:
+            print("  | (nothing — it never reached its own logging)")
         return fail(
-            "the headless browser did not finish",
-            f"it ran for {CHECK_TIMEOUT_S}s without dumping the page",
-            "a software rasterizer spending virtual time on every frame, or a hung module",
-            "lower CHECK_VIRTUAL_MS, or run without --check and look at the page yourself",
+            f"the headless browser did not finish pass {tag}",
+            f"it ran for {CHECK_TIMEOUT_S}s at {url} without dumping the page; "
+            f"its log is {log.relative_to(REPO_ROOT)} and the quote above is its tail",
+            "a software rasterizer spending virtual time on every frame, a hung "
+            "module, or a browser that hangs headless on this machine — the log "
+            "above is what tells the three apart",
+            "read the quoted log; the CI job uploads target/web-check/ on failure. "
+            "Then either fix what it names, or run without --check and look at the "
+            "page yourself",
         )
     elapsed = time.monotonic() - started
     log.write_text(proc.stderr, encoding="utf-8")

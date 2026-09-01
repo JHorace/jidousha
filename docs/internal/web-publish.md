@@ -49,6 +49,20 @@ tools/serve-web [<name>] [--check]
   simulation — the wall-clock ban applies to engine code, not build scripts).
 - wasm size: log final .wasm size in CI; warn (not fail) over 5 MB — drift
   visibility per practices §5.8's spirit.
+- CONTRACT: the `--check` server serves connections **concurrently**, and reaps
+  a connection that opens without sending a request. Not a scalability
+  question — there is one client. A browser opens several sockets at once and
+  preconnects sockets it may never use, and a strictly serial server (the
+  stdlib `socketserver.TCPServer` default) blocks in `handle_one_request` on
+  the first silent one, with no timeout, forever. Everything behind it queues.
+  That is a *hang*, and it presents as one with nothing to read: because
+  `--virtual-time-budget` does not expire while a fetch is pending (§2's
+  headless caveat, and the reason the browser's own background networking is
+  off too), the page stops mid-load, virtual time stops with it, the DOM is
+  never dumped, and the browser sits silent to the wall having logged no error
+  — it had none. Reproduce in one line: connect a socket, send nothing, watch
+  the next fetch never return. Found in CI (jidousha#81, 2026-09-01) after it
+  had failed the `web build` job intermittently since 2026-08-31.
 
 ## 1a. Asset roots: `dist/<name>/` is repository-shaped
 
