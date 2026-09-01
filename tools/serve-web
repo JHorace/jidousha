@@ -44,6 +44,13 @@ import time
 import zlib
 from pathlib import Path
 
+# Line-buffered from the first print, because the interesting failure is a
+# *hang*: a pipe is block-buffered by default, so on a run that times out CI
+# shows nothing until the process exits and the whole log lands at once, with
+# every line carrying the same timestamp. That is what made three consecutive
+# 120s failures unreadable — the log could not say how far the check had got.
+sys.stdout.reconfigure(line_buffering=True)
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DIST = REPO_ROOT / "dist"
 # The check's working files (browser profile, log, screenshots) live outside
@@ -58,6 +65,13 @@ CHECK_VIRTUAL_MS = 4000
 # The wall-clock ceiling on the browser itself, which is a different question
 # from how much page time it simulates.
 CHECK_TIMEOUT_S = 120
+# How many lines of the browser's own stderr to quote when it hangs.
+#
+# The log is written to `target/web-check/` either way, but a CI run whose
+# artifacts are not collected has only what was printed — so the tail goes into
+# the output too. Forty lines is enough to carry a stack, a GPU-process death or
+# a repeated warning, and short enough not to bury the §9 message above it.
+HUNG_LOG_LINES = 40
 
 
 def fail(what: str, specifics: str, cause: str, fix: str) -> int:
@@ -271,6 +285,10 @@ def load_page(browser: str, url: str, tag: str) -> "tuple[str, Path, Path] | int
         "--dump-dom",
         url,
     ]
+    # Announced before the browser starts, not after it returns: a pass that
+    # hangs has to name itself, and the only output a hung run produces is what
+    # was printed before it stopped.
+    print(f"[serve-web] pass {tag}: {url}")
     started = time.monotonic()
     try:
         proc = subprocess.run(
@@ -280,12 +298,31 @@ def load_page(browser: str, url: str, tag: str) -> "tuple[str, Path, Path] | int
             text=True,
             timeout=CHECK_TIMEOUT_S,
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as expired:
+        # Whatever the browser managed to say before the wall. `TimeoutExpired`
+        # carries the output captured so far, and this is the one path where it
+        # is the entire evidence — the success path below writes the log, so
+        # before this a hung run left no log at all.
+        partial = expired.stderr or ""
+        if isinstance(partial, bytes):
+            partial = partial.decode("utf-8", "replace")
+        log.write_text(partial, encoding="utf-8")
+        lines = partial.splitlines()
+        print(f"[serve-web] pass {tag} hung; browser said {len(lines)} line(s):")
+        for line in lines[-HUNG_LOG_LINES:]:
+            print(f"  | {line}")
+        if not lines:
+            print("  | (nothing — it never reached its own logging)")
         return fail(
-            "the headless browser did not finish",
-            f"it ran for {CHECK_TIMEOUT_S}s without dumping the page",
-            "a software rasterizer spending virtual time on every frame, or a hung module",
-            "lower CHECK_VIRTUAL_MS, or run without --check and look at the page yourself",
+            f"the headless browser did not finish pass {tag}",
+            f"it ran for {CHECK_TIMEOUT_S}s at {url} without dumping the page; "
+            f"its log is {log.relative_to(REPO_ROOT)} and the quote above is its tail",
+            "a software rasterizer spending virtual time on every frame, a hung "
+            "module, or a browser that hangs headless on this machine — the log "
+            "above is what tells the three apart",
+            "read the quoted log; the CI job uploads target/web-check/ on failure. "
+            "Then either fix what it names, or run without --check and look at the "
+            "page yourself",
         )
     elapsed = time.monotonic() - started
     log.write_text(proc.stderr, encoding="utf-8")
