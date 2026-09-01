@@ -252,7 +252,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: web-check-logs
-          path: target/web-check/
+          # The logs and the screenshots, not the browser profiles beside them:
+          # the whole directory is 126MB and 1170 files of Chrome profile
+          # (measured, jidousha#81), and one of those entries is a socket the
+          # uploader cannot pack. What diagnoses a hang is six small files.
+          path: |
+            target/web-check/*.log
+            target/web-check/*.png
           if-no-files-found: warn
 
   deploy:

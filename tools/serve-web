@@ -276,6 +276,31 @@ def load_page(browser: str, url: str, tag: str) -> "tuple[str, Path, Path] | int
         # and a GPU process that exits during initialization.
         "--enable-unsafe-swiftshader",
         "--use-angle=swiftshader",
+        # Chrome's own background services, off — and this is the fix for the
+        # hang, not a tidy-up. `--virtual-time-budget` does not expire while a
+        # network request is pending, and a stock Chrome keeps making them:
+        # measured on a CI runner (jidousha#81, 2026-09-01), the page finished
+        # its whole job in 1.5s — module up, overlay on, renderer classified —
+        # and the browser then sat for the remaining 118s retrying a GCM
+        # registration against a deprecated endpoint on a backoff (+0s, +24s,
+        # +66s) and never dumped the DOM. The check timed out on a page that was
+        # already done.
+        #
+        # That is also why it was intermittent, and why no container here could
+        # reproduce it: where the request fails fast — an egress-blocked
+        # sandbox, say — nothing stays pending, virtual time expires and the
+        # page dumps. Where it reaches Google and retries, it does not.
+        "--disable-background-networking",
+        # And nothing else may reach the network either. The flag above stops
+        # the traffic CI caught in the act; this stops the *class*, because
+        # chasing Chrome's subsystems one at a time is a losing game — with
+        # background networking off, this container still logged 51 TLS
+        # handshake retries from something else, and the hang persisted.
+        # Resolving every name but the loopback to NOTFOUND makes such a
+        # request fail instantly instead of sitting pending, which is the only
+        # property that matters here. The page under test is served from
+        # 127.0.0.1 and is untouched.
+        "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1",
         "--enable-logging=stderr",
         "--v=0",
         f"--user-data-dir={profile}",
