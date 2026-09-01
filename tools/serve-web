@@ -166,6 +166,20 @@ class Server(socketserver.ThreadingTCPServer):
 
     daemon_threads = True
     allow_reuse_address = True
+    # The listen backlog, up from the stdlib's 5. Five is the number of
+    # connections the kernel will hold for us between arriving and being
+    # accepted; beyond that it drops the SYN, and the client waits out a TCP
+    # retransmit (1s, then 3s, then 7s) before trying again.
+    #
+    # That is a stall with no error anywhere: nothing failed, a connect is
+    # simply not finished — and an unfinished fetch is exactly what stops
+    # `--virtual-time-budget` from expiring. Chrome opens several sockets at
+    # once per page and preconnects more, so five is not much headroom, and the
+    # fleet check makes ~48 browser launches per run instead of three. The
+    # symptom was one or two arbitrary pages of sixteen hanging at the wall,
+    # a different pair each run, with 26 lines of dbus noise and nothing else
+    # in the browser's log (jidousha#83).
+    request_queue_size = 128
 
 
 def serve(port: int, directory: Path) -> socketserver.TCPServer:
