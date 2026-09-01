@@ -105,11 +105,40 @@ NATIVE_ONLY_EXAMPLES = {
 RELEASE_EXAMPLES = ("pong",)
 
 # The example the full fleet leads with (web-publish.md §3). It heads the
-# examples list on the index and, being first in `fleet.txt`, is the page CI
-# browser-checks — on a release build that falls to the allowlist's first
-# example instead, which is the point: neither the workflow nor this constant
-# has to know which fleet was built.
+# examples list on the index and `fleet.txt` — on a release build that falls to
+# the allowlist's first example instead, which is the point: neither the
+# workflow nor this constant has to know which fleet was built.
 HEADLINE_EXAMPLE = "prototype_kit"
+
+# CONSOLE EXAMPLES: built for the web, but they never call `platform::run()`
+# (web-publish.md §3a). They teach with a `World` and a `println!` —
+# `headless_sim` is "a whole game, with no window", `vec2_tour` is every `Vec2`
+# operation in one file — and their page is worth having because the log is the
+# thing to read.
+#
+# Not calling `run()` decides two things about what such a page can be asked to
+# prove. It never opens a surface, so a blank canvas is its correct result; and
+# the forced `?panic=1` is raised *inside* `run()`, so it never fires there
+# either. Both assertions hold on the nine windowed pages, which is where they
+# earn their keep.
+#
+# Named here because `serve-web --check` cannot tell "draws nothing by design"
+# from "broken" by looking, and a check that cannot tell them apart has to do
+# one of two wrong things: drop the assertions for every page, or call these
+# six a failure. `fleet.txt` carries the answer out to the check
+# (`fleet_listing`), so the workflow still never names a page.
+#
+# An example that grows a window belongs out of this list in the same commit.
+CONSOLE_EXAMPLES = frozenset(
+    {
+        "headless_sim",
+        "homing",
+        "loading_gate",
+        "scripted_player",
+        "spawn_and_reap",
+        "vec2_tour",
+    }
+)
 
 
 def fail(what: str, specifics: str, cause: str, fix: str) -> int:
@@ -593,14 +622,26 @@ def root_index_sections(examples: "list[str]", games: "list[str]", release: bool
 def fleet_listing(examples: "list[str]", games: "list[str]") -> str:
     """Every page this build produced, one per line, the index's first link first.
 
-    Written to `dist/fleet.txt` for CI, which browser-checks the first line
-    (web-publish.md §4). The check thereby follows whichever fleet was built
-    instead of naming a member of one — the release fleet has no `sprites` to
-    check, and no workflow should have to know that.
+    Two columns: the page, and what it has to prove — `windowed` for a page
+    that goes through `platform::run()`, `console` for one of
+    `CONSOLE_EXAMPLES`, which does not. That one word decides two assertions:
+    only a windowed page has a canvas that must show something, and only a
+    windowed page reaches the forced `?panic=1` (it is raised inside `run()`).
+    Written to `dist/fleet.txt`, which `serve-web --check`
+    reads (web-publish.md §4). The check thereby follows whichever fleet was
+    built instead of naming a member of one — the release fleet has no
+    `sprites` to check, and no workflow should have to know that.
+
+    Games are always `windowed`: a prototype nobody can see is not a prototype,
+    and ADR-0038's no-registration property means a new one must get the
+    stricter assertion without anybody adding it to a list.
     """
-    return "".join(
-        f"{name}\n" for name in ordered_names(examples, HEADLINE_EXAMPLE) + sorted(games)
-    )
+    listed = [(name, name in CONSOLE_EXAMPLES) for name in ordered_names(examples, HEADLINE_EXAMPLE)]
+    # Games are appended as windowed without consulting the set at all: the set
+    # names *examples*, and a game that happened to share a name with one must
+    # not inherit its weaker assertions.
+    listed += [(name, False) for name in sorted(games)]
+    return "".join(f"{name} {'console' if console else 'windowed'}\n" for name, console in listed)
 
 
 def stage_root_index(

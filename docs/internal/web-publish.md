@@ -35,8 +35,10 @@ tools/serve-web [<name>] [--check]
   asserting the page ran and drew (and that the canvas still says
   `touch-action: none`, §2a), once at ?panic=1 asserting the panic
   overlay rendered the full §9 text, once at ?frametime=1 asserting the
-  frame-pacing overlay came up and classified the renderer (§2). Check
-  artifacts go to target/web-check/, never into dist/ — dist is what deploys.
+  frame-pacing overlay came up and classified the renderer (§2). With no
+  <name> it runs that over EVERY page in dist/fleet.txt — what CI runs (§3a).
+  Check artifacts go to target/web-check/<page>/, never into dist/ — dist is
+  what deploys.
 ```
 
 - CONTRACT: `tools/build-web` is the ONLY web build path — CI, local dev, and
@@ -49,6 +51,20 @@ tools/serve-web [<name>] [--check]
   simulation — the wall-clock ban applies to engine code, not build scripts).
 - wasm size: log final .wasm size in CI; warn (not fail) over 5 MB — drift
   visibility per practices §5.8's spirit.
+- CONTRACT: **the check covers every page of whatever fleet was built**, not
+  just its first. `serve-web --check` reads `dist/fleet.txt` and runs all three
+  passes per page; nothing outside `tools/build-web` names a page. A check that
+  covered one page could not see a fault in any other, and because the two
+  fleets lead with different pages (§3a) it meant the page production serves
+  was never checked before a merge — a PR led with `prototype_kit`, `main` led
+  with `pong`, and a `pong` failure could only appear once it had already
+  landed. It did, for two days (#79–#82, 2026-08-30/09-01). Failures do not
+  stop the run: "one page is broken" and "every page is broken" want different
+  responses, and only finishing tells them apart, so each page's evidence goes
+  to its own `target/web-check/<page>/` and the summary names every failure.
+  The wall-clock bound on the whole loop is CI's (`timeout-minutes`), because
+  the hazard being bounded is a hang, and a hang costs the check's own ceiling
+  per page.
 - CONTRACT: the `--check` server serves connections **concurrently**, and reaps
   a connection that opens without sending a request. Not a scalability
   question — there is one client. A browser opens several sockets at once and
@@ -387,10 +403,27 @@ example and every game.
   shape it has always had — the whole example fleet first, `prototype_kit`
   leading, then games — because a preview is read by whoever is reviewing an
   engine change, and the examples are where that change shows up.
-- **The browser check follows the fleet.** `build-web` writes `dist/fleet.txt`
-  (the page names, the index's first link first) and the workflow checks its
-  first line, so neither fleet needs a page the other lacks. That is
-  `prototype_kit` on a preview and the allowlist's first example on production.
+- **The browser check follows the fleet, all of it.** `build-web` writes
+  `dist/fleet.txt` — a line per page, the index's first link first — and
+  `serve-web --check` runs every line, so neither fleet needs a page the other
+  lacks and neither has a page nothing checks. Checking only the *first* line
+  is what let a `pong` failure reach production: previews lead with
+  `prototype_kit`, production leads with the allowlist's first example, so the
+  page that deploys was never checked before merging (§1's CONTRACT records
+  the outage this caused).
+- **The listing says what each page must prove**: a second column, `windowed`
+  or `console`. Six of the engine's examples — `CONSOLE_EXAMPLES` in
+  `tools/build-web`, the list's only home — teach with a `World` and a
+  `println!` and never call `platform::run()`. That decides two assertions at
+  once, because both live behind `run()`: such a page has no surface, so a
+  blank canvas is its correct result, and the forced `?panic=1` is raised
+  *inside* `run()`, so it never fires there. Both still hold on all nine
+  windowed pages and on every game, which is where they were earning their
+  keep anyway. The frame-pacing overlay is checked everywhere, because it is
+  the page's and never calls into the module (§2). Games are appended as
+  `windowed` without consulting the set: it names examples, and ADR-0038's
+  no-registration property means a new prototype must get the strict
+  assertions with nobody adding it to a list.
 
 **Rationale.** W1's exit criterion — "every example playable remotely" (§6) —
 was a *milestone's* exit criterion, met and observed on 2026-08-22, not a
@@ -429,8 +462,11 @@ edited). This section is where the decision lives.
 - The `web` job builds the fleet the trigger calls for: `tools/build-web
   --release-fleet` on a `main` push, `--all` on a PR (§3a). That one expression
   is the whole of CI's knowledge about fleets — it names neither an example nor
-  a game. It then browser-checks the first line of `dist/fleet.txt`, so the
-  check runs against a page the built fleet actually contains.
+  a game. It then runs `tools/serve-web --check`, which browser-checks *every*
+  page in `dist/fleet.txt` — so the check covers whichever fleet was built,
+  entirely, and the workflow still names no page (§3a). `timeout-minutes`
+  bounds the loop: the failure it guards against is a hang, and a hang costs
+  the check's own 120s ceiling on each page it touches.
 - Deploy job runs only after build+test jobs pass in the same workflow run.
   Concurrency group per-branch, cancel-in-progress (stale pushes don't race).
 - Bootstrap: previews are versions of the production Worker, so the first

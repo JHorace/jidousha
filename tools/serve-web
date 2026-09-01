@@ -11,6 +11,8 @@ what works here is what works deployed. It MUST serve `.wasm` as
     tools/serve-web sprites --check     # drive a headless browser at the page,
                                         # then at the forced panic (?panic=1),
                                         # then at ?frametime=1, report, exit
+    tools/serve-web --check             # the same, over every page this build
+                                        # contains (dist/fleet.txt) — what CI runs
 
 `--check` is what makes the web target *checkable* rather than merely
 compilable: it loads the page in a real Chromium, asserts the module started
@@ -18,6 +20,9 @@ and drew, loads it again with `?panic=1` and asserts the panic overlay rendered
 the full §9 message, and loads it a third time with `?frametime=1` and asserts
 the frame-pacing overlay came up, classified the renderer and reached a measured
 verdict on how this browser presents (web-publish.md §2, §6 W0 exit criteria).
+Given no page it runs that over the **whole build**, because a check that covers
+only one page of a fleet leaves the rest able to reach production unexamined
+(web-publish.md §3a).
 The first pass also asserts the page's half of touch — `touch-action: none` on
 the canvas (web-publish.md §2a) — which is a grep, because this browser has no
 fingers and the tap itself is a person's job.
@@ -307,12 +312,22 @@ def chromium() -> "str | None":
     return None
 
 
-def load_page(browser: str, url: str, tag: str) -> "tuple[str, Path, Path] | int":
-    """Drive the headless browser at `url`; (dom, screenshot, log) or exit code."""
-    CHECK_DIR.mkdir(parents=True, exist_ok=True)
-    profile = CHECK_DIR / f"profile-{tag}"
-    log = CHECK_DIR / f"browser-{tag}.log"
-    shot = CHECK_DIR / f"check-{tag}.png"
+def load_page(
+    browser: str, url: str, example: str, tag: str
+) -> "tuple[str, Path, Path] | int":
+    """Drive the headless browser at `url`; (dom, screenshot, log) or exit code.
+
+    Artifacts land in `target/web-check/<example>/`, a directory per page. The
+    check runs over a whole fleet, so the second page must not overwrite the
+    first page's evidence: when several pages fail, every one of their logs has
+    to survive to the artifact upload, or the fleet check answers "something is
+    broken" without saying what.
+    """
+    directory = CHECK_DIR / example
+    directory.mkdir(parents=True, exist_ok=True)
+    profile = directory / f"profile-{tag}"
+    log = directory / f"browser-{tag}.log"
+    shot = directory / f"check-{tag}.png"
     command = [
         browser,
         "--headless=new",
@@ -422,9 +437,20 @@ def page_state(dom: str) -> "tuple[str, str, bool]":
     return (state, message, page_failed)
 
 
-def check_runs(browser: str, port: int, example: str) -> int:
-    """The page loads, the module starts, and the engine draws."""
-    loaded = load_page(browser, f"http://127.0.0.1:{port}/{example}/index.html", "run")
+def check_runs(browser: str, port: int, example: str, windowed: bool = True) -> int:
+    """The page loads, the module starts, and — when it is a drawing page — the
+    engine draws.
+
+    `windowed` comes from `dist/fleet.txt`, which `build-web` wrote: six of the
+    engine's examples teach with a `World` and a `println!` and never call
+    `platform::run()` (`CONSOLE_EXAMPLES`), so a blank canvas is their correct
+    result. Passed in rather than decided here, because the check must never be
+    the thing that decides a blank page is acceptable — that is the fleet's
+    statement about the page, and it is made in one place.
+    """
+    loaded = load_page(
+        browser, f"http://127.0.0.1:{port}/{example}/index.html", example, "run"
+    )
     if isinstance(loaded, int):
         return loaded
     dom, shot, log = loaded
@@ -463,11 +489,22 @@ def check_runs(browser: str, port: int, example: str) -> int:
         )
     drawn, detail = canvas_is_drawn(shot.read_bytes())
     print(f"[serve-web] {detail}")
+    if not windowed:
+        # Said out loud every time, never inferred from a blank result: the one
+        # way this weaker assertion could hurt is by going unnoticed on a page
+        # that was supposed to draw.
+        print(
+            f"[serve-web] PASS — {example} started in a browser "
+            "(a console example: the fleet says it opens no window)"
+        )
+        return check_touch_rules(dom, example)
     if not drawn:
         return fail(
             f"{example} started but drew nothing",
             detail,
-            "the engine got no GPU adapter, or the surface is not the canvas on the page",
+            "the engine got no GPU adapter, or the surface is not the canvas on "
+            "the page — or the page never calls platform::run() and "
+            "tools/build-web's CONSOLE_EXAMPLES has not been told",
             f"look at {shot.relative_to(REPO_ROOT)} and {log.relative_to(REPO_ROOT)}",
         )
     print(f"[serve-web] PASS — {example} started and drew in a browser")
@@ -512,7 +549,10 @@ def check_panic_overlay(browser: str, port: int, example: str) -> int:
     does by adding ?panic=1 to any deployed build's URL.
     """
     loaded = load_page(
-        browser, f"http://127.0.0.1:{port}/{example}/index.html?panic=1", "panic"
+        browser,
+        f"http://127.0.0.1:{port}/{example}/index.html?panic=1",
+        example,
+        "panic",
     )
     if isinstance(loaded, int):
         return loaded
@@ -553,7 +593,10 @@ def check_frametime_overlay(browser: str, port: int, example: str) -> int:
     rots, so it is checked the same way the panic overlay is.
     """
     loaded = load_page(
-        browser, f"http://127.0.0.1:{port}/{example}/index.html?frametime=1", "frametime"
+        browser,
+        f"http://127.0.0.1:{port}/{example}/index.html?frametime=1",
+        example,
+        "frametime",
     )
     if isinstance(loaded, int):
         return loaded
@@ -639,9 +682,94 @@ def check_frametime_overlay(browser: str, port: int, example: str) -> int:
     return 0
 
 
-def check(port: int, example: str) -> int:
-    """Three passes: the page runs and draws; the panic overlay works; the
-    frame-pacing overlay comes up and classifies the renderer."""
+def check(browser: str, port: int, example: str, windowed: bool = True) -> int:
+    """Three passes: the page runs (and draws); the forced panic reaches the
+    overlay; the frame-pacing overlay comes up and classifies the renderer.
+
+    The first two need a `windowed` page — both the surface and the forced
+    `?panic=1` live behind `platform::run()`, which a console example never
+    calls. The third does not: the frame-pacing overlay is the *page's*, and it
+    never calls into the module (web-publish.md §2), so it is the same contract
+    everywhere and is checked on every page.
+    """
+    step = check_runs(browser, port, example, windowed)
+    if step != 0:
+        return step
+    if windowed:
+        step = check_panic_overlay(browser, port, example)
+        if step != 0:
+            return step
+    else:
+        print(
+            f"[serve-web] SKIP — {example} has no forced panic to check: "
+            "?panic=1 is raised inside platform::run(), which a console example "
+            "never calls (checked on every windowed page)"
+        )
+    return check_frametime_overlay(browser, port, example)
+
+
+def built_fleet() -> "list[tuple[str, bool]] | None":
+    """Every page of the build in `dist/`, in the index's order, with what it
+    has to prove: `(page, windowed)`.
+
+    Read from `dist/fleet.txt`, which `build-web` wrote — two columns, the page
+    and `windowed` or `console`. The reader never names a page and never knows
+    which fleet was built; that is the whole point of the file
+    (web-publish.md §3a), and it is what lets one command check whatever this
+    build contains.
+
+    A line with no second column reads as `windowed`. That is the stricter of the
+    two, so a `fleet.txt` from an older `build-web` makes the check demand more
+    rather than less — a lenient default here would silently stop asserting
+    that any page draws at all.
+    """
+    listing = DIST / "fleet.txt"
+    if not listing.is_file():
+        return None
+    pages = []
+    for line in listing.read_text(encoding="utf-8").splitlines():
+        fields = line.split()
+        if fields:
+            pages.append((fields[0], fields[1:] != ["console"]))
+    return pages
+
+
+def check_fleet(browser: str, port: int, pages: "list[tuple[str, bool]]") -> int:
+    """Check every page of the built fleet; report every page that failed.
+
+    CONTRACT (web-publish.md §3a): what CI checks is what CI built, all of it.
+    A build that browser-checks only its first page cannot see a fault in any
+    other, and when the two fleets lead with different pages — as they do — a
+    page can reach production having never been checked at all. That is not
+    hypothetical: it is how a `web build` failure stayed invisible across a PR
+    and only appeared on `main` (jidousha#79 through #82, 2026-08-30/09-01).
+
+    Failures do not stop the run. "One page is broken" and "every page is
+    broken" call for completely different next moves, and the difference is
+    only visible if the rest are tried — so the loop finishes and names all of
+    them. The step's wall-clock ceiling belongs in CI, not here.
+    """
+    failed = []
+    for index, (page, windowed) in enumerate(pages, start=1):
+        print(f"\n[serve-web] === {page} ({index} of {len(pages)}) ===")
+        if check(browser, port, page, windowed) != 0:
+            failed.append(page)
+    print()
+    if failed:
+        return fail(
+            f"{len(failed)} of {len(pages)} page(s) failed their browser check",
+            "failed: " + ", ".join(failed),
+            "one page is that page's bug; all of them is the engine, the build or "
+            "this machine's browser",
+            "each page's browser log and screenshot are under "
+            f"{CHECK_DIR.relative_to(REPO_ROOT)}/<page>/; the CI job uploads them on failure",
+        )
+    print(f"[serve-web] PASS — all {len(pages)} page(s) of this build checked out")
+    return 0
+
+
+def browser_to_check_with() -> "str | int":
+    """The headless browser the check drives, or an exit code saying there is none."""
     browser = chromium()
     if browser is None:
         return fail(
@@ -652,13 +780,7 @@ def check(port: int, example: str) -> int:
             "at the page yourself",
         )
     print(f"[serve-web] checking with {browser}")
-    step = check_runs(browser, port, example)
-    if step != 0:
-        return step
-    step = check_panic_overlay(browser, port, example)
-    if step != 0:
-        return step
-    return check_frametime_overlay(browser, port, example)
+    return browser
 
 
 def main() -> int:
@@ -690,18 +812,35 @@ def main() -> int:
             "it was never built for the web, or was built under another name",
             f"run `tools/build-web {args.example}` first",
         )
-    if args.check and not args.example:
+    # `--check` with no page checks the whole build. Naming one checks that one
+    # — for a local iteration on the page you are working on. Both are the same
+    # check; the argument only says how much of the build to run it over.
+    pages = [(args.example, True)] if args.example else built_fleet()
+    if args.check and pages is None:
         return fail(
-            "--check needs an example or game to check",
-            "no name was given",
-            "the check drives a browser at one page, so it has to know which",
-            "run `tools/serve-web <example> --check`",
+            "there is no fleet listing to check",
+            "dist/fleet.txt does not exist",
+            "dist/ was written by something other than build-web, or by a build-web "
+            "too old to list its fleet",
+            "run `tools/build-web --all` (or `--release-fleet`), then check again",
         )
 
     server = serve(args.port, DIST)
     try:
         if args.check:
-            return check(args.port, args.example)
+            browser = browser_to_check_with()
+            if isinstance(browser, int):
+                return browser
+            if args.example:
+                # Look the named page up in the fleet, so `serve-web
+                # headless_sim --check` asserts exactly what CI asserts for it.
+                # Absent from the listing (an unbuilt or hand-made dist/), it is
+                # a windowed page — the stricter reading.
+                listed = dict(built_fleet() or [])
+                return check(
+                    browser, args.port, args.example, listed.get(args.example, True)
+                )
+            return check_fleet(browser, args.port, pages or [])
         where = f"/{args.example}/" if args.example else "/"
         print(f"[serve-web] http://127.0.0.1:{args.port}{where}  —  Ctrl-C to stop")
         try:

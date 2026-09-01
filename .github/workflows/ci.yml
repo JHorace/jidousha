@@ -218,20 +218,32 @@ jobs:
         run: python tools/build-web ${{ github.event_name == 'push' && '--release-fleet' || '--all' }}
       # Run the optimized bytes in a real browser before they can deploy — the
       # exact check that would have caught the binaryen-108 table damage. The
-      # page comes from dist/fleet.txt's first line, which build-web wrote: the
-      # check follows whichever fleet was built rather than naming a page that
-      # one of the two fleets does not have. The ?panic=1 and ?frametime=1
-      # passes check the two overlay contracts too (web-publish.md §2) — and the
-      # second of those can *require* a software-rendering verdict, because a
-      # runner has no GPU. JIDOUSHA_CHROMIUM points at
-      # the runner's google-chrome: the `chromium` on its PATH is a snap shim
-      # that hangs headless (observed: 120s, no DOM), and the tool's env
-      # override exists for exactly this.
-      - name: browser-check the optimized build
-        run: |
-          page="$(head -n 1 dist/fleet.txt)"
-          echo "browser-checking /${page}/ — the page this fleet leads with"
-          JIDOUSHA_CHROMIUM="$(command -v google-chrome)" python tools/serve-web "${page}" --check
+      # ?panic=1 and ?frametime=1 passes check the two overlay contracts too
+      # (web-publish.md §2) — and the second of those can *require* a
+      # software-rendering verdict, because a runner has no GPU.
+      #
+      # EVERY page of whatever fleet was built, not just its first. This step
+      # used to check `head -n 1 dist/fleet.txt`, and because the two fleets
+      # lead with different pages, the page production serves was never checked
+      # before a merge: a PR led with prototype_kit, `main` led with pong, and a
+      # failure in pong could only appear after it had already landed. It did
+      # (jidousha#79 through #82, 2026-08-30/09-01, two days of red `main`).
+      # The workflow still names no page and no fleet — `serve-web --check`
+      # reads dist/fleet.txt, so this covers whichever fleet the step above
+      # chose, and keeps covering it when a fleet's membership changes.
+      #
+      # timeout-minutes because the failure mode this replaces was a *hang*: one
+      # page hanging costs the check's own 120s ceiling, and the loop deliberately
+      # does not stop at the first failure (one broken page and a wholly broken
+      # build need different responses, and only finishing tells them apart).
+      # This bounds the pathological case where every page hangs.
+      #
+      # JIDOUSHA_CHROMIUM points at the runner's google-chrome: the `chromium`
+      # on its PATH is a snap shim that hangs headless (observed: 120s, no DOM),
+      # and the tool's env override exists for exactly this.
+      - name: browser-check every page of the built fleet
+        timeout-minutes: 25
+        run: JIDOUSHA_CHROMIUM="$(command -v google-chrome)" python tools/serve-web --check
       - uses: actions/upload-artifact@v4
         with:
           name: web-dist
@@ -257,8 +269,8 @@ jobs:
           # (measured, jidousha#81), and one of those entries is a socket the
           # uploader cannot pack. What diagnoses a hang is six small files.
           path: |
-            target/web-check/*.log
-            target/web-check/*.png
+            target/web-check/*/*.log
+            target/web-check/*/*.png
           if-no-files-found: warn
 
   deploy:
