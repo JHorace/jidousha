@@ -140,7 +140,7 @@ def write_credits(
             lines.append(f"| `{role}.png` | `art/sprite_defs.py` (this repository) | original work |")
     lines += [
         "",
-        "The slots are the same whichever way a file arrived (UI.md §9): the role is",
+        "The slots are the same whichever way a file arrived (UI.md §7): the role is",
         "the contract, not the picture.",
         "",
         "## Replacing a file",
@@ -150,8 +150,8 @@ def write_credits(
         "",
         "```",
         "art/extract.py --packs <dir>              # cuts the picks, role-named, into target/",
-        "art/import_pack.py --pack target/giri-art/staged \\",
-        "    --provenance target/giri-art/staged/provenance.json \\",
+        "art/import_pack.py --pack target/ninjo-art/staged \\",
+        "    --provenance target/ninjo-art/staged/provenance.json \\",
         '    --licence "CC0 1.0" --source "https://kenney.nl" --confirm-terms',
         "```",
         "",
@@ -249,7 +249,7 @@ def main(argv: "list[str]") -> int:
         shutil.copyfile(source, ASSETS / f"{role}.png")
     write_credits(rows, args.licence, args.source, provenance)
     print(f"[giri-art] wrote {len(rows)} file(s) and rewrote {CREDITS.name}")
-    print("  next: cargo check -p giri, then tools/verify giri, then look at the captures")
+    print("  next: cargo check -p ninjo, then tools/verify ninjo, then look at the captures")
     return 0
 
 

@@ -194,3 +194,69 @@ verify run is where they are owed: every row of its content in the `Panel`
 the frame), every string ASCII (`library.rs` walks them), and every read of
 the world through `lens.rs`. The last one is the easy one to skip and the
 expensive one to retrofit — see that module's header for why.
+
+## 7. Asset slots — the roles, and what fills them
+
+giri's §9 forecast the slots and its §11 recorded the sizes they landed at.
+The fork's table supersedes both, because the fork has a different set: no
+card, no quest detail panel, a map that draws portraits as tokens, and — since
+2026-09-02 — the founding cast's fifteen new roles (CAST.md §4, §9).
+
+**The role is the contract, not the picture** (`src/sprites.rs`,
+DESIGN §12's curation model). Every slot is a native texel size drawn at a
+whole-number multiple of it; `Art::scale_across` takes the size a row wants and
+panics if the two do not divide, and the readability floors assert the same
+thing over every icon actually drawn (§1.4, §4).
+
+| Slot | Roles | Texels | Drawn | Source |
+|---|---|---|---|---|
+| portraits | `portrait_{alex,bob,steve,tim,rin,goro,hana,ludo,ines,odd}` | 16x16 | 32 units (scale 2) on the map, the party chip and the character panel | Tiny Dungeon |
+| quest icons | `quest_{cave,crypt,tower}` | 8x8 | 32 units (scale 4) as a map marker | Micro Roguelike |
+| quest icon | `quest_vault` | 16x16 | 32 units (scale 2) as a map marker | Tiny Dungeon |
+| stat and event icons | `icon_{flame,coin,skull,heart}` | 8x8 | 16 units (scale 2) as a chip; the heart also at 32 units (scale 4) as the town marker | Micro Roguelike |
+| stat icon | `icon_eye` | 8x8 | 16 units (scale 2) | generated (`art/sprite_defs.py`) |
+| aptitude chips | `icon_{fight,labor,scout,craft}` | 8x8 | 16 units (scale 2) as a trait chip | Micro Roguelike |
+| motivator chips | `icon_{indebted,renown,caring,restless,maker}` | 8x8 | 16 units (scale 2) as a trait chip | Micro Roguelike |
+
+Twenty-eight roles; `assets/CREDITS.md` carries one row per file and
+`art/kenney-manifest.json` says which pack region fills which.
+
+**The nine trait chips are roles ahead of their wearers.** They are in
+`Art::ALL` and in `Gallery::load` so `tools/check-assets` and `library.rs`'s
+art contract both know the names, and nothing draws them: wave 1.1 lands the
+trait rows that carry them. The five personality chips keep the category icons
+§3's trait-chip rule gave them (coin, heart, eye, flame, skull) — that
+borrowing is unchanged, and the nine new icons do not touch it.
+
+**The two chip families are told apart by weight, not by subject.** An
+aptitude is line-work — a steel-and-timber implement with the panel showing
+through it (a sword, a ladder, a lantern, a hammer); a motivator is one filled
+warm mass that fills its cell (a satchel, a flag, a joint of meat, a chevron, a
+bench). That is the cue a glance uses at 16 units, where the *subject* of an
+8x8 picture is not yet legible and its weight already is. `art/sprite_defs.py`
+draws the generated fallbacks to the same cue, so a withdrawn pack does not
+change which family a chip reads as.
+
+**The eye is still the one generated slot.** No eye glyph exists in any of the
+packs (`art/kenney-manifest.json`'s `gaps`), and §2 fixes what the eye means, so
+the slot keeps its violet icon rather than taking a substitute. The scout
+lantern is the second gap recorded there: neither pack has a boot, a footprint,
+a spyglass or a map, and the lantern is the nearest thing to "knows the way, or
+finds it" that survives the 16-unit chip.
+
+**No two portraits may read as one person at map scale.**
+`library::portraits_are_tellable_apart` asserts it over every pair of portrait
+roles, at native texel size on the ground colour: at least 15% of texels must
+differ by more than 24 of 255 on some channel. Both numbers are shipped
+literals rather than anything derived from the art, so a `chosen` edit that
+picks a near-duplicate fails the verify run instead of arriving as two
+identical figures standing at two home tiles. The landed ten clear it with room
+(CAST.md §9 has the measurements).
+
+**Picking is the owner's** (DESIGN §7), with one recorded exception: the
+2026-09-02 cast-art session picked the fifteen against written criteria because
+the owner was away from the machine with the packs, and the approval moved to
+the PR by way of the committed picks sheet `art/picks/cast-2026-09.png`
+(CAST.md §9). That is one session's dispensation and not a change to the model.
+A veto is one line — edit `chosen` in the manifest — applied by any later
+session with `art/extract.py` and `art/import_pack.py`.

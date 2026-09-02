@@ -87,7 +87,7 @@ def main(argv: "list[str]") -> int:
         role: pick for role, pick in manifest["chosen"].items() if not role.startswith("_")
     }
 
-    out = Path(args.out).expanduser().resolve() if args.out else REPO / "target" / "giri-art" / "staged"
+    out = Path(args.out).expanduser().resolve() if args.out else REPO / "target" / "ninjo-art" / "staged"
     out.mkdir(parents=True, exist_ok=True)
 
     provenance = {}

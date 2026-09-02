@@ -1,19 +1,19 @@
 {
   "readme": [
-    "What has been looked at in the owner's Kenney packs, and what each region is.",
+    "What has been looked at in the Kenney packs, and what each region is.",
     "",
-    "This is metadata, not art: it names regions of packs that live on the owner's",
-    "machine and never enter this repository. Committing it is what makes looking at",
-    "a pack a one-time cost -- the next curation session reads this instead of",
-    "re-rendering and re-reading contact sheets.",
+    "This is metadata, not art: it names regions of packs that live in the private",
+    "asset depot (jidousha-assets) and on the owner's machine, and never enter this",
+    "repository. Committing it is what makes looking at a pack a one-time cost -- the",
+    "next curation session reads this instead of re-rendering and re-reading contact",
+    "sheets.",
     "",
-    "Classification is ON DEMAND. Only regions relevant to giri's thirteen asset",
-    "slots (UI.md section 9) are classified; everything else is listed under",
-    "'unclassified' with its extent, so a later session knows what was skipped",
-    "rather than guessing it was empty. Labelling a whole pack would be hours spent",
-    "on tags nobody will query.",
+    "Classification is ON DEMAND. Only regions relevant to an asset slot the game",
+    "names are classified; everything else is listed under 'unclassified' with its",
+    "extent, so a later session knows what was skipped rather than guessing it was",
+    "empty. Labelling a whole pack would be hours spent on tags nobody will query.",
     "",
-    "It lives with giri until a second game wants it (second-consumer rule).",
+    "It arrived with giri and now serves ninjo's twenty-eight slots (UI.md section 7).",
     "",
     "Regenerate contact sheets with art/contact_sheet.py; sheets are never",
     "committed -- a whole pack rearranged into sheets is still the whole pack.",
@@ -22,7 +22,7 @@
     "Kenney *requests* that whole packs not be redistributed; that is not a licence",
     "term, and the curation model honours it by construction."
   ],
-  "classified_on": "2026-08-23",
+  "classified_on": "2026-09-02 (founding cast; first classified 2026-08-23)",
   "packs": {
     "micro-roguelike": {
       "name": "Micro Roguelike (1.3)",
@@ -136,6 +136,12 @@
       "finding": "No eye glyph exists in any of the seven packs.",
       "looked_at": "All 160 Micro Roguelike tiles, all 132 Tiny Dungeon tiles, all 83 Cartography filenames, and the 1-Bit Pack's symbol band (cells 661-1077, which holds its UI glyphs). The 1-Bit cells that read as eyes at thumbnail size (705-717) are targeting reticles.",
       "consequence": "UI.md section 2 fixes 'eye icon = infamy' as a stable signifier; changing it is a UI.md edit and the owner's call, not an import detail. The slot therefore keeps its generated icon unless the owner decides otherwise -- import_pack.py's partial-library path is exactly this case."
+    },
+    {
+      "role": "icon_scout",
+      "finding": "No boot, footprint, spyglass or map glyph exists in either coloured pack.",
+      "looked_at": "All 160 Micro Roguelike tiles and all 132 Tiny Dungeon tiles, on contact sheets at 8x and again at 16x over the ranges holding items and tools (Micro Roguelike 30-43, 62-93, 112-138, 154; Tiny Dungeon 54-83, 101-131).",
+      "consequence": "The lantern (microrl:39) fills the slot: the light a traveller carries to find the way, which is the nearest thing either pack offers to 'knows the way, or finds it'. The bow (microrl:72) was the other reading and lost on legibility -- it is a crossed arc that muddles into a smear at the 16-unit chip. Recorded so a later session does not re-sweep for a boot."
     }
   ],
   "chosen": {
@@ -161,7 +167,22 @@
     "icon_coin": "microrl:130",
     "icon_skull": "microrl:116",
     "icon_heart": "microrl:102",
-    "icon_eye": null
+    "icon_eye": null,
+    "portrait_rin": "tinydungeon:99",
+    "portrait_goro": "tinydungeon:88",
+    "portrait_hana": "tinydungeon:98",
+    "portrait_ludo": "tinydungeon:86",
+    "portrait_ines": "tinydungeon:100",
+    "portrait_odd": "tinydungeon:97",
+    "icon_fight": "microrl:70",
+    "icon_labor": "microrl:91",
+    "icon_scout": "microrl:39",
+    "icon_craft": "microrl:74",
+    "icon_indebted": "microrl:122",
+    "icon_renown": "microrl:47",
+    "icon_caring": "microrl:138",
+    "icon_restless": "microrl:115",
+    "icon_maker": "microrl:55"
   },
   "entries": [
     {
@@ -293,7 +314,8 @@
         "gold"
       ],
       "candidate_for": [
-        "icon_coin"
+        "icon_coin",
+        "icon_renown"
       ],
       "description": "An ornate gold-and-red medallion, symmetrical."
     },
@@ -308,7 +330,8 @@
         "scattered"
       ],
       "candidate_for": [
-        "icon_coin"
+        "icon_coin",
+        "icon_renown"
       ],
       "description": "Three small gold diamonds, scattered -- reads as loose treasure rather than one coin."
     },
@@ -323,7 +346,8 @@
         "gold"
       ],
       "candidate_for": [
-        "icon_coin"
+        "icon_coin",
+        "icon_indebted"
       ],
       "description": "A gold necklace with a pink pendant."
     },
@@ -549,7 +573,10 @@
         "purple"
       ],
       "candidate_for": [
-        "portrait"
+        "portrait",
+        "portrait_rin",
+        "portrait_hana",
+        "portrait_ines"
       ],
       "description": "A long-haired woman, strawberry blonde, in a purple dress."
     },
@@ -564,9 +591,11 @@
         "grey"
       ],
       "candidate_for": [
-        "portrait"
+        "portrait",
+        "portrait_rin",
+        "portrait_ines"
       ],
-      "description": "A grey-haired elder in a pale hood."
+      "description": "A grey-haired elder, hair falling either side of the face, in a red-brown tunic."
     },
     {
       "id": "tinydungeon:112",
@@ -594,7 +623,9 @@
         "plain"
       ],
       "candidate_for": [
-        "portrait"
+        "portrait",
+        "portrait_rin",
+        "portrait_hana"
       ],
       "description": "A young brown-haired man in a plain white shirt."
     },
@@ -609,7 +640,10 @@
         "gaunt"
       ],
       "candidate_for": [
-        "portrait"
+        "portrait",
+        "portrait_rin",
+        "portrait_ludo",
+        "portrait_ines"
       ],
       "description": "A bald, gaunt, hollow-eyed man in a brown apron."
     },
@@ -692,18 +726,491 @@
         "portrait"
       ],
       "description": "A white-robed wizard holding a staff, with a shield. Older, flatter Kenney palette."
+    },
+    {
+      "id": "microrl:70",
+      "pack": "micro-roguelike",
+      "index": 70,
+      "file": "tile_0070.png",
+      "tags": [
+        "sword",
+        "blade",
+        "steel"
+      ],
+      "candidate_for": [
+        "icon_fight"
+      ],
+      "description": "A straight steel blade on the diagonal, dark guard and brown grip at the lower left."
+    },
+    {
+      "id": "microrl:43",
+      "pack": "micro-roguelike",
+      "index": 43,
+      "file": "tile_0043.png",
+      "tags": [
+        "flail",
+        "mace",
+        "chain"
+      ],
+      "candidate_for": [
+        "icon_fight"
+      ],
+      "description": "A flail: a grey handle and a red-brown head on a short chain."
+    },
+    {
+      "id": "microrl:42",
+      "pack": "micro-roguelike",
+      "index": 42,
+      "file": "tile_0042.png",
+      "tags": [
+        "armour",
+        "plate",
+        "stand"
+      ],
+      "candidate_for": [
+        "icon_fight"
+      ],
+      "description": "A suit of grey plate standing empty, arms out."
+    },
+    {
+      "id": "microrl:71",
+      "pack": "micro-roguelike",
+      "index": 71,
+      "file": "tile_0071.png",
+      "tags": [
+        "pick",
+        "tool",
+        "mining"
+      ],
+      "candidate_for": [
+        "icon_labor",
+        "icon_craft"
+      ],
+      "description": "A pick: a brown haft on the diagonal under a splayed steel head."
+    },
+    {
+      "id": "microrl:77",
+      "pack": "micro-roguelike",
+      "index": 77,
+      "file": "tile_0077.png",
+      "tags": [
+        "barrel",
+        "cask",
+        "haul"
+      ],
+      "candidate_for": [
+        "icon_labor"
+      ],
+      "description": "An upright red-brown barrel with two grey hoops."
+    },
+    {
+      "id": "microrl:91",
+      "pack": "micro-roguelike",
+      "index": 91,
+      "file": "tile_0091.png",
+      "tags": [
+        "ladder",
+        "rungs",
+        "work"
+      ],
+      "candidate_for": [
+        "icon_labor",
+        "icon_restless"
+      ],
+      "description": "A brown ladder of four rungs, seen flat on."
+    },
+    {
+      "id": "microrl:40",
+      "pack": "micro-roguelike",
+      "index": 40,
+      "file": "tile_0040.png",
+      "tags": [
+        "strongbox",
+        "crate",
+        "chest"
+      ],
+      "candidate_for": [
+        "icon_labor",
+        "icon_indebted"
+      ],
+      "description": "A grey strongbox banded in two tones, lid shut."
+    },
+    {
+      "id": "microrl:72",
+      "pack": "micro-roguelike",
+      "index": 72,
+      "file": "tile_0072.png",
+      "tags": [
+        "bow",
+        "arrow",
+        "ranger"
+      ],
+      "candidate_for": [
+        "icon_scout",
+        "icon_fight"
+      ],
+      "description": "A brown bow drawn in an arc with a pale arrow laid across it."
+    },
+    {
+      "id": "microrl:115",
+      "pack": "micro-roguelike",
+      "index": 115,
+      "file": "tile_0115.png",
+      "tags": [
+        "arrow",
+        "chevron",
+        "direction"
+      ],
+      "candidate_for": [
+        "icon_restless",
+        "icon_scout"
+      ],
+      "description": "A solid orange chevron pointing right, a red stripe at its base."
+    },
+    {
+      "id": "microrl:39",
+      "pack": "micro-roguelike",
+      "index": 39,
+      "file": "tile_0039.png",
+      "tags": [
+        "lantern",
+        "lamp",
+        "light"
+      ],
+      "candidate_for": [
+        "icon_scout"
+      ],
+      "description": "A lantern: a grey frame around a yellow light."
+    },
+    {
+      "id": "microrl:88",
+      "pack": "micro-roguelike",
+      "index": 88,
+      "file": "tile_0088.png",
+      "tags": [
+        "portal",
+        "ring",
+        "fire"
+      ],
+      "candidate_for": [
+        "icon_scout",
+        "icon_restless"
+      ],
+      "description": "A ring of orange fire around a pale centre."
+    },
+    {
+      "id": "microrl:74",
+      "pack": "micro-roguelike",
+      "index": 74,
+      "file": "tile_0074.png",
+      "tags": [
+        "hammer",
+        "tool",
+        "smith"
+      ],
+      "candidate_for": [
+        "icon_craft",
+        "icon_maker"
+      ],
+      "description": "A hammer: a brown haft with a blocky steel head square across its top."
+    },
+    {
+      "id": "microrl:41",
+      "pack": "micro-roguelike",
+      "index": 41,
+      "file": "tile_0041.png",
+      "tags": [
+        "pot",
+        "vessel",
+        "grey"
+      ],
+      "candidate_for": [
+        "icon_craft",
+        "icon_caring"
+      ],
+      "description": "A squat grey pot with a heavy rim."
+    },
+    {
+      "id": "microrl:57",
+      "pack": "micro-roguelike",
+      "index": 57,
+      "file": "tile_0057.png",
+      "tags": [
+        "forge",
+        "furnace",
+        "oven"
+      ],
+      "candidate_for": [
+        "icon_craft",
+        "icon_maker"
+      ],
+      "description": "A grey-and-red furnace with a dark mouth."
+    },
+    {
+      "id": "microrl:122",
+      "pack": "micro-roguelike",
+      "index": 122,
+      "file": "tile_0122.png",
+      "tags": [
+        "satchel",
+        "purse",
+        "bag"
+      ],
+      "candidate_for": [
+        "icon_indebted"
+      ],
+      "description": "A brown satchel with an orange strap and a dark handle."
+    },
+    {
+      "id": "microrl:90",
+      "pack": "micro-roguelike",
+      "index": 90,
+      "file": "tile_0090.png",
+      "tags": [
+        "key",
+        "gold",
+        "lock"
+      ],
+      "candidate_for": [
+        "icon_indebted"
+      ],
+      "description": "A gold key, bit to the upper right."
+    },
+    {
+      "id": "microrl:47",
+      "pack": "micro-roguelike",
+      "index": 47,
+      "file": "tile_0047.png",
+      "tags": [
+        "flag",
+        "banner",
+        "pole"
+      ],
+      "candidate_for": [
+        "icon_renown"
+      ],
+      "description": "A red flag flying from a brown pole."
+    },
+    {
+      "id": "microrl:31",
+      "pack": "micro-roguelike",
+      "index": 31,
+      "file": "tile_0031.png",
+      "tags": [
+        "banner",
+        "hanging",
+        "post"
+      ],
+      "candidate_for": [
+        "icon_renown"
+      ],
+      "description": "A red banner hung from a crossbar on a brown post."
+    },
+    {
+      "id": "microrl:138",
+      "pack": "micro-roguelike",
+      "index": 138,
+      "file": "tile_0138.png",
+      "tags": [
+        "meat",
+        "food",
+        "bone"
+      ],
+      "candidate_for": [
+        "icon_caring"
+      ],
+      "description": "A joint of meat on the bone, dusty red with a pale bone end."
+    },
+    {
+      "id": "microrl:135",
+      "pack": "micro-roguelike",
+      "index": 135,
+      "file": "tile_0135.png",
+      "tags": [
+        "potion",
+        "bottle",
+        "remedy"
+      ],
+      "candidate_for": [
+        "icon_caring"
+      ],
+      "description": "A stoppered bottle of red liquid."
+    },
+    {
+      "id": "microrl:154",
+      "pack": "micro-roguelike",
+      "index": 154,
+      "file": "tile_0154.png",
+      "tags": [
+        "cauldron",
+        "bowl",
+        "cooking"
+      ],
+      "candidate_for": [
+        "icon_caring"
+      ],
+      "description": "A wide grey cauldron seen from the front, dark inside."
+    },
+    {
+      "id": "microrl:63",
+      "pack": "micro-roguelike",
+      "index": 63,
+      "file": "tile_0063.png",
+      "tags": [
+        "cloud",
+        "wind",
+        "sky"
+      ],
+      "candidate_for": [
+        "icon_restless"
+      ],
+      "description": "A pale grey cloud, flat-bottomed."
+    },
+    {
+      "id": "microrl:55",
+      "pack": "micro-roguelike",
+      "index": 55,
+      "file": "tile_0055.png",
+      "tags": [
+        "bench",
+        "table",
+        "made"
+      ],
+      "candidate_for": [
+        "icon_maker"
+      ],
+      "description": "A wide red-brown bench on four legs."
+    },
+    {
+      "id": "microrl:92",
+      "pack": "micro-roguelike",
+      "index": 92,
+      "file": "tile_0092.png",
+      "tags": [
+        "table",
+        "bench",
+        "made"
+      ],
+      "candidate_for": [
+        "icon_maker"
+      ],
+      "description": "A red-brown table with a darker top band."
+    },
+    {
+      "id": "microrl:56",
+      "pack": "micro-roguelike",
+      "index": 56,
+      "file": "tile_0056.png",
+      "tags": [
+        "stool",
+        "seat",
+        "made"
+      ],
+      "candidate_for": [
+        "icon_maker"
+      ],
+      "description": "A small red-brown stool."
+    },
+    {
+      "id": "tinydungeon:88",
+      "pack": "tiny-dungeon",
+      "index": 88,
+      "file": "tile_0088.png",
+      "tags": [
+        "portrait",
+        "bare",
+        "tan"
+      ],
+      "candidate_for": [
+        "portrait",
+        "portrait_goro",
+        "portrait_ludo"
+      ],
+      "description": "A bare-armed figure in a brown wrap, tousled brown hair, no armour and no weapon."
+    },
+    {
+      "id": "tinydungeon:97",
+      "pack": "tiny-dungeon",
+      "index": 97,
+      "file": "tile_0097.png",
+      "tags": [
+        "portrait",
+        "knight",
+        "open-helm"
+      ],
+      "candidate_for": [
+        "portrait",
+        "portrait_goro",
+        "portrait_odd"
+      ],
+      "description": "A knight in an open grey helm, face showing, mail at the shoulders."
+    },
+    {
+      "id": "tinydungeon:98",
+      "pack": "tiny-dungeon",
+      "index": 98,
+      "file": "tile_0098.png",
+      "tags": [
+        "portrait",
+        "mail",
+        "brown-hair"
+      ],
+      "candidate_for": [
+        "portrait",
+        "portrait_hana",
+        "portrait_ludo",
+        "portrait_odd",
+        "portrait_goro"
+      ],
+      "description": "A figure in grey mail and pauldrons, brown hair over a dark tunic."
+    },
+    {
+      "id": "tinydungeon:109",
+      "pack": "tiny-dungeon",
+      "index": 109,
+      "file": "tile_0109.png",
+      "tags": [
+        "portrait",
+        "bare",
+        "heavy"
+      ],
+      "candidate_for": [
+        "portrait",
+        "portrait_goro",
+        "portrait_hana",
+        "portrait_ludo",
+        "portrait_odd"
+      ],
+      "description": "A heavy bare-chested figure, fair-haired, wide across the shoulders."
+    },
+    {
+      "id": "tinydungeon:111",
+      "pack": "tiny-dungeon",
+      "index": 111,
+      "file": "tile_0111.png",
+      "tags": [
+        "portrait",
+        "hood",
+        "red-eyes"
+      ],
+      "candidate_for": [
+        "portrait",
+        "portrait_ines",
+        "portrait_odd"
+      ],
+      "description": "A hooded figure in a pale robe under a brown hood, two red eyes in the dark of it."
     }
   ],
   "unclassified": [
     {
       "pack": "micro-roguelike",
-      "ranges": "0-87, 90-99, 103-115, 123-129, 133-135, 138-159",
-      "note": "Walls, floors, doors, monsters, weapons, trees, water. Looked at on contact sheets; not labelled, because no giri slot asks for them."
+      "ranges": "0-30, 32-38, 44-46, 48-54, 57-62, 64-69, 73, 75-87, 89, 93-99, 103-114, 116-121, 123-129, 133-137, 139-153, 155-159",
+      "note": "Walls, floors, doors, monsters, trees, water and the remaining props. Looked at on contact sheets at 8x, and at 16x over the item and tool ranges; not labelled, because no slot asks for them."
     },
     {
       "pack": "tiny-dungeon",
-      "ranges": "0-8, 10-28, 30-40, 42-63, 65-83, 88, 91-95, 97-98, 101-111, 113-131",
-      "note": "Dungeon walls, floors, doors, props, weapons, potions, and the remaining character busts. Looked at; not labelled."
+      "ranges": "0-8, 10-28, 30-40, 42-83, 90-95, 101-107, 108, 110, 111, 113-131",
+      "note": "Dungeon walls, floors, doors, props, weapons and potions, plus the three busts that are not people: 108 a ghost, 110 a crab, 111 a red-eyed troll. Looked at; not labelled. The nine human busts are classified above and all nine were weighed for the founding cast."
     },
     {
       "pack": "roguelike-characters",

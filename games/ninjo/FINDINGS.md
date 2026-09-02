@@ -105,3 +105,109 @@ Owner: `jidousha-testing.md`.
 **G-010 stays open** for the third wave running: the bounds check's stated
 form still assumes a camera that does not move, and wave 0a added more
 map-space content (the selection ring, the focus pulse) culled the same way.
+
+## The cast-art session (2026-09-02) — **3 new findings**
+
+Reading discipline: `CLAUDE.md`, `.claude/skills/make-game/SKILL.md`,
+`docs/internal/assets.md` (named by the handoff — the one document outside the
+fence this session was told to read), and this crate whole. Nothing under
+`crates/*/src/`, no ADR, and `docs/api/` was not opened, because the session
+asked the engine nothing: it added fifteen rows to a table of file names.
+
+All three are the *game's* tooling rather than the engine's, and all three are
+about the same fact — `art/` was written for an owner sitting at the keyboard
+with the packs, and this session was an agent standing in for one.
+
+### G-012 — the import tool drops a staged role it has no grid for, silently
+
+Class: tooling · Game: ninjo · Files: `games/ninjo/art/import_pack.py`
+(`roles`, `plan`), `games/ninjo/art/sprite_defs.py` · **Fixed in this session
+for ninjo; still open in `games/giri/art/`**
+
+`import_pack.py` is the one door art comes in through, and it takes "the roles"
+to be the names in `sprite_defs.LIBRARY` — the *generated-art* table. `plan()`
+walks that list and looks for a file per role, so a role-named PNG staged for a
+role the table does not carry is never looked at. Reproduced deliberately after
+the fact, with `icon_maker` removed from `LIBRARY` and the fifteen staged:
+
+```
+[giri-art] 26 of 27 role(s) filled from target/ninjo-art/staged
+exit 0
+```
+
+No mention of `icon_maker` anywhere in the output, and a zero exit. The count
+reads exactly like a legitimate partial library, which is a documented and
+normal state ("Roles the pack does not fill keep their current file"), so
+nothing about the run says a file was ignored. This is the no-silent-failure
+rule (CLAUDE.md) failing in the tool that enforces the curation model.
+
+Expected: a role list that is the *game's* roles, and a refusal — or at least a
+line — for a staged file that matches none of them. Happened: the session read
+`plan()` before running it and added all fifteen roles to `sprite_defs.LIBRARY`
+first, so the import worked; had it not, fifteen files would have stayed out of
+`assets/` and the only symptom would have been `tools/check-assets` failing
+later with fifteen missing files and no hint why.
+
+The fix taken here is the honest half of it: every role now has a grid, which
+also keeps `make_art.py --restore` meaningful — the way back if a pack is ever
+withdrawn is not a way back for a role with no grid. The other half is the
+tool's, and is not this session's to change in giri: a staged file matching no
+role should be named and refused.
+
+### G-013 — nothing in `art/` shows a candidate at the size it will be drawn
+
+Class: tooling · Game: ninjo · Files: `games/ninjo/art/role_sheet.py`,
+`games/ninjo/art/contact_sheet.py` · **Open**
+
+`role_sheet.py` renders a role's shortlist at `--scale` (default 10) and
+`contact_sheet.py` a whole pack at `--scale` (default 4). Both upscale the
+*art*, so every sheet shows a candidate four to ten times larger than the game
+draws it. For an owner at a screen that is fine — a person holds the slot's
+real size in their head. An agent does not, and the sheets are the only thing
+it sees.
+
+What was done on the sheets' authority: the four aptitude icons were picked as
+one family of steel implements — sword (`microrl:70`), pick (`71`), bow (`72`),
+hammer (`74`) — off role sheets at scale 12, where all four are unambiguous and
+the family cue is obvious. Then a throwaway script composed the same four at
+scale 2 (the 16-unit chip, `attention::CHIP`) and magnified the *composed
+sheet* rather than the art, which is the only way to see honest 16-pixel
+pixels. At that size the pick and the hammer are the same picture — a dim
+diagonal with a pale head — and the bow is a smear. Two of the four picks
+changed (`71` → `91` ladder, `72` → `39` lantern), and the family cue changed
+with them, from "steel implement" to "line-work against filled mass".
+
+Expected: a mode that says "show me this shortlist at the size the slot is
+drawn". Happened: wrote one by hand, twice, and would have shipped two
+illegible chips without it. `art/picks_sheet.py` (added here) does it for the
+landed set — every picture at its drawn size and again at 4x — but it reads
+`assets/`, so it can only judge art that has already been imported. The
+shortlist half is still missing: `role_sheet.py` wants a `--at-size N` that
+composes at the slot's drawn scale and magnifies the sheet.
+
+This is the entry the handoff asked for by name: what an agent-picker needed
+that the manifest tooling, written for an owner at the keyboard, does not have.
+
+### G-014 — the fork's art tooling still calls itself giri
+
+Class: docs · Game: ninjo · Files: `games/ninjo/art/*.py` · **Partly fixed**
+
+`art/` rode along whole in the fork (VARIANT.md), and every script still opens
+`"""games/giri/art/<name>.py"""`, prints `[giri-art]`, and — until this session
+— defaulted its output to `target/giri-art/` and told the reader to run
+`cargo check -p giri`. The last of those is the expensive kind: `giri` is a real
+crate that really builds, so following the instruction succeeds and checks the
+wrong game. `import_pack.py` also wrote `(UI.md §9)` into `CREDITS.md`, which is
+giri's asset-slot section; ninjo's is §7, and giri's §9 says something else.
+
+Fixed here: the output paths, the `cargo check -p giri` line, and the `§9` that
+went into a committed file. Left alone: the docstring headers and the
+`[giri-art]` console prefix, which are wrong but cannot mislead an action — and
+a rename of five files was not this session's to make.
+
+Expected: a forked tool says which game it belongs to. Happened: the session
+followed `extract.py`'s printed next-step verbatim and staged into
+`target/giri-art/`, which is where a giri session would look for it.
+
+**G-010 stays open** for the fourth wave running, untouched here: this session
+added no drawn content and no map-space content.
