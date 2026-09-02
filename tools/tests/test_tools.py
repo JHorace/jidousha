@@ -2447,6 +2447,21 @@ class ServeWebTest(unittest.TestCase):
         self.assertEqual(message, "something threw")
         self.assertTrue(failed)
 
+    def test_the_shell_grep_finds_the_fullscreen_control_on_the_real_template(self):
+        # The grep and the template have to agree about what the control looks
+        # like, so the check runs against the template itself rather than a
+        # hand-written snippet that could drift from it.
+        dom = (REPO_ROOT / "tools/web-template/index.html").read_text("utf-8")
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(serve_web.check_fullscreen_control(dom, "pong"), 0)
+
+    def test_a_page_that_lost_its_fullscreen_control_fails_the_check(self):
+        # The way this control goes missing is an edit to the template, which
+        # is exactly what the grep is for (web-publish.md §2).
+        dom = "<body><div id=\"stamp\">build abc1234</div></body>"
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(serve_web.check_fullscreen_control(dom, "pong"), 1)
+
     def test_the_handler_serves_wasm_with_its_own_mime_type(self):
         # The whole reason serve-web exists rather than `python -m http.server`:
         # a wrong Content-Type degrades instantiateStreaming on every load.
@@ -2479,6 +2494,84 @@ class BuildWebTest(unittest.TestCase):
         self.assertNotIn("__BUILD_STAMP__", page)
         self.assertIn("pong", page)
         self.assertIn("abc1234 · 2026-08-22", page)
+
+    def test_staging_the_page_writes_the_manifest_and_icons_beside_it(self):
+        # The page's <link>s name them relative to itself, so a page staged
+        # without them asks for a manifest and an icon that 404
+        # (web-publish.md §2).
+        with tempfile.TemporaryDirectory() as scratch:
+            out = Path(scratch)
+            build_web.stage_page(out, "pong", "abc1234 · 2026-08-22")
+            page = (out / "index.html").read_text(encoding="utf-8")
+            manifest = json.loads(
+                (out / "manifest.webmanifest").read_text(encoding="utf-8")
+            )
+            staged = sorted(path.name for path in out.iterdir())
+        self.assertIn('rel="manifest"', page)
+        self.assertIn('href="icon-180.png"', page)
+        self.assertEqual(
+            staged,
+            ["icon-180.png", "icon-192.png", "icon-512.png", "index.html",
+             "manifest.webmanifest"],
+        )
+        # Standalone is the whole point: launched from the tile, the page gets
+        # the screen with no URL bar over the game.
+        self.assertEqual(manifest["display"], "standalone")
+        self.assertEqual(manifest["name"], "pong — jidousha")
+        self.assertEqual(manifest["background_color"], build_web.PAGE_GROUND)
+        self.assertEqual(
+            [icon["src"] for icon in manifest["icons"]],
+            ["icon-192.png", "icon-512.png"],
+        )
+
+    def test_no_service_worker_is_staged_or_registered(self):
+        # Deliberately absent (web-publish.md §2): offline play is not in scope
+        # and a stale cache on a playtest trip is the opposite of the goal. The
+        # predictable way one arrives is somebody adding it "while here".
+        page = (REPO_ROOT / "tools/web-template/index.html").read_text("utf-8")
+        self.assertNotIn("serviceWorker", page)
+        with tempfile.TemporaryDirectory() as scratch:
+            out = Path(scratch)
+            build_web.stage_page(out, "pong", "abc1234 · 2026-08-22")
+            manifest = (out / "manifest.webmanifest").read_text(encoding="utf-8")
+        self.assertNotIn("service", manifest.lower())
+
+    def test_the_icon_draws_the_pages_initial_on_the_pages_ground(self):
+        # No new art assets and no image dependency (web-publish.md §2): the
+        # tile is the ground colour and one letter, written as a PNG by hand.
+        # Decoded with serve-web's own decoder, so a PNG this build cannot read
+        # back is a failure here rather than a blank tile on someone's iPad.
+        found = serve_web.decode_png(build_web.icon_bytes(180, "pong"))
+        self.assertIsNotNone(found)
+        width, height, pixels = found
+        self.assertEqual((width, height), (180, 180))
+        ground = tuple(build_web.rgb(build_web.PAGE_GROUND))
+        ink = tuple(build_web.rgb(build_web.PAGE_INK))
+        self.assertEqual(pixels[0], ground)
+        self.assertGreater(pixels.count(ink), 0, "the letter never got drawn")
+        # Two pages must not get the same tile: telling four dark squares apart
+        # on a home screen is the entire job.
+        self.assertNotEqual(
+            build_web.icon_bytes(180, "pong"), build_web.icon_bytes(180, "giri")
+        )
+
+    def test_a_page_whose_initial_has_no_glyph_still_gets_a_tile(self):
+        # No silent failure and no empty tile: an unknown initial falls back to
+        # the box rather than to the ground colour alone.
+        found = serve_web.decode_png(build_web.icon_bytes(64, "7up"))
+        self.assertIsNotNone(found)
+        ink = tuple(build_web.rgb(build_web.PAGE_INK))
+        self.assertGreater(found[2].count(ink), 0)
+
+    def test_the_icons_colours_are_still_the_pages_colours(self):
+        # build-web keeps a copy of the two colours because a PNG cannot read a
+        # stylesheet. This is the loud rot: change the page's ground and this
+        # fails rather than the tiles quietly ceasing to match the page.
+        page = (REPO_ROOT / "tools/web-template/index.html").read_text("utf-8")
+        rule = re.search(r"html,\s*\n?\s*body\s*\{(.*?)\}", page, re.S)
+        self.assertIsNotNone(rule, "the page lost its html/body rule")
+        self.assertIn(f"background: {build_web.PAGE_GROUND}", rule.group(1))
+        self.assertIn(f"color: {build_web.PAGE_INK}", rule.group(1))
 
     def test_the_root_index_leads_with_the_headline_example(self):
         # prototype_kit is the headline (web-publish.md §3); the rest stay

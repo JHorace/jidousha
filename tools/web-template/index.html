@@ -39,6 +39,22 @@
   reports what the page ended up with, which is the honest half of it to keep on
   this side.
 
+  Ergonomic seam: a **fullscreen** button in the page chrome (and the `f` key
+  on a hardware keyboard) fullscreens the *container* that holds the canvas and
+  every overlay — `document.body`, which is where winit appends the canvas — and
+  never the canvas alone. Fullscreening the bare canvas would leave the panic
+  overlay, the loading gate and the ?frametime panel outside the fullscreen
+  element, so the red box would vanish exactly when somebody was playing. The
+  request only ever runs from a real gesture, because a browser refuses (and
+  silently) any other kind (web-publish.md §2).
+
+  Home screen: a `manifest.webmanifest` and an icon are staged beside this page
+  by `tools/build-web`, and the `apple-mobile-web-app-*` tags below are the older
+  iPadOS half of the same thing. "Add to Home Screen" then launches the page
+  without browser chrome. Deliberately **no service worker**: offline play is not
+  in scope, and a stale cache during a playtest trip is the opposite of the goal
+  (web-publish.md §2).
+
   Reserved seam (deferred, do not build yet): the "download recording" button
   lands here once the input recording buffer is reachable from the page
   (input §5, web-publish.md §2) — remote playtesting becomes remote
@@ -50,6 +66,18 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>__EXAMPLE__ — jidousha</title>
+    <!-- Home-screen launch (web-publish.md §2). The manifest and its icons are
+         written beside this page by tools/build-web; the apple- tags are what
+         older iPadOS reads instead of the manifest, and `black-translucent`
+         keeps the page's own ground under the status bar rather than a white
+         band above it. No service worker is registered, deliberately. -->
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="icon-180.png" />
+    <meta name="theme-color" content="#101014" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="__EXAMPLE__" />
     <style>
       html,
       body {
@@ -111,12 +139,79 @@
         border-top: 1px solid #2a2a33;
         white-space: pre-wrap;
       }
+      /* The page chrome: the status line, the build stamp and the fullscreen
+         button, in one strip below the canvas and never over it. It is one
+         element so that fullscreen has one thing to move (below). */
+      #chrome {
+        flex: 0 0 auto;
+      }
       #status.failed {
         color: #ff8080;
       }
       #stamp {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
         padding: 2px 10px 6px;
         color: #6a6a75;
+      }
+      /* Printable ASCII, small, and in the chrome rather than over the canvas.
+         Hidden until the script finds a fullscreen API to call: a button that
+         sits there doing nothing on iPhone Safari is worse than no button. */
+      #fullscreen {
+        font: inherit;
+        color: #c8c8d0;
+        background: #2a2a33;
+        border: 1px solid #3a3a45;
+        border-radius: 4px;
+        padding: 1px 8px;
+        cursor: pointer;
+      }
+      #fullscreen[hidden] {
+        display: none;
+      }
+      #fullscreen:hover {
+        background: #34343f;
+      }
+      /* Fullscreen (web-publish.md §2). The class is toggled by the page's
+         `fullscreenchange` handler rather than written as `:fullscreen` +
+         `:-webkit-full-screen` rules, because an unknown pseudo-class throws
+         away the whole selector list it appears in — two copies of every rule
+         is the alternative, and one class is the same thing said once.
+
+         Out of flow, so the canvas gets the entire screen; faded, so it is not
+         a bar across a game; still there, so leaving fullscreen never requires
+         knowing the Esc key or the iPad's system gesture. The stamp rides along
+         with it: a playtester's bug report identifies its build in fullscreen
+         too (web-publish.md §1). */
+      body.fullscreen #chrome {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(16, 16, 20, 0.72);
+        opacity: 0.18;
+        transition: opacity 150ms linear;
+        /* Never in the way of the game underneath — only the button itself
+           takes a tap. */
+        pointer-events: none;
+      }
+      body.fullscreen.chrome-active #chrome {
+        opacity: 1;
+      }
+      body.fullscreen #fullscreen {
+        pointer-events: auto;
+      }
+      /* The overlays are fixed to the viewport normally, and absolute inside
+         the fullscreened container while fullscreen: the container is its own
+         containing block there, so this is the same box either way — and it
+         does not depend on how a given browser treats a fixed descendant of a
+         top-layer element, which is exactly the thing that would hide the panic
+         overlay on one browser and not another. */
+      body.fullscreen #panic-overlay,
+      body.fullscreen #frametime {
+        position: absolute;
       }
       /* The panic overlay (web-publish.md §2 CONTRACT): a wasm panic renders
          the full §9 message on the page, with a copy button. Remote
@@ -247,8 +342,13 @@
       <div id="frametime-warning"></div>
       <div id="frametime-note"></div>
     </div>
-    <div id="status">starting __EXAMPLE__…</div>
-    <div id="stamp">build __BUILD_STAMP__</div>
+    <div id="chrome">
+      <div id="status">starting __EXAMPLE__…</div>
+      <div id="stamp">
+        <span id="stamp-text">build __BUILD_STAMP__</span>
+        <button id="fullscreen" type="button" hidden>[ fullscreen ]</button>
+      </div>
+    </div>
     <script type="module">
       // The status line exists so a failure is visible on the page rather than
       // only in devtools — the same reason the engine's errors say what to do
@@ -327,6 +427,115 @@
       window.addEventListener("unhandledrejection", (event) => {
         if (!panicked) say(String(event.reason), true);
       });
+
+      // --- the fullscreen control (web-publish.md §2) -----------------------
+      //
+      // CONTRACT: page-side only, like every other control on this page. It
+      // moves DOM and CSS and never calls into the wasm module; the engine
+      // learns that the window changed size the way it learns it about any
+      // other resize, from the browser (ADR-0005, core.md §7).
+      //
+      // **The container, not the canvas.** The element fullscreened is
+      // `document.body` — the thing that holds the canvas winit appends *and*
+      // the panic overlay, the loading gate and the ?frametime panel. Anything
+      // outside the fullscreen element is not rendered while fullscreen, so
+      // fullscreening the bare canvas would hide the red box at exactly the
+      // moment somebody was playing and needed to screenshot it. That failure
+      // mode is the whole reason this comment is here.
+      const stage = document.body;
+      const fullscreenButton = document.getElementById("fullscreen");
+
+      // Feature detection, prefix included: iPadOS Safari has only the webkit-
+      // prefixed spelling, and iPhone Safari has neither (element fullscreen is
+      // a video-only affair there). `fullscreenEnabled` is the second half of
+      // it — an iframe without `allowfullscreen` reports the methods and then
+      // refuses the call.
+      const enterFullscreen = stage.requestFullscreen || stage.webkitRequestFullscreen;
+      const leaveFullscreen = document.exitFullscreen || document.webkitExitFullscreen;
+      const fullscreenAvailable =
+        typeof enterFullscreen === "function" &&
+        typeof leaveFullscreen === "function" &&
+        (document.fullscreenEnabled ?? document.webkitFullscreenEnabled ?? false);
+      const fullscreenNow = () =>
+        (document.fullscreenElement ?? document.webkitFullscreenElement ?? null) !== null;
+
+      // The chrome fades out and comes back on any pointer, touch or key
+      // activity, so the exit button is always one tap from being readable
+      // without being a bar across the game.
+      const CHROME_AWAKE_MS = 2500;
+      let chromeSleep = 0;
+      const wakeChrome = () => {
+        document.body.classList.add("chrome-active");
+        clearTimeout(chromeSleep);
+        chromeSleep = setTimeout(
+          () => document.body.classList.remove("chrome-active"),
+          CHROME_AWAKE_MS,
+        );
+      };
+
+      const onFullscreenChange = () => {
+        const on = fullscreenNow();
+        document.body.classList.toggle("fullscreen", on);
+        fullscreenButton.textContent = on ? "[ exit fullscreen ]" : "[ fullscreen ]";
+        wakeChrome();
+        // The existing resize path, reused rather than forked. The canvas is
+        // sized by CSS (it fills the flex column), so entering and leaving
+        // fullscreen already changes its box; what the page owes is the
+        // notification, and `resize` is the one every listener on this page and
+        // in winit's web backend is already waiting for. The page never sets
+        // canvas.width itself — wgpu writes it from the surface size, and a
+        // page-side write would be overwritten by the next configure (§2).
+        window.dispatchEvent(new Event("resize"));
+      };
+
+      const toggleFullscreen = () => {
+        // Gesture-only, and there is no other caller: a browser refuses a
+        // fullscreen request that did not come from a user gesture, and it
+        // refuses it *silently*, so an automatic call would read as a button
+        // that does nothing.
+        const call = fullscreenNow()
+          ? leaveFullscreen.call(document)
+          : enterFullscreen.call(stage);
+        // The prefixed spellings return undefined rather than a promise.
+        Promise.resolve(call).catch((error) => {
+          // A handled problem, not a failure: the page and the game carry on.
+          // The `[jidousha] ` prefix is what keeps the status line out of its
+          // failed styling (core.md §9).
+          say(
+            "[jidousha] fullscreen refused: " +
+              String(error) +
+              "\nlikely cause: the request did not reach the browser as a user " +
+              "gesture, or this page is embedded without allowfullscreen" +
+              "\nfix: tap the button (or press f) directly; if this page is in " +
+              "an iframe, open it in its own tab",
+          );
+        });
+      };
+
+      if (fullscreenAvailable) {
+        fullscreenButton.hidden = false;
+        fullscreenButton.addEventListener("click", toggleFullscreen);
+        document.addEventListener("fullscreenchange", onFullscreenChange);
+        document.addEventListener("webkitfullscreenchange", onFullscreenChange);
+        for (const activity of ["pointerdown", "pointermove", "touchstart", "keydown"]) {
+          window.addEventListener(activity, wakeChrome, { passive: true });
+        }
+        // `f` toggles it. "When a hardware keyboard is present" needs no
+        // detection: a keydown only arrives from one. The event is deliberately
+        // NOT consumed — the engine sees the same key, because this page does
+        // not take input away from the game it is hosting.
+        window.addEventListener("keydown", (event) => {
+          if (event.key !== "f" && event.key !== "F") return;
+          if (event.ctrlKey || event.metaKey || event.altKey || event.repeat) return;
+          toggleFullscreen();
+        });
+      } else {
+        // iPhone Safari: no element fullscreen at all. The button hides rather
+        // than sitting there dead — a control that does nothing when tapped is
+        // a bug report about the game.
+        fullscreenButton.hidden = true;
+        console.log("[jidousha] no fullscreen API here; the button is hidden");
+      }
 
       // --- the frame-pacing overlay (?frametime=1, web-publish.md §2) -------
       //

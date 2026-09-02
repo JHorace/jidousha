@@ -50,8 +50,10 @@ import argparse
 import json
 import re
 import shutil
+import struct
 import subprocess
 import sys
+import zlib
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -64,6 +66,56 @@ TARGET = "wasm32-unknown-unknown"
 # Advisory, not a gate: the wasm size is logged on every build and warned about
 # past this, so drift is visible long before it is a problem (web-publish.md §1).
 WASM_WARN_BYTES = 5 * 1024 * 1024
+
+# The page's own two colours, restated here because the home-screen icon has to
+# be drawn *outside* the browser and a PNG cannot read a stylesheet. A test
+# asserts these still match `tools/web-template/index.html`, so the copy rots
+# loudly rather than quietly drifting from the page it is supposed to look like.
+PAGE_GROUND = "#101014"
+PAGE_INK = "#c8c8d0"
+
+# The home-screen icon sizes, and what each is for: 180 is what iOS reads from
+# `<link rel="apple-touch-icon">`, 192 and 512 are the two sizes a web app
+# manifest is conventionally expected to offer (small tile, splash). Three
+# files, a few kilobytes, no image dependency (practices §5.8).
+APPLE_TOUCH_ICON = 180
+MANIFEST_ICONS = (192, 512)
+
+# A 5x7 bitmap of the capitals, which is all the icon draws: a page name is a
+# crate name, so its initial is a letter. Anything else falls back to the
+# hollow box below rather than to an empty tile — an icon that is only the
+# ground colour is indistinguishable from every other page's.
+GLYPH_WIDTH = 5
+GLYPH_HEIGHT = 7
+GLYPHS = {
+    "A": ("01110", "10001", "10001", "11111", "10001", "10001", "10001"),
+    "B": ("11110", "10001", "10001", "11110", "10001", "10001", "11110"),
+    "C": ("01110", "10001", "10000", "10000", "10000", "10001", "01110"),
+    "D": ("11110", "10001", "10001", "10001", "10001", "10001", "11110"),
+    "E": ("11111", "10000", "10000", "11110", "10000", "10000", "11111"),
+    "F": ("11111", "10000", "10000", "11110", "10000", "10000", "10000"),
+    "G": ("01110", "10001", "10000", "10111", "10001", "10001", "01111"),
+    "H": ("10001", "10001", "10001", "11111", "10001", "10001", "10001"),
+    "I": ("11111", "00100", "00100", "00100", "00100", "00100", "11111"),
+    "J": ("00111", "00010", "00010", "00010", "00010", "10010", "01100"),
+    "K": ("10001", "10010", "10100", "11000", "10100", "10010", "10001"),
+    "L": ("10000", "10000", "10000", "10000", "10000", "10000", "11111"),
+    "M": ("10001", "11011", "10101", "10101", "10001", "10001", "10001"),
+    "N": ("10001", "11001", "10101", "10011", "10001", "10001", "10001"),
+    "O": ("01110", "10001", "10001", "10001", "10001", "10001", "01110"),
+    "P": ("11110", "10001", "10001", "11110", "10000", "10000", "10000"),
+    "Q": ("01110", "10001", "10001", "10001", "10101", "10010", "01101"),
+    "R": ("11110", "10001", "10001", "11110", "10100", "10010", "10001"),
+    "S": ("01111", "10000", "10000", "01110", "00001", "00001", "11110"),
+    "T": ("11111", "00100", "00100", "00100", "00100", "00100", "00100"),
+    "U": ("10001", "10001", "10001", "10001", "10001", "10001", "01110"),
+    "V": ("10001", "10001", "10001", "10001", "10001", "01010", "00100"),
+    "W": ("10001", "10001", "10001", "10101", "10101", "11011", "10001"),
+    "X": ("10001", "10001", "01010", "00100", "01010", "10001", "10001"),
+    "Y": ("10001", "10001", "01010", "00100", "00100", "00100", "00100"),
+    "Z": ("11111", "00001", "00010", "00100", "01000", "10000", "11111"),
+}
+FALLBACK_GLYPH = ("11111", "10001", "10001", "10001", "10001", "10001", "11111")
 
 # The oldest wasm-opt this tool will use. Ubuntu 24.04's binaryen 108 clamps
 # the externref table wasm-bindgen's glue grows from JS, so every optimized
@@ -352,10 +404,113 @@ def stage_page(out_dir: Path, example: str, stamp: str, template: Path = TEMPLAT
 
     Substitution beats keeping a copy of the page per example in the repo; the
     template is the one source (web-publish.md §2).
+
+    The home-screen files go beside it, because the page's `<link>`s name them
+    relative to itself: a page staged without them would ask for a manifest and
+    an icon that 404.
     """
     page = template.read_text(encoding="utf-8")
     page = page.replace("__EXAMPLE__", example).replace("__BUILD_STAMP__", stamp)
     (out_dir / "index.html").write_text(page, encoding="utf-8")
+    stage_home_screen(out_dir, example)
+
+
+def rgb(colour: str) -> bytes:
+    """`#rrggbb` to the three bytes a PNG pixel is."""
+    return bytes.fromhex(colour.lstrip("#"))
+
+
+def png_bytes(size: int, pixels: bytes) -> bytes:
+    """A square 8-bit RGB PNG, written by hand from `zlib` and `struct`.
+
+    Stdlib only, like everything else here (tooling.md, practices §5.8). A
+    home-screen tile is a flat colour and one letter; pulling an image library
+    into the build for that would be a dependency bought with a stamp-sized
+    picture.
+    """
+
+    def chunk(kind: bytes, payload: bytes) -> bytes:
+        crc = zlib.crc32(kind + payload) & 0xFFFFFFFF
+        return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", crc)
+
+    stride = size * 3
+    # Filter byte 0 (none) in front of every row: the picture is flat colour,
+    # so a filter would buy nothing that zlib does not already get.
+    raw = b"".join(
+        b"\x00" + pixels[row * stride : (row + 1) * stride] for row in range(size)
+    )
+    header = struct.pack(">IIBBBBB", size, size, 8, 2, 0, 0, 0)
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", header)
+        + chunk(b"IDAT", zlib.compress(raw, 9))
+        + chunk(b"IEND", b"")
+    )
+
+
+def icon_bytes(size: int, example: str) -> bytes:
+    """The home-screen tile: the page's ground colour and its initial letter.
+
+    No new art assets and no dependency (web-publish.md §2). It is not a logo;
+    it is the difference between four identical dark squares on a home screen
+    and four tiles a playtester can tell apart at a glance.
+    """
+    ground = rgb(PAGE_GROUND)
+    ink = rgb(PAGE_INK)
+    pixels = bytearray(ground * (size * size))
+    glyph = GLYPHS.get(example[:1].upper(), FALLBACK_GLYPH)
+    # Half the tile's height, which leaves the letter room to breathe on a
+    # small icon and keeps it a tile rather than a letterform on a big one.
+    cell = max(1, round(size * 0.5 / GLYPH_HEIGHT))
+    left = (size - GLYPH_WIDTH * cell) // 2
+    top = (size - GLYPH_HEIGHT * cell) // 2
+    for row, bits in enumerate(glyph):
+        for column, bit in enumerate(bits):
+            if bit != "1":
+                continue
+            start = left + column * cell
+            for y in range(top + row * cell, top + (row + 1) * cell):
+                at = (y * size + start) * 3
+                pixels[at : at + cell * 3] = ink * cell
+    return png_bytes(size, bytes(pixels))
+
+
+def manifest_json(example: str) -> str:
+    """The web app manifest that makes "Add to Home Screen" a chrome-free launch.
+
+    Minimal on purpose (web-publish.md §2): a name taken from the page's own
+    title, `standalone` display, the page's ground colour so the launch does not
+    flash white, and the icons above. **No service worker and no `start_url`
+    pointing anywhere but here** — offline play is not in scope, and a stale
+    cache on a playtest trip is the opposite of what this is for.
+    """
+    manifest = {
+        "name": f"{example} — jidousha",
+        "short_name": example,
+        "start_url": "./",
+        "scope": "./",
+        "display": "standalone",
+        "background_color": PAGE_GROUND,
+        "theme_color": PAGE_GROUND,
+        "icons": [
+            {
+                "src": f"icon-{size}.png",
+                "sizes": f"{size}x{size}",
+                "type": "image/png",
+            }
+            for size in MANIFEST_ICONS
+        ],
+    }
+    return json.dumps(manifest, indent=2, ensure_ascii=False) + "\n"
+
+
+def stage_home_screen(out_dir: Path, example: str) -> None:
+    """Write the manifest and its icons beside the page (web-publish.md §2)."""
+    (out_dir / "manifest.webmanifest").write_text(
+        manifest_json(example), encoding="utf-8"
+    )
+    for size in (APPLE_TOUCH_ICON, *MANIFEST_ICONS):
+        (out_dir / f"icon-{size}.png").write_bytes(icon_bytes(size, example))
 
 
 def stage_one_root(out_dir: Path, root: str) -> int:
