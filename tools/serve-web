@@ -35,6 +35,13 @@ software-rendering — `--use-angle=swiftshader`, because a CI runner has no GPU
 so the overlay's software-rendering warning is a thing the check can require
 rather than merely tolerate, and a detector that stopped detecting fails here.
 
+**Only the first pass takes a screenshot**, because only it reads pixels — and
+because asking for one is what makes this browser hang. `--screenshot` and
+`--virtual-time-budget` deadlock while the page composites WebGL through
+SwiftShader (`load_page`'s SCREENSHOT_DEADLOCK note has the measurements). The
+two DOM-reading passes stopped asking and stopped hanging; the pixel-reading one
+is retried once.
+
 Stdlib only, like every other tool here (tooling.md).
 """
 
@@ -90,12 +97,27 @@ CHECK_DIR = REPO_ROOT / "target" / "web-check"
 # detector that never reaches a verdict is a detector nothing is testing.
 CHECK_VIRTUAL_MS = 1000
 # The wall-clock ceiling on the browser itself, which is a different question
-# from how much page time it simulates. With the budget above it is roughly 9x
-# the check's actual cost on a CI runner, where the `run` pass measures 12.8s —
-# about 30x the 3.6s it costs on a developer machine. The CI figure is the one
-# that sizes this ceiling, which is the point: it should mean "the page is
-# broken", never "the runner was busy".
-CHECK_TIMEOUT_S = 120
+# from how much page time it simulates. With the budget above it was sized at
+# roughly 9x the check's actual cost on a CI runner, where the `run` pass
+# measures 12.8s — about 30x the 3.6s it costs on a developer machine. The CI
+# figure is the one that sizes this ceiling, which is the point: it should mean
+# "the page is broken", never "the runner was busy".
+#
+# 180s rather than 120s because a runner can be much worse than the one that
+# figure came off. On 2026-09-02 a `main` deploy met one where the `run` pass
+# measured **23.6s** — 1.8x the sizing assumption, and the same page had cost
+# 4.1s twenty minutes earlier on the same commit. At 120s that left 5.1x of
+# headroom against the intended 9x; 180s takes it to 7.6x at that measurement.
+# Insurance, and named as such: the *deadlock* below is what was actually
+# failing these runs, and a bigger ceiling would not have fixed it — it only
+# stops a genuinely slow runner being reported as a broken page (the failure
+# jidousha#80 hit on 2026-09-01).
+# A pass that asked for pixels and hit this wall is retried once before it is
+# called a failure — `load_page`'s SCREENSHOT_DEADLOCK note says why that is a
+# characterized browser defect rather than a flake, and why the retry is
+# bounded at one. Passes that do not ask for a screenshot cannot hit the
+# deadlock and are never retried.
+CHECK_TIMEOUT_S = 180
 # How many lines of the browser's own stderr to quote when it hangs.
 #
 # The log is written to `target/web-check/` either way, but a CI run whose
@@ -332,7 +354,7 @@ def chromium() -> "str | None":
 
 
 def load_page(
-    browser: str, url: str, example: str, tag: str
+    browser: str, url: str, example: str, tag: str, pixels: bool = False
 ) -> "tuple[str, Path, Path] | int":
     """Drive the headless browser at `url`; (dom, screenshot, log) or exit code.
 
@@ -341,6 +363,13 @@ def load_page(
     first page's evidence: when several pages fail, every one of their logs has
     to survive to the artifact upload, or the fleet check answers "something is
     broken" without saying what.
+
+    `pixels` asks for `--screenshot`, and **only the pass that reads pixels may
+    ask**, because the flag is what makes this browser hang (see
+    SCREENSHOT_DEADLOCK below). `check_runs` needs it — a page that starts and
+    draws nothing is the bug this whole tool was written for. The panic and
+    frame-pacing passes read the DOM and threw their screenshot away, so they
+    now stop asking for one and stop being able to hang.
     """
     directory = CHECK_DIR / example
     directory.mkdir(parents=True, exist_ok=True)
@@ -391,7 +420,7 @@ def load_page(
         f"--user-data-dir={profile}",
         f"--virtual-time-budget={CHECK_VIRTUAL_MS}",
         "--window-size=640,480",
-        f"--screenshot={shot}",
+        *([f"--screenshot={shot}"] if pixels else []),
         "--dump-dom",
         url,
     ]
@@ -399,25 +428,67 @@ def load_page(
     # hangs has to name itself, and the only output a hung run produces is what
     # was printed before it stopped.
     print(f"[serve-web] pass {tag}: {url}")
+
+    def attempt() -> "subprocess.CompletedProcess | str":
+        """Run the browser once; the process, or the partial log of a hang."""
+        try:
+            return subprocess.run(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=CHECK_TIMEOUT_S,
+            )
+        except subprocess.TimeoutExpired as expired:
+            # Whatever the browser managed to say before the wall.
+            # `TimeoutExpired` carries the output captured so far, and this is
+            # the one path where it is the entire evidence — the success path
+            # writes the log, so before this a hung run left no log at all.
+            partial = expired.stderr or ""
+            return partial.decode("utf-8", "replace") if isinstance(partial, bytes) else partial
+
+    # A screenshot from an earlier invocation must never be read as this run's
+    # evidence, and that holds whether or not this pass takes one. The browser
+    # writes the file when it finishes, so a run that fails to finish would
+    # leave the previous run's pixels for `canvas_is_drawn` to pass on — and a
+    # pass that no longer asks for a screenshot at all would leave one sitting
+    # in `target/web-check/`, which CI uploads as the evidence for a failure.
+    shot.unlink(missing_ok=True)
+
     started = time.monotonic()
-    try:
-        proc = subprocess.run(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            timeout=CHECK_TIMEOUT_S,
-        )
-    except subprocess.TimeoutExpired as expired:
-        # Whatever the browser managed to say before the wall. `TimeoutExpired`
-        # carries the output captured so far, and this is the one path where it
-        # is the entire evidence — the success path below writes the log, so
-        # before this a hung run left no log at all.
-        partial = expired.stderr or ""
-        if isinstance(partial, bytes):
-            partial = partial.decode("utf-8", "replace")
-        log.write_text(partial, encoding="utf-8")
-        lines = partial.splitlines()
+    proc = attempt()
+    if isinstance(proc, str) and pixels:
+        # SCREENSHOT_DEADLOCK: retried once, and only here.
+        #
+        # `--screenshot` and `--virtual-time-budget` deadlock in this browser
+        # when the page is compositing WebGL through SwiftShader: the capture
+        # forces a compositor frame, the frame does not complete under virtual
+        # time, and the browser never dumps the DOM and never exits. Measured
+        # by interleaved A/B over 24 runs of one page (interleaved because
+        # block-testing this reads whatever the machine's load was doing):
+        # **3 hangs of 24 with `--screenshot`, 0 of 24 without**. A static page
+        # and a page whose only work is a bare `requestAnimationFrame` loop
+        # never hang at all, with the screenshot or without — it takes the
+        # engine actually rendering.
+        #
+        # Not a flake and not this project's bug, so it is not "re-run until
+        # green": the page has *already finished its whole job* when this
+        # strikes — module up, canvas drawn, overlay classified — and only the
+        # dump is lost, which is why the browser's own log ends with the page's
+        # last console line and nothing after it. Each launch is independent,
+        # so one retry takes a per-pass 12% to about 1.5%, and the passes that
+        # do not ask for pixels cannot hit it at all any more.
+        #
+        # Bounded at exactly one, deliberately. A second hang on the same page
+        # is reported as the failure it is: at that point the odds say
+        # something is actually broken, and a check that retried until it
+        # passed would be a check that never failed.
+        print(f"[serve-web] pass {tag} hung; retrying once (browser screenshot deadlock)")
+        started = time.monotonic()
+        proc = attempt()
+    if isinstance(proc, str):
+        log.write_text(proc, encoding="utf-8")
+        lines = proc.splitlines()
         print(f"[serve-web] pass {tag} hung; browser said {len(lines)} line(s):")
         for line in lines[-HUNG_LOG_LINES:]:
             print(f"  | {line}")
@@ -425,8 +496,9 @@ def load_page(
             print("  | (nothing — it never reached its own logging)")
         return fail(
             f"the headless browser did not finish pass {tag}",
-            f"it ran for {CHECK_TIMEOUT_S}s at {url} without dumping the page; "
-            f"its log is {log.relative_to(REPO_ROOT)} and the quote above is its tail",
+            f"it ran for {CHECK_TIMEOUT_S}s at {url} without dumping the page"
+            + (" (twice — it was retried)" if pixels else "")
+            + f"; its log is {log.relative_to(REPO_ROOT)} and the quote above is its tail",
             "a software rasterizer spending virtual time on every frame, a hung "
             "module, or a browser that hangs headless on this machine — the log "
             "above is what tells the three apart",
@@ -467,8 +539,10 @@ def check_runs(browser: str, port: int, example: str, windowed: bool = True) -> 
     the thing that decides a blank page is acceptable — that is the fleet's
     statement about the page, and it is made in one place.
     """
+    # The only pass that asks for a screenshot: it is the one that reads the
+    # pixels, and asking is what risks the deadlock (`load_page`).
     loaded = load_page(
-        browser, f"http://127.0.0.1:{port}/{example}/index.html", example, "run"
+        browser, f"http://127.0.0.1:{port}/{example}/index.html", example, "run", pixels=True
     )
     if isinstance(loaded, int):
         return loaded

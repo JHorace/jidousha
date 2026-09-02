@@ -32,9 +32,10 @@ tools/serve-web [<name>] [--check]
   local static server for dist/; MUST serve application/wasm correctly
   (implementation free; doctor verifies by fetching a .wasm and checking the
   Content-Type). --check drives a headless browser at /<name>/: once
-  asserting the page ran and drew (and the two shell greps: that the
-  canvas still says `touch-action: none`, §2a, and that the fullscreen
-  control is on the page, §2), once at ?panic=1 asserting the panic
+  asserting the page ran and drew (the only pass that takes a
+  screenshot — see the deadlock CONTRACT below — plus the two shell greps:
+  that the canvas still says `touch-action: none`, §2a, and that the
+  fullscreen control is on the page, §2), once at ?panic=1 asserting the panic
   overlay rendered the full §9 text, once at ?frametime=1 asserting the
   frame-pacing overlay came up and classified the renderer (§2). With no
   <name> it runs that over EVERY page in dist/fleet.txt — what CI runs (§3a).
@@ -85,6 +86,34 @@ tools/serve-web [<name>] [--check]
   — it had none. Reproduce in one line: connect a socket, send nothing, watch
   the next fetch never return. Found in CI (jidousha#81, 2026-09-01) after it
   had failed the `web build` job intermittently since 2026-08-31.
+- CONTRACT: **only the pass that reads pixels asks for `--screenshot`**, and a
+  pass that asked for one and hung is retried exactly once. `--screenshot` and
+  `--virtual-time-budget` deadlock in headless Chromium while the page is
+  compositing WebGL through SwiftShader: the capture forces a compositor frame,
+  the frame does not complete under virtual time, and the browser never dumps
+  the DOM and never exits. The check then spends its whole `CHECK_TIMEOUT_S` on
+  a page that had *already finished its job* — module up, canvas drawn, overlay
+  classified — which is why the browser's log ends on the page's last console
+  line with nothing after it.
+  **Measured, interleaved rather than in blocks** (block-testing this reads
+  whatever the machine's load happened to be doing, which is how a first pass
+  at it "proved" two contradictory things): over 24 runs of one page,
+  **3 hangs with `--screenshot`, 0 without**. A static page never hangs, and
+  neither does a page whose only work is a bare `requestAnimationFrame` loop —
+  with the screenshot or without. It takes the engine actually rendering.
+  So the panic and frame-pacing passes, which read the DOM and threw their
+  screenshot away, stopped asking for one and stopped being able to hang; the
+  `run` pass needs the pixels (a page that starts and draws nothing is the bug
+  this tool was written for) and is retried instead. The retry is **bounded at
+  one**: launches are independent, so it takes a per-pass 12% to about 1.5%,
+  and a second hang is reported as the failure it is — a check that retried
+  until it passed would be a check that never failed. `serve-web`'s
+  SCREENSHOT_DEADLOCK note carries the same reasoning at the call site.
+  Cost: two production deploys blocked. It reached `main` as an intermittent
+  `web build` failure and then, on 2026-09-02, took out a deploy outright —
+  the run pass measuring 23.6s against its usual 4.1s on a degraded runner,
+  two of two pages hung, and the same commit's tree green on 15 of 15 pages
+  twenty minutes earlier (jidousha#88).
 
 ## 1a. Asset roots: `dist/<name>/` is repository-shaped
 
@@ -539,7 +568,8 @@ edited). This section is where the decision lives.
   entirely, and the workflow still names no page (§3a). The `?frametime=1` pass
   is the lead page's only; §3a says why. `timeout-minutes`
   bounds the loop: the failure it guards against is a hang, and a hang costs
-  the check's own 120s ceiling on each page it touches.
+  the check's own per-page ceiling (`CHECK_TIMEOUT_S`) on each page it touches —
+  twice it on the `run` pass, which is retried once (§1's deadlock CONTRACT).
 - Deploy job runs only after build+test jobs pass in the same workflow run.
   Concurrency group per-branch, cancel-in-progress (stale pushes don't race).
 - Bootstrap: previews are versions of the production Worker, so the first
