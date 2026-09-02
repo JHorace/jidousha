@@ -170,6 +170,11 @@ mod tests {
             std::fs::read_to_string(&two).ok(),
             Some("second writer\n".into())
         );
+        // A test run's CWD is the crate directory, so these land in
+        // `crates/jidousha-platform/target/`, which the root-anchored `/target`
+        // rule does not ignore. Left behind they show up as untracked files.
+        let _ = std::fs::remove_file(&one);
+        let _ = std::fs::remove_file(&two);
     }
 
     #[test]
