@@ -1,5 +1,7 @@
-/target
+target/
 # tools/test and tools/doctor write their reports under target/verify/.
+# Unanchored, so a nested one counts too: a test's CWD is its own crate
+# directory, so `Snapshots::write` lands in crates/<name>/target/ there.
 # tools/build-web stages web builds here; it is what deploys, never committed.
 /dist
 **/*.rs.bk
