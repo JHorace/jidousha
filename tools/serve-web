@@ -87,9 +87,11 @@ CHECK_DIR = REPO_ROOT / "target" / "web-check"
 # detector that never reaches a verdict is a detector nothing is testing.
 CHECK_VIRTUAL_MS = 1000
 # The wall-clock ceiling on the browser itself, which is a different question
-# from how much page time it simulates. With the budget above it is roughly 30x
-# the check's actual cost, which is the point: this ceiling should mean "the
-# page is broken", never "the runner was busy".
+# from how much page time it simulates. With the budget above it is roughly 9x
+# the check's actual cost on a CI runner, where the `run` pass measures 12.8s —
+# about 30x the 3.6s it costs on a developer machine. The CI figure is the one
+# that sizes this ceiling, which is the point: it should mean "the page is
+# broken", never "the runner was busy".
 CHECK_TIMEOUT_S = 120
 # How many lines of the browser's own stderr to quote when it hangs.
 #
