@@ -10,6 +10,7 @@ than imported by name.
 import contextlib
 import importlib.machinery
 import importlib.util
+import functools
 import io
 import json
 import re
@@ -43,6 +44,19 @@ build_web = load_tool("build-web")
 check_claude_md = load_tool("check-claude-md")
 dep_count = load_tool("dep-count")
 verify = load_tool("verify")
+
+
+@functools.lru_cache(maxsize=1)
+def workspace_targets():
+    """The workspace's playable pages, asked for once per process.
+
+    Five tests want them, and `build-web` answers by shelling out to `cargo
+    metadata`. On a Windows runner that is slow enough that five of them
+    together put the whole `tool-selftest` phase past its 120s budget
+    (jidousha#83). None of the five patches `REPO_ROOT` first, so they are all
+    asking the same question and one answer serves them.
+    """
+    return build_web.playable_targets()
 check_assets = load_tool("check-assets")
 gen_api_doc = load_tool("gen-api-doc")
 check_api_prose = load_tool("check-api-prose")
@@ -2315,9 +2329,6 @@ class DepCountTest(unittest.TestCase):
         self.assertEqual(names, ["glam 0.30.0"])
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 def png_bytes(width, height, rows, filter_kind=0):
     """A minimal 8-bit RGB PNG, for the decoder tests below.
@@ -2503,12 +2514,12 @@ class BuildWebTest(unittest.TestCase):
         self.assertNotIn("__BUILD_STAMP__", page)
         self.assertIn('href="pong/"', page)
         self.assertEqual(stamp, "abc1234 · 2026-08-22\n")
-        self.assertEqual(listing, "prototype_kit\npong\n")
+        self.assertEqual(listing, "prototype_kit windowed\npong windowed\n")
 
     def test_every_native_only_exclusion_names_a_real_example(self):
         # The list must rot loudly: an entry for a renamed or deleted example
         # would silently exclude nothing while claiming to exclude something.
-        targets = build_web.playable_targets()
+        targets = workspace_targets()
         self.assertIsNotNone(targets)
         names = {name for _package, name, _kind in targets}
         for name in build_web.NATIVE_ONLY_EXAMPLES:
@@ -2884,7 +2895,7 @@ class GameToolingTest(unittest.TestCase):
     def test_the_example_allowlist_names_no_game(self):
         # A game name written into the allowlist would be the first breach of
         # the no-registration property: games come from the glob, always.
-        targets = build_web.playable_targets()
+        targets = workspace_targets()
         self.assertIsNotNone(targets)
         game_names = {name for _package, name, kind in targets if kind == "game"}
         self.assertEqual(game_names & set(build_web.RELEASE_EXAMPLES), set())
@@ -2892,7 +2903,7 @@ class GameToolingTest(unittest.TestCase):
     def test_every_allowlisted_example_names_a_real_web_example(self):
         # The allowlist must rot loudly: an entry for a renamed, deleted or
         # native-only example would quietly shrink the production page.
-        targets = build_web.playable_targets()
+        targets = workspace_targets()
         self.assertIsNotNone(targets)
         with contextlib.redirect_stdout(io.StringIO()):
             examples, _games = build_web.fleet(targets)
@@ -2901,25 +2912,101 @@ class GameToolingTest(unittest.TestCase):
     def test_an_allowlist_entry_nothing_builds_is_reported_not_dropped(self):
         self.assertEqual(build_web.missing_from_allowlist([]), list(build_web.RELEASE_EXAMPLES))
 
-    def test_the_fleet_listing_leads_with_the_page_ci_browser_checks(self):
-        # dist/fleet.txt is how the workflow checks a page without naming one:
-        # its first line is the page the index leads with, in either fleet.
+    def test_the_fleet_listing_names_every_page_and_what_it_must_prove(self):
+        # dist/fleet.txt is how the check reaches every page without anything
+        # naming one: a line per page, led by the page the index leads with,
+        # and a second column saying whether that page opens a window.
         full = build_web.fleet_listing(["sprites", build_web.HEADLINE_EXAMPLE], ["giri"])
-        self.assertEqual(full.splitlines()[0], build_web.HEADLINE_EXAMPLE)
-        self.assertEqual(sorted(full.split()), sorted(["sprites", build_web.HEADLINE_EXAMPLE, "giri"]))
+        self.assertEqual(full.splitlines()[0].split()[0], build_web.HEADLINE_EXAMPLE)
+        self.assertEqual(
+            [line.split()[0] for line in full.splitlines()],
+            [build_web.HEADLINE_EXAMPLE, "sprites", "giri"],
+        )
         release = build_web.fleet_listing(["pong"], ["giri"])
-        self.assertEqual(release.splitlines()[0], "pong")
+        self.assertEqual(release.splitlines()[0].split()[0], "pong")
+
+    def test_a_console_example_is_listed_as_one_and_a_game_never_is(self):
+        # The six console examples never call platform::run(), so they have no
+        # canvas to draw on and never reach the forced ?panic=1. Games are
+        # always windowed — ADR-0038 means a new prototype must get the
+        # stricter assertion without anybody adding it to a list.
+        console = sorted(build_web.CONSOLE_EXAMPLES)[0]
+        listing = build_web.fleet_listing([console, "sprites"], [console])
+        lines = [line.split() for line in listing.splitlines()]
+        self.assertEqual(lines[:2], [[console, "console"], ["sprites", "windowed"]])
+        # The same name, arriving as a game: still windowed. The set names
+        # examples, and a game must never inherit an example's weaker
+        # assertions by sharing its name.
+        self.assertEqual(lines[2], [console, "windowed"])
+
+    def test_every_console_example_is_still_an_example(self):
+        # A rename that left CONSOLE_EXAMPLES behind would not fail anything —
+        # it would just stop matching, and the page would be asked to draw.
+        # Better to hear about it here than in a red CI run.
+        targets = workspace_targets()
+        self.assertIsNotNone(targets)
+        names = {name for _package, name, _kind in targets}
+        for console in sorted(build_web.CONSOLE_EXAMPLES):
+            self.assertIn(console, names, "CONSOLE_EXAMPLES names something unbuilt")
+
+    def test_the_check_reads_the_fleet_and_defaults_to_the_strict_assertion(self):
+        # An older build-web wrote one column. That has to read as `windowed`:
+        # a lenient default would quietly stop asserting that anything draws.
+        with tempfile.TemporaryDirectory() as scratch:
+            dist = Path(scratch)
+            (dist / "fleet.txt").write_text(
+                "pong windowed\nvec2_tour console\nlegacy\n\n", encoding="utf-8"
+            )
+            with unittest.mock.patch.object(serve_web, "DIST", dist):
+                self.assertEqual(
+                    serve_web.built_fleet(),
+                    [("pong", True), ("vec2_tour", False), ("legacy", True)],
+                )
+
+    def test_the_frame_pacing_pass_runs_on_the_lead_page_alone(self):
+        # The overlay it drives is the page shell's and never calls into the
+        # wasm module (web-publish.md §2), so it is one template identical on
+        # every page: N launches of it buy nothing the first does not. What is
+        # per page — started, drew, panicked — still runs on all of them.
+        asked = []
+
+        def record(_browser, _port, page, windowed=True, frametime=True):
+            asked.append((page, frametime))
+            return 0
+
+        pages = [("prototype_kit", True), ("pong", True), ("giri", True)]
+        with unittest.mock.patch.object(serve_web, "check", record):
+            self.assertEqual(serve_web.check_fleet("browser", 8080, pages), 0)
+        self.assertEqual(
+            asked, [("prototype_kit", True), ("pong", False), ("giri", False)]
+        )
+
+    def test_a_page_checked_by_name_still_gets_every_pass(self):
+        # `serve-web <page> --check` is the local iteration path: there the
+        # named page is the whole check, so no pass is another page's job. The
+        # default carries that — only the fleet loop turns frametime off.
+        import inspect
+
+        default = inspect.signature(serve_web.check).parameters["frametime"].default
+        self.assertIs(default, True)
+
+    def test_the_check_says_so_when_there_is_no_fleet_to_check(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            with unittest.mock.patch.object(serve_web, "DIST", Path(scratch)):
+                self.assertIsNone(serve_web.built_fleet())
 
     def test_the_workflow_chooses_a_fleet_and_never_names_a_member(self):
         # The predictable failure mode this split has: the allowlist duplicated
         # into the workflow. The allowlist is data in tools/build-web and only
         # there; CI picks `--release-fleet` on main and `--all` on a PR, and
-        # browser-checks whatever dist/fleet.txt leads with.
+        # browser-checks the whole of whichever fleet that built — the workflow
+        # names no page, and no longer even reads the listing itself.
         workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text("utf-8")
         self.assertIn("--release-fleet", workflow)
         self.assertIn("--all", workflow)
-        self.assertIn("dist/fleet.txt", workflow)
-        targets = build_web.playable_targets()
+        self.assertIn("serve-web --check", workflow)
+        self.assertIn("dist/fleet.txt", (REPO_ROOT / "tools/serve-web").read_text("utf-8"))
+        targets = workspace_targets()
         self.assertIsNotNone(targets)
         pages = {name for _package, name, _kind in targets}
         for name in sorted(pages):
@@ -3066,3 +3153,7 @@ class GameToolingTest(unittest.TestCase):
         manifest = (REPO_ROOT / "Cargo.toml").read_text("utf-8")
         self.assertIn('"games/*"', manifest)
         self.assertIn('exclude = ["attic"]', manifest)
+
+
+if __name__ == "__main__":
+    unittest.main()
