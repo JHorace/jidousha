@@ -27,13 +27,14 @@ tools/build-web --all | --release-fleet       # a whole fleet + the root index (
   wasm-bindgen --target web --out-dir dist/<name>/
   wasm-opt -Os if available (optional; skipped with a log line if absent)
   stage: index.html (from tools/web-template/), every asset root the page's
-  code can name (§1a), build stamp
+  code can name (§1a), build stamp, manifest.webmanifest + icon-*.png (§2)
 tools/serve-web [<name>] [--check]
   local static server for dist/; MUST serve application/wasm correctly
   (implementation free; doctor verifies by fetching a .wasm and checking the
   Content-Type). --check drives a headless browser at /<name>/: once
-  asserting the page ran and drew (and that the canvas still says
-  `touch-action: none`, §2a), once at ?panic=1 asserting the panic
+  asserting the page ran and drew (and the two shell greps: that the
+  canvas still says `touch-action: none`, §2a, and that the fullscreen
+  control is on the page, §2), once at ?panic=1 asserting the panic
   overlay rendered the full §9 text, once at ?frametime=1 asserting the
   frame-pacing overlay came up and classified the renderer (§2). With no
   <name> it runs that over EVERY page in dist/fleet.txt — what CI runs (§3a).
@@ -302,6 +303,65 @@ One `index.html` template, self-contained (no external CDN dependencies):
     slow-presentation warning. One reader for every page parameter
     (`web::query_parameter`), so `?panic=1` and `?renderscale=` cannot disagree
     about what a query string means.
+- **Fullscreen** (CONTRACT): a small printable-ASCII button in the page chrome,
+  and the `f` key, put the page into fullscreen. Four parts, and each is a
+  failure mode that has a name:
+  - **The container, never the canvas.** The element fullscreened is the one
+    holding the canvas *and* every overlay — `document.body`, which is where
+    winit appends the canvas (`with_append`). Anything outside the fullscreen
+    element is not rendered while fullscreen, so a page that fullscreened the
+    bare canvas would hide the panic overlay, the loading gate and the
+    `?frametime` panel at exactly the moment somebody was playing and needed to
+    screenshot the red box. The overlays switch from `fixed` to `absolute`
+    inside the fullscreened container for the same reason, one step further
+    down: their box is then the container's, rather than whatever a given
+    browser decides a fixed descendant of a top-layer element means.
+  - **Gesture-only.** The request is made from the button's `click` and the
+    key's `keydown` and from nowhere else. A browser refuses a fullscreen
+    request that did not come from a user gesture, and it refuses it *silently*
+    — an automatic call reads as a control that does nothing.
+  - **Feature-detected, prefix included, and it hides rather than dying.**
+    `requestFullscreen` or the `webkitRequestFullscreen` spelling iPadOS Safari
+    has; `fullscreenEnabled` on top, because an embedded page reports the
+    methods and then refuses the call. Where there is neither — iPhone Safari,
+    where element fullscreen does not exist — the button hides itself. A
+    control that does nothing when tapped becomes a bug report about the game.
+  - **The existing resize path, reused.** `fullscreenchange` (and its webkit
+    twin) dispatches the page's ordinary `resize`; the canvas is sized by CSS
+    and the engine handles the surface resize as it does any other. The page
+    never writes `canvas.width` — wgpu writes it from the surface extent, and a
+    page-side write is overwritten by the next configure (the same reason
+    `?renderscale=` is read engine-side).
+
+  While fullscreen the chrome strip goes out of flow so the canvas gets the
+  whole screen, and stays *inside* the fullscreened container, faded until
+  pointer, touch or key activity: leaving fullscreen must never require knowing
+  the Esc key or the iPad's system gesture. The build stamp rides along in it,
+  because a playtester's bug report identifies its build in fullscreen too (§1).
+- **Home-screen launch**: `tools/build-web` stages a minimal
+  `manifest.webmanifest` beside each page — name from the page's own title,
+  `display: standalone`, background and theme the page's own ground — plus
+  `icon-192.png`, `icon-512.png` and the `icon-180.png` that
+  `<link rel="apple-touch-icon">` names, and the page carries the
+  `apple-mobile-web-app-capable` / `-status-bar-style` / `-title` tags older
+  iPadOS reads instead of a manifest. Launched from the tile, the page gets the
+  screen with no browser chrome over it. The icon is generated at build time
+  from the page's ground colour and its initial letter — a hand-written PNG out
+  of `zlib` and `struct`, because a flat tile with one letter on it is not worth
+  an image dependency (practices §5.8), and four identical dark squares on a
+  home screen are worth less than four a playtester can tell apart. build-web
+  keeps the two colours as constants and a test asserts they still match the
+  template, so the copy a PNG cannot avoid rots loudly.
+  **No service worker, deliberately**: offline play is not in scope, and a stale
+  cache during a playtest trip is the opposite of what this is for. A test
+  asserts the absence, because the predictable way one arrives is somebody
+  adding it while here.
+- CONTRACT: **everything on this page is page-side and never calls into the
+  wasm module.** Stated for the frame-pacing overlay above and binding on the
+  fullscreen control and the manifest the same way: they move DOM, CSS and the
+  browser's own resize path, and they ask the module nothing. Real time and
+  real input reach the simulation through `jidousha-platform` and nowhere else
+  (ADR-0005, core.md §7).
 - Build stamp footer (§1).
 - Reserved hook (deferred, do not build yet): "download recording" button
   wired to the input recording buffer (input §5) once I2 lands — turns remote
@@ -345,8 +405,12 @@ of it, and each is here because leaving it out breaks something specific.
   comfort rather than contract: a long press on a game should not offer to copy
   it, and a tap should not flash a grey box over the canvas.
 - **What `serve-web --check` cannot tell you.** The headless browser it drives
-  has no fingers; it can prove the page loads, draws and panics correctly, and
-  it cannot prove a tap feels right. The touch rules are checked where they
+  has no fingers — and no screen to be handed, which is why the fullscreen
+  control is asserted by presence (§2) and not by behaviour: `--dump-dom`
+  renders once and exits, there is no window manager, and the request has to
+  come from a gesture the check cannot make. It can prove the page loads, draws
+  and panics correctly, and it cannot prove a tap feels right or that a game
+  fills an iPad. The touch rules are checked where they
   live — `jidousha-input`'s transcript and property tests, and the driver's
   own — and the last mile is a person holding a phone. `input_echo` is the page
   to open: put one finger down and the crosshair follows it, put a second down

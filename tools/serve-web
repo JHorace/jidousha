@@ -23,9 +23,12 @@ verdict on how this browser presents (web-publish.md §2, §6 W0 exit criteria).
 Given no page it runs that over the **whole build**, because a check that covers
 only one page of a fleet leaves the rest able to reach production unexamined
 (web-publish.md §3a).
-The first pass also asserts the page's half of touch — `touch-action: none` on
-the canvas (web-publish.md §2a) — which is a grep, because this browser has no
-fingers and the tap itself is a person's job.
+The first pass also greps the served page for the two shell rules a browser
+cannot check for us: the page's half of touch — `touch-action: none` on the
+canvas (web-publish.md §2a) — and the presence of the fullscreen control
+(web-publish.md §2). Both are greps because this browser has no fingers and no
+screen to be given: whether a tap lands right, and whether the canvas fills an
+iPad with the panic overlay still on top of it, are a person's job.
 
 The third pass has a property the other two do not: this browser is *deliberately*
 software-rendering — `--use-angle=swiftshader`, because a CI runner has no GPU —
@@ -525,7 +528,11 @@ def check_runs(browser: str, port: int, example: str, windowed: bool = True) -> 
         )
     print(f"[serve-web] PASS — {example} started and drew in a browser")
 
-    return check_touch_rules(dom, example)
+    # Both shell greps run, and both report: "the touch rule went missing" and
+    # "the fullscreen control went missing" are two different edits to the
+    # template, and a run that stopped at the first would hide the second.
+    touch = check_touch_rules(dom, example)
+    return check_fullscreen_control(dom, example) or touch
 
 
 def check_touch_rules(dom: str, example: str) -> int:
@@ -553,6 +560,40 @@ def check_touch_rules(dom: str, example: str) -> int:
             "(web-publish.md §2a)",
         )
     print("[serve-web] PASS — the canvas leaves touch to the engine (touch-action: none)")
+    return 0
+
+
+def check_fullscreen_control(dom: str, example: str) -> int:
+    """The fullscreen control is on the served page (web-publish.md §2).
+
+    A grep, and for the same reason the touch rule above is one: this browser
+    has no fingers, and headless fullscreen proves nothing anyway. A headless
+    Chromium has no window manager to hand a screen over, `--dump-dom` renders
+    a page once and exits, and the request has to come from a user gesture the
+    check cannot make — so a pass that "entered fullscreen" would be testing
+    the harness, not the page. What a person has to check is what the button is
+    *for*: that the canvas fills the iPad, that the panic overlay is still on
+    top of it, and that the way back out is findable. That last mile is the
+    owner with the device (web-publish.md §2).
+
+    What CI can hold onto is that the control did not go missing from the
+    template — the way it would go missing is an edit here, not a browser
+    quirk. Presence, not state: on a browser with no fullscreen API the page
+    deliberately hides the button, so the check asserts the element is in the
+    page, not that it is showing.
+    """
+    button = re.search(r'<button[^>]*\bid="fullscreen"[^>]*>(.*?)</button>', dom, re.S)
+    if button is None:
+        return fail(
+            f"{example}'s page has no fullscreen control",
+            'no <button id="fullscreen"> in the served page',
+            "tools/web-template/index.html lost the button, or the page was "
+            "built from a template that never had it",
+            "restore the fullscreen button in the page chrome — without it a "
+            "playtester on a tablet plays in a browser window with a URL bar "
+            "over the game (web-publish.md §2)",
+        )
+    print("[serve-web] PASS — the page carries a fullscreen control")
     return 0
 
 
@@ -629,7 +670,12 @@ def check_frametime_overlay(browser: str, port: int, example: str) -> int:
     classification = verdict.group(1)
     print(f"[serve-web] frametime overlay says the renderer is: {classification}")
 
-    panel = re.search(r'<div id="frametime"([^>]*)>(.*?)\n\s*</div>\s*<div id="status"', dom, re.S)
+    # The panel's own attributes, and nothing about what follows it. This
+    # regex used to run to the *next* element to find the panel's end, which
+    # made it a check on the page's element order: moving the status line into
+    # a chrome wrapper made a shown panel read as hidden. Only the attributes
+    # were ever wanted, and the readings below are matched on their own.
+    panel = re.search(r'<div id="frametime"([^>]*)>', dom)
     shown = 'class="shown"' in (panel.group(1) if panel else "")
     if not shown:
         return fail(
