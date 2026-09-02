@@ -12,11 +12,10 @@
 //! everyone knows about them and what they think of each other is `stores.rs`.
 //! Every screen reads all three through `lens.rs` and nothing else.
 //!
-//! **Nobody decides anything yet.** Autonomy is wave 1: in wave 0b a character
-//! stands at their home tile, holds a wallet, carries a desperation with the
-//! `source` line that says why it presses, and waits. The one thing that moves
-//! them is being the member a party fields, which is the substrate's dispatch
-//! loop wearing a name.
+//! **The cast is `CAST.md`** — the founding band of ten, their homes, their
+//! sheets and their source lines, landed by wave 1.1 with the vocabulary they
+//! wear. What a character *decides* is `autonomy.rs`; every one of them fields
+//! a one-person party, and that party is the only way anybody moves.
 
 use crate::grid::Tile;
 use crate::sprites::Art;
@@ -58,61 +57,137 @@ pub struct Character {
     pub active_petition: Option<usize>,
 }
 
-/// The authored cast (GDD §7 wants 8-12 at the MVP scenario; wave 0b ships
-/// four, one per committed portrait role, and the cast's *content* is an open
-/// ledger item alongside the trait list — GDD §10).
+/// The founding band (`CAST.md` §4): ten, the number GDD §7's MVP scenario
+/// asks for, drawn from everywhere on purpose.
 ///
-/// Homes are spread around Ebisu on passable ground, far enough apart that
-/// four names and the town's own label do not collide; `floors.rs` asserts
-/// that rather than trusting this sentence.
+/// Homes are the tents on the near bank of the Kawaza crossing — two rows just
+/// south of the road and east of the ford, far enough apart that ten names,
+/// ten figures and the town's own marker do not collide. `floors.rs` asserts that rather than trusting this sentence,
+/// and [`registry`] asserts the ground is passable, unshared, and off every
+/// named location.
 pub fn roster() -> Vec<Character> {
     vec![
         Character {
-            id: "alex",
-            name: "Alex",
-            home: Tile::new(3, 13),
-            icon: Art::PortraitAlex,
-            traits: vec![TraitId::Pragmatic, TraitId::Deft],
-            wallet: 12,
-            desperation: 1,
-            source: "owes the crypt-keeper for a winter's grain",
-            active_petition: None,
-        },
-        Character {
             id: "bob",
             name: "Bob",
-            home: Tile::new(12, 13),
+            home: Tile::new(12, 15),
             icon: Art::PortraitBob,
-            traits: vec![TraitId::Greedy, TraitId::Ambitious],
-            wallet: 8,
-            desperation: 3,
-            source: "means to buy the mill, and is not close",
+            traits: vec![TraitId::Fight, TraitId::Greedy, TraitId::Indebted],
+            wallet: 6,
+            desperation: 4,
+            source: "owes the collector at the toll-house, who counts days",
             active_petition: None,
         },
         Character {
             id: "steve",
             name: "Steve",
-            home: Tile::new(17, 16),
+            home: Tile::new(16, 15),
             icon: Art::PortraitSteve,
-            traits: vec![TraitId::Loyal, TraitId::Provider, TraitId::Strong],
-            wallet: 4,
+            traits: vec![TraitId::Labor, TraitId::Loyal, TraitId::Caring],
+            wallet: 3,
             desperation: 5,
-            source: "feeds a sister whose hands no longer work",
+            source: "sends half of everything to a sister whose hands gave out",
+            active_petition: None,
+        },
+        Character {
+            id: "alex",
+            name: "Alex",
+            home: Tile::new(20, 15),
+            icon: Art::PortraitAlex,
+            traits: vec![TraitId::Scout, TraitId::Cold, TraitId::Restless],
+            wallet: 12,
+            desperation: 1,
+            source: "has not slept a full month in one place since childhood",
             active_petition: None,
         },
         Character {
             id: "tim",
             name: "Tim",
-            home: Tile::new(23, 16),
+            home: Tile::new(24, 15),
             icon: Art::PortraitTim,
-            traits: vec![TraitId::Cold, TraitId::Upright, TraitId::Learned],
+            traits: vec![TraitId::Labor, TraitId::Proud, TraitId::Vengeful],
             wallet: 20,
             desperation: 2,
-            source: "keeps the tally and is owed by half the town",
+            source: "keeps the tally, and is owed by half the camp",
+            active_petition: None,
+        },
+        Character {
+            id: "rin",
+            name: "Rin",
+            home: Tile::new(28, 15),
+            icon: Art::PortraitRin,
+            traits: vec![TraitId::Craft, TraitId::Maker, TraitId::Loyal],
+            wallet: 5,
+            desperation: 2,
+            source: "cooks for ten on a fire built for three",
+            active_petition: None,
+        },
+        Character {
+            id: "goro",
+            name: "Goro",
+            home: Tile::new(6, 17),
+            icon: Art::PortraitGoro,
+            traits: vec![TraitId::Fight, TraitId::Renown, TraitId::Proud],
+            wallet: 9,
+            desperation: 3,
+            source: "left home to be talked about, and nobody is talking yet",
+            active_petition: None,
+        },
+        Character {
+            id: "hana",
+            name: "Hana",
+            home: Tile::new(10, 17),
+            icon: Art::PortraitHana,
+            traits: vec![TraitId::Scout, TraitId::Caring, TraitId::Vengeful],
+            wallet: 7,
+            desperation: 2,
+            source: "came for her brother; stays exactly as long as he does",
+            active_petition: None,
+        },
+        Character {
+            id: "ludo",
+            name: "Ludo",
+            home: Tile::new(14, 17),
+            icon: Art::PortraitLudo,
+            traits: vec![TraitId::Labor, TraitId::Fight, TraitId::Indebted],
+            wallet: 2,
+            desperation: 4,
+            source: "works off a debt that was his father's before it was his",
+            active_petition: None,
+        },
+        Character {
+            id: "ines",
+            name: "Ines",
+            home: Tile::new(18, 17),
+            icon: Art::PortraitInes,
+            traits: vec![TraitId::Craft, TraitId::Maker, TraitId::Craven],
+            wallet: 10,
+            desperation: 2,
+            source: "mends what breaks, and would rather be far from what breaks it",
+            active_petition: None,
+        },
+        Character {
+            id: "odd",
+            name: "Odd",
+            home: Tile::new(22, 17),
+            icon: Art::PortraitOdd,
+            traits: vec![TraitId::Fight, TraitId::Renown, TraitId::Restless],
+            wallet: 8,
+            desperation: 3,
+            source: "took the same job as Goro twice, and only one of them got paid",
             active_petition: None,
         },
     ]
 }
+
+/// The personalities `CAST.md` §3.3 **parks**: kept as rows of the vocabulary
+/// because the trait x mark reaction table references them and stays whole,
+/// and worn by nobody until marks are common — the betrayal ladder's era
+/// (asks, wave 2, and after).
+///
+/// Declared here rather than as a field on the trait row, because being on a
+/// sheet is a casting decision and not a property of the word.
+pub const PARKED: &[TraitId] = &[TraitId::Pious, TraitId::Pragmatic, TraitId::Upright];
 
 /// The registry's own validation — the authoring claims prose cannot hold.
 ///
@@ -227,14 +302,77 @@ pub fn registry(checks: &mut crate::checks::Checks, tuning: &crate::constants::T
             ),
         );
     }
+    // **The coverage matrix** (`CAST.md` §7), asserted as data so a future
+    // edit that breaks it is caught at the row that caused it rather than in
+    // a playtest: every aptitude and every motivator on at least two sheets,
+    // every kept personality on at least one, every parked personality on
+    // none.
+    let carries = |id: crate::traits::TraitId| {
+        cast.iter()
+            .filter(|person| person.traits.contains(&id))
+            .count()
+    };
+    for def in crate::traits::TRAITS {
+        let sheets = carries(def.id);
+        let (floor, why) = match def.kind {
+            crate::traits::TraitKind::Aptitude | crate::traits::TraitKind::Motivator => (
+                2usize,
+                "an aptitude or a want on one sheet is a word the cast cannot compare",
+            ),
+            crate::traits::TraitKind::Personality => (
+                usize::from(!PARKED.contains(&def.id)),
+                "a kept personality nobody carries is a chip the player never meets",
+            ),
+        };
+        checks.require(
+            sheets >= floor,
+            "a trait is on fewer sheets than the coverage matrix allows",
+            format!(
+                "{:?} is a {} carried by {sheets} of the ten and CAST.md §7 wants at least \
+                 {floor}: {why}",
+                def.id,
+                def.kind.name()
+            ),
+        );
+    }
+    for id in PARKED.iter().copied() {
+        checks.require(
+            carries(id) == 0,
+            "a parked personality is on somebody's sheet",
+            format!(
+                "{id:?} is carried by {} of the ten; CAST.md §3.3 parks it until marks are \
+                 common, and a parked row is in the vocabulary and on no sheet",
+                carries(id)
+            ),
+        );
+        checks.require(
+            crate::traits::TRAITS.iter().any(|def| def.id == id),
+            "a parked personality was deleted from the vocabulary instead of parked",
+            format!(
+                "{id:?} has no row; the trait x mark reaction table references it and stays \
+                 whole"
+            ),
+        );
+    }
     // Every party's face is its member's face: a token on the road and a
     // figure at a doorstep are the same person, or the map is telling two
-    // stories about one name.
-    let sim = crate::sim::Sim::opening(tuning);
-    for party in &sim.parties {
+    // stories about one name. One party per character, in registry order —
+    // the one-person party the dispatch loop moves (`sim.rs`).
+    let sim = crate::sim::Sim::opening(tuning, crate::modules::ModuleSet::ALL);
+    checks.require(
+        sim.parties.len() == cast.len(),
+        "the settlement does not field one party per person",
+        format!(
+            "{} parties over {} people; every character fields their own one-person party, \
+             which is how anybody moves at all",
+            sim.parties.len(),
+            cast.len()
+        ),
+    );
+    for (index, party) in sim.parties.iter().enumerate() {
         match sim.people.get(party.member) {
             Some(person) => checks.require(
-                party.token == person.icon,
+                party.token == person.icon && party.member == index && party.name == person.name,
                 "a party's token is not its member's own portrait",
                 format!(
                     "{} draws {:?} and its member {:?} draws {:?}",

@@ -15,13 +15,15 @@ as the change.
 | `ninjo-settlement-reference.png` | the settlement at world-minute 0 — the whole cast standing at their home tiles, named, before anything is dispatched | 1920x1080 |
 | `ninjo-modes-reference.png` | the auto-pause config, with `quest-complete` set to pause — the change this session's photographed run is stopped by | 1920x1080 |
 | `ninjo-map-reference.png` | the map at world-minute 40 — three parties out, two mid-travel on visibly different routes | 1920x1080 |
-| `ninjo-feed-reference.png` | the feed at world-minute 161, with the world stopped: the reason line, and the entry that caused it ringed in gold | 1920x1080 |
-| `ninjo-person-reference.png` | Steve's panel, opened by clicking his figure, with the selection ring on it | 1920x1080 |
+| `ninjo-feed-reference.png` | the feed at the first completion, with the world stopped: the reason line, and the entry that caused it ringed in gold | 1920x1080 |
+| `ninjo-living-reference.png` | world-minute 400 — **nobody was told to go anywhere**, and five of the ten are on the road because they decided to be | 1920x1080 |
+| `ninjo-roster-reference.png` | the roster drawer: everyone, their chips, their purse, their desperation, and what they are doing with the reason they are doing it — with a trait chip tapped and its explanation on the row above | 1920x1080 |
+| `ninjo-person-reference.png` | Steve's panel, opened by clicking his figure, with the `caring` chip tapped and the line that chip derives at the foot of the sheet | 1920x1080 |
 | `ninjo-map-narrow.png` | the same map | 600x540 |
 | `ninjo-feed-narrow.png` | the same feed | 600x540 |
 | `ninjo-tuning-reference.png` | the tuning drawer, MIRE pending in gold, APPLY lit | 1920x1080 |
 
-The settlement, config and character shots are reference-only: they are
+The settlement, config, living, roster and character shots are reference-only: they are
 pictures of *what is on screen*, and the scaling defects the narrow surface
 exists to catch are on the same chrome the map and feed pairs already cover.
 

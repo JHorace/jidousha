@@ -7,6 +7,13 @@ the *working surface*; when a capsule and this document disagree about
 something decided, this document wins and the capsule is stale. Numeric values
 are drawer-tunable throughout; shapes are the design.
 
+**`CAST.md` beside this file is the cast bible** — who lives in Kawaza, what
+the trait words mean, the seeded relationships and the first petition
+templates. It is content where this document is design; where the two disagree
+about a decided thing, this one wins, and `CAST.md`'s vocabulary is
+**provisional through the wave-1 close** (its §7 carries the question the
+playtest asks of it).
+
 **`DESIGN.md` beside this file is the substrate's technical doc** — the tile
 world, the integer clock, the one scheduler, the pathfinder, the verify
 machinery. The two are deliberately not merged: this document is what ninjo
@@ -131,6 +138,22 @@ section left open.
   ported whole, plus three motivator and three aptitude rows that are
   **placeholder content authored to prove the format**, flagged for the
   trait-content pass. The three-trait sheet cap giri enforced is gone.
+
+*Implemented (w1.1):* the content, from `CAST.md`. The placeholder rows are
+deleted and the vocabulary is the founding band's: **four aptitudes whose ids
+are the task ids** (`fight`, `labor`, `scout`, `craft` — so a job of a type
+reads the row of that name and nothing maps between two vocabularies), **five
+motivators**, each carrying a new `favors` field (a task type, or `any` for any
+paid work, neutral `none`) that is the whole of a want's reach into the scorer,
+and giri's nine personalities kept whole — six worn, three *parked* (`pious`,
+`pragmatic`, `upright`; `people::PARKED`), which are rows the trait x mark
+table still references and nobody carries until marks are common. The registry
+asserts `CAST.md` §7's coverage matrix — every aptitude and motivator on at
+least two sheets, every kept personality on at least one, every parked one on
+none — and the **no-dead-motivator rule** against `traits::TEMPLATED_MOTIVATORS`
+(wave 1.3 repoints that constant at the real template table and the assertion
+does not change). **The cast is ten**, at their own homes south of the ford,
+and the town is **Kawaza**.
 - **How the `kind` field avoids becoming a branch**, which this section asks
   for and does not say how to get: every `TraitDef` carries every modifier
   field, and the vocabulary's validation asserts that a row holds the neutral
@@ -374,6 +397,48 @@ dream; title-marks. **threats** — routine vs heroic; emits petitions.
 rendezvous; who-shows-up as foreshadowing. **knowledge** — lens
 parameters; regard-unlock leading.
 
+*Implemented (w1.1): autonomy.* `src/autonomy.rs` is the scorer, and it is one
+function: `choose(sim, tuning, now, who, candidates) -> Judged` — the action,
+the score, every term of it, and **the words**. The candidates are the
+caller's, which is how wave 2's ask arrives (a fourth `Action`, not a fork).
+This wave's three: **seek work** (claim a site's open job and go), **socialize**
+(walk to somebody's door, stay `visit_minutes`, small regard both ways by a
+drawer row) and **idle** (the floor everything else has to beat).
+
+- **The terms, each from data**: desperation opens the sum as it did in giri; a
+  want's `pressure` applies where its `favors` field covers the candidate's
+  task type; the aptitude is the row whose id *is* that task type; the pot
+  pulls by `pot_affinity`; regard toward whoever is at the door is weighed by
+  the visitor's own bond and grudge multipliers; and a rest term keeps somebody
+  who just finished a job at home for `rest_hours`. **No term branches on a
+  trait id** — the neutrality rule is what makes multiplying every row in safe.
+- **One party per character, one dispatch loop.** The roster and `Sim::parties`
+  are the same list twice, so a character the scorer sends out goes through
+  `sim::dispatch` — the player's own order path — and `sim::begin_journey` is
+  the only place `Activity::Outbound` is written. Verify asserts a
+  self-dispatched journey and an ordered one come out the same five movement
+  classes with the same verbs.
+- **Cadence**: every `scorer_hours`, staggered by roster index by
+  `scorer_stagger` minutes, on the one scheduler with a world-time address —
+  so it is speed-invariant like everything else. **Somebody who is out is not
+  rescored**; the occurrence fires, finds them abroad and reschedules.
+- **The player's order stands and wins**: the scorer only ever looks at an idle
+  party, and an order for somebody already out bounces with its reason, as
+  before.
+- **Two classes**, `action-started` (log) and `action-done` (ignore). The
+  journey itself is told in the five classes the substrate already had — one
+  story per movement — and these two carry the *decision*, with the reason on
+  the note: `Ludo took the mushroom haul at the Deep Cave - needs the money`.
+  An idle choice emits nothing: nothing happened, and the feed is for things
+  that did.
+- **Relationship presets** are `bonds_preset`, a drawer row like every other
+  constant and so on every stamp: 0 is flat, 1 writes `CAST.md` §5's seeds
+  through the store APIs at scenario open.
+- **The quest board grew to six a site.** S1 authored seven jobs for a player
+  who dispatches three parties by hand; ten people looking for work empty that
+  before the first day is out, and a settlement with nothing to do is not one
+  the scorer can be judged on. Sites still run dry — they take longer.
+
 *Implemented (w0b): the registry as machinery, empty of rows.*
 `src/modules.rs` holds the table above's shape (`ModuleSpec`: id, tier, wave,
 degrades-to), the per-module disable flags (`ModuleSet`, a bitmask planted as
@@ -511,6 +576,36 @@ battery — both written with **shipped literals**, because a check that derives
 its expectation from the constant under test cannot see that constant move.
 17 of 17 noticed.
 
+*Implemented (w1.1):* the module-off matrix is two passes now, and the
+autonomy-off one is what makes the row's degrades-to sentence a fact: with the
+scorer off nothing is scheduled at all, nobody emits `action-started`, and the
+world comes to rest with everybody at their own door — the wave-0b world. The
+speed-invariance sweep is extended over the scorer, and **its transcripts now
+carry the sentences**, because a replay that reproduced the choices and not the
+reasons would be reproducing half a decision.
+
+Two shapes of the harness changed, and both are the retuned clock's doing
+rather than the module's. **The sweep is judged over a world-time window**
+(`sweep::WINDOW`, the scenario's first day) instead of running to rest: a world
+with people deciding things in it never comes to rest, and two speed scripts
+are only comparable over the same span of *world*-time. And an order is
+addressed by `When::Approaching` — the conductor simulates the clock forward
+the three ticks a two-click order takes and starts it early enough to *land* on
+the world-minute it names — because at 4x the retuned clock carries 1.6 minutes
+a tick and a click begun when the minute arrives takes effect several minutes
+later, by a different several at every speed.
+
+The scorer's own battery is `autonomy::judge_module`: the choices replay
+identically (transcript and sentences); the **alive sweep** runs an idle player
+over `alive_days` world-days and asserts everybody takes paid work, nobody is
+dispatched while already out, and Ludo — `CAST.md` §4.1's eager worker — takes
+work at the first minute he is asked to think; the **preset flip** shows at
+least one choice differing between flat and authored, and it is the one the
+seeds are for; and the **one-dispatch-path** claim compares an ordered journey
+against a self-sent one. The mutation round grew to thirty-four constants and
+notices all of them, through a seventh instrument — the scorer battery, every
+expectation a shipped literal.
+
 Economy sweeps wait for an economy; distribution sweeps wait for the ladder.
 
 ## 10. Confidence & open ledger
@@ -525,10 +620,10 @@ wave at a time.
 
 Open (deliberately): the wave-1 class registrations and whether the mockup's
 defaults survive a real petition load (wave 0a shipped them; nothing this
-build has opens on pause) · scorer cadence · **trait list
-content, and the cast content beside it** — who ninjo's people are, how
-many of them, what they carry, and the portrait art more of them would
-need (wave 0b ships four and six placeholder trait rows) ·
+build has opens on pause) · **the trait vocabulary is provisional through the
+wave-1 close** — the words are `CAST.md` §3, chosen before the context that
+tests them exists, and §7 carries the question the wave-1.5 playtest asks of
+them; a rename is a data edit until 1.3 writes petition copy against them ·
 aptitude-change mechanism (two candidates recorded) · bond/grudge
 erasure rules · quest authoring surface beyond template `next` links ·
 settlement stock list beyond gold-only (bound to a famine/siege design

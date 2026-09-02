@@ -56,10 +56,6 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
         when,
         what: Act::ClickUi(at),
     };
-    let resume = |minute: u64, after: u64| Directive {
-        when: When::MinuteHeld { minute, after },
-        what: Act::Tap(Key::Digit1),
-    };
     let mut script: Vec<Directive> = vec![
         // The config, before the clock starts: a recorded input that changes
         // what the world will do.
@@ -75,30 +71,44 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
         },
     ];
     script.extend(sweep::order(8, 0, 0));
-    script.extend(sweep::order(12, 1, 1));
-    script.extend(sweep::order(20, 2, 2));
-    // Open the feed and leave it open across the first three completions, so
-    // the photograph at minute 161 catches the world stopped with its reason
+    script.extend(sweep::order(16, 1, 1));
+    script.extend(sweep::order(24, 2, 2));
+    // Open the feed and leave it open across the first completions, so the
+    // photograph at the first one catches the world stopped with its reason
     // on screen. Every resume is the player pressing 1, which is what a
     // player does; the world-times on the far side are unchanged.
     script.push(click_ui(When::Minute(100), layout::feed_button().center()));
-    script.push(resume(161, 60));
-    script.push(resume(176, 20));
-    script.push(resume(222, 20));
     script.push(click_ui(When::Minute(300), layout::feed_button().center()));
-    script.extend(sweep::order(330, 0, 3));
-    script.push(resume(606, 20));
-    // Somebody to look at: Steve fields no party, so he is at his doorstep at
-    // every minute of this scenario.
+    script.extend(sweep::order(360, 0, 3));
+    // Somebody to look at: Steve fields his own party, is home from the Deep
+    // Cave by minute 221, and is resting through the four hundreds.
     let steve = people::roster()
         .iter()
         .position(|person| person.id == "steve")
         .unwrap_or(0);
     let doorstep = people::roster()[steve].home.center();
     script.push(Directive {
-        when: When::Minute(640),
+        when: When::Minute(410),
         what: Act::ClickWorld(doorstep),
     });
+    // **A trait chip, tapped on the sheet** — the clarity slice, photographed.
+    // Steve's third chip is `caring`, a motivator, which is what the wave
+    // asks the picture to show.
+    script.push(click_ui(When::Minute(420), layout::sheet_chip(2).center()));
+    // Then the roster, with a chip's explanation open on it: the same
+    // gesture, the same derived line, a different surface.
+    script.push(click_ui(
+        When::Minute(440),
+        layout::roster_button().center(),
+    ));
+    let ludo = people::roster()
+        .iter()
+        .position(|person| person.id == "ludo")
+        .unwrap_or(0);
+    script.push(click_ui(
+        When::Minute(452),
+        layout::roster_chip(ludo, 2).center(),
+    ));
     let photos = [
         // The settlement before anything is dispatched: the whole cast
         // standing at their homes, named. Wave 0b's own exit picture - the
@@ -107,6 +117,7 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
             name: "settlement",
             minute: 0,
             tick: 10,
+            paused: false,
         },
         // The config panel, with the class the session will be stopped by
         // set to pause.
@@ -114,23 +125,43 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
             name: "modes",
             minute: 0,
             tick: 20,
+            paused: false,
         },
         Photo {
             name: "map",
             minute: 40,
             tick: 0,
+            paused: false,
         },
         // The feed, at the world-minute the world stopped itself.
         Photo {
             name: "feed",
-            minute: 161,
+            minute: sweep::COMPLETIONS[0],
             tick: 0,
+            paused: true,
         },
-        // A character looked at, with the selection ring on their figure.
+        // **The world living on its own**: the map at a minute when nobody
+        // was told to go anywhere and people are on the road anyway.
+        Photo {
+            name: "living",
+            minute: 400,
+            tick: 0,
+            paused: false,
+        },
+        // A character looked at, with a chip's explanation open on their
+        // sheet and the selection ring on their figure.
         Photo {
             name: "person",
-            minute: 645,
+            minute: 430,
             tick: 0,
+            paused: false,
+        },
+        // The roster: everyone, and what they are doing about it.
+        Photo {
+            name: "roster",
+            minute: 462,
+            tick: 0,
+            paused: false,
         },
     ];
     conduct(&Session {
@@ -142,7 +173,11 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
         probe_ticks: &[],
         viewport,
         max_ticks: 60_000,
-        stop_at_rest: true,
+        stop_at_rest: false,
+        stop_at_minute: Some(sweep::RUN_UNTIL),
+        // The photographed session is played under a config that stops the
+        // world at every completion; the player presses 1 again each time.
+        resume_after: Some((Key::Digit1, 20)),
     })
 }
 
@@ -218,7 +253,7 @@ pub fn path_contracts_at(checks: &mut Checks, tuning: Tuning) {
     let world = grid::grid();
     let town = LOCATIONS[0].tile;
 
-    // Ebisu -> Watchtower: all road, 47 tiles, 94 minutes — longer in tiles
+    // Kawaza -> Watchtower: all road, 47 tiles, 94 minutes — longer in tiles
     // than the 39-tile overland line, and cheaper (DESIGN §3's visible
     // routing).
     let tower = route(&world, &tuning, town, LOCATIONS[1].tile);
@@ -257,7 +292,7 @@ pub fn path_contracts_at(checks: &mut Checks, tuning: Tuning) {
         ),
     }
 
-    // Ebisu -> Deep Cave: 5 road tiles east along the spine, then 7 forest
+    // Kawaza -> Deep Cave: 5 road tiles east along the spine, then 7 forest
     // north up the x=12 column — 59 minutes, the cheap way into the slog.
     let cave = route(&world, &tuning, town, LOCATIONS[2].tile);
     let kinds = |route: &crate::path::Route| {
@@ -285,7 +320,7 @@ pub fn path_contracts_at(checks: &mut Checks, tuning: Tuning) {
         ),
     );
 
-    // Ebisu -> Black Vault: around the peak ridge's east end — 48 road
+    // Kawaza -> Black Vault: around the peak ridge's east end — 48 road
     // tiles, 96 minutes, through the wrap column at x=44.
     let vault = route(&world, &tuning, town, LOCATIONS[4].tile);
     checks.require(
@@ -576,15 +611,50 @@ fn module_matrix(checks: &mut Checks) -> String {
         let mut session = Session::plain(Tuning::SHIPPED, &script, 25_000);
         session.modules = set;
         let conducted = conduct(&session);
+        // **What every pass owes is a world that runs**: no panic, the script
+        // consumed, the window run out, and the shared state's arithmetic
+        // intact. "At rest" is only meaningful with the scorer switched off —
+        // a world where people decide things is never finished deciding, and
+        // that is the module's whole point.
         checks.require(
-            conducted.sim.at_rest(),
-            "a module-off pass left the world still moving",
+            conducted.minutes >= sweep::WINDOW,
+            "a module-off pass did not run out its world-time window",
             format!(
-                "with {what} ({}) the world had not come to rest after {} ticks",
+                "with {what} ({}) the clock ended at minute {} after {} ticks",
                 set.stamp(),
+                conducted.minutes,
                 conducted.ticks
             ),
         );
+        if !set.enabled(crate::autonomy::MODULE) {
+            checks.require(
+                conducted.sim.at_rest(),
+                "with autonomy off the world did not come to rest",
+                format!(
+                    "with {what} ({}) somebody is still abroad after {} ticks; the row's \
+                     degrades-to sentence says everybody idles at their own door until the \
+                     player dispatches them",
+                    set.stamp(),
+                    conducted.ticks
+                ),
+            );
+            checks.require(
+                !conducted
+                    .events
+                    .iter()
+                    .any(|event| event.class == crate::attention::EventClass::ActionStarted),
+                "with autonomy off somebody decided something anyway",
+                format!(
+                    "the transcript holds {} action-started events, and the module that emits \
+                     them is switched off",
+                    conducted
+                        .events
+                        .iter()
+                        .filter(|event| event.class == crate::attention::EventClass::ActionStarted)
+                        .count()
+                ),
+            );
+        }
         checks.require(
             !conducted.events.is_empty(),
             "a module-off pass produced a world where nothing happened",
@@ -618,16 +688,16 @@ fn drift_cadence(checks: &mut Checks) {
         let conducted = conduct(&Session::plain(Tuning::SHIPPED, &script, 60_000));
         counts.push((name, conducted.sim.shared.drifts(), conducted.minutes));
     }
-    // The scenario runs to minute 702 and the shipped cadence is every four
-    // world-hours, so drift falls due at 240 and 480 and not again before the
-    // world comes to rest. A shipped literal, so `drift_hours` moving breaks
-    // it (the mutation round leans on that).
+    // The scenario runs to minute 800 and the shipped cadence is every four
+    // world-hours, so drift falls due at 240, 480 and 720. A shipped literal,
+    // so `drift_hours` moving breaks it (the mutation round leans on that).
     for (name, drifts, minutes) in &counts {
         checks.require(
-            *drifts == 2,
+            *drifts == 3,
             "regard did not drift on the schedule the shipped cadence says",
             format!(
-                "under {name} the world ran {minutes} world-minutes and drift ran {drifts}                  times; every four hours over 702 minutes is 2 (at 240 and 480)"
+                "under {name} the world ran {minutes} world-minutes and drift ran {drifts} \
+                 times; every four hours over 800 minutes is 3 (at 240, 480 and 720)"
             ),
         );
     }
@@ -763,6 +833,7 @@ pub fn run() -> ExitCode {
     // --- the module scaffold, and the matrix it exists to be iterated by ----
     modules::registry(&mut checks);
     let matrix = module_matrix(&mut checks);
+    let scorer = crate::autonomy::judge_module(&mut checks, &baseline);
 
     // --- the art library, every string, and the link grammar ---------------
     library::library(&mut checks);
@@ -810,6 +881,7 @@ pub fn run() -> ExitCode {
     );
     println!("  auto-pause: {pauses}");
     println!("  module-off matrix: {matrix}");
+    println!("  scorer: {scorer}");
     println!("  module set: {}", modules::ModuleSet::ALL.stamp());
     println!("  mutation round: {mutations}");
     println!("{captured}");

@@ -125,6 +125,7 @@ pub fn content(flow: &Flow, lens: &Lens<'_>, clock: &Clock, tuning: &Tuning) -> 
     ));
     for (rect, label) in [
         (layout::feed_button(), "FEED"),
+        (layout::roster_button(), "ROSTER"),
         (layout::tune_button(), "TUNE"),
         (layout::modes_button(), "MODES"),
     ] {
@@ -140,7 +141,7 @@ pub fn content(flow: &Flow, lens: &Lens<'_>, clock: &Clock, tuning: &Tuning) -> 
     // nobody can read lying across a control somebody can click — and the
     // floors judge exactly that. The tuning drawer carries the toast in its
     // own prose band, so nothing is lost by keeping quiet here.
-    let bare = !flow.feed_open && !flow.modes_open && !flow.tuner.open;
+    let bare = !flow.feed_open && !flow.modes_open && !flow.tuner.open && !flow.roster_open;
     if bare && let Some(toast) = &flow.toast {
         panel.text(TextRun::new(
             layout::toast_at(),
@@ -151,49 +152,63 @@ pub fn content(flow: &Flow, lens: &Lens<'_>, clock: &Clock, tuning: &Tuning) -> 
     }
 
     // --- party strip --------------------------------------------------------
-    panel.text(TextRun::new(
-        layout::party_label(),
-        "PARTIES - click an idle one, then a site on the map",
-        theme::SMALL,
-        theme::DIM,
-    ));
-    for (index, party) in lens.parties().iter().enumerate() {
-        let chip = layout::party_chip(index);
-        panel.icon(IconRun::new(
-            chip.min + Vec2::splat(layout::pchip::PORTRAIT),
-            party.token,
-            layout::pchip::PORTRAIT_SCALE,
-        ));
-        let picked = flow.selected == Some(index);
-        // The token carries a character's name: the party is a band somebody
-        // in the registry fields, and the face on the chip is their portrait.
+    // One chip per person since wave 1.1, in two rows of five: a party is a
+    // one-person band, and the chip is how the player picks one up.
+    //
+    // **A drawer covers it**, and a strip drawn under one is a row of text
+    // lying across a control somebody can click - which is what the floors
+    // refuse, and what a person reading the drawer sees as a smear.
+    if bare {
         panel.text(TextRun::new(
-            chip.min + Vec2::new(layout::pchip::NAME_X, layout::pchip::NAME_TOP),
-            format!("{} - {}", party.name, lens.name(party.member)),
+            layout::party_label(),
+            "EVERYONE - click an idle one, then a site on the map",
             theme::SMALL,
-            if picked { theme::GOLD } else { theme::INK },
+            theme::DIM,
         ));
-        panel.text(TextRun::new(
-            chip.min + Vec2::new(layout::pchip::NAME_X, layout::pchip::STATUS_TOP),
-            party.status(),
-            theme::SMALL,
-            match party.activity {
-                Activity::Idle => theme::DIM,
-                Activity::Working { .. } => theme::REGARD,
-                _ => theme::INK,
-            },
-        ));
+        let names = lens.names();
+        for (index, party) in lens.parties().iter().enumerate() {
+            let chip = layout::party_chip(index);
+            panel.icon(IconRun::new(
+                chip.min + Vec2::splat(layout::pchip::PORTRAIT),
+                party.token,
+                layout::pchip::PORTRAIT_SCALE,
+            ));
+            let picked = flow.selected == Some(index);
+            panel.text(TextRun::new(
+                chip.min + Vec2::new(layout::pchip::NAME_X, layout::pchip::NAME_TOP),
+                party.name,
+                theme::SMALL,
+                if picked { theme::GOLD } else { theme::INK },
+            ));
+            panel.text(TextRun::new(
+                chip.min + Vec2::new(layout::pchip::NAME_X, layout::pchip::STATUS_TOP),
+                party.status(&names),
+                theme::SMALL,
+                match party.activity {
+                    Activity::Idle => theme::DIM,
+                    Activity::Working { .. } => theme::REGARD,
+                    _ => theme::INK,
+                },
+            ));
+        }
     }
 
     // --- the map's own words: markers' labels and quest counts -------------
+    // **Under an open drawer the map says nothing**, exactly as the banner and
+    // the toast do not: a drawer covers the screen, and a label nobody can
+    // read under a scrim is still a row of text lying across a control
+    // somebody can click. The markers and the figures stay - they are
+    // pictures, and the scrim is what hides them.
     for (index, spec) in LOCATIONS.iter().enumerate() {
         let style = theme::text(theme::SMALL, theme::INK);
-        let width = style.width_of(spec.name);
-        let at = layout::marker_label(spec.tile, width);
-        let mut label = TextRun::new(at, spec.name, theme::SMALL, theme::INK);
-        label.layer = theme::layers::MAP_TEXT;
-        panel.world_text(label);
-        if index != TOWN {
+        if bare {
+            let width = style.width_of(spec.name);
+            let at = layout::marker_label(spec.tile, width);
+            let mut label = TextRun::new(at, spec.name, theme::SMALL, theme::INK);
+            label.layer = theme::layers::MAP_TEXT;
+            panel.world_text(label);
+        }
+        if bare && index != TOWN {
             let open = lens.open_quests(index);
             let line = match open {
                 0 => "dry".to_owned(),
@@ -237,6 +252,9 @@ pub fn content(flow: &Flow, lens: &Lens<'_>, clock: &Clock, tuning: &Tuning) -> 
         );
         figure.layer = theme::layers::MARKER;
         panel.world_icon(figure);
+        if !bare {
+            continue;
+        }
         let style = theme::text(theme::SMALL, theme::INK);
         let width = style.width_of(person.name);
         let mut label = TextRun::new(
@@ -260,6 +278,9 @@ pub fn content(flow: &Flow, lens: &Lens<'_>, clock: &Clock, tuning: &Tuning) -> 
     }
     if flow.modes_open {
         panel.absorb(panels::modes_drawer(lens));
+    }
+    if flow.roster_open {
+        panel.absorb(panels::roster_drawer(flow, lens));
     }
     if flow.tuner.open {
         panel.absorb(tuning::drawer(flow, tuning));
@@ -367,6 +388,8 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
     let clock = *ctx.world.resource::<Clock>();
     let active = *ctx.world.resource::<Tuning>();
     let sim_parties = Lens::on(ctx.world.resource::<Sim>()).parties().len();
+    // The base screen, as `content` reckons it: no drawer over the map.
+    let bare = !flow.feed_open && !flow.modes_open && !flow.tuner.open && !flow.roster_open;
 
     let fill = |ctx: &mut DrawCtx, rect: Rect, color: Color, layer: i16| {
         ui::fill(ctx, map.to_world_rect(rect), color, layer);
@@ -377,12 +400,14 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
 
     // Top bar and party strip.
     fill(ctx, layout::topbar(), theme::BAR, theme::layers::PANEL);
-    fill(
-        ctx,
-        layout::party_strip(),
-        theme::STRIP,
-        theme::layers::PANEL,
-    );
+    if bare {
+        fill(
+            ctx,
+            layout::party_strip(),
+            theme::STRIP,
+            theme::layers::PANEL,
+        );
+    }
     for index in 0..layout::CHIPS {
         let chip = layout::speed_chip(index);
         let active_chip = match index {
@@ -473,23 +498,28 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
         );
         ghost(ctx, &map, layout::person_close());
     }
-    for index in 0..sim_parties {
-        let chip = layout::party_chip(index);
-        fill(ctx, chip, theme::PANEL, theme::layers::CARD);
-        border(
-            ctx,
-            chip,
-            if flow.selected == Some(index) {
-                theme::GOLD
-            } else {
-                theme::BORDER
-            },
-            theme::layers::CARD,
-        );
+    // The strip's own chrome, only where the strip is drawn: a drawer hides
+    // it (`content`), and a row of empty boxes under a drawer is a surface
+    // saying nothing loudly.
+    if bare {
+        for index in 0..sim_parties {
+            let chip = layout::party_chip(index);
+            fill(ctx, chip, theme::PANEL, theme::layers::CARD);
+            border(
+                ctx,
+                chip,
+                if flow.selected == Some(index) {
+                    theme::GOLD
+                } else {
+                    theme::BORDER
+                },
+                theme::layers::CARD,
+            );
+        }
     }
 
     // Drawers.
-    if flow.feed_open || flow.modes_open {
+    if flow.feed_open || flow.modes_open || flow.roster_open {
         fill(
             ctx,
             layout::feed_panel(),
@@ -502,6 +532,21 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
             theme::BORDER,
             theme::layers::OVERLAY,
         );
+    }
+    if flow.roster_open {
+        // Every row's own ground, and the chips over it: a chip is a target,
+        // and a target with no edge is a thing nobody knows they may tap.
+        for row in 0..layout::ROSTER_ROWS.min(ctx.world.resource::<Sim>().people.len()) {
+            fill(
+                ctx,
+                layout::roster_open(row),
+                theme::GHOST,
+                theme::layers::OVERLAY,
+            );
+            for slot in 0..layout::SHEET_CHIPS {
+                ghost(ctx, &map, layout::roster_chip(row, slot));
+            }
+        }
     }
     if flow.feed_open {
         ghost(ctx, &map, layout::feed_ignored_toggle());
@@ -543,6 +588,12 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
             }
         }
     }
+    // The character panel's own trait chips, when one is open over the map.
+    if flow.selected_person.is_some() && !flow.tuner.open {
+        for slot in 0..layout::SHEET_CHIPS {
+            ghost_at(ctx, &map, layout::sheet_chip(slot), theme::layers::CARD);
+        }
+    }
     if flow.tuner.open {
         fill(
             ctx,
@@ -571,18 +622,19 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
 
 /// A ghost button on the overlay band, through the UI mapping.
 fn ghost(ctx: &mut DrawCtx, map: &UiMap, rect: Rect) {
-    ui::fill(
-        ctx,
-        map.to_world_rect(rect),
-        theme::GHOST,
-        theme::layers::OVERLAY + 1,
-    );
+    ghost_at(ctx, map, rect, theme::layers::OVERLAY + 1);
+}
+
+/// The same, on a stated band — a control that sits on the base screen rather
+/// than inside a drawer has to be under the panel's own text, not over it.
+fn ghost_at(ctx: &mut DrawCtx, map: &UiMap, rect: Rect, layer: i16) {
+    ui::fill(ctx, map.to_world_rect(rect), theme::GHOST, layer);
     ui::border(
         ctx,
         map.to_world_rect(rect),
         theme::BORDER,
         2.0 * map.scale,
-        theme::layers::OVERLAY + 1,
+        layer,
     );
 }
 

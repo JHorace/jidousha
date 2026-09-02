@@ -157,20 +157,48 @@ impl<'a> Lens<'a> {
         self.person(index).map(|person| person.home)
     }
 
+    /// Everyone's name, in registry order — what a party's status line needs
+    /// to say whose doorstep somebody is standing on.
+    pub fn names(&self) -> Vec<&'static str> {
+        self.sim.names()
+    }
+
+    /// What paid work this character is out on, if any — the quest itself,
+    /// so a surface can name it without walking the site table.
+    pub fn quest(&self, index: usize) -> Option<&'a crate::sim::Quest> {
+        self.sim.parties.get(index)?.quest(&self.sim.sites)
+    }
+
+    /// **Why they are doing it** — the string the scorer wrote when it chose,
+    /// or the player's own order.
+    ///
+    /// One source: the panel, the roster row and the `action-started` event
+    /// all read this, so no surface can compute a second answer to a question
+    /// the scorer already answered (GDD §1).
+    pub fn reason(&self, index: usize) -> &'a str {
+        self.sim
+            .parties
+            .get(index)
+            .map_or("", |party| party.reason.as_str())
+    }
+
     /// What they are doing right now, as the character panel says it.
     ///
     /// Derived from the same facts the map draws them with: a character is at
-    /// home unless a party they field is out, and then they are doing what
-    /// that party is doing. Wave 1's autonomy gives them something of their
-    /// own to be doing and this answer grows a term; the panel does not.
+    /// home unless the party they field is out, and then they are doing what
+    /// that party is doing — with the reason it is doing it, which is what
+    /// wave 1.1 added and what makes the world legible rather than merely
+    /// alive.
     pub fn activity_line(&self, index: usize) -> String {
+        let names = self.names();
         match self
             .sim
             .parties
             .iter()
             .find(|party| party.member == index && party.activity != Activity::Idle)
         {
-            Some(party) => format!("out with {} - {}", party.name, party.status()),
+            Some(party) if party.reason.is_empty() => party.status(&names),
+            Some(party) => format!("{} - {}", party.status(&names), party.reason),
             None => "at home, and nobody has asked them for anything".to_owned(),
         }
     }
@@ -246,7 +274,7 @@ impl<'a> Lens<'a> {
 /// over a `Sim` is not quietly a copy of one: it is asserted against the same
 /// `Sim` it was built from, after that `Sim` has been mutated.
 pub fn identity(checks: &mut crate::checks::Checks, tuning: &Tuning) {
-    let mut sim = Sim::opening(tuning);
+    let mut sim = Sim::opening(tuning, crate::modules::ModuleSet::ALL);
     // Write something into every store, through the write API, so the
     // accessors have more than zeroes to agree about.
     let (a, b) = (0usize, 1usize);
@@ -405,7 +433,7 @@ pub fn identity(checks: &mut crate::checks::Checks, tuning: &Tuning) {
          home tile"
             .to_owned(),
     );
-    let mut moved = Sim::opening(tuning);
+    let mut moved = Sim::opening(tuning, crate::modules::ModuleSet::ALL);
     let out = moved.parties[0].member;
     moved.parties[0].activity = Activity::Working { until: 99 };
     let lens = Lens::on(&moved);

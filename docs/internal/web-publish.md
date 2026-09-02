@@ -92,7 +92,7 @@ records the alternative that was declined (blessing `include_bytes!` as the way
 a game ships art). This section is the pipeline half of it.
 
 - CONTRACT: **an asset root is staged under the page at the path the code names
-  it by.** `asset_source("assets")` and `asset_source("games/giri/assets")` are
+  it by.** `asset_source("assets")` and `asset_source("games/ninjo/assets")` are
   both paths from the top of the repository; the native loader reads them from
   there and the web loader fetches them relative to the page, and the build puts
   the directory at the same relative path under the page so one string means one
@@ -104,8 +104,8 @@ a game ships art). This section is the pipeline half of it.
     page only**, so a prototype's art travels with it and two prototypes'
     `icon_coin.png` cannot collide (ADR-0038).
 - The URL a game's picture ends up at is therefore
-  `/giri/games/giri/assets/icon_coin.png`, which is redundant and is the price
-  of the rule. ADR-0040's rationale is why the shorter `/giri/assets/…` is not
+  `/ninjo/games/ninjo/assets/icon_coin.png`, which is redundant and is the price
+  of the rule. ADR-0040's rationale is why the shorter `/ninjo/assets/…` is not
   available: it would make one string mean two different directories depending
   on which crate wrote it.
 - `tools/check-assets` enforces the same two roots from the source side, so a
@@ -279,7 +279,7 @@ One `index.html` template, self-contained (no external CDN dependencies):
   - CONTRACT: **presentation-only, and that is a three-part promise.** The scale
     multiplies the surface size, the camera viewport that follows it, and
     pointer positions — *together*. So world-space rendering is unchanged, the
-    aspect ratio a letterbox is built on is unchanged (games/giri/UI.md §6),
+    aspect ratio a letterbox is built on is unchanged (attic/giri/UI.md §6),
     a click lands where it looks like it lands at any scale, and the simulation
     never learns that any of this happened. The only thing that moves is how
     many device pixels the browser is asked to fill.

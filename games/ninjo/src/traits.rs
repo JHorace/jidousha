@@ -26,14 +26,108 @@
 //! **No list cap.** giri capped a sheet at three traits because a card had to
 //! hold them; ninjo's attention architecture owns legibility (GDD §3, revisit
 //! at the MVP gate), so the cap is gone and `vocabulary` no longer asserts
-//! one. The list's *content* — which traits ninjo's cast actually carries — is
-//! an open ledger item (GDD §10); the motivator and aptitude rows below are
-//! **placeholder content, flagged for the trait-content pass**, authored to
+//! one. The list's *content* is now `CAST.md` §3 — the founding band's
+//! vocabulary, landed by wave 1.1 and **provisional through the wave-1
+//! close**: four aptitude rows whose ids are the task ids, five motivator
+//! rows each carrying the task type its want [`Favors`], and giri's nine
+//! personalities kept whole. The placeholder rows wave 0b shipped to
 //! prove the format rather than to be played.
 
 use crate::checks::Checks;
 use crate::constants::Tuning;
 use crate::sprites::Art;
+
+/// The four kinds of work the world has (`CAST.md` §2).
+///
+/// **A task type's id is an aptitude's id**: the aptitude row a task reads is
+/// the row whose task is this one, so resolution (wave 1.4) and the scorer
+/// (1.1) ask the same question of the same row and cannot disagree about which
+/// competence a job wants.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TaskType {
+    /// Clear a site of what is in it.
+    Fight,
+    /// Camp work, and the generic industry's shifts.
+    Labor,
+    /// Travel-heavy: go and look.
+    Scout,
+    /// Mend, build.
+    Craft,
+}
+
+impl TaskType {
+    /// Every task type, in `CAST.md` §2's order.
+    pub const ALL: &'static [TaskType] = &[
+        TaskType::Fight,
+        TaskType::Labor,
+        TaskType::Scout,
+        TaskType::Craft,
+    ];
+
+    /// The id a quest row, a chip explanation and a report name it by.
+    pub fn id(self) -> &'static str {
+        match self {
+            TaskType::Fight => "fight",
+            TaskType::Labor => "labor",
+            TaskType::Scout => "scout",
+            TaskType::Craft => "craft",
+        }
+    }
+
+    /// The aptitude row this task reads.
+    pub fn aptitude(self) -> TraitId {
+        match self {
+            TaskType::Fight => TraitId::Fight,
+            TaskType::Labor => TraitId::Labor,
+            TaskType::Scout => TraitId::Scout,
+            TaskType::Craft => TraitId::Craft,
+        }
+    }
+
+    /// The task type an aptitude row is the competence for, if it is one.
+    pub fn of_aptitude(id: TraitId) -> Option<TaskType> {
+        TaskType::ALL
+            .iter()
+            .copied()
+            .find(|task| task.aptitude() == id)
+    }
+}
+
+/// Which work a motivator's pressure applies to (`CAST.md` §3.2).
+///
+/// **A field every consumer reads, never a match on the motivator's id.** The
+/// scorer adds a row's `pressure` to a candidate whose task type this favours;
+/// [`Favors::Any`] means any paid work, and [`Favors::None`] is the neutral
+/// value every non-motivator row holds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Favors {
+    /// Nothing. The neutral value.
+    None,
+    /// Any paid work, whatever its type.
+    Any,
+    /// One task type.
+    Task(TaskType),
+}
+
+impl Favors {
+    /// Whether this want's pressure applies to `task`.
+    pub fn covers(self, task: TaskType) -> bool {
+        match self {
+            Favors::None => false,
+            Favors::Any => true,
+            Favors::Task(wanted) => wanted == task,
+        }
+    }
+
+    /// What it favours, as a chip explanation says it.
+    pub fn phrase(self) -> String {
+        match self {
+            Favors::None => "nothing in particular".to_owned(),
+            Favors::Any => "any paid work".to_owned(),
+            Favors::Task(task) => format!("{} work", task.id()),
+        }
+    }
+}
 
 /// Which family a trait belongs to (GDD §3, §6).
 ///
@@ -97,20 +191,26 @@ pub enum TraitId {
     Cold,
     /// The upright refuse the dark-marked, whatever it costs them.
     Upright,
-    // ── motivator (placeholder content; the format is the point) ─────────
-    /// Somebody else eats first: upkeep costs more and the need presses.
-    Provider,
-    /// Wants to be somebody, and spends like it.
-    Ambitious,
-    /// Wants to go home, and takes little while they save for it.
-    Homesick,
-    // ── aptitude (placeholder content; the format is the point) ──────────
-    /// Does the heavy work without complaint.
-    Strong,
-    /// Good hands, quick work.
-    Deft,
-    /// Reads, counts, remembers.
-    Learned,
+    // ── motivator (CAST.md §3.2; one petition template each, §6) ─────────
+    /// Owes somebody impatient. Costs more to carry, and takes any paid work.
+    Indebted,
+    /// Wants a name people say, and fight work is where names are made.
+    Renown,
+    /// Somebody else's trouble is theirs: feeding another costs.
+    Caring,
+    /// Wants to be somewhere else for a while — the far roads.
+    Restless,
+    /// Wants to make something that lasts.
+    Maker,
+    // ── aptitude (CAST.md §3.1; one per task type, id = task id) ─────────
+    /// Stands where the trouble is.
+    Fight,
+    /// Does the long work without being asked twice.
+    Labor,
+    /// Knows the way, or finds it.
+    Scout,
+    /// Fixes it, or builds the thing that replaces it.
+    Craft,
 }
 
 /// One trait: its family, its name, its interim icon role, and its modifiers.
@@ -155,6 +255,9 @@ pub struct TraitDef {
     /// **Motivator.** What this want adds to the scorer's weight for the
     /// actions that serve it (GDD §5's autonomy module reads it).
     pub pressure: i64,
+    /// **Motivator.** Which work that pressure applies to (`CAST.md` §3.2) —
+    /// a field, so no consumer ever matches on a motivator's id.
+    pub favors: Favors,
     /// **Aptitude.** Competence at the work this trait names — what task
     /// resolution reads (GDD §5's resolution module).
     pub aptitude: i64,
@@ -179,6 +282,7 @@ pub const NEUTRAL: TraitDef = TraitDef {
     upkeep_num: 1,
     upkeep_den: 1,
     pressure: 0,
+    favors: Favors::None,
     aptitude: 0,
 };
 
@@ -262,71 +366,104 @@ pub const TRAITS: &[TraitDef] = &[
         icon: Art::Eye,
         ..NEUTRAL
     },
-    // ── motivator — PLACEHOLDER CONTENT (GDD §10's trait-content pass) ────
-    // Three rows, authored to prove the format: a motivator moves the upkeep
-    // multiplier and the pressure, and nothing else. What ninjo's cast
-    // actually wants is written when the content pass runs.
+    // ── motivator (CAST.md §3.2) ─────────────────────────────────────────
+    // Five wants, one per petition template (CAST.md §6). `favors` is the
+    // whole of a want's mechanical reach into the scorer: the task type its
+    // pressure applies to, `Any` meaning any paid work.
     TraitDef {
-        id: TraitId::Provider,
-        name: "provider",
+        id: TraitId::Indebted,
+        name: "indebted",
         kind: TraitKind::Motivator,
-        line: "somebody else eats before they do",
-        icon: Art::Heart,
+        line: "owes somebody, and the somebody is not patient",
+        icon: Art::Indebted,
+        upkeep_num: 5,
+        upkeep_den: 4,
+        pressure: 3,
+        favors: Favors::Any,
+        ..NEUTRAL
+    },
+    TraitDef {
+        id: TraitId::Renown,
+        name: "renown",
+        kind: TraitKind::Motivator,
+        line: "wants a name people say",
+        icon: Art::Renown,
+        pressure: 2,
+        favors: Favors::Task(TaskType::Fight),
+        ..NEUTRAL
+    },
+    TraitDef {
+        id: TraitId::Caring,
+        name: "caring",
+        kind: TraitKind::Motivator,
+        line: "somebody else's trouble is their trouble",
+        icon: Art::Caring,
         upkeep_num: 3,
         upkeep_den: 2,
         pressure: 2,
+        favors: Favors::Any,
         ..NEUTRAL
     },
     TraitDef {
-        id: TraitId::Ambitious,
-        name: "ambitious",
+        id: TraitId::Restless,
+        name: "restless",
         kind: TraitKind::Motivator,
-        line: "means to be somebody, and spends like it",
-        icon: Art::Coin,
-        upkeep_num: 2,
-        upkeep_den: 1,
-        pressure: 3,
+        line: "wants to be somewhere else, for a while",
+        icon: Art::Restless,
+        pressure: 2,
+        favors: Favors::Task(TaskType::Scout),
         ..NEUTRAL
     },
     TraitDef {
-        id: TraitId::Homesick,
-        name: "homesick",
+        id: TraitId::Maker,
+        name: "maker",
         kind: TraitKind::Motivator,
-        line: "saving for a road out of here",
-        icon: Art::Flame,
-        upkeep_num: 1,
-        upkeep_den: 2,
-        pressure: 1,
+        line: "wants to make something that lasts",
+        icon: Art::Maker,
+        upkeep_num: 5,
+        upkeep_den: 4,
+        pressure: 2,
+        favors: Favors::Task(TaskType::Craft),
         ..NEUTRAL
     },
-    // ── aptitude — PLACEHOLDER CONTENT (GDD §10's trait-content pass) ─────
-    // Three rows: an aptitude moves the competence value a task reads, and
-    // nothing else.
+    // ── aptitude (CAST.md §3.1) ──────────────────────────────────────────
+    // One per task type, and **the row's id is the task's id**: a job of type
+    // `fight` reads the `fight` row, so nothing has to map between two
+    // vocabularies.
     TraitDef {
-        id: TraitId::Strong,
-        name: "strong",
+        id: TraitId::Fight,
+        name: "fighter",
         kind: TraitKind::Aptitude,
-        line: "carries what two of them would",
-        icon: Art::Skull,
+        line: "stands where the trouble is",
+        icon: Art::Fight,
         aptitude: 2,
         ..NEUTRAL
     },
     TraitDef {
-        id: TraitId::Deft,
-        name: "deft",
+        id: TraitId::Labor,
+        name: "laborer",
         kind: TraitKind::Aptitude,
-        line: "good hands, and quick with them",
-        icon: Art::Eye,
+        line: "does the long work without being asked twice",
+        icon: Art::Labor,
         aptitude: 2,
         ..NEUTRAL
     },
     TraitDef {
-        id: TraitId::Learned,
-        name: "learned",
+        id: TraitId::Scout,
+        name: "scout",
         kind: TraitKind::Aptitude,
-        line: "reads, counts, and remembers",
-        icon: Art::Flame,
-        aptitude: 3,
+        line: "knows the way, or finds it",
+        icon: Art::Scout,
+        aptitude: 2,
+        ..NEUTRAL
+    },
+    TraitDef {
+        id: TraitId::Craft,
+        name: "crafter",
+        kind: TraitKind::Aptitude,
+        line: "fixes it, or builds the thing that replaces it",
+        icon: Art::Craft,
+        aptitude: 2,
         ..NEUTRAL
     },
 ];
@@ -596,6 +733,112 @@ pub fn competence_of(traits: &[TraitId]) -> i64 {
     traits.iter().map(|id| id.def().aptitude).sum()
 }
 
+/// What this character brings to **one kind of work**: the aptitude row whose
+/// id is the task's id (`CAST.md` §2).
+///
+/// Walked over every trait for the same reason [`upkeep_of`] is — a row that
+/// is not this task's aptitude contributes the neutral zero — so nothing here
+/// filters the list by kind or matches on an id.
+pub fn competence_at(task: TaskType, traits: &[TraitId]) -> i64 {
+    traits
+        .iter()
+        .filter(|id| **id == task.aptitude())
+        .map(|id| id.def().aptitude)
+        .sum()
+}
+
+/// What a want's pressure adds to a candidate of this task type — the sum over
+/// every row whose [`Favors`] covers it.
+///
+/// The `favors` **field** is what is read, never the motivator's id: adding a
+/// sixth want is a row, and this function does not change.
+pub fn pressure_toward(task: TaskType, traits: &[TraitId]) -> i64 {
+    traits
+        .iter()
+        .map(|id| id.def())
+        .filter(|def| def.favors.covers(task))
+        .map(|def| def.pressure)
+        .sum()
+}
+
+/// How strongly a pot pulls this character — the sum of their pot affinities.
+pub fn pot_pull_of(traits: &[TraitId]) -> i64 {
+    traits.iter().map(|id| id.def().pot_affinity).sum()
+}
+
+/// A rational as a chip explanation prints it: `2` for 2/1, `3/2` otherwise.
+fn ratio(num: i64, den: i64) -> String {
+    if den == 1 {
+        format!("{num}")
+    } else {
+        format!("{num}/{den}")
+    }
+}
+
+/// **What a trait does, derived from its row** — the chip explanation
+/// (`CAST.md`'s vocabulary question; the clarity slice of wave 1.1).
+///
+/// One formatter over the row, never a sentence written per trait: a renamed
+/// want, a moved multiplier or a sixth motivator changes this line without
+/// anybody editing prose, which is the only way a vocabulary this provisional
+/// can stay honest. The line is the row's own stranger-facing gist, and what
+/// follows it is every field the row actually moves.
+pub fn explain(id: TraitId) -> String {
+    let def = id.def();
+    let mut parts: Vec<String> = Vec::new();
+    if let Some(task) = TaskType::of_aptitude(def.id)
+        && def.aptitude != 0
+    {
+        parts.push(format!("counts for {} tasks", task.id()));
+    }
+    if def.upkeep_num != NEUTRAL.upkeep_num || def.upkeep_den != NEUTRAL.upkeep_den {
+        parts.push(format!("upkeep x{}", ratio(def.upkeep_num, def.upkeep_den)));
+    }
+    if def.pressure != NEUTRAL.pressure {
+        parts.push(format!("pulls toward {}", def.favors.phrase()));
+    }
+    if def.bond_num != NEUTRAL.bond_num || def.bond_den != NEUTRAL.bond_den {
+        parts.push(format!(
+            "bonds weigh x{}",
+            ratio(def.bond_num, def.bond_den)
+        ));
+    }
+    if def.grudge_num != NEUTRAL.grudge_num || def.grudge_den != NEUTRAL.grudge_den {
+        parts.push(format!(
+            "grudges weigh x{}",
+            ratio(def.grudge_num, def.grudge_den)
+        ));
+    }
+    if def.pot_affinity != NEUTRAL.pot_affinity {
+        parts.push(format!("the pot pulls x{}", def.pot_affinity));
+    }
+    let cells = REACTIONS.iter().filter(|cell| cell.trait_id == id).count();
+    if cells > 0 {
+        parts.push(format!("reacts to {cells} public marks"));
+    }
+    if parts.is_empty() {
+        parts.push("no weight of its own yet".to_owned());
+    }
+    format!("{} - {}", def.line, parts.join(" / "))
+}
+
+/// The motivators `CAST.md` §6 writes a petition template for.
+///
+/// **The no-dead-motivator rule, as far as this build can assert it**
+/// (`CAST.md` §3.2): every motivator row has at least one template whose
+/// source class is `motivator` and whose trigger names it. The template table
+/// is wave 1.3's; until it exists the rule is asserted against this declared
+/// list, which is `CAST.md` §6's five templates read off the document.
+/// **Wave 1.3 replaces this constant with a walk over the real table** and the
+/// assertion in [`vocabulary`] does not change.
+pub const TEMPLATED_MOTIVATORS: &[TraitId] = &[
+    TraitId::Indebted,
+    TraitId::Renown,
+    TraitId::Caring,
+    TraitId::Restless,
+    TraitId::Maker,
+];
+
 /// The vocabulary's own validation — the data-shape claims prose cannot hold.
 ///
 /// The kind discipline is enforced here rather than trusted: every row holds
@@ -679,7 +922,7 @@ pub fn vocabulary(checks: &mut Checks) {
         // The kind discipline: a row moves only the fields its kind owns.
         let owned = match def.kind {
             TraitKind::Personality => "bond/grudge multipliers and pot_affinity",
-            TraitKind::Motivator => "upkeep multiplier and pressure",
+            TraitKind::Motivator => "upkeep multiplier, pressure and favors",
             TraitKind::Aptitude => "aptitude",
         };
         let personality_neutral = def.bond_num == NEUTRAL.bond_num
@@ -689,7 +932,8 @@ pub fn vocabulary(checks: &mut Checks) {
             && def.pot_affinity == NEUTRAL.pot_affinity;
         let motivator_neutral = def.upkeep_num == NEUTRAL.upkeep_num
             && def.upkeep_den == NEUTRAL.upkeep_den
-            && def.pressure == NEUTRAL.pressure;
+            && def.pressure == NEUTRAL.pressure
+            && def.favors == NEUTRAL.favors;
         let aptitude_neutral = def.aptitude == NEUTRAL.aptitude;
         let held = match def.kind {
             TraitKind::Personality => motivator_neutral && aptitude_neutral,
@@ -701,8 +945,8 @@ pub fn vocabulary(checks: &mut Checks) {
             "a trait moves a field its kind does not own",
             format!(
                 "{:?} is a {} and so owns only the {owned}; it reads bond {}/{} grudge {}/{} \
-                 pot {} upkeep {}/{} pressure {} aptitude {}. A kind gates which fields \
-                 apply, and every consumer applies them all - a stray value would act \
+                 pot {} upkeep {}/{} pressure {} favors {:?} aptitude {}. A kind gates which \
+                 fields apply, and every consumer applies them all - a stray value would act \
                  without anybody choosing to apply it",
                 def.id,
                 def.kind.name(),
@@ -714,6 +958,7 @@ pub fn vocabulary(checks: &mut Checks) {
                 def.upkeep_num,
                 def.upkeep_den,
                 def.pressure,
+                def.favors,
                 def.aptitude
             ),
         );
@@ -778,6 +1023,81 @@ pub fn vocabulary(checks: &mut Checks) {
             ),
         );
     }
+    // **The aptitude ids are the task ids** (`CAST.md` §2): every task type has
+    // exactly one aptitude row, and every aptitude row is some task's. A task
+    // whose competence nobody can carry is a job nobody is good at, and an
+    // aptitude no task reads is a chip that means nothing.
+    for task in TaskType::ALL.iter().copied() {
+        let rows = TRAITS
+            .iter()
+            .filter(|def| def.kind == TraitKind::Aptitude && def.id == task.aptitude())
+            .count();
+        checks.require(
+            rows == 1,
+            "a task type does not have exactly one aptitude row",
+            format!(
+                "{:?} reads {rows} rows; CAST.md §2 makes an aptitude's id the task's id",
+                task.id()
+            ),
+        );
+        checks.require(
+            !task.id().is_empty() && task.id().chars().all(|glyph| glyph.is_ascii_lowercase()),
+            "a task type's id is not stamp-shaped ASCII",
+            format!("{task:?} is named {:?}", task.id()),
+        );
+    }
+    for def in TRAITS.iter().filter(|def| def.kind == TraitKind::Aptitude) {
+        checks.require(
+            TaskType::of_aptitude(def.id).is_some(),
+            "an aptitude row is not the competence for any task type",
+            format!(
+                "{:?} is an aptitude and no task reads it; CAST.md §2's four types are the \
+                 whole list",
+                def.id
+            ),
+        );
+    }
+    // **The no-dead-motivator rule** (`CAST.md` §3.2): every want has a
+    // petition that voices it. Asserted against the declared list until wave
+    // 1.3's template table exists.
+    for def in TRAITS.iter().filter(|def| def.kind == TraitKind::Motivator) {
+        checks.require(
+            TEMPLATED_MOTIVATORS.contains(&def.id),
+            "a motivator has no petition template to voice it",
+            format!(
+                "{:?} is a want nothing in CAST.md §6 ever asks for out loud; a motivator with \
+                 no template is pressure the player never hears",
+                def.id
+            ),
+        );
+        checks.require(
+            def.pressure > 0,
+            "a motivator puts no pressure on the scorer",
+            format!(
+                "{:?} has pressure {}; a want that weighs nothing is a chip that does nothing",
+                def.id, def.pressure
+            ),
+        );
+    }
+    for id in TEMPLATED_MOTIVATORS.iter().copied() {
+        checks.require(
+            id.kind() == TraitKind::Motivator,
+            "the template list names something that is not a motivator",
+            format!("{id:?} is a {}", id.kind().name()),
+        );
+    }
+    // A chip explanation is derived from the row and is one printable ASCII
+    // line - the thing the vocabulary question is asked with.
+    for def in TRAITS {
+        let line = explain(def.id);
+        checks.require(
+            line.starts_with(def.line)
+                && line.chars().all(|glyph| (' '..='~').contains(&glyph))
+                && !line.ends_with(" - "),
+            "a trait's chip explanation is not its own row, derived",
+            format!("{:?} explains as {line:?}", def.id),
+        );
+    }
 }
 
 /// The trait arithmetic, at a stated constants set — **every expectation a
@@ -831,7 +1151,7 @@ pub fn arithmetic(checks: &mut Checks, tuning: &Tuning) {
     );
     judge(
         "a motivator or an aptitude changed a mark reaction",
-        reaction_to(tuning, &[TraitId::Deft, TraitId::Provider], MarkId::Skimmer),
+        reaction_to(tuning, &[TraitId::Scout, TraitId::Caring], MarkId::Skimmer),
         -1,
         "a kind gates data, not behaviour: neither row has a cell, so the sum \
          is the bare tone",
@@ -857,7 +1177,7 @@ pub fn arithmetic(checks: &mut Checks, tuning: &Tuning) {
         ),
         (
             4,
-            &[TraitId::Loyal, TraitId::Strong][..],
+            &[TraitId::Loyal, TraitId::Fight][..],
             8,
             "an aptitude does not weigh regard",
         ),
@@ -873,9 +1193,17 @@ pub fn arithmetic(checks: &mut Checks, tuning: &Tuning) {
     // Upkeep, as a motivator multiplies it.
     for (carried, want, why) in [
         (&[][..], 4, "nobody's upkeep is the base"),
-        (&[TraitId::Provider][..], 6, "a provider carries half again"),
-        (&[TraitId::Ambitious][..], 8, "the ambitious carry double"),
-        (&[TraitId::Homesick][..], 2, "the homesick take half"),
+        (
+            &[TraitId::Caring][..],
+            6,
+            "the caring carry half again - they are feeding somebody",
+        ),
+        (
+            &[TraitId::Indebted][..],
+            5,
+            "the indebted carry a quarter more",
+        ),
+        (&[TraitId::Renown][..], 4, "a name costs nothing to keep"),
         (
             &[TraitId::Greedy][..],
             4,
@@ -890,16 +1218,16 @@ pub fn arithmetic(checks: &mut Checks, tuning: &Tuning) {
         );
     }
 
-    // Competence, as aptitudes sum it.
+    // Competence, as aptitudes sum it - and as one task reads it.
     for (carried, want, why) in [
         (&[][..], 0, "nobody brings nothing"),
         (
-            &[TraitId::Strong, TraitId::Deft][..],
+            &[TraitId::Fight, TraitId::Labor][..],
             4,
             "two aptitudes sum",
         ),
         (
-            &[TraitId::Greedy, TraitId::Provider][..],
+            &[TraitId::Greedy, TraitId::Caring][..],
             0,
             "a personality and a motivator bring no competence",
         ),
@@ -911,4 +1239,73 @@ pub fn arithmetic(checks: &mut Checks, tuning: &Tuning) {
             why,
         );
     }
+    for (task, carried, want, why) in [
+        (
+            TaskType::Fight,
+            &[TraitId::Fight, TraitId::Labor][..],
+            2,
+            "one task reads one row, not the sum of every aptitude carried",
+        ),
+        (
+            TaskType::Craft,
+            &[TraitId::Fight, TraitId::Labor][..],
+            0,
+            "a fighter who labours brings nothing to a craft task",
+        ),
+    ] {
+        judge(
+            "a task does not read the aptitude row whose id is its own",
+            competence_at(task, carried),
+            want,
+            why,
+        );
+    }
+
+    // The `favors` field, read as a field: `any` covers every task, a named
+    // task covers only its own, and nothing here knows a motivator's id.
+    for (task, carried, want, why) in [
+        (
+            TaskType::Craft,
+            &[TraitId::Indebted][..],
+            3,
+            "the indebted take any paid work",
+        ),
+        (
+            TaskType::Fight,
+            &[TraitId::Renown][..],
+            2,
+            "renown wants fight work",
+        ),
+        (
+            TaskType::Labor,
+            &[TraitId::Renown][..],
+            0,
+            "and nothing else will do",
+        ),
+        (
+            TaskType::Fight,
+            &[TraitId::Indebted, TraitId::Renown][..],
+            5,
+            "two wants that both cover a task both apply",
+        ),
+        (
+            TaskType::Fight,
+            &[TraitId::Greedy, TraitId::Fight][..],
+            0,
+            "a personality and an aptitude favour nothing",
+        ),
+    ] {
+        judge(
+            "a want's pressure is not applied by the task its favors field names",
+            pressure_toward(task, carried),
+            want,
+            why,
+        );
+    }
+    judge(
+        "the pot does not pull by the carrier's own affinity",
+        pot_pull_of(&[TraitId::Greedy, TraitId::Loyal]),
+        1,
+        "greedy carries the only pot affinity in the vocabulary",
+    );
 }

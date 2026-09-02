@@ -348,7 +348,7 @@ each has its ADR.
 
 **Changed after giri (prototype #1): two additions, both from its findings.**
 Prototype findings land here the way E0 run findings do; the ledger is
-`games/giri/FINDINGS.md`.
+`attic/giri/FINDINGS.md`.
 
 - **`World::view() -> WorldView<'_>`** joins the inventory (ADR-0039, G-001).
   A projection read by an Update system *and* by a Draw system had to be

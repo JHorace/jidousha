@@ -83,7 +83,11 @@ retires to `attic/` and we learn cheaply.
   substrate*, not as giri-with-holes.
 - giri mainline is **not** touched. Its tests stay green; its published
   page stays up. The fleet gains one published page: the fork's (`ninjo`
-  since wave 0b).
+  since wave 0b). **Wave 1.1 retired giri to `attic/giri/`** — the fork had
+  long since become the game, the two-alive budget had nothing left to hold,
+  and the workspace, the verify sweep and the published fleet all build with
+  it gone. Its documents are read where they now live; every path in this
+  file that says `games/giri/` is history rather than a pointer.
 
 ## 3. The sim model — a tile-grid world
 
@@ -119,7 +123,7 @@ The world is a **tile grid, and the sim reads it**:
 *Implemented (S1):* the grid is a 48x27 ASCII literal (`grid::MAP`) with
 the five-kind set as six glyphs — water and peak are two pictures, one
 impassable fact; each passable kind's cost is a named drawer constant. One
-town (Ebisu) and four sites are named tiles; three parties field. The
+town (Kawaza) and four sites are named tiles; three parties field. The
 authored terrain makes routing visible exactly as asked: the Watchtower's
 47-tile all-road route beats the 39-tile overland line, and the peak ridge
 forces the Black Vault detour around x=44. The pathfinder is 4-connected
@@ -175,8 +179,20 @@ no territory. Those wait for the mechanics that need them.
 *Implemented (S1):* the clock is integer world-minutes plus an integer
 tick-accumulator: every tick adds the current speed's accumulation
 (`speed_1x`/`speed_2x`/`speed_4x`, 0 paused) and every `minute_ticks`
-accumulated carries one minute — 1x is exactly the stated 1 minute per 30
-ticks, and the constants are drawer rows. Space toggles pause, 1/2/3 set
+accumulated carries one minute — 1x was exactly the stated 1 minute per 30
+ticks, and the constants are drawer rows.
+
+*Retuned (w1.1):* the stated starting point was **an order of magnitude too
+slow**, which is what the wave-0a playtest returned. The shipped set is now
+`minute_ticks 30` with accumulations `12 / 24 / 48`, so **1x is 24
+world-minutes a real second** — a world-day every minute of wall time — and
+2x and 4x are exact multiples of it. Nothing about the model changed and no
+world-time in this document moved. What did change is a consequence worth
+stating here rather than in a commit message: at 4x a tick carries 1.6
+world-minutes, so **the clock no longer visits every world-minute**, and an
+order can only be addressed to a minute the clock visits at every speed it is
+asked to be identical under (`games/ninjo/FINDINGS.md` G-016; the sweep's
+`When::Approaching` is the other half of the answer). Space toggles pause, 1/2/3 set
 the rate, the chips do the same, all through the `InputSnapshot`. The
 scenario **opens paused** (pause is consent — the player starts the
 world). The one scheduler is `sim.rs`: every occurrence carries

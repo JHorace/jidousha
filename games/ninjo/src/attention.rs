@@ -93,6 +93,12 @@ pub enum EventClass {
     QuestComplete,
     /// The party is home.
     Returned,
+    /// **A character decided something for themselves** and set out to do it
+    /// (GDD §5's autonomy module, wave 1.1). The reason is on the note: this
+    /// is the class that says *why* anybody did anything.
+    ActionStarted,
+    /// The thing they chose is finished and they are home again.
+    ActionDone,
 }
 
 /// One row of the event-class table: what a class is called, how it is drawn,
@@ -122,6 +128,11 @@ pub struct ClassSpec {
 /// the petitions module (wave 1.3) — no class this build has is one, so a
 /// shipped scenario never auto-pauses until the player asks for it in the
 /// config panel. That is the mockup's answer, not an oversight.
+///
+/// Wave 1.1 adds the scorer's two: `action-started` opens on `log`, because
+/// the reason a character left is the one thing the feed exists to carry, and
+/// `action-done` on `ignore`, because the completion and the return already
+/// said it.
 pub const CLASSES: &[ClassSpec] = &[
     ClassSpec {
         class: EventClass::Departed,
@@ -156,6 +167,25 @@ pub const CLASSES: &[ClassSpec] = &[
         id: "returned",
         color: theme::REGARD,
         icon: Art::Heart,
+        default_mode: Mode::Ignore,
+    },
+    // **Autonomy's two classes** (wave 1.1). A self-dispatch reuses the five
+    // movement classes above for the journey — one story per movement, not
+    // two — and these two carry the *decision*: the start is worth reading
+    // because it is the only place the reason appears, and the end is not,
+    // because the completion and the return already spoke.
+    ClassSpec {
+        class: EventClass::ActionStarted,
+        id: "action-started",
+        color: theme::INK,
+        icon: Art::Scout,
+        default_mode: Mode::Log,
+    },
+    ClassSpec {
+        class: EventClass::ActionDone,
+        id: "action-done",
+        color: theme::DIM,
+        icon: Art::Craft,
         default_mode: Mode::Ignore,
     },
 ];
@@ -420,6 +450,8 @@ pub fn vocabulary(checks: &mut crate::checks::Checks) {
         (EventClass::WorkBegan, Mode::Ignore),
         (EventClass::Returned, Mode::Ignore),
         (EventClass::QuestComplete, Mode::Log),
+        (EventClass::ActionStarted, Mode::Log),
+        (EventClass::ActionDone, Mode::Ignore),
     ] {
         checks.require(
             opening.mode(class) == wanted,
@@ -459,7 +491,7 @@ pub fn judge_at(checks: &mut crate::checks::Checks, tuning: &Tuning) {
         ),
     );
     // A feed over more events than it may hold: the cap is what stops it.
-    let mut sim = crate::sim::Sim::opening(tuning);
+    let mut sim = crate::sim::Sim::opening(tuning, crate::modules::ModuleSet::ALL);
     for minute in 0..25u64 {
         sim.events.push(Event {
             minute,
@@ -467,6 +499,7 @@ pub fn judge_at(checks: &mut crate::checks::Checks, tuning: &Tuning) {
             party: 0,
             tile: LOCATIONS[0].tile,
             location: Some(0),
+            gold: 0,
             note: format!("a probe event at minute {minute}"),
         });
     }
@@ -543,9 +576,12 @@ pub fn feed_is_a_view(checks: &mut crate::checks::Checks, run: &crate::sweep::Co
         }
     }
     // Hiding the ignored classes is what the filter does, and it does it here:
-    // this scenario's transcript is mostly movement.
-    let shown = feed(&lens, false, cap).len();
-    let all = feed(&lens, true, cap).len();
+    // this scenario's transcript is mostly movement. Judged **over the whole
+    // log rather than over a capped view**, because a world busy enough to
+    // fill the cap twice over would fill it with either filter and the claim
+    // would pass without the filter doing anything.
+    let shown = feed(&lens, false, usize::MAX).len();
+    let all = feed(&lens, true, usize::MAX).len();
     checks.require(
         shown < all,
         "the ignored filter hides nothing in a run that is mostly movement",

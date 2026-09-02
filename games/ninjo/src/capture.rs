@@ -1,7 +1,7 @@
 //! The captured frames: the screenshots a person looks at (giri's capture
 //! path, re-aimed at the map).
 //!
-//! Eight pictures. The mid-travel map and the feed are each taken at the
+//! Ten pictures. The mid-travel map and the feed are each taken at the
 //! reference surface and at a narrow one (the narrow set exists to catch
 //! scaling regressions, which are invisible to every assertion that is not
 //! about pixels). The rest are reference only: the settlement before anything
@@ -60,7 +60,7 @@ pub fn capture_screens(
     let mut wanted: Vec<Wanted> = Vec::new();
     // The reference-only set: pictures of *what is on screen* rather than of
     // how the chrome scales, which the map and feed pairs already cover.
-    for name in ["settlement", "modes", "person"] {
+    for name in ["settlement", "modes", "person", "living", "roster"] {
         if let Some(shot) = reference.photo(name) {
             wanted.push(Wanted {
                 name: format!("{name}-reference"),

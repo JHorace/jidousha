@@ -76,27 +76,44 @@ not a queue — the import path (`art/`) rode along from giri.
   floor at the reference zoom exactly as a site marker does. What a person
   *has* — wallet, desperation and its source, traits — is on their panel and
   nowhere else.
-- **Party strip** (always visible): one chip per party — portrait, the
-  party's name and the character who fields it (`OX - Bob`), and a
-  one-line status (`idle in Ebisu` / `-> the Watchtower` /
-  `working the Watchtower` / `<- Ebisu`). The portrait is the member's
-  own, so a face on the road and a figure at a doorstep are the same
-  person. Click an idle party to pick it, then click a site marker to
-  dispatch. A refused order bounces: a toast under the bar, and the same
-  sentence in the log.
+- **Party strip** (visible whenever no drawer is): **one chip per person**
+  since wave 1.1, in two rows of five — portrait, name, and a one-line
+  status (`at home` / `-> Watchtower` / `at Watchtower` / `-> Hana's` /
+  `with Hana` / `<- home`). A party is a one-person band, so the strip and
+  the roster are the same ten names; the portrait is the member's own, so a
+  face on the road and a figure at a doorstep are the same person. Click an
+  idle one to pick it, then click a site marker to dispatch. A refused order
+  bounces: a toast under the bar, and the same sentence in the notices. A
+  drawer hides the strip rather than being drawn over it — a row of text
+  under a scrim is still a row lying across a control.
 - **Pan/zoom**: arrows pan, `-`/`=` and the scroll wheel zoom; the camera
   clamps to the map and to a zoom range. All of it is input through the
   snapshot, none of it simulation state.
 - **Feed drawer**: §3a. It replaced wave 0b's log drawer, which was a copy
   of the event list; the feed is a view of it.
-- **Tuning drawer**: giri's §12 rules verbatim, at the game's nineteen
-  constants — two columns of ten, with the stamp to the right of them — and
+- **Tuning drawer**: giri's §12 rules verbatim, at the game's thirty-four
+  constants — three columns of twelve, with the stamp and the prose band in
+  the last two hundred pixels to the right of them — and
   APPLY restarts the **scenario** (this game's boundary). The stamp ends
   `seed <n>`. The variant picker is gone with the variant machinery.
-- **Trait chips are drawn on the character panel** (wave 0a), at the 16
-  units square the vocabulary specifies, in the interim category icon each
-  row carries (giri's §13 rule). What a chip *looks* like is still the UI
-  session's; where one appears is settled.
+- **Trait chips are drawn on the character panel and on every roster row**,
+  at the 16 units square the vocabulary specifies, in the icon each row
+  carries. **A chip is a click target wherever it appears** (wave 1.1): the
+  same tap on the same word opens the same one-line explanation, because the
+  line is *derived from the row* — `traits::explain` reads the row's
+  stranger-facing line and then the fields the row actually moves (`upkeep
+  x3/2 / pulls toward any paid work`, `counts for fight tasks`, `bonds weigh
+  x2`, `reacts to 4 public marks`). Nothing about a trait is written per
+  trait, so a rename, a moved multiplier or a sixth want changes the
+  explanation without anybody editing prose. The chip whose line is showing
+  is drawn in gold.
+- **The roster drawer** (wave 1.1, the ROSTER handle or the `r` key):
+  **everyone in one list** — portrait and name, their chips, their purse,
+  their desperation, and what they are doing *with the reason they are doing
+  it*, all through the lens. The name opens that character's panel; a chip
+  opens its explanation, on the row under the title. The row's own name box
+  and its chips are separate targets, because a control inside a control is
+  what the overlap floor refuses.
 
 ## 3a. The attention surfaces (wave 0a)
 
@@ -148,8 +165,9 @@ world unit is one reference pixel); no interactive overlap; no text across
 a control it does not label; stat numbers carry their icon (the treasury's
 coin); ASCII everywhere.
 
-The floors bind **every** surface §3a adds: a feed row, a face row, a config
-radio, a meter chip and the character panel's close are all at or above the
+The floors bind **every** surface §3a and §3 add: a feed row, a face row, a
+config radio, a meter chip, a roster row, a trait chip anywhere it appears
+and the character panel's close are all at or above the
 32x32 target floor, none of them overlaps another control that shares its
 screen, and every row of text is inside the surface that holds it.
 `floors::controls_for` is the one function that says which controls share a
@@ -166,12 +184,16 @@ frame judges hold all three.
 
 ## 5. Screenshot process
 
-Eight PNGs per verify run. Reference-only, because they are pictures of what
+Ten PNGs per verify run. Reference-only, because they are pictures of what
 is on screen rather than of how the chrome scales: **the settlement** at
 world-minute 0 (the whole cast standing at their homes, named, before
 anything is dispatched, which is wave 0b's own exit question), **the
-auto-pause config** with a class set to pause, and **a character's panel**
-with the selection ring on their figure. At both the reference surface and
+auto-pause config** with a class set to pause, **a character's panel** with
+the selection ring on their figure and a trait chip tapped, **the roster**
+with a chip's explanation open on it, and **the world living on its own** —
+the map at a minute when nobody was told to go anywhere and half the band is
+on the road because they decided to be, which is wave 1.1's own exit
+question. At both the reference surface and
 600x540 narrow: **the mid-travel map** (photographed with two parties on
 visibly different routes) and **the feed mid-pause** (the reason line
 showing, and the entry that stopped the world ringed in gold). Plus the

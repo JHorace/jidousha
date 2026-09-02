@@ -238,6 +238,7 @@ must still run when yours is switched off.
 | the game's **GDD** — its registry row for your module, plus the sections that row's `reads`/`writes` columns point into | the GDD is the game's canon. Where it and any other document disagree about a decided thing, it wins |
 | the game's **DESIGN.md** | the substrate's technical doc — the clock, the grid, the scheduler, the verify machinery you are landing on top of |
 | the game's **UI.md**, if your module owns a surface | the floors, the screenshot process, and what binds a new surface |
+| the game's **content bible**, where it has one (`games/ninjo/CAST.md`) | who the cast are, what the vocabulary words mean, and which of its sections your wave is the one that builds |
 | **the module's fences in your handoff** | what this session may and may not touch; three sessions can be in flight at once |
 | `docs/api/` | as §A.1 orders them, for any engine question the game has not already answered |
 
