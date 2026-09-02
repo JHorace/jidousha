@@ -7,11 +7,20 @@ G-008's `?constants=` location reading rode along in `src/web.rs` unchanged
 and is not re-counted here.
 
 **Reading discipline:** this fork was written from `docs/api/` (all four),
-`crates/jidousha/examples/`, and `games/giri/` (a game, not the engine). No
+`crates/jidousha/examples/`, and giri (a game, not the engine — at
+`games/giri/` then, `attic/giri/` since wave 1.1). No
 file under `crates/*/src/` was opened, and neither was `docs/internal/` nor
 any ADR but 0038 and 0041 (both named by the handoff). Wave 0b held the same
 line: `games/giri/` (the port source) and this crate, and nothing under
 `crates/*/src/`.
+
+**Wave 1.1 read** `CLAUDE.md`, the `make-game` skill, this game's own
+`GDD.md`, `DESIGN.md`, `UI.md`, `CAST.md` and `FINDINGS.md`, and its whole
+`src/`. It opened no file under `crates/*/src/`, no `docs/internal/`, and no
+ADR. It asked `docs/api/` nothing new — the scorer is arithmetic over the
+game's own data and the two surfaces it added are `Panel`s like every other,
+so its two entries below are about *this repository* rather than about the
+engine's documents.
 
 One entry from the S1 session. Nothing else was asked of the documents that
 they did not answer: the Camera's pan/zoom, `visible_bounds`, the pointer's
@@ -209,5 +218,58 @@ Expected: a forked tool says which game it belongs to. Happened: the session
 followed `extract.py`'s printed next-step verbatim and staged into
 `target/giri-art/`, which is where a giri session would look for it.
 
-**G-010 stays open** for the fourth wave running, untouched here: this session
-added no drawn content and no map-space content.
+### G-015 — the sweep's `games/giri/` paths in the engine's own comments
+
+Class: docs · Game: ninjo · Files: `crates/*/src/`, `docs/api/` · Open
+
+Wave 1.1 retired giri to `attic/giri/` (the handoff's last item). Every path in
+`docs/internal/` that pointed at one of its documents was repointed in this
+commit; the ones inside `crates/*/src/` doc comments were not, because engine
+source is outside a game session's fence — and `docs/api/` carries them
+because it is generated from those comments. The dangling references are:
+`crates/jidousha-render-core/src/font/mod.rs` and `style.rs` (G-003),
+`crates/jidousha-platform/src/driver/mod.rs`, `src/web/render_scale.rs` and
+`src/lib.rs` (`games/giri/UI.md §6`, and `"games/giri/assets"` as the worked
+example of a game's own asset root, which reaches `docs/api/jidousha-api.md`
+and `tools/api-doc/concepts.md`).
+
+Expected: a move that is mechanical in the game's own tree to be mechanical
+everywhere. Happened: four engine files and one generated document now name a
+directory that does not exist. None of them can mislead an *action* — they are
+citations and an illustrative path — but the asset-root example is the sharper
+half: it teaches `asset_source("games/giri/assets")` for "a game at
+`games/giri/`", and the game it names is in the attic. A sanitation pass or an
+engine session can repoint them at `games/ninjo/` and at `attic/giri/`; a game
+session may not.
+
+### G-016 — the game's own: an order cannot be addressed to a world-minute a fast clock never visits
+
+Class: **the game's own**, recorded here because the next wave meets it ·
+Game: ninjo · Open
+
+Wave 1.1 retuned 1x to 24 world-minutes a real second (the owner's 0a
+playtest). At 4x the clock then carries **1.6 world-minutes a tick**, which
+has two consequences the substrate's shape did not anticipate and neither is
+a bug:
+
+1. **The clock skips minutes.** `floor(1.6t)` never lands on a minute whose
+   residue mod 8 is 2, 5 or 7, so a scripted order addressed at such a minute
+   fires at the next one the clock does visit — and at a *different* next one
+   under each speed script, which breaks the invariance sweep at the
+   conductor rather than in the world. The sweep's four orders were moved to
+   minutes eight apart (8, 16, 24, 360) for this reason, and the reason is
+   worth a sentence because the next content change will want to move them
+   again.
+2. **A multi-tick input sequence lands later than it starts.** An order is
+   four ticks of clicking, which at 4x is six world-minutes. `When::Approaching`
+   is the answer: the conductor simulates the clock forward the ticks the
+   sequence takes and starts it early enough to *land* on the minute it names.
+
+The design rule that survives both: **the invariance claim is about the
+world's occurrences, not about the player's inputs**. Two speed scripts can
+issue the same order at the same world-minute only where the clock visits
+that minute at both speeds, and the sweep's scripts are authored to that.
+
+**G-010 stays open** for the fifth wave running, untouched here: this session
+added map-space content (ten figures and their names) but no *new kind* of it,
+and the culling pair it describes is unchanged.

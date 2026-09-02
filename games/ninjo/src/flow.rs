@@ -69,6 +69,15 @@ pub struct Flow {
     pub feed_open: bool,
     /// Whether the auto-pause config drawer is open.
     pub modes_open: bool,
+    /// Whether the roster drawer is open — everyone in one list (wave 1.1's
+    /// clarity slice). The `r` key and the ROSTER handle both open it.
+    pub roster_open: bool,
+    /// Which trait chip's explanation is showing, if one is.
+    ///
+    /// **A trait, not a place**: tapping the same word anywhere it appears —
+    /// a sheet, a roster row — shows the same line, because the line is
+    /// derived from the row (`traits::explain`) and not written per surface.
+    pub explained: Option<crate::traits::TraitId>,
     /// Whether the feed shows the classes the config ignores, dimmed — the
     /// auditing setting, so a player can see what they told the world to
     /// swallow.
@@ -104,6 +113,7 @@ impl Flow {
     fn close_everything(&mut self) {
         self.feed_open = false;
         self.modes_open = false;
+        self.roster_open = false;
         self.tuner.open = false;
         self.drilled = None;
         self.selected_person = None;
@@ -141,7 +151,11 @@ pub fn load_scenario(world: &mut World) {
     let tuning = *world.resource::<Tuning>();
     world.insert_resource(Rng::from_seed(seed));
     world.insert_resource(crate::grid::grid());
-    world.insert_resource(Sim::opening(&tuning));
+    let modules = world
+        .find_resource::<ModuleSet>()
+        .copied()
+        .unwrap_or_default();
+    world.insert_resource(Sim::opening(&tuning, modules));
     world.insert_resource(Clock::opening());
     let flow = world.resource_mut::<Flow>();
     flow.selected = None;
@@ -150,10 +164,7 @@ pub fn load_scenario(world: &mut World) {
     flow.pulse = None;
     flow.show_ignored = false;
     flow.seed = seed;
-    let modules = world
-        .find_resource::<ModuleSet>()
-        .copied()
-        .unwrap_or_default();
+    flow.explained = None;
     let flow = world.resource_mut::<Flow>();
     // The stamp on the opening line carries seed and module set; the
     // constants ride the drawer's own stamp, which is always on screen while
@@ -187,6 +198,7 @@ pub fn handle_input(world: &mut World) {
     .filter(|(key, _)| input.just_pressed(*key))
     .map(|(_, rate)| rate)
     .collect::<Vec<_>>();
+    let roster_key = input.just_pressed(Key::R);
     let pan = Vec2::new(
         f32::from(input.held(Key::ArrowRight)) - f32::from(input.held(Key::ArrowLeft)),
         f32::from(input.held(Key::ArrowDown)) - f32::from(input.held(Key::ArrowUp)),
@@ -199,6 +211,14 @@ pub fn handle_input(world: &mut World) {
     // space toggles pause, 1/2/3 pick a rate (and resume).
     for change in speed_keys {
         apply_speed(world, tick, change);
+    }
+
+    // The roster: a registered key opens the same drawer the handle does.
+    if roster_key {
+        let flow = world.resource_mut::<Flow>();
+        let open = flow.roster_open;
+        flow.close_everything();
+        flow.roster_open = !open;
     }
 
     // Pan and zoom: presentation, still input-driven and so still replayable.
@@ -251,9 +271,14 @@ pub fn handle_input(world: &mut World) {
         modes_click(world, at);
         return;
     }
+    if world.resource::<Flow>().roster_open {
+        roster_click(world, at);
+        return;
+    }
     for (handle, open) in [
         (layout::feed_button(), Drawer::Feed),
         (layout::modes_button(), Drawer::Modes),
+        (layout::roster_button(), Drawer::Roster),
     ] {
         if !handle.contains(at) {
             continue;
@@ -263,6 +288,7 @@ pub fn handle_input(world: &mut World) {
         match open {
             Drawer::Feed => flow.feed_open = true,
             Drawer::Modes => flow.modes_open = true,
+            Drawer::Roster => flow.roster_open = true,
         }
         return;
     }
@@ -292,10 +318,25 @@ pub fn handle_input(world: &mut World) {
             return;
         }
     }
-    if world.resource::<Flow>().selected_person.is_some() {
+    if let Some(who) = world.resource::<Flow>().selected_person {
         if layout::person_close().contains(at) {
-            world.resource_mut::<Flow>().selected_person = None;
+            let flow = world.resource_mut::<Flow>();
+            flow.selected_person = None;
+            flow.explained = None;
             return;
+        }
+        // **A trait chip, tapped**: the same gesture the roster's rows answer,
+        // over the same rectangles, showing the same derived line.
+        let carried: Vec<crate::traits::TraitId> = {
+            let lens = Lens::on(world.resource::<Sim>());
+            lens.traits(who).to_vec()
+        };
+        for (slot, id) in carried.into_iter().take(layout::SHEET_CHIPS).enumerate() {
+            if layout::sheet_chip(slot).contains(at) {
+                let flow = world.resource_mut::<Flow>();
+                flow.explained = (flow.explained != Some(id)).then_some(id);
+                return;
+            }
         }
         if layout::person_panel().contains(at) {
             return;
@@ -384,6 +425,37 @@ enum Drawer {
     Feed,
     /// The auto-pause config.
     Modes,
+    /// The roster.
+    Roster,
+}
+
+/// A click inside the open roster drawer.
+///
+/// A row's name opens that character's panel; a trait chip opens that trait's
+/// explanation. Anything else shuts the drawer, exactly as the feed's and the
+/// config's own rule.
+fn roster_click(world: &mut World, at: Vec2) {
+    let people = world.resource::<Sim>().people.len();
+    for who in 0..people.min(layout::ROSTER_ROWS) {
+        let carried: Vec<crate::traits::TraitId> = {
+            let lens = Lens::on(world.resource::<Sim>());
+            lens.traits(who).to_vec()
+        };
+        for (slot, id) in carried.into_iter().take(layout::SHEET_CHIPS).enumerate() {
+            if layout::roster_chip(who, slot).contains(at) {
+                let flow = world.resource_mut::<Flow>();
+                flow.explained = (flow.explained != Some(id)).then_some(id);
+                return;
+            }
+        }
+        if layout::roster_open(who).contains(at) {
+            let flow = world.resource_mut::<Flow>();
+            flow.close_everything();
+            flow.selected_person = Some(who);
+            return;
+        }
+    }
+    world.resource_mut::<Flow>().roster_open = false;
 }
 
 /// A click inside the open feed drawer.
@@ -492,7 +564,16 @@ fn order_dispatch(world: &mut World, tick: u64, site_index: usize) {
     let grid = world.resource::<Grid>().clone();
     let refused = {
         let sim = world.resource_mut::<Sim>();
-        sim::dispatch(sim, &grid, &tuning, now, party_index, site_index).err()
+        sim::dispatch(
+            sim,
+            &grid,
+            &tuning,
+            now,
+            party_index,
+            site_index,
+            sim::Motive::ordered(),
+        )
+        .err()
     };
     match refused {
         None => {

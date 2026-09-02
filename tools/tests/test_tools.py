@@ -3021,10 +3021,14 @@ class GameToolingTest(unittest.TestCase):
     def test_a_game_gets_its_own_asset_root_and_an_example_does_not(self):
         # ADR-0040: a game's art travels with the crate; an example loads from
         # the repository's shared root and owns nothing.
-        dirs = {"giri": "games/giri", "jidousha": "crates/jidousha"}
+        # The game is named for one that is really on disk: this case reads
+        # the tree to decide whether the crate has art of its own, so a
+        # retired prototype's path stops being an example the day it moves to
+        # `attic/`.
+        dirs = {"ninjo": "games/ninjo", "jidousha": "crates/jidousha"}
         with unittest.mock.patch.object(build_web, "REPO_ROOT", REPO_ROOT):
             self.assertEqual(
-                build_web.own_asset_root("giri", "game", dirs), "games/giri/assets"
+                build_web.own_asset_root("ninjo", "game", dirs), "games/ninjo/assets"
             )
             self.assertIsNone(build_web.own_asset_root("jidousha", "example", dirs))
 

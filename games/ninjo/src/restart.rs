@@ -21,7 +21,9 @@ use crate::clock::Clock;
 use crate::constants::Tuning;
 use crate::flow::Flow;
 use crate::sim::Sim;
-use crate::sweep::{Act, Directive, Photo, Session, Shot, When, conduct, order, transcript};
+use crate::sweep::{
+    Act, Directive, Photo, RUN_UNTIL, Session, Shot, When, conduct, order, transcript,
+};
 use crate::{layout, presets, verify};
 
 /// The preset the session applies. `MIRE` moves the off-road costs, so the
@@ -130,6 +132,7 @@ pub fn drawer_run() -> DrawerRun {
         name: "tuning",
         minute: 0,
         tick: PENDING_AT,
+        paused: false,
     }];
     let probe_ticks = [OPENED_AT, PENDING_AT, APPLIED_AT];
     let conducted = conduct(&Session {
@@ -141,7 +144,9 @@ pub fn drawer_run() -> DrawerRun {
         probe_ticks: &probe_ticks,
         viewport: verify::HEADLESS_VIEWPORT,
         max_ticks: 60_000,
-        stop_at_rest: true,
+        stop_at_rest: false,
+        stop_at_minute: Some(RUN_UNTIL),
+        resume_after: None,
     });
 
     let take = |tick: u64| {
@@ -304,12 +309,27 @@ fn replay_identity(checks: &mut Checks, run: &DrawerRun) {
             transcript(&fresh.events)
         ),
     );
-    // The dispatch itself landed: five events, starting with the departure
-    // at minute 6.
+    // The dispatch itself landed: a departure at minute 6, and the whole loop
+    // behind it. The count is not pinned any more — the world has people in
+    // it who decide things for themselves, and how many of them do so inside
+    // the window is the scorer's business, not the drawer's.
     checks.require(
         run.events.first().is_some_and(|event| {
             event.minute == 6 && event.class == crate::attention::EventClass::Departed
-        }) && run.events.len() == 5,
+        }) && run
+            .events
+            .iter()
+            .filter(|event| event.party == 0)
+            .take(5)
+            .map(|event| event.class)
+            .collect::<Vec<_>>()
+            == [
+                crate::attention::EventClass::Departed,
+                crate::attention::EventClass::Arrived,
+                crate::attention::EventClass::WorkBegan,
+                crate::attention::EventClass::QuestComplete,
+                crate::attention::EventClass::Returned,
+            ],
         "the post-apply dispatch did not run its whole loop",
         format!("the post-apply transcript is {:?}", transcript(&run.events)),
     );

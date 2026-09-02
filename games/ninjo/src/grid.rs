@@ -246,13 +246,13 @@ impl Grid {
 /// Reading it: `=` road, `.` plains, `f` forest, `r` rough, `~` water,
 /// `^` peak. The authored facts the verify scripts lean on:
 ///
-/// - **The road beats the overland shortcut.** Ebisu (7,14) to the Watchtower
+/// - **The road beats the overland shortcut.** Kawaza (7,14) to the Watchtower
 ///   (36,4) is 39 tiles by the straightest overland line — through the
 ///   forest — and 47 tiles by road (east along the spine, north up the x=40
 ///   branch, west along y=4). At the shipped costs the longer road is far
 ///   cheaper, and the pathfinder takes it.
 /// - **A barrier forces a detour.** The peak ridge (x 31..43, y 15..20)
-///   stands between Ebisu and the Black Vault (40,21); the road wraps around
+///   stands between Kawaza and the Black Vault (40,21); the road wraps around
 ///   its east end via x=44.
 /// - The Deep Cave (12,7) has no road: five road tiles east and seven
 ///   forest tiles north is the cheap way in — 59 minutes of mostly slog.
@@ -342,8 +342,8 @@ pub const TOWN: usize = 0;
 /// Every named tile: the town, then the quest sites.
 pub const LOCATIONS: &[LocationSpec] = &[
     LocationSpec {
-        id: "ebisu",
-        name: "Ebisu",
+        id: "kawaza",
+        name: "Kawaza",
         tile: Tile::new(7, 14),
         icon: IconRole::Town,
     },

@@ -348,7 +348,7 @@ believe.
 **And a mitigation a playtester can reach.** `?renderscale=0.5`
 (web-publish.md §2) renders a quarter of the device pixels and lets the browser
 upscale — presentation-only, so world space, the letterbox contract
-(games/giri/UI.md §6), input mapping and the simulation are all untouched. It is
+(attic/giri/UI.md §6), input mapping and the simulation are all untouched. It is
 opt-in: no deployed build's default behavior changed, and a default cap on
 device pixel ratio would be a decision needing an ADR rather than a quiet edit.
 

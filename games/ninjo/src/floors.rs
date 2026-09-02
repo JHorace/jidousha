@@ -44,6 +44,10 @@ pub fn targets() -> Vec<(String, Rect)> {
     }
     out.push(("the feed drawer's handle".to_owned(), layout::feed_button()));
     out.push((
+        "the roster drawer's handle".to_owned(),
+        layout::roster_button(),
+    ));
+    out.push((
         "the tuning drawer's handle".to_owned(),
         layout::tune_button(),
     ));
@@ -64,7 +68,16 @@ pub fn targets() -> Vec<(String, Rect)> {
         "the character panel's close".to_owned(),
         layout::person_close(),
     ));
-    for index in 0..Sim::opening(&Tuning::SHIPPED).parties.len() {
+    for slot in 0..layout::SHEET_CHIPS {
+        out.push((
+            format!("the sheet's trait chip {slot}"),
+            layout::sheet_chip(slot),
+        ));
+    }
+    for index in 0..Sim::opening(&Tuning::SHIPPED, crate::modules::ModuleSet::ALL)
+        .parties
+        .len()
+    {
         out.push((format!("party chip {index}"), layout::party_chip(index)));
     }
     out
@@ -96,6 +109,22 @@ pub fn modes_targets() -> Vec<(String, Rect)> {
     out
 }
 
+/// Every rectangle the roster drawer answers a click in: a row's name, and
+/// every trait chip on it.
+pub fn roster_targets() -> Vec<(String, Rect)> {
+    let mut out = Vec::new();
+    for row in 0..layout::ROSTER_ROWS {
+        out.push((format!("roster row {row}"), layout::roster_open(row)));
+        for slot in 0..layout::SHEET_CHIPS {
+            out.push((
+                format!("roster row {row}'s trait chip {slot}"),
+                layout::roster_chip(row, slot),
+            ));
+        }
+    }
+    out
+}
+
 /// The controls that share this screen — whichever surface is up.
 ///
 /// One function, because "a row of text may not lie across a control it is not
@@ -110,6 +139,9 @@ pub fn controls_for(flow: &Flow) -> Vec<(String, Rect)> {
     }
     if flow.modes_open {
         return modes_targets();
+    }
+    if flow.roster_open {
+        return roster_targets();
     }
     targets()
 }
@@ -176,7 +208,10 @@ pub fn layout_floors(checks: &mut Checks) {
             format!("chip {index} at {:?}", layout::speed_chip(index)),
         );
     }
-    for index in 0..Sim::opening(&Tuning::SHIPPED).parties.len() {
+    for index in 0..Sim::opening(&Tuning::SHIPPED, crate::modules::ModuleSet::ALL)
+        .parties
+        .len()
+    {
         checks.require(
             inside(layout::party_strip(), layout::party_chip(index)),
             "a party chip runs off the strip it belongs to",
@@ -210,6 +245,11 @@ pub fn drawer_floors(checks: &mut Checks) {
             layout::feed_panel(),
             modes_targets(),
             layout::modes_button(),
+        ),
+        (
+            layout::roster_panel(),
+            roster_targets(),
+            layout::roster_button(),
         ),
     ] {
         drawer_floor(checks, drawer, &controls, handle);
@@ -333,13 +373,13 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
     let opening = (
         "the opening screen",
         Flow::default(),
-        Sim::opening(&Tuning::SHIPPED),
+        Sim::opening(&Tuning::SHIPPED, crate::modules::ModuleSet::ALL),
         Clock::opening(),
     );
     // The end of the conducted run: notices written, everything home.
     let mut played = Flow::default();
     played.note("d1 11:42 - running at 4x".to_owned());
-    played.note("CRANE is out - only an idle party takes orders".to_owned());
+    played.note("Steve is out - only an idle party takes orders".to_owned());
     let mut ended_clock = Clock::opening();
     ended_clock.minutes = baseline.minutes;
     // A world that stopped itself, with the feed open on the reason: the
@@ -366,16 +406,29 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
     feed_open.show_ignored = true;
     let mut modes_open = played.clone();
     modes_open.modes_open = true;
+    // The roster, with a chip's explanation up: the loudest that surface gets.
+    let mut roster_open = played.clone();
+    roster_open.roster_open = true;
+    roster_open.explained = crate::traits::TRAITS
+        .iter()
+        .max_by_key(|def| crate::traits::explain(def.id).chars().count())
+        .map(|def| def.id);
     // A character selected and a chip drilled: the two panels that share the
     // base screen, both up at once.
     let mut looked_at = played.clone();
     looked_at.selected_person = Some(baseline.sim.people.len().saturating_sub(1));
     looked_at.drilled = Some(0);
+    // With the longest explanation a trait has, open on the sheet: a panel
+    // that fits its widest state fits every other one.
+    looked_at.explained = crate::traits::TRAITS
+        .iter()
+        .max_by_key(|def| crate::traits::explain(def.id).chars().count())
+        .map(|def| def.id);
     // A toast up, a party picked — the strip's loudest state.
     let mut toasted = played.clone();
     toasted.selected = Some(0);
     toasted.toast = Some(crate::flow::Toast {
-        text: crate::sim::Refusal::NotIdle.message("CRANE", "the Black Vault"),
+        text: crate::sim::Refusal::NotIdle.message("Steve", "the Black Vault"),
         until: u64::MAX,
     });
     vec![
@@ -390,6 +443,12 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
             "the auto-pause config",
             modes_open,
             paused_sim.clone(),
+            ended_clock,
+        ),
+        (
+            "the roster with an explanation open",
+            roster_open,
+            baseline.sim.clone(),
             ended_clock,
         ),
         (

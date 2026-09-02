@@ -42,9 +42,11 @@ pub struct Tuning {
     /// Engine ticks per world-minute at 1x — the clock's base pace.
     ///
     /// The clock accumulates the current speed's multiplier every tick and
-    /// carries one world-minute for every `minute_ticks` accumulated, so at
-    /// the shipped 30 one world-minute is half a wall-second at 1x and a
-    /// world-hour is about thirty seconds (DESIGN §4's starting point).
+    /// carries one world-minute for every `minute_ticks` accumulated. At the
+    /// shipped 30 ticks and an accumulation of 12, **1x is 24 world-minutes a
+    /// real second** at the engine's fixed sixty — a world-day every minute of
+    /// wall time. DESIGN §4's first guess was an order of magnitude slower and
+    /// the wave-0a playtest said so; 2x and 4x are exact multiples of this.
     pub minute_ticks: i64,
     /// The 1x speed's per-tick accumulation.
     pub speed_1x: i64,
@@ -90,6 +92,49 @@ pub struct Tuning {
     /// wall-second** — presentation, so it is measured in wall time, and in
     /// tenths because the drawer's range is small.
     pub pulse_tenths: i64,
+
+    // ── autonomy: the scorer (GDD §5; wave 1.1) ───────────────────────────
+    /// World-hours between one character's rescorings. Stated in hours
+    /// because the drawer's range is small, like `drift_hours`.
+    pub scorer_hours: i64,
+    /// World-minutes of stagger per roster index, so ten people do not all
+    /// decide in the same tick. Deterministic, and the only reason the
+    /// cadence is not a single moment.
+    pub scorer_stagger: i64,
+    /// World-hours after a job during which work weighs less — the rest term,
+    /// so nobody works forever.
+    pub rest_hours: i64,
+    /// What one point of desperation adds to a paid candidate. The term that
+    /// opens every sum, as it did in giri.
+    pub need_weight: i64,
+    /// What one point of a want's pressure adds, where its `favors` field
+    /// covers the candidate's task type.
+    pub want_weight: i64,
+    /// What one point of aptitude at the candidate's task type adds.
+    pub apt_weight: i64,
+    /// What the pot pulls, per ten gold, per point of pot affinity.
+    pub pot_weight: i64,
+    /// What one point of felt regard toward whoever is at the destination
+    /// adds to a visit.
+    pub regard_weight: i64,
+    /// What a candidate loses while its carrier is still resting.
+    pub rest_weight: i64,
+    /// What idling scores. A candidate has to beat this to happen at all, so
+    /// this is the floor the whole scorer is measured against.
+    pub idle_floor: i64,
+    /// How long a visit lasts, in world-minutes.
+    pub visit_minutes: i64,
+    /// What a completed visit adds to the visitor's regard for their host.
+    pub visit_regard: i64,
+    /// Whether that regard is symmetric: 1 gives the host the same warmth
+    /// back, 0 leaves a visit one-sided.
+    pub visit_mutual: i64,
+    /// Which relationship preset a scenario opens on: 0 is flat (every edge
+    /// zero, no facts), 1 is the authored seeds of `CAST.md` §5.
+    pub bonds_preset: i64,
+    /// How many world-days the alive sweep gives every character to take at
+    /// least one job (GDD §9's economy sweep, opening half).
+    pub alive_days: i64,
 }
 
 impl Resource for Tuning {}
@@ -102,7 +147,8 @@ impl Tuning {
     /// one nothing plausibly authors. What a person can reach by clicking, and
     /// what a shared link may carry, is this range.
     pub const MIN: i64 = 0;
-    /// And the largest — wide enough for `minute_ticks` at its shipped 30.
+    /// And the largest — wide enough for `speed_4x` at its shipped 48 and
+    /// `visit_minutes` at 45.
     pub const MAX: i64 = 60;
 
     /// What the game ships with — the set the scenario's fixed scripts are
@@ -113,9 +159,9 @@ impl Tuning {
         forest_cost: 7,
         rough_cost: 10,
         minute_ticks: 30,
-        speed_1x: 1,
-        speed_2x: 2,
-        speed_4x: 4,
+        speed_1x: 12,
+        speed_2x: 24,
+        speed_4x: 48,
         mark_dark: 1,
         mark_light: 1,
         regard_span: 10,
@@ -127,23 +173,46 @@ impl Tuning {
         drift_hours: 4,
         feed_cap: 10,
         pulse_tenths: 25,
+        scorer_hours: 4,
+        scorer_stagger: 24,
+        rest_hours: 6,
+        need_weight: 2,
+        want_weight: 2,
+        apt_weight: 3,
+        pot_weight: 1,
+        regard_weight: 2,
+        rest_weight: 12,
+        idle_floor: 3,
+        visit_minutes: 45,
+        visit_regard: 1,
+        visit_mutual: 1,
+        bonds_preset: 1,
+        alive_days: 3,
     };
 
     /// The constants in effect, as the lines the drawer's stamp and every
     /// verify report print (a run is only reproducible if it says what it ran
     /// with).
     pub fn readout(&self) -> String {
+        // Two constants to a line and never wider than the drawer's stamp
+        // column, which is what is left of the screen beside three columns of
+        // steppers. `floors.rs` fails a line that outgrows it.
         format!(
-            "road {}  plains {}\n\
-             forest {}  rough {}\n\
+            "road {} plains {}\n\
+             forest {} rough {}\n\
              minute {} ticks\n\
-             speeds {} / {} / {}\n\
-             marks -{} / +{}\n\
-             regard span {}\n\
-             bond floor {}  ceil -{}\n\
-             bond after {} at {}\n\
-             drift {} per {}h\n\
-             feed {}  pulse {}",
+             speeds {}/{}/{}\n\
+             marks -{}/+{}\n\
+             span {} floor {}\n\
+             ceil -{} after {}@{}\n\
+             drift {}/{}h\n\
+             feed {} pulse {}\n\
+             score {}h stag {}m\n\
+             rest {}h w{}\n\
+             need{} want{} apt{}\n\
+             pot{} regard{} idle{}\n\
+             visit {}m +{} both{}\n\
+             bonds {} alive {}d",
             self.road_cost,
             self.plains_cost,
             self.forest_cost,
@@ -163,6 +232,21 @@ impl Tuning {
             self.drift_hours,
             self.feed_cap,
             self.pulse_tenths,
+            self.scorer_hours,
+            self.scorer_stagger,
+            self.rest_hours,
+            self.rest_weight,
+            self.need_weight,
+            self.want_weight,
+            self.apt_weight,
+            self.pot_weight,
+            self.regard_weight,
+            self.idle_floor,
+            self.visit_minutes,
+            self.visit_regard,
+            self.visit_mutual,
+            self.bonds_preset,
+            self.alive_days,
         )
     }
 
@@ -190,6 +274,21 @@ impl Tuning {
             Field::DriftHours => &mut self.drift_hours,
             Field::FeedCap => &mut self.feed_cap,
             Field::PulseTenths => &mut self.pulse_tenths,
+            Field::ScorerHours => &mut self.scorer_hours,
+            Field::ScorerStagger => &mut self.scorer_stagger,
+            Field::RestHours => &mut self.rest_hours,
+            Field::NeedWeight => &mut self.need_weight,
+            Field::WantWeight => &mut self.want_weight,
+            Field::AptWeight => &mut self.apt_weight,
+            Field::PotWeight => &mut self.pot_weight,
+            Field::RegardWeight => &mut self.regard_weight,
+            Field::RestWeight => &mut self.rest_weight,
+            Field::IdleFloor => &mut self.idle_floor,
+            Field::VisitMinutes => &mut self.visit_minutes,
+            Field::VisitRegard => &mut self.visit_regard,
+            Field::VisitMutual => &mut self.visit_mutual,
+            Field::BondsPreset => &mut self.bonds_preset,
+            Field::AliveDays => &mut self.alive_days,
         }
     }
 
@@ -365,6 +464,36 @@ pub enum Field {
     FeedCap,
     /// How long a focus pulse lasts, in tenths of a second.
     PulseTenths,
+    /// World-hours between rescorings.
+    ScorerHours,
+    /// Stagger per roster index, in world-minutes.
+    ScorerStagger,
+    /// World-hours of rest after a job.
+    RestHours,
+    /// What one point of desperation adds.
+    NeedWeight,
+    /// What one point of a want's pressure adds.
+    WantWeight,
+    /// What one point of aptitude adds.
+    AptWeight,
+    /// What the pot pulls, per ten gold per affinity.
+    PotWeight,
+    /// What one point of felt regard adds to a visit.
+    RegardWeight,
+    /// What resting costs a work candidate.
+    RestWeight,
+    /// What idling scores.
+    IdleFloor,
+    /// How long a visit lasts.
+    VisitMinutes,
+    /// What a visit earns.
+    VisitRegard,
+    /// Whether a visit's regard is symmetric.
+    VisitMutual,
+    /// Which relationship preset a scenario opens on.
+    BondsPreset,
+    /// How many world-days the alive sweep allows.
+    AliveDays,
 }
 
 impl Field {
@@ -389,6 +518,21 @@ impl Field {
         Field::DriftHours,
         Field::FeedCap,
         Field::PulseTenths,
+        Field::ScorerHours,
+        Field::ScorerStagger,
+        Field::RestHours,
+        Field::NeedWeight,
+        Field::WantWeight,
+        Field::AptWeight,
+        Field::PotWeight,
+        Field::RegardWeight,
+        Field::RestWeight,
+        Field::IdleFloor,
+        Field::VisitMinutes,
+        Field::VisitRegard,
+        Field::VisitMutual,
+        Field::BondsPreset,
+        Field::AliveDays,
     ];
 
     /// The name DESIGN gives this constant.
@@ -413,6 +557,21 @@ impl Field {
             Field::DriftHours => "drift_hours",
             Field::FeedCap => "feed_cap",
             Field::PulseTenths => "pulse_tenths",
+            Field::ScorerHours => "scorer_hours",
+            Field::ScorerStagger => "scorer_stagger",
+            Field::RestHours => "rest_hours",
+            Field::NeedWeight => "need_weight",
+            Field::WantWeight => "want_weight",
+            Field::AptWeight => "apt_weight",
+            Field::PotWeight => "pot_weight",
+            Field::RegardWeight => "regard_weight",
+            Field::RestWeight => "rest_weight",
+            Field::IdleFloor => "idle_floor",
+            Field::VisitMinutes => "visit_minutes",
+            Field::VisitRegard => "visit_regard",
+            Field::VisitMutual => "visit_mutual",
+            Field::BondsPreset => "bonds_preset",
+            Field::AliveDays => "alive_days",
         }
     }
 
@@ -459,6 +618,21 @@ impl Field {
             Field::DriftHours => "world-hours between regard drifts",
             Field::FeedCap => "how many entries the feed holds",
             Field::PulseTenths => "focus pulse, in tenths of a second",
+            Field::ScorerHours => "world-hours between rescorings",
+            Field::ScorerStagger => "minutes of stagger per roster index",
+            Field::RestHours => "world-hours of rest after a job",
+            Field::NeedWeight => "what one point of desperation adds",
+            Field::WantWeight => "what one point of a want adds",
+            Field::AptWeight => "what one point of aptitude adds",
+            Field::PotWeight => "pot pull per ten gold per affinity",
+            Field::RegardWeight => "what felt regard adds to a visit",
+            Field::RestWeight => "what resting costs a work candidate",
+            Field::IdleFloor => "what idling scores - the bar to beat",
+            Field::VisitMinutes => "how long a visit lasts",
+            Field::VisitRegard => "what a visit earns the visitor",
+            Field::VisitMutual => "1 if a visit's warmth is symmetric",
+            Field::BondsPreset => "0 flat relationships, 1 authored",
+            Field::AliveDays => "days the alive sweep allows a job",
         }
     }
 }

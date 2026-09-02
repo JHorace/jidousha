@@ -44,7 +44,8 @@ pub fn judge(checks: &mut Checks, run: &Conducted, tuning: &Tuning) {
             shot.clock.paused && lens.pause().is_some(),
             "the feed photograph does not show a world that stopped itself",
             format!(
-                "the clock reads paused={} at minute {} and the reason is {:?}; the point of                  the picture is the pause and its reason",
+                "the clock reads paused={} at minute {} and the reason is {:?}; the point of \
+                 the picture is the pause and its reason",
                 shot.clock.paused,
                 shot.clock.minutes,
                 lens.pause()
@@ -75,7 +76,10 @@ pub fn judge(checks: &mut Checks, run: &Conducted, tuning: &Tuning) {
         checks.require(
             false,
             "the feed photograph was never taken",
-            "the conductor's photo schedule names minute 161, the first completion".to_owned(),
+            format!(
+                "the conductor's photo schedule names minute {}, the first completion",
+                crate::sweep::COMPLETIONS[0]
+            ),
         );
     }
 
@@ -100,6 +104,133 @@ pub fn judge(checks: &mut Checks, run: &Conducted, tuning: &Tuning) {
             false,
             "the config photograph was never taken",
             "the conductor's photo schedule names tick 20, before the clock starts".to_owned(),
+        );
+    }
+
+    // --- the world living on its own ----------------------------------------
+    // **Nobody told them to go.** The picture the wave exists to be judged on:
+    // a character on the road at a minute when the player has issued no order
+    // that reaches it, with the feed carrying the reason they left.
+    if let Some(shot) = run.photo("living") {
+        let lens = lens::Lens::on(&shot.sim);
+        let travelling: Vec<&str> = shot
+            .sim
+            .parties
+            .iter()
+            .enumerate()
+            .filter(|(_, party)| {
+                party.chosen
+                    && matches!(
+                        party.activity,
+                        Activity::Outbound { .. } | Activity::Homebound { .. }
+                    )
+            })
+            .map(|(index, _)| lens.name(index))
+            .collect();
+        checks.require(
+            !travelling.is_empty(),
+            "the photograph of a world living on its own has nobody living in it",
+            format!(
+                "at minute {} the parties on the road are {:?}, and none of them chose to be",
+                shot.clock.minutes,
+                shot.sim
+                    .parties
+                    .iter()
+                    .map(|party| (party.name, party.chosen))
+                    .collect::<Vec<_>>()
+            ),
+        );
+        // And the reason is on the event that started it, not merely on the
+        // party: the feed is where a player finds out why.
+        let said = shot
+            .sim
+            .events
+            .iter()
+            .filter(|event| event.class == attention::EventClass::ActionStarted)
+            .count();
+        checks.require(
+            said > 0,
+            "somebody left on their own and the feed was never told why",
+            format!(
+                "the transcript holds {said} action-started events at minute {}",
+                shot.clock.minutes
+            ),
+        );
+        verify::judge_terrain(checks, &shot.frame, verify::HEADLESS_VIEWPORT);
+        frames::judge_chrome(checks, run, shot, "the world living on its own");
+        floors::judge_frame_floor(checks, run.font, &shot.frame, "the world living on its own");
+    } else {
+        checks.require(
+            false,
+            "the photograph of a world living on its own was never taken",
+            "the conductor's photo schedule names minute 400".to_owned(),
+        );
+    }
+
+    // --- the roster, with a chip's explanation open -------------------------
+    if let Some(shot) = run.photo("roster") {
+        checks.require(
+            shot.flow.roster_open && shot.flow.explained.is_some(),
+            "the roster photograph does not show the surface it is for",
+            format!(
+                "the drawer is open={} and the explained chip is {:?}",
+                shot.flow.roster_open, shot.flow.explained
+            ),
+        );
+        // Every row's activity line is the lens's own, reason and all.
+        let lens = lens::Lens::on(&shot.sim);
+        let panel = screens::content(&shot.flow, &lens, &shot.clock, tuning);
+        let says = |text: &str| panel.runs.iter().any(|run| run.text.contains(text));
+        let missing: Vec<&str> = (0..lens.people().len())
+            .filter(|who| !says(lens.name(*who)))
+            .map(|who| lens.name(who))
+            .collect();
+        checks.require(
+            missing.is_empty(),
+            "the roster does not list everybody",
+            format!("{missing:?} are not on the roster the photograph was taken of"),
+        );
+        // **The reason is on the roster**, not only in the feed: a row for
+        // somebody who is out says what they are doing and why, in the
+        // scorer's own words through the lens.
+        let travelling: Vec<usize> = (0..lens.people().len())
+            .filter(|who| !lens.at_home(*who) && !lens.reason(*who).is_empty())
+            .collect();
+        for who in &travelling {
+            checks.require(
+                says(lens.reason(*who)) || says(&clipped_head(lens.reason(*who))),
+                "the roster does not say why somebody is out",
+                format!(
+                    "{} is out because {:?} and the roster's row does not carry it",
+                    lens.name(*who),
+                    lens.reason(*who)
+                ),
+            );
+        }
+        checks.require(
+            !travelling.is_empty(),
+            "the roster photograph was taken of a world where nobody is doing anything",
+            "the picture is for the column that says what each of them is doing".to_owned(),
+        );
+        if let Some(id) = shot.flow.explained {
+            checks.require(
+                says(
+                    &crate::traits::explain(id)
+                        .chars()
+                        .take(24)
+                        .collect::<String>(),
+                ),
+                "the roster's explanation is not the line the trait row derives",
+                format!("{id:?} explains as {:?}", crate::traits::explain(id)),
+            );
+        }
+        frames::judge_chrome(checks, run, shot, "the roster");
+        floors::judge_frame_floor(checks, run.font, &shot.frame, "the roster");
+    } else {
+        checks.require(
+            false,
+            "the roster photograph was never taken",
+            "the conductor's photo schedule names minute 462".to_owned(),
         );
     }
 
@@ -138,7 +269,7 @@ pub fn judge(checks: &mut Checks, run: &Conducted, tuning: &Tuning) {
         checks.require(
             false,
             "the character photograph was never taken",
-            "the conductor's photo schedule names minute 645, after the doorstep click".to_owned(),
+            "the conductor's photo schedule names minute 430, after the doorstep click".to_owned(),
         );
     }
 
@@ -171,6 +302,11 @@ pub fn judge(checks: &mut Checks, run: &Conducted, tuning: &Tuning) {
             "the conductor's photo schedule names tick 10, before the first dispatch".to_owned(),
         );
     }
+}
+
+/// The first few words of a reason - what survives the roster's own clip.
+fn clipped_head(reason: &str) -> String {
+    reason.split(' ').take(3).collect::<Vec<_>>().join(" ")
 }
 
 /// **The tokens sit where the derivation says** (ADR-0041, DESIGN §3): the

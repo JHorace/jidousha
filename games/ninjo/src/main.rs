@@ -35,6 +35,7 @@ use std::process::ExitCode;
 use jidousha::prelude::*;
 
 mod attention;
+mod autonomy;
 mod camera;
 mod capture;
 mod checks;

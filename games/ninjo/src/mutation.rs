@@ -3,13 +3,14 @@
 //!
 //! A script that passes under a mutated constant is a vacuous assertion, and
 //! this is the only thing that says which of the two a check is. **Every**
-//! constant is moved to a value nothing plausibly authors, and one of the six
-//! instruments must complain: the exact-time order script (terrain costs move
-//! arrival minutes), the pacing probes (the clock constants move the
-//! tick-for-minute arithmetic), the path battery (a cost that only a route's
-//! literal sees), the trait arithmetic (the mark constants), the store
-//! battery (the regard bounds, the write thresholds and the drift), or the
-//! attention battery (the feed's cap and the focus pulse).
+//! constant is moved to a value nothing plausibly authors, and one of the
+//! seven instruments must complain: the exact-time order script (terrain
+//! costs move arrival minutes), the pacing probes (the clock constants move
+//! the tick-for-minute arithmetic), the path battery (a cost that only a
+//! route's literal sees), the trait arithmetic (the mark constants), the
+//! store battery (the regard bounds, the write thresholds and the drift), the
+//! attention battery (the feed's cap and the focus pulse), or the scorer
+//! battery (every weight, every cadence, and the relationship preset).
 //!
 //! The round grows with the drawer by construction: it walks `Field::ALL`, so
 //! a constant added to `constants.rs` arrives here needing only a
@@ -19,7 +20,7 @@
 use crate::checks::Checks;
 use crate::constants::{Field, Tuning};
 use crate::sweep::{self, Session, conduct};
-use crate::{attention, stores, traits, verify};
+use crate::{attention, autonomy, stores, traits, verify};
 
 /// Break every constant on purpose and check the run notices.
 pub fn mutation_round(checks: &mut Checks) -> String {
@@ -40,6 +41,7 @@ pub fn mutation_round(checks: &mut Checks) -> String {
         traits::arithmetic(&mut probe, &mutated);
         stores::judge_at(&mut probe, &mutated);
         attention::judge_at(&mut probe, &mutated);
+        autonomy::judge_at(&mut probe, &mutated);
         let shipped = Tuning::SHIPPED.field(field);
         if probe.failures() > 0 {
             noticed += 1;
@@ -57,9 +59,9 @@ pub fn mutation_round(checks: &mut Checks) -> String {
             "a tuning constant can be changed without any check noticing",
             format!(
                 "{} moved from {shipped} to {} and the order script, the pacing probes, the \
-                 path battery, the trait arithmetic, the store battery and the attention \
-                 battery all still passed; a check that survives its own constant moving is \
-                 not measuring it",
+                 path battery, the trait arithmetic, the store battery, the attention battery \
+                 and the scorer battery all still passed; a check that survives its own \
+                 constant moving is not measuring it",
                 field.name(),
                 perturbation(field),
             ),
@@ -114,5 +116,31 @@ fn perturbation(field: Field) -> i64 {
         // are seen by the attention battery's shipped literals.
         Field::FeedCap => 0,
         Field::PulseTenths => 0,
+        // The scorer's cadence collapses to an hour and its stagger to
+        // nothing: the scorer battery's shipped literals see both.
+        Field::ScorerHours => 0,
+        Field::ScorerStagger => 0,
+        // Rest stops lasting and stops costing.
+        Field::RestHours => 0,
+        Field::RestWeight => 0,
+        // Every weight stops weighing, which moves the staged sums the scorer
+        // battery pins with literals.
+        Field::NeedWeight => 0,
+        Field::WantWeight => 0,
+        Field::AptWeight => 0,
+        Field::PotWeight => 0,
+        Field::RegardWeight => 0,
+        // Idling stops being a floor at all, so a candidate worth nothing
+        // still beats staying home.
+        Field::IdleFloor => 0,
+        // A visit stops taking time, stops earning anything, and stops being
+        // symmetric.
+        Field::VisitMinutes => 0,
+        Field::VisitRegard => 0,
+        Field::VisitMutual => 0,
+        // The relationships go flat: the authored seeds stop being written.
+        Field::BondsPreset => 0,
+        // And the alive sweep's window stops existing.
+        Field::AliveDays => 0,
     }
 }

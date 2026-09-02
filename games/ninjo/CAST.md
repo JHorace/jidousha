@@ -7,6 +7,17 @@ table) with the **wave-1.1** session, and this document stays as the
 living cast bible - rewritten state, per the living-docs convention.
 Where a number appears it is a drawer starting value, not a decision.
 
+**Sections 1 to 8 landed with wave 1.1**, as the plan below says: the trait
+vocabulary is `src/traits.rs`, the ten sheets and their homes are
+`src/people.rs`, the task types are on every quest row, the relationship
+presets are the `bonds_preset` drawer row, and the coverage matrix and the
+no-dead-motivator rule are assertions the registry runs. What 1.1 did *not*
+build is s6's template table — petitions are wave 1.3 — so the no-dead
+rule is asserted against a declared list of the five motivators s6 covers
+(`traits::TEMPLATED_MOTIVATORS`), and 1.3 repoints that constant at the real
+table without the assertion changing. The `*Implemented*` notes below are
+per-section.
+
 **Landed early, on 2026-09-02, by the cast-art session** rather than
 with wave 1.1 as the plan above says. That session picked and imported
 the fifteen art roles s9 asks for, and s9 is its record; a document
@@ -50,8 +61,10 @@ template; the **four authored sites** stand as landed (watchtower,
 deep-cave, old-crypt, and the fourth); the camp's **fire** is Rin's and
 is the ancestor of the first industry; money is gold and only gold.
 
-The 0a build calls the town "Ebisu"; the owner's name is **Kawaza**
-and the repo renames (one string in `LOCATIONS`, the docs, the page).
+The 0a build called the town by a placeholder name; the owner's name is
+**Kawaza**. *Implemented (w1.1):* renamed everywhere — `grid::LOCATIONS`, the
+docs, the page title, the screenshots — and the old name is grepped for and
+gone from the tree, this sentence included.
 
 ## 2. Task taxonomy (four types; aptitude ids double as task ids)
 
@@ -67,6 +80,15 @@ Every authored quest/site job carries a task type from wave 1.1 on
 equals the task's type; until then the landed stub ignores it and the
 scorer already weighs it.
 
+*Implemented (w1.1):* `traits::TaskType`, and `Quest::task` on every authored
+row. `TaskType::aptitude()` and `TaskType::of_aptitude()` are the round trip,
+and the vocabulary's validation asserts it both ways — every type has exactly
+one aptitude row and every aptitude row is some type's. **The board grew from
+seven jobs to twenty-four**, six a site, each site leaning toward the work its
+fiction implies and carrying at least one of every type: ten people looking
+for work empty a seven-job board before the first day is out, and an aptitude
+with nothing to do is a chip that means nothing. Sites still run dry.
+
 ## 3. Trait vocabulary (content)
 
 ### 3.1 Aptitudes (kind `aptitude`; one per task type)
@@ -80,6 +102,10 @@ scorer already weighs it.
 
 The placeholder rows `strong`, `deft`, `learned` retire (not on any
 sheet; delete the rows - nothing else references them).
+
+*Implemented (w1.1):* deleted, and these four are the rows. The aptitude id
+**is** the task id, so `competence_at(task, traits)` reads one row rather
+than summing everything the carrier can do.
 
 ### 3.2 Motivators (kind `motivator`; five, each with its template)
 
@@ -98,6 +124,11 @@ The scorer (1.1) adds `pressure` to a candidate whose task type matches
 This is the row's whole mechanical surface; the *petition* half of each
 motivator is s6.
 
+*Implemented (w1.1):* `favors` is a field on the row (`Favors::None` neutral,
+`Any`, or `Task(t)`), asserted neutral on every non-motivator row like every
+other kind-owned field, and read by `traits::pressure_toward` — which is the
+only place a want reaches the scorer, and which never looks at an id.
+
 The placeholder rows `provider`, `ambitious`, `homesick` retire.
 `caring` absorbs provider's upkeep idea (feeding somebody else costs);
 `renown` replaces ambitious; `restless` replaces homesick with the
@@ -106,6 +137,11 @@ direction reversed (away, not home).
 **No-dead-motivator rule** (decided): every motivator row has at least
 one template in s6 whose source class is `motivator` and whose trigger
 names it. Checkable as data validation - add the check.
+
+*Implemented (w1.1):* `traits::vocabulary` asserts it against
+`TEMPLATED_MOTIVATORS`, the declared list of the five s6 writes a template
+for, and asserts besides that no motivator has zero pressure. Wave 1.3
+replaces the constant with a walk over the real table.
 
 ### 3.3 Personalities (giri's nine, audited)
 
@@ -131,6 +167,12 @@ No personality is added. The scorer does not exist yet; a personality
 that owns a scorer field (a work/idle bias, say) is proposed when 1.1
 finds the scorer wants one, not before.
 
+*Implemented (w1.1):* none was added, and the scorer did not ask for one. The
+parked three are `people::PARKED` — declared beside the roster rather than as
+a field on the trait row, because being on a sheet is a casting decision and
+not a property of the word — and the registry asserts they are in the
+vocabulary and on nobody.
+
 Authoring norm: two or three traits per sheet (practice, not rule; the
 list cap is gone).
 
@@ -153,6 +195,14 @@ locations - the registry asserts it).
 | `ludo` | Ludo | laborer, fights when asked | laborer, fighter, indebted | 2 | 4 | works off a debt that was his father's before it was his |
 | `ines` | Ines | crafter | crafter, maker, craven | 10 | 2 | mends what breaks, and would rather be far from what breaks it |
 | `odd` | Odd | fighter | fighter, renown, restless | 8 | 3 | took the same job as Goro twice, and only one of them got paid |
+
+*Implemented (w1.1):* all ten, in this order, in `people::roster`. **Homes are
+two rows of tents south of the road and east of the ford** — y=15 at x
+12/16/20/24/28 and y=17 at x 6/10/14/18/22 — spaced so ten names, ten figures
+and the town's own marker do not collide, which `floors.rs` asserts rather
+than this sentence. A dispatched party leaves from the doorstep it is standing
+on and comes home to it, which is why the journey minutes differ per
+character.
 
 ### 4.1 Demo characters (each MVP module names the person it is proved on)
 
@@ -186,6 +236,17 @@ Regard (directed, small magnitudes; drawer scale):
   (cold, and the newest to the band).
 - Toward the player: founders (bob, steve, alex, tim) small +; the rest
   0. The guildmaster has to earn the six who came later.
+
+*Implemented (w1.1):* `sim::seed_relationships`, gated on the `bonds_preset`
+drawer row (0 flat, 1 authored) and so on every stamp. Every seed is written
+through the ordinary store API — `adjust_regard`, `record_shared_success`,
+`record_grudge` — so a seeded world is a world that could have got there by
+living, and no vector is written directly. Regard is written before the facts,
+so a bond's floor and a grudge's ceiling are seen to hold what follows them.
+The founders' warmth toward the player is +2 each; the six who came later open
+at nothing. `autonomy::judge_presets` is the flip test: with the board spent,
+somebody goes to see somebody they think well of under the authored seeds and
+stays home under the flat ones.
 
 The seeds are chosen so that the two **deliberate gaps** in s7 have
 faces: the fighters who should team up hold a grudge, and the pair who
@@ -317,14 +378,22 @@ motivator has a template (s3.2's rule).
 Bonus friction, not counted: two crafters, one of them the cook who is
 always busy - the maker's petition bites.
 
+*Implemented (w1.1):* the counts above are asserted in `people::registry` as
+rules rather than as numbers — every aptitude and motivator on at least two
+sheets, every kept personality on at least one, every parked one on none — so
+a future edit that breaks coverage fails at the row that caused it.
+
 **The vocabulary question for the wave-1.5 playtest**, beside the
 wave's own: *do the words on the chips match what you watched them
-do?* Renames happen before 1.3 writes petition copy against them if
+do?* Wave 1.1 made it answerable early: **tapping a trait chip anywhere it
+appears** — a sheet, a roster row — shows one line derived from the row
+itself, so the words and what they do can be compared without reading the
+source. Renames happen before 1.3 writes petition copy against them if
 the answer is no; after that a rename costs prose.
 
 ## 8. Format notes for the implementing sessions
 
-- **1.1**: motivator rows gain `favors` (task type or `any`; neutral
+- **1.1** (*done*): motivator rows gain `favors` (task type or `any`; neutral
   none). Quest rows gain a task type. Aptitude id = task id. Retired
   placeholder rows deleted; parked personalities stay as rows.
   Relationship presets as a drawer/scenario choice. The coverage

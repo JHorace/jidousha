@@ -60,19 +60,12 @@ fn idle(lens: &Lens<'_>, who: usize) -> Option<String> {
         .then(|| "at home, and nobody has asked them for anything".to_owned())
 }
 
-/// Out of the settlement with the party they field.
+/// Out of the settlement, and why.
 fn away(lens: &Lens<'_>, who: usize) -> Option<String> {
     if lens.at_home(who) {
         return None;
     }
-    let with = lens
-        .parties()
-        .iter()
-        .find(|party| party.member == who)
-        .map_or("somebody".to_owned(), |party| {
-            format!("{} - {}", party.name, party.status())
-        });
-    Some(format!("out with {with}"))
+    Some(lens.activity_line(who))
 }
 
 /// The faces behind chip `index`: who counts, and why.
@@ -134,7 +127,7 @@ pub fn registry(checks: &mut crate::checks::Checks, tuning: &crate::constants::T
     }
     // A world where one party is out: the two chips must divide the cast, and
     // every count must be the length of the list it opens into.
-    let mut sim = crate::sim::Sim::opening(tuning);
+    let mut sim = crate::sim::Sim::opening(tuning, crate::modules::ModuleSet::ALL);
     sim.parties[0].activity = crate::sim::Activity::Working { until: 99 };
     let lens = Lens::on(&sim);
     let mut counted = 0usize;

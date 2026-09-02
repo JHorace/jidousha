@@ -283,7 +283,7 @@ pub fn glance(flow: &Flow, lens: &Lens<'_>) -> Panel {
         panel.absorb(faces_panel(lens, drilled));
     }
     if let Some(who) = flow.selected_person {
-        panel.absorb(person_panel(lens, who));
+        panel.absorb(person_panel(flow, lens, who));
     }
     panel
 }
@@ -328,8 +328,12 @@ fn faces_panel(lens: &Lens<'_>, index: usize) -> Panel {
 }
 
 /// One character, through the lens: who they are, what they carry, what
-/// presses on them, and what they are doing.
-fn person_panel(lens: &Lens<'_>, who: usize) -> Panel {
+/// presses on them, what they are doing — **and why**.
+///
+/// The reason is the scorer's own string, read through the lens; nothing here
+/// recomputes it, because a panel that computed its own answer would be the
+/// second decision function GDD §1 forbids.
+fn person_panel(flow: &Flow, lens: &Lens<'_>, who: usize) -> Panel {
     use layout::sheet;
     let mut panel = Panel::default();
     let origin = layout::person_panel().min;
@@ -355,22 +359,21 @@ fn person_panel(lens: &Lens<'_>, who: usize) -> Panel {
     ));
     panel.text(TextRun::new(
         origin + sheet::TRAITS,
-        "traits",
+        "traits - tap one for what it does",
         theme::SMALL,
         theme::FAINT,
     ));
-    for (row, id) in lens.traits(who).iter().copied().enumerate() {
-        let step = Vec2::new(0.0, row as f32 * sheet::TRAIT_PITCH);
-        panel.icon(IconRun::new(
-            origin + sheet::TRAIT_ICON + step,
-            id.icon(),
-            id.icon().scale_across(CHIP),
-        ));
-        panel.text(TextRun::new(
-            origin + sheet::TRAIT_NAME + step,
-            id.name(),
-            theme::SMALL,
-            theme::INK,
+    for (slot, id) in lens
+        .traits(who)
+        .iter()
+        .copied()
+        .take(layout::SHEET_CHIPS)
+        .enumerate()
+    {
+        panel.absorb(trait_chip(
+            layout::sheet_chip(slot),
+            id,
+            flow.explained == Some(id),
         ));
     }
     panel.icon(IconRun::new(
@@ -402,9 +405,13 @@ fn person_panel(lens: &Lens<'_>, who: usize) -> Panel {
         theme::SMALL,
         theme::DIM,
     );
+    let doing = match lens.quest(who) {
+        Some(quest) => format!("{} ({})", lens.activity_line(who), quest.name),
+        None => lens.activity_line(who),
+    };
     panel.block(
         origin + sheet::DOING,
-        &wrap(&lens.activity_line(who), prose),
+        &wrap(&doing, prose),
         theme::SMALL,
         theme::INK,
     );
@@ -417,5 +424,124 @@ fn person_panel(lens: &Lens<'_>, who: usize) -> Panel {
         theme::SMALL,
         theme::FAINT,
     ));
+    if let Some(id) = flow.explained {
+        panel.block(
+            origin + sheet::EXPLAIN,
+            &wrap(&crate::traits::explain(id), prose),
+            theme::SMALL,
+            theme::GOLD,
+        );
+    }
+    panel
+}
+
+/// One trait chip, wherever it appears: the icon, the name, and gold when it
+/// is the chip whose explanation is showing.
+///
+/// **One function, every surface.** A chip on a sheet and a chip on a roster
+/// row are the same picture and the same target, so "tap a chip for what it
+/// does" is true everywhere without anybody remembering to make it true.
+fn trait_chip(rect: Rect, id: crate::traits::TraitId, lit: bool) -> Panel {
+    use layout::rrow;
+    let mut panel = Panel::default();
+    let tone = if lit { theme::GOLD } else { theme::INK };
+    let mut icon = IconRun::new(
+        rect.min + rrow::CHIP_ICON,
+        id.icon(),
+        id.icon().scale_across(CHIP),
+    );
+    icon.tint = tone;
+    panel.icon(icon);
+    panel.text(TextRun::new(
+        rect.min + rrow::CHIP_NAME,
+        id.name(),
+        theme::SMALL,
+        tone,
+    ));
+    panel
+}
+
+/// **The roster**: every character in one list — name, chips, wallet,
+/// desperation, and what they are doing with the reason they are doing it
+/// (wave 1.1's clarity slice).
+///
+/// Every number and every sentence comes off the [`Lens`], including the
+/// reason, which is the scorer's own words. A row's name opens that
+/// character's panel; a chip opens its explanation.
+pub fn roster_drawer(flow: &Flow, lens: &Lens<'_>) -> Panel {
+    use layout::rrow;
+    let mut panel = Panel::default();
+    panel.text(TextRun::over(
+        layout::roster_title(),
+        "ROSTER - everyone, what they carry, and what they are doing about it",
+        theme::SMALL,
+        theme::DIM,
+    ));
+    let (explanation, tone) = match flow.explained {
+        Some(id) => (crate::traits::explain(id), theme::GOLD),
+        None => ("tap a trait chip for what it does".to_owned(), theme::FAINT),
+    };
+    panel.text(TextRun::over(
+        layout::roster_explain(),
+        clipped(&explanation, layout::ROSTER_EXPLAIN_W),
+        theme::SMALL,
+        tone,
+    ));
+    for who in 0..lens.people().len().min(layout::ROSTER_ROWS) {
+        let open = layout::roster_open(who);
+        if let Some(person) = lens.person(who) {
+            let mut face = IconRun::new(
+                open.min + rrow::PORTRAIT,
+                person.icon,
+                layout::sheet::PORTRAIT_SCALE,
+            );
+            face.layer = theme::layers::OVERLAY_TEXT;
+            panel.icon(face);
+        }
+        panel.text(TextRun::over(
+            open.min + rrow::NAME,
+            lens.name(who),
+            theme::SMALL,
+            theme::INK,
+        ));
+        for (slot, id) in lens
+            .traits(who)
+            .iter()
+            .copied()
+            .take(layout::SHEET_CHIPS)
+            .enumerate()
+        {
+            let mut chip = trait_chip(
+                layout::roster_chip(who, slot),
+                id,
+                flow.explained == Some(id),
+            );
+            for run in &mut chip.runs {
+                run.layer = theme::layers::OVERLAY_TEXT;
+            }
+            for icon in &mut chip.icons {
+                icon.layer = theme::layers::OVERLAY_TEXT;
+            }
+            panel.absorb(chip);
+        }
+        panel.text(TextRun::over(
+            open.min + rrow::WALLET,
+            format!("{}g", lens.wallet(who)),
+            theme::SMALL,
+            theme::GOLD,
+        ));
+        panel.text(TextRun::over(
+            open.min + rrow::NEED,
+            format!("desp {}", lens.desperation(who)),
+            theme::SMALL,
+            theme::EMBER,
+        ));
+        panel.text(TextRun::over(
+            open.min + rrow::DOING,
+            clipped(&lens.activity_line(who), rrow::DOING_W),
+            theme::SMALL,
+            theme::DIM,
+        ));
+    }
     panel
 }

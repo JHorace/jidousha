@@ -5,13 +5,11 @@
 //! individually off, and green is the claim (GDD §9's module-off matrix).
 //! That matrix is built here and iterated by `verify::module_matrix`.
 //!
-//! **The table below is empty, and that is the point.** Wave 0b is foundation:
-//! the clock, the grid, the people, the stores, the lens. Not one row of GDD
-//! §5's registry has been built yet, so [`MODULES`] has no rows and the matrix
-//! runs exactly one pass — the everything-on baseline. The machinery is landed
-//! *now* so that wave 1.1's autonomy module lands into a harness that already
-//! works, instead of arriving with the harness as a second thing to get right
-//! in the same session.
+//! **The table has one row.** Wave 0b landed the machinery empty so that wave
+//! 1.1's autonomy module would arrive into a harness that already worked; it
+//! did, and `autonomy` is that row. The matrix is therefore two passes — the
+//! everything-on baseline and the world with the scorer switched off — and the
+//! off-pass is what makes the row's `degrades_to` sentence a fact.
 //!
 //! Adding a module is adding a row to [`MODULES`] and reading
 //! [`ModuleSet::enabled`] wherever the module's systems and data are
@@ -59,11 +57,16 @@ pub struct ModuleSpec {
 
 /// Every module this build has.
 ///
-/// **Empty in wave 0b**: foundation is not a module, and no module has been
-/// built. GDD §5's table is the schedule — autonomy, needs, petitions,
-/// resolution, settlement and the events-director land in wave 1, asks in
-/// wave 2 — and each arrives as one row here.
-pub const MODULES: &[ModuleSpec] = &[];
+/// **One row, since wave 1.1.** GDD §5's table is the schedule — needs,
+/// petitions, resolution, settlement and the events-director are the rest of
+/// wave 1, asks is wave 2 — and each arrives as one row here.
+pub const MODULES: &[ModuleSpec] = &[ModuleSpec {
+    id: crate::autonomy::MODULE,
+    tier: Tier::Mvp,
+    wave: "1.1",
+    degrades_to: "nobody decides anything: every character idles at their own \
+                  door until the player dispatches them, which is the wave-0b world",
+}];
 
 /// Which modules are on.
 ///

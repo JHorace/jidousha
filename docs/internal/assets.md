@@ -133,7 +133,7 @@ Implemented (A0):
   property is asserted in those words in `tests/asset_ops.rs` and on every
   handle after every operation in `tests/asset_model.rs`.
 
-  Implemented (2026-08-23) in response to `games/giri/FINDINGS.md` G-006, which
+  Implemented (2026-08-23) in response to `attic/giri/FINDINGS.md` G-006, which
   is what a silent success costs: `MemorySource::insert` of a PNG's bytes used
   to resolve `Ready` with the file still undecoded, `all_ready` said true,
   `commit` reported nothing, every sprite drew the magenta placeholder, and no
