@@ -248,7 +248,7 @@ def main(argv: "list[str]") -> int:
     source = (pack / args.source).resolve()
 
     name = args.name or source.stem.replace(" ", "-").lower()
-    out = Path(args.out).expanduser().resolve() if args.out else REPO / "target" / "giri-art" / name
+    out = Path(args.out).expanduser().resolve() if args.out else REPO / "target" / "ninjo-art" / name
     # The one hard rule: a pack rendered into sheets is still the pack, so the
     # sheets cannot land anywhere git will pick them up.
     try:

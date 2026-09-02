@@ -1,22 +1,31 @@
 //! The art library, carried from giri: one role, one file, one handle (UI.md
-//! §2, §9).
+//! §2, §7).
 //!
 //! **The role is the contract, not the picture.** Every asset is named for
 //! what it *means* — `icon_flame` is desperation, `portrait_tim` is Tim — so a
 //! library replaces the files by name and no code here changes (DESIGN §12's
-//! curation model; UI.md §9's asset slots). Nothing is downloaded:
-//! the owner supplies a pack and a committed script curates from it, or
+//! curation model; UI.md §7's asset slots). Nothing is downloaded:
+//! a pack the owner already has is curated from by a committed script, or
 //! `art/make_art.py` writes a PNG from committed grids — and `assets/CREDITS.md`
 //! records the provenance of every one.
 //!
-//! That claim was tested on 2026-08-23 in giri: the owner's Kenney packs replaced twelve
-//! of the thirteen slots and **no code here changed except the texel sizes in
-//! `LIBRARY`**. Which pack region fills which role is
-//! `art/kenney-manifest.json`; the thirteenth slot, the eye (reputation marks
-//! since v2 — UI.md §2), is still generated from the grids in
-//! `art/sprite_defs.py`, because no eye glyph exists in any of the packs. Both
-//! paths stay live, and a change to how ninjo looks is a change to whichever of
-//! the two owns the slot.
+//! That claim was tested twice. On 2026-08-23 in giri, the owner's Kenney packs
+//! replaced twelve of the then-thirteen slots and **no code here changed except
+//! the texel sizes in `LIBRARY`**. On 2026-09-02 the founding cast added fifteen
+//! more — six portraits and nine trait-chip icons (CAST.md §4, §9) — and the
+//! only change here was fifteen rows in three lists and fifteen load lines,
+//! because a role is a name and a size and nothing else. Which pack region fills
+//! which role is `art/kenney-manifest.json`; one slot of the twenty-eight, the
+//! eye (reputation marks since v2 — UI.md §2), is still generated from the grids
+//! in `art/sprite_defs.py`, because no eye glyph exists in any of the packs.
+//! Both paths stay live, and a change to how ninjo looks is a change to
+//! whichever of the two owns the slot.
+//!
+//! **The fifteen new roles are roles and nothing more.** Nothing in the game
+//! draws them yet: wave 1.1 lands the characters and the trait rows that wear
+//! them. They are here so that `library.rs`'s art contract and
+//! `tools/check-assets` both know the names, and an unfilled role is a failure
+//! before the game runs rather than a magenta quad after it.
 //!
 //! **The art is a directory, and the directory is this crate's own.**
 //! `games/ninjo/assets/` is that directory: the game loads from it
@@ -55,6 +64,18 @@ pub enum Art {
     PortraitSteve,
     /// Tim.
     PortraitTim,
+    /// Rin.
+    PortraitRin,
+    /// Goro.
+    PortraitGoro,
+    /// Hana.
+    PortraitHana,
+    /// Ludo.
+    PortraitLudo,
+    /// Ines.
+    PortraitInes,
+    /// Odd.
+    PortraitOdd,
     /// A mouth in a hillside.
     QuestCave,
     /// A stone that is somebody's.
@@ -73,6 +94,24 @@ pub enum Art {
     Skull,
     /// Regard: a bond or a grudge.
     Heart,
+    /// The `fight` aptitude — standing where the trouble is.
+    Fight,
+    /// The `labor` aptitude — the long work.
+    Labor,
+    /// The `scout` aptitude — knowing the way, or finding it.
+    Scout,
+    /// The `craft` aptitude — mending, and building.
+    Craft,
+    /// The `indebted` motivator — what is owed.
+    Indebted,
+    /// The `renown` motivator — a name people say.
+    Renown,
+    /// The `caring` motivator — somebody else's trouble.
+    Caring,
+    /// The `restless` motivator — wanting to be elsewhere.
+    Restless,
+    /// The `maker` motivator — wanting to make something that lasts.
+    Maker,
 }
 
 /// ninjo's asset root: this crate's own `assets/` directory.
@@ -85,8 +124,8 @@ pub const ASSET_ROOT: &str = "games/ninjo/assets";
 
 /// How many polls [`settle`] gives the loader before calling the art absent.
 ///
-/// Generous: thirteen small files off one loader thread finish in the first few
-/// polls, and a number this size can only be reached by a fault.
+/// Generous: twenty-eight small files off one loader thread finish in the first
+/// few polls, and a number this size can only be reached by a fault.
 const SETTLE_POLLS: usize = 100_000;
 
 /// One entry: the role, the file it lives in, and its texel size.
@@ -102,6 +141,12 @@ const LIBRARY: &[Slot] = &[
     slot(Art::PortraitBob, "portrait_bob.png", 16, 16),
     slot(Art::PortraitSteve, "portrait_steve.png", 16, 16),
     slot(Art::PortraitTim, "portrait_tim.png", 16, 16),
+    slot(Art::PortraitRin, "portrait_rin.png", 16, 16),
+    slot(Art::PortraitGoro, "portrait_goro.png", 16, 16),
+    slot(Art::PortraitHana, "portrait_hana.png", 16, 16),
+    slot(Art::PortraitLudo, "portrait_ludo.png", 16, 16),
+    slot(Art::PortraitInes, "portrait_ines.png", 16, 16),
+    slot(Art::PortraitOdd, "portrait_odd.png", 16, 16),
     slot(Art::QuestCave, "quest_cave.png", 8, 8),
     slot(Art::QuestCrypt, "quest_crypt.png", 8, 8),
     slot(Art::QuestTower, "quest_tower.png", 8, 8),
@@ -111,6 +156,15 @@ const LIBRARY: &[Slot] = &[
     slot(Art::Coin, "icon_coin.png", 8, 8),
     slot(Art::Skull, "icon_skull.png", 8, 8),
     slot(Art::Heart, "icon_heart.png", 8, 8),
+    slot(Art::Fight, "icon_fight.png", 8, 8),
+    slot(Art::Labor, "icon_labor.png", 8, 8),
+    slot(Art::Scout, "icon_scout.png", 8, 8),
+    slot(Art::Craft, "icon_craft.png", 8, 8),
+    slot(Art::Indebted, "icon_indebted.png", 8, 8),
+    slot(Art::Renown, "icon_renown.png", 8, 8),
+    slot(Art::Caring, "icon_caring.png", 8, 8),
+    slot(Art::Restless, "icon_restless.png", 8, 8),
+    slot(Art::Maker, "icon_maker.png", 8, 8),
 ];
 
 const fn slot(art: Art, file: &'static str, w: u32, h: u32) -> Slot {
@@ -128,6 +182,12 @@ impl Art {
         Art::PortraitBob,
         Art::PortraitSteve,
         Art::PortraitTim,
+        Art::PortraitRin,
+        Art::PortraitGoro,
+        Art::PortraitHana,
+        Art::PortraitLudo,
+        Art::PortraitInes,
+        Art::PortraitOdd,
         Art::QuestCave,
         Art::QuestCrypt,
         Art::QuestTower,
@@ -137,10 +197,19 @@ impl Art {
         Art::Coin,
         Art::Skull,
         Art::Heart,
+        Art::Fight,
+        Art::Labor,
+        Art::Scout,
+        Art::Craft,
+        Art::Indebted,
+        Art::Renown,
+        Art::Caring,
+        Art::Restless,
+        Art::Maker,
     ];
 
     fn index(self) -> usize {
-        // A linear walk over thirteen entries, so the enum and the table cannot
+        // A linear walk over twenty-eight entries, so the enum and the table cannot
         // drift the way parallel `as usize` indices do.
         LIBRARY
             .iter()
@@ -290,7 +359,7 @@ impl Gallery {
     ///
     /// **Written out, one literal per role**, because an asset path is a string
     /// literal at the load site (assets.md §2): that is what lets
-    /// `tools/check-assets` prove, before the game runs, that all thirteen name
+    /// `tools/check-assets` prove, before the game runs, that all twenty-eight name
     /// files that exist with exactly this spelling. A fold over `LIBRARY` would
     /// be shorter and would make every path invisible to the check that turns a
     /// typo into a CI failure instead of a magenta quad.
@@ -305,6 +374,12 @@ impl Gallery {
                 assets.load_texture("portrait_bob.png"),
                 assets.load_texture("portrait_steve.png"),
                 assets.load_texture("portrait_tim.png"),
+                assets.load_texture("portrait_rin.png"),
+                assets.load_texture("portrait_goro.png"),
+                assets.load_texture("portrait_hana.png"),
+                assets.load_texture("portrait_ludo.png"),
+                assets.load_texture("portrait_ines.png"),
+                assets.load_texture("portrait_odd.png"),
                 assets.load_texture("quest_cave.png"),
                 assets.load_texture("quest_crypt.png"),
                 assets.load_texture("quest_tower.png"),
@@ -314,6 +389,15 @@ impl Gallery {
                 assets.load_texture("icon_coin.png"),
                 assets.load_texture("icon_skull.png"),
                 assets.load_texture("icon_heart.png"),
+                assets.load_texture("icon_fight.png"),
+                assets.load_texture("icon_labor.png"),
+                assets.load_texture("icon_scout.png"),
+                assets.load_texture("icon_craft.png"),
+                assets.load_texture("icon_indebted.png"),
+                assets.load_texture("icon_renown.png"),
+                assets.load_texture("icon_caring.png"),
+                assets.load_texture("icon_restless.png"),
+                assets.load_texture("icon_maker.png"),
             ],
         }
     }

@@ -95,7 +95,7 @@ def main(argv: "list[str]") -> int:
         print("  fix: classify some in kenney-manifest.json, or ask for one of the above")
         return 1
 
-    out = Path(args.out).expanduser().resolve() if args.out else REPO / "target" / "giri-art" / "roles"
+    out = Path(args.out).expanduser().resolve() if args.out else REPO / "target" / "ninjo-art" / "roles"
     out.mkdir(parents=True, exist_ok=True)
 
     for role in roles:

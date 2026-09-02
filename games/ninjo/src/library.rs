@@ -8,6 +8,8 @@
 //! hand-kept list covers what somebody remembered, and the entry that goes
 //! wrong is always the one added after the list.
 
+use jidousha::prelude::*;
+
 use crate::checks::Checks;
 use crate::constants::Tuning;
 use crate::grid::LOCATIONS;
@@ -15,7 +17,7 @@ use crate::lens::Lens;
 use crate::sim::Sim;
 use crate::sprites::{self, Art};
 use crate::sweep::Conducted;
-use crate::{clock, floors, screens};
+use crate::{clock, floors, screens, theme};
 
 /// **The art library** (giri's curation model, carried whole): every role a
 /// distinct file, every file a picture of the size the code says, every
@@ -84,6 +86,8 @@ pub fn library(checks: &mut Checks) {
         );
     }
 
+    portraits_are_tellable_apart(checks, &assets, &gallery);
+
     // Every location draws a marker nobody else draws, and every party a
     // token nobody else carries — a marker is an identity.
     let mut markers: Vec<(&'static str, Art)> = Vec::new();
@@ -108,6 +112,97 @@ pub fn library(checks: &mut Checks) {
                 format!(
                     "{} and {} both draw {:?}",
                     party.name, other.name, party.token
+                ),
+            );
+        }
+    }
+}
+
+/// How far apart two texels have to be, per channel, to count as different.
+///
+/// A shipped literal, never derived from the art: a floor computed from the
+/// pictures it judges cannot see them move (make-game §A.6). 24 of 255 is
+/// wider than the palette's own neighbouring shades and narrower than any two
+/// of Tiny Dungeon's colour roles.
+const PORTRAIT_TEXEL_DIFFERENCE: i32 = 24;
+
+/// What share of a portrait's texels must differ from every other portrait's.
+///
+/// Measured over the ten committed on 2026-09-02: the tightest pair is
+/// `portrait_tim` and `portrait_odd` — a closed helm and an open one — at 19%,
+/// and every other pair is above 20%. The floor sits at 15% so the landed set
+/// clears it with room, and a future `chosen` edit that picks a near-duplicate
+/// does not: the two busts rejected for being too alike scored 12%
+/// (CAST.md §9).
+const PORTRAIT_DISTINCT_FLOOR: f32 = 0.15;
+
+/// **No two people wear the same face at map scale** (CAST.md §9's criterion).
+///
+/// The eye is the gate and this is the floor under it: a portrait is a click
+/// target standing at a home tile beside nine others, and two that differ only
+/// in a detail are two people the player cannot tell apart. Judged at *native
+/// texel size* over the ground colour, because that is where the difference has
+/// to exist — an integer upscale cannot add one.
+///
+/// The comparison is per texel over the alpha-composited picture, so a portrait
+/// that differs only by transparency still counts as the same picture, which is
+/// what it looks like on the map.
+fn portraits_are_tellable_apart(checks: &mut Checks, assets: &Assets, gallery: &sprites::Gallery) {
+    let ground = theme::GROUND;
+    let over_ground = |art: Art| -> Option<Vec<[i32; 3]>> {
+        let texture = assets.texture_of(gallery.handle(art))?;
+        Some(
+            texture
+                .rgba
+                .chunks_exact(4)
+                .map(|texel| {
+                    let alpha = i32::from(texel[3]);
+                    let base = [ground.r, ground.g, ground.b];
+                    let mut out = [0i32; 3];
+                    for (channel, slot) in out.iter_mut().enumerate() {
+                        let back = (base[channel] * 255.0).round() as i32;
+                        *slot = (i32::from(texel[channel]) * alpha + back * (255 - alpha)) / 255;
+                    }
+                    out
+                })
+                .collect(),
+        )
+    };
+
+    let faces: Vec<(Art, Vec<[i32; 3]>)> = Art::ALL
+        .iter()
+        .copied()
+        .filter(|art| art.file().starts_with("portrait_"))
+        .filter_map(|art| over_ground(art).map(|texels| (art, texels)))
+        .collect();
+
+    for (index, (art, texels)) in faces.iter().enumerate() {
+        for (other, others) in faces.iter().skip(index + 1) {
+            if texels.len() != others.len() {
+                // Two portraits at two texel sizes are trivially tellable apart,
+                // and the size check above already has an opinion about it.
+                continue;
+            }
+            let differing = texels
+                .iter()
+                .zip(others)
+                .filter(|(mine, theirs)| {
+                    mine.iter()
+                        .zip(theirs.iter())
+                        .any(|(a, b)| (a - b).abs() > PORTRAIT_TEXEL_DIFFERENCE)
+                })
+                .count();
+            let share = differing as f32 / texels.len() as f32;
+            checks.require(
+                share >= PORTRAIT_DISTINCT_FLOOR,
+                "two portraits are too alike to tell apart at map scale",
+                format!(
+                    "{art:?} and {other:?} differ on {differing} of {} texels ({:.0}%), and the \
+                     floor is {:.0}% - a `chosen` edit in art/kenney-manifest.json picked two \
+                     faces that read as one person on the map",
+                    texels.len(),
+                    share * 100.0,
+                    PORTRAIT_DISTINCT_FLOOR * 100.0,
                 ),
             );
         }
