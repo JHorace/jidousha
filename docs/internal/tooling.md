@@ -475,12 +475,15 @@ a row (stop rule printed, `failure-streak.json` count 2).
     developer's local build keeps both, which is what keeps a local edit-check
     loop quick. `debug-assertions` is untouched, so "panic loudly in debug"
     (CLAUDE.md) is unaffected.
-  - **The web job's two long stages run their pages in parallel**, inside the
-    tools rather than beside them (web-publish.md §1b): `build-web` stages a
-    fleet's pages one per core, `serve-web --check` drives them one per core.
-    The workflow still makes one call to each, because `build-web` is the only
-    build path (web-publish.md §1) — and the staged bytes are identical to the
-    serial build's, hashed over a whole fleet both ways.
+  - **The web job's fleet build stages its pages in parallel**, inside the tool
+    rather than beside it (web-publish.md §1b): the workflow still makes one
+    call, because `build-web` is the only build path (web-publish.md §1), and
+    the staged bytes are identical to the serial build's, hashed over a whole
+    fleet built both ways. The browser check was tried the same way and **backed
+    out on the measurement**: 15 seconds saved against three-minute stalls,
+    because starving a compositor of cores is what the screenshot deadlock feeds
+    on. §1b has both tables — a lever measured and dropped is worth as much on
+    the record as one that paid.
   - **fmt, clippy and doctor were already their own jobs**, so there was no
     fail-fast split left to make: a short job already fails first, and
     `tools/test` does not run them.

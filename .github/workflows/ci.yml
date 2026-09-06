@@ -273,12 +273,6 @@ jobs:
       # because the frame-pacing overlay is the page shell's and never calls
       # into the module (web-publish.md §2) — the same template on all of them.
       #
-      # The pages are checked several at a time, inside the tool (one browser
-      # per core, web-publish.md §1b) — the workflow still makes one call and
-      # still names no page. Each page keeps its own target/web-check/<page>/
-      # and its own browser profile, and the check's static server is threaded,
-      # so nothing about the evidence changes with the pool.
-      #
       # timeout-minutes because the failure mode this replaces was a *hang*: one
       # page hanging costs the check's own per-page ceiling (CHECK_TIMEOUT_S in
       # tools/serve-web, and up to twice it on the one pass that takes a

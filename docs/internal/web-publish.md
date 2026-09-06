@@ -149,21 +149,21 @@ a game ships art). This section is the pipeline half of it.
   ADR-0040. Neither fleet changes it: games are in both (§3a), and a page that
   is not built stages nothing because it does not exist.
 
-## 1b. What runs at once, and what that may not change
+## 1b. What runs at once, what does not, and what neither may change
 
-Both halves of the pipeline had a serial stage that left most of a runner idle,
-and the `web` job is CI's longest (owner authorization for CI speed work,
-2026-09-02; the before/after measurements are on the PR that landed this).
-Neither parallelism changes what is built or what is asserted — that is the
-condition the work was done under, and the two CONTRACTs below are how it is
-kept true rather than hoped for.
+The `web` job is CI's longest, and both halves of the pipeline had a serial
+stage (owner authorization for CI speed work, 2026-09-02; the measurements are
+on jidousha#93). One of them was worth parallelizing and one was not, and the
+difference is the point of this section.
 
 - **The fleet build stages its pages several at a time** (`tools/build-web`,
-  `stage_fleet`). The compile is untouched and still one cargo invocation for
-  the facade's examples plus one per game crate: cargo already uses every core,
-  so there is nothing to win there. What follows it is per page — `wasm-bindgen`,
-  `wasm-opt -Os`, the page template, the asset roots — and those are independent
-  single-core pipelines, one per core (`MAX_STAGE_WORKERS`).
+  `stage_fleet`, one worker per core). The compile is untouched and still one
+  cargo invocation for the facade's examples plus one per game crate: cargo
+  already uses every core, so there is nothing to win there. What follows it is
+  per page — `wasm-bindgen`, `wasm-opt -Os`, the page template, the asset roots
+  — and those are independent single-core pipelines. `build-web` remains the
+  ONLY build path (§1): the workflow makes one call, and the parallelism is
+  inside it.
 - CONTRACT: **the bytes a fleet stages do not depend on how many pages stage at
   once.** wasm-bindgen and wasm-opt are deterministic functions of one module
   and a fixed set of flags, and no page reads another page's files. Measured
@@ -173,38 +173,21 @@ kept true rather than hoped for.
   constant). A change here that cannot show that again must not land: what
   deploys is optimized bytes, and a preview that is not the build the check
   checked is worth nothing.
-- **The fleet check drives its pages several at a time** (`tools/serve-web
-  --check`, `CHECK_WORKERS_CAP`), at **half** the machine's cores. The pages
-  already shared nothing: each page's evidence goes to its own
-  `target/web-check/<page>/` and each launch takes its own profile directory
-  under it. **One server on one port**, deliberately: it is threaded (§1's
-  concurrency CONTRACT), a single browser already opens several sockets at once,
-  and a second server would only be a second thing to collide on a port with.
-- **Half the cores, because the browser defect is load-sensitive.** The wall
-  clock said one per core: 51s serial → 28s at two → 20s at four over a 15-page
-  fleet, with no single pass slower than the serial run's slowest. CI said
-  otherwise on the first run at four: **two of fifteen** pixel passes hit §1's
-  screenshot deadlock, against a serial history whose step durations say roughly
-  one run in three saw a single hang across fifteen launches — a per-launch rate
-  nearer 3%. The deadlock is a compositor frame that has to complete under
-  virtual time, and starving it of cores is the wrong thing to do to it. Eight
-  seconds is not worth a gate that fails a fifth of the time.
-- CONTRACT: **a retried pass runs alone** (`Machine.alone`). The retry is
-  bounded at one because launches are independent — that is what takes a
-  per-pass 12% to about 1.5% — and a pool is precisely what breaks that
-  independence: the launch that hung did so under load, and retrying it into the
-  same load repeats the experiment rather than testing it. Observed: on that
-  first run at four, a page hung, was retried beside three other running
-  browsers, and hung again, spending 360s to prove nothing. The retry now waits
-  for every other browser to finish, one retry draining the machine at a time —
-  two threads each taking half the slots and waiting for the rest would be a
-  deadlock, and two pages hitting the defect within a second of each other is
-  what actually happened.
-- **They log differently, on purpose.** `build-web` collects each page's lines
-  and writes the block whole, because its log is read to answer "what happened
-  to *this* page". `serve-web` tags each line with its page and prints it the
-  moment it is printed, because the failure it exists to survive is a *hang*,
-  and a hung page's only evidence is what reached the log before it stopped.
+- Each page's build log is collected and written whole rather than interleaved,
+  because that log is read to answer "what happened to *this* page" — which
+  module it bound, what wasm-opt did to it, how many asset files it staged.
+- **The fleet check stays one page at a time**, and that is a measured decision,
+  not an oversight (`check_fleet` carries the table). A pool there is just as
+  easy — the pages already share nothing — and on a developer container it was
+  worth 2.5x. On CI it was worth 15 seconds and cost three-minute stalls: at one
+  browser per core, two of fifteen pixel passes hit §1's screenshot deadlock and
+  one hung again on its retry, failing the build; at half the cores, two of
+  forty-five hung where three serial runs of the same fleet hung none. The
+  deadlock is a compositor frame that has to complete under virtual time, so
+  starving it of cores is the one thing certain to make it likelier. A gate that
+  stalls for `CHECK_TIMEOUT_S` is worth far more than the seconds a pool saves.
+  The reasoning that separates this from the build above is one line: the build's
+  parallel work is deterministic byte-shuffling with no browser in it.
 
 ## 2. The playtest page shell (`tools/web-template/`)
 
@@ -624,9 +607,8 @@ edited). This section is where the decision lives.
   page in `dist/fleet.txt` — so the check covers whichever fleet was built,
   entirely, and the workflow still names no page (§3a). The `?frametime=1` pass
   is the lead page's only; §3a says why. The build stages its pages several at a
-  time and the check drives its pages several at a time (§1b) — the job still
-  makes one call to each tool, and the parallelism is inside them, where the
-  one-build-path CONTRACT (§1) requires it to be. `timeout-minutes`
+  time and the check drives them one at a time — §1b has the measurements for
+  both, including why the second is deliberate. `timeout-minutes`
   bounds the loop: the failure it guards against is a hang, and a hang costs
   the check's own per-page ceiling (`CHECK_TIMEOUT_S`) on each page it touches —
   twice it on the `run` pass, which is retried once (§1's deadlock CONTRACT).

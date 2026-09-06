@@ -3235,125 +3235,35 @@ class GameToolingTest(unittest.TestCase):
         # wasm module (web-publish.md §2), so it is one template identical on
         # every page: N launches of it buy nothing the first does not. What is
         # per page — started, drew, panicked — still runs on all of them.
-        #
-        # The pages are checked several at a time (web-publish.md §1b), so this
-        # asserts the set of launches rather than the order they arrive in — the
-        # order is the pool's business and the assertion is not about it.
-        lock = threading.Lock()
         asked = []
 
         def record(_browser, _port, page, windowed=True, frametime=True):
-            with lock:
-                asked.append((page, frametime))
+            asked.append((page, frametime))
             return 0
 
         pages = [("prototype_kit", True), ("pong", True), ("giri", True)]
         with unittest.mock.patch.object(serve_web, "check", record):
-            with contextlib.redirect_stdout(io.StringIO()):
-                self.assertEqual(serve_web.check_fleet("browser", 8080, pages), 0)
+            self.assertEqual(serve_web.check_fleet("browser", 8080, pages), 0)
         self.assertEqual(
-            sorted(asked),
-            sorted([("prototype_kit", True), ("pong", False), ("giri", False)]),
+            asked, [("prototype_kit", True), ("pong", False), ("giri", False)]
         )
 
-    def test_every_page_is_checked_and_every_failure_named_however_they_finish(self):
-        # Failures do not stop the run, and the report is in fleet order
-        # whatever order the pool finished in: "one page is broken" and "every
-        # page is broken" want different next moves (web-publish.md §3a).
-        lock = threading.Lock()
+    def test_every_page_is_checked_and_every_failure_is_named(self):
+        # Failures do not stop the run: "one page is broken" and "every page is
+        # broken" want different next moves (web-publish.md §3a).
         checked = []
 
         def record(_browser, _port, page, windowed=True, frametime=True):
-            with lock:
-                checked.append(page)
+            checked.append(page)
             return 1 if page in ("pong", "prototype_kit") else 0
 
         pages = [("prototype_kit", True), ("pong", True), ("giri", True)]
         with unittest.mock.patch.object(serve_web, "check", record):
             with contextlib.redirect_stdout(io.StringIO()) as log:
                 self.assertEqual(serve_web.check_fleet("browser", 8080, pages), 1)
-        self.assertEqual(sorted(checked), ["giri", "pong", "prototype_kit"])
+        self.assertEqual(checked, ["prototype_kit", "pong", "giri"])
         self.assertIn("2 of 3 page(s) failed", log.getvalue())
         self.assertIn("failed: prototype_kit, pong", log.getvalue())
-
-    def test_a_checked_pages_lines_carry_its_name_as_they_are_printed(self):
-        # Tagged rather than buffered, and that is the point: the failure this
-        # tool survives is a *hang*, whose only evidence is what was printed
-        # before it stopped. A buffer would throw exactly that away.
-        stream = io.StringIO()
-        out = serve_web.TaggedOutput(stream)
-        with out.page("pong"):
-            print("pass run: http://127.0.0.1:8080/pong/", file=out)
-            self.assertIn("[pong] pass run:", stream.getvalue())
-            print("two\nlines", file=out)
-        print("after the block", file=out)
-        written = stream.getvalue()
-        self.assertIn("[pong] two\n[pong] lines\n", written)
-        self.assertIn("\nafter the block\n", written)
-        self.assertNotIn("[pong] after", written)
-
-    def test_a_retrying_pass_waits_for_every_other_browser(self):
-        # The bounded retry's 1.5% is the per-launch 12% squared, which assumes
-        # the two launches are independent — and they are not while three other
-        # browsers software-render beside the retry. `alone` is what restores
-        # the condition that figure was measured under.
-        machine = serve_web.Machine(2)
-        holding = threading.Event()
-        release = threading.Event()
-        retried = threading.Event()
-
-        def occupy():
-            with machine.launching():
-                holding.set()
-                release.wait(5)
-
-        def retry():
-            with machine.alone():
-                retried.set()
-
-        busy = threading.Thread(target=occupy)
-        busy.start()
-        self.assertTrue(holding.wait(5))
-        alone = threading.Thread(target=retry)
-        alone.start()
-        # The other browser is still running, so the retry has not started.
-        self.assertFalse(retried.wait(0.2))
-        release.set()
-        self.assertTrue(retried.wait(5))
-        busy.join()
-        alone.join()
-
-    def test_two_pages_retrying_at_once_do_not_wedge_the_machine(self):
-        # Two pages hitting the browser defect within a second of each other is
-        # what actually happened on CI, and two threads each taking half the
-        # slots and waiting for the rest is a deadlock. One retry drains the
-        # machine at a time.
-        machine = serve_web.Machine(2)
-        done = []
-        lock = threading.Lock()
-
-        def retry():
-            with machine.alone():
-                with lock:
-                    done.append(threading.current_thread().name)
-
-        threads = [threading.Thread(target=retry, name=f"r{n}") for n in range(2)]
-        for thread in threads:
-            thread.start()
-        for thread in threads:
-            thread.join(timeout=5)
-        self.assertEqual(sorted(done), ["r0", "r1"], "a retry never got the machine")
-
-    def test_no_more_check_workers_than_there_are_pages_or_half_the_cores(self):
-        # A worker is a whole software-rendering browser, and the margin the
-        # extra ones spend is CHECK_TIMEOUT_S's: at one per core, two of
-        # fifteen pixel passes hit the browser deadlock on CI. Half the cores,
-        # capped, and never more than there are pages — and never zero, on a
-        # machine that will not say how many cores it has.
-        self.assertEqual(serve_web.check_workers(1), 1)
-        ceiling = min((os.cpu_count() or 1) // 2, serve_web.CHECK_WORKERS_CAP)
-        self.assertEqual(serve_web.check_workers(1000), max(1, ceiling))
-        self.assertGreaterEqual(serve_web.check_workers(0), 1)
 
     def test_a_page_checked_by_name_still_gets_every_pass(self):
         # `serve-web <page> --check` is the local iteration path: there the
