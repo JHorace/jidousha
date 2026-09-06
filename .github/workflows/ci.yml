@@ -238,7 +238,9 @@ jobs:
       # into the module (web-publish.md §2) — the same template on all of them.
       #
       # timeout-minutes because the failure mode this replaces was a *hang*: one
-      # page hanging costs the check's own 120s ceiling, and the loop deliberately
+      # page hanging costs the check's own per-page ceiling (CHECK_TIMEOUT_S in
+      # tools/serve-web, and up to twice it on the one pass that takes a
+      # screenshot, which is retried once), and the loop deliberately
       # does not stop at the first failure (one broken page and a wholly broken
       # build need different responses, and only finishing tells them apart).
       # This bounds the pathological case where every page hangs.

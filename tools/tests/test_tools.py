@@ -14,6 +14,7 @@ import functools
 import io
 import json
 import re
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -2446,6 +2447,94 @@ class ServeWebTest(unittest.TestCase):
         self.assertEqual(state, "running")
         self.assertEqual(message, "something threw")
         self.assertTrue(failed)
+
+    def _load_page(self, pixels, outcomes):
+        """Drive serve_web.load_page with a scripted subprocess.run."""
+        calls = []
+
+        def fake_run(command, **kwargs):
+            calls.append(command)
+            outcome = outcomes[len(calls) - 1]
+            if outcome == "hang":
+                raise subprocess.TimeoutExpired(command, 120, stderr=b"browser said this")
+            return subprocess.CompletedProcess(command, 0, stdout="<body></body>", stderr="")
+
+        with tempfile.TemporaryDirectory() as scratch:
+            previous = (serve_web.CHECK_DIR, serve_web.REPO_ROOT)
+            serve_web.CHECK_DIR = Path(scratch) / "web-check"
+            serve_web.REPO_ROOT = Path(scratch)
+            try:
+                with unittest.mock.patch.object(serve_web.subprocess, "run", fake_run):
+                    with contextlib.redirect_stdout(io.StringIO()) as printed:
+                        result = serve_web.load_page(
+                            "chrome", "http://127.0.0.1:8080/pong/", "pong", "run",
+                            pixels=pixels,
+                        )
+            finally:
+                serve_web.CHECK_DIR, serve_web.REPO_ROOT = previous
+        return result, calls, printed.getvalue()
+
+    def test_only_the_pixel_reading_pass_asks_for_a_screenshot(self):
+        # `--screenshot` is what deadlocks this browser against
+        # --virtual-time-budget while the page composites through SwiftShader,
+        # so the passes that read the DOM and threw the picture away stopped
+        # asking for one (web-publish.md §1).
+        _result, calls, _printed = self._load_page(pixels=True, outcomes=["ok"])
+        self.assertTrue(any(arg.startswith("--screenshot=") for arg in calls[0]))
+        _result, calls, _printed = self._load_page(pixels=False, outcomes=["ok"])
+        self.assertFalse(any(arg.startswith("--screenshot=") for arg in calls[0]))
+
+    def test_a_hung_pixel_pass_is_retried_exactly_once_and_can_then_pass(self):
+        # The deadlock strikes a page that has already finished its whole job,
+        # and each launch is independent — so one retry is the fix, and it is
+        # the browser being retried, not the assertions being softened.
+        result, calls, printed = self._load_page(pixels=True, outcomes=["hang", "ok"])
+        self.assertNotIsInstance(result, int, "the retry should have produced a page")
+        self.assertEqual(len(calls), 2)
+        self.assertIn("retrying once", printed)
+
+    def test_a_pass_that_hangs_twice_is_a_failure_not_a_third_attempt(self):
+        # Bounded at one. A check that retried until it passed would be a check
+        # that never failed.
+        result, calls, printed = self._load_page(pixels=True, outcomes=["hang", "hang"])
+        self.assertEqual(result, 1)
+        self.assertEqual(len(calls), 2)
+        self.assertIn("twice", printed)
+
+    def test_a_hung_dom_only_pass_is_not_retried(self):
+        # It never asked for a screenshot, so it cannot have hit the deadlock;
+        # retrying it would just spend another 120s on a real failure.
+        result, calls, _printed = self._load_page(pixels=False, outcomes=["hang", "ok"])
+        self.assertEqual(result, 1)
+        self.assertEqual(len(calls), 1)
+
+    def test_a_stale_screenshot_cannot_be_read_as_this_runs_evidence(self):
+        # The browser writes the picture when it finishes, so a run that fails
+        # to finish would otherwise leave the previous run's pixels for
+        # canvas_is_drawn to pass on. Checked on the DOM-only pass, which is
+        # the harder case: it never takes a screenshot at all, so without this
+        # a picture from before the change would sit in target/web-check/ and
+        # be uploaded as the evidence for a failure it has nothing to do with.
+        with tempfile.TemporaryDirectory() as scratch:
+            previous = (serve_web.CHECK_DIR, serve_web.REPO_ROOT)
+            serve_web.CHECK_DIR = Path(scratch) / "web-check"
+            serve_web.REPO_ROOT = Path(scratch)
+            stale = Path(scratch) / "web-check" / "pong" / "check-run.png"
+            stale.parent.mkdir(parents=True)
+            stale.write_bytes(b"pixels from a previous, passing run")
+            try:
+                def hang(command, **kwargs):
+                    raise subprocess.TimeoutExpired(command, 120, stderr=b"")
+
+                with unittest.mock.patch.object(serve_web.subprocess, "run", hang):
+                    with contextlib.redirect_stdout(io.StringIO()):
+                        serve_web.load_page(
+                            "chrome", "http://127.0.0.1:8080/pong/", "pong", "run",
+                            pixels=False,
+                        )
+                self.assertFalse(stale.exists(), "the stale screenshot survived")
+            finally:
+                serve_web.CHECK_DIR, serve_web.REPO_ROOT = previous
 
     def test_the_shell_grep_finds_the_fullscreen_control_on_the_real_template(self):
         # The grep and the template have to agree about what the control looks
