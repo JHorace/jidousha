@@ -1,6 +1,6 @@
 ---
 name: make-game
-description: Build a playable game or prototype with the Jidousha engine, or land a module into one that already runs, as the game's author rather than the engine's. Use whenever the user asks for a game, a prototype, a demo, or anything playable built with this engine — "make Pong", "a little arcade game", "try this mechanic" — even if they never say the word "game", and whenever a session's job is a wave or a module of a game that already exists under games/. Owns the whole game-session workflow — where a game lives (a crate under games/, ADR-0038), reading order for docs/api/ and for a game's own canon, writing the game, the --verify mode and its players, the mutation round, the capture, the findings it owes back, and the closing checklist the owner loop runs on. Not for engine work: changing the engine's source, docs, or tools has its own routing in CLAUDE.md.
+description: Build a playable game or prototype with the Jidousha engine, or land a module into one that already runs, as the game's author rather than the engine's. Use whenever the user asks for a game, a prototype, a demo, or anything playable built with this engine — "make Pong", "a little arcade game", "try this mechanic" — even if they never say the word "game", and whenever a session's job is a wave or a module of a game that already exists under games/. Owns the whole game-session workflow — where a game lives (a crate under games/, ADR-0038), reading order for docs/api/ and for a game's own canon, writing the game, the --verify mode and its players, the mutation round, the capture, the decision-surface section a handoff must carry, the findings it owes back, and the closing checklist the owner loop runs on. Not for engine work: changing the engine's source, docs, or tools has its own routing in CLAUDE.md.
 ---
 
 # make-game — the game-session workflow
@@ -12,12 +12,14 @@ Two session shapes come through here, and they share a spine:
 
 | You were asked to… | Go to |
 |---|---|
-| Make a new game or prototype — nothing exists yet | **§A**, then §C and §D |
-| Land a wave or a module into a game that already runs (`games/ninjo/`) | **§B**, then §C and §D |
+| Make a new game or prototype — nothing exists yet | **§A**, then §C, §D and §E |
+| Land a wave or a module into a game that already runs (`games/ninjo/`) | **§B**, then §C, §D and §E |
 
-§0 binds both. §C (findings) and §D (the closing checklist) are owed by every
-session of either shape, and §D is not optional: a session that ends without
-working its checklist has violated this skill.
+§0 binds both. §C (findings), §D (decision surfaces) and §E (the closing
+checklist) are owed by every session of either shape, and §E is not optional: a
+session that ends without working its checklist has violated this skill. §D
+carries the one rule in this file that is read **before** implementing rather
+than after: a handoff missing its decision-surface section stops the session.
 
 ---
 
@@ -60,7 +62,7 @@ CLAUDE.md's definition of done, plus: `cargo fmt --all` clean, clippy clean,
 `tools/test` green with the report file as the verdict — and the four things
 this workflow adds, each with its own step below: the `--verify` mode (§A.4 /
 §B.4), the mutation round (§A.6 / §B.5), the pictures a person actually looked
-at (§A.7 / §B.6), and the findings (§C).
+at (§A.7 / §B.6), and the findings (§C). §D binds the handoff itself.
 
 ---
 
@@ -239,7 +241,7 @@ must still run when yours is switched off.
 | the game's **DESIGN.md** | the substrate's technical doc — the clock, the grid, the scheduler, the verify machinery you are landing on top of |
 | the game's **UI.md**, if your module owns a surface | the floors, the screenshot process, and what binds a new surface |
 | the game's **content bible**, where it has one (`games/ninjo/CAST.md`) | who the cast are, what the vocabulary words mean, and which of its sections your wave is the one that builds |
-| **the module's fences in your handoff** | what this session may and may not touch; three sessions can be in flight at once |
+| **the module's fences in your handoff**, and its decision-surface section (§D) | what this session may and may not touch — three sessions can be in flight at once — and what the player is meant to be able to decide when yours has landed |
 | `docs/api/` | as §A.1 orders them, for any engine question the game has not already answered |
 
 Read the registry row before the prose. It is the contract; the prose is why.
@@ -374,11 +376,106 @@ what gets filed, so:
 
 ---
 
-## D. The closing checklist — the owner loop
+## D. Decision surfaces, and mockups as references
+
+§C is owed after the build. This section is owed **before** it: it is about
+what the handoff says, and the one place in this file where the right move is
+to stop and ask rather than to implement.
+
+### D.1 The decision-surface table is a required section of the handoff
+
+**A game handoff that adds or changes a player decision carries a
+decision-surface table** — one row per decision, six columns:
+
+| column | what goes in it |
+|---|---|
+| **decision** | what the *player* chooses, in their words ("which job to send the selected character to") |
+| **must know** | the facts the choice turns on (the job's task type, its pot, its duration; this character's fit; the travel) |
+| **surface** | where those facts are shown **at the moment of choosing** (the site panel's job row) |
+| **action** | the input that commits it (tap the open row with an idle character selected) |
+| **one function** | the sim function that both the display and the outcome read (`traits::competence_at`; the pathfinder), so a preview and the sim cannot disagree |
+| **asserted by** | the floor or the scripted test that proves those facts are on screen when the action is available |
+
+`docs/templates/DECISIONS.md` is the copyable skeleton and carries that row
+worked out in full. **A handoff that adds no decision says so in one explicit
+line** — `Decisions: none new; existing surfaces unchanged.` — because an empty
+table reads as a section nobody filled in.
+
+**The rule: a game handoff with neither the table nor that line is malformed.
+Stop and ask the owner before implementing**, exactly as you would for a
+handoff missing its reading fence. Do not infer the surface from the systems,
+and do not plan to build the systems now and the surface after.
+
+Why it is a stop rather than a reminder: a build is faithful to its handoff,
+which means faithful to its **silence**. Wave 1.1 of ninjo specified its
+systems and its data down to the drawer row and its decision surface not at
+all, and the owner's playtest of the deployed build filed
+`games/ninjo/FINDINGS.md` **G-017** (two selections over one roster, so the
+player could not tell whom they were about to send) and **G-018** (one person
+drawn twice on the map) — both "the game's own (a wave-1.1 gap)", both
+invisible to the checks, because a surface nobody specified is a surface
+nobody asserts. The omission was the design session's, so the remedy is a
+section of the handoff and a stop, not diligence at build time.
+`docs/agent-practices.md` §2.6 is the argument in full. (Owner policy,
+2026-09-02.)
+
+Where the handoff has the table, §E closes it out: every row ships with the
+test that asserts it, named in the final message.
+
+### D.2 A mockup is a reference the build is checked against
+
+Two kinds come through, and they are not the same object:
+
+- **An architecture mockup** — an interactive HTML slice that runs the real
+  data shapes. Rare, and attached when a wave introduces a new *interaction
+  model* rather than another surface in an existing one (ninjo's wave 0a
+  attention mockup is the precedent: GDD §8, and §8's wave-1.5 calibration is
+  still being spent out of it).
+- **A surface spec** — the decision table plus a wireframe. The ordinary case,
+  and what most waves should attach.
+
+**When a handoff attaches a mockup of either kind, the session opens it.** An
+attached mockup nobody opened is the failure mode this rule exists for: it
+looks like a specification and functions as decoration.
+
+You have a headless browser and no excuse. It is the one `tools/serve-web
+--check` drives — that tool's `chromium()` helper names where it lives
+(`/opt/pw-browsers/chromium-*/chrome-linux/chrome`, then `chromium` on PATH).
+For each surface the mockup specifies:
+
+- [ ] **Photograph the mockup.** A self-contained HTML mockup needs the plain
+  screenshot pass and none of `--check`'s WebGL flags:
+
+  ```
+  <chromium> --headless=new --no-sandbox --disable-background-networking \
+    --host-resolver-rules='MAP * ~NOTFOUND, EXCLUDE 127.0.0.1' \
+    --user-data-dir=target/mockup-shots/profile \
+    --window-size=<the surface's reference width,height> \
+    --screenshot=target/mockup-shots/<surface>.png \
+    file://$PWD/<the mockup>.html
+  ```
+
+  (Chromium's dbus complaints on stderr are noise in a container; the line
+  that matters is `<n> bytes written to file`.) A mockup that is itself an
+  engine build is a page under `dist/`: serve it and let `tools/serve-web
+  <name> --check` photograph it (`target/web-check/<page>/check-run.png`).
+- [ ] **Photograph the build's same surface with the capture the game already
+  has** (§A.7 / §B.6 — ninjo's is `UI.md` §5, eleven PNGs into `screens/`). Do
+  not add a second screenshot path. If the mockup specifies a surface the
+  capture does not photograph, add that capture: a surface worth mocking up is
+  a surface worth a committed picture.
+- [ ] **Put the pair in the PR, mockup beside build, one line per difference
+  and whether it was deliberate.** A deliberate difference is a decision and
+  reads as one; an undeliberate one is a bug you found before the owner did.
+  Both are cheap here and expensive after the playtest.
+
+---
+
+## E. The closing checklist — the owner loop
 
 **Every game session's final message enumerates the owner actions it
 triggered.** The owner loop only runs on what a session hands back; forgetting
-this checklist is a skill violation, not a missed pleasantry. Work all four
+this checklist is a skill violation, not a missed pleasantry. Work all five
 lines and state each one, including the ones that do not apply and why.
 
 - [ ] **"Sync now."** Say it whenever the session changed anything the owner's
@@ -397,6 +494,10 @@ lines and state each one, including the ones that do not apply and why.
   entries that dispatch it; `docs/templates/SANITATION.md` is the handoff
   template and the four pass types. You do not run the pass and you do not
   create its session — you hand the owner the evidence that one is owed.
+- [ ] **Decision surfaces shipped**: one line per row of the handoff's
+  decision-surface table (§D.1), naming the test that asserts it — or the one
+  line saying the handoff added no decision. A table that was opened and never
+  closed out is the same silence one document later.
 - [ ] **What the next session inherits**: the deviations, the open findings,
   and anything you decided that the GDD leaves open.
 

@@ -235,6 +235,42 @@ motivated is a review nobody reads.
 that skips them violates the skill); the SANITATION template's evidence slot, which
 cannot be filled without a ledger entry or a failed gate.
 
+### 2.6 Decision surfaces are specified, not inferred
+
+A handoff written by a systems designer has a predictable shape: the systems and the
+data are specified thoroughly, and the surface on which the player makes the decision
+those systems exist to offer is not specified at all. It is not carelessness. The
+decision is obvious to whoever designed the system — they can see the numbers — so the
+screen that has to show them reads as an implementation detail, and the parts of the
+handoff that get the attention are the parts that were hard to decide. The build is
+then faithful to the handoff, which means **faithful to its silence**: the systems
+land, the checks pass, and the player cannot make the choice, because nothing on
+screen tells them what they are choosing between. Nothing fails; the wave is simply
+not playable and nobody finds out until somebody plays it.
+
+ninjo's wave 1.1 is the worked case. Its handoff specified the autonomy scorer, its
+terms and its data down to the drawer row, and said nothing about the surface for
+*whom to send where* — and the owner's playtest of the deployed build filed
+`games/ninjo/FINDINGS.md` **G-017** (two selections over one roster, each drawing its
+own ring, so the player could not tell who was selected) and **G-018** (an idle
+character drawn twice, the second drifting further with every index). Both are classed
+"the game's own — a wave-1.1 gap", and G-017 names why the instruments were quiet:
+each field's tests asserted its own index and no check counted rings. A surface nobody
+specified is a surface nobody asserts.
+
+So the surface is stated where the systems are stated, in a form that can be checked
+for: `docs/templates/DECISIONS.md` — one row per decision the wave adds or changes,
+naming the facts it turns on, where they are shown *at the moment of choosing*, the
+input that commits it, the one function display and simulation share, and the test
+that proves the facts are on screen when the action is available. A wave that adds no
+decision says so in a line. (Owner policy, 2026-09-02.)
+
+*Enforcement:* `make-game` §D — a game handoff carrying neither the table nor that
+line is malformed and the session **stops and asks the owner before implementing**,
+rather than inferring a surface; and §E's closing checklist, which reports one line
+per row with the test that asserts it. The stop is the whole mechanism: diligence at
+build time cannot recover a decision the design never made.
+
 ---
 
 ## 3. Skills (`.claude/skills/`)
@@ -253,7 +289,8 @@ stable, and a premature skill enforces a procedure about to change.
 - `make-game` — the flagship: how a game session uses the engine. Points at
   `docs/api/` and `examples/`; owns both session shapes — a new prototype, and a
   wave or module landing into a game that already runs — plus the findings a
-  session owes back (§2.5) and the closing checklist the owner loop runs on.
+  session owes back (§2.5), the decision-surface section a handoff must carry
+  (§2.6), and the closing checklist the owner loop runs on.
 
 **Form:** a checklist that points into repo docs rather than restating them. One source of
 truth. Skills live in `.claude/skills/` and version with the code, so an engine change and
