@@ -237,7 +237,7 @@ pub fn judge(checks: &mut Checks, run: &Conducted, tuning: &Tuning) {
     // --- a character, looked at ---------------------------------------------
     if let Some(shot) = run.photo("person") {
         let lens = lens::Lens::on(&shot.sim);
-        let who = shot.flow.selected_person;
+        let who = shot.flow.selected;
         checks.require(
             who.is_some_and(|who| lens.name(who) == "Steve"),
             "clicking a figure on the map did not select the person standing there",

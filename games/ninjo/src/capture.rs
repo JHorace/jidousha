@@ -1,14 +1,16 @@
 //! The captured frames: the screenshots a person looks at (giri's capture
 //! path, re-aimed at the map).
 //!
-//! Ten pictures. The mid-travel map and the feed are each taken at the
+//! Eleven pictures. The mid-travel map and the feed are each taken at the
 //! reference surface and at a narrow one (the narrow set exists to catch
 //! scaling regressions, which are invisible to every assertion that is not
 //! about pixels). The rest are reference only: the settlement before anything
 //! has been dispatched — the cast standing at their homes, named — the
 //! auto-pause config panel, one character's own panel with the selection ring
-//! on their figure, and the tuning drawer (a dev surface whose rows are the
-//! smallest type in the game).
+//! on their figure, the owner's double-selection reproduction (one character
+//! picked on the strip and another on the map — one ring, on the second), and
+//! the tuning drawer (a dev surface whose rows are the smallest type in the
+//! game).
 //!
 //! A machine with no GPU is not a failure: every runner this project has is
 //! headless and some have no graphics stack at all.
@@ -56,6 +58,7 @@ pub fn capture_screens(
     reference: &Conducted,
     narrow: &Conducted,
     drawer: &DrawerRun,
+    reproduction: Option<&Conducted>,
 ) -> String {
     let mut wanted: Vec<Wanted> = Vec::new();
     // The reference-only set: pictures of *what is on screen* rather than of
@@ -105,6 +108,19 @@ pub fn capture_screens(
                 format!("the {name} photo is missing from the narrow run"),
             );
         }
+    }
+    // The reproduction of the wave-1.1 double selection, as it now resolves:
+    // one character picked on the strip and another on the map, and exactly one
+    // ring — the picture the owner's playtest steps produce.
+    if let Some(run) = reproduction
+        && let Some(shot) = run.photo("selection")
+    {
+        wanted.push(Wanted {
+            name: "selection-reference".to_owned(),
+            surface: verify::HEADLESS_VIEWPORT,
+            frame: shot.frame.clone(),
+            font: run.font,
+        });
     }
     if let Some(shot) = &drawer.shot {
         wanted.push(Wanted {

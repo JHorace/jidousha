@@ -14,6 +14,13 @@ any ADR but 0038 and 0041 (both named by the handoff). Wave 0b held the same
 line: `games/giri/` (the port source) and this crate, and nothing under
 `crates/*/src/`.
 
+**The selection-bugfix session (2026-09-06) read** `CLAUDE.md`, the
+`make-game` skill, this game's `UI.md`, `DESIGN.md`, `GDD.md`, `FINDINGS.md`
+and its whole `src/`, and nothing else: no file under `crates/*/src/`, no
+`docs/internal/`, no ADR, and it asked `docs/api/` nothing — every question it
+had was about this game's own UI state, and the two entries it files below are
+about this repository rather than about the engine's documents.
+
 **Wave 1.1 read** `CLAUDE.md`, the `make-game` skill, this game's own
 `GDD.md`, `DESIGN.md`, `UI.md`, `CAST.md` and `FINDINGS.md`, and its whole
 `src/`. It opened no file under `crates/*/src/`, no `docs/internal/`, and no
@@ -269,6 +276,65 @@ The design rule that survives both: **the invariance claim is about the
 world's occurrences, not about the player's inputs**. Two speed scripts can
 issue the same order at the same world-minute only where the clock visits
 that minute at both speeds, and the sweep's scripts are authored to that.
+
+### G-017 — the game's own: wave 1.1 made a party a character and left two selections over one roster
+
+Class: **the game's own** (a wave-1.1 gap) · Game: ninjo ·
+Files: `games/ninjo/src/flow.rs`, `src/screens.rs`, `UI.md` · **Fixed here**
+
+Reported by the owner from a playtest of the deployed build: select a character
+in the party strip, then click a *different* character's map sprite, and both
+are ringed gold on the map.
+
+Expected: one selection, because after wave 1.1 a party *is* a character — ten
+parties, ten people, same order, `party.member == index`. Happened: S1's
+dispatch pick (`Flow::selected`, an index over parties) and wave 0a's character
+selection (`Flow::selected_person`, an index over people) survived wave 1.1 as
+two independent fields over what had become one list, and each drew its own
+ring — the token's at 36 units and the figure's at 38. Nothing was wrong with
+either field on its own; what was wrong is that wave 1.1 unified the two lists
+and did not unify the two states over them. Neither field's own tests could see
+it: each asserted its own index, and no check counted rings.
+
+The fix is a deletion, not a bridge: one field, written by every select path
+and read by everything that highlights (UI.md §3b). The reproduction is
+`verify::one_selection` — chip-select one, sprite-select another, count the
+gold marker-sized quads on the photographed frame, expect the shipped literal
+**one** — and `screens/ninjo-selection-reference.png` is that frame.
+
+**What the next wave inherits:** the character panel's *body* is no longer a
+click target (its close button and trait chips still are). It had to stop being
+one: the panel now opens on any selection, so it is up for the whole of a
+two-click dispatch, and at the reference camera it lies across the Watchtower's
+and the Black Vault's markers — a swallowing body would have made two of the
+four sites unorderable. `dispatch_reads_the_selection` orders to all four with
+the panel open, so a later layout change cannot take that back quietly.
+
+### G-018 — the game's own: an idle character is drawn twice, and the second one drifts further with every index
+
+Class: **the game's own** (a wave-1.1 gap) · Game: ninjo ·
+Files: `games/ninjo/src/screens.rs` · **Open — not fixed here**
+
+Found while working out which of a person's two portraits the one selection
+ring belongs on, and left alone because this session's fence is the selection.
+
+Expected: one picture of a person on the map. Happened: two. `content` draws a
+**figure** at each at-home character's own tile (wave 0b's cast-at-home) and
+`draw_map` draws a **party token** for every party, always — and after wave 1.1
+those are the same ten people. The token carries S1's two-parties-on-one-tile
+nudge, `(index * 4, index * -4)` world units, which was written when there were
+three parties: at index 9 it is 36 units away, nearly two tiles, so the tenth
+character's second portrait is not even overlapping the first.
+`screens/ninjo-settlement-reference.png` shows all ten pairs at world-minute 0.
+
+It is the same 1.1 gap as G-017 one layer down — two renderings of one roster
+rather than two selections over it — and it is why `screens::selection_ring`
+rings the *figure* when somebody is home and the *token* when they are on the
+road: those are the two places a person is actually drawn. Fixing it is a
+decision about what the map should show (a figure and no token while somebody
+is idle, presumably, and the nudge retired or restated for ten) and it changes
+five committed screenshots, which is an owner call rather than a bugfix
+session's.
 
 **G-010 stays open** for the fifth wave running, untouched here: this session
 added map-space content (ten figures and their names) but no *new kind* of it,

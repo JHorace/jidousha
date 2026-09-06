@@ -78,6 +78,47 @@ pub fn token_position(party: &sim::Party, now: f32) -> Vec2 {
     from.center().lerp(to.center(), fraction)
 }
 
+/// The box a party's token is drawn in, at a fractional world-minute reading.
+///
+/// One function, because the token and the ring that marks it have to be the
+/// same rectangle: two parties on one tile stay two tokens by a draw-time
+/// nudge per party, and a ring that did not carry the nudge would sit beside
+/// the person it claims to mark.
+pub fn token_rect(index: usize, party: &sim::Party, now: f32) -> Rect {
+    Rect::from_min_size(
+        token_position(party, now) - Vec2::splat(layout::TOKEN * 0.5)
+            + Vec2::new(index as f32 * 4.0, index as f32 * -4.0),
+        Vec2::splat(layout::TOKEN),
+    )
+}
+
+/// How far the selection ring stands out past the figure it rings.
+pub const RING: f32 = 3.0;
+
+/// **The one selection ring**: the box to draw it in, and the layer to draw it
+/// on — `None` when nobody is selected.
+///
+/// The whole of the game's selection highlighting on the map, in one function
+/// that reads the one selection (`Flow::selected`). A selected character is
+/// ringed *where they are drawn*: at their doorstep while they are home, on
+/// their token while they are on the road — never both, and never a second
+/// ring somewhere else.
+///
+/// INVARIANT: the party at index `who` is the person at index `who` — a party
+/// is a one-person band in registry order (`sim::authored_parties`), which
+/// `verify::one_selection` asserts over the whole roster.
+pub fn selection_ring(flow: &Flow, lens: &Lens<'_>, now: f32) -> Option<(Rect, i16)> {
+    let who = flow.selected?;
+    if lens.at_home(who) {
+        return lens
+            .home(who)
+            .map(|home| (layout::home_rect(home), theme::layers::MARKER));
+    }
+    lens.parties()
+        .get(who)
+        .map(|party| (token_rect(who, party, now), theme::layers::TOKEN))
+}
+
 /// Everything the screen says, as data: the chrome in UI units, the map's
 /// labels in world units.
 ///
@@ -153,7 +194,8 @@ pub fn content(flow: &Flow, lens: &Lens<'_>, clock: &Clock, tuning: &Tuning) -> 
 
     // --- party strip --------------------------------------------------------
     // One chip per person since wave 1.1, in two rows of five: a party is a
-    // one-person band, and the chip is how the player picks one up.
+    // one-person band, and the chip is one of the four doors onto the one
+    // selection. A lit chip *is* that selection, not a second one.
     //
     // **A drawer covers it**, and a strip drawn under one is a row of text
     // lying across a control somebody can click - which is what the floors
@@ -161,7 +203,7 @@ pub fn content(flow: &Flow, lens: &Lens<'_>, clock: &Clock, tuning: &Tuning) -> 
     if bare {
         panel.text(TextRun::new(
             layout::party_label(),
-            "EVERYONE - click an idle one, then a site on the map",
+            "EVERYONE - click somebody, then a site on the map",
             theme::SMALL,
             theme::DIM,
         ));
@@ -322,25 +364,18 @@ pub fn draw_map(ctx: &mut DrawCtx) {
     let sim = ctx.world.resource::<Sim>().clone();
     let lens = Lens::on(&sim);
 
-    // The selection ring under a chosen character's figure, and the pulse a
-    // click-to-focus left on the place it jumped to. Both presentation: one is
-    // UI state, the other is a countdown in wall ticks, and the simulation
-    // reads neither.
-    if let Some(who) = flow.selected_person
-        && lens.at_home(who)
-        && let Some(home) = lens.home(who)
-    {
-        let ring = layout::home_rect(home);
+    // **One selection, one ring** (UI.md §3b): the selected character, ringed
+    // where they are drawn. And the pulse a click-to-focus left on the place it
+    // jumped to. Both presentation: one is UI state, the other is a countdown
+    // in wall ticks, and the simulation reads neither.
+    if let Some((ring, layer)) = selection_ring(&flow, &lens, now) {
         ctx.rect(
             Rect {
-                min: ring.min - Vec2::splat(3.0),
-                max: ring.max + Vec2::splat(3.0),
+                min: ring.min - Vec2::splat(RING),
+                max: ring.max + Vec2::splat(RING),
             },
             theme::GOLD,
-            Depth {
-                layer: theme::layers::MARKER,
-                z: -1.0,
-            },
+            Depth { layer, z: -1.0 },
         );
     }
     if let Some(pulse) = flow.pulse {
@@ -357,27 +392,15 @@ pub fn draw_map(ctx: &mut DrawCtx) {
         );
     }
     for (index, party) in lens.parties().iter().enumerate() {
-        let at = token_position(party, now)
-            - Vec2::splat(layout::TOKEN * 0.5)
-            // Two parties on one tile stay two tokens: a draw-time nudge per
-            // party, never written back.
-            + Vec2::new(index as f32 * 4.0, index as f32 * -4.0);
+        // Two parties on one tile stay two tokens: a draw-time nudge per
+        // party, never written back. `selection_ring` uses the same box.
+        let box_ = token_rect(index, party, now);
         // Culled like the terrain: a token panned off screen submits nothing.
-        if !Rect::from_min_size(at, Vec2::splat(layout::TOKEN)).overlaps(view) {
+        if !box_.overlaps(view) {
             continue;
         }
-        if flow.selected == Some(index) {
-            ctx.rect(
-                Rect::from_min_size(at - Vec2::splat(2.0), Vec2::splat(layout::TOKEN + 4.0)),
-                theme::GOLD,
-                Depth {
-                    layer: theme::layers::TOKEN,
-                    z: -1.0,
-                },
-            );
-        }
         let sprite = gallery.sprite(party.token, 2.0, theme::layers::TOKEN, Color::WHITE);
-        ctx.sprite(&Transform::at(at), &sprite);
+        ctx.sprite(&Transform::at(box_.min), &sprite);
     }
 }
 
@@ -483,7 +506,7 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
             );
         }
     }
-    if flow.selected_person.is_some() {
+    if flow.selected.is_some() {
         fill(
             ctx,
             layout::person_panel(),
@@ -589,7 +612,7 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
         }
     }
     // The character panel's own trait chips, when one is open over the map.
-    if flow.selected_person.is_some() && !flow.tuner.open {
+    if flow.selected.is_some() && !flow.tuner.open {
         for slot in 0..layout::SHEET_CHIPS {
             ghost_at(ctx, &map, layout::sheet_chip(slot), theme::layers::CARD);
         }

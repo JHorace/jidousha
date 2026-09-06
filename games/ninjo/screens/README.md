@@ -21,9 +21,10 @@ as the change.
 | `ninjo-person-reference.png` | Steve's panel, opened by clicking his figure, with the `caring` chip tapped and the line that chip derives at the foot of the sheet | 1920x1080 |
 | `ninjo-map-narrow.png` | the same map | 600x540 |
 | `ninjo-feed-narrow.png` | the same feed | 600x540 |
+| `ninjo-selection-reference.png` | the owner's double-selection reproduction, as it now resolves: Bob picked on the party strip, then Tim picked by his map sprite — **one** ring, on Tim, his panel open and his chip lit, and nothing on Bob | 1920x1080 |
 | `ninjo-tuning-reference.png` | the tuning drawer, MIRE pending in gold, APPLY lit | 1920x1080 |
 
-The settlement, config, living, roster and character shots are reference-only: they are
+The settlement, config, living, roster, character and selection shots are reference-only: they are
 pictures of *what is on screen*, and the scaling defects the narrow surface
 exists to catch are on the same chrome the map and feed pairs already cover.
 

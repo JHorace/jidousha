@@ -416,7 +416,7 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
     // A character selected and a chip drilled: the two panels that share the
     // base screen, both up at once.
     let mut looked_at = played.clone();
-    looked_at.selected_person = Some(baseline.sim.people.len().saturating_sub(1));
+    looked_at.selected = Some(baseline.sim.people.len().saturating_sub(1));
     looked_at.drilled = Some(0);
     // With the longest explanation a trait has, open on the sheet: a panel
     // that fits its widest state fits every other one.

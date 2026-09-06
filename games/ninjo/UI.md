@@ -41,12 +41,12 @@ giri's colour roles stand. The changed and new rows:
 | an event class's colour + icon | **what kind of thing happened** — one chip per class on every feed row | the pair is the row's two channels; both come off `attention::CLASSES` and nothing else names them |
 | the watchtower icon | the `away` meter chip | interim: no "out on the road" role exists in the curated set, and a thing that watches a road is the nearest one |
 | gold, on a feed row | **the entry an auto-pause fired on** | the same fact as the reason line above it, from `Lens::pause` |
-| a gold ring on a map figure | **the selected character** | the party token's own ring, reused for people |
+| a gold ring on a map figure | **the selected character — the one selection there is** | exactly one is ever drawn, on the figure at their doorstep or on their token on the road (§3b) |
 | portraits, on the map | **a character standing at their home tile** | one per person, at marker weight (32 world units), named underneath |
 | dungeon icons (cave/crypt/tower/vault) | one quest site each | unchanged in art, now map markers |
 | portraits | **party tokens** | one per party, unique, on the map and on the strip |
 | coin icon | the treasury | beside the gold number in the top bar |
-| gold | the active speed chip, a picked party, selection | still not a general accent |
+| gold | the active speed chip, the selected character wherever they appear, selection | still not a general accent |
 | terrain colours | the six terrain kinds | one colour per kind, `theme.rs`; the fill *is* the grid data |
 
 **Terrain is flat colour tiles, deliberately interim.** DESIGN §3 imagines
@@ -67,8 +67,8 @@ not a queue — the import path (`art/`) rode along from giri.
 - **The map**: terrain tiles culled to the camera; markers + labels + an
   open-quest count per site (`2 quests` / `1 quest` / `dry`); party tokens
   moving tile to tile, between-tile progress derived at draw time and never
-  written back (ADR-0041; DESIGN §3). A picked party's token and chip carry
-  a gold ring.
+  written back (ADR-0041; DESIGN §3). The selected character carries a ring
+  and a lit chip — one of each, §3b.
 - **The cast, at home** (wave 0b): every character stands at their home
   tile with their name under them, unless a party they field is out. They
   are **click targets since wave 0a**: clicking a figure selects that person
@@ -81,9 +81,12 @@ not a queue — the import path (`art/`) rode along from giri.
   status (`at home` / `-> Watchtower` / `at Watchtower` / `-> Hana's` /
   `with Hana` / `<- home`). A party is a one-person band, so the strip and
   the roster are the same ten names; the portrait is the member's own, so a
-  face on the road and a figure at a doorstep are the same person. Click an
-  idle one to pick it, then click a site marker to dispatch. A refused order
-  bounces: a toast under the bar, and the same sentence in the notices. A
+  face on the road and a figure at a doorstep are the same person. **A chip is
+  one of the four doors onto the one selection** (§3b): click one to select
+  that person, then click a site marker to dispatch. There is no idle gate on
+  the *selection* — selecting is looking at somebody, and it is the order that
+  refuses. A refused order bounces: a toast under the bar, and the same
+  sentence in the notices. A
   drawer hides the strip rather than being drawn over it — a row of text
   under a scrim is still a row lying across a control.
 - **Pan/zoom**: arrows pan, `-`/`=` and the scroll wheel zoom; the camera
@@ -110,8 +113,9 @@ not a queue — the import path (`art/`) rode along from giri.
 - **The roster drawer** (wave 1.1, the ROSTER handle or the `r` key):
   **everyone in one list** — portrait and name, their chips, their purse,
   their desperation, and what they are doing *with the reason they are doing
-  it*, all through the lens. The name opens that character's panel; a chip
-  opens its explanation, on the row under the title. The row's own name box
+  it*, all through the lens. The name selects that character (§3b), which
+  shuts the drawer and opens their panel; a chip opens its explanation, on the
+  row under the title. The row's own name box
   and its chips are separate targets, because a control inside a control is
   what the overlap floor refuses.
 
@@ -125,7 +129,8 @@ laid out in `layout.rs` and asserted in `floors.rs` like every other row.
   only when its count is nonzero** — a zero is a chip you are allowed not to
   look at. Clicking one opens the **faces list**: a panel of portraits, names
   and the *reason* each is counted, never a bare number. Clicking a face
-  opens that character's panel.
+  selects that character (§3b) — the fourth door, and the same act as the
+  other three.
 - **The pause banner**, under the meters: one line, gold, present only while
   the world has stopped itself, saying the class, the place and what
   happened. The same sentence appears in the feed's header when the drawer is
@@ -146,15 +151,69 @@ laid out in `layout.rs` and asserted in `floors.rs` like every other row.
   goes into the simulation, and the footer says so.
 - **The character panel**: portrait, name, trait chips, wallet, desperation
   and its source line, what they are doing, and where they live — every field
-  read through `lens.rs`. Opened by clicking a figure on the map or a face in
-  a list; a gold ring marks the figure. A close button, and a click elsewhere
-  on the map moves the selection rather than clearing it.
+  read through `lens.rs`. **It is the selection's own surface**: it is open
+  exactly while somebody is selected, on exactly that person, whichever door
+  the selection came through (§3b). Its close button puts the selection down.
+  **Its controls are a click target and its body is not**: the close button
+  and the trait chips answer a click, and anything else that lands on it goes
+  to the map underneath — a marker takes the order, a figure moves the
+  selection, bare ground puts it down. The panel is up through the whole of a
+  two-click dispatch and it lies across two of the four site markers at the
+  reference camera, so a body that swallowed clicks would make those two sites
+  unorderable.
 - **Never two at once.** Opening any drawer shuts the others and closes both
-  over-the-map panels (`Flow::close_everything`), and a click that is not one
-  of the open drawer's own controls shuts it. Under an open drawer the map's
+  over-the-map panels (`Flow::close_everything`) — which, since the panel *is*
+  the selection, means opening a drawer puts the selection down. A click that
+  is not one of the open drawer's own controls shuts it. Under an open drawer the map's
   own chrome — the banner, the toast, the meters — draws nothing at all: a
   row nobody can read lying across a control somebody can click is exactly
   what the floors forbid.
+
+## 3b. Selection, and the dispatch that reads it
+
+**There is one selection.** One index (`Flow::selected`) over the ten people,
+which is the same index over the ten parties — a party is a one-person band in
+registry order, so a party *is* a character and the two lists are one list
+twice. Every select path writes that field; everything that highlights reads
+it. There is no second selection to keep in step, and keeping two in step was
+never the fix.
+
+**Four doors, one act.** Selecting a person — by their **map sprite**, their
+**party-strip chip**, their **roster row's name**, or their **face in a faces
+list** — does the same thing from every surface:
+
+- they become *the* selected character;
+- the character panel opens on them, and on nobody else;
+- exactly **one** selection ring is drawn, on them — at their doorstep while
+  they are home, on their token while they are on the road, never both;
+- their strip chip lights. The strip's highlight **is** the one selection, not
+  a second one, which is what makes the strip a glanceable status row rather
+  than a second selector.
+
+Selecting somebody else moves the selection to them. Clicking the person who
+is already selected puts them down; so does the panel's close button, a click
+on bare ground, and opening any drawer. A selection that is put down closes the
+panel with it — the panel is open exactly while somebody is selected.
+
+**Nothing about it is simulation state.** The selection is presentation
+derived from recorded clicks: two runs of one scenario that issue the same
+clicks produce byte-identical transcripts whether or not anybody was ever
+selected, and a replay carries the clicks, not the selection.
+
+**Dispatch reads the same selection** and DESIGN §5's two clicks are unchanged:
+select somebody, then click a site's marker. If they are idle the order is
+issued at the clock's minute; if they are out the order bounces with its
+reason (`sim::Refusal`), which is where the refusal belongs — the *selection*
+of somebody who is out is allowed, because looking at a person is not ordering
+them. A site clicked with nobody selected says so and does nothing; dispatch
+never became one click. A successful order puts the selection down, as the
+strip's pick always did.
+
+`verify::one_selection` is the reproduction of the bug this rule replaced —
+chip-select one character, sprite-select another, count the rings on the
+photographed frame — and `dispatch_reads_the_selection` and
+`selection_moves_nothing` are the other two halves. The count is a shipped
+literal: **one**.
 
 ## 4. Readability floors — what binds here
 
@@ -184,7 +243,7 @@ frame judges hold all three.
 
 ## 5. Screenshot process
 
-Ten PNGs per verify run. Reference-only, because they are pictures of what
+Eleven PNGs per verify run. Reference-only, because they are pictures of what
 is on screen rather than of how the chrome scales: **the settlement** at
 world-minute 0 (the whole cast standing at their homes, named, before
 anything is dispatched, which is wave 0b's own exit question), **the
@@ -193,7 +252,9 @@ the selection ring on their figure and a trait chip tapped, **the roster**
 with a chip's explanation open on it, and **the world living on its own** —
 the map at a minute when nobody was told to go anywhere and half the band is
 on the road because they decided to be, which is wave 1.1's own exit
-question. At both the reference surface and
+question — and **the selection reproduction**: the owner's own playtest steps,
+one character picked on the strip and another picked on the map, with one ring
+and one lit chip on the second of them (§3b). At both the reference surface and
 600x540 narrow: **the mid-travel map** (photographed with two parties on
 visibly different routes) and **the feed mid-pause** (the reason line
 showing, and the entry that stopped the world ringed in gold). Plus the

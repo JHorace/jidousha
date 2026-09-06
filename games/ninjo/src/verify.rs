@@ -502,9 +502,7 @@ fn touch_selects(checks: &mut Checks) {
     session.stop_at_rest = false;
     session.probe_ticks = &[10];
     let conducted = conduct(&session);
-    let selected = conducted
-        .probe(10)
-        .and_then(|(_, flow, ..)| flow.selected_person);
+    let selected = conducted.probe(10).and_then(|(_, flow, ..)| flow.selected);
     checks.require(
         selected == Some(steve),
         "a finger on a character's figure did not select them",
@@ -709,6 +707,468 @@ fn drift_cadence(checks: &mut Checks) {
     );
 }
 
+/// Every selection ring on a frame: a gold, square, marker-sized fill.
+///
+/// **The count is the whole point.** Wave 1.1's double-selection bug drew two
+/// of these — one from the dispatch pick over parties, one from the character
+/// selection over people — so the instrument that catches it has to count
+/// rings on the photographed frame rather than read a field. The size band is
+/// wide enough to catch both of the old rings (38 units and 36) and no chrome:
+/// nothing else this game draws is a gold square anywhere near marker size.
+fn rings(frame: &FrameRecord) -> Vec<Rect> {
+    frame
+        .quads()
+        .iter()
+        .filter(|quad| quad.tint == theme::GOLD)
+        .map(|quad| quad.bounds())
+        .filter(|bounds| {
+            let size = bounds.size();
+            crate::checks::near(size.x, size.y) && size.x > 33.0 && size.x < 48.0
+        })
+        .collect()
+}
+
+/// What one selection script left behind: the selection, the rings drawn, and
+/// the name the character panel put in its name row.
+struct Selected {
+    /// `Flow::selected` at the probe.
+    who: Option<usize>,
+    /// Every ring on the photographed frame.
+    rings: Vec<Rect>,
+    /// The panel's name row, if the panel drew one.
+    named: Option<String>,
+}
+
+/// Run a script over the paused opening world and read the selection off it.
+///
+/// The scenario opens paused, so nobody moves and every figure stays on its
+/// own doorstep: what changes between these runs is the clicking, which is
+/// exactly what a selection test wants to vary and nothing else.
+fn selection_run(script: &[Directive]) -> (Conducted, Selected) {
+    let photos = [Photo {
+        name: "selection",
+        minute: 0,
+        tick: 24,
+        paused: false,
+    }];
+    let mut session = Session::plain(Tuning::SHIPPED, script, 26);
+    session.probe_ticks = &[24];
+    session.photos = &photos;
+    let conducted = conduct(&session);
+    let who = conducted.probe(24).and_then(|(_, flow, ..)| flow.selected);
+    let (rings, named) = conducted.photo("selection").map_or_else(
+        || (Vec::new(), None),
+        |shot| {
+            let panel = screens::content(
+                &shot.flow,
+                &lens::Lens::on(&shot.sim),
+                &shot.clock,
+                &Tuning::SHIPPED,
+            );
+            let name_at = layout::person_panel().min + layout::sheet::NAME;
+            let named = panel
+                .runs
+                .iter()
+                .find(|row| {
+                    crate::checks::near(row.at.x, name_at.x)
+                        && crate::checks::near(row.at.y, name_at.y)
+                })
+                .map(|row| row.text.clone());
+            (rings(&shot.frame), named)
+        },
+    );
+    (conducted, Selected { who, rings, named })
+}
+
+/// **One selection** (UI.md §3b): the wave-1.1 double-selection bug, as the
+/// reproduction that failed before the fix and the rule that replaced it.
+///
+/// The bug: the S1 dispatch pick (an index over parties) and the wave-0a
+/// character selection (an index over people) survived wave 1.1 as two
+/// independent fields over what had become one roster, each drawing its own
+/// gold ring — chip-select somebody, sprite-select somebody else, and two
+/// people are lit (`FINDINGS.md` G-017, the owner's playtest). What this
+/// battery asserts is the rule that replaced them: one field, written by every
+/// select path, read by everything that highlights.
+///
+/// Every expectation here is a shipped literal — **one** ring, and the box it
+/// is in — rather than arithmetic over the field under test, so a second
+/// selection reappearing is a failure this run can see.
+fn one_selection(checks: &mut Checks) -> Option<Conducted> {
+    let cast = people::roster();
+    let tuning = Tuning::SHIPPED;
+    // The index identity the one selection stands on: a party is a one-person
+    // band in registry order, so party `i` *is* person `i`. Asserted rather
+    // than assumed, because the unified index is only meaningful while it
+    // holds.
+    let opening = crate::sim::Sim::opening(&tuning, modules::ModuleSet::ALL);
+    let paired = opening.parties.len() == opening.people.len()
+        && opening
+            .parties
+            .iter()
+            .enumerate()
+            .all(|(index, party)| party.member == index);
+    checks.require(
+        paired,
+        "a party is no longer the character at the same index",
+        format!(
+            "{} parties over {} people, and the members read {:?}; the one selection is one \
+             index over both lists",
+            opening.parties.len(),
+            opening.people.len(),
+            opening
+                .parties
+                .iter()
+                .map(|party| party.member)
+                .collect::<Vec<_>>()
+        ),
+    );
+
+    // --- the reproduction: chip-select one, sprite-select another ----------
+    let (first, second) = (0usize, 3usize);
+    let script = [
+        Directive {
+            when: When::Tick(6),
+            what: Act::ClickUi(layout::party_chip(first).center()),
+        },
+        Directive {
+            when: When::Tick(14),
+            what: Act::ClickWorld(cast[second].home.center()),
+        },
+    ];
+    let (reproduction, after) = selection_run(&script);
+    checks.require(
+        after.who == Some(second),
+        "a sprite-select did not move the selection off the chip-selected character",
+        format!(
+            "the chip picked {} and the sprite picked {}, and the selection reads {:?}",
+            cast[first].name,
+            cast[second].name,
+            after.who.map(|who| cast[who].name)
+        ),
+    );
+    let wanted = Rect {
+        min: layout::home_rect(cast[second].home).min - Vec2::splat(screens::RING),
+        max: layout::home_rect(cast[second].home).max + Vec2::splat(screens::RING),
+    };
+    checks.require(
+        after.rings.len() == 1,
+        "the map drew more than one selection ring",
+        format!(
+            "{} rings landed on the frame at {:?} after chip-selecting {} and then \
+             sprite-selecting {}; there is one selection and it draws one ring",
+            after.rings.len(),
+            after.rings,
+            cast[first].name,
+            cast[second].name
+        ),
+    );
+    checks.require(
+        after.rings.first().is_some_and(|ring| {
+            crate::checks::near(ring.min.x, wanted.min.x)
+                && crate::checks::near(ring.min.y, wanted.min.y)
+        }),
+        "the one selection ring is not on the selected character",
+        format!(
+            "the ring is at {:?} and {}'s doorstep wants it at {wanted:?}",
+            after.rings.first(),
+            cast[second].name
+        ),
+    );
+    checks.require(
+        after.named.as_deref() == Some(cast[second].name),
+        "the character panel is keyed to somebody other than the selection",
+        format!(
+            "the selection is {:?} and the panel's name row says {:?}",
+            after.who.map(|who| cast[who].name),
+            after.named
+        ),
+    );
+
+    // --- the same act from every surface ------------------------------------
+    // Four surfaces show a person; selecting on any of them is one act with
+    // one outcome, which is the whole of the unified rule.
+    let idle_face = {
+        let lens = lens::Lens::on(&opening);
+        crate::meters::faces(&lens, 0).first().map(|(who, _)| *who)
+    };
+    let Some(idle_face) = idle_face else {
+        checks.require(
+            false,
+            "the idle meter counts nobody in the opening world",
+            "every character is idle at minute zero, so its faces list cannot be empty".to_owned(),
+        );
+        return Some(reproduction);
+    };
+    let surfaces: [(&str, usize, Vec<Directive>); 4] = [
+        (
+            "the party strip's chip",
+            1,
+            vec![Directive {
+                when: When::Tick(6),
+                what: Act::ClickUi(layout::party_chip(1).center()),
+            }],
+        ),
+        (
+            "the map sprite",
+            4,
+            vec![Directive {
+                when: When::Tick(6),
+                what: Act::ClickWorld(cast[4].home.center()),
+            }],
+        ),
+        (
+            "the roster row's name",
+            7,
+            vec![
+                Directive {
+                    when: When::Tick(6),
+                    what: Act::ClickUi(layout::roster_button().center()),
+                },
+                Directive {
+                    when: When::Tick(12),
+                    what: Act::ClickUi(layout::roster_open(7).center()),
+                },
+            ],
+        ),
+        (
+            "the faces list",
+            idle_face,
+            vec![
+                Directive {
+                    when: When::Tick(6),
+                    what: Act::ClickUi(layout::meter_chip(0).center()),
+                },
+                Directive {
+                    when: When::Tick(12),
+                    what: Act::ClickUi(layout::faces_row(0).center()),
+                },
+            ],
+        ),
+    ];
+    for (surface, wanted_who, script) in surfaces {
+        let (_, landed) = selection_run(&script);
+        checks.require(
+            landed.who == Some(wanted_who)
+                && landed.rings.len() == 1
+                && landed.named.as_deref() == Some(cast[wanted_who].name),
+            "a select surface does not do what the others do",
+            format!(
+                "{surface} picked {}: the selection reads {:?}, {} ring(s) drew, and the panel \
+                 says {:?}; every surface selects the same one person, rings them once and \
+                 opens the panel on them",
+                cast[wanted_who].name,
+                landed.who.map(|who| cast[who].name),
+                landed.rings.len(),
+                landed.named
+            ),
+        );
+    }
+    Some(reproduction)
+}
+
+/// **Dispatch reads the one selection** (DESIGN §5, still two clicks).
+///
+/// The order vocabulary did not change: select somebody, click a site. What
+/// changed is that "select somebody" is now one act with four doors, so the
+/// order a sprite-select produces has to be *the same order* the strip's chip
+/// produced before — byte-identical in the transcript, which is the shape
+/// every other check in this file reads the world through.
+///
+/// The whole battery runs on the paused opening world: dispatch works while
+/// the clock holds ("paused - the clock holds, orders still work"), the order
+/// is addressed at minute zero, and nothing else in the world moves to muddy
+/// the comparison.
+fn dispatch_reads_the_selection(checks: &mut Checks) {
+    let cast = people::roster();
+    let who = 0usize;
+    let ordered = |site: usize, pick: Act| {
+        let marker = layout::marker_rect(LOCATIONS[crate::sim::site_location(site)].tile);
+        let script = [
+            Directive {
+                when: When::Tick(6),
+                what: pick,
+            },
+            Directive {
+                when: When::Tick(14),
+                what: Act::ClickWorld(marker.center()),
+            },
+        ];
+        let mut session = Session::plain(Tuning::SHIPPED, &script, 24);
+        session.probe_ticks = &[22];
+        conduct(&session)
+    };
+    let by_chip = ordered(0, Act::ClickUi(layout::party_chip(who).center()));
+    let by_sprite = ordered(0, Act::ClickWorld(cast[who].home.center()));
+    checks.require(
+        !by_chip.events.is_empty(),
+        "the scripted order produced no event at all, so the paths cannot be compared",
+        format!(
+            "a chip-select of {} and a click on the Watchtower's marker emitted {} events",
+            cast[who].name,
+            by_chip.events.len()
+        ),
+    );
+    checks.require(
+        transcript(&by_chip.events) == transcript(&by_sprite.events),
+        "the same order given through two select surfaces is two different orders",
+        format!(
+            "the chip path emitted {:?} and the sprite path {:?}; dispatch reads the one \
+             selection, so the surface the selection came from cannot reach the world",
+            transcript(&by_chip.events),
+            transcript(&by_sprite.events)
+        ),
+    );
+
+    // **Every site is still dispatchable while the panel is open.** The panel
+    // opens on any selection now and it lies across two of the four markers at
+    // the reference camera, so this is the check that the fix did not quietly
+    // make those two sites unorderable.
+    for site in 0..LOCATIONS.len() - 1 {
+        let run = ordered(site, Act::ClickWorld(cast[who].home.center()));
+        let departed = run
+            .events
+            .iter()
+            .any(|event| event.class == crate::attention::EventClass::Departed);
+        checks.require(
+            departed,
+            "a site cannot be ordered to while the character panel is open over it",
+            format!(
+                "{} was selected and {} clicked, and the transcript is {:?}; the panel's body \
+                 is not a click target and a marker under it still takes the order",
+                cast[who].name,
+                LOCATIONS[crate::sim::site_location(site)].name,
+                transcript(&run.events)
+            ),
+        );
+    }
+
+    // **Ordered while out still bounces, with its reason.** The strip used to
+    // refuse the *selection* of somebody who was out; the refusal now lives
+    // where the order is, which is the only place it was ever about.
+    let away = {
+        let marker = |site: usize| {
+            layout::marker_rect(LOCATIONS[crate::sim::site_location(site)].tile).center()
+        };
+        let script = [
+            Directive {
+                when: When::Tick(6),
+                what: Act::ClickUi(layout::party_chip(who).center()),
+            },
+            Directive {
+                when: When::Tick(14),
+                what: Act::ClickWorld(marker(0)),
+            },
+            Directive {
+                when: When::Tick(22),
+                what: Act::ClickUi(layout::party_chip(who).center()),
+            },
+            Directive {
+                when: When::Tick(30),
+                what: Act::ClickWorld(marker(1)),
+            },
+        ];
+        let mut session = Session::plain(Tuning::SHIPPED, &script, 40);
+        session.probe_ticks = &[38];
+        conduct(&session)
+    };
+    let (selected, notice, departures) = {
+        let departures = away
+            .events
+            .iter()
+            .filter(|event| event.class == crate::attention::EventClass::Departed)
+            .count();
+        let probe = away.probe(38);
+        (
+            probe.and_then(|(_, flow, ..)| flow.selected),
+            probe.and_then(|(_, flow, ..)| flow.log.first().cloned()),
+            departures,
+        )
+    };
+    checks.require(
+        departures == 1
+            && notice.as_deref()
+                == Some(
+                    crate::sim::Refusal::NotIdle
+                        .message(cast[who].name, "")
+                        .as_str(),
+                ),
+        "an order given to somebody who is out did not bounce with its reason",
+        format!(
+            "{departures} departure(s) were emitted and the top notice is {notice:?}; the \
+             second order was given to {} after they had already left",
+            cast[who].name
+        ),
+    );
+    checks.require(
+        selected == Some(who),
+        "a refused order put the selection down",
+        format!(
+            "the selection reads {:?} after the bounce; a refusal says why and changes nothing \
+             else",
+            selected.map(|who| cast[who].name)
+        ),
+    );
+}
+
+/// **The selection is presentation, derived from recorded clicks.**
+///
+/// Nothing about selecting somebody reaches the world: two runs of the same
+/// scenario, one of them clicking its way around every select surface and the
+/// other clicking nothing at all, produce the same transcript to the
+/// world-minute. That is the whole claim that the one selection added no sim
+/// state, and it is what makes a replay of either run the same world.
+fn selection_moves_nothing(checks: &mut Checks) {
+    let cast = people::roster();
+    let run_at_speed = |script: &[Directive]| {
+        let mut session = Session::plain(Tuning::SHIPPED, script, 4_000);
+        session.stop_at_minute = Some(240);
+        conduct(&session)
+    };
+    let quiet = [Directive {
+        when: When::Tick(4),
+        what: Act::Tap(Key::Digit1),
+    }];
+    let clicking = [
+        Directive {
+            when: When::Tick(4),
+            what: Act::Tap(Key::Digit1),
+        },
+        Directive {
+            when: When::Tick(20),
+            what: Act::ClickUi(layout::party_chip(2).center()),
+        },
+        Directive {
+            when: When::Tick(28),
+            what: Act::ClickWorld(cast[5].home.center()),
+        },
+        Directive {
+            when: When::Tick(36),
+            what: Act::ClickUi(layout::roster_button().center()),
+        },
+        Directive {
+            when: When::Tick(44),
+            what: Act::ClickUi(layout::roster_open(8).center()),
+        },
+        // And a click on bare ground, which puts the selection down.
+        Directive {
+            when: When::Tick(52),
+            what: Act::ClickWorld(Vec2::ZERO),
+        },
+    ];
+    let (quiet, clicking) = (run_at_speed(&quiet), run_at_speed(&clicking));
+    checks.require(
+        !quiet.events.is_empty() && transcript(&quiet.events) == transcript(&clicking.events),
+        "selecting people changed what happened in the world",
+        format!(
+            "{} events with no selecting and {} with a click on every select surface; the \
+             selection is UI state derived from recorded input and reaches nothing",
+            quiet.events.len(),
+            clicking.events.len()
+        ),
+    );
+}
+
 pub fn run() -> ExitCode {
     let mut checks = Checks::default();
     let tuning = Tuning::SHIPPED;
@@ -741,6 +1201,11 @@ pub fn run() -> ExitCode {
     culling_probe(&mut checks);
     // --- and a tap, which the engine already made a click ------------------
     touch_selects(&mut checks);
+
+    // --- one selection, and the dispatch that reads it ---------------------
+    let reproduction = one_selection(&mut checks);
+    dispatch_reads_the_selection(&mut checks);
+    selection_moves_nothing(&mut checks);
 
     // --- the layout floors --------------------------------------------------
     floors::layout_floors(&mut checks);
@@ -845,7 +1310,13 @@ pub fn run() -> ExitCode {
 
     // --- the pictures a person looks at ------------------------------------
     let narrow = photographed(NARROW_VIEWPORT);
-    let captured = capture::capture_screens(&mut checks, &photographed_run, &narrow, &drawer);
+    let captured = capture::capture_screens(
+        &mut checks,
+        &photographed_run,
+        &narrow,
+        &drawer,
+        reproduction.as_ref(),
+    );
 
     let verdict = checks.verdict();
     println!(
