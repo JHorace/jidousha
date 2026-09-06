@@ -70,33 +70,29 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
             what: Act::Tap(Key::Digit1),
         },
     ];
-    script.extend(sweep::order(8, 0, 0));
-    script.extend(sweep::order(16, 1, 1));
-    script.extend(sweep::order(24, 2, 2));
+    // Three orders, each given the way a player gives one: pick somebody, open
+    // the site's board, tap a job. The order puts the board down with the
+    // selection, so the map is clear again between them.
+    script.extend(sweep::order(sweep::ORDER_MINUTES[0], 0, 0, 2));
+    script.extend(sweep::order(sweep::ORDER_MINUTES[1], 1, 1, 0));
+    script.extend(sweep::order(sweep::ORDER_MINUTES[2], 2, 2, 5));
+    // **The board re-opened on the site just ordered to**: the `ordered`
+    // picture, a row that now reads as the person the player sent.
+    script.push(Directive {
+        when: When::Minute(56),
+        what: Act::ClickWorld(
+            layout::marker_rect(LOCATIONS[crate::sim::site_location(2)].tile).center(),
+        ),
+    });
     // Open the feed and leave it open across the first completions, so the
     // photograph at the first one catches the world stopped with its reason
     // on screen. Every resume is the player pressing 1, which is what a
     // player does; the world-times on the far side are unchanged.
     script.push(click_ui(When::Minute(100), layout::feed_button().center()));
     script.push(click_ui(When::Minute(300), layout::feed_button().center()));
-    script.extend(sweep::order(360, 0, 3));
-    // Somebody to look at: Steve fields his own party, is home from the Deep
-    // Cave by minute 221, and is resting through the four hundreds.
-    let steve = people::roster()
-        .iter()
-        .position(|person| person.id == "steve")
-        .unwrap_or(0);
-    let doorstep = people::roster()[steve].home.center();
-    script.push(Directive {
-        when: When::Minute(410),
-        what: Act::ClickWorld(doorstep),
-    });
-    // **A trait chip, tapped on the sheet** — the clarity slice, photographed.
-    // Steve's third chip is `caring`, a motivator, which is what the wave
-    // asks the picture to show.
-    script.push(click_ui(When::Minute(420), layout::sheet_chip(2).center()));
-    // Then the roster, with a chip's explanation open on it: the same
-    // gesture, the same derived line, a different surface.
+    script.extend(sweep::order(sweep::ORDER_MINUTES[3], 0, 3, 0));
+    // The roster, with a chip's explanation open on it: a trait chip tapped on
+    // one surface reads the same line it reads on the other.
     script.push(click_ui(
         When::Minute(440),
         layout::roster_button().center(),
@@ -109,6 +105,51 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
         When::Minute(452),
         layout::roster_chip(ludo, 2).center(),
     ));
+    // **The job board, the wave's own pictures.** Shut the roster, pick Alex —
+    // the band's scout, home since minute 212 and idle, so the board answers
+    // him with a travel line from his own door and with a fit column that
+    // separates the one open scout job from everything else — and open the
+    // Deep Cave, whose six rows carry three task types between them and
+    // several rows other people already hold.
+    let alex = people::roster()
+        .iter()
+        .position(|person| person.id == "alex")
+        .unwrap_or(0);
+    script.push(click_ui(
+        When::Minute(470),
+        layout::roster_button().center(),
+    ));
+    script.push(click_ui(
+        When::Minute(480),
+        layout::party_chip(alex).center(),
+    ));
+    script.push(Directive {
+        when: When::Minute(490),
+        what: Act::ClickWorld(
+            layout::marker_rect(LOCATIONS[crate::sim::site_location(1)].tile).center(),
+        ),
+    });
+    // And the bounce: the Deep Cave's front row is the mushroom haul, which
+    // Steve was ordered to at minute 32 and which is therefore never open
+    // again — so tapping it is the claimed-row refusal, deterministically.
+    script.push(click_ui(When::Minute(510), layout::board_row(0).center()));
+    // Shut the board, then somebody to look at: Steve is home from the Deep
+    // Cave's second run at minute 512 and rests six world-hours, so his
+    // doorstep is a figure to click from there on.
+    script.push(click_ui(When::Minute(530), layout::board_close().center()));
+    let steve = people::roster()
+        .iter()
+        .position(|person| person.id == "steve")
+        .unwrap_or(0);
+    let doorstep = people::roster()[steve].home.center();
+    script.push(Directive {
+        when: When::Minute(540),
+        what: Act::ClickWorld(doorstep),
+    });
+    // **A trait chip, tapped on the sheet** — the clarity slice, photographed.
+    // Steve's third chip is `caring`, a motivator, which is what the wave
+    // asks the picture to show.
+    script.push(click_ui(When::Minute(550), layout::sheet_chip(2).center()));
     let photos = [
         // The settlement before anything is dispatched: the whole cast
         // standing at their homes, named. Wave 0b's own exit picture - the
@@ -129,7 +170,7 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
         },
         Photo {
             name: "map",
-            minute: 40,
+            minute: 44,
             tick: 0,
             paused: false,
         },
@@ -152,7 +193,7 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
         // sheet and the selection ring on their figure.
         Photo {
             name: "person",
-            minute: 430,
+            minute: 590,
             tick: 0,
             paused: false,
         },
@@ -160,6 +201,31 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
         Photo {
             name: "roster",
             minute: 462,
+            tick: 0,
+            paused: false,
+        },
+        // **The job board**, open on a mixed-type site with the fit column
+        // and the travel line up for the selected character: the surface the
+        // marker's bare count was standing in for.
+        Photo {
+            name: "board",
+            minute: 500,
+            tick: 0,
+            paused: false,
+        },
+        // The same board a few minutes after a row was ordered from: the row
+        // now reads as somebody's, and that somebody is on the road.
+        Photo {
+            name: "ordered",
+            minute: 64,
+            tick: 0,
+            paused: false,
+        },
+        // And the bounce: a row somebody already has, tapped, with the toast
+        // under the bar saying so.
+        Photo {
+            name: "bounce",
+            minute: 520,
             tick: 0,
             paused: false,
         },
@@ -762,6 +828,7 @@ fn selection_run(script: &[Directive]) -> (Conducted, Selected) {
             let panel = screens::content(
                 &shot.flow,
                 &lens::Lens::on(&shot.sim),
+                &grid::grid(),
                 &shot.clock,
                 &Tuning::SHIPPED,
             );
@@ -967,6 +1034,33 @@ fn one_selection(checks: &mut Checks) -> Option<Conducted> {
     Some(reproduction)
 }
 
+/// One scripted order over the paused opening world: pick somebody, open the
+/// site's board, tap a job row.
+///
+/// The paused world is what makes the comparison clean — dispatch works while
+/// the clock holds ("paused - the clock holds, orders still work"), the order
+/// is addressed at minute zero, and nothing else moves.
+fn ordered_from(site: usize, slot: usize, pick: Act) -> Conducted {
+    let marker = layout::marker_rect(LOCATIONS[crate::sim::site_location(site)].tile);
+    let script = [
+        Directive {
+            when: When::Tick(6),
+            what: pick,
+        },
+        Directive {
+            when: When::Tick(14),
+            what: Act::ClickWorld(marker.center()),
+        },
+        Directive {
+            when: When::Tick(22),
+            what: Act::ClickUi(layout::board_row(slot).center()),
+        },
+    ];
+    let mut session = Session::plain(Tuning::SHIPPED, &script, 32);
+    session.probe_ticks = &[30];
+    conduct(&session)
+}
+
 /// **Dispatch reads the one selection** (DESIGN §5, still two clicks).
 ///
 /// The order vocabulary did not change: select somebody, click a site. What
@@ -982,24 +1076,8 @@ fn one_selection(checks: &mut Checks) -> Option<Conducted> {
 fn dispatch_reads_the_selection(checks: &mut Checks) {
     let cast = people::roster();
     let who = 0usize;
-    let ordered = |site: usize, pick: Act| {
-        let marker = layout::marker_rect(LOCATIONS[crate::sim::site_location(site)].tile);
-        let script = [
-            Directive {
-                when: When::Tick(6),
-                what: pick,
-            },
-            Directive {
-                when: When::Tick(14),
-                what: Act::ClickWorld(marker.center()),
-            },
-        ];
-        let mut session = Session::plain(Tuning::SHIPPED, &script, 24);
-        session.probe_ticks = &[22];
-        conduct(&session)
-    };
-    let by_chip = ordered(0, Act::ClickUi(layout::party_chip(who).center()));
-    let by_sprite = ordered(0, Act::ClickWorld(cast[who].home.center()));
+    let by_chip = ordered_from(0, 0, Act::ClickUi(layout::party_chip(who).center()));
+    let by_sprite = ordered_from(0, 0, Act::ClickWorld(cast[who].home.center()));
     checks.require(
         !by_chip.events.is_empty(),
         "the scripted order produced no event at all, so the paths cannot be compared",
@@ -1025,7 +1103,7 @@ fn dispatch_reads_the_selection(checks: &mut Checks) {
     // the reference camera, so this is the check that the fix did not quietly
     // make those two sites unorderable.
     for site in 0..LOCATIONS.len() - 1 {
-        let run = ordered(site, Act::ClickWorld(cast[who].home.center()));
+        let run = ordered_from(site, 0, Act::ClickWorld(cast[who].home.center()));
         let departed = run
             .events
             .iter()
@@ -1061,15 +1139,23 @@ fn dispatch_reads_the_selection(checks: &mut Checks) {
             },
             Directive {
                 when: When::Tick(22),
-                what: Act::ClickUi(layout::party_chip(who).center()),
+                what: Act::ClickUi(layout::board_row(0).center()),
             },
             Directive {
                 when: When::Tick(30),
+                what: Act::ClickUi(layout::party_chip(who).center()),
+            },
+            Directive {
+                when: When::Tick(38),
                 what: Act::ClickWorld(marker(1)),
             },
+            Directive {
+                when: When::Tick(46),
+                what: Act::ClickUi(layout::board_row(0).center()),
+            },
         ];
-        let mut session = Session::plain(Tuning::SHIPPED, &script, 40);
-        session.probe_ticks = &[38];
+        let mut session = Session::plain(Tuning::SHIPPED, &script, 56);
+        session.probe_ticks = &[54];
         conduct(&session)
     };
     let (selected, notice, departures) = {
@@ -1078,7 +1164,7 @@ fn dispatch_reads_the_selection(checks: &mut Checks) {
             .iter()
             .filter(|event| event.class == crate::attention::EventClass::Departed)
             .count();
-        let probe = away.probe(38);
+        let probe = away.probe(54);
         (
             probe.and_then(|(_, flow, ..)| flow.selected),
             probe.and_then(|(_, flow, ..)| flow.log.first().cloned()),
@@ -1090,7 +1176,7 @@ fn dispatch_reads_the_selection(checks: &mut Checks) {
             && notice.as_deref()
                 == Some(
                     crate::sim::Refusal::NotIdle
-                        .message(cast[who].name, "")
+                        .message(cast[who].name, "", "")
                         .as_str(),
                 ),
         "an order given to somebody who is out did not bounce with its reason",
@@ -1107,6 +1193,263 @@ fn dispatch_reads_the_selection(checks: &mut Checks) {
             "the selection reads {:?} after the bounce; a refusal says why and changes nothing \
              else",
             selected.map(|who| cast[who].name)
+        ),
+    );
+}
+
+/// **The job board is the order** (UI.md §3c, DESIGN §5) — the wave's own
+/// battery.
+///
+/// Five claims, and each of them is one of the failure modes the board makes
+/// possible: the marker must stop ordering, the claim must be the named row,
+/// a row somebody has must refuse out loud, a row tapped with nobody selected
+/// must refuse out loud, and the fit and travel the panel prints must be the
+/// sim's own answers rather than a second computation beside them.
+fn the_board_is_the_order(checks: &mut Checks) {
+    let tuning = Tuning::SHIPPED;
+    let grid = grid::grid();
+    let cast = people::roster();
+    let who = 0usize;
+    let marker =
+        |site: usize| layout::marker_rect(LOCATIONS[crate::sim::site_location(site)].tile).center();
+
+    // --- 1: the marker opens the board and issues nothing -------------------
+    // The two ways to order that the old marker and a job row would have been
+    // is exactly the thing this session removed; a marker that still ordered
+    // would make the board a decoration over a dispatch nobody could see.
+    let looked = {
+        let script = [
+            Directive {
+                when: When::Tick(6),
+                what: Act::ClickUi(layout::party_chip(who).center()),
+            },
+            Directive {
+                when: When::Tick(14),
+                what: Act::ClickWorld(marker(1)),
+            },
+        ];
+        let mut session = Session::plain(tuning, &script, 24);
+        session.probe_ticks = &[22];
+        conduct(&session)
+    };
+    let opened = looked.probe(22).and_then(|(_, flow, ..)| flow.board);
+    checks.require(
+        opened == Some(1) && looked.events.is_empty(),
+        "a site marker still issues an order",
+        format!(
+            "with {} selected, clicking the Deep Cave's marker left the board {opened:?} and              emitted {:?}; the marker opens the board and the job row is the one way to order",
+            cast[who].name,
+            transcript(&looked.events)
+        ),
+    );
+
+    // --- 2: the claim is the row that was tapped ----------------------------
+    // Slot three of the Watchtower, which is neither the front of the list nor
+    // the back: a dispatch that kept first-open underneath claims slot zero
+    // and this check reads the difference off the board itself.
+    let named = ordered_from(0, 3, Act::ClickUi(layout::party_chip(who).center()));
+    let states: Vec<crate::sim::JobState> = named
+        .sim
+        .sites
+        .first()
+        .map(|site| site.states.clone())
+        .unwrap_or_default();
+    let job = named
+        .sim
+        .sites
+        .first()
+        .and_then(|site| site.quest(3))
+        .map(|quest| quest.name)
+        .unwrap_or_default();
+    checks.require(
+        states.get(3) == Some(&crate::sim::JobState::Claimed { by: who })
+            && states
+                .iter()
+                .take(3)
+                .all(|state| *state == crate::sim::JobState::Open),
+        "the order claimed a job other than the one the row named",
+        format!(
+            "tapping the Watchtower's fourth row left the board reading {states:?}; the row              the player tapped is {job:?} and the claim has to be that row"
+        ),
+    );
+    checks.require(
+        named.events.iter().any(|event| {
+            event.class == crate::attention::EventClass::Departed && event.note.contains(job)
+        }),
+        "the departure does not name the job the row named",
+        format!(
+            "the transcript is {:?} and the row tapped was {job:?}",
+            transcript(&named.events)
+        ),
+    );
+
+    // --- 3: a row somebody already has refuses, and says why ----------------
+    let taken = {
+        let script = [
+            Directive {
+                when: When::Tick(6),
+                what: Act::ClickUi(layout::party_chip(who).center()),
+            },
+            Directive {
+                when: When::Tick(14),
+                what: Act::ClickWorld(marker(0)),
+            },
+            Directive {
+                when: When::Tick(22),
+                what: Act::ClickUi(layout::board_row(3).center()),
+            },
+            Directive {
+                when: When::Tick(30),
+                what: Act::ClickUi(layout::party_chip(who + 1).center()),
+            },
+            Directive {
+                when: When::Tick(38),
+                what: Act::ClickWorld(marker(0)),
+            },
+            Directive {
+                when: When::Tick(46),
+                what: Act::ClickUi(layout::board_row(3).center()),
+            },
+        ];
+        let mut session = Session::plain(tuning, &script, 56);
+        session.probe_ticks = &[54];
+        conduct(&session)
+    };
+    let (notice, selected, departures) = {
+        let probe = taken.probe(54);
+        (
+            probe.and_then(|(_, flow, ..)| flow.log.first().cloned()),
+            probe.and_then(|(_, flow, ..)| flow.selected),
+            taken
+                .events
+                .iter()
+                .filter(|event| event.class == crate::attention::EventClass::Departed)
+                .count(),
+        )
+    };
+    checks.require(
+        departures == 1
+            && notice.as_deref() == Some(crate::sim::Refusal::Taken.message("", "", job).as_str()),
+        "a claimed job row took a second order, or refused one in silence",
+        format!(
+            "{departures} departure(s) were emitted and the top notice reads {notice:?}; the              second character tapped a row {} had already taken",
+            cast[who].name
+        ),
+    );
+    checks.require(
+        selected == Some(who + 1),
+        "a bounced job row put the selection down",
+        format!(
+            "the selection reads {:?} after the bounce; a refusal says why and changes              nothing else",
+            selected.map(|who| cast[who].name)
+        ),
+    );
+
+    // --- 4: a row tapped with nobody selected refuses, and says why ---------
+    let unmanned = {
+        let script = [
+            Directive {
+                when: When::Tick(6),
+                what: Act::ClickWorld(marker(0)),
+            },
+            Directive {
+                when: When::Tick(14),
+                what: Act::ClickUi(layout::board_row(0).center()),
+            },
+        ];
+        let mut session = Session::plain(tuning, &script, 24);
+        session.probe_ticks = &[22];
+        conduct(&session)
+    };
+    let said = unmanned
+        .probe(22)
+        .and_then(|(_, flow, ..)| flow.log.first().cloned());
+    checks.require(
+        unmanned.events.is_empty() && said.is_some_and(|line| line.starts_with("select somebody")),
+        "a job row tapped with nobody selected did something, or said nothing",
+        format!(
+            "the transcript is {:?} and the top notice is {:?}",
+            transcript(&unmanned.events),
+            unmanned
+                .probe(22)
+                .and_then(|(_, flow, ..)| flow.log.first().cloned())
+        ),
+    );
+
+    // --- 5: the fit and the travel are the sim's own answers ---------------
+    // Not "a number near the sim's": the panel is rebuilt here and every fit
+    // it prints is looked up in `traits::competence_at`, and its travel line
+    // in `sim::route_out` — the two functions the scorer and the dispatch use.
+    let ines = cast
+        .iter()
+        .position(|person| person.id == "ines")
+        .unwrap_or(0);
+    let staged = crate::sim::Sim::opening(&tuning, modules::ModuleSet::ALL);
+    let mut flow = crate::flow::Flow {
+        selected: Some(ines),
+        board: Some(1),
+        ..crate::flow::Flow::default()
+    };
+    let panel = screens::content(
+        &flow,
+        &lens::Lens::on(&staged),
+        &grid,
+        &crate::clock::Clock::opening(),
+        &tuning,
+    );
+    let says = |text: &str| panel.runs.iter().any(|row| row.text.contains(text));
+    for quest in &staged.sites[1].quests {
+        let fit = traits::competence_at(quest.task, &cast[ines].traits);
+        checks.require(
+            says(&format!("fit {fit}")),
+            "a job row's fit is not the aptitude the sim reads",
+            format!(
+                "{:?} is {} work, {} answers {fit} to traits::competence_at, and no row of                  the board says so",
+                quest.name,
+                quest.task.id(),
+                cast[ines].name
+            ),
+        );
+    }
+    let route = crate::sim::route_out(&grid, &tuning, &staged, ines, 1);
+    checks.require(
+        route.as_ref().is_some_and(|route| {
+            says(&format!("{} min from where they stand", route.cost))
+        }),
+        "the board's travel line is not the journey the sim would walk",
+        format!(
+            "sim::route_out puts {}'s door {:?} from the Deep Cave and the header does not              say it; a preview that can disagree with the journey is the whole failure mode",
+            cast[ines].name,
+            route.map(|route| (route.tiles.len(), route.cost))
+        ),
+    );
+    // And with nobody selected there is no fit column and no travel line at
+    // all — a board read by nobody is still a board, and a fit for nobody is
+    // a number about nothing.
+    flow.selected = None;
+    let empty = screens::content(
+        &flow,
+        &lens::Lens::on(&staged),
+        &grid,
+        &crate::clock::Clock::opening(),
+        &tuning,
+    );
+    checks.require(
+        !empty.runs.iter().any(|row| row.text.starts_with("fit "))
+            && !empty
+                .runs
+                .iter()
+                .any(|row| row.text.contains("from where they stand")),
+        "the board guesses a fit and a journey for nobody",
+        format!(
+            "with nobody selected the board still prints {:?}",
+            empty
+                .runs
+                .iter()
+                .filter(|row| row.text.starts_with("fit ")
+                    || row.text.contains("from where they stand"))
+                .map(|row| row.text.clone())
+                .collect::<Vec<_>>()
         ),
     );
 }
@@ -1206,6 +1549,8 @@ pub fn run() -> ExitCode {
     let reproduction = one_selection(&mut checks);
     dispatch_reads_the_selection(&mut checks);
     selection_moves_nothing(&mut checks);
+    // --- the job board, which is now where an order is given ---------------
+    the_board_is_the_order(&mut checks);
 
     // --- the layout floors --------------------------------------------------
     floors::layout_floors(&mut checks);

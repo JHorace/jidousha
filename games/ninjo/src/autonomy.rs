@@ -53,10 +53,15 @@ pub const DAY: u64 = 1440;
 /// [`weigh`]; nothing else changes, which is the point of the shape.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Action {
-    /// Claim the open job at this site and go.
+    /// Claim **this job** at this site and go.
+    ///
+    /// One candidate per open job, not one per site: a site's rows are six
+    /// different pieces of work, and weighing only the front of the list made
+    /// a crafter standing behind a fight job stay home. What the player sees
+    /// on the board and what the scorer weighs are now the same thing.
     SeekWork {
-        /// Which site.
-        site: usize,
+        /// Which job, by site and row (`sim::JobId`).
+        job: sim::JobId,
     },
     /// Walk to another character's home tile and stay a while.
     Socialize {
@@ -126,14 +131,21 @@ pub fn visit_minutes(tuning: &Tuning) -> u64 {
 
 /// The candidates open to `who` right now.
 ///
-/// **Built by the caller, weighed by the scorer.** Every site with an open
-/// quest, every other character standing at their own door, and staying home.
+/// **Built by the caller, weighed by the scorer.** Every **open job** at every
+/// site, every other character standing at their own door, and staying home.
 /// Wave 2 appends its ask to whatever this returns.
+///
+/// One candidate per job is what makes an aptitude mean something: the board
+/// leans by fiction, so the Deep Cave's front row is a haul and its fourth is
+/// the shoring, and a site-shaped candidate offered the crafter the haul or
+/// nothing.
 pub fn candidates(sim: &Sim, who: usize) -> Vec<Action> {
     let mut out = vec![Action::Idle];
     for (site, spec) in sim.sites.iter().enumerate() {
-        if spec.open().is_some() {
-            out.push(Action::SeekWork { site });
+        for slot in spec.open_slots() {
+            out.push(Action::SeekWork {
+                job: sim::JobId { site, slot },
+            });
         }
     }
     for (other, party) in sim.parties.iter().enumerate() {
@@ -160,11 +172,16 @@ pub fn weigh(sim: &Sim, tuning: &Tuning, now: u64, who: usize, action: Action) -
             value: tuning.idle_floor,
             because: "nothing worth leaving for".to_owned(),
         }),
-        Action::SeekWork { site } => {
-            let Some(quest) = sim.sites.get(site).and_then(|site| site.open()).copied() else {
+        Action::SeekWork { job } => {
+            let Some(quest) = sim
+                .sites
+                .get(job.site)
+                .and_then(|site| site.quest(job.slot))
+                .copied()
+            else {
                 return terms;
             };
-            let where_to = crate::grid::LOCATIONS[sim::site_location(site)].name;
+            let where_to = crate::grid::LOCATIONS[sim::site_location(job.site)].name;
             // Desperation opens the sum, as it opened giri's willingness.
             terms.push(Term {
                 what: "need",
@@ -318,12 +335,12 @@ pub fn act(sim: &mut Sim, grid: &Grid, tuning: &Tuning, now: u64, who: usize, ju
         // An idle choice is not an occurrence: nothing happened to anybody,
         // and the feed is for things that did (the drift's own precedent).
         Action::Idle => {}
-        Action::SeekWork { site } => {
-            let name = crate::grid::LOCATIONS[sim::site_location(site)].name;
+        Action::SeekWork { job } => {
+            let name = crate::grid::LOCATIONS[sim::site_location(job.site)].name;
             let quest = sim
                 .sites
-                .get(site)
-                .and_then(|site| site.open())
+                .get(job.site)
+                .and_then(|site| site.quest(job.slot))
                 .map_or("work", |quest| quest.name);
             sim.emit_action(
                 now,
@@ -337,7 +354,7 @@ pub fn act(sim: &mut Sim, grid: &Grid, tuning: &Tuning, now: u64, who: usize, ju
                 tuning,
                 now,
                 who,
-                site,
+                job,
                 sim::Motive::chose(judged.reason.clone()),
             );
         }
@@ -451,7 +468,14 @@ pub fn judge_at(checks: &mut crate::checks::Checks, tuning: &Tuning) {
     judge(
         checks,
         "the eager worker's pull toward open labour is not the shipped sum",
-        score(&sim, 0, ludo, Action::SeekWork { site: 1 }),
+        score(
+            &sim,
+            0,
+            ludo,
+            Action::SeekWork {
+                job: sim::JobId { site: 1, slot: 0 },
+            },
+        ),
         20,
         "desperation 4x2 + indebted 3x2 + labor 2x3",
     );
@@ -460,7 +484,14 @@ pub fn judge_at(checks: &mut crate::checks::Checks, tuning: &Tuning) {
     judge(
         checks,
         "the pot does not pull the greedy by the shipped weight",
-        score(&sim, 0, bob, Action::SeekWork { site: 3 }),
+        score(
+            &sim,
+            0,
+            bob,
+            Action::SeekWork {
+                job: sim::JobId { site: 3, slot: 0 },
+            },
+        ),
         28,
         "desperation 4x2 + indebted 3x2 + fight 2x3 + pot 1x80x1/10",
     );
@@ -469,7 +500,14 @@ pub fn judge_at(checks: &mut crate::checks::Checks, tuning: &Tuning) {
     judge(
         checks,
         "a want applied to work its favors field does not name",
-        score(&sim, 0, odd, Action::SeekWork { site: 1 }),
+        score(
+            &sim,
+            0,
+            odd,
+            Action::SeekWork {
+                job: sim::JobId { site: 1, slot: 0 },
+            },
+        ),
         6,
         "desperation 3x2 and nothing else - renown wants fight work",
     );
@@ -487,14 +525,28 @@ pub fn judge_at(checks: &mut crate::checks::Checks, tuning: &Tuning) {
     judge(
         checks,
         "the rest term does not cost what the shipped set says",
-        score(&rested, 0, ludo, Action::SeekWork { site: 1 }),
+        score(
+            &rested,
+            0,
+            ludo,
+            Action::SeekWork {
+                job: sim::JobId { site: 1, slot: 0 },
+            },
+        ),
         8,
         "the same twenty, less the rest weight of twelve",
     );
     judge(
         checks,
         "the rest term outlasts the rest it is counting",
-        score(&rested, 100, ludo, Action::SeekWork { site: 1 }),
+        score(
+            &rested,
+            100,
+            ludo,
+            Action::SeekWork {
+                job: sim::JobId { site: 1, slot: 0 },
+            },
+        ),
         20,
         "at the minute rest ends the term is gone",
     );
@@ -538,7 +590,7 @@ pub fn judge_at(checks: &mut crate::checks::Checks, tuning: &Tuning) {
     let mut fight_only = sim.clone();
     for site in &mut fight_only.sites {
         site.quests.retain(|quest| quest.task == TaskType::Fight);
-        site.claimed = 0;
+        site.states = vec![crate::sim::JobState::Open; site.quests.len()];
     }
     checks.require(
         matches!(
@@ -551,6 +603,57 @@ pub fn judge_at(checks: &mut crate::checks::Checks, tuning: &Tuning) {
              in the band and no term of his covers a fight task",
             choose(&fight_only, tuning, 0, alex, &candidates(&fight_only, alex)).action
         ),
+    );
+
+    // **The crafter takes the craft job standing behind a fight job.** The
+    // whole of what per-job candidates bought: with one candidate per *site*
+    // the scorer only ever saw the front of the list, so a board whose first
+    // open row was fight work offered Ines nothing and she stayed home while
+    // the job she is the best in the band at stood open behind it. Staged over
+    // a board spent everywhere else, so the choice is between those two rows
+    // and nothing else.
+    let ines = index("ines");
+    let mut behind = sim.clone();
+    for site in &mut behind.sites {
+        site.states = vec![crate::sim::JobState::Done { by: 0 }; site.quests.len()];
+    }
+    behind.sites[0].quests = vec![
+        crate::sim::Quest {
+            name: "the ridge patrol",
+            task: TaskType::Fight,
+            pot: 55,
+            duration: 100,
+        },
+        crate::sim::Quest {
+            name: "the signal repair",
+            task: TaskType::Craft,
+            pot: 45,
+            duration: 80,
+        },
+    ];
+    behind.sites[0].states = vec![crate::sim::JobState::Open; 2];
+    let picked = choose(&behind, tuning, 0, ines, &candidates(&behind, ines));
+    checks.require(
+        picked.action
+            == Action::SeekWork {
+                job: sim::JobId { site: 0, slot: 1 },
+            },
+        "the scorer cannot reach a job standing behind another one",
+        format!(
+            "Ines chose {:?} off a board whose first open row is fight work and whose second \
+             is the signal repair; she is the band's crafter, and a candidate list built per \
+             site would only ever have offered her the patrol",
+            picked.action
+        ),
+    );
+    // And the fit the board's row shows her is the aptitude the sum weighed —
+    // one function, two readers (`Lens::competence`).
+    judge(
+        checks,
+        "the fit a board row shows is not the aptitude the scorer weighs",
+        crate::traits::competence_at(TaskType::Craft, &behind.people[ines].traits),
+        2,
+        "Ines's craft aptitude, which the panel prints and the sum multiplies",
     );
 
     // A completed visit's warmth, through the one function the scheduler uses.
@@ -619,7 +722,7 @@ pub fn judge_at(checks: &mut crate::checks::Checks, tuning: &Tuning) {
     checks.require(
         sim.sites
             .get(1)
-            .and_then(|site| site.open())
+            .and_then(|site| site.quest(0))
             .is_some_and(|quest| TaskType::of_aptitude(quest.task.aptitude()) == Some(quest.task)),
         "a quest's task type does not round-trip through its aptitude row",
         "CAST.md §2 makes an aptitude's id the task's id".to_owned(),
@@ -686,6 +789,7 @@ pub fn judge_module(
 
     // --- 4: one dispatch path -----------------------------------------------
     judge_one_path(checks, baseline);
+    judge_named_claims(checks, baseline);
 
     notes.join("; ")
 }
@@ -821,7 +925,7 @@ fn judge_presets(checks: &mut crate::checks::Checks, tuning: &Tuning) {
     let spend = |tuning: &Tuning| {
         let mut sim = Sim::opening(tuning, crate::modules::ModuleSet::ALL);
         for site in &mut sim.sites {
-            site.claimed = site.quests.len();
+            site.states = vec![crate::sim::JobState::Done { by: 0 }; site.quests.len()];
         }
         sim
     };
@@ -862,6 +966,63 @@ fn judge_presets(checks: &mut crate::checks::Checks, tuning: &Tuning) {
             "it opens with {} edges and {} facts",
             flat.shared.edges().len(),
             flat.shared.all_facts().len()
+        ),
+    );
+}
+
+/// **The claim is the named job**, for a player's order and a self-dispatch
+/// alike.
+///
+/// Every departure for paid work names a job in its sentence; the row the
+/// board records as taken is that same job, taken by that same party. This is
+/// the check aimed at a dispatch that showed the player one job and claimed
+/// the site's first open one underneath — the failure the whole job board
+/// would otherwise be a picture of.
+fn judge_named_claims(checks: &mut crate::checks::Checks, run: &crate::sweep::Conducted) {
+    let departures = run
+        .events
+        .iter()
+        .filter(|event| {
+            event.class == crate::attention::EventClass::Departed
+                && event.note.starts_with("departed for")
+        })
+        .count();
+    let mut taken = 0usize;
+    for site in &run.sim.sites {
+        for (slot, state) in site.states.iter().enumerate() {
+            let Some(by) = state.holder() else { continue };
+            taken += 1;
+            let Some(quest) = site.quest(slot) else {
+                continue;
+            };
+            let named = run
+                .events
+                .iter()
+                .filter(|event| {
+                    event.party == by
+                        && event.class == crate::attention::EventClass::Departed
+                        && event.note.contains(quest.name)
+                })
+                .count();
+            checks.require(
+                named == 1,
+                "a claimed job is not the job the departure named",
+                format!(
+                    "{:?} at {} is held by party {by} and {named} of their departures name it; \
+                     the order names a job and the claim is that job, never the site's \
+                     first-open row",
+                    quest.name,
+                    crate::grid::LOCATIONS[site.location].name,
+                ),
+            );
+        }
+    }
+    checks.require(
+        taken == departures && departures > 0,
+        "the board's spent rows and the departures for work are not the same list",
+        format!(
+            "{taken} rows are claimed or done across the four sites and {departures} \
+             departures for paid work were emitted; one departure claims exactly one row"
         ),
     );
 }

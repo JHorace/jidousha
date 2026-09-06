@@ -81,7 +81,10 @@ equals the task's type; until then the landed stub ignores it and the
 scorer already weighs it.
 
 *Implemented (w1.1):* `traits::TaskType`, and `Quest::task` on every authored
-row. `TaskType::aptitude()` and `TaskType::of_aptitude()` are the round trip,
+row — the "data on the quest row" this section asks for, and since the
+job-board session (2026-09-06) it is **drawn on the row too**: every job on a
+site's board carries its task-type chip, in the aptitude icon whose id is the
+task's, beside the fit the reader has for it (UI.md §3c). `TaskType::aptitude()` and `TaskType::of_aptitude()` are the round trip,
 and the vocabulary's validation asserts it both ways — every type has exactly
 one aptitude row and every aptitude row is some type's. **The board grew from
 seven jobs to twenty-four**, six a site, each site leaning toward the work its

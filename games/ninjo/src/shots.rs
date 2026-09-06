@@ -20,6 +20,7 @@ use crate::{floors, frames, layout, lens, people, screens, verify};
 
 /// Every photograph of the reference run, against what it is for.
 pub fn judge(checks: &mut Checks, run: &Conducted, tuning: &Tuning) {
+    let grid = crate::grid::grid();
     if let Some(shot) = run.photo("map") {
         verify::judge_terrain(checks, &shot.frame, verify::HEADLESS_VIEWPORT);
         judge_tokens(checks, shot);
@@ -29,7 +30,7 @@ pub fn judge(checks: &mut Checks, run: &Conducted, tuning: &Tuning) {
         checks.require(
             false,
             "the mid-travel photograph was never taken",
-            "the conductor's photo schedule names minute 40".to_owned(),
+            "the conductor's photo schedule names minute 44".to_owned(),
         );
     }
     // --- the feed, photographed with the world stopped ---------------------
@@ -179,7 +180,7 @@ pub fn judge(checks: &mut Checks, run: &Conducted, tuning: &Tuning) {
         );
         // Every row's activity line is the lens's own, reason and all.
         let lens = lens::Lens::on(&shot.sim);
-        let panel = screens::content(&shot.flow, &lens, &shot.clock, tuning);
+        let panel = screens::content(&shot.flow, &lens, &grid, &shot.clock, tuning);
         let says = |text: &str| panel.runs.iter().any(|run| run.text.contains(text));
         let missing: Vec<&str> = (0..lens.people().len())
             .filter(|who| !says(lens.name(*who)))
@@ -249,7 +250,7 @@ pub fn judge(checks: &mut Checks, run: &Conducted, tuning: &Tuning) {
         // The panel says what the lens says — the whole of the one-source rule
         // over a surface that reads a person.
         if let Some(who) = who {
-            let panel = screens::content(&shot.flow, &lens, &shot.clock, tuning);
+            let panel = screens::content(&shot.flow, &lens, &grid, &shot.clock, tuning);
             let says = |text: &str| panel.runs.iter().any(|run| run.text.contains(text));
             checks.require(
                 says(&format!("{}g in hand", lens.wallet(who)))
@@ -269,9 +270,12 @@ pub fn judge(checks: &mut Checks, run: &Conducted, tuning: &Tuning) {
         checks.require(
             false,
             "the character photograph was never taken",
-            "the conductor's photo schedule names minute 430, after the doorstep click".to_owned(),
+            "the conductor's photo schedule names minute 590, after the doorstep click".to_owned(),
         );
     }
+
+    // --- the job board: the three pictures this wave owes ------------------
+    judge_board(checks, run, tuning, &grid);
 
     // --- the settlement: the cast, at home, named --------------------------
     if let Some(shot) = run.photo("settlement") {
@@ -300,6 +304,173 @@ pub fn judge(checks: &mut Checks, run: &Conducted, tuning: &Tuning) {
             false,
             "the settlement photograph was never taken",
             "the conductor's photo schedule names tick 10, before the first dispatch".to_owned(),
+        );
+    }
+}
+
+/// **The job board, photographed three ways** (UI.md §3c): read by somebody,
+/// ordered from, and refusing a row that is already taken.
+///
+/// The wave's own pictures, and each one asserts the thing it is for — a
+/// screenshot nobody checks is a screenshot that quietly stops showing what it
+/// was taken for.
+fn judge_board(checks: &mut Checks, run: &Conducted, tuning: &Tuning, grid: &crate::grid::Grid) {
+    // --- the board, read by a selected character ----------------------------
+    if let Some(shot) = run.photo("board") {
+        let lens = lens::Lens::on(&shot.sim);
+        let panel = screens::content(&shot.flow, &lens, grid, &shot.clock, tuning);
+        let says = |text: &str| panel.runs.iter().any(|row| row.text.contains(text));
+        let Some(site) = shot.flow.board else {
+            checks.require(
+                false,
+                "the board photograph was taken with no board open",
+                format!("the flow's board reads {:?}", shot.flow.board),
+            );
+            return;
+        };
+        let Some(who) = shot.flow.selected else {
+            checks.require(
+                false,
+                "the board photograph was taken with nobody selected, so it has no fit column",
+                "the picture is for the fit a named character has for named work".to_owned(),
+            );
+            return;
+        };
+        // Every row's fit is the aptitude the sim reads, and the header's
+        // travel is the journey the sim would walk.
+        let jobs = lens
+            .site(site)
+            .map(|board| board.quests.clone())
+            .unwrap_or_default();
+        let kinds = jobs
+            .iter()
+            .map(|quest| quest.task.id())
+            .collect::<std::collections::BTreeSet<_>>();
+        checks.require(
+            kinds.len() >= 2,
+            "the board photograph was taken of a site whose jobs are all one kind of work",
+            format!(
+                "the board shows {:?}; the picture is for a fit column that distinguishes \
+                 people, and a single-type board cannot",
+                jobs.iter().map(|quest| quest.task.id()).collect::<Vec<_>>()
+            ),
+        );
+        for quest in &jobs {
+            let fit = crate::traits::competence_at(quest.task, lens.traits(who));
+            checks.require(
+                says(&format!("fit {fit}")),
+                "a photographed job row does not show the fit the sim reads",
+                format!(
+                    "{:?} is {} work and {} answers {fit}",
+                    quest.name,
+                    quest.task.id(),
+                    lens.name(who)
+                ),
+            );
+        }
+        checks.require(
+            lens.travel(grid, tuning, who, site)
+                .is_some_and(|route| says(&format!("{} min from where they stand", route.cost))),
+            "the photographed board's travel line is not the journey the sim would walk",
+            format!(
+                "sim::route_out answers {:?} for {}",
+                lens.travel(grid, tuning, who, site)
+                    .map(|route| (route.tiles.len(), route.cost)),
+                lens.name(who)
+            ),
+        );
+        frames::judge_chrome(checks, run, shot, "the job board");
+        floors::judge_frame_floor(checks, run.font, &shot.frame, "the job board");
+    } else {
+        checks.require(
+            false,
+            "the job board photograph was never taken",
+            "the conductor's photo schedule names minute 500".to_owned(),
+        );
+    }
+
+    // --- a board an order has just been given from --------------------------
+    if let Some(shot) = run.photo("ordered") {
+        let lens = lens::Lens::on(&shot.sim);
+        let panel = screens::content(&shot.flow, &lens, grid, &shot.clock, tuning);
+        let says = |text: &str| panel.runs.iter().any(|row| row.text.contains(text));
+        let held: Vec<(usize, usize)> = shot
+            .flow
+            .board
+            .and_then(|site| lens.site(site))
+            .map(|board| {
+                board
+                    .states
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(slot, state)| state.holder().map(|by| (slot, by)))
+                    .collect()
+            })
+            .unwrap_or_default();
+        checks.require(
+            held.len() == 1 && says("has it"),
+            "the ordered photograph does not show a row somebody was just sent to",
+            format!(
+                "the board open in it is {:?} and its spent rows are {held:?}; the picture is \
+                 of the row the player tapped, now reading as the person they sent",
+                shot.flow.board
+            ),
+        );
+        // And the person on that row is out, on the journey the row started.
+        checks.require(
+            held.first().is_some_and(|(_, by)| !lens.at_home(*by)),
+            "the person the ordered row names is not on the road",
+            format!(
+                "the spent rows are {held:?} at minute {}",
+                shot.clock.minutes
+            ),
+        );
+        frames::judge_chrome(checks, run, shot, "an order given from a job row");
+        floors::judge_frame_floor(
+            checks,
+            run.font,
+            &shot.frame,
+            "an order given from a job row",
+        );
+    } else {
+        checks.require(
+            false,
+            "the ordered-from-a-row photograph was never taken",
+            "the conductor's photo schedule names minute 64".to_owned(),
+        );
+    }
+
+    // --- the bounce on a row somebody already has ---------------------------
+    if let Some(shot) = run.photo("bounce") {
+        let lens = lens::Lens::on(&shot.sim);
+        let toast = shot.flow.toast.as_ref().map(|toast| toast.text.clone());
+        let taken = shot
+            .flow
+            .board
+            .and_then(|site| lens.site(site))
+            .and_then(|board| board.quest(0))
+            .map(|quest| quest.name)
+            .unwrap_or_default();
+        checks.require(
+            toast.as_deref() == Some(crate::sim::Refusal::Taken.message("", "", taken).as_str()),
+            "the bounce photograph does not show the refusal it is for",
+            format!(
+                "the toast reads {toast:?} and the row tapped was {taken:?}; a claimed row \
+                 says why it will not take the order, in the established bounce style"
+            ),
+        );
+        checks.require(
+            shot.flow.selected.is_some(),
+            "the bounce put the selection down",
+            format!("the selection reads {:?}", shot.flow.selected),
+        );
+        frames::judge_chrome(checks, run, shot, "the bounce on a claimed row");
+        floors::judge_frame_floor(checks, run.font, &shot.frame, "the bounce on a claimed row");
+    } else {
+        checks.require(
+            false,
+            "the claimed-row bounce photograph was never taken",
+            "the conductor's photo schedule names minute 520".to_owned(),
         );
     }
 }

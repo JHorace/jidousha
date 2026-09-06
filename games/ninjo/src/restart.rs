@@ -73,8 +73,8 @@ pub struct DrawerRun {
 
 /// The order the post-apply half runs: OX to the Deep Cave at minute 6 — a
 /// route through plains and forest, which is exactly what `MIRE` moves.
-fn post_apply_order() -> [Directive; 2] {
-    order(6, 0, 1)
+fn post_apply_order() -> [Directive; 3] {
+    order(6, 0, 1, 0)
 }
 
 /// Play the drawer: open it, step a row, load the preset, apply, close, run

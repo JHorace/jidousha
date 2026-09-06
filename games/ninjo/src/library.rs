@@ -219,7 +219,14 @@ pub fn printable_strings(checks: &mut Checks, baseline: &Conducted) {
     let mut note = |what: String, text: String| strings.push((what, text));
 
     for (what, flow, sim, clock) in floors::content_states(baseline) {
-        for text in screens::content(&flow, &Lens::on(&sim), &clock, &Tuning::SHIPPED).all_strings()
+        for text in screens::content(
+            &flow,
+            &Lens::on(&sim),
+            &crate::grid::grid(),
+            &clock,
+            &Tuning::SHIPPED,
+        )
+        .all_strings()
         {
             note(format!("{what}'s screen"), text.to_owned());
         }
@@ -235,6 +242,7 @@ pub fn printable_strings(checks: &mut Checks, baseline: &Conducted) {
     for text in screens::content(
         &tuner,
         &Lens::on(&opening),
+        &crate::grid::grid(),
         &crate::clock::Clock::opening(),
         &Tuning::SHIPPED,
     )
@@ -254,11 +262,12 @@ pub fn printable_strings(checks: &mut Checks, baseline: &Conducted) {
     for refusal in [
         crate::sim::Refusal::NotIdle,
         crate::sim::Refusal::Dry,
+        crate::sim::Refusal::Taken,
         crate::sim::Refusal::Unreachable,
     ] {
         note(
             "a refusal".to_owned(),
-            refusal.message("CRANE", "the Black Vault"),
+            refusal.message("CRANE", "the Black Vault", "the vault ledger"),
         );
     }
     note("the opening stamp".to_owned(), clock::stamp(0));

@@ -21,6 +21,15 @@ and its whole `src/`, and nothing else: no file under `crates/*/src/`, no
 had was about this game's own UI state, and the two entries it files below are
 about this repository rather than about the engine's documents.
 
+**The job-board session (2026-09-06) read** `CLAUDE.md`, the `make-game`
+skill, this game's `UI.md`, `DESIGN.md`, `GDD.md`, `CAST.md`, `FINDINGS.md`
+and its whole `src/`, plus one line of `docs/api/jidousha-testing.md` (the
+`DrawnQuad` fields, checking whether a recorded quad carries the draw band it
+was submitted on — it does not, which is why the answer below is a rule about
+what the game draws rather than a smarter judge). Nothing under
+`crates/*/src/`, no `docs/internal/`, no ADR. Its two entries are about this
+game.
+
 **Wave 1.1 read** `CLAUDE.md`, the `make-game` skill, this game's own
 `GDD.md`, `DESIGN.md`, `UI.md`, `CAST.md` and `FINDINGS.md`, and its whole
 `src/`. It opened no file under `crates/*/src/`, no `docs/internal/`, and no
@@ -58,6 +67,76 @@ Expected: guidance on what the bounds check becomes for a camera that
 roams. Happened: worked it out from the check's purpose; the workaround is
 three assertions rather than one. Owner: `jidousha-testing.md`.
 
+
+## The job-board session (2026-09-06) — **2 new findings**, both the game's own
+
+The documents were asked nothing they did not answer. `jidousha-testing.md`
+was opened once, for `DrawnQuad`'s fields, and it was accurate; the panel /
+floors / frames machinery this game already had absorbed a whole new surface
+without a new engine question, which is the thing that made the session cheap.
+
+### G-019 — the game's own: a site marker showed a count and took an order, and the work was invisible
+
+Class: **the game's own** (a wave-1.1 gap the owner played into) · Game: ninjo ·
+Files: `games/ninjo/src/flow.rs`, `src/board.rs`, `src/sim.rs`, `UI.md`,
+`DESIGN.md` · **Fixed here**
+
+Reported by the owner from the wave-1.1 playtest of the deployed build: a site
+marker shows only a quest count, so there is no way to see the work or to
+choose it.
+
+Expected, from `CAST.md` §2 and the wave-1.1 board: the player picks a person
+for a *kind of work*, because the whole trait vocabulary is built to make
+"whom do I send, and why" a decision. Happened: dispatch was "this person to
+this site", the site handed out its first open row, and the marker's `6
+quests` was the only thing on screen about what stood there. Wave 1.1 had
+grown the board from seven jobs to twenty-four and put a task type on every
+one of them — which made the gap much larger than it had been, because a
+count of six now stood in for six *different* pieces of work.
+
+**What made it invisible to the checks:** every assertion about dispatch was
+about the site. `expected_events` pinned arrival minutes, `judge_one_path`
+compared movement classes, and the scorer's own battery weighed
+`SeekWork { site }` — so a build in which the UI named one job and the sim
+claimed another would have passed all of them. The fix carries its own
+instrument: `autonomy::judge_named_claims` walks every spent row on every
+board and requires that the departure which claimed it named it, which is a
+check that could not have been written while a claim was a count.
+
+**What the next session inherits:** the board and the faces list share the
+left of the screen and are never open together, so the base screen is now two
+control sets (`floors::targets` and `floors::board_targets`) and
+`controls_for` picks between them. A third over-the-map surface has to pick a
+side or take a third set.
+
+### G-020 — the game's own: a recorded quad does not say which draw band it came from
+
+Class: **the game's own**, though it starts at an engine boundary · Game: ninjo ·
+Files: `games/ninjo/src/screens.rs`, `src/frames.rs` · **Worked around here,
+and the workaround is a rule**
+
+Found while adding the job board. `frames::judge_chrome` finds a row of chrome
+on the recorded frame by counting glyph quads inside the row's own box; the
+board's footer sits at the same world *y* as the Old Crypt's `4 quests` label
+and overlaps it in *x*, so a glyph of the map label landed inside the footer's
+box and the count came out one too high. The row was drawn correctly and the
+panel covers the label on screen — the judge was counting a glyph the reader
+cannot see.
+
+Expected: a way to ask the frame for the chrome's own glyphs. Happened:
+`DrawnQuad` carries `batch`, `texture`, `corners` and `tint`, and no depth or
+layer (`jidousha-testing.md` is accurate about this; nothing misled). The
+document is not wrong — it is a gap, and a small one, because the honest fix
+turned out to be a rule about the game rather than a smarter judge.
+
+**What we did on that basis:** extended UI.md §3's standing law — *under an
+open drawer the map says nothing* — to the job board, which is a panel over
+the map in exactly the same sense. While a board is open the map draws no
+words at all; the board carries the site's name and its open count in full,
+and the labels it hides are the ones it is standing on. That is a better rule
+than the one it replaced anyway. It is filed here so the next surface over the
+map meets the fact rather than the symptom, and so that a `layer` on
+`DrawnQuad` — if the engine ever wants one — has a use case on record.
 
 ## Wave 0b (the people substrate) — **0 new findings**
 
@@ -276,6 +355,19 @@ The design rule that survives both: **the invariance claim is about the
 world's occurrences, not about the player's inputs**. Two speed scripts can
 issue the same order at the same world-minute only where the clock visits
 that minute at both speeds, and the sweep's scripts are authored to that.
+
+**Amended by the job-board session (2026-09-06), and the rule is now a
+check.** An order became three clicks (person, marker, job row), so its lead
+went from three ticks to five and every one of the sweep's order minutes had
+to be re-derived: they are now `sweep::ORDER_MINUTES` — 16, 32, 48 and 360,
+multiples of eight sixteen apart, because six ticks of clicking at 4x is nine
+world-minutes and 8 is where `floor(8k/5)` lands. The paragraph above said
+"the next content change will want to move them again", and it did; so
+`sweep::visited_minutes` now enumerates the minutes each speed's clock
+actually reads and `sweep::orders_are_addressable` asserts every order minute
+is in all three sets. **The entry stays open** because the rule still binds
+the next change — but it now fails loudly instead of quietly, which is the
+half of it that was missing.
 
 ### G-017 — the game's own: wave 1.1 made a party a character and left two selections over one roster
 

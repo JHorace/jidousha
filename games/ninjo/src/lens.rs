@@ -79,13 +79,47 @@ impl<'a> Lens<'a> {
         &self.sim.sites
     }
 
-    /// How many quests the site standing on `location` still has open.
+    /// How many jobs the site standing on `location` still has open — the
+    /// count the marker carries as the glance (UI.md §3).
     pub fn open_quests(&self, location: usize) -> usize {
         self.sim
             .sites
             .iter()
             .find(|site| site.location == location)
-            .map_or(0, |site| site.quests.len() - site.claimed)
+            .map_or(0, Site::open_count)
+    }
+
+    /// One site's board, by site index (sites skip the town).
+    pub fn site(&self, index: usize) -> Option<&'a Site> {
+        self.sim.sites.get(index)
+    }
+
+    /// **What this character brings to one kind of work** — `CAST.md` §2's
+    /// aptitude row, through the lens.
+    ///
+    /// The board's fit column and the scorer's aptitude term are the same
+    /// number from the same function (`traits::competence_at`): a panel that
+    /// worked out its own fit would be the second answer GDD §1 forbids, and
+    /// the one the player would act on.
+    pub fn competence(&self, who: usize, task: traits::TaskType) -> i64 {
+        traits::competence_at(task, self.traits(who))
+    }
+
+    /// **The journey this character would make to that site**, by the
+    /// pathfinder and the terrain costs the sim will walk (`sim::route_out`).
+    ///
+    /// A preview and the journey are one computation, so the header cannot
+    /// promise a walk the dispatch will not make. `None` when nobody is at
+    /// that index, the site is not there, or no passable route reaches it —
+    /// the same three cases dispatch refuses on.
+    pub fn travel(
+        &self,
+        grid: &crate::grid::Grid,
+        tuning: &Tuning,
+        who: usize,
+        site: usize,
+    ) -> Option<crate::path::Route> {
+        crate::sim::route_out(grid, tuning, self.sim, who, site)
     }
 
     /// Everything that has happened, in firing order.

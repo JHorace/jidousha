@@ -1,16 +1,17 @@
 //! The captured frames: the screenshots a person looks at (giri's capture
 //! path, re-aimed at the map).
 //!
-//! Eleven pictures. The mid-travel map and the feed are each taken at the
+//! Fourteen pictures. The mid-travel map and the feed are each taken at the
 //! reference surface and at a narrow one (the narrow set exists to catch
 //! scaling regressions, which are invisible to every assertion that is not
 //! about pixels). The rest are reference only: the settlement before anything
 //! has been dispatched — the cast standing at their homes, named — the
 //! auto-pause config panel, one character's own panel with the selection ring
 //! on their figure, the owner's double-selection reproduction (one character
-//! picked on the strip and another on the map — one ring, on the second), and
-//! the tuning drawer (a dev surface whose rows are the smallest type in the
-//! game).
+//! picked on the strip and another on the map — one ring, on the second), the
+//! job board in its three states (read by somebody, ordered from, and
+//! refusing a row that is already taken), and the tuning drawer (a dev
+//! surface whose rows are the smallest type in the game).
 //!
 //! A machine with no GPU is not a failure: every runner this project has is
 //! headless and some have no graphics stack at all.
@@ -63,7 +64,16 @@ pub fn capture_screens(
     let mut wanted: Vec<Wanted> = Vec::new();
     // The reference-only set: pictures of *what is on screen* rather than of
     // how the chrome scales, which the map and feed pairs already cover.
-    for name in ["settlement", "modes", "person", "living", "roster"] {
+    for name in [
+        "settlement",
+        "modes",
+        "person",
+        "living",
+        "roster",
+        "board",
+        "ordered",
+        "bounce",
+    ] {
         if let Some(shot) = reference.photo(name) {
             wanted.push(Wanted {
                 name: format!("{name}-reference"),

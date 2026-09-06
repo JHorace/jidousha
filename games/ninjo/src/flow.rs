@@ -8,7 +8,9 @@
 //! input into orders and UI state.
 //!
 //! The dispatch vocabulary is two clicks (DESIGN §5): select a character —
-//! from any surface that shows one — then click a site's marker on the map. A
+//! from any surface that shows one — then tap an open job on a site's board.
+//! A site marker **opens the board and orders nothing**; the job row is the
+//! one way to give an order, so the work is visible before it is chosen. A
 //! refused order bounces — a toast and a log line, never silence.
 //!
 //! **There is one selection** (`Flow::selected`, UI.md §3b). Every select path
@@ -87,6 +89,17 @@ pub struct Flow {
     pub show_ignored: bool,
     /// Which meter chip has been drilled into, if one has.
     pub drilled: Option<usize>,
+    /// **Which site's job board is open**, if one is (UI.md §3c).
+    ///
+    /// The site marker opens this and issues no order; a board row is the one
+    /// way to dispatch. It is not the selection and it does not close with it:
+    /// the board says what the work is while the character panel says who is
+    /// being sent, and a two-click order needs both of them up.
+    ///
+    /// It shares the left of the screen with the faces list, so opening either
+    /// shuts the other — `floors::controls_for` names the pair that is
+    /// actually on screen, and the overlap floor is about siblings.
+    pub board: Option<usize>,
     /// **The selected character** — the one selection this game has.
     ///
     /// One index over the ten people, which is the same index over the ten
@@ -136,6 +149,7 @@ impl Flow {
         self.roster_open = false;
         self.tuner.open = false;
         self.drilled = None;
+        self.board = None;
         self.selected = None;
     }
 
@@ -320,6 +334,9 @@ pub fn handle_input(world: &mut World) {
         }
         let flow = world.resource_mut::<Flow>();
         flow.drilled = (flow.drilled != Some(index)).then_some(index);
+        // The faces list and the job board share the left of the screen, so
+        // they are never up together — `floors::controls_for` says the same.
+        flow.board = None;
         return;
     }
     if let Some(drilled) = world.resource::<Flow>().drilled {
@@ -337,6 +354,39 @@ pub fn handle_input(world: &mut World) {
             return;
         }
     }
+    // **The job board's own controls**: a row is the order, and the close puts
+    // the board away.
+    //
+    // **The board swallows its whole rectangle**, where the character panel's
+    // body falls through — and the difference is not an inconsistency. The
+    // panel is a detail view that has to be up *through* a dispatch, so a body
+    // that took clicks would make the markers under it unorderable. The board
+    // is the dispatch surface itself: its rows are the targets, and a marker
+    // that answered a click landing between two of them would let a stray tap
+    // silently open a different site's board instead of ordering. So a click
+    // inside the board is the board's, and the ways out of it are its close,
+    // bare ground beyond it, a drawer, or the order itself.
+    if let Some(site) = world.resource::<Flow>().board {
+        if layout::board_close().contains(at) {
+            world.resource_mut::<Flow>().board = None;
+            return;
+        }
+        let jobs = world
+            .resource::<Sim>()
+            .sites
+            .get(site)
+            .map_or(0, |board| board.quests.len());
+        for slot in 0..jobs.min(layout::BOARD_ROWS) {
+            if layout::board_row(slot).contains(at) {
+                order_dispatch(world, tick, site, slot);
+                return;
+            }
+        }
+        if layout::board_panel().contains(at) {
+            return;
+        }
+    }
+
     if let Some(who) = world.resource::<Flow>().selected {
         if layout::person_close().contains(at) {
             let flow = world.resource_mut::<Flow>();
@@ -422,19 +472,27 @@ pub fn handle_input(world: &mut World) {
         }
     }
 
-    // The map: a click on a site's marker dispatches the selected character.
+    // **The map: a click on a site's marker opens that site's board.** It
+    // issues no order — the job row does, and it is the only thing that does
+    // (UI.md §3c). The two clicks a dispatch takes are unchanged in number and
+    // changed in what the second one lands on: a named job instead of a site
+    // whose front row the player could not see.
     for (site_index, site) in world.resource::<Sim>().sites.clone().iter().enumerate() {
         let marker = layout::marker_rect(crate::grid::LOCATIONS[site.location].tile);
         if !marker.contains(at_world) {
             continue;
         }
-        order_dispatch(world, tick, site_index);
+        let flow = world.resource_mut::<Flow>();
+        flow.board = (flow.board != Some(site_index)).then_some(site_index);
+        flow.drilled = None;
         return;
     }
 
-    // Empty ground: nobody there and nothing to order, so the selection is put
-    // down and the panel shuts with it (UI.md §3b).
-    world.resource_mut::<Flow>().selected = None;
+    // Empty ground: nobody there and no board to read, so the selection is put
+    // down, the panel shuts with it (UI.md §3b), and the board closes too.
+    let flow = world.resource_mut::<Flow>();
+    flow.selected = None;
+    flow.board = None;
 }
 
 /// **Select a person** — the one thing every select surface does.
@@ -581,18 +639,29 @@ fn apply_speed(world: &mut World, tick: u64, change: Option<Rate>) {
     let _ = tick;
 }
 
-/// The dispatch order: the selected character to this site, at the clock's
-/// minute.
+/// The dispatch order: the selected character to **this job at this site**, at
+/// the clock's minute.
 ///
 /// **It reads the one selection** and no pick of its own, so the two clicks are
 /// the same two clicks whichever surface the first one landed on — a chip, a
-/// figure, a roster row, a face. A site clicked with nobody selected still says
-/// so rather than doing anything, which is what keeps dispatch two clicks
-/// (DESIGN §5).
-fn order_dispatch(world: &mut World, tick: u64, site_index: usize) {
+/// figure, a roster row, a face. The second click is a job row on the site's
+/// board (UI.md §3c), which is the whole of what changed: the order names the
+/// work instead of naming a site and taking whatever was in front.
+///
+/// A row tapped with nobody selected, a row somebody already has, and a row
+/// ordered for a character who is out all **bounce with their reason** and
+/// change nothing else (`sim::Refusal`).
+fn order_dispatch(world: &mut World, tick: u64, site_index: usize, slot: usize) {
+    let site = crate::grid::LOCATIONS[sim::site_location(site_index)].name;
+    let job = world
+        .resource::<Sim>()
+        .sites
+        .get(site_index)
+        .and_then(|board| board.quest(slot))
+        .map_or("that job", |quest| quest.name)
+        .to_owned();
     let Some(party_index) = world.resource::<Flow>().selected else {
-        let site = crate::grid::LOCATIONS[sim::site_location(site_index)].name;
-        let text = format!("select somebody first, then click {site}");
+        let text = format!("select somebody first, then tap {job}");
         world.resource_mut::<Flow>().bounce(tick, text);
         return;
     };
@@ -607,14 +676,23 @@ fn order_dispatch(world: &mut World, tick: u64, site_index: usize) {
             &tuning,
             now,
             party_index,
-            site_index,
+            sim::JobId {
+                site: site_index,
+                slot,
+            },
             sim::Motive::ordered(),
         )
         .err()
     };
     match refused {
         None => {
-            world.resource_mut::<Flow>().selected = None;
+            // **A given order puts the board down with the selection.** The
+            // board is the surface you choose on, and the choice is made; a
+            // board left open would also lie across the map's other markers,
+            // so the next order could not reach them.
+            let flow = world.resource_mut::<Flow>();
+            flow.selected = None;
+            flow.board = None;
         }
         Some(refusal) => {
             let party = world
@@ -623,8 +701,7 @@ fn order_dispatch(world: &mut World, tick: u64, site_index: usize) {
                 .get(party_index)
                 .map_or("someone", |party| party.name)
                 .to_owned();
-            let site = crate::grid::LOCATIONS[sim::site_location(site_index)].name;
-            let text = refusal.message(&party, site);
+            let text = refusal.message(&party, site, &job);
             world.resource_mut::<Flow>().bounce(tick, text);
         }
     }

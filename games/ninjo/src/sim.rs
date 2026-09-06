@@ -101,24 +101,84 @@ pub struct Quest {
     pub duration: i64,
 }
 
-/// One quest site's state: its authored quests, in order, and how many have
-/// been claimed. A quest is claimed at dispatch — two parties cannot take the
-/// same one — and the site runs dry when the list is spent (S1 keeps the
-/// simpler choice; DESIGN §10 leaves it open).
+/// What has become of one authored job — the third column of a board row.
+///
+/// **Per job, not per site.** S1 counted claims and handed out the front of
+/// the list, which was enough while a site was a single dispatch target; the
+/// job board makes each row its own target, so each row carries its own state
+/// and a claim names the job it took (UI.md §3c, DESIGN §5).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum JobState {
+    /// Nobody has taken it. The only state a row can be ordered from.
+    Open,
+    /// Claimed at dispatch by this party, and being travelled to or worked.
+    Claimed {
+        /// Which party holds it — a party is a person, so this is who.
+        by: usize,
+    },
+    /// Worked, paid, and finished by this party.
+    Done {
+        /// Who did it — so a spent board still says who spent it.
+        by: usize,
+    },
+}
+
+impl JobState {
+    /// The party holding or having held this job, if anybody does.
+    pub fn holder(self) -> Option<usize> {
+        match self {
+            JobState::Open => None,
+            JobState::Claimed { by } | JobState::Done { by } => Some(by),
+        }
+    }
+}
+
+/// One quest site's board: its authored jobs, in order, and what has become of
+/// each. A job is claimed at dispatch — two parties cannot take the same one —
+/// and the site runs dry when every row is spent (S1 keeps the simpler choice;
+/// DESIGN §10 leaves it open).
 #[derive(Clone, Debug)]
 pub struct Site {
     /// Which location this site is.
     pub location: usize,
-    /// The authored quests, front first.
+    /// The authored jobs, front first.
     pub quests: Vec<Quest>,
-    /// How many have been claimed by a dispatch.
-    pub claimed: usize,
+    /// What has become of each of them, one entry per job.
+    ///
+    /// INVARIANT: the same length as `quests` — a job with no state is a row
+    /// the board could not draw and dispatch could not judge.
+    pub states: Vec<JobState>,
 }
 
 impl Site {
-    /// The next open quest, if the site is not dry.
-    pub fn open(&self) -> Option<&Quest> {
-        self.quests.get(self.claimed)
+    /// The job at this slot, if the site has one there.
+    pub fn quest(&self, slot: usize) -> Option<&Quest> {
+        self.quests.get(slot)
+    }
+
+    /// What has become of the job at this slot, if the site has one there.
+    pub fn state(&self, slot: usize) -> Option<JobState> {
+        self.states.get(slot).copied()
+    }
+
+    /// Whether this slot is an open job — the one question dispatch asks.
+    pub fn is_open(&self, slot: usize) -> bool {
+        self.state(slot) == Some(JobState::Open)
+    }
+
+    /// Every open slot, front first — what the scorer weighs one at a time and
+    /// what the marker's count counts.
+    pub fn open_slots(&self) -> impl Iterator<Item = usize> + '_ {
+        self.states
+            .iter()
+            .enumerate()
+            .filter(|(_, state)| **state == JobState::Open)
+            .map(|(slot, _)| slot)
+    }
+
+    /// How many jobs are still open.
+    pub fn open_count(&self) -> usize {
+        self.open_slots().count()
     }
 }
 
@@ -159,6 +219,21 @@ pub enum Activity {
     },
 }
 
+/// **One job on a board**, addressed the way an order addresses it: which
+/// site, and which of its rows.
+///
+/// One spelling of a pair that travels together everywhere — the order, the
+/// claim, the errand, the scorer's candidate and the panel's row all mean the
+/// same two numbers, and two spellings of it is how they would come to
+/// disagree.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct JobId {
+    /// Which site (sites skip the town; `site_location` is the round trip).
+    pub site: usize,
+    /// Which of its jobs, front first.
+    pub slot: usize,
+}
+
 /// What a party is out to do.
 ///
 /// **One field, two shapes** — a paid job at a site, or a visit to somebody's
@@ -167,13 +242,8 @@ pub enum Activity {
 /// enum exists to make impossible.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Errand {
-    /// A quest at a site, by (site index, quest index).
-    Job {
-        /// Which site.
-        site: usize,
-        /// Which of its quests.
-        slot: usize,
-    },
+    /// A job at a site.
+    Job(JobId),
     /// A call on another character, by registry index.
     Visit {
         /// Whose doorstep.
@@ -275,15 +345,15 @@ impl Party {
         let who = |index: usize| names.get(index).copied().unwrap_or("someone");
         match (&self.activity, self.errand) {
             (Activity::Idle, _) => "at home".to_owned(),
-            (Activity::Outbound { .. }, Some(Errand::Job { site, .. })) => {
-                format!("-> {}", place(site_location(site)))
+            (Activity::Outbound { .. }, Some(Errand::Job(job))) => {
+                format!("-> {}", place(site_location(job.site)))
             }
             (Activity::Outbound { .. }, Some(Errand::Visit { toward })) => {
                 format!("-> {}'s", who(toward))
             }
             (Activity::Outbound { .. }, None) => "-> somewhere".to_owned(),
-            (Activity::Working { .. }, Some(Errand::Job { site, .. })) => {
-                format!("at {}", place(site_location(site)))
+            (Activity::Working { .. }, Some(Errand::Job(job))) => {
+                format!("at {}", place(site_location(job.site)))
             }
             (Activity::Working { .. }, Some(Errand::Visit { toward })) => {
                 format!("with {}", who(toward))
@@ -294,17 +364,17 @@ impl Party {
     }
 
     /// The job this party holds, if its errand is one.
-    pub fn job(&self) -> Option<(usize, usize)> {
+    pub fn job(&self) -> Option<JobId> {
         match self.errand {
-            Some(Errand::Job { site, slot }) => Some((site, slot)),
+            Some(Errand::Job(job)) => Some(job),
             _ => None,
         }
     }
 
     /// The quest this party is out on, if it is out on one.
     pub fn quest<'a>(&self, sites: &'a [Site]) -> Option<&'a Quest> {
-        let (site, slot) = self.job()?;
-        sites.get(site)?.quests.get(slot)
+        let job = self.job()?;
+        sites.get(job.site)?.quest(job.slot)
     }
 }
 
@@ -618,10 +688,11 @@ fn authored_sites() -> Vec<Site> {
                 LOCATIONS[location].id, id,
                 "sim::authored_sites and grid::LOCATIONS disagree about site order"
             );
+            let states = vec![JobState::Open; quests.len()];
             Site {
                 location,
                 quests,
-                claimed: 0,
+                states,
             }
         })
         .collect()
@@ -846,18 +917,25 @@ pub fn acknowledge_pause(sim: &mut Sim) {
 pub enum Refusal {
     /// The party is not idle at home.
     NotIdle,
-    /// The site has no open quest.
+    /// The site has no job at that slot at all.
     Dry,
+    /// The job is there and somebody already has it, or it is finished.
+    Taken,
     /// No passable route exists (authoring fault; said loudly anyway).
     Unreachable,
 }
 
 impl Refusal {
     /// The toast's sentence.
-    pub fn message(&self, party: &str, site: &str) -> String {
+    ///
+    /// Every refusal names the thing it is about, which is why the job's name
+    /// travels with the party's and the site's: a board row that bounced with
+    /// "that is taken" and no name is a row the player has to guess at.
+    pub fn message(&self, party: &str, site: &str, job: &str) -> String {
         match self {
             Refusal::NotIdle => format!("{party} is out - only an idle party can be sent"),
-            Refusal::Dry => format!("{site} has no open quest left"),
+            Refusal::Dry => format!("{site} has no open job left"),
+            Refusal::Taken => format!("{job} is taken already - pick an open job"),
             Refusal::Unreachable => {
                 format!("no route reaches {site} - the map should not allow this")
             }
@@ -923,8 +1001,34 @@ fn begin_journey(
     Ok(())
 }
 
+/// **The route a party would walk to a site** — the one answer to "how far".
+///
+/// [`dispatch`] computes it to write the departure's sentence, the journey
+/// walks it, and the board's travel line previews it (`Lens::travel`). One
+/// function, so a preview cannot promise a journey the sim will not make; a
+/// second `route(...)` call anywhere a surface can see is the failure this
+/// exists to refuse (GDD §1: one decision function per question).
+pub fn route_out(
+    grid: &Grid,
+    tuning: &Tuning,
+    sim: &Sim,
+    party_index: usize,
+    site_index: usize,
+) -> Option<Route> {
+    let site = sim.sites.get(site_index)?;
+    let goal = LOCATIONS[site.location].tile;
+    let from = sim.parties.get(party_index)?.tile;
+    crate::path::route(grid, tuning, from, goal)
+}
+
 /// Dispatch: the player's whole order vocabulary (DESIGN §5), and the same
 /// call the scorer makes when it sends somebody to work.
+///
+/// **The order names a job**, by (site, slot), because the board is where an
+/// order is given and a board row is one job. S1 handed out the front of the
+/// site's list and the player could not see which job that was; a UI that
+/// names the work while dispatch quietly claims the first-open one is two
+/// answers to one question.
 ///
 /// The route out **and** the route home are computed once and stored — terrain
 /// is static. The departure event and the first tile entry are addressed from
@@ -936,15 +1040,22 @@ pub fn dispatch(
     tuning: &Tuning,
     now: u64,
     party_index: usize,
-    site_index: usize,
+    job: JobId,
     motive: Motive,
 ) -> Result<(), Refusal> {
+    let JobId {
+        site: site_index,
+        slot,
+    } = job;
     let Some(site) = sim.sites.get(site_index) else {
         return Err(Refusal::Dry);
     };
-    let Some(quest) = site.open().copied() else {
+    let Some(quest) = site.quest(slot).copied() else {
         return Err(Refusal::Dry);
     };
+    if !site.is_open(slot) {
+        return Err(Refusal::Taken);
+    }
     let goal = LOCATIONS[site.location].tile;
     let Some(party) = sim.parties.get(party_index) else {
         return Err(Refusal::NotIdle);
@@ -952,11 +1063,9 @@ pub fn dispatch(
     if party.activity != Activity::Idle {
         return Err(Refusal::NotIdle);
     }
-    let from = party.tile;
-    let Some(out) = crate::path::route(grid, tuning, from, goal) else {
+    let Some(out) = route_out(grid, tuning, sim, party_index, site_index) else {
         return Err(Refusal::Unreachable);
     };
-    let slot = sim.sites[site_index].claimed;
     let site_name = LOCATIONS[site_location(site_index)].name;
     // Kept under eighty characters: a log row is one row, and the drawer is
     // ninety-nine characters wide at the text floor.
@@ -976,16 +1085,15 @@ pub fn dispatch(
         party_index,
         goal,
         Departure {
-            errand: Errand::Job {
-                site: site_index,
-                slot,
-            },
+            errand: Errand::Job(job),
             motive,
             note,
         },
     );
-    if began.is_ok() {
-        sim.sites[site_index].claimed += 1;
+    if began.is_ok()
+        && let Some(state) = sim.sites[site_index].states.get_mut(slot)
+    {
+        *state = JobState::Claimed { by: party_index };
     }
     began
 }
@@ -1171,11 +1279,11 @@ fn tile_entry(sim: &mut Sim, grid: &Grid, tuning: &Tuning, at: u64, index: usize
         return;
     }
     match errand {
-        Some(Errand::Job { site, slot }) => {
+        Some(Errand::Job(JobId { site, slot })) => {
             let Some(quest) = sim
                 .sites
                 .get(site)
-                .and_then(|site| site.quests.get(slot))
+                .and_then(|site| site.quest(slot))
                 .copied()
             else {
                 return;
@@ -1259,15 +1367,22 @@ fn work_done(sim: &mut Sim, grid: &Grid, tuning: &Tuning, at: u64, index: usize)
         next_at,
     };
     match errand {
-        Errand::Job { site, slot } => {
+        Errand::Job(JobId { site, slot }) => {
             let Some(quest) = sim
                 .sites
                 .get(site)
-                .and_then(|site| site.quests.get(slot))
+                .and_then(|site| site.quest(slot))
                 .copied()
             else {
                 return;
             };
+            // **The row is finished, and the board says so.** A job whose pot
+            // has paid is neither open nor still somebody's; the state moves
+            // here, where the money moves, so no second pass has to work out
+            // which claimed rows are over (UI.md §3c).
+            if let Some(state) = sim.sites[site].states.get_mut(slot) {
+                *state = JobState::Done { by: index };
+            }
             sim.treasury += quest.pot;
             let treasury = sim.treasury;
             // The rest term's whole state: work weighs less on somebody who
