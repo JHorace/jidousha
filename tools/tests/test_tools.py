@@ -3292,13 +3292,67 @@ class GameToolingTest(unittest.TestCase):
         self.assertIn("\nafter the block\n", written)
         self.assertNotIn("[pong] after", written)
 
-    def test_no_more_check_workers_than_there_are_pages_or_cores(self):
-        # A worker is a whole software-rendering browser; more of them than
-        # cores would only take cores from each other, and the margin they
-        # would spend is CHECK_TIMEOUT_S's.
+    def test_a_retrying_pass_waits_for_every_other_browser(self):
+        # The bounded retry's 1.5% is the per-launch 12% squared, which assumes
+        # the two launches are independent — and they are not while three other
+        # browsers software-render beside the retry. `alone` is what restores
+        # the condition that figure was measured under.
+        machine = serve_web.Machine(2)
+        holding = threading.Event()
+        release = threading.Event()
+        retried = threading.Event()
+
+        def occupy():
+            with machine.launching():
+                holding.set()
+                release.wait(5)
+
+        def retry():
+            with machine.alone():
+                retried.set()
+
+        busy = threading.Thread(target=occupy)
+        busy.start()
+        self.assertTrue(holding.wait(5))
+        alone = threading.Thread(target=retry)
+        alone.start()
+        # The other browser is still running, so the retry has not started.
+        self.assertFalse(retried.wait(0.2))
+        release.set()
+        self.assertTrue(retried.wait(5))
+        busy.join()
+        alone.join()
+
+    def test_two_pages_retrying_at_once_do_not_wedge_the_machine(self):
+        # Two pages hitting the browser defect within a second of each other is
+        # what actually happened on CI, and two threads each taking half the
+        # slots and waiting for the rest is a deadlock. One retry drains the
+        # machine at a time.
+        machine = serve_web.Machine(2)
+        done = []
+        lock = threading.Lock()
+
+        def retry():
+            with machine.alone():
+                with lock:
+                    done.append(threading.current_thread().name)
+
+        threads = [threading.Thread(target=retry, name=f"r{n}") for n in range(2)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=5)
+        self.assertEqual(sorted(done), ["r0", "r1"], "a retry never got the machine")
+
+    def test_no_more_check_workers_than_there_are_pages_or_half_the_cores(self):
+        # A worker is a whole software-rendering browser, and the margin the
+        # extra ones spend is CHECK_TIMEOUT_S's: at one per core, two of
+        # fifteen pixel passes hit the browser deadlock on CI. Half the cores,
+        # capped, and never more than there are pages — and never zero, on a
+        # machine that will not say how many cores it has.
         self.assertEqual(serve_web.check_workers(1), 1)
-        ceiling = min(os.cpu_count() or 1, serve_web.CHECK_WORKERS_CAP)
-        self.assertEqual(serve_web.check_workers(1000), ceiling)
+        ceiling = min((os.cpu_count() or 1) // 2, serve_web.CHECK_WORKERS_CAP)
+        self.assertEqual(serve_web.check_workers(1000), max(1, ceiling))
         self.assertGreaterEqual(serve_web.check_workers(0), 1)
 
     def test_a_page_checked_by_name_still_gets_every_pass(self):

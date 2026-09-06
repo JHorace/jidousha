@@ -142,20 +142,25 @@ CHECK_TIMEOUT_S = 180
 # sockets per page anyway, so N browsers are not a new kind of load, and a
 # second server would only be a second thing to collide on a port with.
 #
-# What they do share is the machine: this browser software-renders through
-# SwiftShader, so pages at once are passes competing for the same cores. One
-# per core, then, and a cap so a 32-core developer machine does not launch
-# fifteen browsers for a fleet of fifteen. Measured over the full 15-page fleet
-# on this project's 4-core container:
+# What they share is the machine, and that turned out to matter more than the
+# wall-clock arithmetic did. Measured over the full 15-page fleet on this
+# project's 4-core container:
 #
 #     workers   wall     slowest single pass
 #       1       51s      10.1s
 #       2       28s       5.0s
 #       4       20s       4.9s
 #
-# The margin that matters is `CHECK_TIMEOUT_S`'s, and contention did not eat it:
-# no pass got slower than the serial run's slowest. It is measured again on CI
-# whenever this changes — a runner is a busier machine than this one.
+# Four looked free by that table and was not. On its first CI run at four,
+# **two of fifteen** pixel passes hit the screenshot deadlock below (13%),
+# where the serial check's own history says roughly one run in three saw a
+# single hang across fifteen launches — a per-launch rate nearer 3%. The
+# deadlock is a compositor frame that must complete under virtual time, so
+# starving it of cores is exactly the wrong thing to do to it.
+#
+# **Half the cores**, then: the 1.8x that costs nothing the check depends on,
+# not the 2.5x that spends the margin the whole tool rests on. A hang costs
+# `CHECK_TIMEOUT_S` twice and can fail the gate; eight seconds cannot.
 CHECK_WORKERS_CAP = 4
 # How many lines of the browser's own stderr to quote when it hangs.
 #
@@ -222,10 +227,58 @@ class TaggedOutput(io.TextIOBase):
 OUT = TaggedOutput(sys.stdout)
 
 
+class Machine:
+    """The cores the browsers share: a slot to launch in, and quiet for a retry.
+
+    A launch takes a slot, so no more browsers software-render at once than
+    `check_workers` allows. A **retry takes the whole machine** — it waits for
+    every other launch to finish and runs alone.
+
+    That second rule is what makes the bounded retry mean what it says. The
+    retry's justification (SCREENSHOT_DEADLOCK, below) is that launches are
+    independent, which is why one retry takes a per-pass 12% to about 1.5%. A
+    pool breaks that: the launch that just hung did so on a machine under load,
+    and retrying it into the same load is retrying the same experiment. On the
+    first CI run at four at a time, one page hung, was retried beside three
+    other running browsers, and hung again — 360s spent proving nothing. A
+    retry alone is the condition the 1.5% was measured under.
+
+    One retry drains the machine at a time (`quiet`): two threads each grabbing
+    half the slots and waiting for the rest is a deadlock, and two pages hitting
+    the browser defect within a second of each other is exactly what happened.
+    """
+
+    def __init__(self, workers: int = 1):
+        self.workers = workers
+        self.slots = threading.Semaphore(workers)
+        self.quiet = threading.Lock()
+
+    @contextlib.contextmanager
+    def launching(self):
+        with self.slots:
+            yield
+
+    @contextlib.contextmanager
+    def alone(self):
+        with self.quiet:
+            for _ in range(self.workers):
+                self.slots.acquire()
+            try:
+                yield
+            finally:
+                for _ in range(self.workers):
+                    self.slots.release()
+
+
+# One worker until a fleet says otherwise, which is what `serve-web <page>
+# --check` is: one page, one launch at a time, and a retry that is already alone.
+MACHINE = Machine()
+
+
 def check_workers(pages: int) -> int:
-    """How many pages to check at once — one per core, capped, and never more
+    """How many pages to check at once — half the cores, capped, and never more
     than there are pages. `CHECK_WORKERS_CAP` has the measurements."""
-    return max(1, min(pages, os.cpu_count() or 1, CHECK_WORKERS_CAP))
+    return max(1, min(pages, (os.cpu_count() or 1) // 2, CHECK_WORKERS_CAP))
 
 
 def handler_for(directory: Path):
@@ -551,7 +604,8 @@ def load_page(
     shot.unlink(missing_ok=True)
 
     started = time.monotonic()
-    proc = attempt()
+    with MACHINE.launching():
+        proc = attempt()
     if isinstance(proc, str) and pixels:
         # SCREENSHOT_DEADLOCK: retried once, and only here.
         #
@@ -578,9 +632,19 @@ def load_page(
         # is reported as the failure it is: at that point the odds say
         # something is actually broken, and a check that retried until it
         # passed would be a check that never failed.
-        print(f"[serve-web] pass {tag} hung; retrying once (browser screenshot deadlock)")
+        #
+        # The retry runs with the machine to itself (`Machine.alone`). The 12%
+        # above is a per-launch figure and the 1.5% is that figure squared,
+        # which assumes the two launches are independent — and they are not,
+        # when the pool has three other browsers software-rendering beside the
+        # retry. Alone is the condition the measurement was taken under.
+        print(f"[serve-web] pass {tag} hung; retrying once, alone (browser screenshot deadlock)")
         started = time.monotonic()
-        proc = attempt()
+        # Alone: the retry waits for every other browser to finish and takes
+        # the machine to itself. `Machine` says why — a retry into the same
+        # contention is a repeat of the experiment that just failed.
+        with MACHINE.alone():
+            proc = attempt()
     if isinstance(proc, str):
         log.write_text(proc, encoding="utf-8")
         lines = proc.splitlines()
@@ -1012,7 +1076,9 @@ def check_fleet(browser: str, port: int, pages: "list[tuple[str, bool]]") -> int
     tagged with their page rather than held until it finishes, so a hang still
     says how far it got (`TaggedOutput`).
     """
+    global MACHINE
     workers = check_workers(len(pages))
+    MACHINE = Machine(workers)
     print(f"[serve-web] checking {len(pages)} page(s), {workers} at a time")
 
     def check_page(index: int, page: str, windowed: bool) -> int:

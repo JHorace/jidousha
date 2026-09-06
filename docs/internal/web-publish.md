@@ -174,16 +174,32 @@ kept true rather than hoped for.
   deploys is optimized bytes, and a preview that is not the build the check
   checked is worth nothing.
 - **The fleet check drives its pages several at a time** (`tools/serve-web
-  --check`, `CHECK_WORKERS_CAP`), one per core. The pages already shared
-  nothing: each page's evidence goes to its own `target/web-check/<page>/` and
-  each launch takes its own profile directory under it. **One server on one
-  port**, deliberately: it is threaded (§1's concurrency CONTRACT), a single
-  browser already opens several sockets at once, and a second server would only
-  be a second thing to collide on a port with.
-- The wall-clock ceiling per browser (`CHECK_TIMEOUT_S`) is now met by a busier
-  machine, so the contention was measured before it was believed: over the
-  15-page fleet on a 4-core container, 51s serial → 20s at four at a time, and
-  the slowest single pass did not get slower (10.1s serial, 4.9s at four).
+  --check`, `CHECK_WORKERS_CAP`), at **half** the machine's cores. The pages
+  already shared nothing: each page's evidence goes to its own
+  `target/web-check/<page>/` and each launch takes its own profile directory
+  under it. **One server on one port**, deliberately: it is threaded (§1's
+  concurrency CONTRACT), a single browser already opens several sockets at once,
+  and a second server would only be a second thing to collide on a port with.
+- **Half the cores, because the browser defect is load-sensitive.** The wall
+  clock said one per core: 51s serial → 28s at two → 20s at four over a 15-page
+  fleet, with no single pass slower than the serial run's slowest. CI said
+  otherwise on the first run at four: **two of fifteen** pixel passes hit §1's
+  screenshot deadlock, against a serial history whose step durations say roughly
+  one run in three saw a single hang across fifteen launches — a per-launch rate
+  nearer 3%. The deadlock is a compositor frame that has to complete under
+  virtual time, and starving it of cores is the wrong thing to do to it. Eight
+  seconds is not worth a gate that fails a fifth of the time.
+- CONTRACT: **a retried pass runs alone** (`Machine.alone`). The retry is
+  bounded at one because launches are independent — that is what takes a
+  per-pass 12% to about 1.5% — and a pool is precisely what breaks that
+  independence: the launch that hung did so under load, and retrying it into the
+  same load repeats the experiment rather than testing it. Observed: on that
+  first run at four, a page hung, was retried beside three other running
+  browsers, and hung again, spending 360s to prove nothing. The retry now waits
+  for every other browser to finish, one retry draining the machine at a time —
+  two threads each taking half the slots and waiting for the rest would be a
+  deadlock, and two pages hitting the defect within a second of each other is
+  what actually happened.
 - **They log differently, on purpose.** `build-web` collects each page's lines
   and writes the block whole, because its log is read to answer "what happened
   to *this* page". `serve-web` tags each line with its page and prints it the
