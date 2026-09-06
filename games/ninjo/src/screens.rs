@@ -126,7 +126,13 @@ pub fn selection_ring(flow: &Flow, lens: &Lens<'_>, now: f32) -> Option<(Rect, i
 /// knowledge-lens rule (`lens.rs`): a screen cannot read around the lens
 /// because a screen has nothing else to read. When the knowledge module makes
 /// the lens conditional, this function does not change.
-pub fn content(flow: &Flow, lens: &Lens<'_>, clock: &Clock, tuning: &Tuning) -> Panel {
+///
+/// The `Grid` rides beside it because the site panel previews a journey, and
+/// the journey is the pathfinder's own answer over the terrain the sim walks
+/// (`Lens::travel` -> `sim::route_out`). The grid is static authored terrain
+/// and `draw_map` has always read it directly; what goes through the lens is
+/// the *answer*, which is what a screen would otherwise be tempted to compute.
+pub fn content(flow: &Flow, lens: &Lens<'_>, grid: &Grid, clock: &Clock, tuning: &Tuning) -> Panel {
     let mut panel = Panel::default();
 
     // --- top bar ------------------------------------------------------------
@@ -203,7 +209,7 @@ pub fn content(flow: &Flow, lens: &Lens<'_>, clock: &Clock, tuning: &Tuning) -> 
     if bare {
         panel.text(TextRun::new(
             layout::party_label(),
-            "EVERYONE - click somebody, then a site on the map",
+            "EVERYONE - click somebody, then a job on a site's board",
             theme::SMALL,
             theme::DIM,
         ));
@@ -241,16 +247,23 @@ pub fn content(flow: &Flow, lens: &Lens<'_>, clock: &Clock, tuning: &Tuning) -> 
     // read under a scrim is still a row of text lying across a control
     // somebody can click. The markers and the figures stay - they are
     // pictures, and the scrim is what hides them.
+    //
+    // **An open job board is the same rule.** It is a panel over the map that
+    // lies across markers and their labels at the reference camera, and the
+    // words it hides are the words it carries in full: a site's name and the
+    // count of what is open there. So while a board is up the map is a picture
+    // and the board is the words (UI.md §3c).
+    let worded = bare && flow.board.is_none();
     for (index, spec) in LOCATIONS.iter().enumerate() {
         let style = theme::text(theme::SMALL, theme::INK);
-        if bare {
+        if worded {
             let width = style.width_of(spec.name);
             let at = layout::marker_label(spec.tile, width);
             let mut label = TextRun::new(at, spec.name, theme::SMALL, theme::INK);
             label.layer = theme::layers::MAP_TEXT;
             panel.world_text(label);
         }
-        if bare && index != TOWN {
+        if worded && index != TOWN {
             let open = lens.open_quests(index);
             let line = match open {
                 0 => "dry".to_owned(),
@@ -294,7 +307,7 @@ pub fn content(flow: &Flow, lens: &Lens<'_>, clock: &Clock, tuning: &Tuning) -> 
         );
         figure.layer = theme::layers::MARKER;
         panel.world_icon(figure);
-        if !bare {
+        if !worded {
             continue;
         }
         let style = theme::text(theme::SMALL, theme::INK);
@@ -312,6 +325,10 @@ pub fn content(flow: &Flow, lens: &Lens<'_>, clock: &Clock, tuning: &Tuning) -> 
     // --- the attention surfaces over the map (GDD §3, wave 0a) -------------
     if bare {
         panel.absorb(panels::glance(flow, lens));
+        // --- and the site panel a marker opens (UI.md §3c) -----------------
+        if let Some(site) = flow.board {
+            panel.absorb(crate::board::site_board(flow, lens, grid, tuning, site));
+        }
     }
 
     // --- drawers ------------------------------------------------------------
@@ -506,6 +523,27 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
             );
         }
     }
+    // The job board: its ground, its rows, and its close. A row is a target,
+    // and a target with no edge is a thing nobody knows they may tap.
+    if let Some(site) = flow.board {
+        let jobs = ctx
+            .world
+            .resource::<Sim>()
+            .sites
+            .get(site)
+            .map_or(0, |board| board.quests.len());
+        fill(
+            ctx,
+            layout::board_panel(),
+            theme::PANEL,
+            theme::layers::CARD,
+        );
+        border(ctx, layout::board_panel(), theme::GOLD, theme::layers::CARD);
+        ghost_at(ctx, &map, layout::board_close(), theme::layers::CARD);
+        for slot in 0..jobs.min(layout::BOARD_ROWS) {
+            ghost_at(ctx, &map, layout::board_row(slot), theme::layers::CARD);
+        }
+    }
     if flow.selected.is_some() {
         fill(
             ctx,
@@ -668,6 +706,7 @@ pub fn draw_content(ctx: &mut DrawCtx) {
     let clock = *ctx.world.resource::<Clock>();
     let tuning = *ctx.world.resource::<Tuning>();
     let sim = ctx.world.resource::<Sim>().clone();
-    let panel = content(&flow, &Lens::on(&sim), &clock, &tuning);
+    let grid = ctx.world.resource::<Grid>().clone();
+    let panel = content(&flow, &Lens::on(&sim), &grid, &clock, &tuning);
     ui::draw(ctx, &panel, &map);
 }

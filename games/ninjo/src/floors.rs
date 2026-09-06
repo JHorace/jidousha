@@ -30,6 +30,22 @@ pub fn inside(area: Rect, bounds: Rect) -> bool {
         && bounds.max.y <= area.max.y + SLACK
 }
 
+/// The base screen's controls with a site's job board up instead of the faces
+/// list.
+///
+/// The board and the faces list share the left of the screen and are never
+/// open together (`flow.rs`: opening either shuts the other), so this is the
+/// other set of siblings — the character panel, the strip and the bar are in
+/// both, because a dispatch has the board and the panel up at once.
+pub fn board_targets() -> Vec<(String, Rect)> {
+    let mut out: Vec<(String, Rect)> = base_targets();
+    out.push(("the job board's close".to_owned(), layout::board_close()));
+    for slot in 0..layout::BOARD_ROWS {
+        out.push((format!("job row {slot}"), layout::board_row(slot)));
+    }
+    out
+}
+
 /// Every rectangle a click does something in on the base screen, with the
 /// name a message uses.
 ///
@@ -38,6 +54,16 @@ pub fn inside(area: Rect, bounds: Rect) -> bool {
 /// are exactly the controls that share a screen, and the overlap floor is
 /// about siblings.
 pub fn targets() -> Vec<(String, Rect)> {
+    let mut out: Vec<(String, Rect)> = base_targets();
+    for index in 0..layout::FACE_ROWS {
+        out.push((format!("face row {index}"), layout::faces_row(index)));
+    }
+    out
+}
+
+/// The controls that are on the base screen whichever of the two left-hand
+/// surfaces is up: the bar, the meters, the character panel and the strip.
+fn base_targets() -> Vec<(String, Rect)> {
     let mut out: Vec<(String, Rect)> = Vec::new();
     for (index, label) in screens::chip_labels().into_iter().enumerate() {
         out.push((format!("the {label} chip"), layout::speed_chip(index)));
@@ -60,9 +86,6 @@ pub fn targets() -> Vec<(String, Rect)> {
             format!("the {} meter chip", spec.id),
             layout::meter_chip(index),
         ));
-    }
-    for index in 0..layout::FACE_ROWS {
-        out.push((format!("face row {index}"), layout::faces_row(index)));
     }
     out.push((
         "the character panel's close".to_owned(),
@@ -143,6 +166,9 @@ pub fn controls_for(flow: &Flow) -> Vec<(String, Rect)> {
     if flow.roster_open {
         return roster_targets();
     }
+    if flow.board.is_some() {
+        return board_targets();
+    }
     targets()
 }
 
@@ -167,37 +193,68 @@ pub fn tuner_targets() -> Vec<(String, Rect)> {
 
 /// The floors that are questions about the layout alone.
 pub fn layout_floors(checks: &mut Checks) {
-    for (what, rect) in targets() {
-        let size = rect.size();
+    // **Both base screens**: the one the faces list is up on and the one the
+    // job board is up on. They share most of their controls and differ on the
+    // left, and each has to hold the floors on its own.
+    for set in [targets(), board_targets()] {
+        for (what, rect) in &set {
+            let size = rect.size();
+            checks.require(
+                !greater(theme::MIN_TARGET, size.x) && !greater(theme::MIN_TARGET, size.y),
+                "a clickable target is smaller than the readability floor allows",
+                format!(
+                    "{what} is {:.0}x{:.0} reference pixels and the floor is {}x{}",
+                    size.x,
+                    size.y,
+                    theme::MIN_TARGET,
+                    theme::MIN_TARGET
+                ),
+            );
+            checks.require(
+                inside(layout::design(), *rect),
+                "a clickable target is partly off the UI rect",
+                format!(
+                    "{what} is {rect:?} and the UI rect is {:?}",
+                    layout::design()
+                ),
+            );
+        }
+        for (index, (what, rect)) in set.iter().enumerate() {
+            for (other_what, other) in set.iter().skip(index + 1) {
+                checks.require(
+                    !rect.overlaps(*other),
+                    "two interactive rectangles overlap",
+                    format!("{what} at {rect:?} overlaps {other_what} at {other:?}"),
+                );
+            }
+        }
+    }
+    // Every job row is inside the panel that holds it, and the board has a row
+    // for every job a site is authored with — a job with no row is a job that
+    // cannot be ordered, now that the row *is* the order.
+    for slot in 0..layout::BOARD_ROWS {
         checks.require(
-            !greater(theme::MIN_TARGET, size.x) && !greater(theme::MIN_TARGET, size.y),
-            "a clickable target is smaller than the readability floor allows",
+            inside(layout::board_panel(), layout::board_row(slot)),
+            "a job row runs off the board that holds it",
             format!(
-                "{what} is {:.0}x{:.0} reference pixels and the floor is {}x{}",
-                size.x,
-                size.y,
-                theme::MIN_TARGET,
-                theme::MIN_TARGET
-            ),
-        );
-        checks.require(
-            inside(layout::design(), rect),
-            "a clickable target is partly off the UI rect",
-            format!(
-                "{what} is {rect:?} and the UI rect is {:?}",
-                layout::design()
+                "row {slot} is {:?} and the board is {:?}",
+                layout::board_row(slot),
+                layout::board_panel()
             ),
         );
     }
-    let interactive = targets();
-    for (index, (what, rect)) in interactive.iter().enumerate() {
-        for (other_what, other) in interactive.iter().skip(index + 1) {
-            checks.require(
-                !rect.overlaps(*other),
-                "two interactive rectangles overlap",
-                format!("{what} at {rect:?} overlaps {other_what} at {other:?}"),
-            );
-        }
+    for site in Sim::opening(&Tuning::SHIPPED, crate::modules::ModuleSet::ALL).sites {
+        checks.require(
+            site.quests.len() <= layout::BOARD_ROWS,
+            "a site has more jobs than its board has rows",
+            format!(
+                "{} is authored with {} jobs and the board draws {}; a job with no row is a \
+                 job nobody can be sent to",
+                LOCATIONS[site.location].name,
+                site.quests.len(),
+                layout::BOARD_ROWS
+            ),
+        );
     }
     // The chips and handles live in the top bar; the party chips in the
     // strip. A control outside its band is a control over the map.
@@ -428,9 +485,29 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
     let mut toasted = played.clone();
     toasted.selected = Some(0);
     toasted.toast = Some(crate::flow::Toast {
-        text: crate::sim::Refusal::NotIdle.message("Steve", "the Black Vault"),
+        text: crate::sim::Refusal::NotIdle.message("Steve", "the Black Vault", "the vault door"),
         until: u64::MAX,
     });
+    // **The job board, on the site that has been worked hardest**, with
+    // somebody selected so the fit column and the travel line are both up:
+    // the loudest that surface gets, which is the state its floors are owed
+    // against.
+    let mut board = played.clone();
+    board.selected = Some(0);
+    board.board = Some(
+        (0..baseline.sim.sites.len())
+            .max_by_key(|site| {
+                baseline.sim.sites[*site]
+                    .states
+                    .iter()
+                    .filter(|state| **state != crate::sim::JobState::Open)
+                    .count()
+            })
+            .unwrap_or(0),
+    );
+    // And the same board read by nobody: no fit column, no travel line.
+    let mut unread = board.clone();
+    unread.selected = None;
     vec![
         opening,
         (
@@ -463,6 +540,18 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
             baseline.sim.clone(),
             ended_clock,
         ),
+        (
+            "a site's job board, read by a selected character",
+            board,
+            baseline.sim.clone(),
+            ended_clock,
+        ),
+        (
+            "a site's job board with nobody selected",
+            unread,
+            baseline.sim.clone(),
+            ended_clock,
+        ),
     ]
 }
 
@@ -471,8 +560,9 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
 /// label of.
 pub fn content_floors(checks: &mut Checks, baseline: &Conducted) {
     let tuning = Tuning::SHIPPED;
+    let grid = crate::grid::grid();
     for (what, flow, sim, clock) in content_states(baseline) {
-        let panel = screens::content(&flow, &Lens::on(&sim), &clock, &tuning);
+        let panel = screens::content(&flow, &Lens::on(&sim), &grid, &clock, &tuning);
         judge_panel(checks, &panel, what, &controls_for(&flow));
     }
 }
@@ -614,10 +704,12 @@ pub fn judge_tuner_screen(checks: &mut Checks, drawer: &crate::restart::DrawerRu
         ("the drawer with a pending set", &drawer.pending_flow),
         ("the drawer after the APPLY", &drawer.applied_flow),
     ];
+    let grid = crate::grid::grid();
     for (what, flow) in tuning_states {
         let panel = screens::content(
             flow,
             &Lens::on(&drawer.applied_sim),
+            &grid,
             &Clock::opening(),
             &drawer.applied_active,
         );
@@ -629,6 +721,7 @@ pub fn judge_tuner_screen(checks: &mut Checks, drawer: &crate::restart::DrawerRu
     let panel = screens::content(
         &refused,
         &Lens::on(&drawer.applied_sim),
+        &grid,
         &Clock::opening(),
         &drawer.pending_active,
     );

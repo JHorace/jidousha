@@ -41,9 +41,11 @@ pub fn judge_chrome(checks: &mut Checks, run: &Conducted, shot: &Shot, what: &st
     let tuning = Tuning::SHIPPED;
     let map = UiMap::for_camera(&verify::run_camera(verify::HEADLESS_VIEWPORT));
     let view = verify::run_camera(verify::HEADLESS_VIEWPORT).visible_bounds();
+    let grid = crate::grid::grid();
     let panel = screens::content(
         &shot.flow,
         &crate::lens::Lens::on(&shot.sim),
+        &grid,
         &shot.clock,
         &tuning,
     );

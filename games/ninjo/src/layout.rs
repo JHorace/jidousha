@@ -145,6 +145,92 @@ pub fn faces_row(index: usize) -> Rect {
     )
 }
 
+// ── the site panel: one site's job board (UI.md §3c) ───────────────────────
+
+/// How many job rows the board has room for.
+///
+/// Six, which is what a site is authored with (`sim::authored_sites`) — and
+/// `verify` asserts no site holds more, because a job with no row is a job
+/// nobody can be sent to now that the row *is* the order.
+pub const BOARD_ROWS: usize = 6;
+
+/// The panel a tapped site marker opens.
+///
+/// Left of the character panel and clear of it, because the two are up
+/// together through the whole of a dispatch: the board says what the work is
+/// and the panel says who is being sent.
+pub fn board_panel() -> Rect {
+    Rect::from_min_size(Vec2::new(16.0, 112.0), Vec2::new(576.0, 300.0))
+}
+
+/// The board's title row: which site, and how much of it is open.
+pub fn board_title() -> Vec2 {
+    Vec2::new(28.0, 122.0)
+}
+
+/// The travel line under it — the selected character's own journey to here.
+pub fn board_travel() -> Vec2 {
+    Vec2::new(28.0, 140.0)
+}
+
+/// How wide either header row may run before it is clipped.
+pub const BOARD_HEAD_W: f32 = 500.0;
+
+/// The board's close button.
+pub fn board_close() -> Rect {
+    Rect::from_min_size(Vec2::new(556.0, 120.0), Vec2::new(36.0, 32.0))
+}
+
+/// Job row `index` — **the dispatch target**. An open row takes the order.
+pub fn board_row(index: usize) -> Rect {
+    Rect::from_min_size(
+        Vec2::new(24.0, 164.0 + index as f32 * 38.0),
+        Vec2::new(564.0, 32.0),
+    )
+}
+
+/// The footer hint, under the rows.
+pub fn board_hint() -> Vec2 {
+    Vec2::new(28.0, 398.0)
+}
+
+/// How wide it may run.
+pub const BOARD_HINT_W: f32 = 540.0;
+
+/// The columns inside a job row, as offsets from its top-left — two lines:
+/// **what the work is and what it pays** over **what kind it is, who has it,
+/// and how the selected character fits it**.
+pub mod job {
+    use jidousha::prelude::Vec2;
+
+    /// The job's name.
+    pub const NAME: Vec2 = Vec2::new(8.0, 3.0);
+    /// How wide that may run.
+    pub const NAME_W: f32 = 320.0;
+    /// The pot.
+    pub const POT: Vec2 = Vec2::new(336.0, 3.0);
+    /// How wide that may run.
+    pub const POT_W: f32 = 60.0;
+    /// How long the work takes.
+    pub const DURATION: Vec2 = Vec2::new(404.0, 3.0);
+    /// How wide that may run.
+    pub const DURATION_W: f32 = 90.0;
+    /// The task-type chip's icon.
+    pub const TASK_ICON: Vec2 = Vec2::new(8.0, 14.0);
+    /// And its word.
+    pub const TASK_NAME: Vec2 = Vec2::new(28.0, 17.0);
+    /// How wide that may run.
+    pub const TASK_W: f32 = 60.0;
+    /// What has become of the row: open, whose it is, or done.
+    pub const STATE: Vec2 = Vec2::new(100.0, 17.0);
+    /// How wide that may run.
+    pub const STATE_W: f32 = 200.0;
+    /// The selected character's fit for this work.
+    pub const FIT: Vec2 = Vec2::new(320.0, 17.0);
+    /// How wide that may run.
+    pub const FIT_W: f32 = 220.0;
+}
+
 // ── the character panel ────────────────────────────────────────────────────
 
 /// The panel a selected character opens.

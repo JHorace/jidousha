@@ -401,9 +401,9 @@ parameters; regard-unlock leading.
 function: `choose(sim, tuning, now, who, candidates) -> Judged` — the action,
 the score, every term of it, and **the words**. The candidates are the
 caller's, which is how wave 2's ask arrives (a fourth `Action`, not a fork).
-This wave's three: **seek work** (claim a site's open job and go), **socialize**
-(walk to somebody's door, stay `visit_minutes`, small regard both ways by a
-drawer row) and **idle** (the floor everything else has to beat).
+This wave's three: **seek work** (claim a named job at a site and go),
+**socialize** (walk to somebody's door, stay `visit_minutes`, small regard both
+ways by a drawer row) and **idle** (the floor everything else has to beat).
 
 - **The terms, each from data**: desperation opens the sum as it did in giri; a
   want's `pressure` applies where its `favors` field covers the candidate's
@@ -438,6 +438,20 @@ drawer row) and **idle** (the floor everything else has to beat).
   who dispatches three parties by hand; ten people looking for work empty that
   before the first day is out, and a settlement with nothing to do is not one
   the scorer can be judged on. Sites still run dry — they take longer.
+
+*Amended (the job-board session, 2026-09-06): the candidates go per open job.*
+`Action::SeekWork` names a `sim::JobId` — a `(site, slot)` — and
+[`candidates`] pushes one per **open job** rather than one per site, so each
+row is weighed on its own task type. Wave 1.1 weighed only the front of a
+site's list, which meant a board whose first open row was fight work offered
+the crafter the patrol or nothing; the six-a-site board this wave authored is
+what made that visible. **A deliberate behaviour change**: the same seed and
+the same orders now produce different choices, so the sweep's fixtures moved
+with it. The judge battery pins it with a staged case — a site whose first
+open row is fight work and whose second is the signal repair, and Ines takes
+the repair. Nothing branches on a trait id, and the aptitude term is still
+`traits::competence_at`, which is also what the job board's fit column prints
+(UI.md §3c).
 
 *Implemented (w0b): the registry as machinery, empty of rows.*
 `src/modules.rs` holds the table above's shape (`ModuleSpec`: id, tier, wave,

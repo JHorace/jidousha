@@ -36,6 +36,7 @@ use jidousha::prelude::*;
 
 mod attention;
 mod autonomy;
+mod board;
 mod camera;
 mod capture;
 mod checks;

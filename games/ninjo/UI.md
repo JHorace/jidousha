@@ -43,7 +43,10 @@ giri's colour roles stand. The changed and new rows:
 | gold, on a feed row | **the entry an auto-pause fired on** | the same fact as the reason line above it, from `Lens::pause` |
 | a gold ring on a map figure | **the selected character — the one selection there is** | exactly one is ever drawn, on the figure at their doorstep or on their token on the road (§3b) |
 | portraits, on the map | **a character standing at their home tile** | one per person, at marker weight (32 world units), named underneath |
-| dungeon icons (cave/crypt/tower/vault) | one quest site each | unchanged in art, now map markers |
+| dungeon icons (cave/crypt/tower/vault) | one quest site each | unchanged in art, now map markers; **a marker opens that site's board and issues no order** (§3c) |
+| an aptitude chip on a job row | **what kind of work the job is** — the task type (`CAST.md` §2) | the icon is the aptitude row whose id *is* the task's, so the chip on a job and the chip on a person are the same picture of the same word |
+| `open` in regard-green on a job row | **the row can be ordered from** | the only state a job row takes an order in; a claimed row is dim and a done row fainter still, and both name whose it is |
+| `fit N` on a job row | **what the selected character brings to that work** | `traits::competence_at`, the scorer's own aptitude term; gold when it is more than nothing, faint at zero. Absent when nobody is selected |
 | portraits | **party tokens** | one per party, unique, on the map and on the strip |
 | coin icon | the treasury | beside the gold number in the top bar |
 | gold | the active speed chip, the selected character wherever they appear, selection | still not a general accent |
@@ -65,10 +68,14 @@ not a queue — the import path (`art/`) rode along from giri.
   do), the treasury with its coin, and the TUNE, FEED and MODES handles in
   giri's positions.
 - **The map**: terrain tiles culled to the camera; markers + labels + an
-  open-quest count per site (`2 quests` / `1 quest` / `dry`); party tokens
-  moving tile to tile, between-tile progress derived at draw time and never
-  written back (ADR-0041; DESIGN §3). The selected character carries a ring
-  and a lit chip — one of each, §3b.
+  open-job count per site (`2 quests` / `1 quest` / `dry`) — **the glance the
+  board is read through**, and clicking the marker is how the board is
+  reached (§3c); party tokens moving tile to tile, between-tile progress
+  derived at draw time and never written back (ADR-0041; DESIGN §3). The
+  selected character carries a ring and a lit chip — one of each, §3b.
+  **Under an open job board the map's own words say nothing**, exactly as
+  under a drawer: the board lies across markers and their labels at the
+  reference camera, and the words it hides are the words it carries in full.
 - **The cast, at home** (wave 0b): every character stands at their home
   tile with their name under them, unless a party they field is out. They
   are **click targets since wave 0a**: clicking a figure selects that person
@@ -83,10 +90,10 @@ not a queue — the import path (`art/`) rode along from giri.
   the roster are the same ten names; the portrait is the member's own, so a
   face on the road and a figure at a doorstep are the same person. **A chip is
   one of the four doors onto the one selection** (§3b): click one to select
-  that person, then click a site marker to dispatch. There is no idle gate on
-  the *selection* — selecting is looking at somebody, and it is the order that
-  refuses. A refused order bounces: a toast under the bar, and the same
-  sentence in the notices. A
+  that person, then tap an open job on a site's board to dispatch. There is no
+  idle gate on the *selection* — selecting is looking at somebody, and it is
+  the order that refuses. A refused order bounces: a toast under the bar, and
+  the same sentence in the notices. A
   drawer hides the strip rather than being drawn over it — a row of text
   under a scrim is still a row lying across a control.
 - **Pan/zoom**: arrows pan, `-`/`=` and the scroll wheel zoom; the camera
@@ -200,20 +207,69 @@ derived from recorded clicks: two runs of one scenario that issue the same
 clicks produce byte-identical transcripts whether or not anybody was ever
 selected, and a replay carries the clicks, not the selection.
 
-**Dispatch reads the same selection** and DESIGN §5's two clicks are unchanged:
-select somebody, then click a site's marker. If they are idle the order is
-issued at the clock's minute; if they are out the order bounces with its
-reason (`sim::Refusal`), which is where the refusal belongs — the *selection*
-of somebody who is out is allowed, because looking at a person is not ordering
-them. A site clicked with nobody selected says so and does nothing; dispatch
-never became one click. A successful order puts the selection down, as the
-strip's pick always did.
+**Dispatch reads the same selection** and DESIGN §5's two clicks are unchanged
+in number: select somebody, then tap an open **job row** on a site's board
+(§3c). The marker is how the board is reached and it issues no order. If they
+are idle the order is issued at the clock's minute; if they are out it bounces
+with its reason (`sim::Refusal`), which is where the refusal belongs — the
+*selection* of somebody who is out is allowed, because looking at a person is
+not ordering them. A row tapped with nobody selected says so and does nothing;
+dispatch never became one click. A successful order puts the selection down —
+and the board with it, §3c.
 
 `verify::one_selection` is the reproduction of the bug this rule replaced —
 chip-select one character, sprite-select another, count the rings on the
 photographed frame — and `dispatch_reads_the_selection` and
 `selection_moves_nothing` are the other two halves. The count is a shipped
 literal: **one**.
+
+## 3c. The site panel — the job board, and the order given from it
+
+**A site marker opens a panel for that site, and orders nothing.** Before the
+job board a marker showed a count and took an order, so with six jobs a site
+the player could see how much work stood at a place and never what it was; the
+owner's wave-1.1 playtest reported exactly that (`FINDINGS.md` G-019), and
+"whom do I send, and why" is the decision the trait vocabulary exists to pose.
+The panel is where that decision is made and given.
+
+- **The panel** (`layout::board_panel`, left of the character panel and clear
+  of it) carries the site's name and how much of it is open, and one row per
+  authored job. It is not a drawer: it is up *with* the character panel
+  through the whole of a dispatch, because the board says what the work is
+  and the panel says who is being sent.
+- **A row's anatomy**: name and pot and duration on the first line; the
+  **task-type chip** (icon + word), the **state** and the **fit** on the
+  second. State is `open`, `<name> has it`, or `<name> did it` — open in
+  regard-green, a taken row dim, a finished one fainter still.
+- **Fit and travel belong to the one selection.** Each row shows the selected
+  character's `traits::competence_at` for that task, and the header shows
+  `sim::route_out` from wherever they stand — the same two functions the
+  scorer and the dispatch use, never a second computation. **With nobody
+  selected there is no fit column and no travel line at all**, because a fit
+  for nobody is a number about nothing; the footer says what to do instead.
+- **The row is the order.** Tapping an open row with an idle character
+  selected issues the dispatch at the clock's minute, naming that job.
+  Tapping a claimed or finished row, or any row with nobody selected, or
+  ordering somebody who is out, bounces in the established style — a toast
+  under the bar and the same sentence in the notices — and changes nothing
+  else. There is exactly one way to order.
+- **A given order puts the board down with the selection.** The choice is
+  made, and a board left open would lie across the markers the next order
+  needs.
+- **The board swallows clicks inside its own rectangle**, where the character
+  panel's body falls through, and the difference is not an inconsistency. The
+  panel is a passive detail view that must be up during a dispatch, so a body
+  that took clicks would make the markers under it unorderable; the board *is*
+  the dispatch surface, and a marker answering a click that landed between two
+  rows would let a stray tap open a different site instead of ordering. The
+  ways out of a board are its close, bare ground beyond it, any drawer, or the
+  order itself.
+- **The marker keeps its count** as the glance (§3): the count is what the
+  board is read through, and it is the same number the board's header says in
+  words. Under an open board the map's own words say nothing (§3).
+- Six rows, which is what a site is authored with; `floors::layout_floors`
+  asserts no site holds more, because a job with no row is a job nobody can be
+  sent to now that the row is the order.
 
 ## 4. Readability floors — what binds here
 
@@ -224,13 +280,16 @@ world unit is one reference pixel); no interactive overlap; no text across
 a control it does not label; stat numbers carry their icon (the treasury's
 coin); ASCII everywhere.
 
-The floors bind **every** surface §3a and §3 add: a feed row, a face row, a
-config radio, a meter chip, a roster row, a trait chip anywhere it appears
-and the character panel's close are all at or above the
-32x32 target floor, none of them overlaps another control that shares its
-screen, and every row of text is inside the surface that holds it.
+The floors bind **every** surface §3a, §3b and §3c add: a feed row, a face row, a
+config radio, a meter chip, a roster row, a **job row**, a trait chip anywhere
+it appears, and the character panel's and the board's closes are all at or
+above the 32x32 target floor, none of them overlaps another control that
+shares its screen, and every row of text is inside the surface that holds it.
 `floors::controls_for` is the one function that says which controls share a
-screen, so the overlap floor is asked about the right set.
+screen, so the overlap floor is asked about the right set — and since the job
+board and the faces list share the left of the screen and are never open
+together, **the base screen is two sets**, `targets()` and `board_targets()`,
+and `layout_floors` judges both.
 
 **The off-screen floor is restated for a camera that roams.** giri asserted
 every quad inside the design rect; a pan/zoom map legitimately draws
@@ -243,13 +302,17 @@ frame judges hold all three.
 
 ## 5. Screenshot process
 
-Eleven PNGs per verify run. Reference-only, because they are pictures of what
+Fourteen PNGs per verify run. Reference-only, because they are pictures of what
 is on screen rather than of how the chrome scales: **the settlement** at
 world-minute 0 (the whole cast standing at their homes, named, before
 anything is dispatched, which is wave 0b's own exit question), **the
 auto-pause config** with a class set to pause, **a character's panel** with
 the selection ring on their figure and a trait chip tapped, **the roster**
-with a chip's explanation open on it, and **the world living on its own** —
+with a chip's explanation open on it, the **job board** in its three states —
+read by a selected character (the fit column and the travel line up, on a
+site whose rows are not all one kind of work), the moment after an order was
+given from one of its rows, and refusing a row somebody already has — and
+**the world living on its own** —
 the map at a minute when nobody was told to go anywhere and half the band is
 on the road because they decided to be, which is wave 1.1's own exit
 question — and **the selection reproduction**: the owner's own playtest steps,

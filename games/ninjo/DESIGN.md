@@ -205,9 +205,15 @@ sweep is `sweep.rs` and runs on every verify.
 Deliberately thin — enough that the world visibly runs:
 
 - **Quests** exist at quest-site nodes (authored for S1; a small
-  generator can wait): pot, duration in world-minutes, site.
-- **Dispatch**: the player selects an idle party in town and sends it
-  to a site with an open quest. That is the entire order vocabulary.
+  generator can wait): pot, duration in world-minutes, site, and — from
+  wave 1.1 — a task type (`CAST.md` §2).
+- **Dispatch**: the player selects a character from any surface that shows
+  one, then **taps an open job on that site's board**. The order names the
+  job: `(site, slot)`, not "this site, whatever is in front". A site marker
+  **opens the board and issues nothing**; the job row is the only thing that
+  issues an order. That is the entire order vocabulary. It is still two
+  clicks — the pick, then the job — with the marker as the way the board is
+  reached.
 - A dispatched party **travels** (follows its computed path tile by
   tile, each tile entry costing that terrain's world-minutes), **works**
   the quest at the site for its duration, **succeeds** (stub — no
@@ -224,14 +230,50 @@ Deliberately thin — enough that the world visibly runs:
 duration, name — data in `sim.rs`); a quest is claimed at dispatch, so two
 parties cannot take one; **sites run dry** when their list is spent (the
 §10 open question, resolved to the simpler choice for S1 and noted in the
-PR). Dispatch is two clicks — select somebody, then a site's marker — and a
-refused order bounces with its reason. *(Wave 1.1's selection fix: the first
-click is any of the four surfaces that show a person, because there is one
-selection and dispatch reads it — UI.md §3b. Two clicks, unchanged; the idle
-gate that used to sit on the strip's pick now sits where the order is.)* The five event
-classes land with world-time + tile + named location on every entry; the
-log renders them in mechanical narration (`d1 02:41 - OWL completed the
-mushroom haul - 40g into the treasury (40g held) - turning for home`).
+PR). *(Wave 1.1 grew the board to six jobs a site and put a task type on
+every row — `CAST.md` §2.)* The five event classes land with world-time +
+tile + named location on every entry; the log renders them in mechanical
+narration (`d1 02:41 - OWL completed the mushroom haul - 40g into the
+treasury (40g held) - turning for home`).
+
+*Implemented (the job-board session, 2026-09-06):* **jobs are the dispatch
+target**, and the paragraph above is rewritten to say so. S1 said "send it
+to a site with an open quest" and the build handed out the site's first
+open row; the marker showed a count and nothing else, so with six jobs a
+site the player could see *how much* work stood at a place and never *what*
+it was. The owner's wave-1.1 playtest reported exactly that, and "whom do I
+send, and why" is the decision the trait system exists to pose.
+
+- **A site marker opens a panel** (UI.md §3c): the site's name, the travel
+  from the selected character's own position, and one row per authored job —
+  name · task-type chip · pot · duration · state (open / whose it is / done)
+  · **their fit for it**. The marker keeps its count as the glance.
+- **Fit and travel are the sim's own answers.** The fit is
+  `traits::competence_at`, the same function the scorer's aptitude term
+  multiplies in; the travel is `sim::route_out`, the same function dispatch
+  calls to lay the route the party then walks. One decision function per
+  question (GDD §1) — a preview that could disagree with the journey is the
+  failure mode this shape refuses. With nobody selected there is no fit
+  column and no travel line, rather than a guess about nobody.
+- **Job state is per row.** `Site::claimed` was a count; it is now one
+  `JobState` per job (`Open` / `Claimed { by }` / `Done { by }`), and a
+  dispatch claims the row it names. The site still runs dry when every row
+  is spent.
+- **The scorer's candidates went with it**: `SeekWork` names a `(site,
+  slot)` and each open job is weighed on its own task type, so a crafter can
+  take the craft job standing behind a fight job. A deliberate behaviour
+  change — transcripts and sweep fixtures moved because choices moved.
+- **The two-click shape survives** as marker-then-row, so `sweep::order` is
+  three clicks through the real UI and its lead is five ticks rather than
+  three. The order minutes were re-derived under `FINDINGS.md` G-016's rule
+  and are now 16, 32, 48 and 360; `sweep::orders_are_addressable` asserts
+  that every one of them is a minute the clock actually reads at 1x, 2x and
+  4x, so the rule is a check rather than a comment.
+- **A given order puts the board down with the selection**, and the board
+  swallows clicks inside its own rectangle. Both follow from the board lying
+  across the map: a board left open would cover the markers the next order
+  needs, and a body that fell through would let a stray tap open a different
+  site instead of ordering.
 
 ## 6. Attention (S2 — designed now, built after its mockup)
 

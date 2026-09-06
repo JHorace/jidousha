@@ -70,20 +70,18 @@ fn stopping_script() -> Vec<Directive> {
         when: When::Tick(28),
         what: Act::Tap(Key::Digit1),
     });
-    script.extend(sweep::order(12, 1, 1)); // Steve to the Deep Cave
+    script.extend(sweep::order(12, 1, 1, 0)); // Steve to the mushroom haul
     script
 }
 
 /// The same run with no config click in it.
 fn running_script() -> Vec<Directive> {
-    vec![
-        Directive {
-            when: When::Tick(28),
-            what: Act::Tap(Key::Digit1),
-        },
-        sweep::order(12, 1, 1)[0],
-        sweep::order(12, 1, 1)[1],
-    ]
+    let mut script = vec![Directive {
+        when: When::Tick(28),
+        what: Act::Tap(Key::Digit1),
+    }];
+    script.extend(sweep::order(12, 1, 1, 0));
+    script
 }
 
 /// Everything above, run.

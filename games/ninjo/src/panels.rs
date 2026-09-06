@@ -36,7 +36,7 @@ fn over_icon(at: Vec2, art: Art, units: f32) -> IconRun {
 /// The cut falls back to the last space and leaves three dots, because a row
 /// that stops mid-word reads as a rendering fault rather than as a row that
 /// ran out of drawer.
-fn clipped(text: &str, width: f32) -> String {
+pub fn clipped(text: &str, width: f32) -> String {
     let style = theme::text(theme::SMALL, theme::INK);
     let fits = style.fits_in(text, width);
     if fits >= text.chars().count() {

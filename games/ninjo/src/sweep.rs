@@ -22,7 +22,7 @@ use jidousha::testing::{
 use crate::attention::EventClass;
 use crate::camera::UiMap;
 use crate::checks::Checks;
-use crate::clock::Clock;
+use crate::clock::{Clock, Rate};
 use crate::constants::Tuning;
 use crate::flow::{Flow, SessionSeed};
 use crate::grid::{LOCATIONS, Tile};
@@ -105,13 +105,25 @@ pub struct Directive {
 }
 
 /// How many ticks an order takes from its first microstep to the tick its
-/// dispatch lands on: point, click, point, click.
-pub const ORDER_LEAD: u64 = 3;
+/// dispatch lands on.
+///
+/// **Five since the job board landed**, where it was three. An order is now
+/// three clicks — the person, the site's marker, the job's row — and the
+/// conductor microsteps a click into a move and a press, so the sequence is
+/// six ticks and its effect lands on the sixth: point, click (the chip),
+/// point, click (the marker), point, click (the row). The clock the prediction
+/// is made against is read *before* the tick the press lands on, which is why
+/// the lead is one less than the tick count.
+pub const ORDER_LEAD: u64 = 5;
 
-/// A dispatch order, as the scripts state one: this party to this site, **at
-/// this world-minute** — two clicks through the real UI, begun early enough
-/// that the second one lands on the minute it names.
-pub fn order(minute: u64, party: usize, site: usize) -> [Directive; 2] {
+/// A dispatch order, as the scripts state one: this party to **this job at
+/// this site**, at this world-minute — three clicks through the real UI, begun
+/// early enough that the last of them lands on the minute it names.
+///
+/// The marker opens the board and orders nothing; the row is the order (UI.md
+/// §3c). The two-click shape survives as marker-then-row with the person
+/// picked first, exactly as a player does it.
+pub fn order(minute: u64, party: usize, site: usize, slot: usize) -> [Directive; 3] {
     let marker = layout::marker_rect(LOCATIONS[sim::site_location(site)].tile);
     [
         Directive {
@@ -125,7 +137,67 @@ pub fn order(minute: u64, party: usize, site: usize) -> [Directive; 2] {
             when: When::Now,
             what: Act::ClickWorld(marker.center()),
         },
+        Directive {
+            when: When::Now,
+            what: Act::ClickUi(layout::board_row(slot).center()),
+        },
     ]
+}
+
+/// **Every world-minute the clock actually reads**, under one speed, over
+/// `ticks` ticks from a standing start.
+///
+/// The set G-016 is about: at the retuned 4x a tick carries 1.6 world-minutes,
+/// so `floor` skips minutes and an order addressed at one the clock never
+/// visits fires at the next one it does — at a *different* next one under each
+/// speed script, which breaks the invariance sweep at the conductor rather
+/// than in the world. The sweep's order minutes are chosen out of this set at
+/// every speed, and [`orders_are_addressable`] asserts it rather than trusting
+/// the arithmetic in a comment.
+pub fn visited_minutes(tuning: &Tuning, rate: Rate, ticks: u64) -> Vec<u64> {
+    let mut clock = Clock::opening();
+    clock.paused = false;
+    clock.rate = rate;
+    let mut out = Vec::new();
+    for _ in 0..ticks {
+        clock.accum += clock.accumulation(tuning);
+        while clock.accum >= tuning.minute_ticks.max(1) {
+            clock.accum -= tuning.minute_ticks.max(1);
+            clock.minutes += 1;
+        }
+        out.push(clock.minutes);
+    }
+    out
+}
+
+/// The world-minutes the scripts address an order to.
+///
+/// **Multiples of eight, spaced far enough apart to click.** `floor(8k/5)` —
+/// the retuned 4x — lands on a multiple of eight every fifth tick and never on
+/// a minute whose residue mod 8 is 2, 5 or 7 (`FINDINGS.md` G-016); at 1x and
+/// 2x a tick carries less than a minute, so every minute is visited. Sixteen
+/// apart because six ticks of clicking at 4x is nine world-minutes and two
+/// orders closer than that cannot both land where they are aimed.
+pub const ORDER_MINUTES: [u64; 4] = [16, 32, 48, 360];
+
+/// **The orders address minutes the clock visits at every speed** — G-016's
+/// rule, asserted instead of remembered.
+pub fn orders_are_addressable(checks: &mut Checks, tuning: &Tuning) {
+    for rate in [Rate::X1, Rate::X2, Rate::X4] {
+        let visited = visited_minutes(tuning, rate, 4_000);
+        for minute in ORDER_MINUTES {
+            checks.require(
+                visited.contains(&minute),
+                "an order is addressed to a world-minute the clock never reads",
+                format!(
+                    "at {} the clock steps over minute {minute}; an order can only be \
+                     addressed to a minute every speed visits, or the same script lands at a \
+                     different world-time under each one (FINDINGS G-016)",
+                    rate.label()
+                ),
+            );
+        }
+    }
 }
 
 /// The world-minute the clock will read `ticks` ticks from now, at the rate it
@@ -534,15 +606,20 @@ pub const WINDOW: u64 = 720;
 /// addressed inside the window has fired before the run ends.
 pub const RUN_UNTIL: u64 = 800;
 
-/// The world-minutes every quest in this scenario's first day resolves at —
-/// the four the player orders and the three the scorer takes.
+/// **Every world-minute a quest resolves at, over a whole conducted session**
+/// — out to [`RUN_UNTIL`] rather than to [`WINDOW`], because that is the span
+/// an auto-pausing run is stopped over and `pauses.rs` counts its stops
+/// against this list.
 ///
 /// Stated as literals because they are where an auto-pause on
 /// `quest-complete` stops the world, and a resume has to be addressed at one:
 /// the clock is holding, so a resume cannot be addressed by the clock
-/// (`When::MinuteHeld` counts ticks from the minute's first arrival). They are
-/// the same minutes [`expected_events`] pins.
-pub const COMPLETIONS: [u64; 12] = [165, 170, 240, 500, 506, 540, 589, 590, 603, 654, 664, 688];
+/// (`When::MinuteHeld` counts ticks from the minute's first arrival). All but
+/// the last are minutes [`expected_events`] pins; the last falls in the tail
+/// between the invariance window and the end of the run.
+pub const COMPLETIONS: [u64; 13] = [
+    180, 181, 202, 432, 470, 497, 567, 569, 576, 603, 608, 628, 786,
+];
 
 /// The shared order script under one speed prologue: four dispatches at
 /// fixed world-times — three parties out at once, then a re-dispatch to
@@ -555,14 +632,21 @@ pub const COMPLETIONS: [u64; 12] = [165, 170, 240, 500, 506, 540, 589, 590, 603,
 /// what makes the two variants comparable.
 fn script_with(speed_prologue: &[Directive]) -> Vec<Directive> {
     let mut script = speed_prologue.to_vec();
-    // **Eight world-minutes apart**, because that is what the retuned clock's
-    // coarsest speed can address: 4x carries 1.6 minutes a tick, an order is
-    // four ticks of clicking, and two orders closer together than that cannot
-    // both land on the minute they name under every speed script.
-    script.extend(order(8, 0, 0)); // Bob to the Watchtower
-    script.extend(order(16, 1, 1)); // Steve to the Deep Cave
-    script.extend(order(24, 2, 2)); // Alex to the Old Crypt
-    script.extend(order(360, 0, 3)); // Bob again, to the Black Vault
+    // **[`ORDER_MINUTES`], and the reason they are those**: six ticks of
+    // clicking at 4x is nine world-minutes, and the coarse clock only lands on
+    // a multiple of eight every fifth tick, so the orders are sixteen apart on
+    // minutes every speed visits. The last one is late enough that Bob is home
+    // from the first.
+    //
+    // **The slots are named, not first-open.** Each order picks a row that
+    // suits the person the way a player would: Bob fights, Steve hauls, Alex
+    // scouts — which is exactly the choice the board exists to let anybody
+    // make, and it is now visible in the script rather than hidden in
+    // whichever row happened to be in front.
+    script.extend(order(ORDER_MINUTES[0], 0, 0, 2)); // Bob to the ridge patrol
+    script.extend(order(ORDER_MINUTES[1], 1, 1, 0)); // Steve to the mushroom haul
+    script.extend(order(ORDER_MINUTES[2], 2, 2, 5)); // Alex to the far survey
+    script.extend(order(ORDER_MINUTES[3], 0, 3, 0)); // Bob again, to the vault ledger
     script
 }
 
@@ -585,19 +669,19 @@ pub fn speed_scripts() -> Vec<(&'static str, Vec<Directive>)> {
         what: Act::Tap(key),
     };
     let mut mixed = vec![tap(When::Tick(5), Key::Digit2)];
-    mixed.extend(order(8, 0, 0));
-    mixed.extend(order(16, 1, 1));
-    mixed.push(tap(When::Minute(24), Key::Space));
-    mixed.extend(order(24, 2, 2));
+    mixed.extend(order(ORDER_MINUTES[0], 0, 0, 2));
+    mixed.extend(order(ORDER_MINUTES[1], 1, 1, 0));
+    mixed.push(tap(When::Minute(ORDER_MINUTES[2]), Key::Space));
+    mixed.extend(order(ORDER_MINUTES[2], 2, 2, 5));
     mixed.push(tap(
         When::MinuteHeld {
-            minute: 24,
+            minute: ORDER_MINUTES[2],
             after: 300,
         },
         Key::Space,
     ));
-    mixed.push(tap(When::Minute(40), Key::Digit3));
-    mixed.extend(order(360, 0, 3));
+    mixed.push(tap(When::Minute(64), Key::Digit3));
+    mixed.extend(order(ORDER_MINUTES[3], 0, 3, 0));
     vec![
         ("all-1x", script_with(&[tap(When::Tick(5), Key::Digit1)])),
         ("all-4x", script_with(&[tap(When::Tick(5), Key::Digit3)])),
@@ -612,80 +696,92 @@ pub fn speed_scripts() -> Vec<(&'static str, Vec<Directive>)> {
 pub fn expected_events() -> Vec<(u64, EventClass, usize, Option<usize>)> {
     // (minute, class, party, location index - None on an unnamed tile)
     vec![
-        (8, EventClass::Departed, 0, None),
-        (16, EventClass::Departed, 1, None),
-        (24, EventClass::Departed, 2, None),
-        (56, EventClass::Arrived, 2, Some(3)),
-        (56, EventClass::WorkBegan, 2, Some(3)),
-        (75, EventClass::Arrived, 1, Some(2)),
-        (75, EventClass::WorkBegan, 1, Some(2)),
-        (94, EventClass::Arrived, 0, Some(1)),
-        (94, EventClass::WorkBegan, 0, Some(1)),
-        (156, EventClass::QuestComplete, 2, Some(3)),
-        (165, EventClass::QuestComplete, 1, Some(2)),
-        (188, EventClass::Returned, 2, None),
-        (214, EventClass::QuestComplete, 0, Some(1)),
-        (221, EventClass::Returned, 1, None),
-        (302, EventClass::Returned, 0, None),
+        (16, EventClass::Departed, 0, None),
+        (32, EventClass::Departed, 1, None),
+        (48, EventClass::Departed, 2, None),
+        (80, EventClass::Arrived, 2, Some(3)),
+        (80, EventClass::WorkBegan, 2, Some(3)),
+        (91, EventClass::Arrived, 1, Some(2)),
+        (91, EventClass::WorkBegan, 1, Some(2)),
+        (102, EventClass::Arrived, 0, Some(1)),
+        (102, EventClass::WorkBegan, 0, Some(1)),
+        (180, EventClass::QuestComplete, 2, Some(3)),
+        (181, EventClass::QuestComplete, 1, Some(2)),
+        (202, EventClass::QuestComplete, 0, Some(1)),
+        (212, EventClass::Returned, 2, None),
+        (237, EventClass::Returned, 1, None),
+        (264, EventClass::ActionStarted, 1, None),
+        (264, EventClass::Departed, 1, None),
+        (290, EventClass::Returned, 0, None),
         (312, EventClass::ActionStarted, 3, None),
         (312, EventClass::Departed, 3, None),
         (336, EventClass::ActionStarted, 4, None),
         (336, EventClass::Departed, 4, None),
+        (342, EventClass::Arrived, 1, Some(1)),
+        (342, EventClass::WorkBegan, 1, Some(1)),
         (360, EventClass::ActionStarted, 5, None),
         (360, EventClass::Departed, 5, None),
         (360, EventClass::Departed, 0, None),
-        (374, EventClass::Arrived, 3, Some(1)),
-        (374, EventClass::WorkBegan, 3, Some(1)),
         (384, EventClass::ActionStarted, 6, None),
         (384, EventClass::Departed, 6, None),
+        (387, EventClass::Arrived, 3, Some(2)),
+        (387, EventClass::WorkBegan, 3, Some(2)),
         (390, EventClass::Arrived, 4, Some(1)),
         (390, EventClass::WorkBegan, 4, Some(1)),
         (408, EventClass::ActionStarted, 7, None),
         (408, EventClass::Departed, 7, None),
         (432, EventClass::ActionStarted, 8, None),
         (432, EventClass::Departed, 8, None),
-        (436, EventClass::Arrived, 5, Some(3)),
-        (436, EventClass::WorkBegan, 5, Some(3)),
+        (432, EventClass::QuestComplete, 1, Some(1)),
+        (439, EventClass::Arrived, 5, Some(2)),
+        (439, EventClass::WorkBegan, 5, Some(2)),
         (448, EventClass::Arrived, 0, Some(4)),
         (448, EventClass::WorkBegan, 0, Some(4)),
-        (453, EventClass::Arrived, 6, Some(2)),
-        (453, EventClass::WorkBegan, 6, Some(2)),
         (456, EventClass::ActionStarted, 9, None),
         (456, EventClass::Departed, 9, None),
+        (470, EventClass::QuestComplete, 4, Some(1)),
+        (476, EventClass::Arrived, 9, Some(3)),
+        (476, EventClass::WorkBegan, 9, Some(3)),
         (477, EventClass::Arrived, 7, Some(2)),
         (477, EventClass::WorkBegan, 7, Some(2)),
-        (490, EventClass::QuestComplete, 4, Some(1)),
-        (494, EventClass::QuestComplete, 3, Some(1)),
-        (504, EventClass::ActionStarted, 1, None),
-        (504, EventClass::Departed, 1, None),
-        (514, EventClass::Arrived, 8, Some(1)),
-        (514, EventClass::WorkBegan, 8, Some(1)),
-        (530, EventClass::Arrived, 9, Some(1)),
-        (530, EventClass::WorkBegan, 9, Some(1)),
-        (536, EventClass::QuestComplete, 5, Some(3)),
-        (546, EventClass::Returned, 4, None),
-        (546, EventClass::ActionDone, 4, None),
-        (558, EventClass::Returned, 3, None),
-        (558, EventClass::ActionDone, 3, None),
-        (582, EventClass::Arrived, 1, Some(1)),
-        (582, EventClass::WorkBegan, 1, Some(1)),
-        (587, EventClass::QuestComplete, 7, Some(2)),
-        (594, EventClass::QuestComplete, 8, Some(1)),
-        (603, EventClass::QuestComplete, 6, Some(2)),
-        (618, EventClass::Returned, 5, None),
-        (618, EventClass::ActionDone, 5, None),
+        (488, EventClass::Arrived, 6, Some(1)),
+        (488, EventClass::WorkBegan, 6, Some(1)),
+        (497, EventClass::QuestComplete, 3, Some(2)),
+        (503, EventClass::Arrived, 8, Some(2)),
+        (503, EventClass::WorkBegan, 8, Some(2)),
+        (512, EventClass::Returned, 1, None),
+        (512, EventClass::ActionDone, 1, None),
+        (526, EventClass::Returned, 4, None),
+        (526, EventClass::ActionDone, 4, None),
+        (567, EventClass::QuestComplete, 7, Some(2)),
+        (569, EventClass::QuestComplete, 5, Some(2)),
+        (569, EventClass::Returned, 3, None),
+        (569, EventClass::ActionDone, 3, None),
+        (576, EventClass::QuestComplete, 9, Some(3)),
+        (596, EventClass::Returned, 9, None),
+        (596, EventClass::ActionDone, 9, None),
+        (603, EventClass::QuestComplete, 8, Some(2)),
+        (608, EventClass::QuestComplete, 6, Some(1)),
         (628, EventClass::QuestComplete, 0, Some(4)),
-        (659, EventClass::Returned, 7, None),
-        (659, EventClass::ActionDone, 7, None),
-        (670, EventClass::QuestComplete, 9, Some(1)),
-        (672, EventClass::QuestComplete, 1, Some(1)),
-        (675, EventClass::Returned, 6, None),
-        (675, EventClass::ActionDone, 6, None),
-        (678, EventClass::Returned, 8, None),
-        (678, EventClass::ActionDone, 8, None),
+        (639, EventClass::Returned, 7, None),
+        (639, EventClass::ActionDone, 7, None),
+        (648, EventClass::ActionStarted, 7, None),
+        (648, EventClass::Departed, 7, None),
+        (651, EventClass::Returned, 5, None),
+        (651, EventClass::ActionDone, 5, None),
+        (671, EventClass::Returned, 8, None),
+        (671, EventClass::ActionDone, 8, None),
+        (696, EventClass::ActionStarted, 9, None),
+        (696, EventClass::Departed, 9, None),
+        (706, EventClass::Arrived, 7, Some(3)),
+        (706, EventClass::WorkBegan, 7, Some(3)),
+        (716, EventClass::Arrived, 9, Some(3)),
+        (716, EventClass::WorkBegan, 9, Some(3)),
         (718, EventClass::Returned, 0, None),
         (720, EventClass::ActionStarted, 0, None),
         (720, EventClass::Departed, 0, None),
+        (720, EventClass::Returned, 6, None),
+        (720, EventClass::ActionDone, 6, None),
     ]
 }
 
@@ -694,7 +790,7 @@ pub fn expected_events() -> Vec<(u64, EventClass, usize, Option<usize>)> {
 /// The player orders four of them and the scorer takes the rest, which is
 /// itself the module's loudest claim: a world where people go looking for work
 /// is a world where the board empties without anybody being told to empty it.
-pub const EXPECTED_TREASURY: i64 = 605;
+pub const EXPECTED_TREASURY: i64 = 595;
 
 /// One row of a reduced transcript: address, class, party, place, sentence.
 pub type Entry = (u64, &'static str, usize, Tile, Option<usize>, String);
@@ -828,6 +924,9 @@ pub const SHIPPED_PACING: [u64; 3] = [120, 240, 480];
 /// Returns the summary and the all-1x run, which later checks read.
 pub fn run(checks: &mut Checks) -> (String, Conducted) {
     let tuning = Tuning::SHIPPED;
+    // Before the scripts are run at all: the minutes they address are minutes
+    // every speed's clock actually reads (G-016).
+    orders_are_addressable(checks, &tuning);
     let mut runs: Vec<(&'static str, Conducted)> = Vec::new();
     for (name, script) in speed_scripts() {
         let conducted = conduct(&Session::plain(tuning, &script, 60_000));
