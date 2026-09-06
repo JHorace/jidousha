@@ -287,9 +287,10 @@ class PageOutput(io.TextIOBase):
     Interleaved lines would be the wrong trade here. `build-web`'s log is read
     to answer "what happened to *this* page" — which module it bound, what
     wasm-opt did to it, how many asset files it staged — and fifteen pages'
-    worth of that shuffled together answers it for none of them. (`serve-web`'s
-    fleet check makes the opposite choice, and says why: there the hazard is a
-    *hang*, so a line has to appear the moment it is printed.)
+    worth of that shuffled together answers it for none of them. Collecting is
+    safe because the hazard here is a *failure*, which arrives with its page;
+    `serve-web --check`'s hazard is a *hang*, which is why that tool checks one
+    page at a time and prints every line as it happens (web-publish.md §1b).
     """
 
     def __init__(self, stream: "io.TextIOBase"):
