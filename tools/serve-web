@@ -46,7 +46,10 @@ Stdlib only, like every other tool here (tooling.md).
 """
 
 import argparse
+import concurrent.futures
+import contextlib
 import http.server
+import io
 import os
 import re
 import shutil
@@ -99,9 +102,14 @@ CHECK_VIRTUAL_MS = 1000
 # The wall-clock ceiling on the browser itself, which is a different question
 # from how much page time it simulates. With the budget above it was sized at
 # roughly 9x the check's actual cost on a CI runner, where the `run` pass
-# measures 12.8s — about 30x the 3.6s it costs on a developer machine. The CI
-# figure is the one that sizes this ceiling, which is the point: it should mean
-# "the page is broken", never "the runner was busy".
+# measured 12.8s — about 3.6x the 3.6s the same pass costs on a developer
+# machine. (That last figure read "about 30x" until 2026-09-06, which was
+# nobody's measurement: 12.8 over 3.6 is 3.6, and the 9x margin the sentence
+# opens with is the number that sizes this ceiling. A wrong ratio beside a
+# right one is worse than no ratio, because the next person to size this would
+# have started from it.) The CI figure is the one that sizes the ceiling, which
+# is the point: it should mean "the page is broken", never "the runner was
+# busy".
 #
 # 180s rather than 120s because a runner can be much worse than the one that
 # figure came off. On 2026-09-02 a `main` deploy met one where the `run` pass
@@ -117,7 +125,38 @@ CHECK_VIRTUAL_MS = 1000
 # characterized browser defect rather than a flake, and why the retry is
 # bounded at one. Passes that do not ask for a screenshot cannot hit the
 # deadlock and are never retried.
+#
+# Pages are checked several at a time now (`CHECK_WORKERS_CAP`), so this ceiling
+# is met by a busier machine than it was sized against. That was measured before
+# it was believed: at four at a time no pass ran slower than the serial run's
+# slowest, the table below the cap has the numbers, and CI's own figures are on
+# the PR that made it parallel.
 CHECK_TIMEOUT_S = 180
+# How many pages the fleet check drives at once.
+#
+# The pages are independent — a page's evidence goes to its own
+# `target/web-check/<page>/`, every browser launch takes its own profile
+# directory under it, and the one static server behind them is threaded (see
+# `Server`), so several browsers fetching at once is the case it was already
+# fixed for. One server on one port, deliberately: a browser opens several
+# sockets per page anyway, so N browsers are not a new kind of load, and a
+# second server would only be a second thing to collide on a port with.
+#
+# What they do share is the machine: this browser software-renders through
+# SwiftShader, so pages at once are passes competing for the same cores. One
+# per core, then, and a cap so a 32-core developer machine does not launch
+# fifteen browsers for a fleet of fifteen. Measured over the full 15-page fleet
+# on this project's 4-core container:
+#
+#     workers   wall     slowest single pass
+#       1       51s      10.1s
+#       2       28s       5.0s
+#       4       20s       4.9s
+#
+# The margin that matters is `CHECK_TIMEOUT_S`'s, and contention did not eat it:
+# no pass got slower than the serial run's slowest. It is measured again on CI
+# whenever this changes — a runner is a busier machine than this one.
+CHECK_WORKERS_CAP = 4
 # How many lines of the browser's own stderr to quote when it hangs.
 #
 # The log is written to `target/web-check/` either way, but a CI run whose
@@ -131,6 +170,62 @@ def fail(what: str, specifics: str, cause: str, fix: str) -> int:
     """Report in the engine's message format (core.md §9)."""
     print(f"[jidousha] {what}\n  {specifics}\n  likely cause: {cause}\n  fix: {fix}")
     return 1
+
+
+class TaggedOutput(io.TextIOBase):
+    """stdout that names the page each line came from, while pages check at once.
+
+    Lines stay live — written the moment they are printed, never held until a
+    page finishes. That is the whole reason this is a prefix and not a buffer:
+    the failure this tool exists to survive is a *hang*, and a hung page's only
+    evidence is what was printed before it stopped (the same reasoning as the
+    line-buffering above). A buffer would throw exactly that away.
+
+    Outside a `page()` block it is a plain passthrough, so `serve-web <page>
+    --check` and everything before the pool print as they always did.
+    """
+
+    def __init__(self, stream: "io.TextIOBase"):
+        self.stream = stream
+        self.lock = threading.Lock()
+        self.local = threading.local()
+
+    @contextlib.contextmanager
+    def page(self, name: str):
+        self.local.tag = name
+        self.local.at_start = True
+        try:
+            yield
+        finally:
+            self.local.tag = None
+
+    def write(self, text: str) -> int:
+        tag = getattr(self.local, "tag", None)
+        if tag is None:
+            with self.lock:
+                return self.stream.write(text)
+        tagged = []
+        for piece in text.splitlines(keepends=True):
+            if self.local.at_start:
+                tagged.append(f"[{tag}] ")
+            tagged.append(piece)
+            self.local.at_start = piece.endswith("\n")
+        with self.lock:
+            self.stream.write("".join(tagged))
+            self.stream.flush()
+        return len(text)
+
+    def flush(self) -> None:
+        self.stream.flush()
+
+
+OUT = TaggedOutput(sys.stdout)
+
+
+def check_workers(pages: int) -> int:
+    """How many pages to check at once — one per core, capped, and never more
+    than there are pages. `CHECK_WORKERS_CAP` has the measurements."""
+    return max(1, min(pages, os.cpu_count() or 1, CHECK_WORKERS_CAP))
 
 
 def handler_for(directory: Path):
@@ -905,18 +1000,52 @@ def check_fleet(browser: str, port: int, pages: "list[tuple[str, bool]]") -> int
     broken" call for completely different next moves, and the difference is
     only visible if the rest are tried — so the loop finishes and names all of
     them. The step's wall-clock ceiling belongs in CI, not here.
+
+    Several pages at a time (`CHECK_WORKERS_CAP` says how many, with the
+    measurements). A page's check is one browser after another with a whole software
+    rasterizer's work inside each, and the pages share nothing: their evidence
+    goes to `target/web-check/<page>/`, every launch takes its own profile
+    directory, and the one static server behind them is threaded — a browser
+    already opens several sockets at once, which is the case `Server` exists to
+    survive. What the pool changes is only how long the step takes; what each
+    page must prove, and the verdict a fleet gets, are the same. Lines are
+    tagged with their page rather than held until it finishes, so a hang still
+    says how far it got (`TaggedOutput`).
     """
-    failed = []
-    for index, (page, windowed) in enumerate(pages, start=1):
-        lead = index == 1
-        print(f"\n[serve-web] === {page} ({index} of {len(pages)}) ===")
-        if not lead:
-            print(
-                "[serve-web] SKIP — ?frametime=1 is the page shell's overlay, "
-                f"the same on every page; checked on {pages[0][0]}, the lead"
+    workers = check_workers(len(pages))
+    print(f"[serve-web] checking {len(pages)} page(s), {workers} at a time")
+
+    def check_page(index: int, page: str, windowed: bool) -> int:
+        # The lead page's alone: ?frametime=1 drives the page shell's overlay,
+        # which never calls into the module, so it is the same template on all
+        # of them (web-publish.md §3a).
+        lead = index == 0
+        with OUT.page(page):
+            print(f"=== {page} ({index + 1} of {len(pages)}) ===")
+            if not lead:
+                print(
+                    "[serve-web] SKIP — ?frametime=1 is the page shell's overlay, "
+                    f"the same on every page; checked on {pages[0][0]}, the lead"
+                )
+            return check(browser, port, page, windowed, frametime=lead)
+
+    # Whatever stdout is *now*: this tool is imported by its own tests, which
+    # capture what it prints, and a shim bound to the stream it saw at import
+    # time would print straight past them.
+    OUT.stream = sys.stdout
+    previous, sys.stdout = sys.stdout, OUT
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+            steps = list(
+                pool.map(
+                    lambda job: check_page(*job),
+                    [(index, page, windowed) for index, (page, windowed) in enumerate(pages)],
+                )
             )
-        if check(browser, port, page, windowed, frametime=lead) != 0:
-            failed.append(page)
+    finally:
+        sys.stdout = previous
+    # Named in fleet order, whatever order they finished in.
+    failed = [page for (page, _windowed), step in zip(pages, steps) if step != 0]
     print()
     if failed:
         return fail(

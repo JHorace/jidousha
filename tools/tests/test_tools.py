@@ -13,10 +13,12 @@ import importlib.util
 import functools
 import io
 import json
+import os
 import re
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 import unittest.mock
 from pathlib import Path
@@ -2718,6 +2720,89 @@ class BuildWebTest(unittest.TestCase):
         self.assertIn('id="panic-copy"', template)
         self.assertIn('dataset.jidousha = "panicked"', template)
 
+    def test_every_page_of_a_fleet_is_staged_once_however_many_run_at_once(self):
+        # The pool is a speed device (web-publish.md §1b): the same pages, the
+        # same arguments, one call each. What it changes is when a page is
+        # staged, never whether it is or with what.
+        lock = threading.Lock()
+        staged = []
+
+        def record(name, kind, debug, stamp, own_root=None):
+            with lock:
+                staged.append((name, kind, debug, stamp, own_root))
+            return 0
+
+        pages = [
+            ("prototype_kit", "example", None),
+            ("pong", "example", None),
+            ("ninjo", "game", "games/ninjo/assets"),
+        ]
+        with unittest.mock.patch.object(build_web, "stage_playable", record):
+            with contextlib.redirect_stdout(io.StringIO()):
+                step = build_web.stage_fleet(pages, False, "abc1234 · 2026-09-06")
+        self.assertEqual(step, 0)
+        self.assertEqual(
+            sorted(staged),
+            sorted(
+                [
+                    ("prototype_kit", "example", False, "abc1234 · 2026-09-06", None),
+                    ("pong", "example", False, "abc1234 · 2026-09-06", None),
+                    ("ninjo", "game", False, "abc1234 · 2026-09-06", "games/ninjo/assets"),
+                ]
+            ),
+        )
+
+    def test_a_page_that_fails_to_stage_is_the_verdict_and_stops_no_other_page(self):
+        # "One page is broken" and "the build is broken" want different next
+        # moves, and only finishing tells them apart — the same rule the fleet
+        # check follows. The verdict is the first failure in fleet order.
+        lock = threading.Lock()
+        staged = []
+
+        def record(name, _kind, _debug, _stamp, _own_root=None):
+            with lock:
+                staged.append(name)
+            return 3 if name == "pong" else 0
+
+        pages = [("prototype_kit", "example", None), ("pong", "example", None), ("ninjo", "game", None)]
+        with unittest.mock.patch.object(build_web, "stage_playable", record):
+            with contextlib.redirect_stdout(io.StringIO()):
+                step = build_web.stage_fleet(pages, False, "stamp")
+        self.assertEqual(step, 3)
+        self.assertEqual(sorted(staged), ["ninjo", "pong", "prototype_kit"])
+
+    def test_one_pages_build_log_stays_in_one_block(self):
+        # What a build log is read for is "what happened to *this* page", so a
+        # page's lines are collected and written whole. The barrier forces the
+        # interleaving that would otherwise need luck to reproduce.
+        stream = io.StringIO()
+        out = build_web.PageOutput(stream)
+        barrier = threading.Barrier(2)
+
+        def emit(name):
+            with out.page():
+                for line in range(3):
+                    print(f"{name} line {line}", file=out)
+                    barrier.wait()
+
+        threads = [threading.Thread(target=emit, args=(name,)) for name in ("alpha", "beta")]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        written = stream.getvalue()
+        for name in ("alpha", "beta"):
+            block = "".join(f"{name} line {line}\n" for line in range(3))
+            self.assertIn(block, written)
+
+    def test_no_more_staging_workers_than_there_are_pages_or_cores(self):
+        # A worker is a core's worth of wasm-opt; more of them than either
+        # would only take cores from each other.
+        self.assertEqual(build_web.staging_workers(1), 1)
+        ceiling = min(os.cpu_count() or 1, build_web.MAX_STAGE_WORKERS)
+        self.assertEqual(build_web.staging_workers(1000), ceiling)
+        self.assertGreaterEqual(build_web.staging_workers(0), 1)
+
 
 class DoctorWebChecksTest(unittest.TestCase):
     """Doctor's web-toolchain probes (web-publish.md §5)."""
@@ -3150,18 +3235,71 @@ class GameToolingTest(unittest.TestCase):
         # wasm module (web-publish.md §2), so it is one template identical on
         # every page: N launches of it buy nothing the first does not. What is
         # per page — started, drew, panicked — still runs on all of them.
+        #
+        # The pages are checked several at a time (web-publish.md §1b), so this
+        # asserts the set of launches rather than the order they arrive in — the
+        # order is the pool's business and the assertion is not about it.
+        lock = threading.Lock()
         asked = []
 
         def record(_browser, _port, page, windowed=True, frametime=True):
-            asked.append((page, frametime))
+            with lock:
+                asked.append((page, frametime))
             return 0
 
         pages = [("prototype_kit", True), ("pong", True), ("giri", True)]
         with unittest.mock.patch.object(serve_web, "check", record):
-            self.assertEqual(serve_web.check_fleet("browser", 8080, pages), 0)
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(serve_web.check_fleet("browser", 8080, pages), 0)
         self.assertEqual(
-            asked, [("prototype_kit", True), ("pong", False), ("giri", False)]
+            sorted(asked),
+            sorted([("prototype_kit", True), ("pong", False), ("giri", False)]),
         )
+
+    def test_every_page_is_checked_and_every_failure_named_however_they_finish(self):
+        # Failures do not stop the run, and the report is in fleet order
+        # whatever order the pool finished in: "one page is broken" and "every
+        # page is broken" want different next moves (web-publish.md §3a).
+        lock = threading.Lock()
+        checked = []
+
+        def record(_browser, _port, page, windowed=True, frametime=True):
+            with lock:
+                checked.append(page)
+            return 1 if page in ("pong", "prototype_kit") else 0
+
+        pages = [("prototype_kit", True), ("pong", True), ("giri", True)]
+        with unittest.mock.patch.object(serve_web, "check", record):
+            with contextlib.redirect_stdout(io.StringIO()) as log:
+                self.assertEqual(serve_web.check_fleet("browser", 8080, pages), 1)
+        self.assertEqual(sorted(checked), ["giri", "pong", "prototype_kit"])
+        self.assertIn("2 of 3 page(s) failed", log.getvalue())
+        self.assertIn("failed: prototype_kit, pong", log.getvalue())
+
+    def test_a_checked_pages_lines_carry_its_name_as_they_are_printed(self):
+        # Tagged rather than buffered, and that is the point: the failure this
+        # tool survives is a *hang*, whose only evidence is what was printed
+        # before it stopped. A buffer would throw exactly that away.
+        stream = io.StringIO()
+        out = serve_web.TaggedOutput(stream)
+        with out.page("pong"):
+            print("pass run: http://127.0.0.1:8080/pong/", file=out)
+            self.assertIn("[pong] pass run:", stream.getvalue())
+            print("two\nlines", file=out)
+        print("after the block", file=out)
+        written = stream.getvalue()
+        self.assertIn("[pong] two\n[pong] lines\n", written)
+        self.assertIn("\nafter the block\n", written)
+        self.assertNotIn("[pong] after", written)
+
+    def test_no_more_check_workers_than_there_are_pages_or_cores(self):
+        # A worker is a whole software-rendering browser; more of them than
+        # cores would only take cores from each other, and the margin they
+        # would spend is CHECK_TIMEOUT_S's.
+        self.assertEqual(serve_web.check_workers(1), 1)
+        ceiling = min(os.cpu_count() or 1, serve_web.CHECK_WORKERS_CAP)
+        self.assertEqual(serve_web.check_workers(1000), ceiling)
+        self.assertGreaterEqual(serve_web.check_workers(0), 1)
 
     def test_a_page_checked_by_name_still_gets_every_pass(self):
         # `serve-web <page> --check` is the local iteration path: there the
