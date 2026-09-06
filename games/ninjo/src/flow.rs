@@ -7,9 +7,14 @@
 //! `clock::advance`'s and the scheduler is `sim::fire_due`'s; this file turns
 //! input into orders and UI state.
 //!
-//! The dispatch vocabulary is two clicks (DESIGN §5): select an idle party on
-//! the strip, then click a site's marker on the map. A refused order bounces
-//! — a toast and a log line, never silence.
+//! The dispatch vocabulary is two clicks (DESIGN §5): select a character —
+//! from any surface that shows one — then click a site's marker on the map. A
+//! refused order bounces — a toast and a log line, never silence.
+//!
+//! **There is one selection** (`Flow::selected`, UI.md §3b). Every select path
+//! writes that one index and every highlight reads it, which is what makes a
+//! chip-select and a sprite-select the same act rather than two states over
+//! one roster.
 
 use jidousha::prelude::*;
 
@@ -55,8 +60,6 @@ pub struct Pulse {
 /// The UI's state — none of it simulation state.
 #[derive(Clone, Debug, Default)]
 pub struct Flow {
-    /// The party picked for dispatch, if one is.
-    pub selected: Option<usize>,
     /// The notices trail, most recent first: what the *player* did, and what
     /// bounced.
     ///
@@ -84,9 +87,23 @@ pub struct Flow {
     pub show_ignored: bool,
     /// Which meter chip has been drilled into, if one has.
     pub drilled: Option<usize>,
-    /// Which character's panel is open, if one is. Also the map's selection
-    /// ring.
-    pub selected_person: Option<usize>,
+    /// **The selected character** — the one selection this game has.
+    ///
+    /// One index over the ten people, which is the same index over the ten
+    /// parties (`sim::authored_parties`: a party is a one-person band, in
+    /// registry order). Every select path writes this field and every render
+    /// that highlights reads it, so there is exactly one ring on the map,
+    /// exactly one lit chip on the strip, and the panel is open on exactly
+    /// the person the player last picked.
+    ///
+    /// INVARIANT: the panel is open if and only if this is `Some` — nothing
+    /// else opens or closes it (`verify::one_selection` asserts the pair).
+    ///
+    /// Wave 1.1 made a party a character and left S1's dispatch pick beside
+    /// wave 0a's character selection, two indices over one roster, each
+    /// drawing its own ring (`FINDINGS.md` G-017). This is the one that
+    /// replaced them; there is no second one to keep in step.
+    pub selected: Option<usize>,
     /// The click-to-focus marker, if one is up.
     pub pulse: Option<Pulse>,
     /// The transient message, if one is up.
@@ -105,18 +122,21 @@ impl Flow {
         self.log.insert(0, line);
     }
 
-    /// Shut every drawer and every panel over the map.
+    /// Shut every drawer and every panel over the map, and put the selection
+    /// down with them.
     ///
     /// One place, because "a drawer and a panel are never both up" is a claim
     /// the floors assert about *pairs of controls*, and the way to keep it
-    /// true is to have exactly one function that opens anything.
+    /// true is to have exactly one function that opens anything. The selection
+    /// goes because the character panel *is* the selection (UI.md §3b): there
+    /// is no way to shut that panel and leave somebody picked.
     fn close_everything(&mut self) {
         self.feed_open = false;
         self.modes_open = false;
         self.roster_open = false;
         self.tuner.open = false;
         self.drilled = None;
-        self.selected_person = None;
+        self.selected = None;
     }
 
     /// Raise a toast, and log the same sentence — nothing appears only in a
@@ -158,7 +178,6 @@ pub fn load_scenario(world: &mut World) {
     world.insert_resource(Sim::opening(&tuning, modules));
     world.insert_resource(Clock::opening());
     let flow = world.resource_mut::<Flow>();
-    flow.selected = None;
     flow.close_everything();
     flow.toast = None;
     flow.pulse = None;
@@ -310,7 +329,7 @@ pub fn handle_input(world: &mut World) {
         };
         for (row, (who, _)) in faces.into_iter().take(layout::FACE_ROWS).enumerate() {
             if layout::faces_row(row).contains(at) {
-                world.resource_mut::<Flow>().selected_person = Some(who);
+                world.resource_mut::<Flow>().selected = Some(who);
                 return;
             }
         }
@@ -318,10 +337,10 @@ pub fn handle_input(world: &mut World) {
             return;
         }
     }
-    if let Some(who) = world.resource::<Flow>().selected_person {
+    if let Some(who) = world.resource::<Flow>().selected {
         if layout::person_close().contains(at) {
             let flow = world.resource_mut::<Flow>();
-            flow.selected_person = None;
+            flow.selected = None;
             flow.explained = None;
             return;
         }
@@ -338,9 +357,18 @@ pub fn handle_input(world: &mut World) {
                 return;
             }
         }
-        if layout::person_panel().contains(at) {
-            return;
-        }
+        // **The panel's controls swallow a click; its body does not.**
+        //
+        // The panel is a detail view of the selection, not a drawer: it is up
+        // through the whole of a two-click dispatch, and at the reference
+        // camera it lies across the Watchtower's and the Black Vault's
+        // markers. A body that swallowed clicks would make those two sites
+        // undispatchable the moment anybody was selected — dispatch broken by
+        // the fix that unified the selection. So the body falls through to the
+        // map below it, where a marker orders, a figure moves the selection,
+        // and bare ground puts it down and shuts the panel with it. Its own
+        // controls — the close button and the trait chips, both handled above
+        // — are the only part of it that is a click target.
     }
 
     // The speed chips do what the keys do.
@@ -352,32 +380,20 @@ pub fn handle_input(world: &mut World) {
         }
     }
 
-    // The party strip: click an idle party to pick it up, a picked one to put
-    // it down.
+    // The party strip: a chip is one of the four surfaces a person is
+    // selected from, and it selects exactly the way the other three do.
+    //
+    // **No idle gate here.** Selecting is looking at somebody; ordering is the
+    // second click, and that is where being out refuses (`order_dispatch` ->
+    // `sim::Refusal::NotIdle`). A chip that refused the *selection* would be a
+    // second rule about the one selection, and it is what made the strip's
+    // pick feel like a different thing from the map's.
     let party_count = world.resource::<Sim>().parties.len();
     for index in 0..party_count {
         if !layout::party_chip(index).contains(at) {
             continue;
         }
-        let idle = world
-            .resource::<Sim>()
-            .parties
-            .get(index)
-            .is_some_and(|party| party.activity == sim::Activity::Idle);
-        let name = world
-            .resource::<Sim>()
-            .parties
-            .get(index)
-            .map_or("someone", |party| party.name);
-        let flow = world.resource_mut::<Flow>();
-        if flow.selected == Some(index) {
-            flow.selected = None;
-        } else if idle {
-            flow.selected = Some(index);
-        } else {
-            let text = format!("{name} is out - only an idle party takes orders");
-            flow.bounce(tick, text);
-        }
+        select(world, index);
         return;
     }
 
@@ -401,13 +417,12 @@ pub fn handle_input(world: &mut World) {
             if !layout::home_rect(home).contains(at_world) {
                 continue;
             }
-            let flow = world.resource_mut::<Flow>();
-            flow.selected_person = (flow.selected_person != Some(index)).then_some(index);
+            select(world, index);
             return;
         }
     }
 
-    // The map: a click on a site's marker dispatches the picked party.
+    // The map: a click on a site's marker dispatches the selected character.
     for (site_index, site) in world.resource::<Sim>().sites.clone().iter().enumerate() {
         let marker = layout::marker_rect(crate::grid::LOCATIONS[site.location].tile);
         if !marker.contains(at_world) {
@@ -416,6 +431,21 @@ pub fn handle_input(world: &mut World) {
         order_dispatch(world, tick, site_index);
         return;
     }
+
+    // Empty ground: nobody there and nothing to order, so the selection is put
+    // down and the panel shuts with it (UI.md §3b).
+    world.resource_mut::<Flow>().selected = None;
+}
+
+/// **Select a person** — the one thing every select surface does.
+///
+/// Clicking whoever is already selected puts them down, which is the dismiss
+/// gesture the map figure and the strip chip have always had; clicking anybody
+/// else moves the selection to them. The panel follows the field, so there is
+/// nothing else to open.
+fn select(world: &mut World, who: usize) {
+    let flow = world.resource_mut::<Flow>();
+    flow.selected = (flow.selected != Some(who)).then_some(who);
 }
 
 /// Which drawer a handle opens.
@@ -451,7 +481,7 @@ fn roster_click(world: &mut World, at: Vec2) {
         if layout::roster_open(who).contains(at) {
             let flow = world.resource_mut::<Flow>();
             flow.close_everything();
-            flow.selected_person = Some(who);
+            flow.selected = Some(who);
             return;
         }
     }
@@ -551,11 +581,18 @@ fn apply_speed(world: &mut World, tick: u64, change: Option<Rate>) {
     let _ = tick;
 }
 
-/// The dispatch order: the picked party to this site, at the clock's minute.
+/// The dispatch order: the selected character to this site, at the clock's
+/// minute.
+///
+/// **It reads the one selection** and no pick of its own, so the two clicks are
+/// the same two clicks whichever surface the first one landed on — a chip, a
+/// figure, a roster row, a face. A site clicked with nobody selected still says
+/// so rather than doing anything, which is what keeps dispatch two clicks
+/// (DESIGN §5).
 fn order_dispatch(world: &mut World, tick: u64, site_index: usize) {
     let Some(party_index) = world.resource::<Flow>().selected else {
         let site = crate::grid::LOCATIONS[sim::site_location(site_index)].name;
-        let text = format!("pick an idle party on the strip, then click {site}");
+        let text = format!("select somebody first, then click {site}");
         world.resource_mut::<Flow>().bounce(tick, text);
         return;
     };

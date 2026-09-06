@@ -224,8 +224,11 @@ Deliberately thin — enough that the world visibly runs:
 duration, name — data in `sim.rs`); a quest is claimed at dispatch, so two
 parties cannot take one; **sites run dry** when their list is spent (the
 §10 open question, resolved to the simpler choice for S1 and noted in the
-PR). Dispatch is two clicks — an idle party on the strip, then a site's
-marker — and a refused order bounces with its reason. The five event
+PR). Dispatch is two clicks — select somebody, then a site's marker — and a
+refused order bounces with its reason. *(Wave 1.1's selection fix: the first
+click is any of the four surfaces that show a person, because there is one
+selection and dispatch reads it — UI.md §3b. Two clicks, unchanged; the idle
+gate that used to sit on the strip's pick now sits where the order is.)* The five event
 classes land with world-time + tile + named location on every entry; the
 log renders them in mechanical narration (`d1 02:41 - OWL completed the
 mushroom haul - 40g into the treasury (40g held) - turning for home`).

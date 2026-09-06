@@ -282,7 +282,7 @@ pub fn glance(flow: &Flow, lens: &Lens<'_>) -> Panel {
     if let Some(drilled) = flow.drilled {
         panel.absorb(faces_panel(lens, drilled));
     }
-    if let Some(who) = flow.selected_person {
+    if let Some(who) = flow.selected {
         panel.absorb(person_panel(flow, lens, who));
     }
     panel

@@ -221,7 +221,7 @@ pub fn handle_pointer(world: &mut World, at: Vec2, tick: u64, clicked: bool) -> 
             flow.feed_open = false;
             flow.modes_open = false;
             flow.drilled = None;
-            flow.selected_person = None;
+            flow.selected = None;
         }
         return true;
     }
