@@ -70,7 +70,7 @@ fn stopping_script() -> Vec<Directive> {
         when: When::Tick(28),
         what: Act::Tap(Key::Digit1),
     });
-    script.extend(sweep::order(12, 1, 1, 0)); // Steve to the mushroom haul
+    script.extend(sweep::post(12, 1, 1, 0)); // Steve to the mushroom haul
     script
 }
 
@@ -80,7 +80,7 @@ fn running_script() -> Vec<Directive> {
         when: When::Tick(28),
         what: Act::Tap(Key::Digit1),
     }];
-    script.extend(sweep::order(12, 1, 1, 0));
+    script.extend(sweep::post(12, 1, 1, 0));
     script
 }
 

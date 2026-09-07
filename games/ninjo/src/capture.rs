@@ -1,7 +1,7 @@
 //! The captured frames: the screenshots a person looks at (giri's capture
 //! path, re-aimed at the map).
 //!
-//! Fourteen pictures. The mid-travel map and the feed are each taken at the
+//! Sixteen pictures. The mid-travel map and the feed are each taken at the
 //! reference surface and at a narrow one (the narrow set exists to catch
 //! scaling regressions, which are invisible to every assertion that is not
 //! about pixels). The rest are reference only: the settlement before anything
@@ -60,6 +60,7 @@ pub fn capture_screens(
     narrow: &Conducted,
     drawer: &DrawerRun,
     reproduction: Option<&Conducted>,
+    asked: &Conducted,
 ) -> String {
     let mut wanted: Vec<Wanted> = Vec::new();
     // The reference-only set: pictures of *what is on screen* rather than of
@@ -116,6 +117,25 @@ pub fn capture_screens(
                 false,
                 "a narrow capture was never photographed",
                 format!("the {name} photo is missing from the narrow run"),
+            );
+        }
+    }
+    // **The asks module's two** (wave 1.2): being told no, with the reason on
+    // the banner and the world stopped for it, and the ledger of what has
+    // been asked for beside the rates that price it.
+    for name in ["declined", "ledger"] {
+        if let Some(shot) = asked.photo(name) {
+            wanted.push(Wanted {
+                name: format!("{name}-reference"),
+                surface: verify::HEADLESS_VIEWPORT,
+                frame: shot.frame.clone(),
+                font: asked.font,
+            });
+        } else {
+            checks.require(
+                false,
+                "an asks capture was never photographed",
+                format!("the {name} photo is missing from the asks run"),
             );
         }
     }

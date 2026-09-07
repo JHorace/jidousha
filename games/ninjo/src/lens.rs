@@ -127,6 +127,48 @@ impl<'a> Lens<'a> {
         &self.sim.events
     }
 
+    // ── the asks module (wave 1.2) ───────────────────────────────────────
+
+    /// **Every posting on the player's ledger**, oldest first.
+    ///
+    /// The ledger drawer is a view of exactly this — there is no second list,
+    /// which is why a posting the player can see and a posting the scorer can
+    /// weigh cannot be two different things.
+    pub fn postings(&self) -> &'a [crate::asks::Posting] {
+        self.sim.postings.all()
+    }
+
+    /// **What the settlement pays for this kind of work right now** — the
+    /// standing rate a new posting inherits, and the expectation a payment is
+    /// judged against.
+    pub fn standing_rate(&self, task: traits::TaskType) -> i64 {
+        self.sim.rates.of(task)
+    }
+
+    /// **What the scorer would say about a posting**, and why — the job row's
+    /// read (`answers::read`).
+    ///
+    /// The one function, called read-only: the row's verdict is produced by
+    /// running the same `autonomy::choose` over the same candidates the
+    /// rescore would run, so a preview that disagreed with the decision could
+    /// only do so by the world having moved in between.
+    pub fn would_take(
+        &self,
+        tuning: &Tuning,
+        now: u64,
+        who: usize,
+        posting: &crate::asks::Posting,
+        job: crate::sim::JobId,
+    ) -> (crate::answers::Verdict, String) {
+        crate::answers::read(self.sim, tuning, now, who, posting, job)
+    }
+
+    /// Whether the asks module is on — what makes the site panel read-only
+    /// and the ledger unopenable when it is not.
+    pub fn asks_on(&self) -> bool {
+        self.sim.modules.enabled(crate::asks::MODULE)
+    }
+
     // ── the attention architecture (GDD §3) ──────────────────────────────
 
     /// What each class of event currently does to the world.

@@ -73,9 +73,9 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
     // Three orders, each given the way a player gives one: pick somebody, open
     // the site's board, tap a job. The order puts the board down with the
     // selection, so the map is clear again between them.
-    script.extend(sweep::order(sweep::ORDER_MINUTES[0], 0, 0, 2));
-    script.extend(sweep::order(sweep::ORDER_MINUTES[1], 1, 1, 0));
-    script.extend(sweep::order(sweep::ORDER_MINUTES[2], 2, 2, 5));
+    script.extend(sweep::post(sweep::ORDER_MINUTES[0], 0, 0, 2));
+    script.extend(sweep::post(sweep::ORDER_MINUTES[1], 1, 1, 0));
+    script.extend(sweep::post(sweep::ORDER_MINUTES[2], 2, 2, 5));
     // **The board re-opened on the site just ordered to**: the `ordered`
     // picture, a row that now reads as the person the player sent.
     script.push(Directive {
@@ -90,7 +90,7 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
     // player does; the world-times on the far side are unchanged.
     script.push(click_ui(When::Minute(100), layout::feed_button().center()));
     script.push(click_ui(When::Minute(300), layout::feed_button().center()));
-    script.extend(sweep::order(sweep::ORDER_MINUTES[3], 0, 3, 0));
+    script.extend(sweep::post(sweep::ORDER_MINUTES[3], 0, 3, 0));
     // The roster, with a chip's explanation open on it: a trait chip tapped on
     // one surface reads the same line it reads on the other.
     script.push(click_ui(
@@ -1061,19 +1061,20 @@ fn ordered_from(site: usize, slot: usize, pick: Act) -> Conducted {
     conduct(&session)
 }
 
-/// **Dispatch reads the one selection** (DESIGN §5, still two clicks).
+/// **The posting reads the one selection** (UI.md §3b, still two clicks).
 ///
-/// The order vocabulary did not change: select somebody, click a site. What
-/// changed is that "select somebody" is now one act with four doors, so the
-/// order a sprite-select produces has to be *the same order* the strip's chip
-/// produced before — byte-identical in the transcript, which is the shape
-/// every other check in this file reads the world through.
+/// The gesture did not change: select somebody, open a board, tap a job. What
+/// changed in wave 1.1 is that "select somebody" is one act with four doors,
+/// and what changed in 1.2 is what the tap means — so the posting a
+/// sprite-select produces has to be *the same posting* the strip's chip
+/// produces, byte-identical in the transcript, which is the shape every other
+/// check in this file reads the world through.
 ///
 /// The whole battery runs on the paused opening world: dispatch works while
 /// the clock holds ("paused - the clock holds, orders still work"), the order
 /// is addressed at minute zero, and nothing else in the world moves to muddy
 /// the comparison.
-fn dispatch_reads_the_selection(checks: &mut Checks) {
+fn posting_reads_the_selection(checks: &mut Checks) {
     let cast = people::roster();
     let who = 0usize;
     let by_chip = ordered_from(0, 0, Act::ClickUi(layout::party_chip(who).center()));
@@ -1121,9 +1122,12 @@ fn dispatch_reads_the_selection(checks: &mut Checks) {
         );
     }
 
-    // **Ordered while out still bounces, with its reason.** The strip used to
-    // refuse the *selection* of somebody who was out; the refusal now lives
-    // where the order is, which is the only place it was ever about.
+    // **A posting to somebody who is out is carried, not refused** (wave
+    // 1.2). Wave 1.1's order bounced with `NotIdle`, because an order is a
+    // thing a body does and a body was already busy; an ask is a thing a
+    // person hears, and asks travel. So the second posting is *made*, stands
+    // on the ledger unheard, and moves nobody — the messenger's arrival is
+    // what delivers it (`compliance::messengers`).
     let away = {
         let marker = |site: usize| {
             layout::marker_rect(LOCATIONS[crate::sim::site_location(site)].tile).center()
@@ -1158,54 +1162,51 @@ fn dispatch_reads_the_selection(checks: &mut Checks) {
         session.probe_ticks = &[54];
         conduct(&session)
     };
-    let (selected, notice, departures) = {
-        let departures = away
-            .events
-            .iter()
-            .filter(|event| event.class == crate::attention::EventClass::Departed)
-            .count();
-        let probe = away.probe(54);
-        (
-            probe.and_then(|(_, flow, ..)| flow.selected),
-            probe.and_then(|(_, flow, ..)| flow.log.first().cloned()),
-            departures,
-        )
-    };
+    let departures = away
+        .events
+        .iter()
+        .filter(|event| event.class == crate::attention::EventClass::Departed)
+        .count();
+    let ledger = away.sim.postings.all();
     checks.require(
-        departures == 1
-            && notice.as_deref()
-                == Some(
-                    crate::sim::Refusal::NotIdle
-                        .message(cast[who].name, "", "")
-                        .as_str(),
-                ),
-        "an order given to somebody who is out did not bounce with its reason",
+        departures == 1 && ledger.len() == 2,
+        "a posting made to somebody who is out did not stand on the ledger",
         format!(
-            "{departures} departure(s) were emitted and the top notice is {notice:?}; the \
-             second order was given to {} after they had already left",
+            "{departures} departure(s) were emitted and the ledger holds {} postings; the \
+             second ask was made to {} after they had already left, and an ask that travels \
+             is made and carried rather than refused",
+            ledger.len(),
             cast[who].name
         ),
     );
     checks.require(
-        selected == Some(who),
-        "a refused order put the selection down",
+        ledger.last().is_some_and(|posting| {
+            posting.heard.is_empty() && posting.status == crate::asks::Status::Open
+        }),
+        "an ask to somebody who is out was heard where they are not",
         format!(
-            "the selection reads {:?} after the bounce; a refusal says why and changes nothing \
-             else",
-            selected.map(|who| cast[who].name)
+            "the second posting reads {:?}; nothing binds until it is heard, and {} is on \
+             the road",
+            ledger
+                .last()
+                .map(|posting| (posting.status, posting.heard.len())),
+            cast[who].name
         ),
     );
 }
 
-/// **The job board is the order** (UI.md §3c, DESIGN §5) — the wave's own
-/// battery.
+/// **The job board is where the asking happens** (UI.md §3c) — the job
+/// board's own battery, carried forward from the wave that built it.
 ///
 /// Five claims, and each of them is one of the failure modes the board makes
-/// possible: the marker must stop ordering, the claim must be the named row,
+/// possible: the marker must ask nothing, the claim must be the named row,
 /// a row somebody has must refuse out loud, a row tapped with nobody selected
 /// must refuse out loud, and the fit and travel the panel prints must be the
-/// sim's own answers rather than a second computation beside them.
-fn the_board_is_the_order(checks: &mut Checks) {
+/// sim's own answers rather than a second computation beside them. What wave
+/// 1.2 changed is the verb — the tap posts and the answer is the scorer's —
+/// so the claims read the same and mean one step more: the departure they
+/// look for is one somebody agreed to.
+fn the_board_is_the_ask(checks: &mut Checks) {
     let tuning = Tuning::SHIPPED;
     let grid = grid::grid();
     let cast = people::roster();
@@ -1213,10 +1214,11 @@ fn the_board_is_the_order(checks: &mut Checks) {
     let marker =
         |site: usize| layout::marker_rect(LOCATIONS[crate::sim::site_location(site)].tile).center();
 
-    // --- 1: the marker opens the board and issues nothing -------------------
-    // The two ways to order that the old marker and a job row would have been
-    // is exactly the thing this session removed; a marker that still ordered
-    // would make the board a decoration over a dispatch nobody could see.
+    // --- 1: the marker opens the board and asks nothing ---------------------
+    // The two ways to ask that a marker and a job row would have been is
+    // exactly the thing the job-board session removed; a marker that still
+    // asked would make the board a decoration over a posting nobody could
+    // see.
     let looked = {
         let script = [
             Directive {
@@ -1235,7 +1237,7 @@ fn the_board_is_the_order(checks: &mut Checks) {
     let opened = looked.probe(22).and_then(|(_, flow, ..)| flow.board);
     checks.require(
         opened == Some(1) && looked.events.is_empty(),
-        "a site marker still issues an order",
+        "a site marker still makes a posting",
         format!(
             "with {} selected, clicking the Deep Cave's marker left the board {opened:?} and              emitted {:?}; the marker opens the board and the job row is the one way to order",
             cast[who].name,
@@ -1267,7 +1269,7 @@ fn the_board_is_the_order(checks: &mut Checks) {
                 .iter()
                 .take(3)
                 .all(|state| *state == crate::sim::JobState::Open),
-        "the order claimed a job other than the one the row named",
+        "the ask was agreed to for a job other than the one the row named",
         format!(
             "tapping the Watchtower's fourth row left the board reading {states:?}; the row              the player tapped is {job:?} and the claim has to be that row"
         ),
@@ -1330,7 +1332,7 @@ fn the_board_is_the_order(checks: &mut Checks) {
     checks.require(
         departures == 1
             && notice.as_deref() == Some(crate::sim::Refusal::Taken.message("", "", job).as_str()),
-        "a claimed job row took a second order, or refused one in silence",
+        "a claimed job row took a second posting, or refused one in silence",
         format!(
             "{departures} departure(s) were emitted and the top notice reads {notice:?}; the              second character tapped a row {} had already taken",
             cast[who].name
@@ -1414,7 +1416,7 @@ fn the_board_is_the_order(checks: &mut Checks) {
     let route = crate::sim::route_out(&grid, &tuning, &staged, ines, 1);
     checks.require(
         route.as_ref().is_some_and(|route| {
-            says(&format!("{} min from where they stand", route.cost))
+            says(&format!("{} min away", route.cost))
         }),
         "the board's travel line is not the journey the sim would walk",
         format!(
@@ -1436,18 +1438,14 @@ fn the_board_is_the_order(checks: &mut Checks) {
     );
     checks.require(
         !empty.runs.iter().any(|row| row.text.starts_with("fit "))
-            && !empty
-                .runs
-                .iter()
-                .any(|row| row.text.contains("from where they stand")),
+            && !empty.runs.iter().any(|row| row.text.contains("min away")),
         "the board guesses a fit and a journey for nobody",
         format!(
             "with nobody selected the board still prints {:?}",
             empty
                 .runs
                 .iter()
-                .filter(|row| row.text.starts_with("fit ")
-                    || row.text.contains("from where they stand"))
+                .filter(|row| row.text.starts_with("fit ") || row.text.contains("min away"))
                 .map(|row| row.text.clone())
                 .collect::<Vec<_>>()
         ),
@@ -1545,18 +1543,19 @@ pub fn run() -> ExitCode {
     // --- and a tap, which the engine already made a click ------------------
     touch_selects(&mut checks);
 
-    // --- one selection, and the dispatch that reads it ---------------------
+    // --- one selection, and the posting that reads it ----------------------
     let reproduction = one_selection(&mut checks);
-    dispatch_reads_the_selection(&mut checks);
+    posting_reads_the_selection(&mut checks);
     selection_moves_nothing(&mut checks);
-    // --- the job board, which is now where an order is given ---------------
-    the_board_is_the_order(&mut checks);
+    // --- the job board, which is where the asking happens ------------------
+    the_board_is_the_ask(&mut checks);
 
     // --- the layout floors --------------------------------------------------
     floors::layout_floors(&mut checks);
     floors::drawer_floors(&mut checks);
     floors::content_floors(&mut checks, &baseline);
     let ui_report = floors::uimap_contract(&mut checks);
+    let legibility = floors::map_legibility(&mut checks);
 
     // --- the tuning drawer: one scripted session, read three ways ----------
     let drawer = restart::drawer_run();
@@ -1644,6 +1643,10 @@ pub fn run() -> ExitCode {
     modules::registry(&mut checks);
     let matrix = module_matrix(&mut checks);
     let scorer = crate::autonomy::judge_module(&mut checks, &baseline);
+    let compliance = crate::compliance::judge_module(&mut checks, &baseline);
+    let asked = crate::compliance::ask_run();
+    crate::compliance::judge_shots(&mut checks, &asked);
+    crate::compliance::judge_at(&mut checks, &tuning);
 
     // --- the art library, every string, and the link grammar ---------------
     library::library(&mut checks);
@@ -1661,6 +1664,7 @@ pub fn run() -> ExitCode {
         &narrow,
         &drawer,
         reproduction.as_ref(),
+        &asked,
     );
 
     let verdict = checks.verdict();
@@ -1681,6 +1685,7 @@ pub fn run() -> ExitCode {
     println!("  {sweep_summary}");
     println!("  seed 0 stamped; transcripts identical at seeds 7 and 7777777 (no Rng read in S1)");
     println!("  ui mapping: {ui_report}");
+    println!("  map text: {legibility}");
     println!(
         "  people: {} in the registry, {} traits over {} kinds, {} marks, {} reaction cells",
         crate::people::roster().len(),
@@ -1698,6 +1703,12 @@ pub fn run() -> ExitCode {
     println!("  auto-pause: {pauses}");
     println!("  module-off matrix: {matrix}");
     println!("  scorer: {scorer}");
+    println!("  asks: {compliance}");
+    println!(
+        "  standing rates: {} - {} postings on the ledger at the end of the run",
+        baseline.sim.rates.stamp(),
+        baseline.sim.postings.all().len()
+    );
     println!("  module set: {}", modules::ModuleSet::ALL.stamp());
     println!("  mutation round: {mutations}");
     println!("{captured}");

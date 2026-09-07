@@ -66,25 +66,49 @@ pub fn treasury_text_at() -> Vec2 {
     Vec2::new(472.0, 11.0)
 }
 
-/// The feed drawer's handle, in the status bar.
-pub fn feed_button() -> Rect {
-    Rect::from_min_size(Vec2::new(752.0, 2.0), Vec2::new(80.0, 32.0))
+/// How wide a drawer handle is, and how far apart they sit.
+///
+/// **Seventy-two since wave 1.2**, where four handles of eighty fitted and
+/// five do not: the ledger is the fifth drawer, and the row of them still has
+/// to start right of the treasury. Seventy-two holds `ROSTER`, the longest
+/// label, with room, and it is twice the target floor.
+const HANDLE_W: f32 = 72.0;
+const HANDLE_PITCH: f32 = 80.0;
+const HANDLE_X: f32 = 528.0;
+
+/// Drawer handle `index` in the status bar's row of them.
+fn handle(index: usize) -> Rect {
+    Rect::from_min_size(
+        Vec2::new(HANDLE_X + index as f32 * HANDLE_PITCH, 2.0),
+        Vec2::new(HANDLE_W, 32.0),
+    )
+}
+
+/// The tuning drawer's handle, at the head of the row.
+pub fn tune_button() -> Rect {
+    handle(0)
 }
 
 /// The roster drawer's handle — every character in one list (wave 1.1's
 /// clarity slice). The `r` key opens the same drawer.
 pub fn roster_button() -> Rect {
-    Rect::from_min_size(Vec2::new(656.0, 2.0), Vec2::new(80.0, 32.0))
+    handle(1)
 }
 
-/// The tuning drawer's handle, at the head of the row.
-pub fn tune_button() -> Rect {
-    Rect::from_min_size(Vec2::new(560.0, 2.0), Vec2::new(80.0, 32.0))
+/// **The postings ledger's handle** (wave 1.2): every posting the player has
+/// made, and the standing rates that price them.
+pub fn ledger_button() -> Rect {
+    handle(2)
+}
+
+/// The feed drawer's handle.
+pub fn feed_button() -> Rect {
+    handle(3)
 }
 
 /// The auto-pause config drawer's handle, at the end of the row.
 pub fn modes_button() -> Rect {
-    Rect::from_min_size(Vec2::new(848.0, 2.0), Vec2::new(80.0, 32.0))
+    handle(4)
 }
 
 // ── the meters band: the aggregates for the glance (GDD §3) ────────────────
@@ -160,7 +184,7 @@ pub const BOARD_ROWS: usize = 6;
 /// together through the whole of a dispatch: the board says what the work is
 /// and the panel says who is being sent.
 pub fn board_panel() -> Rect {
-    Rect::from_min_size(Vec2::new(16.0, 112.0), Vec2::new(576.0, 300.0))
+    Rect::from_min_size(Vec2::new(16.0, 112.0), Vec2::new(576.0, 328.0))
 }
 
 /// The board's title row: which site, and how much of it is open.
@@ -173,29 +197,79 @@ pub fn board_travel() -> Vec2 {
     Vec2::new(28.0, 140.0)
 }
 
-/// How wide either header row may run before it is clipped.
-pub const BOARD_HEAD_W: f32 = 500.0;
+/// How wide either header row may run before it is clipped — up to the fit
+/// chip beside them.
+pub const BOARD_HEAD_W: f32 = 360.0;
 
 /// The board's close button.
 pub fn board_close() -> Rect {
     Rect::from_min_size(Vec2::new(556.0, 120.0), Vec2::new(36.0, 32.0))
 }
 
-/// Job row `index` — **the dispatch target**. An open row takes the order.
+/// Job row `index` — **the posting target** (wave 1.2). Tapping an open row
+/// posts it to the selected character at the standing rate.
+///
+/// The whole width of the board, because the wage and the who are the
+/// **board's** controls and not the row's: a stepper inside a row would be a
+/// control inside a control, which the overlap floor refuses, and a row cut
+/// short to make room for one would leave no room for the verdict's reason —
+/// which is the sentence this wave exists to put on screen.
 pub fn board_row(index: usize) -> Rect {
-    Rect::from_min_size(
-        Vec2::new(24.0, 164.0 + index as f32 * 38.0),
-        Vec2::new(564.0, 32.0),
-    )
+    Rect::from_min_size(board_row_origin(index), Vec2::new(564.0, 32.0))
 }
 
-/// The footer hint, under the rows.
+fn board_row_origin(index: usize) -> Vec2 {
+    Vec2::new(24.0, 164.0 + index as f32 * 38.0)
+}
+
+/// The board's **wage down** button — what the next tap would offer.
+///
+/// One wage control for the board rather than one per row: the wage is what
+/// you are offering *now*, the row you tap is what you are offering it for,
+/// and six steppers would be six controls inside six targets.
+pub fn board_wage_down() -> Rect {
+    Rect::from_min_size(Vec2::new(388.0, 396.0), Vec2::splat(32.0))
+}
+
+/// Where the wage a tap would offer is drawn, between its two steppers.
+pub fn board_wage_value() -> Rect {
+    Rect::from_min_size(Vec2::new(420.0, 396.0), Vec2::new(40.0, 32.0))
+}
+
+/// The board's **wage up** button.
+pub fn board_wage_up() -> Rect {
+    Rect::from_min_size(Vec2::new(460.0, 396.0), Vec2::splat(32.0))
+}
+
+/// The board's **who** toggle: post to the selected character, or to anyone.
+///
+/// The targeted/open choice, made before the tap and readable while it is
+/// being made — where a per-row OPEN button would put the choice inside the
+/// same gesture that commits it.
+pub fn board_to() -> Rect {
+    Rect::from_min_size(Vec2::new(500.0, 396.0), Vec2::new(88.0, 32.0))
+}
+
+/// The board's **fit chip** — what the fit column means, and what it does not
+/// mean yet (wave 1.2's clarity rider), tapped like any other chip.
+///
+/// In the header band, right of the travel line and left of the close: the
+/// footer is the hint's and the wage's, and the rows are targets — a chip
+/// among them would overlap one or lie across the other, and both are
+/// floors.
+pub fn board_fit_chip() -> Rect {
+    Rect::from_min_size(Vec2::new(400.0, 116.0), Vec2::new(124.0, 32.0))
+}
+
+/// The footer hint, under the rows — a wrapped block since wave 1.2, because
+/// the fit chip's explanation is a sentence and not a label.
 pub fn board_hint() -> Vec2 {
     Vec2::new(28.0, 398.0)
 }
 
-/// How wide it may run.
-pub const BOARD_HINT_W: f32 = 540.0;
+/// How wide it may run before it wraps — narrower than the panel, because
+/// the wage and the who stand at the end of the same band.
+pub const BOARD_HINT_W: f32 = 352.0;
 
 /// The columns inside a job row, as offsets from its top-left — two lines:
 /// **what the work is and what it pays** over **what kind it is, who has it,
@@ -206,29 +280,36 @@ pub mod job {
     /// The job's name.
     pub const NAME: Vec2 = Vec2::new(8.0, 3.0);
     /// How wide that may run.
-    pub const NAME_W: f32 = 320.0;
+    pub const NAME_W: f32 = 180.0;
     /// The pot.
-    pub const POT: Vec2 = Vec2::new(336.0, 3.0);
+    pub const POT: Vec2 = Vec2::new(196.0, 3.0);
     /// How wide that may run.
-    pub const POT_W: f32 = 60.0;
+    pub const POT_W: f32 = 50.0;
     /// How long the work takes.
-    pub const DURATION: Vec2 = Vec2::new(404.0, 3.0);
+    pub const DURATION: Vec2 = Vec2::new(254.0, 3.0);
     /// How wide that may run.
-    pub const DURATION_W: f32 = 90.0;
+    pub const DURATION_W: f32 = 80.0;
     /// The task-type chip's icon.
     pub const TASK_ICON: Vec2 = Vec2::new(8.0, 14.0);
     /// And its word.
     pub const TASK_NAME: Vec2 = Vec2::new(28.0, 17.0);
     /// How wide that may run.
-    pub const TASK_W: f32 = 60.0;
-    /// What has become of the row: open, whose it is, or done.
-    pub const STATE: Vec2 = Vec2::new(100.0, 17.0);
-    /// How wide that may run.
-    pub const STATE_W: f32 = 200.0;
+    pub const TASK_W: f32 = 56.0;
     /// The selected character's fit for this work.
-    pub const FIT: Vec2 = Vec2::new(320.0, 17.0);
+    pub const FIT: Vec2 = Vec2::new(92.0, 17.0);
     /// How wide that may run.
-    pub const FIT_W: f32 = 220.0;
+    pub const FIT_W: f32 = 60.0;
+    /// **What the row has to say about itself**: what has become of it, or —
+    /// where it is open and somebody is selected — what the scorer says they
+    /// would do about a posting here, and why (wave 1.2).
+    ///
+    /// One cell, because the two readings never both apply: a row that is
+    /// somebody's is not a row anybody can be asked for, and a verdict is
+    /// strictly more than the word `open` it replaces. The widest cell on the
+    /// row, because a verdict without its reason is a number about a person.
+    pub const SAYS: Vec2 = Vec2::new(160.0, 17.0);
+    /// How wide that may run.
+    pub const SAYS_W: f32 = 396.0;
 }
 
 // ── the character panel ────────────────────────────────────────────────────
@@ -489,6 +570,128 @@ pub fn notice_row(index: usize) -> Vec2 {
     Vec2::new(28.0, 454.0 + index as f32 * 14.0)
 }
 
+// ── the postings ledger drawer (wave 1.2) ─────────────────────────────────
+
+/// The ledger drawer: the same rectangle every other drawer has.
+pub fn ledger_panel() -> Rect {
+    feed_panel()
+}
+
+/// Its title row.
+pub fn ledger_title() -> Vec2 {
+    Vec2::new(28.0, 50.0)
+}
+
+/// The line under the title: what a posting is, and what withdrawing does.
+pub fn ledger_note() -> Vec2 {
+    Vec2::new(28.0, 72.0)
+}
+
+/// How wide that may run.
+pub const LEDGER_NOTE_W: f32 = 700.0;
+
+/// How many postings the ledger shows at once, newest first.
+pub const LEDGER_ROWS: usize = 8;
+
+fn ledger_row_origin(index: usize) -> Vec2 {
+    Vec2::new(20.0, 94.0 + index as f32 * 38.0)
+}
+
+/// Ledger row `index` — the posting itself, two lines of it.
+pub fn ledger_row(index: usize) -> Rect {
+    Rect::from_min_size(ledger_row_origin(index), Vec2::new(560.0, 32.0))
+}
+
+/// How wide a ledger row's text may run.
+pub const LEDGER_ROW_W: f32 = 550.0;
+
+/// The **withdraw** button on ledger row `index` — the one way to take a
+/// posting down.
+pub fn ledger_withdraw(index: usize) -> Rect {
+    Rect::from_min_size(
+        ledger_row_origin(index) + Vec2::new(572.0, 0.0),
+        Vec2::new(96.0, 32.0),
+    )
+}
+
+/// The rows inside a ledger row, from its top-left.
+pub mod ledger {
+    use jidousha::prelude::Vec2;
+
+    /// Who, what, how much, and until when.
+    pub const HEAD: Vec2 = Vec2::new(8.0, 3.0);
+    /// Who has heard it and who has answered it.
+    pub const ANSWER: Vec2 = Vec2::new(8.0, 17.0);
+}
+
+/// The standing-rates band's title, at the top of its column.
+pub fn rates_title() -> Vec2 {
+    Vec2::new(RATES_X, 72.0)
+}
+
+/// Where the standing-rates band starts — right of the ledger's own rows and
+/// their withdrawals.
+const RATES_X: f32 = 704.0;
+
+/// How wide the rates band's own prose may run.
+pub const RATES_NOTE_W: f32 = 240.0;
+
+/// The note under the rates, saying what they price.
+pub fn rates_note() -> Vec2 {
+    Vec2::new(RATES_X, 260.0)
+}
+
+fn rates_row_origin(index: usize) -> Vec2 {
+    Vec2::new(RATES_X, 94.0 + index as f32 * 38.0)
+}
+
+/// Where standing-rate row `index`'s task type is named.
+pub fn rates_name(index: usize) -> Vec2 {
+    rates_row_origin(index) + Vec2::new(0.0, 10.0)
+}
+
+/// The **rate down** button on standing-rate row `index`.
+pub fn rates_down(index: usize) -> Rect {
+    Rect::from_min_size(
+        rates_row_origin(index) + Vec2::new(76.0, 0.0),
+        Vec2::splat(32.0),
+    )
+}
+
+/// Where the rate itself is drawn, between its two steppers.
+pub fn rates_value(index: usize) -> Rect {
+    Rect::from_min_size(
+        rates_row_origin(index) + Vec2::new(108.0, 0.0),
+        Vec2::new(40.0, 32.0),
+    )
+}
+
+/// The **rate up** button on standing-rate row `index`.
+pub fn rates_up(index: usize) -> Rect {
+    Rect::from_min_size(
+        rates_row_origin(index) + Vec2::new(148.0, 0.0),
+        Vec2::splat(32.0),
+    )
+}
+
+/// The **standing-posting** button on standing-rate row `index` — post this
+/// kind of work, to anyone, until withdrawn, at the rate beside it.
+///
+/// The closest thing to policy the player has by hand (the GDD's postings
+/// section): a standing open posting for a task type at the standing rate,
+/// made from the panel that sets the rate.
+pub fn rates_post(index: usize) -> Rect {
+    Rect::from_min_size(
+        rates_row_origin(index) + Vec2::new(188.0, 0.0),
+        Vec2::new(60.0, 32.0),
+    )
+}
+
+/// The ledger's footer, under both bands.
+pub fn ledger_footer() -> Vec2 {
+    Vec2::new(28.0, 406.0)
+}
+
 // ── the auto-pause config drawer ───────────────────────────────────────────
 
 /// Its title row.
@@ -506,8 +709,31 @@ pub fn modes_prose_width() -> f32 {
     DESIGN_W - 56.0
 }
 
+/// How many config rows a column holds before the next one starts.
+///
+/// **Seven since wave 1.2**: the asks module's six classes take the table
+/// from seven rows to thirteen, and thirteen rows of forty pixels is a
+/// drawer twice the height of the screen. Two columns of seven is what fits,
+/// and the radios narrow to eighty-four to make room for the second column —
+/// still two and a half times the target floor.
+pub const MODES_ROWS: usize = 7;
+const MODES_COL_X: f32 = 20.0;
+const MODES_COL_PITCH: f32 = 468.0;
+const MODES_RADIO_W: f32 = 84.0;
+const MODES_RADIO_PITCH: f32 = 88.0;
+/// Where a row's radios start, from the row's own left — right of the widest
+/// class id there is (`posting-withdrawn`, seventeen glyphs), because a radio
+/// that started under the end of a name would put two rows' glyphs in one
+/// box and the frame judge counts glyphs by box.
+const MODES_RADIO_X: f32 = 200.0;
+
 fn modes_row_origin(index: usize) -> Vec2 {
-    Vec2::new(28.0, 108.0 + index as f32 * 40.0)
+    let column = index / MODES_ROWS;
+    let row = index % MODES_ROWS;
+    Vec2::new(
+        MODES_COL_X + column as f32 * MODES_COL_PITCH,
+        108.0 + row as f32 * 40.0,
+    )
 }
 
 /// The class chip's icon on config row `index`.
@@ -522,9 +748,13 @@ pub fn modes_name(index: usize) -> Vec2 {
 
 /// The radio for mode `mode` on config row `index`.
 pub fn modes_radio(index: usize, mode: usize) -> Rect {
+    let origin = modes_row_origin(index);
     Rect::from_min_size(
-        Vec2::new(240.0 + mode as f32 * 108.0, modes_row_origin(index).y),
-        Vec2::new(100.0, 32.0),
+        Vec2::new(
+            origin.x + MODES_RADIO_X + mode as f32 * MODES_RADIO_PITCH,
+            origin.y,
+        ),
+        Vec2::new(MODES_RADIO_W, 32.0),
     )
 }
 

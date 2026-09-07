@@ -47,6 +47,10 @@ giri's colour roles stand. The changed and new rows:
 | an aptitude chip on a job row | **what kind of work the job is** — the task type (`CAST.md` §2) | the icon is the aptitude row whose id *is* the task's, so the chip on a job and the chip on a person are the same picture of the same word |
 | `open` in regard-green on a job row | **the row can be ordered from** | the only state a job row takes an order in; a claimed row is dim and a done row fainter still, and both name whose it is |
 | `fit N` on a job row | **what the selected character brings to that work** | `traits::competence_at`, the scorer's own aptitude term; gold when it is more than nothing, faint at zero. Absent when nobody is selected |
+| a verdict in regard-green or ember on a job row | **what the selected character would do about a posting here, and why** | `would take it` / `reluctant` / `would refuse`, from `answers::read` — the scorer's own answer, read-only. It stands where the row's state would be, because an open row's state is the word it replaces |
+| `- 20g +` and `TO <name>` in the board's footer | **what the next tap offers, and whom it offers it to** | the board's own two controls; the wage opens at the standing rate for the site's first open row |
+| `WITHDRAW` on a ledger row | **the one way to take a posting down** | instant, and heard the same way a posting is: a posting withdrawn before it was heard is one nobody answers |
+| `STAND` / `STANDS` on a rates row | **a standing open posting for that kind of work**, at the rate beside it | gold while one stands — the closest thing to policy the player has by hand |
 | portraits | **party tokens** | one per party, unique, on the map and on the strip |
 | coin icon | the treasury | beside the gold number in the top bar |
 | gold | the active speed chip, the selected character wherever they appear, selection | still not a general accent |
@@ -65,8 +69,10 @@ not a queue — the import path (`art/`) rode along from giri.
 - **Top bar** (always visible): title, the clock readout `d1 06:40`
   (integer world-minutes, days from one), the four speed chips
   `PAUSE 1x 2x 4x` (active in gold; they do exactly what space and 1/2/3
-  do), the treasury with its coin, and the TUNE, FEED and MODES handles in
-  giri's positions.
+  do), the treasury with its coin, and the five drawer handles — TUNE, ROSTER,
+  LEDGER, FEED, MODES. **Seventy-two reference pixels wide since wave 1.2**,
+  where four of eighty fitted and five did not; the row still starts right of
+  the treasury.
 - **The map**: terrain tiles culled to the camera; markers + labels + an
   open-job count per site (`2 quests` / `1 quest` / `dry`) — **the glance the
   board is read through**, and clicking the marker is how the board is
@@ -223,9 +229,9 @@ photographed frame — and `dispatch_reads_the_selection` and
 `selection_moves_nothing` are the other two halves. The count is a shipped
 literal: **one**.
 
-## 3c. The site panel — the job board, and the order given from it
+## 3c. The site panel — the job board, and the posting made from it
 
-**A site marker opens a panel for that site, and orders nothing.** Before the
+**A site marker opens a panel for that site, and asks nothing.** Before the
 job board a marker showed a count and took an order, so with six jobs a site
 the player could see how much work stood at a place and never what it was; the
 owner's wave-1.1 playtest reported exactly that (`FINDINGS.md` G-019), and
@@ -247,15 +253,29 @@ The panel is where that decision is made and given.
   scorer and the dispatch use, never a second computation. **With nobody
   selected there is no fit column and no travel line at all**, because a fit
   for nobody is a number about nothing; the footer says what to do instead.
-- **The row is the order.** Tapping an open row with an idle character
-  selected issues the dispatch at the clock's minute, naming that job.
-  Tapping a claimed or finished row, or any row with nobody selected, or
-  ordering somebody who is out, bounces in the established style — a toast
-  under the bar and the same sentence in the notices — and changes nothing
-  else. There is exactly one way to order.
-- **A given order puts the board down with the selection.** The choice is
-  made, and a board left open would lie across the markers the next order
-  needs.
+- **The row is the posting** (wave 1.2, and the whole of what changed). The
+  same one-tap gesture that ordered somebody now **posts that job to them at
+  the wage the footer is showing**, and they answer for themselves. The row
+  says so before the tap: with somebody selected, each open row carries the
+  scorer's own read of that offer — `would take it` / `reluctant` / `would
+  refuse`, with the reason — from `answers::read`, which builds the candidate
+  list a rescore would build and calls `autonomy::choose` on it. **A preview
+  that could disagree with the decision is the failure this panel is most able
+  to cause**, and one function is what refuses it. Tapping a claimed or
+  finished row, or a row with nobody selected and nobody-to-anyone unset, or a
+  job already posted, bounces in the established style — a toast under the bar
+  and the same sentence in the notices — and changes nothing else. **Posting
+  to somebody who is out is allowed**: asks travel, and it is heard when a
+  messenger reaches them.
+- **The board's own two controls** live in the footer band, not on the rows: a
+  wage stepper (`- 20g +`) that opens at the standing rate, and a `TO` toggle
+  that switches between the selection and anyone. They are the board's because
+  a stepper inside a row would be a control inside a control, and because a
+  row cut short to make room for one leaves no room for the verdict's reason —
+  which is the sentence this wave exists to put on screen.
+- **A made posting puts the board down with the selection.** The ask is made,
+  the answer is the world's, and a board left open would lie across the
+  markers the next one needs.
 - **The board swallows clicks inside its own rectangle**, where the character
   panel's body falls through, and the difference is not an inconsistency. The
   panel is a passive detail view that must be up during a dispatch, so a body
@@ -267,9 +287,36 @@ The panel is where that decision is made and given.
 - **The marker keeps its count** as the glance (§3): the count is what the
   board is read through, and it is the same number the board's header says in
   words. Under an open board the map's own words say nothing (§3).
+- **The fit chip** in the header (`what is fit?`) says what the fit column
+  means and what it does not mean yet — it sways whether somebody agrees, and
+  every job succeeds until resolution lands (wave 1.4). It is derived from the
+  wave it is in, like every other chip line.
 - Six rows, which is what a site is authored with; `floors::layout_floors`
   asserts no site holds more, because a job with no row is a job nobody can be
-  sent to now that the row is the order.
+  asked for now that the row is the posting.
+
+## 3d. The postings ledger, and the standing rates (wave 1.2)
+
+**One drawer, two bands**, for the reason the feed drawer carries the notices
+band: they are two readings of one subject, and a player deciding what to pay
+is a player looking at what they have already promised. The LEDGER handle
+opens it; with the asks module off it does not open at all and says so.
+
+- **The ledger band** (left, eight rows, newest first) is **a view of
+  `Sim::postings`**: every row is derived from the record on every draw, so
+  there is no state here that could disagree with what the scorer weighs. A
+  row is two lines — *status, who, what, wage, until* over *when it was made
+  and who has heard or answered it, with the reason they gave* — and a
+  standing posting carries a `WITHDRAW` button, which is the one way a posting
+  comes down.
+- **The rates band** (right, four rows) is a name, the rate, a `-` and a `+`,
+  and a `STAND` button that posts that kind of work to anyone until withdrawn.
+  Both writes go into the simulation, like the auto-pause radios: a rate
+  stepped and a posting withdrawn are recorded inputs that change what the
+  world does.
+- **The job row is where a posting is made** (§3c); this drawer is where the
+  player sees what they have asked for and what it costs. Nothing is posted
+  from here except the four standing postings, and nothing else can withdraw.
 
 ## 4. Readability floors — what binds here
 
@@ -280,16 +327,27 @@ world unit is one reference pixel); no interactive overlap; no text across
 a control it does not label; stat numbers carry their icon (the treasury's
 coin); ASCII everywhere.
 
-The floors bind **every** surface §3a, §3b and §3c add: a feed row, a face row, a
-config radio, a meter chip, a roster row, a **job row**, a trait chip anywhere
-it appears, and the character panel's and the board's closes are all at or
-above the 32x32 target floor, none of them overlaps another control that
+The floors bind **every** surface §3a, §3b, §3c and §3d add: a feed row, a face
+row, a config radio, a meter chip, a roster row, a **job row**, the board's
+wage steppers and its `TO` toggle, a **ledger row's withdraw**, a **rate's
+steppers and its STAND**, a trait chip anywhere it appears, and the character
+panel's and the board's closes are all at or above the 32x32 target floor, none of them overlaps another control that
 shares its screen, and every row of text is inside the surface that holds it.
 `floors::controls_for` is the one function that says which controls share a
 screen, so the overlap floor is asked about the right set — and since the job
 board and the faces list share the left of the screen and are never open
 together, **the base screen is two sets**, `targets()` and `board_targets()`,
 and `layout_floors` judges both.
+
+**Map labels are bound at the default zoom, and that is what fixes the zoom.**
+The chrome rides `UiMap` and is a constant size on screen however the camera
+moves; a name under a figure is drawn in *world* units and shrinks as the
+camera pulls back. `floors::map_legibility` states it: at the default camera a
+name reads at exactly the twelve-pixel floor, and **one notch of the wheel out
+puts it at 10.7**, under the floor — so the wave-1.2 rider to open the default
+zoom out one level was refused by the floor, and the default stays at 540. The
+crowding that rider was aimed at is real and is not a zoom problem
+(`FINDINGS.md` G-022).
 
 **The off-screen floor is restated for a camera that roams.** giri asserted
 every quad inside the design rect; a pan/zoom map legitimately draws
@@ -302,7 +360,7 @@ frame judges hold all three.
 
 ## 5. Screenshot process
 
-Fourteen PNGs per verify run. Reference-only, because they are pictures of what
+Sixteen PNGs per verify run. Reference-only, because they are pictures of what
 is on screen rather than of how the chrome scales: **the settlement** at
 world-minute 0 (the whole cast standing at their homes, named, before
 anything is dispatched, which is wave 0b's own exit question), **the
@@ -315,9 +373,13 @@ given from one of its rows, and refusing a row somebody already has — and
 **the world living on its own** —
 the map at a minute when nobody was told to go anywhere and half the band is
 on the road because they decided to be, which is wave 1.1's own exit
-question — and **the selection reproduction**: the owner's own playtest steps,
+question — **the selection reproduction**: the owner's own playtest steps,
 one character picked on the strip and another picked on the map, with one ring
-and one lit chip on the second of them (§3b). At both the reference surface and
+and one lit chip on the second of them (§3b) — and, since wave 1.2, **a
+refusal mid-pause** (a posting made to somebody who says no, the world stopped
+by `ask-declined`, and the reason on the banner) and **the postings ledger**
+with one posting still recruiting, one refused, and the standing rates beside
+them. At both the reference surface and
 600x540 narrow: **the mid-travel map** (photographed with two parties on
 visibly different routes) and **the feed mid-pause** (the reason line
 showing, and the entry that stopped the world ringed in gold). Plus the

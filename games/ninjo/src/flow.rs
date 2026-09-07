@@ -7,11 +7,14 @@
 //! `clock::advance`'s and the scheduler is `sim::fire_due`'s; this file turns
 //! input into orders and UI state.
 //!
-//! The dispatch vocabulary is two clicks (DESIGN §5): select a character —
-//! from any surface that shows one — then tap an open job on a site's board.
-//! A site marker **opens the board and orders nothing**; the job row is the
-//! one way to give an order, so the work is visible before it is chosen. A
-//! refused order bounces — a toast and a log line, never silence.
+//! **The player's verb is the posting** (wave 1.2), and it is the same two
+//! clicks the order was: select a character — from any surface that shows one
+//! — then tap an open job on a site's board, which **posts** that job to them
+//! at the standing rate. The row's second control posts it open instead, and
+//! its steppers move the wage first. A site marker opens the board and asks
+//! nothing. A posting that cannot be made bounces — a toast and a log line,
+//! never silence — and a posting that *can* be made binds nobody: the answer
+//! is the scorer's (`asks.rs`).
 //!
 //! **There is one selection** (`Flow::selected`, UI.md §3b). Every select path
 //! writes that one index and every highlight reads it, which is what makes a
@@ -77,6 +80,22 @@ pub struct Flow {
     /// Whether the roster drawer is open — everyone in one list (wave 1.1's
     /// clarity slice). The `r` key and the ROSTER handle both open it.
     pub roster_open: bool,
+    /// **Whether the postings ledger is open** (wave 1.2) — every posting the
+    /// player has made, and the standing rates that price them.
+    pub ledger_open: bool,
+    /// **The wage the open board is offering**, where the player has stepped
+    /// it off the standing rate.
+    ///
+    /// One offer, held by the board rather than by a row: it is what the next
+    /// tap pays, it is drawn where it is set, and it goes down with the board.
+    /// Presentation — the posting made from it is what reaches the sim, and
+    /// `board::board_wage` is the one reader.
+    pub offer: Option<i64>,
+    /// **Whether the next tap posts to anyone** rather than to the selected
+    /// character — the bounty, as against the contract.
+    pub post_open: bool,
+    /// Whether the board's fit chip is showing its explanation.
+    pub fit_explained: bool,
     /// Which trait chip's explanation is showing, if one is.
     ///
     /// **A trait, not a place**: tapping the same word anywhere it appears —
@@ -147,10 +166,14 @@ impl Flow {
         self.feed_open = false;
         self.modes_open = false;
         self.roster_open = false;
+        self.ledger_open = false;
         self.tuner.open = false;
         self.drilled = None;
         self.board = None;
         self.selected = None;
+        self.offer = None;
+        self.post_open = false;
+        self.fit_explained = false;
     }
 
     /// Raise a toast, and log the same sentence — nothing appears only in a
@@ -198,12 +221,16 @@ pub fn load_scenario(world: &mut World) {
     flow.show_ignored = false;
     flow.seed = seed;
     flow.explained = None;
-    let flow = world.resource_mut::<Flow>();
     // The stamp on the opening line carries seed and module set; the
     // constants ride the drawer's own stamp, which is always on screen while
-    // it is open (GDD §9: stamps carry seed, constants, variant, module set).
+    // it is open (GDD §9: stamps carry seed, constants, variant, module set),
+    // and since wave 1.2 the standing rates ride it too — they are sim state
+    // that changes what the world does, so a recording that did not say what
+    // work paid would be a recording of an unknown world.
+    let rates = world.resource::<Sim>().rates.stamp();
+    let flow = world.resource_mut::<Flow>();
     flow.note(format!(
-        "seed {seed} - {} - the world opens paused; space runs it",
+        "seed {seed} - {} - {rates} - the world opens paused; space runs it",
         modules.stamp()
     ));
 }
@@ -308,13 +335,29 @@ pub fn handle_input(world: &mut World) {
         roster_click(world, at);
         return;
     }
+    if world.resource::<Flow>().ledger_open {
+        ledger_click(world, at, tick);
+        return;
+    }
     for (handle, open) in [
         (layout::feed_button(), Drawer::Feed),
         (layout::modes_button(), Drawer::Modes),
         (layout::roster_button(), Drawer::Roster),
+        (layout::ledger_button(), Drawer::Ledger),
     ] {
         if !handle.contains(at) {
             continue;
+        }
+        // **With asks off there is no ledger**, and a handle that opened an
+        // empty one would be a surface claiming a module the build does not
+        // have. It says so instead (the module's degrades-to sentence).
+        if matches!(open, Drawer::Ledger)
+            && !world.resource::<Sim>().modules.enabled(crate::asks::MODULE)
+        {
+            world
+                .resource_mut::<Flow>()
+                .bounce(tick, "asks are off - there is no ledger to open".to_owned());
+            return;
         }
         let flow = world.resource_mut::<Flow>();
         flow.close_everything();
@@ -322,6 +365,7 @@ pub fn handle_input(world: &mut World) {
             Drawer::Feed => flow.feed_open = true,
             Drawer::Modes => flow.modes_open = true,
             Drawer::Roster => flow.roster_open = true,
+            Drawer::Ledger => flow.ledger_open = true,
         }
         return;
     }
@@ -371,6 +415,28 @@ pub fn handle_input(world: &mut World) {
             world.resource_mut::<Flow>().board = None;
             return;
         }
+        if layout::board_fit_chip().contains(at) && world.resource::<Flow>().selected.is_some() {
+            let flow = world.resource_mut::<Flow>();
+            flow.fit_explained = !flow.fit_explained;
+            return;
+        }
+        // **The board's own controls**, before its rows: the wage the next
+        // tap offers, and whether it is offered to the selection or to
+        // anyone. Neither of them posts anything.
+        for (rect, delta) in [
+            (layout::board_wage_down(), -crate::asks::RATE_STEP),
+            (layout::board_wage_up(), crate::asks::RATE_STEP),
+        ] {
+            if rect.contains(at) {
+                step_offer(world, site, delta);
+                return;
+            }
+        }
+        if layout::board_to().contains(at) {
+            let flow = world.resource_mut::<Flow>();
+            flow.post_open = !flow.post_open;
+            return;
+        }
         let jobs = world
             .resource::<Sim>()
             .sites
@@ -378,7 +444,20 @@ pub fn handle_input(world: &mut World) {
             .map_or(0, |board| board.quests.len());
         for slot in 0..jobs.min(layout::BOARD_ROWS) {
             if layout::board_row(slot).contains(at) {
-                order_dispatch(world, tick, site, slot);
+                let flow = world.resource::<Flow>();
+                let (open, selected) = (flow.post_open, flow.selected);
+                match (open, selected) {
+                    (true, _) => make_posting(world, tick, site, slot, crate::asks::Who::Anyone),
+                    (false, Some(who)) => {
+                        make_posting(world, tick, site, slot, crate::asks::Who::Person(who));
+                    }
+                    (false, None) => {
+                        let job = job_name(world, site, slot);
+                        let text =
+                            format!("select somebody first, then tap {job} - or post to anyone");
+                        world.resource_mut::<Flow>().bounce(tick, text);
+                    }
+                }
                 return;
             }
         }
@@ -515,6 +594,8 @@ enum Drawer {
     Modes,
     /// The roster.
     Roster,
+    /// The postings ledger, and the standing rates beside it.
+    Ledger,
 }
 
 /// A click inside the open roster drawer.
@@ -639,72 +720,208 @@ fn apply_speed(world: &mut World, tick: u64, change: Option<Rate>) {
     let _ = tick;
 }
 
-/// The dispatch order: the selected character to **this job at this site**, at
-/// the clock's minute.
-///
-/// **It reads the one selection** and no pick of its own, so the two clicks are
-/// the same two clicks whichever surface the first one landed on — a chip, a
-/// figure, a roster row, a face. The second click is a job row on the site's
-/// board (UI.md §3c), which is the whole of what changed: the order names the
-/// work instead of naming a site and taking whatever was in front.
-///
-/// A row tapped with nobody selected, a row somebody already has, and a row
-/// ordered for a character who is out all **bounce with their reason** and
-/// change nothing else (`sim::Refusal`).
-fn order_dispatch(world: &mut World, tick: u64, site_index: usize, slot: usize) {
-    let site = crate::grid::LOCATIONS[sim::site_location(site_index)].name;
-    let job = world
+/// The job a row names, for a message about it.
+fn job_name(world: &World, site: usize, slot: usize) -> String {
+    world
         .resource::<Sim>()
         .sites
-        .get(site_index)
+        .get(site)
         .and_then(|board| board.quest(slot))
         .map_or("that job", |quest| quest.name)
-        .to_owned();
-    let Some(party_index) = world.resource::<Flow>().selected else {
-        let text = format!("select somebody first, then tap {job}");
+        .to_owned()
+}
+
+/// **Step the wage the board is offering.** Presentation until a posting is
+/// made from it, and it goes down with the board: an offer nobody can see is
+/// a number that would surprise somebody at the moment they tap.
+fn step_offer(world: &mut World, site: usize, delta: i64) {
+    let held = {
+        let sim = world.resource::<Sim>();
+        let lens = Lens::on(sim);
+        crate::board::board_wage(world.resource::<Flow>(), &lens, site)
+    };
+    world.resource_mut::<Flow>().offer = Some((held + delta).clamp(0, crate::asks::RATE_MAX));
+}
+
+/// **The posting**: this job, at the wage the row is offering, to the
+/// selected character or to anyone (GDD's postings section).
+///
+/// The player's whole verb, and the one place a posting is made from a
+/// board. It reads the same selection every other gesture does and the same
+/// wage the row printed (`board::wage_offered`), so what the player saw is
+/// what is asked for. A row that is already spoken for, or already posted,
+/// bounces with its reason and changes nothing else.
+fn make_posting(world: &mut World, tick: u64, site: usize, slot: usize, who: crate::asks::Who) {
+    let job = sim::JobId { site, slot };
+    let name = job_name(world, site, slot);
+    if !world.resource::<Sim>().modules.enabled(crate::asks::MODULE) {
+        let text = format!("asks are off - {name} can only be watched");
         world.resource_mut::<Flow>().bounce(tick, text);
         return;
+    }
+    let Some(quest) = world
+        .resource::<Sim>()
+        .sites
+        .get(site)
+        .and_then(|board| board.quest(slot))
+        .copied()
+    else {
+        return;
+    };
+    if !world
+        .resource::<Sim>()
+        .sites
+        .get(site)
+        .is_some_and(|board| board.is_open(slot))
+    {
+        let text = sim::Refusal::Taken.message("", "", &name);
+        world.resource_mut::<Flow>().bounce(tick, text);
+        return;
+    }
+    if world
+        .resource::<Sim>()
+        .postings
+        .already_posted(world.resource::<Sim>(), who, job)
+    {
+        let text = format!("{name} is already posted - the ledger has it");
+        world.resource_mut::<Flow>().bounce(tick, text);
+        return;
+    }
+    let wage = {
+        let flow = world.resource::<Flow>();
+        flow.offer
+            .unwrap_or_else(|| world.resource::<Sim>().rates.of(quest.task))
     };
     let now = world.resource::<Clock>().minutes;
     let tuning = *world.resource::<Tuning>();
     let grid = world.resource::<Grid>().clone();
-    let refused = {
+    {
         let sim = world.resource_mut::<Sim>();
-        sim::dispatch(
+        crate::asks::post(
             sim,
             &grid,
             &tuning,
             now,
-            party_index,
-            sim::JobId {
-                site: site_index,
-                slot,
+            crate::asks::Offer {
+                who,
+                what: crate::asks::What::Job(job),
+                until: crate::asks::Until::Done,
+                wage,
             },
-            sim::Motive::ordered(),
-        )
-        .err()
-    };
-    match refused {
-        None => {
-            // **A given order puts the board down with the selection.** The
-            // board is the surface you choose on, and the choice is made; a
-            // board left open would also lie across the map's other markers,
-            // so the next order could not reach them.
-            let flow = world.resource_mut::<Flow>();
-            flow.selected = None;
-            flow.board = None;
+        );
+    }
+    // **The board goes down with the selection**, as a given order used to
+    // put it down: the ask is made, the answer is the world's, and a board
+    // left open would lie across the markers the next one needs.
+    let flow = world.resource_mut::<Flow>();
+    flow.selected = None;
+    flow.board = None;
+    flow.offer = None;
+    flow.fit_explained = false;
+}
+
+/// **A standing open posting for one kind of work** — the policy posting.
+///
+/// To anyone, until withdrawn, at the standing rate: the player says "this
+/// camp pays for scouting" once, and everybody who reads the board weighs it
+/// on every rescore until it comes down. One per task type, because a second
+/// identical notice would be the same notice twice.
+fn post_standing(world: &mut World, tick: u64, task: crate::traits::TaskType) {
+    let what = crate::asks::What::Task(task);
+    let already = world
+        .resource::<Sim>()
+        .postings
+        .all()
+        .iter()
+        .any(|posting| {
+            posting.status == crate::asks::Status::Open
+                && posting.who == crate::asks::Who::Anyone
+                && posting.what == what
+        });
+    if already {
+        let text = format!("{} work is already posted - withdraw it first", task.id());
+        world.resource_mut::<Flow>().bounce(tick, text);
+        return;
+    }
+    let now = world.resource::<Clock>().minutes;
+    let tuning = *world.resource::<Tuning>();
+    let grid = world.resource::<Grid>().clone();
+    let wage = world.resource::<Sim>().rates.of(task);
+    let sim = world.resource_mut::<Sim>();
+    crate::asks::post(
+        sim,
+        &grid,
+        &tuning,
+        now,
+        crate::asks::Offer {
+            who: crate::asks::Who::Anyone,
+            what,
+            until: crate::asks::Until::Withdrawn,
+            wage,
+        },
+    );
+}
+
+/// A click inside the open ledger drawer: a withdrawal, or a standing rate.
+///
+/// **Both writes go into the simulation** — a posting withdrawn and a rate
+/// stepped are recorded inputs that change what the world does, exactly as
+/// the auto-pause config's radios are. Anything that is not one of the
+/// drawer's own controls shuts it, which is every drawer's rule.
+fn ledger_click(world: &mut World, at: Vec2, tick: u64) {
+    let now = world.resource::<Clock>().minutes;
+    let standing: Vec<usize> = world
+        .resource::<Sim>()
+        .postings
+        .all()
+        .iter()
+        .rev()
+        .take(layout::LEDGER_ROWS)
+        .map(|posting| posting.id)
+        .collect();
+    for (row, id) in standing.into_iter().enumerate() {
+        if !layout::ledger_withdraw(row).contains(at) {
+            continue;
         }
-        Some(refusal) => {
-            let party = world
-                .resource::<Sim>()
-                .parties
-                .get(party_index)
-                .map_or("someone", |party| party.name)
-                .to_owned();
-            let text = refusal.message(&party, site, &job);
-            world.resource_mut::<Flow>().bounce(tick, text);
+        let line = {
+            let sim = world.resource::<Sim>();
+            sim.postings
+                .get(id)
+                .map(|posting| posting.line(&Lens::on(sim)))
+        };
+        crate::asks::withdraw(world.resource_mut::<Sim>(), now, id);
+        if let Some(line) = line {
+            world
+                .resource_mut::<Flow>()
+                .note(format!("{} - withdrew {line}", stamp(now)));
+        }
+        return;
+    }
+    for (row, task) in crate::traits::TaskType::ALL.iter().copied().enumerate() {
+        // **The standing posting**: this kind of work, to anyone, until the
+        // player takes it down, at the rate the row is showing.
+        if layout::rates_post(row).contains(at) {
+            post_standing(world, tick, task);
+            return;
+        }
+        for (rect, delta) in [
+            (layout::rates_down(row), -crate::asks::RATE_STEP),
+            (layout::rates_up(row), crate::asks::RATE_STEP),
+        ] {
+            if !rect.contains(at) {
+                continue;
+            }
+            let held = world.resource_mut::<Sim>().rates.step(task, delta);
+            world.resource_mut::<Flow>().note(format!(
+                "{} - {} work now pays {held}g",
+                stamp(now),
+                task.id()
+            ));
+            return;
         }
     }
+    let _ = tick;
+    world.resource_mut::<Flow>().ledger_open = false;
 }
 
 /// The art store and its handles, inserted before anything draws.

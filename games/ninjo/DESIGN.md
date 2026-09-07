@@ -207,13 +207,16 @@ Deliberately thin — enough that the world visibly runs:
 - **Quests** exist at quest-site nodes (authored for S1; a small
   generator can wait): pot, duration in world-minutes, site, and — from
   wave 1.1 — a task type (`CAST.md` §2).
-- **Dispatch**: the player selects a character from any surface that shows
-  one, then **taps an open job on that site's board**. The order names the
-  job: `(site, slot)`, not "this site, whatever is in front". A site marker
-  **opens the board and issues nothing**; the job row is the only thing that
-  issues an order. That is the entire order vocabulary. It is still two
-  clicks — the pick, then the job — with the marker as the way the board is
-  reached.
+- **Posting** (wave 1.2; this replaces dispatch as the player's verb): the
+  player selects a character from any surface that shows one, then **taps an
+  open job on that site's board**, which *posts* that job to them at the
+  standing rate. The posting names the job: `(site, slot)`, not "this site,
+  whatever is in front". A site marker **opens the board and asks nothing**;
+  the job row is the only thing that makes a posting. That is the entire
+  vocabulary, and it is still two clicks — the pick, then the job — with the
+  marker as the way the board is reached. **The player cannot dispatch
+  anybody.** `sim::dispatch` is reached only by a character who decided to
+  go: their own idea, or an ask they heard and agreed to (GDD §3b).
 - A dispatched party **travels** (follows its computed path tile by
   tile, each tile entry costing that terrain's world-minutes), **works**
   the quest at the site for its duration, **succeeds** (stub — no
@@ -235,6 +238,15 @@ every row — `CAST.md` §2.)* The five event classes land with world-time +
 tile + named location on every entry; the log renders them in mechanical
 narration (`d1 02:41 - OWL completed the mushroom haul - 40g into the
 treasury (40g held) - turning for home`).
+
+*Implemented (w1.2):* **the player posts and the sim dispatches on
+agreement.** The two clicks are the two clicks the job-board session landed;
+what changed is what the second one means and what happens next — the posting
+is heard, the scorer weighs it against everything else that character could
+do, and a departure is the answer rather than the order. The board carries the
+wage the tap would offer and, for the selection, what the scorer makes of it.
+Nothing else in this section changed: the journey, the events and the pot are
+the ones below.
 
 *Implemented (the job-board session, 2026-09-06):* **jobs are the dispatch
 target**, and the paragraph above is rewritten to say so. S1 said "send it

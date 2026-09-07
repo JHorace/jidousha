@@ -104,26 +104,29 @@ pub struct Directive {
     pub what: Act,
 }
 
-/// How many ticks an order takes from its first microstep to the tick its
-/// dispatch lands on.
+/// How many ticks a posting takes from its first microstep to the tick it is
+/// made on.
 ///
-/// **Five since the job board landed**, where it was three. An order is now
-/// three clicks — the person, the site's marker, the job's row — and the
-/// conductor microsteps a click into a move and a press, so the sequence is
-/// six ticks and its effect lands on the sixth: point, click (the chip),
-/// point, click (the marker), point, click (the row). The clock the prediction
-/// is made against is read *before* the tick the press lands on, which is why
-/// the lead is one less than the tick count.
+/// **Five since the job board landed**, where it was three, and unchanged by
+/// wave 1.2: the gesture is the same three clicks — the person, the site's
+/// marker, the job's row — and the conductor microsteps a click into a move
+/// and a press, so the sequence is six ticks and its effect lands on the
+/// sixth. The clock the prediction is made against is read *before* the tick
+/// the press lands on, which is why the lead is one less than the tick count.
 pub const ORDER_LEAD: u64 = 5;
 
-/// A dispatch order, as the scripts state one: this party to **this job at
-/// this site**, at this world-minute — three clicks through the real UI, begun
-/// early enough that the last of them lands on the minute it names.
+/// **A posting, as the scripts make one**: this job at this site, posted to
+/// this party at the standing rate, at this world-minute — three clicks
+/// through the real UI, begun early enough that the last of them lands on the
+/// minute it names.
 ///
-/// The marker opens the board and orders nothing; the row is the order (UI.md
-/// §3c). The two-click shape survives as marker-then-row with the person
-/// picked first, exactly as a player does it.
-pub fn order(minute: u64, party: usize, site: usize, slot: usize) -> [Directive; 3] {
+/// The same three clicks that ordered somebody in wave 1.1, because the
+/// gesture did not change; what changed is what it means. The posting is
+/// heard at once by somebody standing at their own door, and the answer is
+/// theirs (`asks.rs`): a script cannot make anybody go anywhere, which is the
+/// whole of the wave and the reason this function is no longer called
+/// `order`.
+pub fn post(minute: u64, party: usize, site: usize, slot: usize) -> [Directive; 3] {
     let marker = layout::marker_rect(LOCATIONS[sim::site_location(site)].tile);
     [
         Directive {
@@ -621,9 +624,9 @@ pub const COMPLETIONS: [u64; 13] = [
     180, 181, 202, 432, 470, 497, 567, 569, 576, 603, 608, 628, 786,
 ];
 
-/// The shared order script under one speed prologue: four dispatches at
-/// fixed world-times — three parties out at once, then a re-dispatch to
-/// the barrier-detour site once OX is home.
+/// The shared script under one speed prologue: four **postings** at fixed
+/// world-times — three people asked at once, then a fourth ask to the
+/// barrier-detour site once Bob is home.
 ///
 /// `resume_key` is `Some` for the auto-pause variant of the sweep: a tap of
 /// the script's own speed key a few ticks after each completion, which is the
@@ -638,15 +641,17 @@ fn script_with(speed_prologue: &[Directive]) -> Vec<Directive> {
     // minutes every speed visits. The last one is late enough that Bob is home
     // from the first.
     //
-    // **The slots are named, not first-open.** Each order picks a row that
+    // **The slots are named, not first-open.** Each posting picks a row that
     // suits the person the way a player would: Bob fights, Steve hauls, Alex
     // scouts — which is exactly the choice the board exists to let anybody
-    // make, and it is now visible in the script rather than hidden in
-    // whichever row happened to be in front.
-    script.extend(order(ORDER_MINUTES[0], 0, 0, 2)); // Bob to the ridge patrol
-    script.extend(order(ORDER_MINUTES[1], 1, 1, 0)); // Steve to the mushroom haul
-    script.extend(order(ORDER_MINUTES[2], 2, 2, 5)); // Alex to the far survey
-    script.extend(order(ORDER_MINUTES[3], 0, 3, 0)); // Bob again, to the vault ledger
+    // make. That all four are agreed to is a fact about the founding band at
+    // the standing rates, not an assumption of the harness: the transcript
+    // carries the `ask-agreed` that says so, and `compliance.rs` is where a
+    // refusal is staged on purpose.
+    script.extend(post(ORDER_MINUTES[0], 0, 0, 2)); // the ridge patrol, to Bob
+    script.extend(post(ORDER_MINUTES[1], 1, 1, 0)); // the mushroom haul, to Steve
+    script.extend(post(ORDER_MINUTES[2], 2, 2, 5)); // the far survey, to Alex
+    script.extend(post(ORDER_MINUTES[3], 0, 3, 0)); // the vault ledger, to Bob again
     script
 }
 
@@ -669,10 +674,10 @@ pub fn speed_scripts() -> Vec<(&'static str, Vec<Directive>)> {
         what: Act::Tap(key),
     };
     let mut mixed = vec![tap(When::Tick(5), Key::Digit2)];
-    mixed.extend(order(ORDER_MINUTES[0], 0, 0, 2));
-    mixed.extend(order(ORDER_MINUTES[1], 1, 1, 0));
+    mixed.extend(post(ORDER_MINUTES[0], 0, 0, 2));
+    mixed.extend(post(ORDER_MINUTES[1], 1, 1, 0));
     mixed.push(tap(When::Minute(ORDER_MINUTES[2]), Key::Space));
-    mixed.extend(order(ORDER_MINUTES[2], 2, 2, 5));
+    mixed.extend(post(ORDER_MINUTES[2], 2, 2, 5));
     mixed.push(tap(
         When::MinuteHeld {
             minute: ORDER_MINUTES[2],
@@ -681,7 +686,7 @@ pub fn speed_scripts() -> Vec<(&'static str, Vec<Directive>)> {
         Key::Space,
     ));
     mixed.push(tap(When::Minute(64), Key::Digit3));
-    mixed.extend(order(ORDER_MINUTES[3], 0, 3, 0));
+    mixed.extend(post(ORDER_MINUTES[3], 0, 3, 0));
     vec![
         ("all-1x", script_with(&[tap(When::Tick(5), Key::Digit1)])),
         ("all-4x", script_with(&[tap(When::Tick(5), Key::Digit3)])),
@@ -695,9 +700,29 @@ pub fn speed_scripts() -> Vec<(&'static str, Vec<Directive>)> {
 /// routes themselves).
 pub fn expected_events() -> Vec<(u64, EventClass, usize, Option<usize>)> {
     // (minute, class, party, location index - None on an unnamed tile)
+    //
+    // **Wave 1.2's timeline is wave 1.1's, plus twelve.** A posting is the
+    // player's own act, so its party is `sim::PLAYER` — the index that names
+    // nobody in the roster, which is what makes the feed read it as *you*.
+    // The four scripted
+    // asks add three occurrences each at the minute they are made — the
+    // posting, the hearing, and the agreement — and change nothing else: the
+    // founding band takes all four at the standing rates, so the journeys,
+    // the completions and everybody else's own choices are minute for minute
+    // what they were before the player stopped ordering. That is the claim
+    // this list is, and it is why nothing was re-timed to make it pass.
     vec![
+        (16, EventClass::PostingMade, sim::PLAYER, Some(0)),
+        (16, EventClass::AskHeard, 0, None),
+        (16, EventClass::AskAgreed, 0, None),
         (16, EventClass::Departed, 0, None),
+        (32, EventClass::PostingMade, sim::PLAYER, Some(0)),
+        (32, EventClass::AskHeard, 1, None),
+        (32, EventClass::AskAgreed, 1, None),
         (32, EventClass::Departed, 1, None),
+        (48, EventClass::PostingMade, sim::PLAYER, Some(0)),
+        (48, EventClass::AskHeard, 2, None),
+        (48, EventClass::AskAgreed, 2, None),
         (48, EventClass::Departed, 2, None),
         (80, EventClass::Arrived, 2, Some(3)),
         (80, EventClass::WorkBegan, 2, Some(3)),
@@ -721,6 +746,9 @@ pub fn expected_events() -> Vec<(u64, EventClass, usize, Option<usize>)> {
         (342, EventClass::WorkBegan, 1, Some(1)),
         (360, EventClass::ActionStarted, 5, None),
         (360, EventClass::Departed, 5, None),
+        (360, EventClass::PostingMade, sim::PLAYER, Some(0)),
+        (360, EventClass::AskHeard, 0, None),
+        (360, EventClass::AskAgreed, 0, None),
         (360, EventClass::Departed, 0, None),
         (384, EventClass::ActionStarted, 6, None),
         (384, EventClass::Departed, 6, None),
@@ -785,12 +813,23 @@ pub fn expected_events() -> Vec<(u64, EventClass, usize, Option<usize>)> {
     ]
 }
 
-/// What the quests resolving inside the window pay, in gold.
+/// What the quests resolving inside the window pay **into** the treasury, in
+/// gold.
 ///
-/// The player orders four of them and the scorer takes the rest, which is
+/// The player asks for four of them and the scorer takes the rest, which is
 /// itself the module's loudest claim: a world where people go looking for work
 /// is a world where the board empties without anybody being told to empty it.
 pub const EXPECTED_TREASURY: i64 = 595;
+
+/// And what it pays **out** in wages inside the same window (GDD §4.1's
+/// TRANSFER port, wave 1.2).
+///
+/// All four postings are agreed to and all four jobs resolve before the run
+/// ends, so the wages are the four standing rates the script posted at: the
+/// ridge patrol and the vault ledger at the fight rate (24 each), the
+/// mushroom haul at the labour rate (16) and the far survey at the scout rate
+/// (20). A shipped literal, so a moved rate moves this and the round notices.
+pub const EXPECTED_WAGES: i64 = 84;
 
 /// One row of a reduced transcript: address, class, party, place, sentence.
 pub type Entry = (u64, &'static str, usize, Tile, Option<usize>, String);
@@ -861,6 +900,35 @@ pub fn judge_orders(checks: &mut Checks, run: &Conducted, label: &str) {
         format!(
             "{label}: {paid}g was paid inside the first {WINDOW} world-minutes and the quests \
              that resolve in them promise {EXPECTED_TREASURY}g"
+        ),
+    );
+    // **The money is conserved between holders** (GDD §4.1, and the first
+    // wave that moves any): every gold the pots minted is in the treasury or
+    // in somebody's wallet, and the wages inside the window are what the
+    // postings promised.
+    let wallets: i64 = run.sim.people.iter().map(|person| person.wallet).sum();
+    let opening: i64 = crate::people::roster()
+        .iter()
+        .map(|person| person.wallet)
+        .sum();
+    let minted: i64 = run.events.iter().map(|event| event.gold).sum();
+    checks.require(
+        run.sim.treasury + wallets - opening == minted,
+        "gold was minted or burned where the ports say it is only moved",
+        format!(
+            "{label}: the treasury holds {}g and the wallets {wallets}g over an opening \
+             {opening}g, against {minted}g minted at the pots; a wage is a transfer and \
+             transfers conserve",
+            run.sim.treasury
+        ),
+    );
+    let paid_out = wallets - opening;
+    checks.require(
+        paid_out == EXPECTED_WAGES,
+        "the wages paid are not what the postings promised",
+        format!(
+            "{label}: {paid_out}g reached the wallets and the four postings at the standing \
+             rates promise {EXPECTED_WAGES}g inside the run"
         ),
     );
     checks.require(

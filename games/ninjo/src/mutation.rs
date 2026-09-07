@@ -4,13 +4,15 @@
 //! A script that passes under a mutated constant is a vacuous assertion, and
 //! this is the only thing that says which of the two a check is. **Every**
 //! constant is moved to a value nothing plausibly authors, and one of the
-//! seven instruments must complain: the exact-time order script (terrain
+//! eight instruments must complain: the exact-time order script (terrain
 //! costs move arrival minutes), the pacing probes (the clock constants move
 //! the tick-for-minute arithmetic), the path battery (a cost that only a
 //! route's literal sees), the trait arithmetic (the mark constants), the
 //! store battery (the regard bounds, the write thresholds and the drift), the
-//! attention battery (the feed's cap and the focus pulse), or the scorer
-//! battery (every weight, every cadence, and the relationship preset).
+//! attention battery (the feed's cap and the focus pulse), the scorer
+//! battery (every weight, every cadence, and the relationship preset), or the
+//! asks battery (the targeted bonus, the wage's regard, and the compliance
+//! bands the ladder is swept over).
 //!
 //! The round grows with the drawer by construction: it walks `Field::ALL`, so
 //! a constant added to `constants.rs` arrives here needing only a
@@ -42,6 +44,7 @@ pub fn mutation_round(checks: &mut Checks) -> String {
         stores::judge_at(&mut probe, &mutated);
         attention::judge_at(&mut probe, &mutated);
         autonomy::judge_at(&mut probe, &mutated);
+        crate::compliance::judge_at(&mut probe, &mutated);
         let shipped = Tuning::SHIPPED.field(field);
         if probe.failures() > 0 {
             noticed += 1;
@@ -142,5 +145,10 @@ fn perturbation(field: Field) -> i64 {
         Field::BondsPreset => 0,
         // And the alive sweep's window stops existing.
         Field::AliveDays => 0,
+        // Being asked by name stops counting for anything, which moves the
+        // compliance bands and every staged ask sum the asks battery pins.
+        Field::AskTargeted => 0,
+        // And paying off the standing rate stops moving regard at all.
+        Field::WageRegard => 0,
     }
 }

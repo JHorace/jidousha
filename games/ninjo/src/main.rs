@@ -34,6 +34,8 @@ use std::process::ExitCode;
 
 use jidousha::prelude::*;
 
+mod answers;
+mod asks;
 mod attention;
 mod autonomy;
 mod board;
@@ -41,12 +43,14 @@ mod camera;
 mod capture;
 mod checks;
 mod clock;
+mod compliance;
 mod constants;
 mod floors;
 mod flow;
 mod frames;
 mod grid;
 mod layout;
+mod ledger;
 mod lens;
 mod library;
 mod links;

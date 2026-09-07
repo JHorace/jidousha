@@ -135,6 +135,18 @@ pub struct Tuning {
     /// How many world-days the alive sweep gives every character to take at
     /// least one job (GDD §9's economy sweep, opening half).
     pub alive_days: i64,
+
+    // ── asks: the postings module (GDD §5; wave 1.2) ──────────────────────
+    /// What being asked **by name** adds to a posting's sum, over and above
+    /// what the same work at the same wage is worth off a board.
+    ///
+    /// The whole of an ask's "obligation": a notice on the board is a notice,
+    /// and somebody standing in front of you is not (GDD's postings section).
+    pub ask_targeted: i64,
+    /// What paying a wage above the standing rate for its task type earns the
+    /// player in regard — and, below it, costs (GDD §4.2's wage-vs-expectation
+    /// operation, at the expectation the posting recorded).
+    pub wage_regard: i64,
 }
 
 impl Resource for Tuning {}
@@ -188,6 +200,8 @@ impl Tuning {
         visit_mutual: 1,
         bonds_preset: 1,
         alive_days: 3,
+        ask_targeted: 6,
+        wage_regard: 1,
     };
 
     /// The constants in effect, as the lines the drawer's stamp and every
@@ -212,7 +226,8 @@ impl Tuning {
              need{} want{} apt{}\n\
              pot{} regard{} idle{}\n\
              visit {}m +{} both{}\n\
-             bonds {} alive {}d",
+             bonds {} alive {}d\n\
+             ask +{} wage +/-{}",
             self.road_cost,
             self.plains_cost,
             self.forest_cost,
@@ -247,6 +262,8 @@ impl Tuning {
             self.visit_mutual,
             self.bonds_preset,
             self.alive_days,
+            self.ask_targeted,
+            self.wage_regard,
         )
     }
 
@@ -289,6 +306,8 @@ impl Tuning {
             Field::VisitMutual => &mut self.visit_mutual,
             Field::BondsPreset => &mut self.bonds_preset,
             Field::AliveDays => &mut self.alive_days,
+            Field::AskTargeted => &mut self.ask_targeted,
+            Field::WageRegard => &mut self.wage_regard,
         }
     }
 
@@ -494,6 +513,10 @@ pub enum Field {
     BondsPreset,
     /// How many world-days the alive sweep allows.
     AliveDays,
+    /// What being asked by name adds to a posting.
+    AskTargeted,
+    /// What paying off the standing rate moves regard by.
+    WageRegard,
 }
 
 impl Field {
@@ -533,6 +556,8 @@ impl Field {
         Field::VisitMutual,
         Field::BondsPreset,
         Field::AliveDays,
+        Field::AskTargeted,
+        Field::WageRegard,
     ];
 
     /// The name DESIGN gives this constant.
@@ -572,6 +597,8 @@ impl Field {
             Field::VisitMutual => "visit_mutual",
             Field::BondsPreset => "bonds_preset",
             Field::AliveDays => "alive_days",
+            Field::AskTargeted => "ask_targeted",
+            Field::WageRegard => "wage_regard",
         }
     }
 
@@ -633,6 +660,8 @@ impl Field {
             Field::VisitMutual => "1 if a visit's warmth is symmetric",
             Field::BondsPreset => "0 flat relationships, 1 authored",
             Field::AliveDays => "days the alive sweep allows a job",
+            Field::AskTargeted => "what being asked by name adds",
+            Field::WageRegard => "what paying off the rate moves regard",
         }
     }
 }

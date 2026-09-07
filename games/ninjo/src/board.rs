@@ -1,10 +1,17 @@
-//! **The site panel**: one site's job board, and the order given from it
-//! (UI.md §3c, DESIGN §5).
+//! **The site panel**: one site's job board, and the **posting** made from it
+//! (UI.md §3c, GDD's postings section).
 //!
 //! The surface a site marker opens. It is where the player finds out *what*
 //! work stands at a place — before this the marker carried a count and took
 //! an order, so with six jobs a site the amount of work was visible and the
 //! work itself was not (`FINDINGS.md` G-019).
+//!
+//! **The gesture is the same and its meaning is not.** Tapping an open row
+//! with somebody selected used to order them there; since wave 1.2 it
+//! **posts** the job to them at the standing rate, and they answer. The row
+//! says which: it carries the wage the tap would offer, and — with somebody
+//! selected — the scorer's own read of that offer, in the three words a
+//! verdict has and the reason behind them.
 //!
 //! **Nothing here computes an answer the simulation also computes.** The fit
 //! on a row is `traits::competence_at`, which is the scorer's own aptitude
@@ -45,6 +52,7 @@ pub fn site_board(
     lens: &Lens<'_>,
     grid: &crate::grid::Grid,
     tuning: &Tuning,
+    now: u64,
     site: usize,
 ) -> Panel {
     let mut panel = Panel::default();
@@ -80,7 +88,7 @@ pub fn site_board(
             layout::board_travel(),
             clipped(
                 &format!(
-                    "{} - {} {}, {} min from where they stand",
+                    "{} - {} {}, {} min away",
                     lens.name(who),
                     route.tiles.len(),
                     if route.tiles.len() == 1 {
@@ -94,6 +102,24 @@ pub fn site_board(
             ),
             theme::SMALL,
             theme::GOLD,
+        ));
+    }
+
+    // **The fit header** — a chip like every other chip, saying what the
+    // column under it means and what it does not mean yet (wave 1.2's clarity
+    // rider). Only where there is a fit column to explain.
+    if flow.selected.is_some() {
+        let tone = if flow.fit_explained {
+            theme::GOLD
+        } else {
+            theme::DIM
+        };
+        let chip = layout::board_fit_chip();
+        panel.text(TextRun::new(
+            crate::ui::centered(chip, "what is fit?", theme::SMALL, chip.min.y + 10.0),
+            "what is fit?",
+            theme::SMALL,
+            tone,
         ));
     }
 
@@ -130,6 +156,7 @@ pub fn site_board(
             theme::SMALL,
             theme::DIM,
         ));
+        let mut said = false;
         let art = quest.task.aptitude().icon();
         let mut icon = IconRun::new(at + layout::job::TASK_ICON, art, art.scale_across(CHIP));
         icon.tint = if open { theme::INK } else { theme::FAINT };
@@ -140,12 +167,7 @@ pub fn site_board(
             theme::SMALL,
             if open { theme::INK } else { theme::FAINT },
         ));
-        panel.text(TextRun::new(
-            at + layout::job::STATE,
-            clipped(&state_text, layout::job::STATE_W),
-            theme::SMALL,
-            state_tone,
-        ));
+
         // **The fit**, for the selected character and this row's own task —
         // the aptitude row the scorer multiplies in, printed rather than
         // recomputed.
@@ -158,23 +180,156 @@ pub fn site_board(
                 if fit > 0 { theme::GOLD } else { theme::FAINT },
             ));
         }
+        if lens.asks_on() {
+            // **What the scorer says they would do about it** — read-only,
+            // through the one function (`Lens::would_take`), so the row and
+            // the answer are one derivation. It stands where the state would
+            // be, because an open row's state is the word this replaces.
+            if let Some(who) = flow.selected
+                && open
+            {
+                let wage = wage_offered(flow, lens, site, slot, quest.task);
+                let (verdict, why) = lens.would_take(
+                    tuning,
+                    now,
+                    who,
+                    &crate::asks::preview_posting(
+                        who,
+                        site,
+                        slot,
+                        wage,
+                        lens.standing_rate(quest.task),
+                    ),
+                    crate::sim::JobId { site, slot },
+                );
+                let tone = if verdict.takes() {
+                    theme::REGARD
+                } else {
+                    theme::EMBER
+                };
+                panel.text(TextRun::new(
+                    at + layout::job::SAYS,
+                    clipped(&format!("{} - {why}", verdict.name()), layout::job::SAYS_W),
+                    theme::SMALL,
+                    tone,
+                ));
+                said = true;
+            }
+        }
+        if !said {
+            panel.text(TextRun::new(
+                at + layout::job::SAYS,
+                clipped(&state_text, layout::job::SAYS_W),
+                theme::SMALL,
+                state_tone,
+            ));
+        }
     }
 
-    let hint = match flow.selected {
-        None => "click somebody, then an open job here".to_owned(),
-        Some(who) if lens.at_home(who) => {
-            format!("tap an open job to send {}", lens.name(who))
+    // **The board's own controls**: what the next tap offers, and whom it
+    // offers it to. One of each, in the footer band, because the wage is a
+    // thing the player is holding rather than a property of a row.
+    if lens.asks_on() {
+        let wage = board_wage(flow, lens, site);
+        for (rect, glyph) in [
+            (layout::board_wage_down(), "-"),
+            (layout::board_wage_up(), "+"),
+        ] {
+            panel.text(TextRun::new(
+                crate::ui::centered(rect, glyph, theme::BODY, rect.min.y + 10.0),
+                glyph,
+                theme::BODY,
+                theme::INK,
+            ));
         }
-        Some(who) => format!(
-            "{} is out - only an idle character can be sent",
-            lens.name(who)
-        ),
+        let value = layout::board_wage_value();
+        let money = format!("{wage}g");
+        panel.text(TextRun::new(
+            crate::ui::centered(value, &money, theme::SMALL, value.min.y + 10.0),
+            money,
+            theme::SMALL,
+            theme::GOLD,
+        ));
+        let to = layout::board_to();
+        let label = match (flow.post_open, flow.selected) {
+            (true, _) => "TO ANY".to_owned(),
+            (false, Some(who)) => format!("TO {}", lens.name(who)),
+            (false, None) => "NOBODY".to_owned(),
+        };
+        panel.text(TextRun::new(
+            crate::ui::centered(to, &label, theme::SMALL, to.min.y + 10.0),
+            clipped(&label, 84.0),
+            theme::SMALL,
+            if flow.post_open {
+                theme::REGARD
+            } else {
+                theme::GOLD
+            },
+        ));
+    }
+
+    // **The footer says what the tap is.** It is the one place the change of
+    // verb from wave 1.1 is stated in words, and the whole risk of keeping the
+    // gesture is that nobody notices it changed.
+    let hint = if !lens.asks_on() {
+        "asks are off - this board is a read of the work, and nobody can be asked".to_owned()
+    } else if flow.fit_explained {
+        crate::asks::fit_means()
+    } else {
+        match (flow.post_open, flow.selected) {
+            (true, _) => "tap a job to post it to anyone at the wage shown".to_owned(),
+            (false, None) => "click somebody, or post to anyone - then tap a job".to_owned(),
+            (false, Some(who)) => format!(
+                "tap a job to post it to {} - the answer is theirs",
+                lens.name(who)
+            ),
+        }
     };
-    panel.text(TextRun::new(
+    panel.block(
         layout::board_hint(),
-        clipped(&hint, layout::BOARD_HINT_W),
+        &crate::ui::wrap(
+            &hint,
+            crate::ui::columns(layout::BOARD_HINT_W, theme::SMALL),
+        ),
         theme::SMALL,
         theme::FAINT,
-    ));
+    );
     panel
+}
+
+/// **The wage a tap on this row would offer** — the one answer, read by the
+/// row that prints it, the preview that weighs it, and the posting that is
+/// made from it (`flow::post_from_board`).
+///
+/// The standing rate for the work, unless the player has stepped this row's
+/// wage off it: one row at a time carries an offer, because an offer the
+/// player cannot see on the row it belongs to is a number that would surprise
+/// somebody at the moment they tap.
+pub fn wage_offered(
+    flow: &Flow,
+    lens: &Lens<'_>,
+    site: usize,
+    slot: usize,
+    task: crate::traits::TaskType,
+) -> i64 {
+    let _ = (site, slot);
+    flow.offer.unwrap_or_else(|| lens.standing_rate(task))
+}
+
+/// **What the board's own wage control is showing** — the offer in hand, or
+/// the standing rate of the site's first open row when the player has not
+/// moved it.
+pub fn board_wage(flow: &Flow, lens: &Lens<'_>, site: usize) -> i64 {
+    if let Some(wage) = flow.offer {
+        return wage;
+    }
+    lens.site(site)
+        .and_then(|board| {
+            board
+                .open_slots()
+                .next()
+                .and_then(|slot| board.quest(slot))
+                .map(|quest| lens.standing_rate(quest.task))
+        })
+        .unwrap_or(0)
 }

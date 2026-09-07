@@ -173,6 +173,7 @@ pub fn content(flow: &Flow, lens: &Lens<'_>, grid: &Grid, clock: &Clock, tuning:
     for (rect, label) in [
         (layout::feed_button(), "FEED"),
         (layout::roster_button(), "ROSTER"),
+        (layout::ledger_button(), "LEDGER"),
         (layout::tune_button(), "TUNE"),
         (layout::modes_button(), "MODES"),
     ] {
@@ -188,7 +189,11 @@ pub fn content(flow: &Flow, lens: &Lens<'_>, grid: &Grid, clock: &Clock, tuning:
     // nobody can read lying across a control somebody can click — and the
     // floors judge exactly that. The tuning drawer carries the toast in its
     // own prose band, so nothing is lost by keeping quiet here.
-    let bare = !flow.feed_open && !flow.modes_open && !flow.tuner.open && !flow.roster_open;
+    let bare = !flow.feed_open
+        && !flow.modes_open
+        && !flow.tuner.open
+        && !flow.roster_open
+        && !flow.ledger_open;
     if bare && let Some(toast) = &flow.toast {
         panel.text(TextRun::new(
             layout::toast_at(),
@@ -209,7 +214,7 @@ pub fn content(flow: &Flow, lens: &Lens<'_>, grid: &Grid, clock: &Clock, tuning:
     if bare {
         panel.text(TextRun::new(
             layout::party_label(),
-            "EVERYONE - click somebody, then a job on a site's board",
+            "EVERYONE - click somebody, then a job on a site's board to ask them for it",
             theme::SMALL,
             theme::DIM,
         ));
@@ -327,7 +332,14 @@ pub fn content(flow: &Flow, lens: &Lens<'_>, grid: &Grid, clock: &Clock, tuning:
         panel.absorb(panels::glance(flow, lens));
         // --- and the site panel a marker opens (UI.md §3c) -----------------
         if let Some(site) = flow.board {
-            panel.absorb(crate::board::site_board(flow, lens, grid, tuning, site));
+            panel.absorb(crate::board::site_board(
+                flow,
+                lens,
+                grid,
+                tuning,
+                clock.minutes,
+                site,
+            ));
         }
     }
 
@@ -337,6 +349,9 @@ pub fn content(flow: &Flow, lens: &Lens<'_>, grid: &Grid, clock: &Clock, tuning:
     }
     if flow.modes_open {
         panel.absorb(panels::modes_drawer(lens));
+    }
+    if flow.ledger_open {
+        panel.absorb(crate::ledger::ledger_drawer(flow, lens));
     }
     if flow.roster_open {
         panel.absorb(panels::roster_drawer(flow, lens));
@@ -429,7 +444,11 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
     let active = *ctx.world.resource::<Tuning>();
     let sim_parties = Lens::on(ctx.world.resource::<Sim>()).parties().len();
     // The base screen, as `content` reckons it: no drawer over the map.
-    let bare = !flow.feed_open && !flow.modes_open && !flow.tuner.open && !flow.roster_open;
+    let bare = !flow.feed_open
+        && !flow.modes_open
+        && !flow.tuner.open
+        && !flow.roster_open
+        && !flow.ledger_open;
 
     let fill = |ctx: &mut DrawCtx, rect: Rect, color: Color, layer: i16| {
         ui::fill(ctx, map.to_world_rect(rect), color, layer);
@@ -580,7 +599,7 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
     }
 
     // Drawers.
-    if flow.feed_open || flow.modes_open || flow.roster_open {
+    if flow.feed_open || flow.modes_open || flow.roster_open || flow.ledger_open {
         fill(
             ctx,
             layout::feed_panel(),
@@ -627,6 +646,28 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
             if triggered == Some(entry.index) {
                 border(ctx, rect, theme::GOLD, theme::layers::OVERLAY + 1);
             }
+        }
+    }
+    // **The ledger's own targets**: a withdrawal per standing posting, and
+    // the standing rates' steppers and postings — every one of them an edge,
+    // because a target with no edge is a thing nobody knows they may tap.
+    if flow.ledger_open {
+        let standing: Vec<usize> = Lens::on(ctx.world.resource::<Sim>())
+            .postings()
+            .iter()
+            .rev()
+            .take(layout::LEDGER_ROWS)
+            .enumerate()
+            .filter(|(_, posting)| posting.status == crate::asks::Status::Open)
+            .map(|(row, _)| row)
+            .collect();
+        for row in standing {
+            ghost(ctx, &map, layout::ledger_withdraw(row));
+        }
+        for row in 0..crate::traits::TaskType::ALL.len() {
+            ghost(ctx, &map, layout::rates_down(row));
+            ghost(ctx, &map, layout::rates_up(row));
+            ghost(ctx, &map, layout::rates_post(row));
         }
     }
     if flow.modes_open {

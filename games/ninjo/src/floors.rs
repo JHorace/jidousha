@@ -40,8 +40,41 @@ pub fn inside(area: Rect, bounds: Rect) -> bool {
 pub fn board_targets() -> Vec<(String, Rect)> {
     let mut out: Vec<(String, Rect)> = base_targets();
     out.push(("the job board's close".to_owned(), layout::board_close()));
+    out.push(("the board's fit chip".to_owned(), layout::board_fit_chip()));
     for slot in 0..layout::BOARD_ROWS {
         out.push((format!("job row {slot}"), layout::board_row(slot)));
+    }
+    // The board's own two controls (wave 1.2): what the next tap offers, and
+    // whom it offers it to.
+    out.push((
+        "the board's wage down".to_owned(),
+        layout::board_wage_down(),
+    ));
+    out.push(("the board's wage up".to_owned(), layout::board_wage_up()));
+    out.push(("the board's who toggle".to_owned(), layout::board_to()));
+    out
+}
+
+/// Every rectangle the postings ledger answers a click in: a withdrawal per
+/// standing posting, and the standing rates' own steppers and postings.
+pub fn ledger_targets() -> Vec<(String, Rect)> {
+    let mut out = Vec::new();
+    for row in 0..layout::LEDGER_ROWS {
+        out.push((
+            format!("ledger row {row}'s withdraw"),
+            layout::ledger_withdraw(row),
+        ));
+    }
+    for (row, task) in crate::traits::TaskType::ALL.iter().copied().enumerate() {
+        out.push((
+            format!("the {} rate's -", task.id()),
+            layout::rates_down(row),
+        ));
+        out.push((format!("the {} rate's +", task.id()), layout::rates_up(row)));
+        out.push((
+            format!("the {} standing posting", task.id()),
+            layout::rates_post(row),
+        ));
     }
     out
 }
@@ -69,6 +102,10 @@ fn base_targets() -> Vec<(String, Rect)> {
         out.push((format!("the {label} chip"), layout::speed_chip(index)));
     }
     out.push(("the feed drawer's handle".to_owned(), layout::feed_button()));
+    out.push((
+        "the ledger drawer's handle".to_owned(),
+        layout::ledger_button(),
+    ));
     out.push((
         "the roster drawer's handle".to_owned(),
         layout::roster_button(),
@@ -165,6 +202,9 @@ pub fn controls_for(flow: &Flow) -> Vec<(String, Rect)> {
     }
     if flow.roster_open {
         return roster_targets();
+    }
+    if flow.ledger_open {
+        return ledger_targets();
     }
     if flow.board.is_some() {
         return board_targets();
@@ -308,6 +348,11 @@ pub fn drawer_floors(checks: &mut Checks) {
             roster_targets(),
             layout::roster_button(),
         ),
+        (
+            layout::ledger_panel(),
+            ledger_targets(),
+            layout::ledger_button(),
+        ),
     ] {
         drawer_floor(checks, drawer, &controls, handle);
     }
@@ -420,6 +465,49 @@ pub fn uimap_contract(checks: &mut Checks) -> String {
     notes.join(", ")
 }
 
+/// **Map labels are legible at the default zoom** — and what a step out would
+/// cost them (wave 1.2's zoom rider).
+///
+/// The chrome rides `UiMap` and is a constant size on screen at any zoom, so
+/// the readability floors bind it whatever the camera does. **Map-space text
+/// does not**: a name under a figure is drawn at `theme::SMALL` *world*
+/// units, and what a reader gets is that height scaled by how much world the
+/// camera is showing. At the default camera the two are the same number,
+/// which is why every floor in this game is stated in reference pixels.
+///
+/// The rider asked for the default zoom to step out one level — one notch of
+/// the wheel, `camera::SCROLL_STEP` — so the ten figures stand further apart.
+/// This is the floor that answers it: at one notch out a name reads at 10.7
+/// reference pixels, under the twelve the floors require, so **the zoom is
+/// the thing that yields** and the default stays where it is. The number is
+/// reported rather than remembered, because the day map labels stop being
+/// drawn at `SMALL` the answer changes.
+pub fn map_legibility(checks: &mut Checks) -> String {
+    let at = |height: f32| theme::SMALL * layout::DESIGN_H / height;
+    let now = at(camera::DEFAULT_H);
+    let stepped = at(camera::DEFAULT_H * camera::SCROLL_STEP);
+    checks.require(
+        !greater(theme::MIN_TEXT - 0.01, now),
+        "a map label is drawn below the readability floor at the default zoom",
+        format!(
+            "a name under a figure reads at {now:.1} reference pixels at the default camera \
+             height of {:.0}, and the floor is {:.0}",
+            camera::DEFAULT_H,
+            theme::MIN_TEXT
+        ),
+    );
+    checks.require(
+        greater(theme::MIN_TEXT, stepped),
+        "one notch of zoom out no longer costs a map label its legibility",
+        format!(
+            "stepped out one notch the same name reads at {stepped:.1} reference pixels; if \
+             that is now above the floor, the default zoom can step out and this rider is \
+             owed a second look"
+        ),
+    );
+    format!("map labels {now:.1}px at the default zoom, {stepped:.1}px one notch out")
+}
+
 /// The screen states the content floors judge, built from a conducted run.
 ///
 /// Every surface this build has, in the state that puts the most on it: the
@@ -508,6 +596,17 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
     // And the same board read by nobody: no fit column, no travel line.
     let mut unread = board.clone();
     unread.selected = None;
+    // **The board at its loudest** (wave 1.2): a wage stepped off its
+    // standing rate, the fit chip explaining itself, and a verdict with its
+    // reason on every open row.
+    let mut offering = board.clone();
+    offering.fit_explained = true;
+    offering.offer = Some(crate::asks::RATE_MAX);
+    offering.post_open = true;
+    // **The ledger**, on a world that has been asked things: every row of it
+    // is a posting somebody heard, agreed to or refused.
+    let mut ledger = played.clone();
+    ledger.ledger_open = true;
     vec![
         opening,
         (
@@ -543,6 +642,18 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
         (
             "a site's job board, read by a selected character",
             board,
+            baseline.sim.clone(),
+            ended_clock,
+        ),
+        (
+            "the job board with a wage stepped and the fit chip open",
+            offering,
+            baseline.sim.clone(),
+            ended_clock,
+        ),
+        (
+            "the postings ledger, with the standing rates beside it",
+            ledger,
             baseline.sim.clone(),
             ended_clock,
         ),

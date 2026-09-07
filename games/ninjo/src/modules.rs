@@ -5,11 +5,11 @@
 //! individually off, and green is the claim (GDD §9's module-off matrix).
 //! That matrix is built here and iterated by `verify::module_matrix`.
 //!
-//! **The table has one row.** Wave 0b landed the machinery empty so that wave
-//! 1.1's autonomy module would arrive into a harness that already worked; it
-//! did, and `autonomy` is that row. The matrix is therefore two passes — the
-//! everything-on baseline and the world with the scorer switched off — and the
-//! off-pass is what makes the row's `degrades_to` sentence a fact.
+//! **The table has two rows** since wave 1.2: `autonomy`, the scorer, and
+//! `asks`, the postings the player rules by. The matrix is therefore three
+//! passes — the everything-on baseline, the world with the scorer switched
+//! off, and the world where nobody can be asked for anything — and each
+//! off-pass is what makes that row's `degrades_to` sentence a fact.
 //!
 //! Adding a module is adding a row to [`MODULES`] and reading
 //! [`ModuleSet::enabled`] wherever the module's systems and data are
@@ -57,16 +57,32 @@ pub struct ModuleSpec {
 
 /// Every module this build has.
 ///
-/// **One row, since wave 1.1.** GDD §5's table is the schedule — needs,
-/// petitions, resolution, settlement and the events-director are the rest of
-/// wave 1, asks is wave 2 — and each arrives as one row here.
-pub const MODULES: &[ModuleSpec] = &[ModuleSpec {
-    id: crate::autonomy::MODULE,
-    tier: Tier::Mvp,
-    wave: "1.1",
-    degrades_to: "nobody decides anything: every character idles at their own \
-                  door until the player dispatches them, which is the wave-0b world",
-}];
+/// **Two rows, since wave 1.2.** GDD §5's table is the schedule — needs,
+/// settlement, petitions, resolution and the events-director are the rest of
+/// wave 1 — and each arrives as one row here.
+///
+/// `autonomy`'s degrades-to sentence changed with this wave and the change is
+/// the wave: with the scorer off, nobody answers anything either, and there
+/// is no dispatch path left for the player to fall back on, because the
+/// player's verb is now a posting somebody has to agree to.
+pub const MODULES: &[ModuleSpec] = &[
+    ModuleSpec {
+        id: crate::autonomy::MODULE,
+        tier: Tier::Mvp,
+        wave: "1.1",
+        degrades_to: "nobody decides anything: every character idles at their own \
+                      door, postings are heard by nobody and answered by nobody, \
+                      and the world holds still",
+    },
+    ModuleSpec {
+        id: crate::asks::MODULE,
+        tier: Tier::Mvp,
+        wave: "1.2",
+        degrades_to: "pure observation: no ledger and no postings, the site panel \
+                      is a read of the work, and people take the jobs they choose \
+                      for themselves, which is the wave-1.1 world",
+    },
+];
 
 /// Which modules are on.
 ///
