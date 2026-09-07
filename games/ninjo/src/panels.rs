@@ -144,7 +144,7 @@ pub fn feed_drawer(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning) -> Panel {
     // would be the second list this surface exists not to have.
     panel.text(TextRun::over(
         layout::notices_title(),
-        "NOTICES - speed, refused orders, restarts",
+        "NOTICES - speed, refused asks, rates, restarts",
         theme::SMALL,
         theme::FAINT,
     ));

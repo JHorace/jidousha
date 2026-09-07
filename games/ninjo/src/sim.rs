@@ -25,6 +25,7 @@
 
 use jidousha::prelude::*;
 
+use crate::asks::{Postings, Rates};
 use crate::attention::{Attention, EventClass, Mode, Pause};
 use crate::clock::{Clock, stamp};
 use crate::constants::Tuning;
@@ -36,6 +37,14 @@ use crate::people::{self, Character};
 use crate::sprites::Art;
 use crate::stores::{self, Regarded, Shared};
 use crate::traits::TaskType;
+
+/// **The player**, as an event's party — the one actor in this world who is
+/// not a character (wave 1.2).
+///
+/// A posting is made and withdrawn by nobody who lives in Kawaza, and every
+/// event carries a party, so the player needs an index. It names nobody in
+/// the roster, which is exactly what makes [`Event::text`] read it as *you*.
+pub const PLAYER: usize = usize::MAX;
 
 /// One thing that happened, at a world-time, at a place.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -67,13 +76,17 @@ impl Event {
     /// the world-time and the place in their own columns, so they are not in
     /// here (`attention::place_tag` is the place).
     ///
+    /// A party index that names nobody is **you** — [`PLAYER`], which is how
+    /// a posting made by the player reads as a sentence about the player
+    /// without anything here knowing what a posting is.
+    ///
     /// Takes a [`Lens`] rather than the `Sim`, because the feed is a screen:
     /// a line naming a party the player has never seen is exactly the thing
     /// the lens exists to be able to withhold (GDD §3).
     pub fn text(&self, lens: &Lens<'_>) -> String {
         format!(
             "{} {}",
-            lens.party(self.party).map_or("someone", |party| party.name),
+            lens.party(self.party).map_or("you", |party| party.name),
             self.note
         )
     }
@@ -251,12 +264,18 @@ pub enum Errand {
     },
 }
 
-/// Why a journey is being started, and by whom.
+/// Why a journey is being started, and how it was reached.
 ///
 /// One struct rather than two arguments, because the pair travels together
-/// everywhere: the words go onto the party and onto the `action-started`
-/// event, and whether the scorer chose it is what decides whether an
-/// `action-done` closes it.
+/// everywhere: the words go onto the party and onto the event that opened the
+/// errand, and `chosen` is what decides which event closes it — `action-done`
+/// for something they thought of themselves, and nothing but the return for
+/// an ask they agreed to, which `ask-agreed` already opened.
+///
+/// **There is no third constructor.** Wave 1.1 had `ordered()` for the
+/// player's own dispatch; wave 1.2 replaced ordering with asking, so the two
+/// ways an errand begins are the scorer's own idea and a posting somebody
+/// took.
 #[derive(Clone, Debug)]
 pub struct Motive {
     /// The words — the scorer's verdict, or the player's order.
@@ -266,19 +285,24 @@ pub struct Motive {
 }
 
 impl Motive {
-    /// The player asked for it.
-    pub fn ordered() -> Self {
-        Self {
-            reason: "you asked them to".to_owned(),
-            chosen: false,
-        }
-    }
-
     /// They decided it themselves, for this reason.
     pub fn chose(reason: String) -> Self {
         Self {
             reason,
             chosen: true,
+        }
+    }
+
+    /// **They were asked, and they agreed** (wave 1.2).
+    ///
+    /// `chosen` is **false**, and the field still means what it meant: it is
+    /// what decides whether an `action-done` closes the journey, and an
+    /// answered ask is bracketed by `ask-agreed` instead. One opener and one
+    /// closer per errand, never two of either.
+    pub fn asked(reason: String) -> Self {
+        Self {
+            reason,
+            chosen: false,
         }
     }
 }
@@ -329,6 +353,12 @@ pub struct Party {
     /// The world-minute before which work weighs less on this character — the
     /// rest term's whole state, set when they finish a job.
     pub rested_until: u64,
+    /// **The posting this errand answers**, if it answers one (wave 1.2).
+    ///
+    /// Written when an ask is agreed to and cleared when the wage is paid, so
+    /// the money that moves on completion is the money the posting promised
+    /// and not the standing rate as it stands by then.
+    pub posting: Option<usize>,
 }
 
 impl Party {
@@ -447,6 +477,16 @@ pub struct Sim {
     /// input, and it changes what the world does — a replay that carried the
     /// orders and not this would reproduce the journeys and not the pauses.
     pub attention: Attention,
+    /// **The player's ledger** — every posting ever made (GDD's postings
+    /// section, wave 1.2).
+    ///
+    /// Sim state and recorded input, like the auto-pause config: making a
+    /// posting and withdrawing one are the two new inputs a recording
+    /// carries, and the ledger drawer is a view of this and nothing else.
+    pub postings: Postings,
+    /// **What the settlement pays per task type** — the standing rates, the
+    /// policy lever the mass moves by.
+    pub rates: Rates,
     /// Which modules this scenario opened with (GDD §5).
     ///
     /// Sim state for the same reason the config is: it changes what the world
@@ -491,6 +531,7 @@ fn authored_parties(people: &[Character]) -> Vec<Party> {
             reason: String::new(),
             chosen: false,
             rested_until: 0,
+            posting: None,
         })
         .collect()
 }
@@ -794,6 +835,8 @@ impl Sim {
             treasury: 0,
             events: Vec::new(),
             people,
+            postings: Postings::default(),
+            rates: Rates::opening(),
             shared: Shared::opening(),
             attention: Attention::opening(),
             modules,
@@ -888,6 +931,22 @@ impl Sim {
             });
             self.pauses += 1;
         }
+    }
+
+    /// Record one of the asks module's occurrences (wave 1.2).
+    ///
+    /// Public for the reason `emit_action` is: the decision belongs to the
+    /// module and the emission belongs here, because this is the one door
+    /// past which an event can stop the world.
+    pub fn emit_ask(
+        &mut self,
+        minute: u64,
+        class: EventClass,
+        party: usize,
+        tile: Tile,
+        note: String,
+    ) {
+        self.emit(minute, class, party, tile, note);
     }
 
     /// Record an `action-started` — the scorer's own class, and the one place
@@ -1298,6 +1357,10 @@ fn tile_entry(sim: &mut Sim, grid: &Grid, tuning: &Tuning, at: u64, index: usize
                 tile,
                 format!("arrived at {site_name}"),
             );
+            // **The messenger catches them where the road ends** (wave 1.2):
+            // every ask addressed to somebody who was already out is heard
+            // here, at this world-minute, and answered at their next rescore.
+            crate::asks::deliver_on_arrival(sim, at, index);
             sim.emit(
                 at,
                 EventClass::WorkBegan,
@@ -1323,6 +1386,7 @@ fn tile_entry(sim: &mut Sim, grid: &Grid, tuning: &Tuning, at: u64, index: usize
                 tile,
                 format!("arrived at {host}'s"),
             );
+            crate::asks::deliver_on_arrival(sim, at, index);
             sim.schedule(until, Occ::WorkDone { party: index });
         }
         None => {}
@@ -1384,6 +1448,11 @@ fn work_done(sim: &mut Sim, grid: &Grid, tuning: &Tuning, at: u64, index: usize)
                 *state = JobState::Done { by: index };
             }
             sim.treasury += quest.pot;
+            // **The wage, paid on completion** (GDD §4.1's TRANSFER port):
+            // treasury to wallet, and the regard the paying moves. Nothing is
+            // paid for work nobody posted, which is why this reads the
+            // party's own posting rather than the board.
+            let wage = crate::answers::settle_wage(sim, tuning, index);
             let treasury = sim.treasury;
             // The rest term's whole state: work weighs less on somebody who
             // just finished some (`autonomy.rs`).
@@ -1394,10 +1463,17 @@ fn work_done(sim: &mut Sim, grid: &Grid, tuning: &Tuning, at: u64, index: usize)
                 index,
                 tile,
                 quest.pot,
-                format!(
-                    "completed {} - {}g into the treasury ({}g held) - turning for home",
-                    quest.name, quest.pot, treasury
-                ),
+                if wage > 0 {
+                    format!(
+                        "completed {} - {}g in, {wage}g paid out ({}g held) - turning for home",
+                        quest.name, quest.pot, treasury
+                    )
+                } else {
+                    format!(
+                        "completed {} - {}g into the treasury ({}g held) - turning for home",
+                        quest.name, quest.pot, treasury
+                    )
+                },
             );
         }
         Errand::Visit { toward } => settle_visit(sim, tuning, member, toward),

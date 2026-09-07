@@ -68,6 +68,18 @@ pub enum Action {
         /// Whose doorstep.
         toward: usize,
     },
+    /// **Answer a posting** by taking this job for its wage (wave 1.2).
+    ///
+    /// The fourth variant this file was written expecting: an ask is one more
+    /// candidate in the slice, weighed beside everything else the character
+    /// could do, and agreeing goes out through the same dispatch. What makes
+    /// it heavy is its terms, not a branch (`answers::terms`).
+    Answer {
+        /// Which posting, by its id on the ledger.
+        posting: usize,
+        /// Which job it would be answered with.
+        job: sim::JobId,
+    },
     /// Stay home. The floor every other candidate has to beat.
     Idle,
 }
@@ -211,7 +223,7 @@ pub fn weigh(sim: &Sim, tuning: &Tuning, now: u64, who: usize, action: Action) -
                 terms.push(Term {
                     what: "aptitude",
                     value: apt * tuning.apt_weight,
-                    because: format!("it is {} work, and they are good at it", quest.task.id()),
+                    because: format!("good at {} work", quest.task.id()),
                 });
             }
             // The pot's pull, per ten gold, by the carrier's own affinity.
@@ -220,7 +232,7 @@ pub fn weigh(sim: &Sim, tuning: &Tuning, now: u64, who: usize, action: Action) -
                 terms.push(Term {
                     what: "pot",
                     value: pull * quest.pot * tuning.pot_weight / 10,
-                    because: format!("the pot is {}g, and they can feel it", quest.pot),
+                    because: format!("the pot is {}g", quest.pot),
                 });
             }
             // The rest term: nobody works forever.
@@ -228,10 +240,20 @@ pub fn weigh(sim: &Sim, tuning: &Tuning, now: u64, who: usize, action: Action) -
                 terms.push(Term {
                     what: "rest",
                     value: -tuning.rest_weight,
-                    because: "has not stopped since the last job".to_owned(),
+                    because: "not stopped since the last job".to_owned(),
                 });
             }
             let _ = where_to;
+        }
+        // **The ask's own terms**, which are the asks module's (GDD §5: no
+        // module reads another's interior — the posting is shared sim state
+        // like the quest board, and the arithmetic over it lives with the
+        // module that owns the record).
+        Action::Answer { posting, job } => {
+            let Some(posting) = sim.postings.get(posting) else {
+                return terms;
+            };
+            return crate::answers::terms(sim, tuning, now, who, posting, job);
         }
         Action::Socialize { toward } => {
             let felt = traits::weighted_regard(
@@ -269,7 +291,7 @@ pub fn choose(sim: &Sim, tuning: &Tuning, now: u64, who: usize, open: &[Action])
             best = Judged {
                 action,
                 score,
-                reason: reason_for(action, &terms),
+                reason: words(action, &terms),
                 terms,
             };
             first = false;
@@ -280,10 +302,14 @@ pub fn choose(sim: &Sim, tuning: &Tuning, now: u64, who: usize, open: &[Action])
 
 /// The words: the **first** strictly-largest positive term's own sentence.
 ///
+/// Public because a job row's preview says why in the same words the decision
+/// would (`answers::read`) — one sentence-maker, so a row cannot describe a
+/// choice differently from the feed line that reports it.
+///
 /// First rather than last, so a tie reads as the term the sum opened with —
 /// desperation, as it did in giri — and so the sentence is a function of the
 /// term order rather than of an iterator's tie-breaking.
-fn reason_for(action: Action, terms: &[Term]) -> String {
+pub fn words(action: Action, terms: &[Term]) -> String {
     let mut loudest: Option<&Term> = None;
     for term in terms.iter().filter(|term| term.value > 0) {
         if loudest.is_none_or(|best| term.value > best.value) {
@@ -315,9 +341,23 @@ pub fn rescore(sim: &mut Sim, grid: &Grid, tuning: &Tuning, now: u64, who: usize
     {
         return;
     }
-    let open = candidates(sim, who);
+    // **The board is read before it is weighed** (wave 1.2): an open posting
+    // is heard at camp, and what somebody weighs is exactly what they have
+    // heard.
+    crate::asks::hear_the_board(sim, now, who);
+    let mut open = candidates(sim, who);
+    open.extend(crate::answers::candidates(sim, who));
     let judged = choose(sim, tuning, now, who, &open);
+    let taken = match judged.action {
+        Action::Answer { posting, .. } => Some(posting),
+        _ => None,
+    };
+    let reason = judged.reason.clone();
     act(sim, grid, tuning, now, who, judged);
+    // **A named ask they did not take is a refusal, and a refusal is said.**
+    // One place, so the answer is the same whether the rescore was the
+    // cadence's or an ask's own arrival.
+    crate::answers::record_refusals(sim, now, who, taken, &reason);
 }
 
 /// Carry out what the scorer chose — through the player's own dispatch loop.
@@ -358,6 +398,7 @@ pub fn act(sim: &mut Sim, grid: &Grid, tuning: &Tuning, now: u64, who: usize, ju
                 sim::Motive::chose(judged.reason.clone()),
             );
         }
+        Action::Answer { .. } => crate::answers::agree(sim, grid, tuning, now, who, judged),
         Action::Socialize { toward } => {
             let host = sim.people.get(toward).map_or("somebody", |who| who.name);
             sim.emit_action(

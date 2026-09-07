@@ -68,6 +68,84 @@ roams. Happened: worked it out from the check's purpose; the workaround is
 three assertions rather than one. Owner: `jidousha-testing.md`.
 
 
+## Wave 1.2 (the asks module) — **2 new findings**, both the game's own
+
+**Wave 1.2 read** `CLAUDE.md`, the `make-game` skill, this game's own
+`GDD.md`, `DESIGN.md`, `UI.md`, `CAST.md` and `FINDINGS.md`, and its whole
+`src/`. It opened no file under `crates/*/src/`, no `docs/internal/`, and no
+ADR. **It asked `docs/api/` nothing new**, and that is a real answer rather
+than an empty section: the module is arithmetic over the game's own data, its
+three new surfaces are `Panel`s like every other, its two new inputs are
+clicks on rectangles `layout.rs` already knew how to state, and its
+occurrences ride the one scheduler the substrate landed in S1. The engine's
+documents were not the cost of this wave; the two entries below are about
+*this game*, and both are numbers the next playtest is owed.
+
+### G-021 — the game's own: the standing rate is a coarse lever at the rate it ships at
+
+Class: **the game's own** (a tuning fact, found by the check that exists to
+find it) · Game: ninjo · Files: `games/ninjo/src/compliance.rs`,
+`src/asks.rs`, `GDD.md` §9 · **Open — a question for the playtest**
+
+The amendment's policy test asks that "raising fight pay by one drawer step
+shifts at least one fighter's next choice". Expected: one tap of the
+standing-rates panel moves somebody. Happened: at the shipped fight rate of
+24g, **three** taps of the panel's 4g step are needed before anybody's *work*
+changes, and the first person to move is Hana at 36g.
+
+The arithmetic is not a bug and the check reports it rather than hiding it. A
+wage's pull is `(pot_affinity + desperation) x wage / 10`, so 4g is worth one
+or two points to most of the band, while the aptitude term that holds somebody
+in their own trade is six. Walking the rate across the panel's whole range
+shows the lever working exactly as designed — somebody's work changes at 12g,
+16g, 36g and 56g, and five of the ten drift into fight work as it rises — so
+what was wrong was the *test's* framing, not the mechanism.
+
+**What was done:** the battery asserts the whole walk (the four turning
+points, as shipped literals) **and** pins the distance from the shipped rate
+to the first drift at three steps, so a moved weight moves a literal and the
+mutation round notices. Nothing was tuned to make a one-step test pass: moving
+the opening fight rate to sit just under a wall would have been tuning to the
+instrument.
+
+**What the owner is asked:** is a 4g step the right size for a policy control,
+and is 24g the right price for fight work when 36g is what it takes to pull a
+scout off her own trade? The answer is a content decision (`asks::RATES` and
+`asks::RATE_STEP`), not a code one.
+
+### G-022 — the game's own: the crowding at the settlement is the labels, not the zoom
+
+Class: **the game's own** (a rider, answered by measuring it) · Game: ninjo ·
+Files: `games/ninjo/src/floors.rs`, `src/camera.rs`, `UI.md` §4 ·
+**Open — the next UI session's**
+
+The wave's rider asked for the default camera to step out one level "so the
+ten figures are not on top of each other", with the readability floors
+re-asserted at that zoom and the note that if names stop being legible, "the
+zoom is the thing that yields".
+
+Expected: a wider view separates the figures. Happened: **zooming out cannot
+separate them, because the overlap is scale-invariant** — the map is drawn in
+world units and pulling the camera back shrinks the figures and the gaps
+together. What it *does* change is legibility: a name is drawn at twelve world
+units, which is exactly the twelve-reference-pixel floor at the default
+camera, and one notch of the wheel out puts it at 10.7. So the floor refuses
+the step, which is what the rider said should happen, and the default stays at
+540.
+
+The crowding the owner saw is real and has a different cause: the homes are
+two rows of tents two tiles apart (`CAST.md` §4), a figure is 32 world units
+tall (two tiles), and a name is drawn *under* its figure — so the northern
+row's names land on the southern row's heads. The fix is a layout one — the
+label above the figure for one row, or a name only for the selected character,
+or three tiles between the rows — and each of those is a UI or content
+decision this session did not have a mandate for.
+
+**What was done:** `floors::map_legibility` states the numbers as a floor and
+the verify report prints them (`map labels 12.0px at the default zoom, 10.7px
+one notch out`), so the next session inherits a measured fact instead of a
+disagreement.
+
 ## The job-board session (2026-09-06) — **2 new findings**, both the game's own
 
 The documents were asked nothing they did not answer. `jidousha-testing.md`

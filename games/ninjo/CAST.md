@@ -213,7 +213,7 @@ character.
 |---|---|---|
 | needs (1.2) | **Steve** - the pariah-candidate | highest upkeep multiplier (caring 3/2), lowest wallet among earners, labor pays least: first to shortfall with the player idle |
 | autonomy (1.1) | **Ludo** - the eager worker | indebted pressure 3, favors any, no pride: takes whatever work is open without being asked; the character the scorer is most visibly alive on |
-| asks (2) | **Tim** - the proud refuser | proud refuses; vengeful turns a repeat into a grudge; and he holds the tally, so the refusal costs the player something |
+| asks (1.2) | **Tim** - the proud refuser | proud refuses; vengeful turns a repeat into a grudge; and he holds the tally, so the refusal costs the player something |
 | petitions (1.3) | **Goro** - the petition fountain | renown fires the proving-job template most often; Odd makes every answer to it a social problem |
 | settlement (1.2) | **Rin** - the industry seed | maker; her petition asks for the first building; the camp fire becoming a kitchen is the first-building beat and the baker-dream's ancestor |
 | events-director (1.5) | **Bob** - the loan-shark debtor | indebted + greedy; the collector's canned template has a natural target from minute one |
@@ -401,16 +401,31 @@ the answer is no; after that a rename costs prose.
   placeholder rows deleted; parked personalities stay as rows.
   Relationship presets as a drawer/scenario choice. The coverage
   assertions above.
-- **1.2**: needs reads `upkeep`; the pariah-candidate check (Steve
-  shortfalls first in the idle-player sweep at the shipped numbers - an
-  assertion on the seeds, not a hope).
-- **1.3**: the template table in this format; consequence vocabulary;
+- **1.2 asks** (*done*): the standing rates are content, one per task type -
+  `asks::RATES`, the table an event class's default mode is one of, and the
+  panel is the one way to move them. A posting's wage inherits the rate of
+  the work it names, and the wage a job was posted at is what the payment is
+  judged against. **The refusals the shipped set produces are the fits, not
+  the pride**: Alex will not leave scouting and Ines and Rin will not leave
+  crafting, while Tim - §4.1's proud refuser - agrees at the standing rates
+  like every other founder. Pride's own refusal needs the field 1.5 owes it
+  (below), and until then the demo character for this module is a promise
+  rather than a demonstration.
+- **1.3 needs + settlement**: needs reads `upkeep`; the pariah-candidate
+  check (Steve shortfalls first in the idle-player sweep at the shipped
+  numbers - an assertion on the seeds, not a hope). The per-industry wage and
+  the standing rates are one policy family; the drift the asks wave measured
+  (a wage must beat a six-point aptitude to move somebody) is the number to
+  price camp work against.
+- **1.5 petitions**: the template table in this format; consequence vocabulary;
   `proud` needs a field for refusing gifts (the row currently has no
   numeric hook for it); the per-character visited set for T4;
   `walks-out` uses autonomy's away-state.
-- **1.4**: resolution reads the aptitude whose id equals the task's
-  type; `craven` starts to matter once fight tasks carry danger.
-- **1.5**: T1 as the director's loan-shark canned template; the
+- **1.4 resolution**: resolution reads the aptitude whose id equals the
+  task's type; `craven` starts to matter once fight tasks carry danger. Fit
+  stops being only a term in whether somebody agrees, which is what the job
+  board's fit chip promises in words.
+- **1.6 injector**: T1 as the director's loan-shark canned template; the
   no-dead-motivator check runs over the director's templates too.
 
 ## 9. Art check - **landed 2026-09-02** (the cast-art session)

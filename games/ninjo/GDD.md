@@ -199,9 +199,13 @@ that the mockup and this section left open:
   `work-began`, `returned`) is `ignore` because the map already shows motion;
   `quest-complete` is `log`. **No class this build has opens on
   pause-and-focus**, because the petition/consequence family that does is
-  wave 1.3 — so a shipped scenario never stops itself until the player asks
+  wave 1.5 — so a shipped scenario never stops itself until the player asks
   it to in the config panel, which is the mockup's answer rather than an
-  oversight. Wave 1.3's registrations are where the interrupting starts.
+  oversight. *(Superseded by wave 1.2: `ask-declined` opens on
+  pause-and-focus, and is the first class that stops a shipped scenario. Being
+  told no, by somebody you asked by name, with the reason on the banner, is
+  the one thing this build has that a player must not miss — and the config
+  panel is where they say otherwise.)*
 - **The default modes are table data and not drawer rows**, which is the one
   place the build bent the handoff. "Drawer-overridable" would have been a
   second way to do a thing that already has one — the config panel is a live
@@ -242,6 +246,121 @@ that the mockup and this section left open:
   is measured and asserted at. The engine feature having landed is not a
   reason to spend it here.
 
+## 3b. How the player acts — postings
+
+**The player never orders. The player posts.** A posting is an entry on the
+player's ledger:
+
+- **who** — a named character, or *anyone*;
+- **what** — a specific job, a site (any open job there), or a task type (any
+  open job of that kind, anywhere);
+- **until** — *done* (one fulfilment closes it) or *withdrawn* (it stands, and
+  keeps recruiting, until the player takes it down);
+- **wage** — gold per fulfilment, paid from the treasury to the worker's
+  wallet on the job's completion (the §4.1 TRANSFER port); defaults to the
+  **standing rate** for the job's task type.
+
+Three usages, one mechanism: **targeted** (who = someone) is the contract;
+**open** (who = anyone) is the bounty; **standing** (until = withdrawn) is the
+repeat-until-told-otherwise order. A standing open posting for a task type at
+the standing rate is the closest thing to policy the player has by hand; the
+standing rates themselves are the policy.
+
+**Standing rates** — one per task type (`fight`, `labor`, `scout`, `craft`) —
+are the lever for the mass: raise fight pay and the fighters drift to the
+crypt without anybody being named. (Settlement's per-industry wage, 1.3, is
+the same lever for camp work.) A named posting is the exception, not the
+routine.
+
+**Hearing.** A posting binds nobody until it is heard (the petitions rule,
+mirrored). Open postings are heard at camp: a character at home weighs the
+board on their next rescore. A targeted posting to somebody in camp is heard
+at once; to somebody away, it rides a messenger and is heard on arrival at
+their location (asks travel, decided 2026-08-29). Withdrawal is instant on the
+ledger, and heard the same way.
+
+**Deciding.** The scorer weighs a heard posting as a candidate beside
+everything else it weighs — the same one function, the ask as a
+heavily-weighted candidate. Its terms, from data: the wage's pull (the pot
+term, by `pot_affinity` and desperation — a wage is a pot the player fills); a
+**regard-for-player term** (the loyal comply for less; the cold need paying);
+fit (the task's aptitude row); a **targeted bonus** (being asked by name
+weighs more than a notice on a board — a drawer constant; this is the
+"obligation" of an ask without making it an order). Three outcomes:
+
+- **agree** — the character takes the job through the ordinary dispatch loop;
+  the event says why in words ("Ludo took the mushroom haul — asked, and needs
+  the money");
+- **decline** — the scorer chose something else; a targeted decline emits
+  `ask-declined` with the reason ("Tim won't — the pay was short and he's owed
+  already"); an open posting simply goes unfilled;
+- **drop** — a character on a posting's job abandons it when something presses
+  harder (this wave: nothing presses harder than work, so `drop` is the event
+  class and the seam; needs and petitions supply the pressure).
+
+**Regard.** Asking is free and declining is free (the ask-spam question stays
+open; nothing here spends regard for the asking). Payment moves regard through
+the wage-vs-expectation rule already in §4.2: expectation is the standing rate
+for the task type; paying above it small +, below it small −, whether or not
+they took it for less. Shirk and subvert — the betrayal-ladder rungs — are
+parked fills until marks are common.
+
+**Surfaces.** The site panel's job row is where a posting is made: with a
+character selected, the one-tap gesture that ordered them before now **posts
+to them at the standing rate**, and the row reads what the scorer makes of it.
+The **postings ledger** is a drawer: every posting, its who/what/wage/until,
+who heard it, who answered and why; withdraw from the row. The **standing
+rates** panel is four rows.
+
+**Degrades to** (asks off): pure observation; no ledger, no postings; the site
+panel is read-only. Verify runs the matrix that way.
+
+*Implemented (w1.2):* all of it, and here is what the build decided that this
+section left open.
+
+- **The record and the rules are `src/asks.rs`; the answering and the money
+  are `src/answers.rs`.** Two files, one module, because the record and what
+  happens once somebody has heard it are two subjects and the file was the
+  length of both. `Postings` is a private vector on the `Sim` with named
+  writes, the way `stores.rs` holds regard: a posting exists by `post`, ends
+  by `withdraw`, and is answered by nothing else.
+- **Hearing an ask is being asked.** A targeted posting to somebody standing
+  at their own door is heard *and answered* in the same world-minute, through
+  the ordinary rescore — otherwise "heard at once" would mean nothing the
+  player could see, and the answer would wait up to `scorer_hours`. Somebody
+  who is out hears it at their **next arrival anywhere** — the site they were
+  walking to, or their own door on the way home — because that is where a
+  messenger catches them, and it lands on the one scheduler's world-time
+  address like everything else.
+- **The scorer weighs the posting; the module owns the terms.** `Action` has a
+  fourth variant (`Answer { posting, job }`) and `weigh` a fourth arm, which
+  is the shape `autonomy.rs` was written for. The arm hands straight to
+  `answers::terms`, because the arithmetic over a posting belongs with the
+  module that owns the record — the record itself is shared sim state, read
+  the way the quest board is.
+- **The ask replaces the pot term rather than adding to it.** A posted job
+  pays its taker the *wage*; the pot is the player's (§4.1's treasury margin).
+  Weighing both would pay the same gold twice, so an ask's money term is the
+  wage — felt by `pot_affinity` **and** desperation, which is what this
+  section means by "a wage is a pot the player fills".
+- **A refusal is what the scorer did instead**, said in the scorer's own
+  words, and it is the first class in this game that stops the world.
+- **`Motive::ordered` is gone.** Wave 1.1 had two ways an errand began — the
+  player's order and the scorer's own idea — and this wave replaced the first
+  with a posting somebody agrees to. `chosen` still decides which event closes
+  a journey: `action-done` for their own idea, and nothing but the return for
+  an ask, which `ask-agreed` already opened.
+- **The standing rates are content, not a drawer row** (`asks::RATES`, four
+  rows), exactly as an event class's default mode is: the panel is a live
+  write *and* a recorded input, where a drawer row would be a restart, and two
+  ways to move one number is the second way this repo's first convention
+  refuses. They ride every stamp (`Rates::stamp`).
+- **What the wave did not build**: `shirk` and `subvert` (parked with marks),
+  a messenger anybody can see on the map, and a surface for site-shaped
+  postings — the record carries all three shapes and the batteries exercise
+  them, but the player's own hand makes job-shaped and task-shaped postings
+  only.
+
 ## 4. Shared state (deep specs)
 
 ### 4.1 Wealth (gold; the only v1 currency)
@@ -270,6 +389,20 @@ moves gold yet: the mint at site pots is the substrate's stub resolution, and
 every other port belongs to needs, petitions, resolution and settlement
 (wave 1). The conservation assertion arrives with the first transfer.
 
+*Implemented (w1.2): the first TRANSFER, and the assertion it was waiting
+for.* A posting's wage moves treasury → wallet when the job completes
+(`answers::settle_wage`), in full and never in part: the promise was the
+posting's, and paying what was left rather than what was owed would be a
+silent failure with a debtor's face. **The treasury may therefore go
+negative**, which is a fact the top bar shows rather than a rule anybody
+enforces — a settlement that has promised more than it has is a state this
+game should be able to be in, and the needs wave is what makes it press.
+`sweep::judge_orders` now asserts the conservation identity every run:
+treasury + wallets − opening wallets = everything the pots minted. The pot is
+still the player's and the wage is the worker's, which is the treasury-margin
+this section describes, and the job board's row is where the two are seen
+together.
+
 ### 4.2 Regard (the master currency)
 
 Directed integer edges, char→player and char→char, default 0, range
@@ -289,6 +422,13 @@ constants; classes are the spec):
 
 Regard is also the information network (transitive knowledge), dormant
 until the knowledge module.
+
+*Implemented (w1.2): the wage-vs-expectation operation, the third of the
+five.* Paying a posting's wage moves the worker's edge toward the player by
+`wage_regard`, up when the wage beat the standing rate the posting recorded
+and down when it fell short — the expectation is the **rate at posting**, so
+moving the rates afterwards cannot retroactively make somebody feel cheated.
+It goes through `adjust_regard` like every other write, so the bounds hold it.
 
 *Implemented (w0b):* the store and the drift; the five operations are their
 callers' business and four of them arrive with the modules that cause them.
@@ -372,12 +512,13 @@ detail. All modules disableable; "degrades to" per capsule.
 | resolution | mvp | 1 | grid, clock, traits | wealth | wealth |
 | settlement | mvp | 1 | grid | wealth | wealth |
 | events-director | mvp | 1 (minimal) | clock | — | — |
-| asks | mvp | 2 | autonomy, grid | regard | regard |
+| asks | mvp | **1** | autonomy, grid | regard, wealth | regard, wealth |
 | aspirations | post | 3 | petitions | — | marks |
 | threats | post | 3 | grid, events-director | — | — |
 | arrival | post | 3 | grid, autonomy | — | — |
 | parties | post | 4 | asks, resolution | bonds, regard | bonds |
 | knowledge | post | exp | knowledge-lens | regard, wealth | — |
+| whispers | post | exp | knowledge, autonomy | regard, marks | marks |
 
 Module summaries (one line each; capsules canonical for detail):
 **autonomy** — the scorer; actions: seek work, work industry, join
@@ -395,7 +536,10 @@ candidate. **aspirations** — petition-arc generators; the baker
 dream; title-marks. **threats** — routine vs heroic; emits petitions.
 **arrival** — newcomers and notable movers. **parties** — summons to
 rendezvous; who-shows-up as foreshadowing. **knowledge** — lens
-parameters; regard-unlock leading.
+parameters; regard-unlock leading. **whispers** — seeded rumors about real
+work, spreading along regard edges; belief needs the knowledge lens, so parked
+until knowledge; a rumor is stale, never false, and a voice that keeps sending
+people to nothing is learned about.
 
 *Implemented (w1.1): autonomy.* `src/autonomy.rs` is the scorer, and it is one
 function: `choose(sim, tuning, now, who, candidates) -> Judged` — the action,
@@ -453,12 +597,24 @@ the repair. Nothing branches on a trait id, and the aptitude term is still
 `traits::competence_at`, which is also what the job board's fit column prints
 (UI.md §3c).
 
+*Implemented (w1.2): asks.* `src/asks.rs` is the record, the standing rates
+and the hearing; `src/answers.rs` is the candidates, the terms, the row's read
+and the money. The module's registry row is the second in `modules.rs`, and
+the matrix is three passes. **The player's whole verb is a posting**: the S1
+dispatch stub is gone, `Motive::ordered` with it, and `sim::dispatch` is now
+reached only by somebody who decided to go — their own idea, or an ask they
+agreed to. The demo character `CAST.md` §4.1 names for this module is Tim, the
+proud refuser; what the build found is that the refusals the shipped set
+produces are the *fits* rather than the pride — Alex will not leave scouting,
+Ines and Rin will not leave crafting — and that pride's own refusal needs the
+gift-and-charity field 1.5 gives it.
+
 *Implemented (w0b): the registry as machinery, empty of rows.*
 `src/modules.rs` holds the table above's shape (`ModuleSpec`: id, tier, wave,
 degrades-to), the per-module disable flags (`ModuleSet`, a bitmask planted as
 a resource before Startup like the constants), and the matrix §9 iterates.
-**No row of the table above has been built**, so the registry is empty and the
-matrix is one pass — which the harness *runs* rather than skips. Adding a
+**No row of the table above had been built** at that point, so the registry
+was empty and the matrix was one pass — which the harness *runs* rather than skips. Adding a
 module is adding a row here and reading `ModuleSet::enabled` where the
 module's systems and data are installed; the matrix, the stamp and the reports
 all walk the table, so nothing else changes.
@@ -486,6 +642,20 @@ all walk the table, so nothing else changes.
   hints** per candidate. The card is the petition's whole surface; the feed
   entry for a voiced petition is what opens it.
 
+- **Posting record** (wave 1.2): id, who (character id | any), what (job id |
+  site id | task type), until (done | withdrawn), wage,
+  standing-rate-at-posting, made-at (world-minute), heard-by (character →
+  world-minute), answered-by (character → agreed | declined + reason), status
+  (open | filled | withdrawn). Sim state; replay-carried; every posting is
+  recorded input (made and withdrawn are snapshot inputs).
+
+*Implemented (w1.2): the posting record, whole.* `asks::Posting` carries every
+field above and the ledger drawer is a view of the vector they live in — there
+is no second list, so a posting the player can see and a posting the scorer
+can weigh cannot be two different things. The two new recorded inputs are a
+tap on a job row and a tap on WITHDRAW; the standing rates are sim state
+beside them and ride the scenario's opening stamp.
+
 *Implemented (w0b): the trait row only.* Its modifier set is split by kind as
 this section says — bond and grudge multipliers plus the pot's pull for a
 personality, an upkeep multiplier and a scorer pressure for a motivator, a
@@ -497,8 +667,8 @@ lands (§8, wave 1.5).
 
 ## 7. The MVP
 
-**Modules**: foundation + waves 1–2 (autonomy, needs, petitions,
-resolution, settlement-with-one-industry, minimal injector, asks).
+**Modules**: foundation + wave 1 (autonomy, asks, needs,
+settlement-with-one-industry, resolution, petitions, minimal injector).
 **Scenario**: one town, 3–5 sites, 8–12 characters, authored
 templates. **The loop under test**: watch people live → hear
 petitions → ask people to work → set wages → watch compliance → spend
@@ -519,20 +689,28 @@ session per handoff stands)
   ninjo. **Done.**
 - **0a Attention** — interactive mockup first (design side, runs the
   real event data shapes), then the handoff. (Next handoff.)
-- **1.1 autonomy** → **1.2 needs + settlement** (one session — the
-  economy loop halves are one concern) → **1.3 petitions** → **1.4
-  resolution** → **1.5 injector**. Each lands into a running world;
-  owner sanity-plays between sessions but fun is not judged.
-  - **1.3** builds the petition card to §6's anatomy, and registers the
-    petition/consequence classes on `pause-and-focus` — the wave that makes
-    the world interrupt you at all.
-  - **1.5's starting calibration, from the wave-0a mockup**: the mockup
+- **1.1 autonomy** → **1.2 asks** → **1.3 needs + settlement** (one session —
+  the economy loop halves are one concern; the wage lever goes from
+  under-driven to live, and standing rates and the per-industry wage are one
+  policy family) → **1.4 resolution** (fit matters) → **1.5 petitions** →
+  **1.6 injector** (wave close: sanitation whose first pass is the UI exemplar
+  audit; the vocabulary question) → MVP gate. Each lands into a running world;
+  owner sanity-plays between sessions but fun is not judged. **Reordered
+  2026-09-03** on the wave-1.1 playtest: the control verb is fixed before the
+  economy is built on it — the MVP loop in the order it is played (ask, feed,
+  judge, listen, pressure).
+  - **1.5** builds the petition card to §6's anatomy, and registers the
+    petition/consequence classes on `pause-and-focus`. It is no longer the
+    wave that makes the world interrupt you at all: 1.2's `ask-declined` is
+    the first class that stops the world, because being told no, with a
+    reason, is the whole of what the asks wave added to the loop.
+  - **1.6's starting calibration, from the wave-0a mockup**: the mockup
     played best at roughly **twice** the first-guess event density. Land the
     scenario and injector constants there rather than at the first guess and
     tune down; a world that interrupts you twice as often as the drawing
     board expected was the one that felt alive. It is a starting point for
     the drawer, not a finding about the design.
-- **2 asks** → **MVP gate playtest.**
+- **MVP gate playtest** after 1.6.
 - **3+** aspirations / threats / arrival (any order) → **4 parties**
   → knowledge when the experiment is wanted. Re-derive waves at each
   GDD refresh; the registry is the source.
@@ -620,7 +798,45 @@ against a self-sent one. The mutation round grew to thirty-four constants and
 notices all of them, through a seventh instrument — the scorer battery, every
 expectation a shipped literal.
 
-Economy sweeps wait for an economy; distribution sweeps wait for the ladder.
+Economy sweeps wait for an economy.
+
+*Implemented (w1.2): the asks battery, and the distribution sweep the ladder
+was waiting for.* `src/compliance.rs` is the module's own, and it carries the
+five claims GDD §9 owes it:
+
+- **The compliance transcript**: the four scripted postings are agreed to at
+  the same world-minutes with the same sentences on a replay; a posting
+  withdrawn before it was heard is never heard and never answered.
+- **The distribution sweep over the ladder.** The plan asks for ~200 seeds;
+  this build reads no `Rng` at all, so the population that actually varies is
+  the *offer*, and the sweep walks a seven-rung wage ladder against one job of
+  each task type for every character — 280 answers a pass. The four bands
+  (loyal, cold, greedy, desperate) take a pinned number of those offers each,
+  as shipped literals, and the mutation round breaks them by moving
+  `ask_targeted`, `wage_regard` or any weight the sums are made of. The shape
+  is the design's: the loyal and the desperate comply most, the cold least.
+- **One function**: over all 280 staged offers, the job row's verdict and what
+  the character actually does about the same posting agree — the row is
+  produced by the same `autonomy::choose` over the same candidates a rescore
+  would build, so the two can only differ by the world having moved.
+- **The standing-rate policy test**, and how coarse the lever is: walking
+  fight pay across the panel's range in the panel's own step changes somebody's
+  *work* at 12g, 16g, 36g and 56g — five of the ten drift into fight work as
+  it rises — and from the shipped 24g it takes **three** steps to move
+  anybody. That distance is a pinned literal and a question for the playtest,
+  not a bug: a wage has to beat a six-point aptitude term to pull somebody off
+  their own trade.
+- **Speed-invariance over postings and messengers**: the transcripts of all
+  three speed scripts carry the posting, hearing and agreement events at
+  identical world-minutes, and a messenger's hearing is asserted at the
+  arrival minute it rides.
+- **Module-off with asks off** is the third matrix pass: nothing can be
+  posted, the ledger will not open, the site panel is a read of the work, and
+  the world is wave 1.1's.
+
+The mutation round grew to thirty-six constants and notices all of them,
+through an eighth instrument — the asks battery, every expectation a shipped
+literal.
 
 ## 10. Confidence & open ledger
 
@@ -632,7 +848,12 @@ you at the right moments, and only those?). All modules **speculative** —
 correct and expected; wave gates convert speculation to played evidence one
 wave at a time.
 
-Open (deliberately): the wave-1 class registrations and whether the mockup's
+Open (deliberately): **the expectation model beyond the standing rate**
+(fit-adjusted? regard-adjusted?) · **open postings travelling** (this wave:
+heard at camp only) · **standing-posting fatigue** · **the ask-spam question**
+(does asking spend regard?) · **whispers' rumor vocabulary and spread model**
+(capsule) · **a surface for site-shaped postings**, and a messenger anybody
+can see · the wave-1 class registrations and whether the mockup's
 defaults survive a real petition load (wave 0a shipped them; nothing this
 build has opens on pause) · **the trait vocabulary is provisional through the
 wave-1 close** — the words are `CAST.md` §3, chosen before the context that

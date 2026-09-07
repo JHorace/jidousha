@@ -99,6 +99,27 @@ pub enum EventClass {
     ActionStarted,
     /// The thing they chose is finished and they are home again.
     ActionDone,
+    /// **The player posted something** (the asks module, wave 1.2) — an entry
+    /// on the ledger, binding nobody until it is heard.
+    PostingMade,
+    /// Somebody heard a posting: in camp at once, on the road when the
+    /// messenger reached them.
+    AskHeard,
+    /// Somebody took a posted job, for its wage, for a stated reason.
+    AskAgreed,
+    /// Somebody the player asked **by name** weighed it and did something
+    /// else, and this is why. An open posting has no such event: nobody
+    /// refuses a notice on a board, it just goes unfilled.
+    AskDeclined,
+    /// Somebody abandoned a posting's job because something pressed harder.
+    ///
+    /// **The seam, not the behaviour** (wave 1.2): nothing in this build
+    /// presses harder than work, so nothing in a played run emits this.
+    /// Needs (1.3) and petitions are the pressure it is waiting for, and
+    /// `answers::drop_errand` is the door they come through.
+    AskDropped,
+    /// The player took a posting down.
+    PostingWithdrawn,
 }
 
 /// One row of the event-class table: what a class is called, how it is drawn,
@@ -186,6 +207,56 @@ pub const CLASSES: &[ClassSpec] = &[
         id: "action-done",
         color: theme::DIM,
         icon: Art::Craft,
+        default_mode: Mode::Ignore,
+    },
+    // **The asks module's six** (wave 1.2). The player's own two — a posting
+    // made and a posting withdrawn — are `ignore`, because the ledger already
+    // holds them and an event for the thing you just did is a feed that
+    // repeats you back at yourself. The three that are somebody else's answer
+    // are worth reading, and **a refusal by name is the first class in this
+    // game that stops the world**: being told no, with a reason, is the whole
+    // of what this wave added to the loop, and a player who missed it would
+    // be a player who never found out that asking can fail.
+    ClassSpec {
+        class: EventClass::PostingMade,
+        id: "posting-made",
+        color: theme::INK,
+        icon: Art::Eye,
+        default_mode: Mode::Ignore,
+    },
+    ClassSpec {
+        class: EventClass::AskHeard,
+        id: "ask-heard",
+        color: theme::DIM,
+        icon: Art::Renown,
+        default_mode: Mode::Log,
+    },
+    ClassSpec {
+        class: EventClass::AskAgreed,
+        id: "ask-agreed",
+        color: theme::REGARD,
+        icon: Art::Indebted,
+        default_mode: Mode::Log,
+    },
+    ClassSpec {
+        class: EventClass::AskDeclined,
+        id: "ask-declined",
+        color: theme::EMBER,
+        icon: Art::Skull,
+        default_mode: Mode::PauseAndFocus,
+    },
+    ClassSpec {
+        class: EventClass::AskDropped,
+        id: "ask-dropped",
+        color: theme::EMBER,
+        icon: Art::Restless,
+        default_mode: Mode::Log,
+    },
+    ClassSpec {
+        class: EventClass::PostingWithdrawn,
+        id: "posting-withdrawn",
+        color: theme::DIM,
+        icon: Art::Maker,
         default_mode: Mode::Ignore,
     },
 ];
@@ -452,6 +523,12 @@ pub fn vocabulary(checks: &mut crate::checks::Checks) {
         (EventClass::QuestComplete, Mode::Log),
         (EventClass::ActionStarted, Mode::Log),
         (EventClass::ActionDone, Mode::Ignore),
+        (EventClass::PostingMade, Mode::Ignore),
+        (EventClass::AskHeard, Mode::Log),
+        (EventClass::AskAgreed, Mode::Log),
+        (EventClass::AskDeclined, Mode::PauseAndFocus),
+        (EventClass::AskDropped, Mode::Log),
+        (EventClass::PostingWithdrawn, Mode::Ignore),
     ] {
         checks.require(
             opening.mode(class) == wanted,

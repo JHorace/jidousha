@@ -370,7 +370,7 @@ fn judge_board(checks: &mut Checks, run: &Conducted, tuning: &Tuning, grid: &cra
         }
         checks.require(
             lens.travel(grid, tuning, who, site)
-                .is_some_and(|route| says(&format!("{} min from where they stand", route.cost))),
+                .is_some_and(|route| says(&format!("{} min away", route.cost))),
             "the photographed board's travel line is not the journey the sim would walk",
             format!(
                 "sim::route_out answers {:?} for {}",

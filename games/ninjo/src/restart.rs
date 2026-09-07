@@ -22,7 +22,7 @@ use crate::constants::Tuning;
 use crate::flow::Flow;
 use crate::sim::Sim;
 use crate::sweep::{
-    Act, Directive, Photo, RUN_UNTIL, Session, Shot, When, conduct, order, transcript,
+    Act, Directive, Photo, RUN_UNTIL, Session, Shot, When, conduct, post, transcript,
 };
 use crate::{layout, presets, verify};
 
@@ -71,10 +71,11 @@ pub struct DrawerRun {
     pub font: BackendTextureId,
 }
 
-/// The order the post-apply half runs: OX to the Deep Cave at minute 6 — a
+/// The posting the post-apply half makes: the Deep Cave's haul to Bob at
+/// minute 6 — a
 /// route through plains and forest, which is exactly what `MIRE` moves.
-fn post_apply_order() -> [Directive; 3] {
-    order(6, 0, 1, 0)
+fn post_apply_ask() -> [Directive; 3] {
+    post(6, 0, 1, 0)
 }
 
 /// Play the drawer: open it, step a row, load the preset, apply, close, run
@@ -127,7 +128,7 @@ pub fn drawer_run() -> DrawerRun {
             what: Act::Tap(Key::Digit1),
         },
     ];
-    script.extend(post_apply_order());
+    script.extend(post_apply_ask());
     let photos = [Photo {
         name: "tuning",
         minute: 0,
@@ -287,7 +288,7 @@ fn replay_identity(checks: &mut Checks, run: &DrawerRun) {
         when: When::Tick(2),
         what: Act::Tap(Key::Digit1),
     }];
-    fresh_script.extend(post_apply_order());
+    fresh_script.extend(post_apply_ask());
     let fresh = conduct(&Session::plain(run.applied, &fresh_script, 60_000));
     let shipped = conduct(&Session::plain(run.started_at, &fresh_script, 60_000));
     checks.require(
@@ -309,28 +310,31 @@ fn replay_identity(checks: &mut Checks, run: &DrawerRun) {
             transcript(&fresh.events)
         ),
     );
-    // The dispatch itself landed: a departure at minute 6, and the whole loop
-    // behind it. The count is not pinned any more — the world has people in
-    // it who decide things for themselves, and how many of them do so inside
-    // the window is the scorer's business, not the drawer's.
+    // The ask itself landed: a posting at minute 6, agreed to in the same
+    // minute, and the whole journey behind it. The count is not pinned any
+    // more — the world has people in it who decide things for themselves, and
+    // how many of them do so inside the window is the scorer's business, not
+    // the drawer's.
     checks.require(
         run.events.first().is_some_and(|event| {
-            event.minute == 6 && event.class == crate::attention::EventClass::Departed
+            event.minute == 6 && event.class == crate::attention::EventClass::PostingMade
         }) && run
             .events
             .iter()
             .filter(|event| event.party == 0)
-            .take(5)
+            .take(7)
             .map(|event| event.class)
             .collect::<Vec<_>>()
             == [
+                crate::attention::EventClass::AskHeard,
+                crate::attention::EventClass::AskAgreed,
                 crate::attention::EventClass::Departed,
                 crate::attention::EventClass::Arrived,
                 crate::attention::EventClass::WorkBegan,
                 crate::attention::EventClass::QuestComplete,
                 crate::attention::EventClass::Returned,
             ],
-        "the post-apply dispatch did not run its whole loop",
+        "the post-apply ask did not run its whole loop",
         format!("the post-apply transcript is {:?}", transcript(&run.events)),
     );
 }
