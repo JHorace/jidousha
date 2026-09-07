@@ -47,12 +47,17 @@ clock: the wall-clock ban covers engine and simulation code, not build scripts
 """
 
 import argparse
+import concurrent.futures
+import contextlib
+import io
 import json
+import os
 import re
 import shutil
 import struct
 import subprocess
 import sys
+import threading
 import zlib
 from datetime import datetime, timezone
 from pathlib import Path
@@ -66,6 +71,24 @@ TARGET = "wasm32-unknown-unknown"
 # Advisory, not a gate: the wasm size is logged on every build and warned about
 # past this, so drift is visible long before it is a problem (web-publish.md §1).
 WASM_WARN_BYTES = 5 * 1024 * 1024
+
+# The ceiling on how many pages are *staged* at once (web-publish.md §1b).
+# Staging a page is `wasm-bindgen` then `wasm-opt -Os` over that page's own
+# module — independent, CPU-bound work, where the compile before it is one cargo
+# invocation that already uses every core. So the pool is one worker per core,
+# and this is only the cap above that: a very wide machine would otherwise hold
+# a dozen multi-megabyte modules in flight to shorten a build that is already
+# short. Measured on a 4-core container, the full 15-page fleet: 97s serial, 73s
+# at four at a time (both including the same warm cargo pass).
+#
+# Nothing about the *output* depends on this number. wasm-bindgen and wasm-opt
+# are deterministic functions of one module and a fixed set of flags — no page
+# reads another page's files, and none of them reads a clock — so a fleet's
+# bytes are the bytes it staged serially. A test asserts that every page is
+# staged exactly once with the arguments the serial build passed; the bytes
+# themselves were hashed, all 242 files of a full fleet built both ways, on the
+# PR that made this parallel (web-publish.md §1b's CONTRACT).
+MAX_STAGE_WORKERS = 8
 
 # The page's own two colours, restated here because the home-screen icon has to
 # be drawn *outside* the browser and a PNG cannot read a stylesheet. A test
@@ -252,10 +275,85 @@ def check_toolchain(wanted: "str | None") -> int:
     return 0
 
 
+class PageOutput(io.TextIOBase):
+    """stdout that keeps one page's lines together while pages stage at once.
+
+    A worker opens a `page()` block and everything it prints — its own lines and
+    the output of the children it runs — is collected there; the block is
+    written whole, under a lock, when that page finishes. Outside a `page()`
+    block this is a plain passthrough, so the single-page build and every step
+    before the pool print exactly as they always did.
+
+    Interleaved lines would be the wrong trade here. `build-web`'s log is read
+    to answer "what happened to *this* page" — which module it bound, what
+    wasm-opt did to it, how many asset files it staged — and fifteen pages'
+    worth of that shuffled together answers it for none of them. Collecting is
+    safe because the hazard here is a *failure*, which arrives with its page;
+    `serve-web --check`'s hazard is a *hang*, which is why that tool checks one
+    page at a time and prints every line as it happens (web-publish.md §1b).
+    """
+
+    def __init__(self, stream: "io.TextIOBase"):
+        self.stream = stream
+        self.lock = threading.Lock()
+        self.local = threading.local()
+
+    def collecting(self) -> bool:
+        """Whether this thread is inside a `page()` block."""
+        return getattr(self.local, "lines", None) is not None
+
+    @contextlib.contextmanager
+    def page(self):
+        self.local.lines = []
+        try:
+            yield
+        finally:
+            lines, self.local.lines = self.local.lines, None
+            with self.lock:
+                self.stream.write("".join(lines))
+                self.stream.flush()
+
+    def write(self, text: str) -> int:
+        if self.collecting():
+            self.local.lines.append(text)
+            return len(text)
+        with self.lock:
+            return self.stream.write(text)
+
+    def flush(self) -> None:
+        self.stream.flush()
+
+
+OUT = PageOutput(sys.stdout)
+
+
+def child(command: "list[str]") -> "subprocess.CompletedProcess":
+    """Run a child process, with its output going wherever this page's does.
+
+    A child writes to the file descriptor, not to `sys.stdout`, so inside the
+    staging pool its output would sail straight past `PageOutput` and land in
+    the middle of another page's block. There it is captured and re-printed
+    through Python; everywhere else it is left alone, so an interactive build
+    still streams cargo's progress as it happens.
+    """
+    if not OUT.collecting():
+        return subprocess.run(command, cwd=REPO_ROOT)
+    proc = subprocess.run(
+        command,
+        cwd=REPO_ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    if proc.stdout:
+        print(proc.stdout, end="" if proc.stdout.endswith("\n") else "\n")
+    return proc
+
+
 def run(command: "list[str]", what: str) -> int:
     """Run a build step, echoing it first."""
     print(f"[build-web] {' '.join(command)}")
-    proc = subprocess.run(command, cwd=REPO_ROOT)
+    proc = child(command)
     if proc.returncode != 0:
         return fail(
             f"{what} failed",
@@ -591,7 +689,7 @@ def optimize(wasm: Path) -> None:
         )
         return
     optimized = wasm.with_suffix(".wasm.opt")
-    proc = subprocess.run([binary, "-Os", str(wasm), "-o", str(optimized)])
+    proc = child([binary, "-Os", str(wasm), "-o", str(optimized)])
     if proc.returncode != 0:
         # Correct-but-larger beats broken: report and ship the unoptimized one.
         print(f"[build-web] wasm-opt exited {proc.returncode} — shipping the unoptimized module")
@@ -894,6 +992,50 @@ def missing_from_allowlist(examples: "list[str]") -> "list[str]":
     return [name for name in RELEASE_EXAMPLES if name not in examples]
 
 
+def staging_workers(pages: int) -> int:
+    """How many pages to stage at once: one per core, and never more than there
+    are pages. `MAX_STAGE_WORKERS` says why a core is the unit."""
+    return max(1, min(pages, os.cpu_count() or 1, MAX_STAGE_WORKERS))
+
+
+def stage_fleet(
+    pages: "list[tuple[str, str, str | None]]", debug: bool, stamp: str
+) -> int:
+    """Bind, optimize and stage every already-compiled page, several at a time.
+
+    The compile is one cargo invocation that saturates the machine by itself;
+    this stage is N independent pipelines that each saturate one core, so
+    running them one after another leaves most of the machine idle for the
+    longest step of a fleet build (web-publish.md §1b). Nothing is shared: each
+    page reads its own module out of `target/` and writes its own
+    `dist/<page>/`, so the output does not depend on how many run at once — the
+    fleet's bytes are identical to the serial build's.
+
+    Every page is staged even when one fails, and the first failure in fleet
+    order is the verdict. The serial version stopped at the first, which on a
+    fleet answered "a page is broken" without saying whether the rest were —
+    the same reason `serve-web --check` finishes its loop.
+    """
+    workers = staging_workers(len(pages))
+    print(f"[build-web] staging {len(pages)} page(s), {workers} at a time")
+    # Whatever stdout is *now* — this tool is also imported by its own tests,
+    # which capture what it prints; a shim that wrote to the stream it saw at
+    # import time would print past them.
+    OUT.stream = sys.stdout
+    previous, sys.stdout = sys.stdout, OUT
+
+    def stage(name: str, kind: str, own_root: "str | None") -> int:
+        with OUT.page():
+            return stage_playable(name, kind, debug, stamp, own_root)
+
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+            results = list(pool.map(lambda page: stage(*page), pages))
+    finally:
+        sys.stdout = previous
+    return next((step for step in results if step != 0), 0)
+
+
 def build_all(targets: "list[tuple[str, str, str]]", debug: bool, release: bool = False) -> int:
     """The engine-repo deploy layout: a whole fleet of pages, plus the index.
 
@@ -930,15 +1072,13 @@ def build_all(targets: "list[tuple[str, str, str]]", debug: bool, release: bool 
 
     stamp = build_stamp()
     dirs = package_dirs()
-    for name in examples:
-        step = stage_playable(name, "example", debug, stamp)
-        if step != 0:
-            return step
-    for name in games:
-        own_root = own_asset_root(package_of[name], "game", dirs)
-        step = stage_playable(name, "game", debug, stamp, own_root)
-        if step != 0:
-            return step
+    pages = [(name, "example", None) for name in examples]
+    pages += [
+        (name, "game", own_asset_root(package_of[name], "game", dirs)) for name in games
+    ]
+    step = stage_fleet(pages, debug, stamp)
+    if step != 0:
+        return step
     prune_stale(examples + games)
     return stage_root_index(examples, games, stamp, release)
 

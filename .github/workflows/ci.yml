@@ -19,8 +19,30 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Every job that compiles Rust restores a build cache (Swatinem/rust-cache, a CI
+# action — not a workspace dependency). It carries the compiled dependency
+# graph, which is most of every cold build here (wgpu, winit, naga), keyed by
+# the job, the runner OS and Cargo.lock: a lockfile change invalidates it and no
+# two jobs share one. It is a speed device and never a gate — on a miss the job
+# compiles from scratch and asserts exactly what it asserts on a hit. Only the
+# four compiling jobs carry one; for a job that runs a Python check in seconds,
+# restoring a cache costs more than it saves.
+#
+# Two cargo settings are CI-only, and deliberately live here rather than in
+# Cargo.toml: a developer's local build keeps its symbols and its incremental
+# cache, which is what makes a local edit-check loop quick. A runner has
+# neither use — every job starts from a restored cache and compiles once, and
+# nothing here reads a backtrace's symbols (a panic's file:line is compiled in,
+# not debug info; the golden tier compares pixels).
 env:
   CARGO_TERM_COLOR: always
+  # Incremental compilation buys re-compiles that CI never makes, and costs
+  # both build time and a much larger target/ for the cache below to carry.
+  CARGO_INCREMENTAL: 0
+  # Debug info for the dev profile — which the test profile inherits, so this
+  # is what `cargo test` builds with. `debug-assertions` is untouched: the
+  # "panic loudly in debug" contract (CLAUDE.md) is unaffected.
+  CARGO_PROFILE_DEV_DEBUG: 0
 
 jobs:
   fmt:
@@ -35,6 +57,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # The dependency cache — see the header note.
+      - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
   test:
@@ -46,6 +70,10 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
+      # The dependency cache — see the header note.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.os }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -85,6 +113,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # The dependency cache — see the header note.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: wasm32-check
       # No `rustup target add` step: rust-toolchain.toml pins the target (ADR-0005).
       - run: cargo check --workspace --target wasm32-unknown-unknown
       # M4's exit criterion: the examples must build for the web too. They are
@@ -173,6 +205,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # The dependency cache — see the header note.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: wasm32-release
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"

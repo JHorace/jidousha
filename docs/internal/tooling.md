@@ -440,16 +440,54 @@ a row (stop rule printed, `failure-streak.json` count 2).
   optimized modules (never Ubuntu's binaryen 108, which damages the externref
   table — web-publish.md §5; build-web refuses a wasm-opt below its pinned
   minimum, so a runner change cannot silently reintroduce it), then
-  browser-checks the optimized bytes against the first line of `dist/fleet.txt`
-  (`tools/serve-web "$(head -n 1 dist/fleet.txt)" --check`), so the check
-  follows whichever fleet was built,
-  before uploading `dist/` as an artifact. `deploy` runs only after every other gate in the same
+  browser-checks the optimized bytes of **every** page of whatever fleet was
+  built (`tools/serve-web --check`, which reads `dist/fleet.txt` itself), so the
+  check follows whichever fleet that was and the workflow still names no page,
+  before uploading `dist/` as an artifact. (It checked `head -n 1
+  dist/fleet.txt` until 2026-09-02 — one page, and because the two fleets lead
+  with different ones, never the page production serves: jidousha#79–#82, two
+  days of red `main`. This line said so for four days after the check stopped
+  doing it, which is its own small lesson about where a stale sentence hides.) `deploy` runs only after every other gate in the same
   run: `wrangler deploy` on a `main` push (production), `wrangler versions
   upload --preview-alias pr-<number>` on a PR (stable preview URL per PR), with
   ONE sticky comment per PR updated in place on each push — never a comment per
   push. Fork PRs have no secrets, so the job skips neutrally (ADR-0037). node
   and wrangler are CI-only dependencies; they appear in the workflow and
   nowhere else.
+- **CI's wall time is a maintained number, and the gates are not what pays for
+  it** (owner authorization, 2026-09-02). Measured per step over the last ten
+  runs of each job before anything was changed, because every lever below is
+  worth what the measurement says and not what it sounds like:
+  - **Every job that compiles Rust restores a build cache** (`Swatinem/rust-cache`,
+    a CI action — CI actions are not workspace dependencies, and this is the
+    only one added). Keyed by job, runner OS and `Cargo.lock`; the action prunes
+    the workspace's own crates before saving, so what is carried is the
+    dependency graph, which is most of a cold build here (wgpu, winit, naga).
+    The four compiling jobs carry one — for a job that runs a Python check in
+    seconds, restoring a cache costs more than it saves. A cache is a speed
+    device and never a gate: on a miss the job compiles from scratch and asserts
+    exactly what it asserted before.
+  - **Two cargo settings are CI-only**, set as workflow `env` and deliberately
+    not in `Cargo.toml`: `CARGO_INCREMENTAL=0` (CI never makes the second build
+    incremental compilation exists for, and its artifacts bloat the cache) and
+    `CARGO_PROFILE_DEV_DEBUG=0` (nothing on a runner reads a symbol — a panic's
+    `file:line` is compiled in, and the golden tier compares pixels). A
+    developer's local build keeps both, which is what keeps a local edit-check
+    loop quick. `debug-assertions` is untouched, so "panic loudly in debug"
+    (CLAUDE.md) is unaffected.
+  - **The web job's fleet build stages its pages in parallel**, inside the tool
+    rather than beside it (web-publish.md §1b): the workflow still makes one
+    call, because `build-web` is the only build path (web-publish.md §1), and
+    the staged bytes are identical to the serial build's, hashed over a whole
+    fleet built both ways. The browser check was tried the same way and **backed
+    out on the measurement**: 15 seconds saved against three-minute stalls,
+    because starving a compositor of cores is what the screenshot deadlock feeds
+    on. §1b has both tables — a lever measured and dropped is worth as much on
+    the record as one that paid.
+  - **fmt, clippy and doctor were already their own jobs**, so there was no
+    fail-fast split left to make: a short job already fails first, and
+    `tools/test` does not run them.
+
 - **"Was the canvas drawn on" takes two questions, not one.** The original check
   asked only whether the canvas differed from the page's own background, and I1
   found its blind spot: `input_echo` clears to rgb(15, 18, 26) against a page of

@@ -99,9 +99,13 @@ CHECK_VIRTUAL_MS = 1000
 # The wall-clock ceiling on the browser itself, which is a different question
 # from how much page time it simulates. With the budget above it was sized at
 # roughly 9x the check's actual cost on a CI runner, where the `run` pass
-# measures 12.8s — about 30x the 3.6s it costs on a developer machine. The CI
-# figure is the one that sizes this ceiling, which is the point: it should mean
-# "the page is broken", never "the runner was busy".
+# measured 12.8s — about 3.6x the 3.6s the same pass costs on a developer
+# machine. (That last figure read "about 30x" until 2026-09-06, which was
+# nobody's measurement: 12.8 over 3.6 is 3.6, and the 9x this sentence opens
+# with is the number that sizes the ceiling. A wrong ratio beside a right one
+# is worse than no ratio, because it is where the next person sizing this
+# would start.) The CI figure is the one that sizes the ceiling, which is the
+# point: it should mean "the page is broken", never "the runner was busy".
 #
 # 180s rather than 120s because a runner can be much worse than the one that
 # figure came off. On 2026-09-02 a `main` deploy met one where the `run` pass
@@ -905,6 +909,27 @@ def check_fleet(browser: str, port: int, pages: "list[tuple[str, bool]]") -> int
     broken" call for completely different next moves, and the difference is
     only visible if the rest are tried — so the loop finishes and names all of
     them. The step's wall-clock ceiling belongs in CI, not here.
+
+    DELIBERATE: **one page at a time**, and it was measured rather than assumed
+    (2026-09-06, jidousha#93 — a CI-speed pass that tried the obvious thing and
+    backed it out). The pages are independent and a pool is easy: each page
+    already writes to its own `target/web-check/<page>/`, each launch takes its
+    own profile directory, and the server behind them is threaded. On a 4-core
+    container it was worth 2.5x. On CI it was worth 15 seconds and cost far
+    more than that:
+
+        pages at once   check step, three CI runs each
+            1           42s, 70s, 74s     — 0 hangs in 45 pixel launches
+            2           55s, 188s, 197s   — 2 hangs in 45
+            4           (one run)         — 2 hangs in 15, one of them twice
+
+    A hang is `CHECK_TIMEOUT_S`, and the deadlock below is a compositor frame
+    that has to complete under virtual time — so taking cores away from it is
+    the one thing guaranteed to make it likelier. Fifteen seconds of a
+    five-minute workflow is not worth a gate that stalls for three minutes, and
+    the run that spent 360s hanging twice on one page failed the build outright.
+    The fleet *build* is parallel and stays so (`build-web`'s `stage_fleet`):
+    there the work is deterministic byte-shuffling with no browser in it.
     """
     failed = []
     for index, (page, windowed) in enumerate(pages, start=1):
