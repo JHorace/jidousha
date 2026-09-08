@@ -33,7 +33,7 @@ use crate::meters::{self, METERS};
 use crate::modules::ModuleSet;
 use crate::sim::Sim;
 use crate::tuning::Tuner;
-use crate::{camera, layout, sim, sprites, tuning};
+use crate::{camera, layout, screens, sim, sprites, tuning};
 
 /// How many ticks a bounced order's toast stays up — about two and a half
 /// seconds at the engine's fixed sixty.
@@ -531,26 +531,6 @@ pub fn handle_input(world: &mut World) {
         return;
     }
 
-    // The map: a click on somebody standing at their home selects them, and
-    // opens their panel. Nobody stands on a location's tile (the registry
-    // asserts it), so this cannot swallow a dispatch.
-    {
-        let homes: Vec<(usize, crate::grid::Tile)> = {
-            let lens = Lens::on(world.resource::<Sim>());
-            (0..lens.people().len())
-                .filter(|index| lens.at_home(*index))
-                .filter_map(|index| lens.home(index).map(|tile| (index, tile)))
-                .collect()
-        };
-        for (index, home) in homes {
-            if !layout::home_rect(home).contains(at_world) {
-                continue;
-            }
-            select(world, index);
-            return;
-        }
-    }
-
     // **The map: a click on a site's marker opens that site's board.** It
     // issues no order — the job row does, and it is the only thing that does
     // (UI.md §3c). The two clicks a dispatch takes are unchanged in number and
@@ -565,6 +545,48 @@ pub fn handle_input(world: &mut World) {
         flow.board = (flow.board != Some(site_index)).then_some(site_index);
         flow.drilled = None;
         return;
+    }
+
+    // **The map: a click on a person's figure selects them**, and opens their
+    // panel — wherever that figure is standing. The hit target is
+    // `screens::where_drawn`, the same rectangle the figure is drawn in and
+    // the ring is drawn round (UI.md §3b), so a click lands on the picture
+    // rather than on the tile the picture used to be assumed to be over. It
+    // is what makes a person on the road as selectable as a person at a
+    // doorstep, which they were not while a token was a picture nothing
+    // answered for.
+    //
+    // **Under the markers, and only since figures move.** A doorstep is never
+    // a location's tile (the registry asserts it), so for the cast at home
+    // the two sets never met and the order never mattered. A party working at
+    // a site stands *on* that site's marker, and a figure that took the click
+    // there would make the site unorderable for as long as anybody was
+    // working it — the same failure UI.md §3a refuses when it makes the
+    // character panel's body fall through to the markers it lies across. A
+    // person standing on a site is still three doors away (the strip, the
+    // roster, a faces list); a site nobody can open is a dispatch nobody can
+    // make.
+    {
+        let now = screens::reading(
+            world.resource::<Clock>(),
+            world.resource::<Tuning>(),
+            screens::TICK,
+        );
+        let figures: Vec<(usize, Rect)> = {
+            let lens = Lens::on(world.resource::<Sim>());
+            (0..lens.people().len())
+                .filter_map(|index| {
+                    screens::where_drawn(&lens, index, now).map(|figure| (index, figure))
+                })
+                .collect()
+        };
+        for (index, figure) in figures {
+            if !figure.contains(at_world) {
+                continue;
+            }
+            select(world, index);
+            return;
+        }
     }
 
     // Empty ground: nobody there and no board to read, so the selection is put

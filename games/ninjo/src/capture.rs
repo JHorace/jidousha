@@ -74,6 +74,7 @@ pub fn capture_screens(
         "board",
         "ordered",
         "bounce",
+        "roadring",
     ] {
         if let Some(shot) = reference.photo(name) {
             wanted.push(Wanted {

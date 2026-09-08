@@ -42,7 +42,7 @@ giri's colour roles stand. The changed and new rows:
 | the watchtower icon | the `away` meter chip | interim: no "out on the road" role exists in the curated set, and a thing that watches a road is the nearest one |
 | gold, on a feed row | **the entry an auto-pause fired on** | the same fact as the reason line above it, from `Lens::pause` |
 | a gold ring on a map figure | **the selected character — the one selection there is** | exactly one is ever drawn, on the figure at their doorstep or on their token on the road (§3b) |
-| portraits, on the map | **a character standing at their home tile** | one per person, at marker weight (32 world units), named underneath |
+| a portrait, on the map | **a character, standing wherever they are** | one per person and exactly one, at marker weight (32 world units), at their doorstep or on their road (§3, §4); named underneath only at a doorstep |
 | dungeon icons (cave/crypt/tower/vault) | one quest site each | unchanged in art, now map markers; **a marker opens that site's board and issues no order** (§3c) |
 | an aptitude chip on a job row | **what kind of work the job is** — the task type (`CAST.md` §2) | the icon is the aptitude row whose id *is* the task's, so the chip on a job and the chip on a person are the same picture of the same word |
 | `open` in regard-green on a job row | **the row can be ordered from** | the only state a job row takes an order in; a claimed row is dim and a done row fainter still, and both name whose it is |
@@ -51,7 +51,7 @@ giri's colour roles stand. The changed and new rows:
 | `- 20g +` and `TO <name>` in the board's footer | **what the next tap offers, and whom it offers it to** | the board's own two controls; the wage opens at the standing rate for the site's first open row |
 | `WITHDRAW` on a ledger row | **the one way to take a posting down** | instant, and heard the same way a posting is: a posting withdrawn before it was heard is one nobody answers |
 | `STAND` / `STANDS` on a rates row | **a standing open posting for that kind of work**, at the rate beside it | gold while one stands — the closest thing to policy the player has by hand |
-| portraits | **party tokens** | one per party, unique, on the map and on the strip |
+| a portrait, on the party strip | **whose chip this is** | the member's own face, so a person on the map and a chip on the strip are the same picture of the same person |
 | coin icon | the treasury | beside the gold number in the top bar |
 | gold | the active speed chip, the selected character wherever they appear, selection | still not a general accent |
 | terrain colours | the six terrain kinds | one colour per kind, `theme.rs`; the fill *is* the grid data |
@@ -82,13 +82,22 @@ not a queue — the import path (`art/`) rode along from giri.
   **Under an open job board the map's own words say nothing**, exactly as
   under a drawer: the board lies across markers and their labels at the
   reference camera, and the words it hides are the words it carries in full.
-- **The cast, at home** (wave 0b): every character stands at their home
-  tile with their name under them, unless a party they field is out. They
-  are **click targets since wave 0a**: clicking a figure selects that person
-  and opens their panel (§3a), and the 32-world-unit figure meets the target
-  floor at the reference zoom exactly as a site marker does. What a person
-  *has* — wallet, desperation and its source, traits — is on their panel and
-  nowhere else.
+- **The cast, wherever they are** (wave 0b; one figure each since the
+  double-drawn cast): every character is drawn exactly once on the map, at
+  `screens::where_drawn` — at their home tile while they are there, on their
+  party's moving token while they are out, **never both**. A **name** is drawn
+  under them at a doorstep and not on the road: a name has a tent under it to
+  belong to, and a walking figure's status is the party strip's line. They
+  are **click targets since wave 0a**, and since the fix that is true on the
+  road as well as at a door: clicking a figure selects that person and opens
+  their panel (§3a), and the 32-world-unit figure meets the target floor at
+  the reference zoom exactly as a site marker does. **A site marker takes the
+  click first**, because a party working at a site stands on that site's
+  marker and a figure that answered there would make the site unorderable
+  while anybody worked it — the same refusal §3a makes for the character
+  panel's body; a person standing on a site is still three doors away. What a
+  person *has* — wallet, desperation and its source, traits — is on their
+  panel and nowhere else.
 - **Party strip** (visible whenever no drawer is): **one chip per person**
   since wave 1.1, in two rows of five — portrait, name, and a one-line
   status (`at home` / `-> Watchtower` / `at Watchtower` / `-> Hana's` /
@@ -198,7 +207,10 @@ list** — does the same thing from every surface:
 - they become *the* selected character;
 - the character panel opens on them, and on nobody else;
 - exactly **one** selection ring is drawn, on them — at their doorstep while
-  they are home, on their token while they are on the road, never both;
+  they are home, on their token while they are on the road, never both. It
+  computes no position of its own: `screens::selection_ring` asks
+  `where_drawn`, the same function the figure is drawn at and the click is
+  tested against, so a ring cannot come to sit beside the person it marks;
 - their strip chip lights. The strip's highlight **is** the one selection, not
   a second one, which is what makes the strip a glanceable status row rather
   than a second selector.
@@ -339,6 +351,20 @@ board and the faces list share the left of the screen and are never open
 together, **the base screen is two sets**, `targets()` and `board_targets()`,
 and `layout_floors` judges both.
 
+**One person is one figure, and two people are two.** A character is drawn
+exactly once, at `screens::where_drawn` — their own doorstep while they are
+home, their party's interpolated position while they are on the road, never
+both and never neither. A figure standing alone is drawn on its person's own
+place with no offset at all; a figure is nudged only because somebody else is
+standing close enough to read as them, and the nudge separates them by at
+least `floors::FIGURES_APART` (sixteen units, half a figure). §6 names the two
+floors that assert it.
+
+Note what that does **not** say: that no two figures overlap. A figure is 32
+world units and a tile is 16, so people at neighbouring doorsteps overlap and
+always have. Whether the settlement is too crowded to read is a judgement
+about the map and it is the owner's (`FINDINGS.md` G-022).
+
 **Map labels are bound at the default zoom, and that is what fixes the zoom.**
 The chrome rides `UiMap` and is a constant size on screen however the camera
 moves; a name under a figure is drawn in *world* units and shrinks as the
@@ -360,7 +386,7 @@ frame judges hold all three.
 
 ## 5. Screenshot process
 
-Sixteen PNGs per verify run. Reference-only, because they are pictures of what
+Seventeen PNGs per verify run. Reference-only, because they are pictures of what
 is on screen rather than of how the chrome scales: **the settlement** at
 world-minute 0 (the whole cast standing at their homes, named, before
 anything is dispatched, which is wave 0b's own exit question), **the
@@ -375,7 +401,11 @@ the map at a minute when nobody was told to go anywhere and half the band is
 on the road because they decided to be, which is wave 1.1's own exit
 question — **the selection reproduction**: the owner's own playtest steps,
 one character picked on the strip and another picked on the map, with one ring
-and one lit chip on the second of them (§3b) — and, since wave 1.2, **a
+and one lit chip on the second of them (§3b) — and, since the double-drawn
+cast, **the ring on a token**: somebody picked while they are out, marked on
+the figure walking the road with their own doorstep standing empty, which is
+the selection's other state and had no picture at all while the map drew
+everybody twice — and, since wave 1.2, **a
 refusal mid-pause** (a posting made to somebody who says no, the world stopped
 by `ask-declined`, and the reason on the banner) and **the postings ledger**
 with one posting still recruiting, one refused, and the standing rates beside
@@ -402,6 +432,40 @@ verify run is where they are owed: every row of its content in the `Panel`
 the frame), every string ASCII (`library.rs` walks them), and every read of
 the world through `lens.rs`. The last one is the easy one to skip and the
 expensive one to retrofit — see that module's header for why.
+
+**What is exempt from the first, and why — the whole list.** Only three
+things on this screen are drawn past the `Panel`, and they are named here
+rather than only at their code site:
+
+- **the terrain**, because a 48x27 map is a thousand quads no panel should
+  carry, and every drawn tile's fill is asserted against the sim's grid
+  instead (§2);
+- **the selection ring** and **the focus pulse**, because both are fills
+  rather than content — neither carries a string, an icon role or a
+  position of its own, and the ring's rectangle is `screens::where_drawn`,
+  which the floors judge on the figure it rings.
+
+**The party tokens were a fourth, undeclared, and that is where the
+double-drawn cast hid** (`FINDINGS.md` G-023). This section said "every row
+of its content in the `Panel`" without qualification; `screens.rs` took an
+exception for the tokens on the grounds that their between-tile position is
+derived at draw time, and wrote it in its own module header, where nobody
+reading the rule would meet it. It was not even needed — interpolation is a
+reading of the clock and a `Panel` icon takes a position like any other. The
+cost of the undeclared exception was that the one thing on the map drawn
+outside the `Panel` was the one thing drawn twice per person, on all sixteen
+photographs, for two waves, and no floor could see it. **An exemption that
+is not in this list is a defect, not an exemption.**
+
+**And the map's figures are counted now.** Two floors, both directions:
+`floors::judge_cast` reads the `Panel` — one figure per person, at
+`where_drawn`, drawn exactly where its person stands unless somebody else is
+standing there, and no two closer than `floors::FIGURES_APART` — on every
+screen state the content floors judge. `floors::judge_figures` reads the
+frame — the number of figure-weight pictures the screen named, at the
+corners it named, and no others — on every photograph the run keeps.
+`frames::judge_chrome` asks only whether what the screen said is on the
+frame; the second is what asks whether anything else is.
 
 ## 7. Asset slots — the roles, and what fills them
 

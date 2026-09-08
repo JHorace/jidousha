@@ -24,8 +24,8 @@ use crate::grid::{LOCATIONS, Terrain, Tile};
 use crate::path::route;
 use crate::sweep::{Act, Conducted, Directive, Photo, Session, When, conduct, transcript};
 use crate::{
-    camera, capture, floors, grid, layout, lens, library, links, modules, mutation, people,
-    restart, screens, shots, stores, sweep, theme, traits,
+    camera, capture, floors, flow, grid, layout, lens, library, links, modules, mutation, people,
+    restart, screens, shots, sprites, stores, sweep, theme, traits,
 };
 
 /// The surface the reference run draws at: the 960x540 chrome design doubled,
@@ -76,6 +76,18 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
     script.extend(sweep::post(sweep::ORDER_MINUTES[0], 0, 0, 2));
     script.extend(sweep::post(sweep::ORDER_MINUTES[1], 1, 1, 0));
     script.extend(sweep::post(sweep::ORDER_MINUTES[2], 2, 2, 5));
+    // **Somebody picked while they are out**, for the `roadring` picture: the
+    // strip is a door onto the one selection and needs no world position, so
+    // the shot does not have to know where a walking figure is to be taken of
+    // one. Picked at 50 and put down again at 54, clear of the orders at 48
+    // and the board at 56 — the selection is presentation and the transcript
+    // on the far side of it is the same transcript.
+    let bob = people::roster()
+        .iter()
+        .position(|person| person.id == "bob")
+        .unwrap_or(0);
+    script.push(click_ui(When::Minute(50), layout::party_chip(bob).center()));
+    script.push(click_ui(When::Minute(54), layout::party_chip(bob).center()));
     // **The board re-opened on the site just ordered to**: the `ordered`
     // picture, a row that now reads as the person the player sent.
     script.push(Directive {
@@ -210,6 +222,17 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
         Photo {
             name: "board",
             minute: 500,
+            tick: 0,
+            paused: false,
+        },
+        // **The ring on a token**: the selected character on the road, marked
+        // where they are rather than at the door they are not at (UI.md §3b).
+        // The at-home half is the `person` and `selection` pictures; this is
+        // the other state, and it had no picture at all while the map drew
+        // everybody twice.
+        Photo {
+            name: "roadring",
+            minute: 52,
             tick: 0,
             paused: false,
         },
@@ -831,6 +854,7 @@ fn selection_run(script: &[Directive]) -> (Conducted, Selected) {
                 &grid::grid(),
                 &shot.clock,
                 &Tuning::SHIPPED,
+                screens::reading(&shot.clock, &Tuning::SHIPPED, screens::TICK),
             );
             let name_at = layout::person_panel().min + layout::sheet::NAME;
             let named = panel
@@ -845,6 +869,380 @@ fn selection_run(script: &[Directive]) -> (Conducted, Selected) {
         },
     );
     (conducted, Selected { who, rings, named })
+}
+
+/// **One person, one figure, one place** (UI.md §3b, §6): the double-drawn
+/// cast, as the reproduction that failed before the fix and the rule that
+/// replaced it.
+///
+/// The bug: `screens::content` drew a figure per person at their doorstep and
+/// `screens::draw_map` drew a sprite per party at `token_rect`, and since wave
+/// 1.1 a party *is* a character standing at that character's own doorstep — so
+/// the map drew twenty figures for ten people. `token_rect`'s per-party nudge,
+/// `index * 4` in each axis, was S1 residue from three parties stacked on the
+/// town tile, and it is what made the second copy visible and diagonal: index
+/// 0's duplicate hid exactly, 1 to 3 read as thickened sprites, 4 separated by
+/// a whole tile and 5 to 9 by one to over three (`FINDINGS.md` G-023, the
+/// owner's playtest of b48216a).
+///
+/// It carried a second defect inside the first, and this battery's last state
+/// is the one that would have caught it on its own: the nudge drew a token up
+/// to three tiles from the tile its party was actually standing on, and the
+/// error grew with the roster.
+///
+/// Every expectation is a shipped literal — the doorstep rectangle the layout
+/// names, and `floors::FIGURES_APART` — rather than arithmetic over the
+/// placement under test.
+fn one_figure_each(checks: &mut Checks) -> String {
+    /// The world-minute the staged states are read at: half of the staged
+    /// party's step, so it stands squarely between two tiles.
+    const MIDSTEP: u64 = 4;
+
+    let tuning = Tuning::SHIPPED;
+    let cast = people::roster();
+    let grid = grid::grid();
+    // Read at a minute a walking party is *between* tiles: at the minute it
+    // steps off, the derivation puts it on the tile it left, and a road state
+    // read there would agree with a doorstep by accident.
+    let mut clock = crate::clock::Clock::opening();
+    clock.minutes = MIDSTEP;
+    let now = screens::reading(&clock, &tuning, screens::TICK);
+    let portraits: Vec<sprites::Art> = cast.iter().map(|person| person.icon).collect();
+    let figures = |sim: &crate::sim::Sim, flow: &flow::Flow| -> Vec<(usize, Rect)> {
+        let panel = screens::content(flow, &lens::Lens::on(sim), &grid, &clock, &tuning, now);
+        panel
+            .world_icons
+            .iter()
+            .filter_map(|icon| {
+                portraits
+                    .iter()
+                    .position(|art| *art == icon.art)
+                    .map(|who| (who, icon.bounds()))
+            })
+            .collect()
+    };
+
+    // --- the opening scenario: every character idle at their own door -------
+    let opening = crate::sim::Sim::opening(&tuning, modules::ModuleSet::ALL);
+    let at_home = figures(&opening, &flow::Flow::default());
+    checks.require(
+        at_home.len() == cast.len(),
+        "the map does not draw one figure per person",
+        format!(
+            "{} figures for {} people at the opening minute, with everybody idle at home; \
+             one person is one figure",
+            at_home.len(),
+            cast.len()
+        ),
+    );
+    for (index, person) in cast.iter().enumerate() {
+        let mine: Vec<Rect> = at_home
+            .iter()
+            .filter(|(who, _)| *who == index)
+            .map(|(_, bounds)| *bounds)
+            .collect();
+        let doorstep = layout::home_rect(person.home);
+        checks.require(
+            mine.len() == 1 && mine[0].min.x == doorstep.min.x && mine[0].min.y == doorstep.min.y,
+            "a character at home is not drawn once, on their doorstep",
+            format!(
+                "{} has {} figure(s) at {:?} and their doorstep is {doorstep:?}; an idle \
+                 character stands on their own tile with no offset at all",
+                person.name,
+                mine.len(),
+                mine
+            ),
+        );
+    }
+
+    // The invariant `stands_at`'s two branches rest on: an idle party stands
+    // on its member's own home tile, so reading a person at home off their
+    // door and reading them off their party give one answer. Asserted rather
+    // than assumed, because if it ever stopped holding the drawing would go
+    // quietly wrong rather than loudly.
+    let strays: Vec<&str> = opening
+        .parties
+        .iter()
+        .filter(|party| party.activity == crate::sim::Activity::Idle)
+        .filter(|party| {
+            cast.get(party.member)
+                .is_none_or(|who| who.home != party.tile)
+        })
+        .map(|party| party.name)
+        .collect();
+    checks.require(
+        strays.is_empty(),
+        "an idle party does not stand on its member's home tile",
+        format!(
+            "{strays:?} are idle somewhere other than their own door; a person at home is \
+             drawn at their door and their party is read for everything else"
+        ),
+    );
+
+    // --- one out on the road: drawn on their token, and not at their door ---
+    // Staged rather than played, so the state is the same on every run: one
+    // party walking its route out, everybody else idle where they live.
+    let (traveller, elsewhere) = (3usize, 6usize);
+    let mut abroad = opening.clone();
+    let Some(out) = route(
+        &grid,
+        &tuning,
+        cast[traveller].home,
+        LOCATIONS[crate::sim::site_location(0)].tile,
+    ) else {
+        checks.require(
+            false,
+            "the road state could not be staged",
+            "the pathfinder found no route from a doorstep to a site".to_owned(),
+        );
+        return String::new();
+    };
+    abroad.parties[traveller].activity = crate::sim::Activity::Outbound {
+        route: out,
+        index: 1,
+        entered_at: 0,
+        next_at: MIDSTEP * 2,
+    };
+    let on_road = figures(&abroad, &flow::Flow::default());
+    let road_lens = lens::Lens::on(&abroad);
+    checks.require(
+        on_road.len() == cast.len(),
+        "the map does not draw one figure per person once somebody is out",
+        format!(
+            "{} figures for {} people with {} on the road",
+            on_road.len(),
+            cast.len(),
+            cast[traveller].name
+        ),
+    );
+    let doorstep = layout::home_rect(cast[traveller].home);
+    let left_behind = on_road
+        .iter()
+        .any(|(_, bounds)| bounds.min.x == doorstep.min.x && bounds.min.y == doorstep.min.y);
+    checks.require(
+        !left_behind,
+        "a character on the road is still drawn at their doorstep",
+        format!(
+            "a figure stands at {}'s empty door at {doorstep:?} while they are out; a person \
+             is drawn where they are and nowhere else",
+            cast[traveller].name
+        ),
+    );
+    let token = screens::token_position(&abroad.parties[traveller], now);
+    let drawn = on_road
+        .iter()
+        .find(|(who, _)| *who == traveller)
+        .map(|(_, bounds)| *bounds);
+    checks.require(
+        drawn.is_some_and(|bounds| bounds.center().x == token.x && bounds.center().y == token.y),
+        "a character on the road is not drawn on their token",
+        format!(
+            "{} is drawn at {:?} and their party derives to ({:.1}, {:.1})",
+            cast[traveller].name,
+            drawn.map(|bounds| bounds.center()),
+            token.x,
+            token.y
+        ),
+    );
+    // And everybody else is exactly where they were: one person moving is one
+    // figure moving.
+    checks.require(
+        screens::where_drawn(&road_lens, elsewhere, now)
+            == Some(layout::home_rect(cast[elsewhere].home)),
+        "one character leaving home moved somebody else's figure",
+        format!(
+            "{} is drawn at {:?} with {} out, and their doorstep is {:?}",
+            cast[elsewhere].name,
+            screens::where_drawn(&road_lens, elsewhere, now),
+            cast[traveller].name,
+            layout::home_rect(cast[elsewhere].home)
+        ),
+    );
+
+    // --- two genuinely on one tile: still two figures -----------------------
+    // The sharpest form of it: both parties derive to *exactly* the same
+    // point, which is what an idle character and their own token did on every
+    // doorstep in b48216a.
+    let (first, second) = (1usize, 7usize);
+    let shared = LOCATIONS[crate::sim::site_location(1)].tile;
+    let mut crowd = opening.clone();
+    for who in [first, second] {
+        crowd.parties[who].tile = shared;
+        crowd.parties[who].activity = crate::sim::Activity::Working { until: u64::MAX };
+    }
+    let crowd_lens = lens::Lens::on(&crowd);
+    let together = figures(&crowd, &flow::Flow::default());
+    checks.require(
+        together.len() == cast.len(),
+        "two people standing on one tile are not two figures",
+        format!(
+            "{} figures for {} people with {} and {} both on {:?}",
+            together.len(),
+            cast.len(),
+            cast[first].name,
+            cast[second].name,
+            shared
+        ),
+    );
+    let apart = match (
+        screens::where_drawn(&crowd_lens, first, now),
+        screens::where_drawn(&crowd_lens, second, now),
+    ) {
+        (Some(mine), Some(theirs)) => mine.center().distance(theirs.center()),
+        _ => 0.0,
+    };
+    checks.require(
+        !greater(floors::FIGURES_APART, apart),
+        "two people standing on one tile are drawn on top of each other",
+        format!(
+            "{} and {} both stand on {:?} and their figures are {apart:.1} units apart; the \
+             floor is {:.0}",
+            cast[first].name,
+            cast[second].name,
+            shared,
+            floors::FIGURES_APART
+        ),
+    );
+    // Neither of them is drawn far from the tile they are actually on — the
+    // second defect inside the first. Stated as the tile's own rectangle grown
+    // by one figure: a nudge may separate two people, never relocate them.
+    let reach = crate::grid::TILE * 0.5 + layout::HOME;
+    for who in [first, second] {
+        let off = screens::where_drawn(&crowd_lens, who, now).map_or(f32::INFINITY, |bounds| {
+            bounds.center().distance(shared.center())
+        });
+        checks.require(
+            !greater(off, reach),
+            "a nudged figure is drawn away from the tile its person is on",
+            format!(
+                "{} stands on {:?} and is drawn {off:.1} units from its centre; the floor is \
+                 {reach:.0}, and wave 1.1's ninth token stood 50.9 out",
+                cast[who].name, shared
+            ),
+        );
+    }
+
+    // --- the ring lands on the figure, in both states -----------------------
+    for (what, sim) in [("at home", &opening), ("on the road", &abroad)] {
+        let lens = lens::Lens::on(sim);
+        let flow = flow::Flow {
+            selected: Some(traveller),
+            ..flow::Flow::default()
+        };
+        checks.require(
+            screens::selection_ring(&flow, &lens, now)
+                == screens::where_drawn(&lens, traveller, now),
+            "the selection ring is not on the figure it marks",
+            format!(
+                "with {} {what} the ring is at {:?} and their figure is at {:?}",
+                cast[traveller].name,
+                screens::selection_ring(&flow, &lens, now),
+                screens::where_drawn(&lens, traveller, now)
+            ),
+        );
+    }
+
+    // --- and a click lands on the figure, on the road as at a door ---------
+    // Two passes, because a walking figure's place is not knowable before the
+    // run: the first finds where somebody actually is at a tick, the second
+    // clicks there. `handle_input` runs before `advance` (the schedule order
+    // this run also asserts), so the world a click at tick T+1 is tested
+    // against is exactly the world the probe at tick T recorded.
+    let road_click = road_click_selects(checks);
+
+    format!(
+        "figures: 10 for 10 at rest, 10 with one out, 10 with two on one tile ({apart:.1} units \
+         apart, floor {:.0}); {road_click}",
+        floors::FIGURES_APART
+    )
+}
+
+/// **A click on a figure selects that person on the road**, the same act it is
+/// at a doorstep (UI.md §3b) — the half of the one selection that could not
+/// exist while a token was a picture nothing answered for.
+fn road_click_selects(checks: &mut Checks) -> String {
+    /// Ticks the scout pass looks for somebody walking at.
+    ///
+    /// Past the scorer's first pass, deliberately: it runs every
+    /// `scorer_hours` and nobody in an unasked settlement has decided to go
+    /// anywhere before it, so an earlier probe finds ten idle parties and
+    /// nothing to click.
+    const LOOK_AT: [u64; 6] = [700, 800, 900, 1000, 1100, 1200];
+
+    let tuning = Tuning::SHIPPED;
+    let cast = people::roster();
+    let start = [Directive {
+        when: When::Tick(4),
+        what: Act::Tap(Key::Digit1),
+    }];
+    let mut scout = Session::plain(tuning, &start, LOOK_AT[LOOK_AT.len() - 1] + 8);
+    scout.probe_ticks = &LOOK_AT;
+    let scouted = conduct(&scout);
+    // The first probed tick with somebody genuinely between two tiles: a
+    // party standing *on* a site is standing on that site's marker, and the
+    // marker takes the click there by design.
+    let found = LOOK_AT.iter().find_map(|tick| {
+        let (_, _, tuned, sim, clock) = scouted.probe(*tick)?;
+        let now = screens::reading(clock, tuned, screens::TICK);
+        let lens = lens::Lens::on(sim);
+        let walking = sim.parties.iter().position(|party| {
+            matches!(
+                party.activity,
+                crate::sim::Activity::Outbound { .. } | crate::sim::Activity::Homebound { .. }
+            )
+        })?;
+        let figure = screens::where_drawn(&lens, walking, now)?;
+        // Nothing else may be under the click: a marker or a second figure
+        // there would make the answer ambiguous rather than wrong.
+        let clear = crate::grid::LOCATIONS
+            .iter()
+            .all(|place| !layout::marker_rect(place.tile).contains(figure.center()))
+            && (0..lens.people().len())
+                .filter(|other| *other != walking)
+                .all(|other| {
+                    screens::where_drawn(&lens, other, now)
+                        .is_none_or(|theirs| !theirs.contains(figure.center()))
+                });
+        clear.then_some((*tick, walking, figure.center()))
+    });
+    let Some((tick, walking, at)) = found else {
+        checks.require(
+            false,
+            "no character was found walking clear of a marker to click",
+            format!("nobody was between tiles at any of {LOOK_AT:?} with nothing else under them"),
+        );
+        return "road click: never staged".to_owned();
+    };
+    let script = [
+        start[0],
+        Directive {
+            when: When::Tick(tick + 1),
+            what: Act::ClickWorld(at),
+        },
+    ];
+    let after = [tick + 2];
+    let mut session = Session::plain(tuning, &script, tick + 8);
+    session.probe_ticks = &after;
+    let clicked = conduct(&session);
+    let selected = clicked
+        .probe(tick + 2)
+        .and_then(|(_, flow, ..)| flow.selected);
+    checks.require(
+        selected == Some(walking),
+        "a click on a character's figure on the road did not select them",
+        format!(
+            "a click at ({:.1}, {:.1}) on {}'s figure at tick {tick} left the selection at \
+             {:?}; a figure answers a click wherever it is standing",
+            at.x,
+            at.y,
+            cast[walking].name,
+            selected.map(|who| cast[who].name)
+        ),
+    );
+    format!(
+        "road click: {} selected at ({:.1}, {:.1}), tick {tick}",
+        cast[walking].name, at.x, at.y
+    )
 }
 
 /// **One selection** (UI.md §3b): the wave-1.1 double-selection bug, as the
@@ -1398,6 +1796,7 @@ fn the_board_is_the_ask(checks: &mut Checks) {
         &grid,
         &crate::clock::Clock::opening(),
         &tuning,
+        screens::reading(&crate::clock::Clock::opening(), &tuning, screens::TICK),
     );
     let says = |text: &str| panel.runs.iter().any(|row| row.text.contains(text));
     for quest in &staged.sites[1].quests {
@@ -1435,6 +1834,7 @@ fn the_board_is_the_ask(checks: &mut Checks) {
         &grid,
         &crate::clock::Clock::opening(),
         &tuning,
+        screens::reading(&crate::clock::Clock::opening(), &tuning, screens::TICK),
     );
     checks.require(
         !empty.runs.iter().any(|row| row.text.starts_with("fit "))
@@ -1544,6 +1944,7 @@ pub fn run() -> ExitCode {
     touch_selects(&mut checks);
 
     // --- one selection, and the posting that reads it ----------------------
+    let figures = one_figure_each(&mut checks);
     let reproduction = one_selection(&mut checks);
     posting_reads_the_selection(&mut checks);
     selection_moves_nothing(&mut checks);
@@ -1686,6 +2087,7 @@ pub fn run() -> ExitCode {
     println!("  seed 0 stamped; transcripts identical at seeds 7 and 7777777 (no Rng read in S1)");
     println!("  ui mapping: {ui_report}");
     println!("  map text: {legibility}");
+    println!("  {figures}");
     println!(
         "  people: {} in the registry, {} traits over {} kinds, {} marks, {} reaction cells",
         crate::people::roster().len(),

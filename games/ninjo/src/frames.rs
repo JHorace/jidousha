@@ -48,6 +48,7 @@ pub fn judge_chrome(checks: &mut Checks, run: &Conducted, shot: &Shot, what: &st
         &grid,
         &shot.clock,
         &tuning,
+        screens::reading(&shot.clock, &tuning, screens::TICK),
     );
     let style_width = |text: &str, size: f32| {
         TextStyle {

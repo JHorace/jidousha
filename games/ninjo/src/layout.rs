@@ -896,12 +896,15 @@ pub fn marker_label(tile: crate::grid::Tile, width: f32) -> Vec2 {
     tile.center() + Vec2::new(-width * 0.5, MARKER * 0.5 + 2.0)
 }
 
-/// A party token's size, in world units (16 texels at scale 2).
-pub const TOKEN: f32 = 32.0;
-
-/// How big a character standing at their home tile is drawn, in world units —
-/// the same weight as a site marker, because a person is at least as much of
-/// a thing on the map as a hole in the ground is.
+/// How big a character is drawn on the map, in world units — **one size,
+/// wherever they are standing**, the same weight as a site marker, because a
+/// person is at least as much of a thing on the map as a hole in the ground
+/// is.
+///
+/// It was two constants until the double-drawn cast (`FINDINGS.md` G-023):
+/// one for a figure at a doorstep and one for a token on the road, for what
+/// had become one picture of one person. A second name for a size is a second
+/// size waiting to happen.
 ///
 /// A click on a figure opens that character's panel (`flow.rs`), and 32 is the
 /// target floor exactly — but it is a *world* rectangle rather than a chrome
@@ -909,12 +912,18 @@ pub const TOKEN: f32 = 32.0;
 /// it against the chrome.
 pub const HOME: f32 = 32.0;
 
-/// A character's rectangle, centred over their home tile.
+/// A character's rectangle, centred over a tile.
+///
+/// The base a doorstep figure is drawn at; `screens::where_drawn` is the one
+/// answer to where a person actually stands, and this is what it centres.
 pub fn home_rect(tile: crate::grid::Tile) -> Rect {
     Rect::from_center_size(tile.center(), Vec2::splat(HOME))
 }
 
-/// Where a character's name starts, under them.
-pub fn home_label(tile: crate::grid::Tile, width: f32) -> Vec2 {
-    tile.center() + Vec2::new(-width * 0.5, HOME * 0.5 + 2.0)
+/// Where a character's name starts, under the figure it names.
+///
+/// Off the rectangle the figure was drawn in rather than off the tile it
+/// belongs to, so a name cannot be left behind by a figure that moved.
+pub fn figure_label(figure: Rect, width: f32) -> Vec2 {
+    Vec2::new(figure.center().x - width * 0.5, figure.max.y + 2.0)
 }
