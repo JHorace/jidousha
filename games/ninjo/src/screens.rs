@@ -5,11 +5,21 @@
 //! `content` is the
 //! whole of what the chrome and the map's labels say, as data — `verify.rs`
 //! and `floors.rs` read it, and `draw_content` is the only code that turns it
-//! into quads. The terrain and the party tokens are drawn here directly: the
-//! terrain because a 48x27 map is a thousand quads no panel should carry, and
-//! the tokens because their between-tile position is derived at draw time
-//! from the clock and `Time::alpha` (ADR-0041) — `token_position` is the one
-//! function, shared with the checks, and nothing writes its answer back.
+//! into quads.
+//!
+//! **The cast is `Panel` content, interpolation and all.** A person's figure
+//! is a world icon at `where_drawn`, whose between-tile half is derived at
+//! draw time from the clock and `Time::alpha` (ADR-0041) — `token_position`
+//! is the one function, shared with the checks, and nothing writes its answer
+//! back. It was drawn straight through `ctx.sprite` until the double-drawn
+//! cast (`FINDINGS.md` G-023): the interpolation was taken to need a draw of
+//! its own, it did not, and being outside the `Panel` is what put the whole
+//! cast outside the floors that would have counted it.
+//!
+//! What is still drawn here directly is stated in UI.md §6 and nowhere else:
+//! the terrain, because a 48x27 map is a thousand quads no panel should
+//! carry; and the selection ring and the focus pulse, because both are fills
+//! rather than content and neither says anything the floors read.
 
 use jidousha::prelude::*;
 
@@ -147,6 +157,12 @@ fn nudge(rank: usize) -> Vec2 {
 /// `None` for an index that names nobody, which is the only answer there is:
 /// a person who is not in the registry is not standing anywhere.
 pub fn stands_at(lens: &Lens<'_>, who: usize, now: f32) -> Option<Vec2> {
+    // INVARIANT: an idle party stands on its member's home tile, so this
+    // branch and the one below agree today — and it is here because the
+    // *person's* door is the authority for where a person at home stands, not
+    // a party's tile bookkeeping. `verify::one_figure_each` asserts the two
+    // agree, so the day they stop this fails a run rather than quietly
+    // drawing somebody at a stale tile.
     if lens.at_home(who) {
         return lens.home(who).map(|home| home.center());
     }

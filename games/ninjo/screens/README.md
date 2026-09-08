@@ -12,7 +12,7 @@ as the change.
 
 | File | Screen | Surface |
 |---|---|---|
-| `ninjo-settlement-reference.png` | the settlement at world-minute 0 — the whole cast standing at their home tiles, named, before anything is dispatched | 1920x1080 |
+| `ninjo-settlement-reference.png` | the settlement at world-minute 0 — the whole cast standing at their home tiles, named, before anything is dispatched. **Ten figures for ten people since 2026-09-08**; before that it was the picture of the double-drawn cast, and all ten pairs were in it (`FINDINGS.md` G-023) | 1920x1080 |
 | `ninjo-modes-reference.png` | the auto-pause config, with `quest-complete` set to pause — the change this session's photographed run is stopped by | 1920x1080 |
 | `ninjo-map-reference.png` | the map at world-minute 44 — two parties mid-travel on visibly different routes, with each site's open-job count under its marker | 1920x1080 |
 | `ninjo-feed-reference.png` | the feed at the first completion, with the world stopped: the reason line, and the entry that caused it ringed in gold | 1920x1080 |
@@ -25,12 +25,13 @@ as the change.
 | `ninjo-map-narrow.png` | the same map | 600x540 |
 | `ninjo-feed-narrow.png` | the same feed | 600x540 |
 | `ninjo-selection-reference.png` | the owner's double-selection reproduction, as it now resolves: Bob picked on the party strip, then Tim picked by his map sprite — **one** ring, on Tim, his panel open and his chip lit, and nothing on Bob | 1920x1080 |
+| `ninjo-roadring-reference.png` | **the ring on a token**: Bob picked off the strip at world-minute 52 while he is walking to the Watchtower — the one ring is on the figure on the road and his own doorstep stands empty, which is the selection's other state (UI.md §3b) and had no picture at all while the map drew everybody twice | 1920x1080 |
 | `ninjo-declined-reference.png` | **being told no**: the vault door posted to Alex, who would rather scout — the world stopped by `ask-declined` and the banner carrying his reason, which is the first thing in this game that interrupts a player who has not asked it to | 1920x1080 |
 | `ninjo-ledger-reference.png` | **the postings ledger**: a standing open posting for fight work that six people have answered, the refused posting above it with the reason on its second line, and the four standing rates with their steppers and their STAND buttons | 1920x1080 |
 | `ninjo-tuning-reference.png` | the tuning drawer, MIRE pending in gold, APPLY lit | 1920x1080 |
 
 The settlement, config, living, roster, character, board, ordered, bounce,
-declined, ledger and selection shots are reference-only: they are
+declined, ledger, selection and road-ring shots are reference-only: they are
 pictures of *what is on screen*, and the scaling defects the narrow surface
 exists to catch are on the same chrome the map and feed pairs already cover.
 

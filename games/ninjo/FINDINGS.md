@@ -21,6 +21,15 @@ and its whole `src/`, and nothing else: no file under `crates/*/src/`, no
 had was about this game's own UI state, and the two entries it files below are
 about this repository rather than about the engine's documents.
 
+**The double-drawn-cast session (2026-09-08) read** `CLAUDE.md`, the
+`make-game` skill, this game's `UI.md`, `FINDINGS.md`, `screens/README.md` and
+its whole `src/`, plus `docs/api/jidousha-api.md`'s `Vec2` tour (which of
+`distance`/`length_squared` to reach for, and whether `normalize` on a zero
+vector is safe — it is not, and the placement never normalizes) and
+`docs/api/jidousha-testing.md`'s `DrawnQuad` entry. Nothing under
+`crates/*/src/`, no `docs/internal/`, no ADR but 0041, which the handoff names.
+Its one new entry is about this repository's own documents.
+
 **The job-board session (2026-09-06) read** `CLAUDE.md`, the `make-game`
 skill, this game's `UI.md`, `DESIGN.md`, `GDD.md`, `CAST.md`, `FINDINGS.md`
 and its whole `src/`, plus one line of `docs/api/jidousha-testing.md` (the
@@ -140,6 +149,18 @@ row's names land on the southern row's heads. The fix is a layout one — the
 label above the figure for one row, or a name only for the selected character,
 or three tiles between the rows — and each of those is a UI or content
 decision this session did not have a mandate for.
+
+**Reopened 2026-09-08, on its subject rather than its measurements.** This
+finding measured the settlement's crowding and concluded the cause was label
+placement against row spacing. The measurements are not wrong and none of them
+changes. **Its subject was**: the map it measured was drawing twenty figures
+for ten people (G-023), so "the ten figures are on top of each other" was a
+report about a duplicate and not about the rows. The crowding question is to be
+**re-judged by the owner** at ten figures before anybody moves a row or a
+label, and the layout suggestions below — the label above the figure for one
+row, a name only for the selected character, three tiles between the rows —
+are not to be acted on until they are. The fix session deliberately did not
+touch them.
 
 **What was done:** `floors::map_legibility` states the numbers as a floor and
 the verify report prints them (`map labels 12.0px at the default zoom, 10.7px
@@ -483,7 +504,9 @@ the panel open, so a later layout change cannot take that back quietly.
 ### G-018 — the game's own: an idle character is drawn twice, and the second one drifts further with every index
 
 Class: **the game's own** (a wave-1.1 gap) · Game: ninjo ·
-Files: `games/ninjo/src/screens.rs` · **Open — not fixed here**
+Files: `games/ninjo/src/screens.rs` ·
+**Fixed 2026-09-08** — see G-023, which is the owner's report of it from the
+deployed build and carries the fix, the floors and the doc-truth half
 
 Found while working out which of a person's two portraits the one selection
 ring belongs on, and left alone because this session's fence is the selection.
@@ -509,3 +532,99 @@ session's.
 **G-010 stays open** for the fifth wave running, untouched here: this session
 added map-space content (ten figures and their names) but no *new kind* of it,
 and the culling pair it describes is unchanged.
+
+### G-023 — the game's own: the map drew twenty figures for ten people, and the exception it hid behind was never written down
+
+Class: **the game's own** (a wave-1.1 gap) and **a document that said less than
+the code did** · Game: ninjo ·
+Files: `games/ninjo/src/screens.rs`, `src/floors.rs`, `src/flow.rs`,
+`src/layout.rs`, `src/shots.rs`, `src/verify.rs`, `UI.md` §3, §4, §6 ·
+**Fixed here.** Closes G-018, which is the same defect found from the inside
+two days earlier and left open as an owner call.
+
+Reported by the owner from a playtest of the deployed build b48216a: character
+sprites appear duplicated on the map, offset diagonally up-and-right; the whole
+southern row of tents shows doubles, and in the northern row only Rin does.
+
+Expected: one picture of a person. Happened: two, on every idle character.
+`screens::content` drew a figure per person where `Lens::at_home`, at their
+doorstep; `screens::draw_map` drew a sprite per party at `token_rect`. Since
+wave 1.1 a party *is* a character and stands at that character's own doorstep,
+so both paths drew the same person in the same place. `token_rect`'s per-party
+nudge — `(index * 4, index * -4)` world units, S1 residue from three parties
+stacked on the town tile — is what made the second copy visible and diagonal,
+and it predicts the report exactly: index 0's duplicate hid perfectly, 1 to 3
+offset 4 to 12 units and read as thickened sprites, index 4 (Rin) offset a
+whole 16-unit tile and separated, and 5 to 9 offset 20 to 36 units per axis —
+one to over two tiles. Rin is the fifth row of the northern row of tents and
+the only one in it far enough out to read as two people, which is what the
+owner saw.
+
+**The second defect inside the first**, and the more expensive one: the nudge
+put a token up to three tiles from the tile its party was actually standing on,
+and the error grew with the roster. A figure that lies about where somebody is
+lies to a click and to a camera focus too.
+
+**Why nothing caught it, which is the half that is about a document.**
+`UI.md` §6 said, without qualification, that every surface owes "every row of
+its content in the `Panel`" — that is what makes `floors.rs` able to judge what
+was meant and `frames.rs` able to find it on the frame. `screens.rs` took an
+exception for the party tokens anyway, on the grounds that their between-tile
+position is derived at draw time (ADR-0041), and recorded it **in its own
+module header** — where nobody reading the rule in §6 would ever meet it. So:
+
+- `floors.rs` judges the `Panel`, and the tokens were not in it;
+- `frames::judge_chrome` asks only whether what the screen said is on the
+  frame, never whether anything else is;
+- the map-label overlap check covers `world_runs`, and labels were drawn once;
+- `shots.rs`'s settlement check asserts *sim* truth — ten people, all home —
+  which held perfectly.
+
+The duplicate lived exactly in the gap the undeclared exception carved, on all
+sixteen photographs, for two waves. **What was done on the document's
+authority** was to leave the tokens outside the `Panel` when the figures moved
+into it in wave 0b: §6 read as satisfied because the figures were content and
+the tokens were "the drawing", and the sentence that would have said otherwise
+was in a file the rule does not point at.
+
+The exception was also not needed. Interpolation is a reading of the clock; a
+`Panel` icon takes a position like any other, and `ui::draw` culls a world icon
+to the camera exactly as the token loop did.
+
+**The fix is one function.** `screens::where_drawn(lens, who, now)` is the
+single answer to "where is this person drawn right now" — their doorstep while
+`at_home`, their party's interpolated position otherwise, never both — and the
+figure, the name under it, the selection ring and the map's hit-test all read
+it and compute nothing of their own. The nudge became a **placement** rather
+than a formula over an index: everybody takes the place they are standing if it
+is clear and steps out a ring only because somebody else is standing close
+enough to read as them, so a person alone is drawn on their own tile and two
+people together are two figures.
+
+**And the floor gap is closed, in the direction it was open.**
+`floors::judge_cast` reads the `Panel` on every screen state the content floors
+judge; `floors::judge_figures` reads the frame on every photograph, asking the
+question `judge_chrome` never asked — whether the frame carries anything the
+screen did not say it would draw. `verify::one_figure_each` is the
+reproduction, and it failed before the fix on both photographed frames with the
+owner's own numbers (`the settlement: 8 figure-sized quad(s) landed at corners
+the screen never named ... the screen says 25 of them and the frame carries
+35`). §6 now carries the whole list of what is exempt from the `Panel` and why,
+and says that an exemption not in that list is a defect rather than an
+exemption.
+
+**What the next session inherits:** a site marker now takes a map click ahead
+of a person's figure. It had to: a party working at a site stands on that
+site's marker, and now that figures answer clicks on the road, a figure taking
+it there would make the site unorderable while anybody worked it — the same
+refusal `UI.md` §3a already makes for the character panel's body. A person
+standing on a site is still selectable from the strip, the roster and a faces
+list. And **G-022 is reopened on its subject**: it measured the settlement's
+crowding against a map drawing twenty figures for ten people, so whether ten is
+still crowded is the owner's to say before anybody moves a row or a label.
+
+**G-010 stays open** for the sixth wave running, untouched by the
+double-drawn-cast session: the party tokens moved from `ctx.sprite` into the
+`Panel`'s world icons, which is a change of *which list* map-space content
+lives in and not a new kind of it, and `ui::draw` culls a world icon on the
+same bounds the token loop did. The culling pair G-010 describes is unchanged.

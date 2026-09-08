@@ -294,6 +294,49 @@ pub fn judge(checks: &mut Checks, run: &Conducted, tuning: &Tuning) {
         );
     }
 
+    // --- the ring on a token: the selection's other state ------------------
+    if let Some(shot) = run.photo("roadring") {
+        let lens = lens::Lens::on(&shot.sim);
+        let now = screens::reading(&shot.clock, tuning, screens::TICK);
+        let Some(who) = shot.flow.selected else {
+            checks.require(
+                false,
+                "the road-ring photograph was taken with nobody selected",
+                "the picture is the one selection, marked on somebody who is out".to_owned(),
+            );
+            return;
+        };
+        checks.require(
+            !lens.at_home(who),
+            "the road-ring photograph was taken of somebody standing at home",
+            format!(
+                "{} is at their own door at the photographed minute; the picture is the ring \
+                 on a token",
+                lens.name(who)
+            ),
+        );
+        let ring = screens::selection_ring(&shot.flow, &lens, now);
+        checks.require(
+            ring == screens::where_drawn(&lens, who, now)
+                && ring.is_some_and(|ring| ring != layout::home_rect(shot.sim.people[who].home)),
+            "the ring in the road-ring photograph is not on the token it marks",
+            format!(
+                "the ring is at {ring:?}, {}'s figure is at {:?} and their empty door is at {:?}",
+                lens.name(who),
+                screens::where_drawn(&lens, who, now),
+                layout::home_rect(shot.sim.people[who].home)
+            ),
+        );
+        frames::judge_chrome(checks, run, shot, "the ring on a token");
+        floors::judge_frame_floor(checks, run.font, &shot.frame, "the ring on a token");
+    } else {
+        checks.require(
+            false,
+            "the road-ring photograph was never taken",
+            "the conductor's photo schedule names minute 52, with Bob out and picked".to_owned(),
+        );
+    }
+
     // --- the job board: the three pictures this wave owes ------------------
     judge_board(checks, run, tuning, &grid);
 
