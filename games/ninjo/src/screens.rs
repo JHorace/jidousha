@@ -78,45 +78,153 @@ pub fn token_position(party: &sim::Party, now: f32) -> Vec2 {
     from.center().lerp(to.center(), fraction)
 }
 
-/// The box a party's token is drawn in, at a fractional world-minute reading.
+/// The world-minute the map is drawn at: this tick's reading, carried the
+/// fraction of the way towards the next one that this frame stands at
+/// (ADR-0041, DESIGN §3).
 ///
-/// One function, because the token and the ring that marks it have to be the
-/// same rectangle: two parties on one tile stay two tokens by a draw-time
-/// nudge per party, and a ring that did not carry the nudge would sit beside
-/// the person it claims to mark.
-pub fn token_rect(index: usize, party: &sim::Party, now: f32) -> Rect {
-    Rect::from_min_size(
-        token_position(party, now) - Vec2::splat(layout::TOKEN * 0.5)
-            + Vec2::new(index as f32 * 4.0, index as f32 * -4.0),
-        Vec2::splat(layout::TOKEN),
-    )
+/// One formula, because the figures, the ring that marks one of them and the
+/// hit-test that answers a click on one all have to agree about where
+/// somebody is. A headless draw passes [`TICK`] and lands exactly on the tick.
+pub fn reading(clock: &Clock, tuning: &Tuning, alpha: f32) -> f32 {
+    clock.previous_reading + (clock.reading(tuning) - clock.previous_reading) * alpha
+}
+
+/// The interpolation a headless draw stands at: exactly on the tick.
+pub const TICK: f32 = 1.0;
+
+/// How close two figures have to be before they read as one person.
+///
+/// Half a figure. Wave 1.1's duplicate is what fixes the number: at four and
+/// eight units of separation the second copy read as a thickened sprite
+/// rather than as a second person (`FINDINGS.md` G-023), and a nudge is only
+/// worth drawing if what comes out of it is two people.
+const TOGETHER: f32 = layout::HOME * 0.5;
+
+/// How far a nudged figure steps off the place it stands, per ring.
+const NUDGE: f32 = 12.0;
+
+/// The four ways a nudge steps, in the order the ranks take them.
+///
+/// Diagonals, so a step separates a figure in both axes at once and `NUDGE`
+/// buys `NUDGE * sqrt(2)` of separation against the rank that did not move.
+const NUDGE_WAYS: [Vec2; 4] = [
+    Vec2::new(1.0, -1.0),
+    Vec2::new(-1.0, 1.0),
+    Vec2::new(-1.0, -1.0),
+    Vec2::new(1.0, 1.0),
+];
+
+/// The draw-time nudge that keeps people standing in one place separate
+/// figures, by their rank among the people who are actually there.
+///
+/// **Rank 0 takes no nudge at all** — and everybody standing alone is rank 0,
+/// which is what makes a person on a tile drawn on their tile. Ranks past the
+/// four ways step out a further `NUDGE`, so a crowd spreads instead of
+/// stacking and no two ranks ever land on one another.
+///
+/// DELIBERATE: the rank is computed from who is co-located at this instant
+/// and never from a registry index. Wave 1.1's nudge was `index * 4` — S1
+/// residue from three parties stacked on the town tile — which drew person 9
+/// over two tiles from the tile they were standing on, and a figure that lies
+/// about where somebody is lies to a click and to a camera focus too.
+fn nudge(rank: usize) -> Vec2 {
+    let Some(step) = rank.checked_sub(1) else {
+        return Vec2::ZERO;
+    };
+    let ring = (step / NUDGE_WAYS.len() + 1) as f32;
+    NUDGE_WAYS[step % NUDGE_WAYS.len()] * (NUDGE * ring)
+}
+
+/// Where a person *is standing*, which is not the same question as where
+/// their picture goes: their own doorstep while they are home, their party's
+/// derived position while they are on the road, and no nudge at all.
+///
+/// [`where_drawn`] is the answer anything that draws, rings or hit-tests
+/// wants. This one is what the nudge is computed against and what
+/// `floors::judge_cast` holds it to — a figure that is not standing on its
+/// person's place has to have somebody else's figure as its reason.
+///
+/// `None` for an index that names nobody, which is the only answer there is:
+/// a person who is not in the registry is not standing anywhere.
+pub fn stands_at(lens: &Lens<'_>, who: usize, now: f32) -> Option<Vec2> {
+    if lens.at_home(who) {
+        return lens.home(who).map(|home| home.center());
+    }
+    lens.parties()
+        .get(who)
+        .map(|party| token_position(party, now))
+}
+
+/// **Where this person is drawn right now** — the one answer, and the whole
+/// of what anything on the map may use.
+///
+/// One person, one figure, one place: their own doorstep while they are home,
+/// their party's interpolated position while they are on the road, never
+/// both. The figure draw, the name under it, the selection ring and the map's
+/// hit-test all read this and nothing else, so a click, a ring and a picture
+/// cannot end up in three places.
+///
+/// The nudge is a **placement**, not a formula over an index: everybody takes
+/// the place they are standing if it is clear, and steps out a ring only
+/// because somebody already there is close enough to read as them. So a
+/// person standing alone is drawn on their own tile, and two people standing
+/// together are two figures — which is what `floors::judge_cast` asserts, at
+/// its own shipped literal.
+///
+/// INVARIANT: the party at index `who` is the person at index `who` — a party
+/// is a one-person band in registry order (`sim::authored_parties`), which
+/// `verify::one_selection` asserts over the whole roster.
+///
+/// INVARIANT: registry order is the order places are taken in, which is what
+/// makes this answer the same one whoever asks it and in whatever order.
+///
+/// Presentation out of discrete state, derived at draw time and never written
+/// back (ADR-0041): the interpolation is a reading of the clock, and nothing
+/// here reaches the simulation.
+pub fn where_drawn(lens: &Lens<'_>, who: usize, now: f32) -> Option<Rect> {
+    stands_at(lens, who, now)?;
+    // Everybody ahead of them in registry order has already taken their
+    // place; walk the same placement they walked, so the answer does not
+    // depend on who asked or when.
+    let mut taken: Vec<Vec2> = Vec::with_capacity(who);
+    for index in 0..=who {
+        let Some(base) = stands_at(lens, index, now) else {
+            continue;
+        };
+        // The ring grows until the spot is clear. One figure already placed
+        // blocks at most two slots — the two adjacent rings in its own
+        // direction, since the four slots of one ring stand 24 units apart —
+        // so a clear slot always exists inside twice the placements made so
+        // far, and the bound is a statement of that rather than a fallback.
+        let mut rank = 0;
+        while rank <= taken.len() * 2
+            && taken
+                .iter()
+                .any(|at| at.distance(base + nudge(rank)) < TOGETHER)
+        {
+            rank += 1;
+        }
+        let placed = base + nudge(rank);
+        if index == who {
+            return Some(Rect::from_center_size(placed, Vec2::splat(layout::HOME)));
+        }
+        taken.push(placed);
+    }
+    None
 }
 
 /// How far the selection ring stands out past the figure it rings.
 pub const RING: f32 = 3.0;
 
-/// **The one selection ring**: the box to draw it in, and the layer to draw it
-/// on — `None` when nobody is selected.
+/// **The one selection ring**: the box to draw it in — `None` when nobody is
+/// selected.
 ///
 /// The whole of the game's selection highlighting on the map, in one function
-/// that reads the one selection (`Flow::selected`). A selected character is
-/// ringed *where they are drawn*: at their doorstep while they are home, on
-/// their token while they are on the road — never both, and never a second
-/// ring somewhere else.
-///
-/// INVARIANT: the party at index `who` is the person at index `who` — a party
-/// is a one-person band in registry order (`sim::authored_parties`), which
-/// `verify::one_selection` asserts over the whole roster.
-pub fn selection_ring(flow: &Flow, lens: &Lens<'_>, now: f32) -> Option<(Rect, i16)> {
-    let who = flow.selected?;
-    if lens.at_home(who) {
-        return lens
-            .home(who)
-            .map(|home| (layout::home_rect(home), theme::layers::MARKER));
-    }
-    lens.parties()
-        .get(who)
-        .map(|party| (token_rect(who, party, now), theme::layers::TOKEN))
+/// that reads the one selection (`Flow::selected`) and asks [`where_drawn`]
+/// where they are. It computes no position of its own, which is what makes
+/// the ring land on the figure in both states rather than beside it.
+pub fn selection_ring(flow: &Flow, lens: &Lens<'_>, now: f32) -> Option<Rect> {
+    where_drawn(lens, flow.selected?, now)
 }
 
 /// Everything the screen says, as data: the chrome in UI units, the map's
@@ -132,7 +240,14 @@ pub fn selection_ring(flow: &Flow, lens: &Lens<'_>, now: f32) -> Option<(Rect, i
 /// (`Lens::travel` -> `sim::route_out`). The grid is static authored terrain
 /// and `draw_map` has always read it directly; what goes through the lens is
 /// the *answer*, which is what a screen would otherwise be tempted to compute.
-pub fn content(flow: &Flow, lens: &Lens<'_>, grid: &Grid, clock: &Clock, tuning: &Tuning) -> Panel {
+pub fn content(
+    flow: &Flow,
+    lens: &Lens<'_>,
+    grid: &Grid,
+    clock: &Clock,
+    tuning: &Tuning,
+    now: f32,
+) -> Panel {
     let mut panel = Panel::default();
 
     // --- top bar ------------------------------------------------------------
@@ -295,30 +410,34 @@ pub fn content(flow: &Flow, lens: &Lens<'_>, grid: &Grid, clock: &Clock, tuning:
         panel.world_icon(marker);
     }
 
-    // --- the cast, standing at their homes ---------------------------------
-    // Idle: autonomy is wave 1, so a character is at their home tile unless a
-    // party they field has them out (`Lens::at_home`, derived and never
-    // stored). Names ride along because a face with no name is a token, and
-    // the whole point of the people substrate is that these are people.
+    // --- the cast, one figure each, where they stand -----------------------
+    // **One person, one figure, one place** (UI.md §3b): every character is
+    // drawn exactly once, at `where_drawn` — their own doorstep while they are
+    // home, their party's interpolated position while they are on the road,
+    // never both. The token draw that used to live in `draw_map` is this loop:
+    // it moved into the `Panel` so the floors can judge what is on the map at
+    // all (UI.md §6, `floors::judge_figures`), and `ui::draw` culls a
+    // world icon to the camera exactly as the token loop did.
+    //
+    // Names ride along because a face with no name is a token, and the whole
+    // point of the people substrate is that these are people — but only at a
+    // doorstep, where a name has a tent under it to belong to. A name pinned
+    // to a moving figure is what the party strip's status line is for.
     for (index, person) in lens.people().iter().enumerate() {
-        if !lens.at_home(index) {
+        let Some(figure) = where_drawn(lens, index, now) else {
             continue;
-        }
+        };
         let art = person.icon;
-        let mut figure = IconRun::new(
-            layout::home_rect(person.home).min,
-            art,
-            art.scale_across(layout::HOME),
-        );
-        figure.layer = theme::layers::MARKER;
-        panel.world_icon(figure);
-        if !worded {
+        let mut drawn = IconRun::new(figure.min, art, art.scale_across(layout::HOME));
+        drawn.layer = theme::layers::TOKEN;
+        panel.world_icon(drawn);
+        if !worded || !lens.at_home(index) {
             continue;
         }
         let style = theme::text(theme::SMALL, theme::INK);
         let width = style.width_of(person.name);
         let mut label = TextRun::new(
-            layout::home_label(person.home, width),
+            layout::figure_label(figure, width),
             person.name,
             theme::SMALL,
             theme::INK,
@@ -389,10 +508,8 @@ pub fn draw_map(ctx: &mut DrawCtx) {
     // one's by `Time::alpha`; headless draws land exactly on the tick.
     let alpha = ctx.world.resource::<Time>().alpha;
     let tuning = *ctx.world.resource::<Tuning>();
-    let clock = ctx.world.resource::<Clock>();
-    let now = clock.previous_reading + (clock.reading(&tuning) - clock.previous_reading) * alpha;
+    let now = reading(ctx.world.resource::<Clock>(), &tuning, alpha);
     let flow = ctx.world.resource::<Flow>().clone();
-    let gallery = ctx.world.resource::<crate::sprites::Gallery>().clone();
     let sim = ctx.world.resource::<Sim>().clone();
     let lens = Lens::on(&sim);
 
@@ -400,14 +517,17 @@ pub fn draw_map(ctx: &mut DrawCtx) {
     // where they are drawn. And the pulse a click-to-focus left on the place it
     // jumped to. Both presentation: one is UI state, the other is a countdown
     // in wall ticks, and the simulation reads neither.
-    if let Some((ring, layer)) = selection_ring(&flow, &lens, now) {
+    if let Some(ring) = selection_ring(&flow, &lens, now) {
         ctx.rect(
             Rect {
                 min: ring.min - Vec2::splat(RING),
                 max: ring.max + Vec2::splat(RING),
             },
             theme::GOLD,
-            Depth { layer, z: -1.0 },
+            Depth {
+                layer: theme::layers::TOKEN,
+                z: -1.0,
+            },
         );
     }
     if let Some(pulse) = flow.pulse {
@@ -422,17 +542,6 @@ pub fn draw_map(ctx: &mut DrawCtx) {
             2.0,
             theme::layers::MAP_TEXT,
         );
-    }
-    for (index, party) in lens.parties().iter().enumerate() {
-        // Two parties on one tile stay two tokens: a draw-time nudge per
-        // party, never written back. `selection_ring` uses the same box.
-        let box_ = token_rect(index, party, now);
-        // Culled like the terrain: a token panned off screen submits nothing.
-        if !box_.overlaps(view) {
-            continue;
-        }
-        let sprite = gallery.sprite(party.token, 2.0, theme::layers::TOKEN, Color::WHITE);
-        ctx.sprite(&Transform::at(box_.min), &sprite);
     }
 }
 
@@ -748,6 +857,7 @@ pub fn draw_content(ctx: &mut DrawCtx) {
     let tuning = *ctx.world.resource::<Tuning>();
     let sim = ctx.world.resource::<Sim>().clone();
     let grid = ctx.world.resource::<Grid>().clone();
-    let panel = content(&flow, &Lens::on(&sim), &grid, &clock, &tuning);
+    let now = reading(&clock, &tuning, ctx.world.resource::<Time>().alpha);
+    let panel = content(&flow, &Lens::on(&sim), &grid, &clock, &tuning, now);
     ui::draw(ctx, &panel, &map);
 }

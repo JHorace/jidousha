@@ -673,8 +673,16 @@ pub fn content_floors(checks: &mut Checks, baseline: &Conducted) {
     let tuning = Tuning::SHIPPED;
     let grid = crate::grid::grid();
     for (what, flow, sim, clock) in content_states(baseline) {
-        let panel = screens::content(&flow, &Lens::on(&sim), &grid, &clock, &tuning);
+        let panel = screens::content(
+            &flow,
+            &Lens::on(&sim),
+            &grid,
+            &clock,
+            &tuning,
+            screens::reading(&clock, &tuning, screens::TICK),
+        );
         judge_panel(checks, &panel, what, &controls_for(&flow));
+        judge_cast(checks, &panel, &Lens::on(&sim), &clock, what);
     }
 }
 
@@ -823,6 +831,7 @@ pub fn judge_tuner_screen(checks: &mut Checks, drawer: &crate::restart::DrawerRu
             &grid,
             &Clock::opening(),
             &drawer.applied_active,
+            screens::reading(&Clock::opening(), &drawer.applied_active, screens::TICK),
         );
         judge_panel(checks, &panel, what, &controls_for(flow));
     }
@@ -835,6 +844,7 @@ pub fn judge_tuner_screen(checks: &mut Checks, drawer: &crate::restart::DrawerRu
         &grid,
         &Clock::opening(),
         &drawer.pending_active,
+        screens::reading(&Clock::opening(), &drawer.pending_active, screens::TICK),
     );
     judge_panel(
         checks,
@@ -869,7 +879,9 @@ pub fn judge_figures(checks: &mut Checks, run: &Conducted, shot: &Shot, what: &s
         &crate::grid::grid(),
         &shot.clock,
         &Tuning::SHIPPED,
+        screens::reading(&shot.clock, &Tuning::SHIPPED, screens::TICK),
     );
+    judge_cast(checks, &panel, &Lens::on(&shot.sim), &shot.clock, what);
     // Every corner the screen says a figure-weight picture stands at: map
     // content where it is, chrome through the same mapping it is drawn with.
     let mut wanted: Vec<Vec2> = panel
@@ -891,21 +903,26 @@ pub fn judge_figures(checks: &mut Checks, run: &Conducted, shot: &Shot, what: &s
         .iter()
         .filter(|quad| quad.texture != run.font)
         .map(|quad| quad.bounds())
-        .filter(|bounds| {
-            near(bounds.size().x, layout::HOME) && near(bounds.size().y, layout::HOME)
-        })
+        .filter(|bounds| near(bounds.size().x, layout::HOME) && near(bounds.size().y, layout::HOME))
         .collect();
+    // Counted by corner rather than one apiece: a person working at a site
+    // stands on that site's marker, so one corner legitimately carries two
+    // pictures, and what the frame owes is the number the screen named.
     for at in &wanted {
+        let named = wanted
+            .iter()
+            .filter(|other| near(other.x, at.x) && near(other.y, at.y))
+            .count();
         let copies = drawn
             .iter()
             .filter(|bounds| near(bounds.min.x, at.x) && near(bounds.min.y, at.y))
             .count();
         checks.require(
-            copies == 1,
-            "a figure is drawn more than once in the same place",
+            copies == named,
+            "the map draws a different number of figures than the screen says stand there",
             format!(
                 "{what}: {copies} figure-sized quads land on ({:.1}, {:.1}) and the screen says \
-                 one picture stands there",
+                 {named}",
                 at.x, at.y
             ),
         );
@@ -934,4 +951,133 @@ pub fn judge_figures(checks: &mut Checks, run: &Conducted, shot: &Shot, what: &s
             drawn.len()
         ),
     );
+}
+
+/// **One person, one figure, one place** (UI.md §3b): the cast on one screen,
+/// counted and placed.
+///
+/// The panel half of the figure floor, which needs no photograph and so binds
+/// every screen state `content_floors` judges rather than only the two the run
+/// stops to photograph. Three questions, and the first two are the ones the
+/// double-drawn cast would have failed at any offset:
+///
+/// - every person has **exactly one** figure on the map — found by their own
+///   portrait, which no two of the cast share
+///   (`library::portraits_are_tellable_apart`);
+/// - that figure is at `screens::where_drawn`, so a person is drawn where the
+///   one answer says they are and nowhere else;
+/// - a figure standing alone is drawn **exactly** where its person stands, so
+///   a nudge has to have somebody else's figure as its reason;
+/// - **no two figures stand closer than [`FIGURES_APART`]**, so ten figures
+///   stacked on one tile do not pass a count. This is the guarantee
+///   `screens::where_drawn`'s placement exists to make, stated here as its own
+///   number rather than read off the drawer's, so a nudge that stopped
+///   separating people fails this floor instead of moving it.
+///
+/// Note what it does **not** say: that no two figures overlap. A figure is 32
+/// world units and a tile is 16, so two people at neighbouring doorsteps
+/// legitimately overlap and always have. Whether the settlement is too crowded
+/// to read is a judgement about the map, and it is the owner's
+/// (`FINDINGS.md` G-022).
+///
+/// How far apart two cast figures have to be drawn to read as two people: a
+/// shipped literal — half the 32-unit figure — deliberately not derived from
+/// the nudge it judges (`make-game` §A.6: an instrument that computes its
+/// expectation from the number under test cannot see that number move).
+pub const FIGURES_APART: f32 = 16.0;
+
+pub fn judge_cast(checks: &mut Checks, panel: &Panel, lens: &Lens<'_>, clock: &Clock, what: &str) {
+    let now = screens::reading(clock, &Tuning::SHIPPED, screens::TICK);
+    let mut figures: Vec<(usize, Rect)> = Vec::new();
+    for (index, person) in lens.people().iter().enumerate() {
+        let mine: Vec<Rect> = panel
+            .world_icons
+            .iter()
+            .filter(|icon| icon.art == person.icon)
+            .map(crate::ui::IconRun::bounds)
+            .collect();
+        checks.require(
+            mine.len() == 1,
+            "a character is not drawn on the map exactly once",
+            format!(
+                "{what}: {} figures carry {}'s portrait and one person is one figure",
+                mine.len(),
+                lens.name(index)
+            ),
+        );
+        let Some(place) = screens::stands_at(lens, index, now) else {
+            checks.require(
+                false,
+                "a character is standing nowhere at all",
+                format!("{what}: {} has no place on the map", lens.name(index)),
+            );
+            continue;
+        };
+        let Some(wanted) = screens::where_drawn(lens, index, now) else {
+            checks.require(
+                false,
+                "a character is drawn nowhere at all",
+                format!("{what}: {} has no place on the map", lens.name(index)),
+            );
+            continue;
+        };
+        if let Some(drawn) = mine.first() {
+            checks.require(
+                near(drawn.min.x, wanted.min.x) && near(drawn.min.y, wanted.min.y),
+                "a character's figure is not where the one answer puts them",
+                format!(
+                    "{what}: {} is drawn at ({:.1}, {:.1}) and `where_drawn` says ({:.1}, {:.1})",
+                    lens.name(index),
+                    drawn.min.x,
+                    drawn.min.y,
+                    wanted.min.x,
+                    wanted.min.y
+                ),
+            );
+            // **Drawn exactly on their place unless somebody is there.** The
+            // sharp half, and the one wave 1.1's nudge could not have passed
+            // at any roster index but zero: it moved every person, alone or
+            // not, and by the ninth it moved them fifty-one units — three
+            // tiles from the tile their party was on. A figure that stands
+            // somewhere its person does not has to have another figure as its
+            // reason.
+            let alone = (0..lens.people().len())
+                .filter(|other| *other != index)
+                .filter_map(|other| screens::stands_at(lens, other, now))
+                .all(|theirs| !greater(FIGURES_APART, theirs.distance(place)));
+            checks.require(
+                !alone || (near(drawn.center().x, place.x) && near(drawn.center().y, place.y)),
+                "a character standing on their own is not drawn where they stand",
+                format!(
+                    "{what}: {} stands at ({:.1}, {:.1}) with nobody within {FIGURES_APART:.0} \
+                     units and is drawn at ({:.1}, {:.1})",
+                    lens.name(index),
+                    place.x,
+                    place.y,
+                    drawn.center().x,
+                    drawn.center().y
+                ),
+            );
+            figures.push((index, *drawn));
+        }
+    }
+    for (slot, (index, mine)) in figures.iter().enumerate() {
+        for (other, theirs) in figures.iter().skip(slot + 1) {
+            let apart = mine.center().distance(theirs.center());
+            checks.require(
+                !greater(FIGURES_APART, apart),
+                "two characters are drawn too close together to read as two people",
+                format!(
+                    "{what}: {} at ({:.1}, {:.1}) and {} at ({:.1}, {:.1}) are {apart:.1} units \
+                     apart and the floor is {FIGURES_APART:.0}",
+                    lens.name(*index),
+                    mine.center().x,
+                    mine.center().y,
+                    lens.name(*other),
+                    theirs.center().x,
+                    theirs.center().y
+                ),
+            );
+        }
+    }
 }

@@ -8,8 +8,6 @@
 //! was drawn on and looks for it on the frame (`frames.rs`), so a picture
 //! that quietly stopped showing what it is for fails rather than ships.
 
-use jidousha::prelude::*;
-
 use crate::attention;
 use crate::checks::Checks;
 use crate::constants::Tuning;
@@ -21,11 +19,18 @@ use crate::{floors, frames, layout, lens, people, screens, verify};
 /// Every photograph of the reference run, against what it is for.
 pub fn judge(checks: &mut Checks, run: &Conducted, tuning: &Tuning) {
     let grid = crate::grid::grid();
+    // **One person, one figure, on every frame this run kept** (UI.md §6).
+    // Not two of them: the cast is drawn on the map whatever else is open, so
+    // every photograph is a picture of the whole cast and every photograph is
+    // owed the count. The double-drawn cast is what fixes that reading — it
+    // was on all sixteen and asserted on none (`FINDINGS.md` G-023).
+    for shot in &run.photos {
+        floors::judge_figures(checks, run, shot, shot.name);
+    }
     if let Some(shot) = run.photo("map") {
         verify::judge_terrain(checks, &shot.frame, verify::HEADLESS_VIEWPORT);
         judge_tokens(checks, shot);
         frames::judge_chrome(checks, run, shot, "the mid-travel map");
-        floors::judge_figures(checks, run, shot, "the mid-travel map");
         floors::judge_frame_floor(checks, run.font, &shot.frame, "the mid-travel map");
     } else {
         checks.require(
@@ -181,7 +186,14 @@ pub fn judge(checks: &mut Checks, run: &Conducted, tuning: &Tuning) {
         );
         // Every row's activity line is the lens's own, reason and all.
         let lens = lens::Lens::on(&shot.sim);
-        let panel = screens::content(&shot.flow, &lens, &grid, &shot.clock, tuning);
+        let panel = screens::content(
+            &shot.flow,
+            &lens,
+            &grid,
+            &shot.clock,
+            tuning,
+            screens::reading(&shot.clock, tuning, screens::TICK),
+        );
         let says = |text: &str| panel.runs.iter().any(|run| run.text.contains(text));
         let missing: Vec<&str> = (0..lens.people().len())
             .filter(|who| !says(lens.name(*who)))
@@ -251,7 +263,14 @@ pub fn judge(checks: &mut Checks, run: &Conducted, tuning: &Tuning) {
         // The panel says what the lens says — the whole of the one-source rule
         // over a surface that reads a person.
         if let Some(who) = who {
-            let panel = screens::content(&shot.flow, &lens, &grid, &shot.clock, tuning);
+            let panel = screens::content(
+                &shot.flow,
+                &lens,
+                &grid,
+                &shot.clock,
+                tuning,
+                screens::reading(&shot.clock, tuning, screens::TICK),
+            );
             let says = |text: &str| panel.runs.iter().any(|run| run.text.contains(text));
             checks.require(
                 says(&format!("{}g in hand", lens.wallet(who)))
@@ -298,7 +317,6 @@ pub fn judge(checks: &mut Checks, run: &Conducted, tuning: &Tuning) {
         // Every figure and every name on the frame, at the position the panel
         // says - the same judge the chrome gets, over map-space content.
         frames::judge_chrome(checks, run, shot, "the settlement");
-        floors::judge_figures(checks, run, shot, "the settlement");
         floors::judge_frame_floor(checks, run.font, &shot.frame, "the settlement");
         verify::judge_terrain(checks, &shot.frame, verify::HEADLESS_VIEWPORT);
     } else {
@@ -320,7 +338,14 @@ fn judge_board(checks: &mut Checks, run: &Conducted, tuning: &Tuning, grid: &cra
     // --- the board, read by a selected character ----------------------------
     if let Some(shot) = run.photo("board") {
         let lens = lens::Lens::on(&shot.sim);
-        let panel = screens::content(&shot.flow, &lens, grid, &shot.clock, tuning);
+        let panel = screens::content(
+            &shot.flow,
+            &lens,
+            grid,
+            &shot.clock,
+            tuning,
+            screens::reading(&shot.clock, tuning, screens::TICK),
+        );
         let says = |text: &str| panel.runs.iter().any(|row| row.text.contains(text));
         let Some(site) = shot.flow.board else {
             checks.require(
@@ -394,7 +419,14 @@ fn judge_board(checks: &mut Checks, run: &Conducted, tuning: &Tuning, grid: &cra
     // --- a board an order has just been given from --------------------------
     if let Some(shot) = run.photo("ordered") {
         let lens = lens::Lens::on(&shot.sim);
-        let panel = screens::content(&shot.flow, &lens, grid, &shot.clock, tuning);
+        let panel = screens::content(
+            &shot.flow,
+            &lens,
+            grid,
+            &shot.clock,
+            tuning,
+            screens::reading(&shot.clock, tuning, screens::TICK),
+        );
         let says = |text: &str| panel.runs.iter().any(|row| row.text.contains(text));
         let held: Vec<(usize, usize)> = shot
             .flow
@@ -482,12 +514,17 @@ fn clipped_head(reason: &str) -> String {
     reason.split(' ').take(3).collect::<Vec<_>>().join(" ")
 }
 
-/// **The tokens sit where the derivation says** (ADR-0041, DESIGN §3): the
-/// mid-travel frame carries a token-sized quad at each party's derived
+/// **The figures sit where the derivation says** (ADR-0041, DESIGN §3): the
+/// mid-travel frame carries a figure-sized quad at each person's derived
 /// position — presentation read from discrete state, never written back.
+///
+/// The expectation is `screens::where_drawn`, the one answer to where
+/// somebody is drawn, so a person on the road is looked for on their token
+/// and a person at home on their doorstep, by the same call the draw made.
 fn judge_tokens(checks: &mut Checks, shot: &Shot) {
     let tuning = Tuning::SHIPPED;
-    let reading = shot.clock.reading(&tuning);
+    let reading = screens::reading(&shot.clock, &tuning, screens::TICK);
+    let lens = lens::Lens::on(&shot.sim);
     let mut travelling = 0;
     for (index, party) in shot.sim.parties.iter().enumerate() {
         if matches!(
@@ -496,21 +533,27 @@ fn judge_tokens(checks: &mut Checks, shot: &Shot) {
         ) {
             travelling += 1;
         }
-        let expected = screens::token_position(party, reading) - Vec2::splat(layout::TOKEN * 0.5)
-            + Vec2::new(index as f32 * 4.0, index as f32 * -4.0);
+        let Some(expected) = screens::where_drawn(&lens, index, reading) else {
+            checks.require(
+                false,
+                "a party is drawn nowhere at all",
+                format!("{} has no figure at clock reading {reading:.2}", party.name),
+            );
+            continue;
+        };
         let drawn = shot.frame.quads().iter().any(|quad| {
             let bounds = quad.bounds();
-            crate::checks::near(bounds.min.x, expected.x)
-                && crate::checks::near(bounds.min.y, expected.y)
-                && crate::checks::near(bounds.size().x, layout::TOKEN)
+            crate::checks::near(bounds.min.x, expected.min.x)
+                && crate::checks::near(bounds.min.y, expected.min.y)
+                && crate::checks::near(bounds.size().x, layout::HOME)
         });
         checks.require(
             drawn,
             "a party token is not drawn at its derived position",
             format!(
-                "{}'s token should sit at ({:.1}, {:.1}) at clock reading {reading:.2} and no \
-                 token-sized quad does",
-                party.name, expected.x, expected.y
+                "{}'s figure should sit at ({:.1}, {:.1}) at clock reading {reading:.2} and no \
+                 figure-sized quad does",
+                party.name, expected.min.x, expected.min.y
             ),
         );
     }

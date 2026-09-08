@@ -225,6 +225,7 @@ pub fn printable_strings(checks: &mut Checks, baseline: &Conducted) {
             &crate::grid::grid(),
             &clock,
             &Tuning::SHIPPED,
+            screens::reading(&clock, &Tuning::SHIPPED, screens::TICK),
         )
         .all_strings()
         {
@@ -245,6 +246,11 @@ pub fn printable_strings(checks: &mut Checks, baseline: &Conducted) {
         &crate::grid::grid(),
         &crate::clock::Clock::opening(),
         &Tuning::SHIPPED,
+        screens::reading(
+            &crate::clock::Clock::opening(),
+            &Tuning::SHIPPED,
+            screens::TICK,
+        ),
     )
     .all_strings()
     {
