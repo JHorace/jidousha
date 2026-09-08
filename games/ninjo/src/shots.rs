@@ -25,6 +25,7 @@ pub fn judge(checks: &mut Checks, run: &Conducted, tuning: &Tuning) {
         verify::judge_terrain(checks, &shot.frame, verify::HEADLESS_VIEWPORT);
         judge_tokens(checks, shot);
         frames::judge_chrome(checks, run, shot, "the mid-travel map");
+        floors::judge_figures(checks, run, shot, "the mid-travel map");
         floors::judge_frame_floor(checks, run.font, &shot.frame, "the mid-travel map");
     } else {
         checks.require(
@@ -297,6 +298,7 @@ pub fn judge(checks: &mut Checks, run: &Conducted, tuning: &Tuning) {
         // Every figure and every name on the frame, at the position the panel
         // says - the same judge the chrome gets, over map-space content.
         frames::judge_chrome(checks, run, shot, "the settlement");
+        floors::judge_figures(checks, run, shot, "the settlement");
         floors::judge_frame_floor(checks, run.font, &shot.frame, "the settlement");
         verify::judge_terrain(checks, &shot.frame, verify::HEADLESS_VIEWPORT);
     } else {

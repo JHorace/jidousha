@@ -17,7 +17,7 @@ use crate::flow::Flow;
 use crate::grid::LOCATIONS;
 use crate::lens::Lens;
 use crate::sim::Sim;
-use crate::sweep::Conducted;
+use crate::sweep::{Conducted, Shot};
 use crate::ui::Panel;
 use crate::{camera, layout, screens, theme, verify};
 
@@ -845,4 +845,93 @@ pub fn judge_tuner_screen(checks: &mut Checks, drawer: &crate::restart::DrawerRu
     if let Some(shot) = &drawer.shot {
         judge_frame_floor(checks, drawer.font, &shot.frame, "the tuning drawer");
     }
+}
+
+/// **One person, one figure** (UI.md §6): every figure-weight picture on a
+/// photographed frame is one the screen said it would draw, and nobody is
+/// drawn twice.
+///
+/// The floor the double-drawn cast slipped through (`FINDINGS.md` G-023).
+/// `frames::judge_chrome` asks one direction — every row and icon the `Panel`
+/// says is somewhere on the frame — and wave 1.1's party tokens were drawn
+/// straight through `ctx.sprite`, outside the `Panel` UI.md §6 judges, so a
+/// second figure for every person was invisible to every check this game had.
+/// This asks the other direction at the one weight a person is drawn at: a
+/// figure-sized quad the screen cannot account for is somebody drawn twice,
+/// and two quads on one corner is somebody drawn on top of themselves.
+pub fn judge_figures(checks: &mut Checks, run: &Conducted, shot: &Shot, what: &str) {
+    let camera = verify::run_camera(verify::HEADLESS_VIEWPORT);
+    let map = UiMap::for_camera(&camera);
+    let view = camera.visible_bounds();
+    let panel = screens::content(
+        &shot.flow,
+        &Lens::on(&shot.sim),
+        &crate::grid::grid(),
+        &shot.clock,
+        &Tuning::SHIPPED,
+    );
+    // Every corner the screen says a figure-weight picture stands at: map
+    // content where it is, chrome through the same mapping it is drawn with.
+    let mut wanted: Vec<Vec2> = panel
+        .world_icons
+        .iter()
+        .filter(|icon| icon.bounds().overlaps(view) && near(icon.bounds().size().x, layout::HOME))
+        .map(|icon| icon.at)
+        .collect();
+    wanted.extend(
+        panel
+            .icons
+            .iter()
+            .filter(|icon| near(icon.bounds().size().x * map.scale, layout::HOME))
+            .map(|icon| map.to_world(icon.at)),
+    );
+    let drawn: Vec<Rect> = shot
+        .frame
+        .quads()
+        .iter()
+        .filter(|quad| quad.texture != run.font)
+        .map(|quad| quad.bounds())
+        .filter(|bounds| {
+            near(bounds.size().x, layout::HOME) && near(bounds.size().y, layout::HOME)
+        })
+        .collect();
+    for at in &wanted {
+        let copies = drawn
+            .iter()
+            .filter(|bounds| near(bounds.min.x, at.x) && near(bounds.min.y, at.y))
+            .count();
+        checks.require(
+            copies == 1,
+            "a figure is drawn more than once in the same place",
+            format!(
+                "{what}: {copies} figure-sized quads land on ({:.1}, {:.1}) and the screen says \
+                 one picture stands there",
+                at.x, at.y
+            ),
+        );
+    }
+    let stray: Vec<Rect> = drawn
+        .iter()
+        .filter(|bounds| {
+            !wanted
+                .iter()
+                .any(|at| near(bounds.min.x, at.x) && near(bounds.min.y, at.y))
+        })
+        .copied()
+        .collect();
+    checks.require(
+        stray.is_empty(),
+        "the map draws a figure the screen does not say it draws",
+        format!(
+            "{what}: {} figure-sized quad(s) landed at corners the screen never named - {:?}; \
+             the screen says {} of them and the frame carries {}",
+            stray.len(),
+            stray
+                .iter()
+                .map(|bounds| (bounds.min.x, bounds.min.y))
+                .collect::<Vec<_>>(),
+            wanted.len(),
+            drawn.len()
+        ),
+    );
 }
