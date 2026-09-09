@@ -246,6 +246,24 @@ that the mockup and this section left open:
   is measured and asserted at. The engine feature having landed is not a
   reason to spend it here.
 
+*Implemented (the legibility session, 2026-09-09):* **the scorer's own terms
+are an inspectable surface.** The feed said what somebody did and why in one
+sentence — the loudest term of a sum with five or six terms in it, with the
+rest computed and discarded. It is the never-lies invariant (§1) applied to a
+decision: a surface that shows a number the world disagrees with is the
+failure this architecture exists to refuse, and a *reason* that stands for an
+arithmetic nobody can see is the same failure one level up, because the player
+cannot tell a scorer that weighed them wrongly from one they misread. So a
+decision now carries the `Judged` it was made from, recorded on the
+occurrence beside the reason (`autonomy::Reckoning`, `Sim::remember`), and one
+tap on the entry shows every term with the trait row or the fact that produced
+it. The attention cost is a `?` at the end of a row and nothing else: the feed
+still spends one line per occurrence, which is the budget this section sets.
+The same band explains a posting the player has not made yet from the job
+row's own verdict (`UI.md` §3e), out of the one `answers::read` that produced
+that verdict — one derivation, so a preview and a record cannot describe one
+scorer two ways.
+
 ## 3b. How the player acts — postings
 
 **The player never orders. The player posts.** A posting is an entry on the

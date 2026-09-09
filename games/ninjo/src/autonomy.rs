@@ -339,7 +339,7 @@ pub fn weigh(sim: &Sim, tuning: &Tuning, now: u64, who: usize, action: Action) -
                 terms.push(Term {
                     what: "rest",
                     value: -tuning.rest_weight,
-                    cause: Cause::fact("not stopped since the last job"),
+                    cause: Cause::fact("no rest since the last job"),
                     because: "not stopped since the last job".to_owned(),
                 });
             }

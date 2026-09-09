@@ -366,6 +366,55 @@ pub fn layout_floors(checks: &mut Checks) {
             layout::BREAKDOWN_CELLS
         ),
     );
+    // **And every line it can print fits a cell.** Walked over the vocabulary
+    // rather than over the lines that happen to be on screen: a want covered
+    // by two of somebody's motivators names both rows, and the day a third
+    // one is authored the sentence gets longer without anybody noticing. A
+    // clipped term is a term whose attribution is the half that goes.
+    {
+        let tuning = Tuning::SHIPPED;
+        let sim = Sim::opening(&tuning, crate::modules::ModuleSet::ALL);
+        let style = theme::text(theme::SMALL, theme::INK);
+        let mut lines: Vec<String> = Vec::new();
+        for who in 0..sim.people.len() {
+            for action in crate::autonomy::candidates(&sim, who) {
+                lines.extend(
+                    crate::autonomy::weigh(&sim, &tuning, 0, who, action)
+                        .iter()
+                        .map(crate::autonomy::Term::line),
+                );
+            }
+            for site in 0..sim.sites.len() {
+                for slot in sim.sites[site].open_slots() {
+                    let job = crate::sim::JobId { site, slot };
+                    let posting = crate::asks::preview_posting(who, site, slot, 20, 20);
+                    lines.extend(
+                        crate::answers::terms(&sim, &tuning, 0, who, &posting, job)
+                            .iter()
+                            .map(crate::autonomy::Term::line),
+                    );
+                }
+            }
+        }
+        if let Some(longest) = lines.into_iter().max_by(|a, b| {
+            style
+                .width_of(a)
+                .partial_cmp(&style.width_of(b))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        }) {
+            checks.require(
+                !greater(style.width_of(&longest), layout::BREAKDOWN_CELL_W),
+                "a term of a breakdown does not fit the cell that prints it",
+                format!(
+                    "{longest:?} is {:.0} reference pixels wide and a cell is {:.0}; what a \
+                     clip takes off a term line is the attribution, which is the half the \
+                     band exists for",
+                    style.width_of(&longest),
+                    layout::BREAKDOWN_CELL_W
+                ),
+            );
+        }
+    }
     for index in 0..layout::BREAKDOWN_CELLS {
         let cell = Rect::from_min_size(
             layout::breakdown_cell(index),

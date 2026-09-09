@@ -273,7 +273,7 @@ pub fn terms(
         out.push(autonomy::Term {
             what: "rest",
             value: -tuning.rest_weight,
-            cause: autonomy::Cause::fact("not stopped since the last job"),
+            cause: autonomy::Cause::fact("no rest since the last job"),
             because: "not stopped since the last job".to_owned(),
         });
     }

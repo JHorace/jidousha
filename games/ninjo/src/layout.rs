@@ -333,15 +333,19 @@ pub mod job {
 
 /// The panel a selected character opens.
 ///
-/// **Sixty pixels taller since the party strip retired**, into the band the
-/// strip used to hold: a trait chip's explanation now says what its row does
-/// *and* what nothing yet does with it (`traits::explain`'s dormancy clause),
-/// and that is a sentence rather than a phrase. `floors::layout_floors`
-/// asserts the longest explanation the vocabulary can produce still ends
-/// inside this rectangle, so the panel is sized by the data rather than by a
-/// guess that was true when it was typed.
+/// **Twenty-four pixels taller since the party strip retired**, and the rows
+/// inside it closed up by the same: a trait chip's explanation now says what
+/// its row does *and* what nothing yet does with it (`traits::explain`'s
+/// dormancy clause), and that is a sentence rather than a phrase.
+/// `floors::layout_floors` asserts the longest explanation the vocabulary can
+/// produce still ends inside this rectangle, so the panel is sized by the data
+/// rather than by a guess that was true when it was typed.
+///
+/// It stops at the band below it rather than filling the space the strip left,
+/// because that band is the breakdown's and the breakdown wants the width more
+/// than this panel wants the height (§3e).
 pub fn person_panel() -> Rect {
-    Rect::from_min_size(Vec2::new(600.0, 116.0), Vec2::new(344.0, 360.0))
+    Rect::from_min_size(Vec2::new(600.0, 116.0), Vec2::new(344.0, 324.0))
 }
 
 /// Its close button.
@@ -389,9 +393,9 @@ pub mod sheet {
     /// What they are doing and why, wrapped.
     pub const DOING: Vec2 = Vec2::new(12.0, 198.0);
     /// Where they live.
-    pub const HOME: Vec2 = Vec2::new(12.0, 240.0);
+    pub const HOME: Vec2 = Vec2::new(12.0, 224.0);
     /// The chip explanation, when a chip has been tapped.
-    pub const EXPLAIN: Vec2 = Vec2::new(12.0, 258.0);
+    pub const EXPLAIN: Vec2 = Vec2::new(12.0, 242.0);
     /// How wide a wrapped row may run inside the panel.
     pub const PROSE_W: f32 = 320.0;
 }
@@ -402,12 +406,14 @@ pub mod sheet {
 /// verdict's arithmetic is shown when somebody asks for it, and nothing at
 /// all the rest of the time.
 ///
-/// Under the job board and the width of it, because it explains a row of that
-/// board; the character panel stands clear to its right. It is not a drawer:
-/// it is up *with* the board, exactly as the character panel is, because the
-/// row it explains has to stay readable beside it.
+/// **The width of the screen**, under everything the base screen can have up:
+/// a term line is a value, a word and what produced it, and two of those side
+/// by side is what makes ten of them readable at a glance. The board ends at
+/// 440 and the character panel stops there with it, so this band lies under
+/// both. It is not a drawer: it is up *with* the surface that opened it,
+/// exactly as the character panel is up with the selection.
 pub fn breakdown_panel() -> Rect {
-    Rect::from_min_size(Vec2::new(16.0, 444.0), Vec2::new(576.0, 92.0))
+    Rect::from_min_size(Vec2::new(16.0, 444.0), Vec2::new(928.0, 92.0))
 }
 
 /// Its title row — what was weighed, and what it came to.
@@ -416,7 +422,7 @@ pub fn breakdown_title() -> Vec2 {
 }
 
 /// How wide the title may run before it is clipped.
-pub const BREAKDOWN_TITLE_W: f32 = 556.0;
+pub const BREAKDOWN_TITLE_W: f32 = 908.0;
 
 /// How many cells the band holds: five rows of two columns.
 ///
@@ -434,13 +440,13 @@ pub fn breakdown_cell(index: usize) -> Vec2 {
     let column = index / BREAKDOWN_ROWS;
     let row = index % BREAKDOWN_ROWS;
     Vec2::new(
-        28.0 + column as f32 * 284.0,
+        28.0 + column as f32 * 460.0,
         466.0 + row as f32 * (crate::theme::SMALL + 2.0),
     )
 }
 
 /// How wide one cell's line may run before it is clipped.
-pub const BREAKDOWN_CELL_W: f32 = 272.0;
+pub const BREAKDOWN_CELL_W: f32 = 448.0;
 
 // ── the roster drawer: every character in one list ─────────────────────────
 

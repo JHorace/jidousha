@@ -23,9 +23,12 @@ spaces:
   labels, the party tokens. Pans and zooms with the engine `Camera`.
 - **UI space**: a 960x540 reference rect — giri's design rect, kept — that
   `camera::UiMap` fits uniformly inside whatever the camera shows, centred.
-  The top bar, the speed chips, the party strip and both drawers live here,
+  The top bar, the speed chips, the drawers, the breakdown band and **the
+  selected character's own name** live here,
   so the chrome is a constant size *on screen* at any zoom, and every floor
-  stays stated in reference pixels.
+  stays stated in reference pixels. That last one is why the name of the
+  person you are looking at survives a zoom that takes every other map word
+  away (§4).
 
 The mapping is giri's scaling contract (its UI.md §6) restated over a
 camera that moves: aspect preserved, letterboxed, symmetric.
@@ -51,7 +54,9 @@ giri's colour roles stand. The changed and new rows:
 | `- 20g +` and `TO <name>` in the board's footer | **what the next tap offers, and whom it offers it to** | the board's own two controls; the wage opens at the standing rate for the site's first open row |
 | `WITHDRAW` on a ledger row | **the one way to take a posting down** | instant, and heard the same way a posting is: a posting withdrawn before it was heard is one nobody answers |
 | `STAND` / `STANDS` on a rates row | **a standing open posting for that kind of work**, at the rate beside it | gold while one stands — the closest thing to policy the player has by hand |
-| a portrait, on the party strip | **whose chip this is** | the member's own face, so a person on the map and a chip on the strip are the same picture of the same person |
+| `?` at the end of a job row or a feed entry | **the arithmetic behind the verdict beside it** | the only control on either surface that explains rather than acts; gold while its own sum is the one on the band (§3e) |
+| a term line in the breakdown band | **one part of a decision, and what produced it** | `+6 aptitude - fighter`: the value, what the scorer calls the term, and the trait row or the fact behind it — the row's name read off the vocabulary now, never a sentence written per trait |
+| a name in gold under a figure | **the selected character**, named in chrome | the one map word no zoom takes away (§4); every other name on the map is parchment and world-space |
 | coin icon | the treasury | beside the gold number in the top bar |
 | gold | the active speed chip, the selected character wherever they appear, selection | still not a general accent |
 | terrain colours | the six terrain kinds | one colour per kind, `theme.rs`; the fill *is* the grid data |
@@ -86,8 +91,11 @@ not a queue — the import path (`art/`) rode along from giri.
   double-drawn cast): every character is drawn exactly once on the map, at
   `screens::where_drawn` — at their home tile while they are there, on their
   party's moving token while they are out, **never both**. A **name** is drawn
-  under them at a doorstep and not on the road: a name has a tent under it to
-  belong to, and a walking figure's status is the party strip's line. They
+  under them at a doorstep and not on the road — a name has a tent under it to
+  belong to and stays where it was put, where a name pinned to a moving figure
+  would come and go as the figure passed things; where somebody on the road is
+  going is the roster's column and their own panel's line. **And a name is
+  drawn only where the floor and the map leave room for it** (§4). They
   are **click targets since wave 0a**, and since the fix that is true on the
   road as well as at a door: clicking a figure selects that person and opens
   their panel (§3a), and the 32-world-unit figure meets the target floor at
@@ -98,19 +106,17 @@ not a queue — the import path (`art/`) rode along from giri.
   panel's body; a person standing on a site is still three doors away. What a
   person *has* — wallet, desperation and its source, traits — is on their
   panel and nowhere else.
-- **Party strip** (visible whenever no drawer is): **one chip per person**
-  since wave 1.1, in two rows of five — portrait, name, and a one-line
-  status (`at home` / `-> Watchtower` / `at Watchtower` / `-> Hana's` /
-  `with Hana` / `<- home`). A party is a one-person band, so the strip and
-  the roster are the same ten names; the portrait is the member's own, so a
-  face on the road and a figure at a doorstep are the same person. **A chip is
-  one of the four doors onto the one selection** (§3b): click one to select
-  that person, then tap an open job on a site's board to dispatch. There is no
-  idle gate on the *selection* — selecting is looking at somebody, and it is
-  the order that refuses. A refused order bounces: a toast under the bar, and
-  the same sentence in the notices. A
-  drawer hides the strip rather than being drawn over it — a row of text
-  under a scrim is still a row lying across a control.
+- **The party strip is gone** (owner decision, 2026-09-08). It was one chip
+  per person along the foot of the screen — portrait, name, and a one-line
+  status — and by the time the double-drawn cast was fixed every job it held
+  had somewhere better to live: **selection** to the map's figures, the
+  roster's rows and a faces list (§3b's doors, three now instead of four);
+  **dispatch** to the job rows (§3c); **who is out** to the meters band and
+  its drill-down (§3a); **who is who** to the ROSTER drawer, which carries
+  what the strip carried and four columns more. The band it held is the map's
+  again, and the breakdown band (§3e) borrows it while somebody has asked a
+  verdict why. It is the third S1 residue retired after the world it was built
+  for stopped needing it (`FINDINGS.md` G-024).
 - **Pan/zoom**: arrows pan, `-`/`=` and the scroll wheel zoom; the camera
   clamps to the map and to a zoom range. All of it is input through the
   snapshot, none of it simulation state.
@@ -200,9 +206,11 @@ twice. Every select path writes that field; everything that highlights reads
 it. There is no second selection to keep in step, and keeping two in step was
 never the fix.
 
-**Four doors, one act.** Selecting a person — by their **map sprite**, their
-**party-strip chip**, their **roster row's name**, or their **face in a faces
-list** — does the same thing from every surface:
+**Three doors, one act.** Selecting a person — by their **map sprite**, their
+**roster row's name**, or their **face in a faces list** — does the same thing
+from every surface. There were four until the party strip retired, and the one
+that went was the one that did nothing the other three did not: **no path was
+lost with it**, which is the test a retirement has to pass (§3).
 
 - they become *the* selected character;
 - the character panel opens on them, and on nobody else;
@@ -211,9 +219,16 @@ list** — does the same thing from every surface:
   computes no position of its own: `screens::selection_ring` asks
   `where_drawn`, the same function the figure is drawn at and the click is
   tested against, so a ring cannot come to sit beside the person it marks;
-- their strip chip lights. The strip's highlight **is** the one selection, not
-  a second one, which is what makes the strip a glanceable status row rather
-  than a second selector.
+- **their name is drawn on the map in gold, in the chrome** — under their
+  figure wherever it stands, at a constant size on screen, so the person you
+  are looking at is named at any zoom and the label rule (§4) cannot drop
+  them. It is the one map word that is chrome, and it is drawn *instead of*
+  their world-space name rather than beside it: one person, one figure, one
+  name. Like every other word the map says it goes quiet under a drawer or an
+  open board, and like every other drawn thing it is not laid across a control
+  it does not label — where neither under the figure nor over it is clear, it
+  is not drawn, and the panel that is open on that same person carries the
+  name in full.
 
 Selecting somebody else moves the selection to them. Clicking the person who
 is already selected puts them down; so does the panel's close button, a click
@@ -236,7 +251,7 @@ dispatch never became one click. A successful order puts the selection down —
 and the board with it, §3c.
 
 `verify::one_selection` is the reproduction of the bug this rule replaced —
-chip-select one character, sprite-select another, count the rings on the
+roster-select one character, sprite-select another, count the rings on the
 photographed frame — and `dispatch_reads_the_selection` and
 `selection_moves_nothing` are the other two halves. The count is a shipped
 literal: **one**.
@@ -330,20 +345,80 @@ opens it; with the asks module off it does not open at all and says so.
   player sees what they have asked for and what it costs. Nothing is posted
   from here except the four standing postings, and nothing else can withdraw.
 
+## 3e. The breakdown — the scorer's arithmetic, one tap deeper
+
+**A verdict a player cannot account for is the thing this surface fixes.** A
+job row says `would refuse` and a reason; the reason is the loudest term of a
+sum with five or six terms in it, and until this session the rest was computed
+and thrown away. The owner's wave-1.2 playtest reported the consequence — "it
+is difficult to determine what traits actually do" — and the answer is not
+more words on the row but the sum itself, one tap deeper.
+
+- **The verdict stays the headline.** Nothing about a row changes until the
+  `?` at the end of it is tapped. Arithmetic shown by default would bury the
+  three words the row exists to say.
+- **The `?` is a target of its own**, at the end of the row and clear of it,
+  because the row *is* the posting and a control inside a control is what the
+  overlap floor refuses — the same separation the roster row makes between its
+  name box and its chips (§3). It is drawn only where there is a sum to show:
+  on an open row with somebody selected, and on a feed entry that recorded a
+  decision. Tapped anywhere else it bounces and says why.
+- **The band** (`layout::breakdown_panel`) is the space the party strip left,
+  the width of the screen: five rows of two columns, ten cells — one more than
+  the widest sum this game can produce, which `layout_floors` asserts against
+  the scorer's own term count rather than against a memory of it. It took the
+  width from the character panel, which gave up the sixty pixels of height it
+  had briefly taken from the same band: a term line is a value, a word and an
+  attribution, and the attribution is the half a narrow cell clips off.
+  `layout_floors` walks every term line the vocabulary can produce and asserts
+  the widest fits a cell, because a want covered by two of somebody's
+  motivators names both rows and the third one authored would say so silently. Each cell is one term: **the value, what the scorer calls the term, and
+  what produced it** (`+6 aptitude - fighter`). Then the total. Then, where the
+  verdict is a refusal, **the candidate that beat it and by how much** —
+  because a no is only accountable beside the yes it lost to.
+- **Two askers, one band, one derivation.** A **job row** asks about an offer
+  the player has not made yet: its sum comes out of the *same* `answers::Reading`
+  that produced the verdict above it, so a band that disagreed with the row it
+  explains is not a state this surface can reach. A **feed entry** asks about a
+  decision already made: its sum is the `autonomy::Judged` the scorer decided
+  from, recorded on the occurrence beside the reason it already carried
+  (`Sim::remember`). Both are `autonomy::Reckoning` and one renderer draws
+  them.
+- **Recorded, not recomputed.** A sum re-derived ten minutes later would be a
+  different sum — the board has been claimed, the wage stepped, the regard
+  drifted — and a breakdown that disagrees with the decision it explains is
+  worse than none. So the terms are kept where `Event::gold` is kept and for
+  the same reason (§6's one-source rule applied to a decision). It is a record:
+  nothing in the simulation reads it, no arithmetic depends on it, and a run
+  that never opens a band is byte-identical to one that opens every one.
+- **The attribution is derived from the row.** A term carries the trait rows'
+  *ids*, and the name is read off the vocabulary at the moment the line is
+  built, so a renamed row renames its line with nothing else edited. Where no
+  row produced a term it carries the fact instead (`desperation 4`, `wage 12g`,
+  `asked by name`). A hand-written string per trait is the failure mode this
+  refuses, and `verify::attribution_is_derived` is what holds it.
+- **The band belongs to the surface that opened it.** A job row's sum does not
+  outlive its board or the selection; a feed entry's does not outlive the
+  drawer. One rule in one place (`Flow::put_the_band_away`), because there are
+  a dozen ways out of those surfaces and the band cannot be what every one of
+  them remembers. Under the feed the **notices** band steps aside rather than
+  being drawn beneath it.
+
 ## 4. Readability floors — what binds here
 
 giri's §7 floors bind: text ≥ 12 reference pixels; clickable targets ≥
-32x32 (chips, handles, party chips, tuner controls — and site markers,
+32x32 (chips, handles, tuner controls — and site markers,
 whose 32-world-unit rects meet the floor at the reference zoom where one
 world unit is one reference pixel); no interactive overlap; no text across
 a control it does not label; stat numbers carry their icon (the treasury's
 coin); ASCII everywhere.
 
-The floors bind **every** surface §3a, §3b, §3c and §3d add: a feed row, a face
-row, a config radio, a meter chip, a roster row, a **job row**, the board's
-wage steppers and its `TO` toggle, a **ledger row's withdraw**, a **rate's
-steppers and its STAND**, a trait chip anywhere it appears, and the character
-panel's and the board's closes are all at or above the 32x32 target floor, none of them overlaps another control that
+The floors bind **every** surface §3a, §3b, §3c, §3d and §3e add: a feed row, a
+face row, a config radio, a meter chip, a roster row, a **job row**, the
+board's wage steppers and its `TO` toggle, a **ledger row's withdraw**, a
+**rate's steppers and its STAND**, a **`?` on a job row and on a feed entry**,
+a trait chip anywhere it appears, and the character panel's and the board's
+closes are all at or above the 32x32 target floor, none of them overlaps another control that
 shares its screen, and every row of text is inside the surface that holds it.
 `floors::controls_for` is the one function that says which controls share a
 screen, so the overlap floor is asked about the right set — and since the job
@@ -362,18 +437,42 @@ floors that assert it.
 
 Note what that does **not** say: that no two figures overlap. A figure is 32
 world units and a tile is 16, so people at neighbouring doorsteps overlap and
-always have. Whether the settlement is too crowded to read is a judgement
-about the map and it is the owner's (`FINDINGS.md` G-022).
+always have — **a picture is never dropped**, only a word. Whether the
+settlement is too crowded to read is a judgement about the map and it is the
+owner's (`FINDINGS.md` G-022); what the label rule below took off it is the
+northern row's names landing on the southern row's heads, which is what that
+finding measured.
 
-**Map labels are bound at the default zoom, and that is what fixes the zoom.**
-The chrome rides `UiMap` and is a constant size on screen however the camera
-moves; a name under a figure is drawn in *world* units and shrinks as the
-camera pulls back. `floors::map_legibility` states it: at the default camera a
-name reads at exactly the twelve-pixel floor, and **one notch of the wheel out
-puts it at 10.7**, under the floor — so the wave-1.2 rider to open the default
-zoom out one level was refused by the floor, and the default stays at 540. The
-crowding that rider was aimed at is real and is not a zoom problem
-(`FINDINGS.md` G-022).
+**The floor governs the map's words; it does not veto the camera.** The chrome
+rides `UiMap` and is a constant size on screen however the camera moves; a name
+under a figure is drawn in *world* units and shrinks as the camera pulls back.
+`floors::map_legibility` states the two numbers: at the default camera a name
+reads at exactly the twelve-pixel floor, and **one notch of the wheel out puts
+it at 10.7**. Until the legibility session that arithmetic was used as a
+refusal — the name was going to be drawn whatever the camera did, so the floor
+forbade the zoom, and wave 1.2's rider to open the default out one level was
+turned down. That was the wrong way round. **The label is what yields now:**
+
+- a label is drawn only where it would clear the floor **and** land on nothing
+  already drawn — no figure, no marker, no label accepted before it, and no
+  chrome surface that is up (the character panel and its kin have a fill above
+  the map's text band, so a word under one was never read, only hidden);
+- the order is fixed — markers, then figures, then every site's name and count
+  in registry order, then the cast in registry order — so **the same frame
+  always drops the same labels**, and nothing about which survive depends on
+  who asked or when;
+- **below the floor none is drawn at all**, so pulling the camera back costs
+  the names and never their legibility;
+- **the selected character's name is chrome** (§3b) and is drawn instead of
+  their world-space name, so it survives every zoom;
+- **site markers and their counts follow the same rule** as a person's name.
+
+So zooming out is permitted, and what it costs is legible: the names go and
+the picture stays. `verify::map_labels_are_governed` asserts all of it, and
+`screens/ninjo-zoomed-reference.png` is the picture. **Where the default
+camera should sit is a play judgement and the owner's** — this rule is what
+makes it a judgement they can make, and it deliberately leaves the default at
+540 (`FINDINGS.md` G-022).
 
 **The off-screen floor is restated for a camera that roams.** giri asserted
 every quad inside the design rect; a pan/zoom map legitimately draws
@@ -386,7 +485,7 @@ frame judges hold all three.
 
 ## 5. Screenshot process
 
-Seventeen PNGs per verify run. Reference-only, because they are pictures of what
+Twenty PNGs per verify run. Reference-only, because they are pictures of what
 is on screen rather than of how the chrome scales: **the settlement** at
 world-minute 0 (the whole cast standing at their homes, named, before
 anything is dispatched, which is wave 0b's own exit question), **the
@@ -400,8 +499,8 @@ given from one of its rows, and refusing a row somebody already has — and
 the map at a minute when nobody was told to go anywhere and half the band is
 on the road because they decided to be, which is wave 1.1's own exit
 question — **the selection reproduction**: the owner's own playtest steps,
-one character picked on the strip and another picked on the map, with one ring
-and one lit chip on the second of them (§3b) — and, since the double-drawn
+one character picked on the roster and another picked on the map, with one
+ring and one gold name on the second of them (§3b) — and, since the double-drawn
 cast, **the ring on a token**: somebody picked while they are out, marked on
 the figure walking the road with their own doorstep standing empty, which is
 the selection's other state and had no picture at all while the map drew
@@ -409,7 +508,14 @@ everybody twice — and, since wave 1.2, **a
 refusal mid-pause** (a posting made to somebody who says no, the world stopped
 by `ask-declined`, and the reason on the banner) and **the postings ledger**
 with one posting still recruiting, one refused, and the standing rates beside
-them. At both the reference surface and
+them — and, since the legibility session, **three more**: a job row's
+**breakdown open on a refusal**, with every term, what produced each, the total
+and the job that beat it (§3e); **a decision's breakdown in the feed**, which is
+"why did they go there" answered after the fact; and **the settlement one notch
+of the wheel out**, where the map's words are gone, the figures are not, and
+the selected character is still named because that name is chrome (§4). The
+last of those is the picture the owner judges the default camera against.
+At both the reference surface and
 600x540 narrow: **the mid-travel map** (photographed with two parties on
 visibly different routes) and **the feed mid-pause** (the reason line
 showing, and the entry that stopped the world ringed in gold). Plus the
@@ -456,6 +562,14 @@ cost of the undeclared exception was that the one thing on the map drawn
 outside the `Panel` was the one thing drawn twice per person, on all sixteen
 photographs, for two waves, and no floor could see it. **An exemption that
 is not in this list is a defect, not an exemption.**
+
+**The breakdown band adds no exemption** (§3e). Its fill and its border are
+chrome fills, like the character panel's; every row of text on it — the
+heading, each term, the total, the line naming what beat a refusal — is a
+`TextRun` in the `Panel`, so `floors::judge_panel` judges what it says and
+`frames::judge_chrome` finds each row on the frame. That is why
+`shots::judge_breakdowns` can assert the recorded terms of a decision appear
+on the photograph of the band that explains it, term for term.
 
 **And the map's figures are counted now.** Two floors, both directions:
 `floors::judge_cast` reads the `Panel` — one figure per person, at
