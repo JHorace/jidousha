@@ -45,6 +45,20 @@ pub const NARROW_VIEWPORT: PhysicalSize = PhysicalSize::new(600, 540);
 /// wall time and move no world-time address. `run` asserts exactly that, which
 /// makes this session the auto-pause half of the invariance claim as well as
 /// the source of every screenshot.
+/// The Old Crypt row the `breakdown` photograph opens, as a shipped literal.
+///
+/// Its front row is open at minute 530 and Alex will not walk that far for
+/// it; `shots::judge_breakdowns` asserts the picture is of a refusal that
+/// names what beat it rather than trusting the choice.
+const BREAKDOWN_ROW: usize = 0;
+
+/// The feed row the `feedwhy` photograph opens, as a shipped literal.
+///
+/// Newest first, so this is a decision a few entries down the run's own log;
+/// `shots::judge` asserts the entry photographed carries a reckoning, which
+/// is what makes the number checked rather than remembered.
+const BREAKDOWN_ENTRY: usize = 2;
+
 pub fn photographed(viewport: PhysicalSize) -> Conducted {
     // The class the config panel is set to stop on, and where its radio is.
     let pause_row = crate::attention::EventClass::QuestComplete.index();
@@ -77,17 +91,19 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
     script.extend(sweep::post(sweep::ORDER_MINUTES[1], 1, 1, 0));
     script.extend(sweep::post(sweep::ORDER_MINUTES[2], 2, 2, 5));
     // **Somebody picked while they are out**, for the `roadring` picture: the
-    // strip is a door onto the one selection and needs no world position, so
-    // the shot does not have to know where a walking figure is to be taken of
-    // one. Picked at 50 and put down again at 54, clear of the orders at 48
-    // and the board at 56 — the selection is presentation and the transcript
-    // on the far side of it is the same transcript.
+    // roster is the door onto the one selection that needs no world position,
+    // so the shot does not have to know where a walking figure is to be taken
+    // of one — which is exactly why the party strip's retirement cost this
+    // picture nothing. Picked at 50, put down at 54 with the panel's own
+    // close, clear of the orders at 48 and the board at 56 — the selection is
+    // presentation and the transcript on the far side of it is the same
+    // transcript.
     let bob = people::roster()
         .iter()
         .position(|person| person.id == "bob")
         .unwrap_or(0);
-    script.push(click_ui(When::Minute(50), layout::party_chip(bob).center()));
-    script.push(click_ui(When::Minute(54), layout::party_chip(bob).center()));
+    script.extend(sweep::pick_anywhere(When::Minute(50), bob));
+    script.push(click_ui(When::Minute(54), layout::person_close().center()));
     // **The board re-opened on the site just ordered to**: the `ordered`
     // picture, a row that now reads as the person the player sent.
     script.push(Directive {
@@ -131,10 +147,10 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
         When::Minute(470),
         layout::roster_button().center(),
     ));
-    script.push(click_ui(
-        When::Minute(480),
-        layout::party_chip(alex).center(),
-    ));
+    script.push(Directive {
+        when: When::Minute(480),
+        what: sweep::pick_at_home(alex),
+    });
     script.push(Directive {
         when: When::Minute(490),
         what: Act::ClickWorld(
@@ -145,23 +161,49 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
     // Steve was ordered to at minute 32 and which is therefore never open
     // again — so tapping it is the claimed-row refusal, deterministically.
     script.push(click_ui(When::Minute(510), layout::board_row(0).center()));
-    // Shut the board, then somebody to look at: Steve is home from the Deep
+    // **A refusal, opened** (UI.md §3e). Alex is rested and unhurried by
+    // minute 520, and the Old Crypt is further out than anything he would
+    // rather do — so its open rows are the no this picture is for, where the
+    // two boards nearer his door are all yesses and shrugs. Shut the Deep
+    // Cave, open the Crypt, and tap the `?` at the end of the row: the
+    // picture then carries the arithmetic *and* the line naming what beat it,
+    // which is the thing a player could not account for before this session.
+    script.push(click_ui(When::Minute(524), layout::board_close().center()));
+    script.push(Directive {
+        when: When::Minute(528),
+        what: Act::ClickWorld(
+            layout::marker_rect(LOCATIONS[crate::sim::site_location(2)].tile).center(),
+        ),
+    });
+    script.push(click_ui(
+        When::Minute(532),
+        layout::board_why(BREAKDOWN_ROW).center(),
+    ));
+    // Then the feed's own half of the same gesture: a decision already made,
+    // opened from the entry that reports it. The drawer handle shuts the
+    // board and the band with it, so what opens at 544 is a fresh one.
+    script.push(click_ui(When::Minute(540), layout::feed_button().center()));
+    script.push(click_ui(
+        When::Minute(544),
+        layout::feed_why(BREAKDOWN_ENTRY).center(),
+    ));
+    script.push(click_ui(When::Minute(552), layout::feed_button().center()));
+    // Then somebody to look at: Steve is home from the Deep
     // Cave's second run at minute 512 and rests six world-hours, so his
     // doorstep is a figure to click from there on.
-    script.push(click_ui(When::Minute(530), layout::board_close().center()));
     let steve = people::roster()
         .iter()
         .position(|person| person.id == "steve")
         .unwrap_or(0);
     let doorstep = people::roster()[steve].home.center();
     script.push(Directive {
-        when: When::Minute(540),
+        when: When::Minute(556),
         what: Act::ClickWorld(doorstep),
     });
     // **A trait chip, tapped on the sheet** — the clarity slice, photographed.
     // Steve's third chip is `caring`, a motivator, which is what the wave
     // asks the picture to show.
-    script.push(click_ui(When::Minute(550), layout::sheet_chip(2).center()));
+    script.push(click_ui(When::Minute(566), layout::sheet_chip(2).center()));
     let photos = [
         // The settlement before anything is dispatched: the whole cast
         // standing at their homes, named. Wave 0b's own exit picture - the
@@ -252,6 +294,24 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
             tick: 0,
             paused: false,
         },
+        // **A verdict's arithmetic, on a refusal**: the band under the board,
+        // every term with what produced it, the total, and the job that beat
+        // the one being refused (UI.md §3e).
+        Photo {
+            name: "breakdown",
+            minute: 536,
+            tick: 0,
+            paused: false,
+        },
+        // **And the same sum for a decision already made**, opened from the
+        // feed entry that reports it — "why did they go there", answered
+        // after the fact.
+        Photo {
+            name: "feedwhy",
+            minute: 548,
+            tick: 0,
+            paused: false,
+        },
     ];
     conduct(&Session {
         tuning: Tuning::SHIPPED,
@@ -268,6 +328,41 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
         // world at every completion; the player presses 1 again each time.
         resume_after: Some((Key::Digit1, 20)),
     })
+}
+
+/// **The settlement, one notch of the wheel out** — its own short session.
+///
+/// A run of its own rather than a scroll inside the photographed one, because
+/// the camera is what every pointer hit-test converts through: a run that
+/// zoomed out and back would land every later click through a height that had
+/// been multiplied and divided by the same float, and "the same number" is
+/// not what that produces. Here nothing is clicked at all — the picture is of
+/// the label rule, and the rule is a function of the camera alone (UI.md §4).
+pub fn zoomed(viewport: PhysicalSize) -> Conducted {
+    let script = [
+        // Somebody picked, so the picture shows the one map word the floor
+        // cannot take away: the selected character's name, which is chrome.
+        Directive {
+            when: When::Tick(6),
+            what: sweep::pick_at_home(0),
+        },
+        // One notch out. Positive lines are down; the camera reads a scroll
+        // out as a step *up* in the height it shows (`camera::SCROLL_STEP`).
+        Directive {
+            when: When::Tick(10),
+            what: Act::Scroll(-1.0),
+        },
+    ];
+    let photos = [Photo {
+        name: "zoomed",
+        minute: 0,
+        tick: 20,
+        paused: false,
+    }];
+    let mut session = Session::plain(Tuning::SHIPPED, &script, 24);
+    session.photos = &photos;
+    session.viewport = viewport;
+    conduct(&session)
 }
 
 /// **Pathfinding, deterministic by construction** (DESIGN §3): micro-grid
@@ -855,6 +950,7 @@ fn selection_run(script: &[Directive]) -> (Conducted, Selected) {
                 &shot.clock,
                 &Tuning::SHIPPED,
                 screens::reading(&shot.clock, &Tuning::SHIPPED, screens::TICK),
+                &shot.camera,
             );
             let name_at = layout::person_panel().min + layout::sheet::NAME;
             let named = panel
@@ -909,7 +1005,15 @@ fn one_figure_each(checks: &mut Checks) -> String {
     let now = screens::reading(&clock, &tuning, screens::TICK);
     let portraits: Vec<sprites::Art> = cast.iter().map(|person| person.icon).collect();
     let figures = |sim: &crate::sim::Sim, flow: &flow::Flow| -> Vec<(usize, Rect)> {
-        let panel = screens::content(flow, &lens::Lens::on(sim), &grid, &clock, &tuning, now);
+        let panel = screens::content(
+            flow,
+            &lens::Lens::on(sim),
+            &grid,
+            &clock,
+            &tuning,
+            now,
+            &run_camera(HEADLESS_VIEWPORT),
+        );
         panel
             .world_icons
             .iter()
@@ -1289,12 +1393,18 @@ fn one_selection(checks: &mut Checks) -> Option<Conducted> {
         ),
     );
 
-    // --- the reproduction: chip-select one, sprite-select another ----------
+    // --- the reproduction: roster-select one, sprite-select another --------
+    // The owner's own playtest steps, with the door the strip used to be in
+    // the hands of the roster: two doors, one selection, one ring.
     let (first, second) = (0usize, 3usize);
     let script = [
         Directive {
+            when: When::Tick(4),
+            what: Act::ClickUi(layout::roster_button().center()),
+        },
+        Directive {
             when: When::Tick(6),
-            what: Act::ClickUi(layout::party_chip(first).center()),
+            what: Act::ClickUi(layout::roster_open(first).center()),
         },
         Directive {
             when: When::Tick(14),
@@ -1365,15 +1475,7 @@ fn one_selection(checks: &mut Checks) -> Option<Conducted> {
         );
         return Some(reproduction);
     };
-    let surfaces: [(&str, usize, Vec<Directive>); 4] = [
-        (
-            "the party strip's chip",
-            1,
-            vec![Directive {
-                when: When::Tick(6),
-                what: Act::ClickUi(layout::party_chip(1).center()),
-            }],
-        ),
+    let surfaces: [(&str, usize, Vec<Directive>); 3] = [
         (
             "the map sprite",
             4,
@@ -1438,22 +1540,17 @@ fn one_selection(checks: &mut Checks) -> Option<Conducted> {
 /// The paused world is what makes the comparison clean — dispatch works while
 /// the clock holds ("paused - the clock holds, orders still work"), the order
 /// is addressed at minute zero, and nothing else moves.
-fn ordered_from(site: usize, slot: usize, pick: Act) -> Conducted {
+fn ordered_from(site: usize, slot: usize, pick: &[Directive]) -> Conducted {
     let marker = layout::marker_rect(LOCATIONS[crate::sim::site_location(site)].tile);
-    let script = [
-        Directive {
-            when: When::Tick(6),
-            what: pick,
-        },
-        Directive {
-            when: When::Tick(14),
-            what: Act::ClickWorld(marker.center()),
-        },
-        Directive {
-            when: When::Tick(22),
-            what: Act::ClickUi(layout::board_row(slot).center()),
-        },
-    ];
+    let mut script = pick.to_vec();
+    script.push(Directive {
+        when: When::Tick(14),
+        what: Act::ClickWorld(marker.center()),
+    });
+    script.push(Directive {
+        when: When::Tick(22),
+        what: Act::ClickUi(layout::board_row(slot).center()),
+    });
     let mut session = Session::plain(Tuning::SHIPPED, &script, 32);
     session.probe_ticks = &[30];
     conduct(&session)
@@ -1475,24 +1572,31 @@ fn ordered_from(site: usize, slot: usize, pick: Act) -> Conducted {
 fn posting_reads_the_selection(checks: &mut Checks) {
     let cast = people::roster();
     let who = 0usize;
-    let by_chip = ordered_from(0, 0, Act::ClickUi(layout::party_chip(who).center()));
-    let by_sprite = ordered_from(0, 0, Act::ClickWorld(cast[who].home.center()));
+    let by_roster = ordered_from(0, 0, &sweep::pick_anywhere(When::Tick(6), who));
+    let by_sprite = ordered_from(
+        0,
+        0,
+        &[Directive {
+            when: When::Tick(6),
+            what: Act::ClickWorld(cast[who].home.center()),
+        }],
+    );
     checks.require(
-        !by_chip.events.is_empty(),
+        !by_roster.events.is_empty(),
         "the scripted order produced no event at all, so the paths cannot be compared",
         format!(
             "a chip-select of {} and a click on the Watchtower's marker emitted {} events",
             cast[who].name,
-            by_chip.events.len()
+            by_roster.events.len()
         ),
     );
     checks.require(
-        transcript(&by_chip.events) == transcript(&by_sprite.events),
+        transcript(&by_roster.events) == transcript(&by_sprite.events),
         "the same order given through two select surfaces is two different orders",
         format!(
             "the chip path emitted {:?} and the sprite path {:?}; dispatch reads the one \
              selection, so the surface the selection came from cannot reach the world",
-            transcript(&by_chip.events),
+            transcript(&by_roster.events),
             transcript(&by_sprite.events)
         ),
     );
@@ -1502,7 +1606,14 @@ fn posting_reads_the_selection(checks: &mut Checks) {
     // the reference camera, so this is the check that the fix did not quietly
     // make those two sites unorderable.
     for site in 0..LOCATIONS.len() - 1 {
-        let run = ordered_from(site, 0, Act::ClickWorld(cast[who].home.center()));
+        let run = ordered_from(
+            site,
+            0,
+            &[Directive {
+                when: When::Tick(6),
+                what: Act::ClickWorld(cast[who].home.center()),
+            }],
+        );
         let departed = run
             .events
             .iter()
@@ -1533,7 +1644,7 @@ fn posting_reads_the_selection(checks: &mut Checks) {
         let script = [
             Directive {
                 when: When::Tick(6),
-                what: Act::ClickUi(layout::party_chip(who).center()),
+                what: sweep::pick_at_home(who),
             },
             Directive {
                 when: When::Tick(14),
@@ -1545,7 +1656,7 @@ fn posting_reads_the_selection(checks: &mut Checks) {
             },
             Directive {
                 when: When::Tick(30),
-                what: Act::ClickUi(layout::party_chip(who).center()),
+                what: sweep::pick_at_home(who),
             },
             Directive {
                 when: When::Tick(38),
@@ -1621,7 +1732,7 @@ fn the_board_is_the_ask(checks: &mut Checks) {
         let script = [
             Directive {
                 when: When::Tick(6),
-                what: Act::ClickUi(layout::party_chip(who).center()),
+                what: sweep::pick_at_home(who),
             },
             Directive {
                 when: When::Tick(14),
@@ -1647,7 +1758,14 @@ fn the_board_is_the_ask(checks: &mut Checks) {
     // Slot three of the Watchtower, which is neither the front of the list nor
     // the back: a dispatch that kept first-open underneath claims slot zero
     // and this check reads the difference off the board itself.
-    let named = ordered_from(0, 3, Act::ClickUi(layout::party_chip(who).center()));
+    let named = ordered_from(
+        0,
+        3,
+        &[Directive {
+            when: When::Tick(6),
+            what: sweep::pick_at_home(who),
+        }],
+    );
     let states: Vec<crate::sim::JobState> = named
         .sim
         .sites
@@ -1688,7 +1806,7 @@ fn the_board_is_the_ask(checks: &mut Checks) {
         let script = [
             Directive {
                 when: When::Tick(6),
-                what: Act::ClickUi(layout::party_chip(who).center()),
+                what: sweep::pick_at_home(who),
             },
             Directive {
                 when: When::Tick(14),
@@ -1700,7 +1818,7 @@ fn the_board_is_the_ask(checks: &mut Checks) {
             },
             Directive {
                 when: When::Tick(30),
-                what: Act::ClickUi(layout::party_chip(who + 1).center()),
+                what: sweep::pick_at_home(who + 1),
             },
             Directive {
                 when: When::Tick(38),
@@ -1797,6 +1915,7 @@ fn the_board_is_the_ask(checks: &mut Checks) {
         &crate::clock::Clock::opening(),
         &tuning,
         screens::reading(&crate::clock::Clock::opening(), &tuning, screens::TICK),
+        &run_camera(HEADLESS_VIEWPORT),
     );
     let says = |text: &str| panel.runs.iter().any(|row| row.text.contains(text));
     for quest in &staged.sites[1].quests {
@@ -1835,6 +1954,7 @@ fn the_board_is_the_ask(checks: &mut Checks) {
         &crate::clock::Clock::opening(),
         &tuning,
         screens::reading(&crate::clock::Clock::opening(), &tuning, screens::TICK),
+        &run_camera(HEADLESS_VIEWPORT),
     );
     checks.require(
         !empty.runs.iter().any(|row| row.text.starts_with("fit "))
@@ -1877,7 +1997,7 @@ fn selection_moves_nothing(checks: &mut Checks) {
         },
         Directive {
             when: When::Tick(20),
-            what: Act::ClickUi(layout::party_chip(2).center()),
+            what: sweep::pick_at_home(2),
         },
         Directive {
             when: When::Tick(28),
@@ -1910,6 +2030,455 @@ fn selection_moves_nothing(checks: &mut Checks) {
     );
 }
 
+/// **The breakdown is the judgement, not a second reading of it** (UI.md §3e).
+///
+/// The failure this surface is most able to cause is a sum that does not
+/// produce the verdict printed above it, and the shape that refuses it is one
+/// call: `answers::read` returns the verdict, its reason and the arithmetic
+/// together. So this asserts the identity over a played world rather than
+/// over one staged case — every open row of every site, read by everybody —
+/// and then asserts the other half over the transcript: every decision the
+/// scorer actually made carries the terms it made it from, and they add up to
+/// the score it decided on.
+fn the_breakdown_is_the_judgement(checks: &mut Checks, baseline: &Conducted) -> String {
+    let tuning = Tuning::SHIPPED;
+    let sim = baseline.sim.clone();
+    let lens = lens::Lens::on(&sim);
+    let flow = flow::Flow::default();
+    let mut rows = 0usize;
+    let mut refusals = 0usize;
+    for who in 0..sim.people.len() {
+        for (site, board) in sim.sites.iter().enumerate() {
+            for slot in board.open_slots() {
+                let Some(quest) = board.quest(slot).copied() else {
+                    continue;
+                };
+                let job = crate::sim::JobId { site, slot };
+                let reading =
+                    crate::board::reading_for(&flow, &lens, &tuning, 0, who, job, quest.task);
+                rows += 1;
+                // The sum on the band is the sum the verdict was reached
+                // from: the ask's own terms, in order, values and all.
+                let wage = crate::board::wage_offered(&flow, &lens, site, slot, quest.task);
+                let posting = crate::asks::preview_posting(
+                    who,
+                    site,
+                    slot,
+                    wage,
+                    lens.standing_rate(quest.task),
+                );
+                let terms = crate::answers::terms(&sim, &tuning, 0, who, &posting, job);
+                checks.require(
+                    reading.reckoning.terms == terms,
+                    "a job row's breakdown is not the terms its verdict was reached from",
+                    format!(
+                        "{} on {} slot {slot}: the band would show {:?} and the scorer weighs \
+                         {:?}",
+                        lens.name(who),
+                        LOCATIONS[crate::sim::site_location(site)].name,
+                        reading
+                            .reckoning
+                            .terms
+                            .iter()
+                            .map(crate::autonomy::Term::line)
+                            .collect::<Vec<_>>(),
+                        terms
+                            .iter()
+                            .map(crate::autonomy::Term::line)
+                            .collect::<Vec<_>>()
+                    ),
+                );
+                // And the total is the terms, added: a headline number that
+                // does not equal the lines under it is the one thing a
+                // breakdown must not be able to print.
+                checks.require(
+                    reading.reckoning.total() == reading.reckoning.score,
+                    "a breakdown's total is not the sum of the terms above it",
+                    format!(
+                        "{} on {} slot {slot}: it totals {} over terms adding to {}",
+                        lens.name(who),
+                        LOCATIONS[crate::sim::site_location(site)].name,
+                        reading.reckoning.score,
+                        reading.reckoning.total()
+                    ),
+                );
+                // **A refusal names what beat it**, which is the whole of what
+                // a player cannot account for without one.
+                let refused = !reading.verdict.takes();
+                checks.require(
+                    refused == reading.reckoning.beaten_by.is_some(),
+                    "a refusal does not say what beat it, or a verdict that was taken says \
+                     something did",
+                    format!(
+                        "{} on {} slot {slot} reads {:?} and its beaten-by line is {:?}",
+                        lens.name(who),
+                        LOCATIONS[crate::sim::site_location(site)].name,
+                        reading.verdict.name(),
+                        reading.reckoning.beaten_by
+                    ),
+                );
+                if let Some((_, score)) = &reading.reckoning.beaten_by {
+                    refusals += 1;
+                    checks.require(
+                        *score >= reading.reckoning.score,
+                        "a refusal names a candidate that did not beat it",
+                        format!(
+                            "{} refuses {} slot {slot} at {} for something scoring {score}",
+                            lens.name(who),
+                            LOCATIONS[crate::sim::site_location(site)].name,
+                            reading.reckoning.score
+                        ),
+                    );
+                }
+            }
+        }
+    }
+    // **And the feed's half**: every decision in the transcript carries the
+    // arithmetic it was made from, and it adds up.
+    let recorded: Vec<&crate::sim::Event> = baseline
+        .events
+        .iter()
+        .filter(|event| event.judged.is_some())
+        .collect();
+    for event in &recorded {
+        let Some(reckoning) = &event.judged else {
+            continue;
+        };
+        checks.require(
+            reckoning.total() == reckoning.score && !reckoning.terms.is_empty(),
+            "a recorded decision's arithmetic does not add up to the score it was decided on",
+            format!(
+                "at minute {} the record scores {} over terms adding to {} ({:?})",
+                event.minute,
+                reckoning.score,
+                reckoning.total(),
+                reckoning
+                    .terms
+                    .iter()
+                    .map(crate::autonomy::Term::line)
+                    .collect::<Vec<_>>()
+            ),
+        );
+        checks.require(
+            !reckoning.chose.is_empty(),
+            "a recorded decision does not say what was chosen",
+            format!("the record at minute {} names nothing", event.minute),
+        );
+    }
+    let decisions = baseline
+        .events
+        .iter()
+        .filter(|event| {
+            matches!(
+                event.class,
+                crate::attention::EventClass::ActionStarted
+                    | crate::attention::EventClass::AskAgreed
+                    | crate::attention::EventClass::AskDeclined
+            )
+        })
+        .count();
+    checks.require(
+        recorded.len() == decisions && decisions > 0,
+        "a decision reached the feed without the arithmetic behind it",
+        format!(
+            "{} of the run's {decisions} decisions carry a reckoning; the `?` on a decision \
+             with none bounces, so an unrecorded decision is a question the feed cannot answer",
+            recorded.len()
+        ),
+    );
+    format!(
+        "{rows} job rows read, {refusals} of them refusals that name what beat them; {} decisions recorded with their terms",
+        recorded.len()
+    )
+}
+
+/// **The attribution is derived from the row, never written beside it**
+/// (UI.md §3e; the legibility session's own failure mode).
+///
+/// A breakdown says "indebted" beside a want term because the term carries
+/// the row's *id* and the name is read off the vocabulary at the moment the
+/// line is built. This asserts exactly that, two ways: every trait-produced
+/// term carries rows rather than a sentence, and the phrase those rows
+/// produce is recomputed here from the vocabulary — so a term that had stored
+/// a name at weigh time would differ from the name the row carries now, which
+/// is what a rename would do to it.
+fn attribution_is_derived(checks: &mut Checks) {
+    // The phrase is the row's own name, now — for every row the game has.
+    for def in traits::TRAITS {
+        let phrase = crate::autonomy::Cause::Rows(vec![def.id]).phrase();
+        checks.require(
+            phrase == def.name,
+            "a trait's attribution is not the name its row carries",
+            format!(
+                "{:?} attributes as {phrase:?} and its row reads {:?}",
+                def.id, def.name
+            ),
+        );
+    }
+    // And over the scorer's own terms, on a staged world: the rows a term
+    // names are the rows whose fields moved it, and the words are theirs.
+    let tuning = Tuning::SHIPPED;
+    let sim = crate::sim::Sim::opening(&tuning, modules::ModuleSet::ALL);
+    for who in 0..sim.people.len() {
+        let carried = sim.people[who].traits.clone();
+        for action in crate::autonomy::candidates(&sim, who) {
+            for term in crate::autonomy::weigh(&sim, &tuning, 0, who, action) {
+                let crate::autonomy::Cause::Rows(rows) = &term.cause else {
+                    continue;
+                };
+                checks.require(
+                    !rows.is_empty() && rows.iter().all(|id| carried.contains(id)),
+                    "a term is attributed to a row the person does not carry",
+                    format!(
+                        "{}'s {} term names {:?} and they carry {:?}",
+                        sim.people[who].name, term.what, rows, carried
+                    ),
+                );
+                let want = rows
+                    .iter()
+                    .map(|id| id.def().name)
+                    .collect::<Vec<_>>()
+                    .join(" and ");
+                checks.require(
+                    term.cause.phrase() == want,
+                    "a term's attribution is not read off the vocabulary at the moment it is \
+                     shown",
+                    format!(
+                        "{}'s {} term says {:?} and the rows now read {want:?}; a stored name \
+                         is what a rename would leave behind",
+                        sim.people[who].name,
+                        term.what,
+                        term.cause.phrase()
+                    ),
+                );
+            }
+        }
+    }
+}
+
+/// **The floor governs the map's words** (UI.md §4, `FINDINGS.md` G-022).
+///
+/// Four claims, over panels built at the zooms the rule turns on: every label
+/// that is drawn clears the floor and lands on nothing already drawn; below
+/// the floor none is drawn at all, so zooming out costs the names rather than
+/// their legibility; the selected character's name survives either way,
+/// because it is chrome; and the set is the same every time the same frame is
+/// built, so nothing about which labels survive depends on the order a reader
+/// happened to ask in.
+fn map_labels_are_governed(checks: &mut Checks) -> String {
+    let tuning = Tuning::SHIPPED;
+    let sim = crate::sim::Sim::opening(&tuning, modules::ModuleSet::ALL);
+    let clock = crate::clock::Clock::opening();
+    let grid = grid::grid();
+    let lens = lens::Lens::on(&sim);
+    let picked = 0usize;
+    let flow = flow::Flow {
+        selected: Some(picked),
+        ..flow::Flow::default()
+    };
+    let build = |camera: &Camera| {
+        screens::content(
+            &flow,
+            &lens,
+            &grid,
+            &clock,
+            &tuning,
+            screens::reading(&clock, &tuning, screens::TICK),
+            camera,
+        )
+    };
+    let at = run_camera(HEADLESS_VIEWPORT);
+    let out = Camera {
+        height: camera::DEFAULT_H * camera::SCROLL_STEP,
+        ..at
+    };
+    let name = lens.name(picked).to_owned();
+    let named = |panel: &crate::ui::Panel| panel.runs.iter().any(|run| run.text == name);
+
+    let here = build(&at);
+    checks.require(
+        !here.world_runs.is_empty(),
+        "the map draws no words at the camera the game opens at",
+        format!(
+            "the settlement at height {:.0} carries {} map labels",
+            at.height,
+            here.world_runs.len()
+        ),
+    );
+    // Every drawn label clears the floor, and lands on nothing already drawn:
+    // no figure, no marker, no other label.
+    let reads_at = theme::SMALL * layout::DESIGN_H / at.height;
+    for run in &here.world_runs {
+        checks.require(
+            !greater(theme::MIN_TEXT, reads_at),
+            "a map label is drawn below the readability floor",
+            format!("{:?} reads at {reads_at:.1} reference pixels", run.text),
+        );
+        for icon in &here.world_icons {
+            checks.require(
+                !run.bounds().overlaps(icon.bounds()),
+                "a map label is drawn across a figure or a marker",
+                format!(
+                    "{:?} at {:?} lands on {:?} at {:?}",
+                    run.text,
+                    run.bounds(),
+                    icon.art,
+                    icon.bounds()
+                ),
+            );
+        }
+    }
+    checks.require(
+        named(&here),
+        "the selected character is not named on the map at the default zoom",
+        format!("{name} is selected and no chrome row carries their name"),
+    );
+    // **One notch out**: the words go, the picture stays, and the selection
+    // keeps its name because the name is chrome.
+    let stepped = build(&out);
+    checks.require(
+        stepped.world_runs.is_empty(),
+        "zooming out shrinks the map's words instead of dropping them",
+        format!(
+            "at height {:.0} a name would read at {:.1} reference pixels and {} labels are \
+             still drawn",
+            out.height,
+            theme::SMALL * layout::DESIGN_H / out.height,
+            stepped.world_runs.len()
+        ),
+    );
+    checks.require(
+        stepped.world_icons.len() == here.world_icons.len(),
+        "zooming out dropped a picture as well as the words",
+        format!(
+            "{} map pictures at the default zoom and {} one notch out; a figure is never \
+             dropped",
+            here.world_icons.len(),
+            stepped.world_icons.len()
+        ),
+    );
+    checks.require(
+        named(&stepped),
+        "the selected character's name is subject to the floor",
+        format!(
+            "{name} is selected and is not named at height {:.0}; the name is chrome exactly \
+             so that no zoom can take it away",
+            out.height
+        ),
+    );
+    // **The same frame drops the same labels.** Built twice, read twice.
+    let again = build(&at);
+    let words = |panel: &crate::ui::Panel| {
+        panel
+            .world_runs
+            .iter()
+            .map(|run| (run.text.clone(), run.at.x, run.at.y))
+            .collect::<Vec<_>>()
+    };
+    checks.require(
+        words(&here) == words(&again),
+        "the same frame does not drop the same map labels twice running",
+        format!(
+            "one reading drew {:?} and the next drew {:?}",
+            words(&here).len(),
+            words(&again).len()
+        ),
+    );
+    format!(
+        "map labels: {} of {} words survive the default camera, 0 one notch out, and the \
+         selected name is chrome at both",
+        here.world_runs.len(),
+        LOCATIONS.len() * 2 - 1 + sim.people.len()
+    )
+}
+
+/// **The band does not outlive what it explains** (UI.md §3e).
+///
+/// The mistake this asserts against was on a photograph: a feed entry's
+/// arithmetic left lying over the map after the drawer that opened it was
+/// shut, explaining something nobody could see any more. Every way out of the
+/// two surfaces that open a band, walked, with the band up first.
+fn the_band_belongs_to_its_surface(checks: &mut Checks) {
+    let marker =
+        |site: usize| layout::marker_rect(LOCATIONS[crate::sim::site_location(site)].tile).center();
+    let ways: [(&str, Vec<Directive>); 4] = [
+        (
+            "the board's close",
+            vec![Directive {
+                when: When::Tick(30),
+                what: Act::ClickUi(layout::board_close().center()),
+            }],
+        ),
+        (
+            "the character panel's close, which puts the selection down",
+            vec![Directive {
+                when: When::Tick(30),
+                what: Act::ClickUi(layout::person_close().center()),
+            }],
+        ),
+        (
+            "a drawer's handle",
+            vec![Directive {
+                when: When::Tick(30),
+                what: Act::ClickUi(layout::feed_button().center()),
+            }],
+        ),
+        (
+            "another site's marker, which is a board about something else",
+            vec![Directive {
+                when: When::Tick(30),
+                what: Act::ClickWorld(marker(1)),
+            }],
+        ),
+    ];
+    for (what, out) in ways {
+        // Pick somebody, open a board, open a row's arithmetic — then leave.
+        let mut script = vec![
+            Directive {
+                when: When::Tick(6),
+                what: sweep::pick_at_home(0),
+            },
+            Directive {
+                when: When::Tick(14),
+                what: Act::ClickWorld(marker(0)),
+            },
+            Directive {
+                when: When::Tick(22),
+                what: Act::ClickUi(layout::board_why(1).center()),
+            },
+        ];
+        let opened = {
+            let mut session = Session::plain(Tuning::SHIPPED, &script, 26);
+            session.probe_ticks = &[26];
+            conduct(&session)
+        };
+        checks.require(
+            opened
+                .probe(26)
+                .is_some_and(|(_, flow, ..)| flow.breakdown.is_some()),
+            "a job row's arithmetic does not open when its own control is tapped",
+            format!(
+                "the band reads {:?} after the `?` at the end of the row",
+                opened.probe(26).map(|(_, flow, ..)| flow.breakdown)
+            ),
+        );
+        script.extend(out);
+        let mut session = Session::plain(Tuning::SHIPPED, &script, 34);
+        session.probe_ticks = &[34];
+        let left = conduct(&session);
+        checks.require(
+            left.probe(34)
+                .is_some_and(|(_, flow, ..)| flow.breakdown.is_none()),
+            "the breakdown band outlives the surface it explains",
+            format!(
+                "after {what} the band still reads {:?}; an explanation of something nobody \
+                 can see any more is a panel about nothing",
+                left.probe(34).map(|(_, flow, ..)| flow.breakdown)
+            ),
+        );
+    }
+}
+
 pub fn run() -> ExitCode {
     let mut checks = Checks::default();
     let tuning = Tuning::SHIPPED;
@@ -1937,6 +2506,7 @@ pub fn run() -> ExitCode {
         ),
     );
     shots::judge(&mut checks, &photographed_run, &tuning);
+    shots::judge_breakdowns(&mut checks, &photographed_run, &tuning);
 
     // --- the culling, both ways --------------------------------------------
     culling_probe(&mut checks);
@@ -1957,6 +2527,12 @@ pub fn run() -> ExitCode {
     floors::content_floors(&mut checks, &baseline);
     let ui_report = floors::uimap_contract(&mut checks);
     let legibility = floors::map_legibility(&mut checks);
+    let labels = map_labels_are_governed(&mut checks);
+
+    // --- the arithmetic the player can now see ------------------------------
+    let breakdown = the_breakdown_is_the_judgement(&mut checks, &baseline);
+    attribution_is_derived(&mut checks);
+    the_band_belongs_to_its_surface(&mut checks);
 
     // --- the tuning drawer: one scripted session, read three ways ----------
     let drawer = restart::drawer_run();
@@ -2059,6 +2635,8 @@ pub fn run() -> ExitCode {
 
     // --- the pictures a person looks at ------------------------------------
     let narrow = photographed(NARROW_VIEWPORT);
+    let zoomed_run = zoomed(HEADLESS_VIEWPORT);
+    shots::judge_zoomed(&mut checks, &zoomed_run, &tuning);
     let captured = capture::capture_screens(
         &mut checks,
         &photographed_run,
@@ -2066,6 +2644,7 @@ pub fn run() -> ExitCode {
         &drawer,
         reproduction.as_ref(),
         &asked,
+        &zoomed_run,
     );
 
     let verdict = checks.verdict();
@@ -2087,6 +2666,8 @@ pub fn run() -> ExitCode {
     println!("  seed 0 stamped; transcripts identical at seeds 7 and 7777777 (no Rng read in S1)");
     println!("  ui mapping: {ui_report}");
     println!("  map text: {legibility}");
+    println!("  {labels}");
+    println!("  breakdown: {breakdown}");
     println!("  {figures}");
     println!(
         "  people: {} in the registry, {} traits over {} kinds, {} marks, {} reaction cells",

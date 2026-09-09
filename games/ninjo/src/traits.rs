@@ -35,6 +35,7 @@
 
 use crate::checks::Checks;
 use crate::constants::Tuning;
+use crate::modules::ModuleSet;
 use crate::sprites::Art;
 
 /// The four kinds of work the world has (`CAST.md` §2).
@@ -766,6 +767,118 @@ pub fn pot_pull_of(traits: &[TraitId]) -> i64 {
     traits.iter().map(|id| id.def().pot_affinity).sum()
 }
 
+// ── which rows moved a number: the attribution a breakdown prints ─────────
+//
+// **Three walks over the same fields the three arithmetic functions above
+// walk**, and no fourth idea about which trait does what. A breakdown says
+// "indebted" beside a want term because the row's `favors` field covers the
+// work, which is the same test `pressure_toward` applies to decide the
+// number — so an attribution cannot name a row that did not move the term,
+// and a renamed row renames the line without anybody editing prose.
+
+/// The rows whose want covers this work — what produced a `want` term.
+pub fn wanting(task: TaskType, traits: &[TraitId]) -> Vec<TraitId> {
+    traits
+        .iter()
+        .copied()
+        .filter(|id| {
+            let def = id.def();
+            def.pressure != NEUTRAL.pressure && def.favors.covers(task)
+        })
+        .collect()
+}
+
+/// The rows a pot pulls on — what produced a `pot` term, and half of what
+/// produced a `wage` one.
+pub fn drawn_by_a_pot(traits: &[TraitId]) -> Vec<TraitId> {
+    traits
+        .iter()
+        .copied()
+        .filter(|id| id.def().pot_affinity != NEUTRAL.pot_affinity)
+        .collect()
+}
+
+/// The rows that moved a regard term — the bond multipliers where the regard
+/// is positive, the grudge multipliers where it is not.
+///
+/// Empty for a character whose vocabulary leaves regard alone, which is the
+/// answer that makes the term the bare fact of what somebody thinks.
+pub fn weighing_regard(raw: i64, traits: &[TraitId]) -> Vec<TraitId> {
+    if raw == 0 {
+        return Vec::new();
+    }
+    traits
+        .iter()
+        .copied()
+        .filter(|id| {
+            let def = id.def();
+            if raw > 0 {
+                def.bond_num != NEUTRAL.bond_num || def.bond_den != NEUTRAL.bond_den
+            } else {
+                def.grudge_num != NEUTRAL.grudge_num || def.grudge_den != NEUTRAL.grudge_den
+            }
+        })
+        .collect()
+}
+
+/// **What has to be built before a row's field does anything** — the module
+/// that consumes it, named exactly as GDD §5's registry names it.
+///
+/// The whole of the dormancy rule is this table. A clause of an explanation
+/// ([`explain`]) is honest exactly when the module that reads the field is in
+/// `modules::MODULES` **and** switched on; `ModuleSet::enabled` answers both
+/// at once, because an id the registry does not carry reads as off. So
+/// landing needs or resolution retires a clause without anybody editing
+/// prose, and no wave name is written down anywhere in this file.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Consumer {
+    /// **autonomy** — the scorer: what somebody decides to do.
+    Autonomy,
+    /// **needs** — upkeep, and the desperation a shortfall raises.
+    Needs,
+    /// **resolution** — how a task actually turns out.
+    Resolution,
+    /// **aspirations** — what puts a public mark on somebody, which is what
+    /// a mark reaction has to have before it can react to anything.
+    Aspirations,
+}
+
+impl Consumer {
+    /// Every consumer, in the order an explanation names them.
+    pub const ALL: &'static [Consumer] = &[
+        Consumer::Autonomy,
+        Consumer::Needs,
+        Consumer::Resolution,
+        Consumer::Aspirations,
+    ];
+
+    /// The module id, as GDD §5's first column spells it.
+    pub fn module(self) -> &'static str {
+        match self {
+            Consumer::Autonomy => "autonomy",
+            Consumer::Needs => "needs",
+            Consumer::Resolution => "resolution",
+            Consumer::Aspirations => "aspirations",
+        }
+    }
+
+    /// Whether this build has that module and it is switched on.
+    pub fn live(self, modules: ModuleSet) -> bool {
+        modules.enabled(self.module())
+    }
+
+    /// What an explanation says while it is missing — the honest clause, in
+    /// the world's own terms rather than in wave numbers.
+    pub fn absence(self) -> &'static str {
+        match self {
+            Consumer::Autonomy => "the scorer is off, so nothing weighs it",
+            Consumer::Needs => "nothing is paid for yet, so upkeep costs nothing",
+            Consumer::Resolution => "every job succeeds today, so this changes no outcome",
+            Consumer::Aspirations => "nobody is publicly marked yet, so nothing reacts",
+        }
+    }
+}
+
 /// A rational as a chip explanation prints it: `2` for 2/1, `3/2` otherwise.
 fn ratio(num: i64, den: i64) -> String {
     if den == 1 {
@@ -775,49 +888,113 @@ fn ratio(num: i64, den: i64) -> String {
     }
 }
 
-/// **What a trait does, derived from its row** — the chip explanation
-/// (`CAST.md`'s vocabulary question; the clarity slice of wave 1.1).
+/// **What a trait does, derived from its row — and what it does not do
+/// yet, derived from the registry** (`CAST.md`'s vocabulary question; the
+/// clarity slice of wave 1.1, and the dormancy clause of the legibility
+/// session).
 ///
 /// One formatter over the row, never a sentence written per trait: a renamed
 /// want, a moved multiplier or a sixth motivator changes this line without
 /// anybody editing prose, which is the only way a vocabulary this provisional
 /// can stay honest. The line is the row's own stranger-facing gist, and what
 /// follows it is every field the row actually moves.
-pub fn explain(id: TraitId) -> String {
+///
+/// **And every field says who reads it.** A clause whose [`Consumer`] is not
+/// in the module registry — or is switched off in `modules` — is a clause
+/// about something that does not happen in this build, and the explanation
+/// says so in the world's own words. A row *none* of whose clauses has a live
+/// consumer is wholly dormant and says that first, before it says what it
+/// would do. Nothing here names a wave: landing needs or resolution retires
+/// its clause by putting a row in `modules::MODULES`.
+pub fn explain(id: TraitId, modules: ModuleSet) -> String {
     let def = id.def();
-    let mut parts: Vec<String> = Vec::new();
+    // Every clause the row's own fields earn, each with the consumers that
+    // would have to exist for it to mean anything.
+    let mut clauses: Vec<(String, &'static [Consumer])> = Vec::new();
     if let Some(task) = TaskType::of_aptitude(def.id)
         && def.aptitude != 0
     {
-        parts.push(format!("counts for {} tasks", task.id()));
+        // Two readers, and they are not the same claim: the scorer weighs a
+        // competence when somebody decides, and resolution is what would make
+        // it change how the work goes.
+        clauses.push((
+            format!("counts for {} tasks", task.id()),
+            &[Consumer::Autonomy, Consumer::Resolution],
+        ));
     }
     if def.upkeep_num != NEUTRAL.upkeep_num || def.upkeep_den != NEUTRAL.upkeep_den {
-        parts.push(format!("upkeep x{}", ratio(def.upkeep_num, def.upkeep_den)));
+        clauses.push((
+            format!("upkeep x{}", ratio(def.upkeep_num, def.upkeep_den)),
+            &[Consumer::Needs],
+        ));
     }
     if def.pressure != NEUTRAL.pressure {
-        parts.push(format!("pulls toward {}", def.favors.phrase()));
+        clauses.push((
+            format!("pulls toward {}", def.favors.phrase()),
+            &[Consumer::Autonomy],
+        ));
     }
     if def.bond_num != NEUTRAL.bond_num || def.bond_den != NEUTRAL.bond_den {
-        parts.push(format!(
-            "bonds weigh x{}",
-            ratio(def.bond_num, def.bond_den)
+        clauses.push((
+            format!("bonds weigh x{}", ratio(def.bond_num, def.bond_den)),
+            &[Consumer::Autonomy],
         ));
     }
     if def.grudge_num != NEUTRAL.grudge_num || def.grudge_den != NEUTRAL.grudge_den {
-        parts.push(format!(
-            "grudges weigh x{}",
-            ratio(def.grudge_num, def.grudge_den)
+        clauses.push((
+            format!("grudges weigh x{}", ratio(def.grudge_num, def.grudge_den)),
+            &[Consumer::Autonomy],
         ));
     }
     if def.pot_affinity != NEUTRAL.pot_affinity {
-        parts.push(format!("the pot pulls x{}", def.pot_affinity));
+        clauses.push((
+            format!("the pot pulls x{}", def.pot_affinity),
+            &[Consumer::Autonomy],
+        ));
     }
     let cells = REACTIONS.iter().filter(|cell| cell.trait_id == id).count();
     if cells > 0 {
-        parts.push(format!("reacts to {cells} public marks"));
+        clauses.push((
+            format!("reacts to {cells} public marks"),
+            &[Consumer::Aspirations],
+        ));
     }
+
+    // The consumers this row's clauses reach that this build does not have,
+    // in registry order so the sentence is the same every time it is built.
+    let missing: Vec<Consumer> = Consumer::ALL
+        .iter()
+        .copied()
+        .filter(|consumer| {
+            !consumer.live(modules)
+                && clauses
+                    .iter()
+                    .any(|(_, readers)| readers.contains(consumer))
+        })
+        .collect();
+    // **Wholly dormant**: not one clause has a reader that exists. A row like
+    // that says so before it says anything else, because a description of
+    // machinery nobody runs reads as a description of the game.
+    let dormant = !clauses.is_empty()
+        && clauses
+            .iter()
+            .all(|(_, readers)| !readers.iter().any(|reader| reader.live(modules)));
+
+    let mut parts: Vec<String> = clauses.into_iter().map(|(text, _)| text).collect();
     if parts.is_empty() {
         parts.push("no weight of its own yet".to_owned());
+    }
+    if !missing.is_empty() {
+        let phrase = missing
+            .iter()
+            .map(|consumer| consumer.absence())
+            .collect::<Vec<_>>()
+            .join("; ");
+        if dormant {
+            parts.insert(0, format!("does nothing yet - {phrase}"));
+        } else {
+            parts.push(phrase);
+        }
     }
     format!("{} - {}", def.line, parts.join(" / "))
 }
@@ -1089,7 +1266,7 @@ pub fn vocabulary(checks: &mut Checks) {
     // A chip explanation is derived from the row and is one printable ASCII
     // line - the thing the vocabulary question is asked with.
     for def in TRAITS {
-        let line = explain(def.id);
+        let line = explain(def.id, ModuleSet::ALL);
         checks.require(
             line.starts_with(def.line)
                 && line.chars().all(|glyph| (' '..='~').contains(&glyph))
@@ -1098,6 +1275,87 @@ pub fn vocabulary(checks: &mut Checks) {
             format!("{:?} explains as {line:?}", def.id),
         );
     }
+    dormancy(checks);
+}
+
+/// **The dormancy clause is derived, and the derivation is asserted** — the
+/// legibility session's rule (UI.md §3, `FINDINGS.md` G-024).
+///
+/// Three claims, and the third is the one that keeps the prose honest when a
+/// wave lands: the consumer table names modules the way the registry does,
+/// a field whose consumer this build does not have says so, and **flipping a
+/// module's presence flips the clause** with nobody editing a sentence.
+fn dormancy(checks: &mut Checks) {
+    for consumer in Consumer::ALL.iter().copied() {
+        checks.require(
+            !consumer.module().is_empty()
+                && consumer
+                    .module()
+                    .chars()
+                    .all(|glyph| glyph.is_ascii_lowercase() || glyph == '-'),
+            "a trait consumer names a module in something other than a registry id",
+            format!("{consumer:?} names {:?}", consumer.module()),
+        );
+        checks.require(
+            Consumer::ALL
+                .iter()
+                .filter(|other| other.module() == consumer.module())
+                .count()
+                == 1,
+            "two trait consumers name the same module",
+            format!("{:?} is named by more than one consumer", consumer.module()),
+        );
+        checks.require(
+            !consumer.absence().is_empty()
+                && consumer
+                    .absence()
+                    .chars()
+                    .all(|glyph| (' '..='~').contains(&glyph)),
+            "a trait consumer has no honest clause to say while it is missing",
+            format!("{consumer:?} says {:?}", consumer.absence()),
+        );
+    }
+    // The mapping can read the registry at all: the one consumer this build
+    // *has* reads as live. A mistyped id would make every clause dormant and
+    // every explanation a lie in the other direction.
+    checks.require(
+        Consumer::Autonomy.live(ModuleSet::ALL),
+        "the consumer table cannot find the module this build has",
+        format!(
+            "{:?} does not resolve in the registry; every clause would read as dormant",
+            Consumer::Autonomy.module()
+        ),
+    );
+    // An aptitude row, with everything this build has switched on: the scorer
+    // weighs it, and resolution — which the registry does not carry — is what
+    // it is waiting for.
+    let apt = explain(TaskType::Craft.aptitude(), ModuleSet::ALL);
+    checks.require(
+        apt.contains(Consumer::Resolution.absence()),
+        "an aptitude row does not say that nothing yet turns competence into an outcome",
+        format!("the crafter explains as {apt:?}"),
+    );
+    // **The flip.** The same row, with the module that weighs it switched off,
+    // gains that consumer's clause; with it on, it does not carry it. Nothing
+    // between those two strings was edited by hand.
+    let off = ModuleSet::ALL.without(
+        crate::modules::MODULES
+            .iter()
+            .position(|spec| spec.id == Consumer::Autonomy.module())
+            .unwrap_or(usize::MAX),
+    );
+    let want = explain(TraitId::Restless, ModuleSet::ALL);
+    let want_off = explain(TraitId::Restless, off);
+    checks.require(
+        !want.contains(Consumer::Autonomy.absence())
+            && want_off.contains(Consumer::Autonomy.absence())
+            && want_off.starts_with(&format!(
+                "{} - does nothing yet",
+                TraitId::Restless.def().line
+            )),
+        "switching a module off does not change what the rows it reads say they do",
+        format!("restless explains as {want:?} with the scorer on and {want_off:?} with it off"),
+    );
 }
 
 /// The trait arithmetic, at a stated constants set — **every expectation a

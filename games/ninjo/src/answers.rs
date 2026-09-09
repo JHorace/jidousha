@@ -77,6 +77,25 @@ impl Verdict {
     }
 }
 
+/// **What a job row knows about an offer**: the verdict, its reason, and the
+/// arithmetic behind both.
+///
+/// One value out of one call to [`read`], because the row's headline and the
+/// breakdown under it are two readings of one comparison. A surface that
+/// asked for the verdict and then asked separately for the sum could be shown
+/// a sum that does not produce the verdict beside it, which is the failure
+/// this whole surface is most able to cause.
+#[derive(Clone, Debug)]
+pub struct Reading {
+    /// What the row says in three words.
+    pub verdict: Verdict,
+    /// And why, in the scorer's own sentence.
+    pub why: String,
+    /// The whole sum: every term with what produced it, the total, and the
+    /// candidate that beat it where the verdict is a refusal.
+    pub reckoning: autonomy::Reckoning,
+}
+
 /// **The read the job row shows, and the answer the sim gives — one
 /// comparison.**
 ///
@@ -99,7 +118,7 @@ pub fn read(
     who: usize,
     posting: &Posting,
     job: JobId,
-) -> (Verdict, String) {
+) -> Reading {
     let mine = terms(sim, tuning, now, who, posting, job);
     let score: i64 = mine.iter().map(|term| term.value).sum();
     let ask = Action::Answer {
@@ -110,15 +129,34 @@ pub fn read(
     open.extend(candidates(sim, who));
     open.retain(|action| *action != ask);
     let rival = autonomy::choose(sim, tuning, now, who, &open);
-    if score > rival.score {
-        let verdict = if score - rival.score >= RELUCTANT_MARGIN {
-            Verdict::WouldTake
+    let takes = score > rival.score;
+    let verdict = if !takes {
+        Verdict::WouldRefuse
+    } else if score - rival.score >= RELUCTANT_MARGIN {
+        Verdict::WouldTake
+    } else {
+        Verdict::Reluctant
+    };
+    Reading {
+        verdict,
+        why: if takes {
+            autonomy::words(ask, &mine)
         } else {
-            Verdict::Reluctant
-        };
-        return (verdict, autonomy::words(ask, &mine));
+            rival.reason.clone()
+        },
+        // **One comparison, read two ways.** The headline is the verdict and
+        // its reason; the breakdown one tap deeper is the arithmetic that
+        // produced exactly that verdict — the ask's own terms, its total, and
+        // where it lost, the candidate that beat it and by how much. Both
+        // come out of this one call, so the row and its own explanation
+        // cannot disagree about what the row says.
+        reckoning: autonomy::Reckoning {
+            chose: autonomy::describe(sim, ask),
+            score,
+            terms: mine,
+            beaten_by: (!takes).then(|| (autonomy::describe(sim, rival.action), rival.score)),
+        },
     }
-    (Verdict::WouldRefuse, rival.reason)
 }
 
 /// The wants of theirs that cover a piece of work, named — the same phrase
@@ -169,6 +207,7 @@ pub fn terms(
     out.push(autonomy::Term {
         what: "need",
         value: person.desperation * tuning.need_weight,
+        cause: autonomy::Cause::fact(&format!("desperation {}", person.desperation)),
         because: "needs the money".to_owned(),
     });
     let pressure = crate::traits::pressure_toward(quest.task, &person.traits);
@@ -176,6 +215,7 @@ pub fn terms(
         out.push(autonomy::Term {
             what: "want",
             value: pressure * tuning.want_weight,
+            cause: autonomy::Cause::Rows(crate::traits::wanting(quest.task, &person.traits)),
             because: format!("{}, and this is {} work", wants(person), quest.task.id()),
         });
     }
@@ -184,6 +224,7 @@ pub fn terms(
         out.push(autonomy::Term {
             what: "aptitude",
             value: apt * tuning.apt_weight,
+            cause: autonomy::Cause::Rows(vec![quest.task.aptitude()]),
             because: format!("good at {} work", quest.task.id()),
         });
     }
@@ -193,6 +234,10 @@ pub fn terms(
         out.push(autonomy::Term {
             what: "wage",
             value: pull * posting.wage * tuning.pot_weight / 10,
+            // The wage's pull is an affinity **and** a need, and a character
+            // with neither row feels it through desperation alone - so the
+            // wage is the fact and not the vocabulary.
+            cause: autonomy::Cause::fact(&format!("wage {}g", posting.wage)),
             because: format!("the wage is {}g", posting.wage),
         });
     }
@@ -204,6 +249,11 @@ pub fn terms(
         out.push(autonomy::Term {
             what: "regard",
             value: felt * tuning.regard_weight,
+            cause: autonomy::cause_of_regard(
+                sim.shared.regard(who, Regarded::Player),
+                &person.traits,
+                "what they make of you",
+            ),
             because: if felt > 0 {
                 "would do it for you".to_owned()
             } else {
@@ -215,6 +265,7 @@ pub fn terms(
         out.push(autonomy::Term {
             what: "asked",
             value: tuning.ask_targeted,
+            cause: autonomy::Cause::fact("asked by name"),
             because: "was asked by name".to_owned(),
         });
     }
@@ -222,6 +273,7 @@ pub fn terms(
         out.push(autonomy::Term {
             what: "rest",
             value: -tuning.rest_weight,
+            cause: autonomy::Cause::fact("not stopped since the last job"),
             because: "not stopped since the last job".to_owned(),
         });
     }
@@ -240,6 +292,7 @@ pub fn agree(
     now: u64,
     who: usize,
     judged: autonomy::Judged,
+    reckoning: autonomy::Reckoning,
 ) {
     let Action::Answer { posting: id, job } = judged.action else {
         return;
@@ -268,6 +321,7 @@ pub fn agree(
         tile,
         format!("took {name} for {wage}g - {reason}"),
     );
+    sim.remember(reckoning);
     let dispatched = sim::dispatch(sim, grid, tuning, now, who, job, sim::Motive::asked(reason));
     if dispatched.is_err() {
         // The row went while they were deciding. The posting stands, and the
@@ -299,7 +353,14 @@ pub fn agree(
 /// An open posting simply goes unfilled — nobody refused a notice on a board,
 /// and an event for every character who read one and did something else would
 /// be a feed nobody could read.
-pub fn decline(sim: &mut Sim, now: u64, who: usize, id: usize, reason: &str) {
+pub fn decline(
+    sim: &mut Sim,
+    now: u64,
+    who: usize,
+    id: usize,
+    reason: &str,
+    instead: &autonomy::Reckoning,
+) {
     let Some(posting) = sim.postings.get(id) else {
         return;
     };
@@ -320,6 +381,11 @@ pub fn decline(sim: &mut Sim, now: u64, who: usize, id: usize, reason: &str) {
         tile,
         format!("will not take {what} - {reason}"),
     );
+    // **A refusal's arithmetic is the arithmetic of what won.** The scorer
+    // did not weigh "no"; it weighed everything and this posting was not the
+    // best of it, so the sum that answers "why not" is the sum of the
+    // candidate that beat it (UI.md §3e).
+    sim.remember(instead.clone());
     if let Some(posting) = sim.postings.get_mut(id) {
         posting.answered.push((
             who,
@@ -336,7 +402,14 @@ pub fn decline(sim: &mut Sim, now: u64, who: usize, id: usize, reason: &str) {
 /// choose is a refusal, and a refusal is said. One place, so the answer to a
 /// posting is the same whether the rescore was the cadence's or the ask's own
 /// arrival.
-pub fn record_refusals(sim: &mut Sim, now: u64, who: usize, taken: Option<usize>, reason: &str) {
+pub fn record_refusals(
+    sim: &mut Sim,
+    now: u64,
+    who: usize,
+    taken: Option<usize>,
+    reason: &str,
+    instead: &autonomy::Reckoning,
+) {
     if !sim.modules.enabled(MODULE) {
         return;
     }
@@ -351,7 +424,7 @@ pub fn record_refusals(sim: &mut Sim, now: u64, who: usize, taken: Option<usize>
                 .any(|(index, answer)| *index == who && matches!(answer, Answer::Declined { .. }))
     });
     for id in refused {
-        decline(sim, now, who, id, reason);
+        decline(sim, now, who, id, reason, instead);
     }
 }
 

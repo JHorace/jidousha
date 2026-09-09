@@ -188,30 +188,33 @@ pub fn site_board(
             if let Some(who) = flow.selected
                 && open
             {
-                let wage = wage_offered(flow, lens, site, slot, quest.task);
-                let (verdict, why) = lens.would_take(
-                    tuning,
-                    now,
-                    who,
-                    &crate::asks::preview_posting(
-                        who,
-                        site,
-                        slot,
-                        wage,
-                        lens.standing_rate(quest.task),
-                    ),
-                    crate::sim::JobId { site, slot },
-                );
-                let tone = if verdict.takes() {
+                let job = crate::sim::JobId { site, slot };
+                let reading = reading_for(flow, lens, tuning, now, who, job, quest.task);
+                let tone = if reading.verdict.takes() {
                     theme::REGARD
                 } else {
                     theme::EMBER
                 };
                 panel.text(TextRun::new(
                     at + layout::job::SAYS,
-                    clipped(&format!("{} - {why}", verdict.name()), layout::job::SAYS_W),
+                    clipped(
+                        &format!("{} - {}", reading.verdict.name(), reading.why),
+                        layout::job::SAYS_W,
+                    ),
                     theme::SMALL,
                     tone,
+                ));
+                // **The way one tap deeper** (UI.md §3e): a target of its own
+                // at the end of the row, because the row is the posting and a
+                // control inside a control is what the overlap floor refuses.
+                // Gold while this row's sum is the one on the band.
+                let why = layout::board_why(slot);
+                let lit = flow.breakdown == Some(crate::flow::Breakdown::Job(slot));
+                panel.text(TextRun::new(
+                    crate::ui::centered(why, "?", theme::BODY, why.min.y + 12.0),
+                    "?",
+                    theme::BODY,
+                    if lit { theme::GOLD } else { theme::DIM },
                 ));
                 said = true;
             }
@@ -295,6 +298,32 @@ pub fn site_board(
         theme::FAINT,
     );
     panel
+}
+
+/// **What this row says about this offer** — the verdict, its reason and the
+/// arithmetic behind both, out of the one read.
+///
+/// One call, one comparison: the row's headline and the band's breakdown come
+/// out of the same `answers::Reading`, so a sum that does not produce the
+/// verdict beside it is not a state this surface can reach
+/// (`verify::the_breakdown_is_the_judgement`).
+pub fn reading_for(
+    flow: &Flow,
+    lens: &Lens<'_>,
+    tuning: &Tuning,
+    now: u64,
+    who: usize,
+    job: crate::sim::JobId,
+    task: crate::traits::TaskType,
+) -> crate::answers::Reading {
+    let wage = wage_offered(flow, lens, job.site, job.slot, task);
+    lens.would_take(
+        tuning,
+        now,
+        who,
+        &crate::asks::preview_posting(who, job.site, job.slot, wage, lens.standing_rate(task)),
+        job,
+    )
 }
 
 /// **The wage a tap on this row would offer** — the one answer, read by the

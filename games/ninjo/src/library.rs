@@ -218,7 +218,7 @@ pub fn printable_strings(checks: &mut Checks, baseline: &Conducted) {
     let mut strings: Vec<(String, String)> = Vec::new();
     let mut note = |what: String, text: String| strings.push((what, text));
 
-    for (what, flow, sim, clock) in floors::content_states(baseline) {
+    for (what, flow, sim, clock, camera) in floors::content_states(baseline) {
         for text in screens::content(
             &flow,
             &Lens::on(&sim),
@@ -226,6 +226,7 @@ pub fn printable_strings(checks: &mut Checks, baseline: &Conducted) {
             &clock,
             &Tuning::SHIPPED,
             screens::reading(&clock, &Tuning::SHIPPED, screens::TICK),
+            &camera,
         )
         .all_strings()
         {
@@ -251,6 +252,7 @@ pub fn printable_strings(checks: &mut Checks, baseline: &Conducted) {
             &Tuning::SHIPPED,
             screens::TICK,
         ),
+        &crate::verify::run_camera(crate::verify::HEADLESS_VIEWPORT),
     )
     .all_strings()
     {

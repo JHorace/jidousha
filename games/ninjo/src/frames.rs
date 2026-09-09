@@ -13,7 +13,7 @@ use crate::camera::UiMap;
 use crate::checks::{Checks, near};
 use crate::constants::Tuning;
 use crate::sweep::{Conducted, Shot};
-use crate::{screens, ui, verify};
+use crate::{screens, ui};
 
 /// How many of a row's glyphs were drawn, counted inside the row's own
 /// world-space box.
@@ -39,8 +39,13 @@ pub fn glyph_run(
 /// Every row and icon of the shot's content, found on its frame.
 pub fn judge_chrome(checks: &mut Checks, run: &Conducted, shot: &Shot, what: &str) {
     let tuning = Tuning::SHIPPED;
-    let map = UiMap::for_camera(&verify::run_camera(verify::HEADLESS_VIEWPORT));
-    let view = verify::run_camera(verify::HEADLESS_VIEWPORT).visible_bounds();
+    // **The camera the frame was drawn with**, not the one the run opened at:
+    // since the legibility session the map's words are a function of the zoom
+    // and the chrome's positions are a function of the mapping, so a reader
+    // that assumed the default camera would look for every row in the wrong
+    // box on a photograph taken anywhere else (UI.md §4).
+    let map = UiMap::for_camera(&shot.camera);
+    let view = shot.camera.visible_bounds();
     let grid = crate::grid::grid();
     let panel = screens::content(
         &shot.flow,
@@ -49,6 +54,7 @@ pub fn judge_chrome(checks: &mut Checks, run: &Conducted, shot: &Shot, what: &st
         &shot.clock,
         &tuning,
         screens::reading(&shot.clock, &tuning, screens::TICK),
+        &shot.camera,
     );
     let style_width = |text: &str, size: f32| {
         TextStyle {

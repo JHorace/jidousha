@@ -25,6 +25,7 @@ use jidousha::prelude::*;
 
 use crate::attention;
 use crate::camera::UiMap;
+use crate::checks::greater;
 use crate::clock::{Clock, Rate, stamp};
 use crate::constants::Tuning;
 use crate::flow::Flow;
@@ -263,6 +264,7 @@ pub fn content(
     clock: &Clock,
     tuning: &Tuning,
     now: f32,
+    camera: &Camera,
 ) -> Panel {
     let mut panel = Panel::default();
 
@@ -334,50 +336,14 @@ pub fn content(
         ));
     }
 
-    // --- party strip --------------------------------------------------------
-    // One chip per person since wave 1.1, in two rows of five: a party is a
-    // one-person band, and the chip is one of the four doors onto the one
-    // selection. A lit chip *is* that selection, not a second one.
-    //
-    // **A drawer covers it**, and a strip drawn under one is a row of text
-    // lying across a control somebody can click - which is what the floors
-    // refuse, and what a person reading the drawer sees as a smear.
-    if bare {
-        panel.text(TextRun::new(
-            layout::party_label(),
-            "EVERYONE - click somebody, then a job on a site's board to ask them for it",
-            theme::SMALL,
-            theme::DIM,
-        ));
-        let names = lens.names();
-        for (index, party) in lens.parties().iter().enumerate() {
-            let chip = layout::party_chip(index);
-            panel.icon(IconRun::new(
-                chip.min + Vec2::splat(layout::pchip::PORTRAIT),
-                party.token,
-                layout::pchip::PORTRAIT_SCALE,
-            ));
-            let picked = flow.selected == Some(index);
-            panel.text(TextRun::new(
-                chip.min + Vec2::new(layout::pchip::NAME_X, layout::pchip::NAME_TOP),
-                party.name,
-                theme::SMALL,
-                if picked { theme::GOLD } else { theme::INK },
-            ));
-            panel.text(TextRun::new(
-                chip.min + Vec2::new(layout::pchip::NAME_X, layout::pchip::STATUS_TOP),
-                party.status(&names),
-                theme::SMALL,
-                match party.activity {
-                    Activity::Idle => theme::DIM,
-                    Activity::Working { .. } => theme::REGARD,
-                    _ => theme::INK,
-                },
-            ));
-        }
-    }
+    // **The party strip retired** (the owner's 2026-09-08 decision, UI.md
+    // §3). Its four jobs all had somewhere better to live: selection to the
+    // map, the roster's rows and a faces list; dispatch to the job rows;
+    // who-is-out to the meters band's drill-down; who-is-who to the ROSTER
+    // drawer. The band it held is the map's again, and the breakdown band
+    // borrows it when somebody asks a verdict why (§3e).
 
-    // --- the map's own words: markers' labels and quest counts -------------
+    // --- the map's own words, and what the floor does with them ------------
     // **Under an open drawer the map says nothing**, exactly as the banner and
     // the toast do not: a drawer covers the screen, and a label nobody can
     // read under a scrim is still a row of text lying across a control
@@ -390,32 +356,48 @@ pub fn content(
     // count of what is open there. So while a board is up the map is a picture
     // and the board is the words (UI.md §3c).
     let worded = bare && flow.board.is_none();
-    for (index, spec) in LOCATIONS.iter().enumerate() {
-        let style = theme::text(theme::SMALL, theme::INK);
-        if worded {
-            let width = style.width_of(spec.name);
-            let at = layout::marker_label(spec.tile, width);
-            let mut label = TextRun::new(at, spec.name, theme::SMALL, theme::INK);
-            label.layer = theme::layers::MAP_TEXT;
-            panel.world_text(label);
-        }
-        if worded && index != TOWN {
-            let open = lens.open_quests(index);
-            let line = match open {
-                0 => "dry".to_owned(),
-                1 => "1 quest".to_owned(),
-                more => format!("{more} quests"),
-            };
-            let width = style.width_of(&line);
-            let mut count = TextRun::new(
-                layout::marker_label(spec.tile, width) + Vec2::new(0.0, theme::SMALL + 2.0),
-                line,
-                theme::SMALL,
-                if open == 0 { theme::FAINT } else { theme::DIM },
-            );
-            count.layer = theme::layers::MAP_TEXT;
-            panel.world_text(count);
-        }
+
+    // **The floor governs the labels, and the zoom no longer yields to them**
+    // (UI.md §4, `FINDINGS.md` G-022). A name is drawn in world units and
+    // shrinks as the camera pulls back; until the legibility session the
+    // twelve-pixel floor was a *veto* on zooming out, because the name was
+    // going to be drawn whatever the camera did. Now the label yields: below
+    // the floor no map word is drawn at all, so pulling back costs the names
+    // and never their legibility, and how far out the default camera should
+    // sit is a judgement somebody can now actually make.
+    let legible = !greater(
+        theme::MIN_TEXT,
+        theme::SMALL * layout::DESIGN_H / camera.height,
+    );
+    let style = theme::text(theme::SMALL, theme::INK);
+
+    // **And a label is dropped where it would land on something already
+    // drawn.** Pictures are never dropped and words are, so the occupancy is
+    // filled with every marker and every figure first and then with each
+    // label as it is accepted — in one fixed order, so the same frame always
+    // drops the same labels (`floors::judge_panel` asserts no two survive
+    // overlapping, and `verify::labels_are_deterministic` asserts the set is
+    // the same across two readings of one frame).
+    let mut taken: Vec<Rect> = Vec::new();
+    // **The chrome is already drawn, and it is drawn over the map.** Every
+    // surface that is up has a fill above the map's text band, so a word
+    // under one was never readable — it was only invisible. Seeding the
+    // occupancy with the chrome makes "not drawn" the truth rather than
+    // "drawn where nobody can see it", and it is what stops a name under the
+    // character panel from landing in the same box as the panel's own prose.
+    let ui = UiMap::for_camera(camera);
+    let mut chrome: Vec<Rect> = vec![layout::topbar(), layout::meters_band()];
+    if flow.selected.is_some() {
+        chrome.push(layout::person_panel());
+    }
+    if flow.drilled.is_some() {
+        chrome.push(layout::faces_panel());
+    }
+    if flow.breakdown.is_some() {
+        chrome.push(layout::breakdown_panel());
+    }
+    taken.extend(chrome.into_iter().map(|rect| ui.to_world_rect(rect)));
+    for spec in LOCATIONS {
         let art = Art::for_icon(spec.icon);
         let mut marker = IconRun::new(
             layout::marker_rect(spec.tile).min,
@@ -424,6 +406,7 @@ pub fn content(
         );
         marker.layer = theme::layers::MARKER;
         panel.world_icon(marker);
+        taken.push(layout::marker_rect(spec.tile));
     }
 
     // --- the cast, one figure each, where they stand -----------------------
@@ -434,11 +417,7 @@ pub fn content(
     // it moved into the `Panel` so the floors can judge what is on the map at
     // all (UI.md §6, `floors::judge_figures`), and `ui::draw` culls a
     // world icon to the camera exactly as the token loop did.
-    //
-    // Names ride along because a face with no name is a token, and the whole
-    // point of the people substrate is that these are people — but only at a
-    // doorstep, where a name has a tent under it to belong to. A name pinned
-    // to a moving figure is what the party strip's status line is for.
+    let mut figures: Vec<(usize, Rect)> = Vec::new();
     for (index, person) in lens.people().iter().enumerate() {
         let Some(figure) = where_drawn(lens, index, now) else {
             continue;
@@ -447,19 +426,110 @@ pub fn content(
         let mut drawn = IconRun::new(figure.min, art, art.scale_across(layout::HOME));
         drawn.layer = theme::layers::TOKEN;
         panel.world_icon(drawn);
-        if !worded || !lens.at_home(index) {
-            continue;
+        taken.push(figure);
+        figures.push((index, figure));
+    }
+
+    // The words themselves, in one deterministic order: every site's name and
+    // its open count, then the cast in registry order.
+    let label = |panel: &mut Panel, taken: &mut Vec<Rect>, at: Vec2, text: String, tone| {
+        let mut run = TextRun::new(at, text, theme::SMALL, tone);
+        if taken.iter().any(|rect| run.bounds().overlaps(*rect)) {
+            return;
         }
-        let style = theme::text(theme::SMALL, theme::INK);
-        let width = style.width_of(person.name);
-        let mut label = TextRun::new(
-            layout::figure_label(figure, width),
-            person.name,
-            theme::SMALL,
-            theme::INK,
-        );
-        label.layer = theme::layers::MAP_TEXT;
-        panel.world_text(label);
+        taken.push(run.bounds());
+        run.layer = theme::layers::MAP_TEXT;
+        panel.world_text(run);
+    };
+    if worded && legible {
+        for (index, spec) in LOCATIONS.iter().enumerate() {
+            let width = style.width_of(spec.name);
+            label(
+                &mut panel,
+                &mut taken,
+                layout::marker_label(spec.tile, width),
+                spec.name.to_owned(),
+                theme::INK,
+            );
+            if index == TOWN {
+                continue;
+            }
+            let open = lens.open_quests(index);
+            let line = match open {
+                0 => "dry".to_owned(),
+                1 => "1 quest".to_owned(),
+                more => format!("{more} quests"),
+            };
+            let width = style.width_of(&line);
+            label(
+                &mut panel,
+                &mut taken,
+                layout::marker_label(spec.tile, width) + Vec2::new(0.0, theme::SMALL + 2.0),
+                line,
+                if open == 0 { theme::FAINT } else { theme::DIM },
+            );
+        }
+        // Names ride along because a face with no name is a token, and the
+        // whole point of the people substrate is that these are people — but
+        // only at a doorstep, where a name has a tent under it to belong to
+        // and stays where it was put. A name pinned to a moving figure would
+        // enter and leave the frame as the figure passed things, and where
+        // somebody on the road is going is the roster's column and the
+        // character panel's line.
+        for (index, figure) in &figures {
+            // The selected character's name is chrome, below — one name, one
+            // place, and it is not drawn twice.
+            if !lens.at_home(*index) || flow.selected == Some(*index) {
+                continue;
+            }
+            let Some(person) = lens.people().get(*index) else {
+                continue;
+            };
+            let width = style.width_of(person.name);
+            label(
+                &mut panel,
+                &mut taken,
+                layout::figure_label(*figure, width),
+                person.name.to_owned(),
+                theme::INK,
+            );
+        }
+    }
+
+    // **The selected character's name is chrome** (UI.md §3, §4). It rides
+    // `UiMap` like every other piece of chrome, so it is a constant size on
+    // screen at every zoom and the readability floor cannot take it away:
+    // whatever else the camera does, the person the player is looking at is
+    // named on the map. It obeys the one rule every drawn thing here obeys —
+    // it is not laid across a control it does not label — and where neither
+    // under the figure nor over it is clear, it is not drawn and the panel
+    // that is open on that same person carries the name in full.
+    if worded
+        && let Some(who) = flow.selected
+        && let Some(figure) = where_drawn(lens, who, now)
+    {
+        let name = lens.name(who);
+        let width = style.width_of(name);
+        let controls = crate::floors::controls_for(flow);
+        let under = ui.ui_of(Vec2::new(figure.center().x, figure.max.y)) + Vec2::new(0.0, 2.0);
+        let over = ui.ui_of(Vec2::new(figure.center().x, figure.min.y))
+            - Vec2::new(0.0, theme::SMALL + 2.0);
+        for anchor in [under, over] {
+            let run = TextRun::new(
+                Vec2::new(anchor.x - width * 0.5, anchor.y),
+                name,
+                theme::SMALL,
+                theme::GOLD,
+            );
+            let bounds = run.bounds();
+            if !crate::floors::inside(layout::design(), bounds)
+                || controls.iter().any(|(_, rect)| bounds.overlaps(*rect))
+            {
+                continue;
+            }
+            panel.text(run);
+            break;
+        }
     }
 
     // --- the attention surfaces over the map (GDD §3, wave 0a) -------------
@@ -477,6 +547,12 @@ pub fn content(
             ));
         }
     }
+
+    // --- the breakdown band, whichever surface asked for it (UI.md §3e) ----
+    // Drawn after the surfaces that open it and before the drawers, because
+    // the feed's own entries are one of the two askers and the band lies over
+    // the drawer's footer when they are.
+    panel.absorb(panels::breakdown_band(flow, lens, tuning, clock.minutes));
 
     // --- drawers ------------------------------------------------------------
     if flow.feed_open {
@@ -567,13 +643,6 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
     let flow = ctx.world.resource::<Flow>().clone();
     let clock = *ctx.world.resource::<Clock>();
     let active = *ctx.world.resource::<Tuning>();
-    let sim_parties = Lens::on(ctx.world.resource::<Sim>()).parties().len();
-    // The base screen, as `content` reckons it: no drawer over the map.
-    let bare = !flow.feed_open
-        && !flow.modes_open
-        && !flow.tuner.open
-        && !flow.roster_open
-        && !flow.ledger_open;
 
     let fill = |ctx: &mut DrawCtx, rect: Rect, color: Color, layer: i16| {
         ui::fill(ctx, map.to_world_rect(rect), color, layer);
@@ -582,16 +651,10 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
         ui::border(ctx, map.to_world_rect(rect), color, 2.0 * map.scale, layer);
     };
 
-    // Top bar and party strip.
+    // The top bar. The band under the map used to be the party strip's and
+    // is the map's again (UI.md §3); what fills it now is the breakdown band,
+    // and only while somebody has asked a verdict why.
     fill(ctx, layout::topbar(), theme::BAR, theme::layers::PANEL);
-    if bare {
-        fill(
-            ctx,
-            layout::party_strip(),
-            theme::STRIP,
-            theme::layers::PANEL,
-        );
-    }
     for index in 0..layout::CHIPS {
         let chip = layout::speed_chip(index);
         let active_chip = match index {
@@ -703,24 +766,19 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
         );
         ghost(ctx, &map, layout::person_close());
     }
-    // The strip's own chrome, only where the strip is drawn: a drawer hides
-    // it (`content`), and a row of empty boxes under a drawer is a surface
-    // saying nothing loudly.
-    if bare {
-        for index in 0..sim_parties {
-            let chip = layout::party_chip(index);
-            fill(ctx, chip, theme::PANEL, theme::layers::CARD);
-            border(
-                ctx,
-                chip,
-                if flow.selected == Some(index) {
-                    theme::GOLD
-                } else {
-                    theme::BORDER
-                },
-                theme::layers::CARD,
-            );
-        }
+    // **The breakdown band**, and only while somebody has asked a verdict why
+    // (UI.md §3e). It is drawn over whatever is under it — the map, or the
+    // feed drawer's own footer — so it takes the drawer's band when a feed
+    // entry is what is being explained.
+    if let Some(open) = flow.breakdown {
+        let band = layout::breakdown_panel();
+        let layer = if open.over_a_drawer() {
+            theme::layers::OVERLAY + 2
+        } else {
+            theme::layers::PANEL
+        };
+        fill(ctx, band, theme::PANEL, layer);
+        border(ctx, band, theme::GOLD, layer + 1);
     }
 
     // Drawers.
@@ -874,6 +932,7 @@ pub fn draw_content(ctx: &mut DrawCtx) {
     let sim = ctx.world.resource::<Sim>().clone();
     let grid = ctx.world.resource::<Grid>().clone();
     let now = reading(&clock, &tuning, ctx.world.resource::<Time>().alpha);
-    let panel = content(&flow, &Lens::on(&sim), &grid, &clock, &tuning, now);
+    let camera = *ctx.world.resource::<Camera>();
+    let panel = content(&flow, &Lens::on(&sim), &grid, &clock, &tuning, now, &camera);
     ui::draw(ctx, &panel, &map);
 }

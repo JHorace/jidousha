@@ -148,6 +148,9 @@ impl<'a> Lens<'a> {
     /// **What the scorer would say about a posting**, and why — the job row's
     /// read (`answers::read`).
     ///
+    /// **The verdict, its reason and the arithmetic behind both** — one
+    /// value, because they are one comparison (`answers::Reading`).
+    ///
     /// The one function, called read-only: the row's verdict is produced by
     /// running the same `autonomy::choose` over the same candidates the
     /// rescore would run, so a preview that disagreed with the decision could
@@ -159,8 +162,16 @@ impl<'a> Lens<'a> {
         who: usize,
         posting: &crate::asks::Posting,
         job: crate::sim::JobId,
-    ) -> (crate::answers::Verdict, String) {
+    ) -> crate::answers::Reading {
         crate::answers::read(self.sim, tuning, now, who, posting, job)
+    }
+
+    /// **Which modules this world has** — what a surface has to read before
+    /// it describes machinery, so a trait's explanation can say what is not
+    /// built yet instead of describing it as though it were
+    /// (`traits::explain`'s dormancy clause).
+    pub fn modules(&self) -> crate::modules::ModuleSet {
+        self.sim.modules
     }
 
     /// Whether the asks module is on — what makes the site panel read-only

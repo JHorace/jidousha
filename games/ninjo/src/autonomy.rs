@@ -84,19 +84,119 @@ pub enum Action {
     Idle,
 }
 
-/// One term of a candidate's sum: what it was worth, and the words for it.
+/// **What produced a term** — the row, or the fact.
+///
+/// The attribution a breakdown prints, and the whole reason it cannot rot:
+/// where a trait row is what made a term, the cause carries the row's *id*
+/// and the name is read off the row at the moment it is shown. Rename
+/// `laborer` and the breakdown renames its line with nothing else edited,
+/// which a hand-written string per trait could not do — and which
+/// `traits::vocabulary` is not what asserts it: `compliance::attribution_is_derived`
+/// renames a row in a staged vocabulary and reads the line back.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Cause {
+    /// A fact or a state of the world: desperation, a wage, being asked by
+    /// name. Nothing about the carrier's vocabulary produced it.
+    Fact(String),
+    /// These trait rows produced it, named by their own display names.
+    ///
+    /// Never empty — a term with no row behind it is a [`Cause::Fact`].
+    Rows(Vec<traits::TraitId>),
+}
+
+impl Cause {
+    /// The attribution, as a breakdown prints it — **read off the rows now**,
+    /// never stored.
+    pub fn phrase(&self) -> String {
+        match self {
+            Cause::Fact(what) => what.clone(),
+            Cause::Rows(rows) => rows
+                .iter()
+                .map(|id| id.def().name)
+                .collect::<Vec<_>>()
+                .join(" and "),
+        }
+    }
+
+    /// A fact, said in a `&'static str`'s worth of words.
+    pub fn fact(what: &str) -> Self {
+        Cause::Fact(what.to_owned())
+    }
+}
+
+/// One term of a candidate's sum: what it was worth, what produced it, and
+/// the words for it.
 ///
 /// The reason a character gives is the largest positive term's own sentence —
 /// the verdict-plus-reasons shape giri proved, with the arithmetic beside the
-/// words so a surface can show either and neither can lie.
-#[derive(Clone, Debug)]
+/// words so a surface can show either and neither can lie. **Since the
+/// legibility session the arithmetic is shown**: `cause` is what lets a
+/// breakdown say which of this person's traits moved which number, and
+/// `words` still collapses the lot to one sentence for the places that have
+/// room for one.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Term {
     /// What the term is, as a report names it.
     pub what: &'static str,
     /// What it added (or, negative, took away).
     pub value: i64,
+    /// **What produced it** — the rows, or the fact.
+    pub cause: Cause,
     /// The half-sentence a reason is built from.
     pub because: String,
+}
+
+impl Term {
+    /// One line of a breakdown: what it was worth, and what produced it.
+    ///
+    /// One formatter, so the board's band and the feed's band cannot print
+    /// one sum two ways.
+    pub fn line(&self) -> String {
+        format!(
+            "{}{} {} - {}",
+            if self.value < 0 { "" } else { "+" },
+            self.value,
+            self.what,
+            self.cause.phrase()
+        )
+    }
+}
+
+/// **The arithmetic behind one decision, kept** — what a breakdown shows
+/// (UI.md §3e).
+///
+/// The scorer already returned every term; until the legibility session
+/// everything but the loudest one was thrown away, and "why did Ludo go
+/// there" was unanswerable ten minutes later. This is that return value,
+/// recorded where the decision was recorded, and it is **the same
+/// [`Judged`]** the decision was made from rather than a second reckoning of
+/// it: a breakdown that could disagree with the decision is the failure this
+/// surface is most able to cause.
+///
+/// It is a record and not an input. Nothing in the simulation reads it, no
+/// arithmetic depends on it, and a run that never opens a breakdown is
+/// byte-identical to one that opens every one of them.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Reckoning {
+    /// What was chosen, in words, **as it read at the moment of choosing** —
+    /// the board it names may have been claimed by somebody else since.
+    pub chose: String,
+    /// What it scored.
+    pub score: i64,
+    /// Every term of that score, in the order they were weighed.
+    pub terms: Vec<Term>,
+    /// What beat it, and by what score — filled where this is a reading of an
+    /// offer that was refused, and `None` for a decision that was taken.
+    pub beaten_by: Option<(String, i64)>,
+}
+
+impl Reckoning {
+    /// The sum, added up from the terms rather than trusted: a total that
+    /// does not equal its own terms is the one thing a breakdown must not be
+    /// able to print (`verify::the_breakdown_is_the_judgement`).
+    pub fn total(&self) -> i64 {
+        self.terms.iter().map(|term| term.value).sum()
+    }
 }
 
 /// What the scorer decided, and why.
@@ -182,6 +282,7 @@ pub fn weigh(sim: &Sim, tuning: &Tuning, now: u64, who: usize, action: Action) -
         Action::Idle => terms.push(Term {
             what: "idle",
             value: tuning.idle_floor,
+            cause: Cause::fact("the floor every errand has to beat"),
             because: "nothing worth leaving for".to_owned(),
         }),
         Action::SeekWork { job } => {
@@ -198,22 +299,18 @@ pub fn weigh(sim: &Sim, tuning: &Tuning, now: u64, who: usize, action: Action) -
             terms.push(Term {
                 what: "need",
                 value: person.desperation * tuning.need_weight,
+                cause: Cause::fact(&format!("desperation {}", person.desperation)),
                 because: "needs the money".to_owned(),
             });
             // A want's pressure, where its `favors` field covers this work.
             let pressure = traits::pressure_toward(quest.task, &person.traits);
             if pressure != 0 {
-                let named = person
-                    .traits
-                    .iter()
-                    .map(|id| id.def())
-                    .filter(|def| def.favors.covers(quest.task))
-                    .map(|def| def.name)
-                    .collect::<Vec<_>>()
-                    .join(" and ");
+                let rows = traits::wanting(quest.task, &person.traits);
+                let named = Cause::Rows(rows.clone()).phrase();
                 terms.push(Term {
                     what: "want",
                     value: pressure * tuning.want_weight,
+                    cause: Cause::Rows(rows),
                     because: format!("{named}, and this is {} work", quest.task.id()),
                 });
             }
@@ -223,6 +320,7 @@ pub fn weigh(sim: &Sim, tuning: &Tuning, now: u64, who: usize, action: Action) -
                 terms.push(Term {
                     what: "aptitude",
                     value: apt * tuning.apt_weight,
+                    cause: Cause::Rows(vec![quest.task.aptitude()]),
                     because: format!("good at {} work", quest.task.id()),
                 });
             }
@@ -232,6 +330,7 @@ pub fn weigh(sim: &Sim, tuning: &Tuning, now: u64, who: usize, action: Action) -
                 terms.push(Term {
                     what: "pot",
                     value: pull * quest.pot * tuning.pot_weight / 10,
+                    cause: Cause::Rows(traits::drawn_by_a_pot(&person.traits)),
                     because: format!("the pot is {}g", quest.pot),
                 });
             }
@@ -240,6 +339,7 @@ pub fn weigh(sim: &Sim, tuning: &Tuning, now: u64, who: usize, action: Action) -
                 terms.push(Term {
                     what: "rest",
                     value: -tuning.rest_weight,
+                    cause: Cause::fact("not stopped since the last job"),
                     because: "not stopped since the last job".to_owned(),
                 });
             }
@@ -261,14 +361,59 @@ pub fn weigh(sim: &Sim, tuning: &Tuning, now: u64, who: usize, action: Action) -
                 &person.traits,
             );
             let host = sim.people.get(toward).map_or("somebody", |who| who.name);
+            let raw = sim.shared.regard(who, Regarded::Person(toward));
             terms.push(Term {
                 what: "regard",
                 value: felt * tuning.regard_weight,
+                cause: cause_of_regard(raw, &person.traits, &format!("what they make of {host}")),
                 because: format!("thinks well of {host}"),
             });
         }
     }
     terms
+}
+
+/// **Which rows moved a regard term** — the carrier's own multipliers, on the
+/// side of the ledger this regard is on.
+///
+/// Derived from the fields, like everything else: a row whose bond (or grudge,
+/// where the regard is negative) multiplier is not the neutral one is a row
+/// that changed this number, and a term with no such row behind it is the
+/// bare fact of what somebody thinks. Nothing here asks which trait it is.
+pub fn cause_of_regard(raw: i64, carried: &[traits::TraitId], fact: &str) -> Cause {
+    let rows = traits::weighing_regard(raw, carried);
+    if rows.is_empty() {
+        Cause::fact(fact)
+    } else {
+        Cause::Rows(rows)
+    }
+}
+
+/// **What an action is, in words** — what a breakdown's heading says, and
+/// what the line naming the candidate that beat an offer says.
+///
+/// Reads the world it is given and decides nothing. A [`Reckoning`] stores
+/// the sentence rather than the action, because a job named at the minute it
+/// was weighed may be somebody else's by the time anybody reads the record.
+pub fn describe(sim: &Sim, action: Action) -> String {
+    let job_name = |job: sim::JobId| {
+        let where_ = crate::grid::LOCATIONS[sim::site_location(job.site)].name;
+        let what = sim
+            .sites
+            .get(job.site)
+            .and_then(|site| site.quest(job.slot))
+            .map_or("work", |quest| quest.name);
+        format!("{what} at {where_}")
+    };
+    match action {
+        Action::Idle => "staying home".to_owned(),
+        Action::SeekWork { job } => job_name(job),
+        Action::Answer { job, .. } => format!("the posting for {}", job_name(job)),
+        Action::Socialize { toward } => format!(
+            "visiting {}",
+            sim.people.get(toward).map_or("somebody", |who| who.name)
+        ),
+    }
 }
 
 /// **The one decision function**: the best of these candidates, and the words.
@@ -325,6 +470,18 @@ pub fn words(action: Action, terms: &[Term]) -> String {
     }
 }
 
+/// **The scorer's own return, as a record** — one constructor, called
+/// wherever a decision is kept, so a breakdown is the decision rather than a
+/// second reading of it.
+pub fn reckon(sim: &Sim, judged: &Judged) -> Reckoning {
+    Reckoning {
+        chose: describe(sim, judged.action),
+        score: judged.score,
+        terms: judged.terms.clone(),
+        beaten_by: None,
+    }
+}
+
 /// One character's turn to weigh what to do, fired by the one scheduler.
 ///
 /// **Nobody who is out is rescored**: a character on a job — the player's or
@@ -353,11 +510,14 @@ pub fn rescore(sim: &mut Sim, grid: &Grid, tuning: &Tuning, now: u64, who: usize
         _ => None,
     };
     let reason = judged.reason.clone();
+    // What they did instead, with its arithmetic — the same sum, so a refusal
+    // in the feed can be opened and answers "why not" with what won.
+    let instead = reckon(sim, &judged);
     act(sim, grid, tuning, now, who, judged);
     // **A named ask they did not take is a refusal, and a refusal is said.**
     // One place, so the answer is the same whether the rescore was the
     // cadence's or an ask's own arrival.
-    crate::answers::record_refusals(sim, now, who, taken, &reason);
+    crate::answers::record_refusals(sim, now, who, taken, &reason, &instead);
 }
 
 /// Carry out what the scorer chose — through the player's own dispatch loop.
@@ -371,6 +531,12 @@ pub fn act(sim: &mut Sim, grid: &Grid, tuning: &Tuning, now: u64, who: usize, ju
         || crate::grid::LOCATIONS[crate::grid::TOWN].tile,
         |party| party.tile,
     );
+    // **The sum this decision was made from, kept beside the decision**
+    // (UI.md §3e). The scorer returned every term; until the legibility
+    // session everything but the loudest was thrown away here, and the feed
+    // could say what somebody did and never what it came to. Built before the
+    // board it names can move.
+    let reckoning = reckon(sim, &judged);
     match judged.action {
         // An idle choice is not an occurrence: nothing happened to anybody,
         // and the feed is for things that did (the drift's own precedent).
@@ -388,6 +554,7 @@ pub fn act(sim: &mut Sim, grid: &Grid, tuning: &Tuning, now: u64, who: usize, ju
                 who,
                 format!("took {quest} at {name} - {}", judged.reason),
             );
+            sim.remember(reckoning);
             let _ = sim::dispatch(
                 sim,
                 grid,
@@ -398,7 +565,9 @@ pub fn act(sim: &mut Sim, grid: &Grid, tuning: &Tuning, now: u64, who: usize, ju
                 sim::Motive::chose(judged.reason.clone()),
             );
         }
-        Action::Answer { .. } => crate::answers::agree(sim, grid, tuning, now, who, judged),
+        Action::Answer { .. } => {
+            crate::answers::agree(sim, grid, tuning, now, who, judged, reckoning);
+        }
         Action::Socialize { toward } => {
             let host = sim.people.get(toward).map_or("somebody", |who| who.name);
             sim.emit_action(
@@ -407,6 +576,7 @@ pub fn act(sim: &mut Sim, grid: &Grid, tuning: &Tuning, now: u64, who: usize, ju
                 who,
                 format!("went to see {host} - {}", judged.reason),
             );
+            sim.remember(reckoning);
             let _ = sim::call_on(
                 sim,
                 grid,

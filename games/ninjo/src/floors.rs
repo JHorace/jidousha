@@ -134,12 +134,6 @@ fn base_targets() -> Vec<(String, Rect)> {
             layout::sheet_chip(slot),
         ));
     }
-    for index in 0..Sim::opening(&Tuning::SHIPPED, crate::modules::ModuleSet::ALL)
-        .parties
-        .len()
-    {
-        out.push((format!("party chip {index}"), layout::party_chip(index)));
-    }
     out
 }
 
@@ -296,8 +290,8 @@ pub fn layout_floors(checks: &mut Checks) {
             ),
         );
     }
-    // The chips and handles live in the top bar; the party chips in the
-    // strip. A control outside its band is a control over the map.
+    // The chips and handles live in the top bar. A control outside its band
+    // is a control over the map.
     for index in 0..layout::CHIPS {
         checks.require(
             inside(layout::topbar(), layout::speed_chip(index)),
@@ -305,16 +299,88 @@ pub fn layout_floors(checks: &mut Checks) {
             format!("chip {index} at {:?}", layout::speed_chip(index)),
         );
     }
-    for index in 0..Sim::opening(&Tuning::SHIPPED, crate::modules::ModuleSet::ALL)
-        .parties
-        .len()
-    {
+    // **A trait's explanation fits the two bands that print it**, at the
+    // longest the vocabulary can produce (UI.md §3, the dormancy clause).
+    // Derived from the data rather than eyeballed once: the sentence grew
+    // when the clause landed, and it will grow again when a wave retires one.
+    let longest = crate::traits::TRAITS
+        .iter()
+        .map(|def| crate::traits::explain(def.id, crate::modules::ModuleSet::ALL))
+        .max_by_key(String::len)
+        .unwrap_or_default();
+    let rows = |width: f32| {
+        crate::ui::wrap(&longest, crate::ui::columns(width, theme::SMALL))
+            .lines()
+            .count()
+    };
+    let sheet_rows = rows(layout::sheet::PROSE_W);
+    let sheet_end = layout::person_panel().min.y
+        + layout::sheet::EXPLAIN.y
+        + sheet_rows as f32 * (theme::SMALL + 2.0);
+    checks.require(
+        !greater(sheet_end, layout::person_panel().max.y),
+        "a trait's explanation runs off the character panel that holds it",
+        format!(
+            "{longest:?} wraps to {sheet_rows} rows ending at {sheet_end:.0} and the panel \
+             ends at {:.0}",
+            layout::person_panel().max.y
+        ),
+    );
+    checks.require(
+        rows(layout::ROSTER_EXPLAIN_W) <= layout::ROSTER_EXPLAIN_ROWS,
+        "a trait's explanation does not fit the roster's explanation band",
+        format!(
+            "{longest:?} wraps to {} rows and the band holds {}; the rows below it start at \
+             {:.0}",
+            rows(layout::ROSTER_EXPLAIN_W),
+            layout::ROSTER_EXPLAIN_ROWS,
+            layout::roster_open(0).min.y
+        ),
+    );
+
+    // **The breakdown band holds the widest sum this game can produce**
+    // (UI.md §3e): every term of an answered posting, its total, and the
+    // candidate that beat it. Counted off the scorer rather than remembered.
+    let widest = {
+        let sim = Sim::opening(&Tuning::SHIPPED, crate::modules::ModuleSet::ALL);
+        let mut most = 0usize;
+        for who in 0..sim.people.len() {
+            for site in 0..sim.sites.len() {
+                for slot in sim.sites[site].open_slots() {
+                    let job = crate::sim::JobId { site, slot };
+                    let posting = crate::asks::preview_posting(who, site, slot, 20, 20);
+                    most = most.max(
+                        crate::answers::terms(&sim, &Tuning::SHIPPED, 0, who, &posting, job).len(),
+                    );
+                }
+            }
+        }
+        most
+    };
+    checks.require(
+        widest + 2 <= layout::BREAKDOWN_CELLS,
+        "the breakdown band has no room for the widest sum the scorer can produce",
+        format!(
+            "an answered posting weighs up to {widest} terms and the band holds \
+             {} cells, which has to carry the terms, the total and the candidate that beat it",
+            layout::BREAKDOWN_CELLS
+        ),
+    );
+    for index in 0..layout::BREAKDOWN_CELLS {
+        let cell = Rect::from_min_size(
+            layout::breakdown_cell(index),
+            Vec2::new(layout::BREAKDOWN_CELL_W, theme::SMALL),
+        );
         checks.require(
-            inside(layout::party_strip(), layout::party_chip(index)),
-            "a party chip runs off the strip it belongs to",
-            format!("chip {index} at {:?}", layout::party_chip(index)),
+            inside(layout::breakdown_panel(), cell),
+            "a breakdown cell runs off the band that holds it",
+            format!(
+                "cell {index} is {cell:?} and the band is {:?}",
+                layout::breakdown_panel()
+            ),
         );
     }
+
     // The site markers, in world units: at the reference camera one world
     // unit is one reference pixel, so the marker floor is the target floor.
     for spec in LOCATIONS {
@@ -465,8 +531,8 @@ pub fn uimap_contract(checks: &mut Checks) -> String {
     notes.join(", ")
 }
 
-/// **Map labels are legible at the default zoom** — and what a step out would
-/// cost them (wave 1.2's zoom rider).
+/// **The floor governs the map's words, and the zoom no longer yields to
+/// them** (UI.md §4; `FINDINGS.md` G-022, closed by the legibility session).
 ///
 /// The chrome rides `UiMap` and is a constant size on screen at any zoom, so
 /// the readability floors bind it whatever the camera does. **Map-space text
@@ -475,37 +541,54 @@ pub fn uimap_contract(checks: &mut Checks) -> String {
 /// camera is showing. At the default camera the two are the same number,
 /// which is why every floor in this game is stated in reference pixels.
 ///
-/// The rider asked for the default zoom to step out one level — one notch of
-/// the wheel, `camera::SCROLL_STEP` — so the ten figures stand further apart.
-/// This is the floor that answers it: at one notch out a name reads at 10.7
-/// reference pixels, under the twelve the floors require, so **the zoom is
-/// the thing that yields** and the default stays where it is. The number is
-/// reported rather than remembered, because the day map labels stop being
-/// drawn at `SMALL` the answer changes.
+/// Wave 1.2's rider asked for the default camera to step out one level, and
+/// the floor **refused** it: a name reads at 12.0 pixels at the default and
+/// 10.7 one notch out, so stepping out drew an illegible name and the zoom
+/// was the thing that had to yield. That was the floor used as a veto, and it
+/// was the wrong way round — the name is what should yield, because a name
+/// that is not drawn costs the reader nothing and a name drawn at 10.7 pixels
+/// costs them the map.
+///
+/// So the rule is now: **below the floor, no map word is drawn at all**
+/// (`screens::content`). This function states the two numbers the rule turns
+/// on — where the words survive and where they stop — and asserts the
+/// arithmetic that makes the second one a real boundary rather than a
+/// coincidence: one notch out is under the floor, so a player who zooms out
+/// loses the names and keeps the picture, and the selected character's name,
+/// which is chrome, survives either way.
+///
+/// **What is no longer asserted here is the default camera.** Where it should
+/// sit is a play judgement and the owner's, and the rule is what makes it a
+/// judgement they can actually make.
 pub fn map_legibility(checks: &mut Checks) -> String {
     let at = |height: f32| theme::SMALL * layout::DESIGN_H / height;
     let now = at(camera::DEFAULT_H);
     let stepped = at(camera::DEFAULT_H * camera::SCROLL_STEP);
     checks.require(
         !greater(theme::MIN_TEXT - 0.01, now),
-        "a map label is drawn below the readability floor at the default zoom",
+        "the map draws no words at the camera the game opens at",
         format!(
             "a name under a figure reads at {now:.1} reference pixels at the default camera \
-             height of {:.0}, and the floor is {:.0}",
+             height of {:.0} and the floor is {:.0}, so the opening screen would be a map \
+             with nothing named on it",
             camera::DEFAULT_H,
             theme::MIN_TEXT
         ),
     );
     checks.require(
         greater(theme::MIN_TEXT, stepped),
-        "one notch of zoom out no longer costs a map label its legibility",
+        "the label rule has no boundary inside one notch of the wheel",
         format!(
-            "stepped out one notch the same name reads at {stepped:.1} reference pixels; if \
-             that is now above the floor, the default zoom can step out and this rider is \
-             owed a second look"
+            "stepped out one notch a name reads at {stepped:.1} reference pixels, which is \
+             not under the {:.0}-pixel floor; the drop rule would then never fire within a \
+             notch of the default and the zoomed-out screen state asserts nothing",
+            theme::MIN_TEXT
         ),
     );
-    format!("map labels {now:.1}px at the default zoom, {stepped:.1}px one notch out")
+    format!(
+        "map labels {now:.1}px at the default zoom and {stepped:.1}px one notch out, where the \
+         floor drops them"
+    )
 }
 
 /// The screen states the content floors judge, built from a conducted run.
@@ -514,7 +597,7 @@ pub fn map_legibility(checks: &mut Checks) -> String {
 /// opening screen, the feed after a full run (with a pause reason showing and
 /// the ignored classes revealed), the auto-pause config, a character's panel
 /// beside a drilled meter chip, and the strip carrying a toast.
-pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clock)> {
+pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clock, Camera)> {
     let opening = (
         "the opening screen",
         Flow::default(),
@@ -556,7 +639,11 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
     roster_open.roster_open = true;
     roster_open.explained = crate::traits::TRAITS
         .iter()
-        .max_by_key(|def| crate::traits::explain(def.id).chars().count())
+        .max_by_key(|def| {
+            crate::traits::explain(def.id, crate::modules::ModuleSet::ALL)
+                .chars()
+                .count()
+        })
         .map(|def| def.id);
     // A character selected and a chip drilled: the two panels that share the
     // base screen, both up at once.
@@ -567,7 +654,11 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
     // that fits its widest state fits every other one.
     looked_at.explained = crate::traits::TRAITS
         .iter()
-        .max_by_key(|def| crate::traits::explain(def.id).chars().count())
+        .max_by_key(|def| {
+            crate::traits::explain(def.id, crate::modules::ModuleSet::ALL)
+                .chars()
+                .count()
+        })
         .map(|def| def.id);
     // A toast up, a party picked — the strip's loudest state.
     let mut toasted = played.clone();
@@ -607,61 +698,116 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
     // is a posting somebody heard, agreed to or refused.
     let mut ledger = played.clone();
     ledger.ledger_open = true;
+    // **The two states the legibility session added** (UI.md §3e): a job row's
+    // arithmetic open on the board, and a decision's arithmetic open under
+    // the feed — the band's two placements, both judged.
+    let mut explained = board.clone();
+    explained.breakdown = Some(crate::flow::Breakdown::Job(0));
+    let mut explained_entry = feed_open.clone();
+    explained_entry.breakdown = baseline
+        .sim
+        .events
+        .iter()
+        .position(|event| event.judged.is_some())
+        .map(crate::flow::Breakdown::Entry);
+    let at = verify::run_camera(verify::HEADLESS_VIEWPORT);
+    // **And the map one notch further out than the default**, which the label
+    // rule now permits: below the floor the map's words drop out rather than
+    // shrinking, and the one that survives is the selected character's, which
+    // is chrome (UI.md §4).
+    let out = Camera {
+        height: camera::DEFAULT_H * camera::SCROLL_STEP,
+        ..at
+    };
+    let picked = Flow {
+        selected: Some(0),
+        ..Flow::default()
+    };
     vec![
-        opening,
+        (opening.0, opening.1, opening.2, opening.3, at),
         (
             "the ended run with the feed open, mid-pause",
             feed_open,
             paused_sim.clone(),
             ended_clock,
+            at,
         ),
         (
             "the auto-pause config",
             modes_open,
             paused_sim.clone(),
             ended_clock,
+            at,
         ),
         (
             "the roster with an explanation open",
             roster_open,
             baseline.sim.clone(),
             ended_clock,
+            at,
         ),
         (
             "a character looked at, beside a drilled chip",
             looked_at,
             baseline.sim.clone(),
             ended_clock,
+            at,
         ),
         (
-            "the strip with a toast and a pick",
+            "a toast up and somebody picked",
             toasted,
             baseline.sim.clone(),
             ended_clock,
+            at,
         ),
         (
             "a site's job board, read by a selected character",
             board,
             baseline.sim.clone(),
             ended_clock,
+            at,
+        ),
+        (
+            "a job row's arithmetic, open under the board",
+            explained,
+            baseline.sim.clone(),
+            ended_clock,
+            at,
+        ),
+        (
+            "a decision's arithmetic, open under the feed",
+            explained_entry,
+            baseline.sim.clone(),
+            ended_clock,
+            at,
         ),
         (
             "the job board with a wage stepped and the fit chip open",
             offering,
             baseline.sim.clone(),
             ended_clock,
+            at,
         ),
         (
             "the postings ledger, with the standing rates beside it",
             ledger,
             baseline.sim.clone(),
             ended_clock,
+            at,
         ),
         (
             "a site's job board with nobody selected",
             unread,
             baseline.sim.clone(),
             ended_clock,
+            at,
+        ),
+        (
+            "the settlement one notch of zoom out, with somebody picked",
+            picked,
+            Sim::opening(&Tuning::SHIPPED, crate::modules::ModuleSet::ALL),
+            Clock::opening(),
+            out,
         ),
     ]
 }
@@ -672,7 +818,7 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
 pub fn content_floors(checks: &mut Checks, baseline: &Conducted) {
     let tuning = Tuning::SHIPPED;
     let grid = crate::grid::grid();
-    for (what, flow, sim, clock) in content_states(baseline) {
+    for (what, flow, sim, clock, camera) in content_states(baseline) {
         let panel = screens::content(
             &flow,
             &Lens::on(&sim),
@@ -680,6 +826,7 @@ pub fn content_floors(checks: &mut Checks, baseline: &Conducted) {
             &clock,
             &tuning,
             screens::reading(&clock, &tuning, screens::TICK),
+            &camera,
         );
         judge_panel(checks, &panel, what, &controls_for(&flow));
         judge_cast(checks, &panel, &Lens::on(&sim), &clock, what);
@@ -832,6 +979,7 @@ pub fn judge_tuner_screen(checks: &mut Checks, drawer: &crate::restart::DrawerRu
             &Clock::opening(),
             &drawer.applied_active,
             screens::reading(&Clock::opening(), &drawer.applied_active, screens::TICK),
+            &verify::run_camera(verify::HEADLESS_VIEWPORT),
         );
         judge_panel(checks, &panel, what, &controls_for(flow));
     }
@@ -845,6 +993,7 @@ pub fn judge_tuner_screen(checks: &mut Checks, drawer: &crate::restart::DrawerRu
         &Clock::opening(),
         &drawer.pending_active,
         screens::reading(&Clock::opening(), &drawer.pending_active, screens::TICK),
+        &verify::run_camera(verify::HEADLESS_VIEWPORT),
     );
     judge_panel(
         checks,
@@ -870,7 +1019,7 @@ pub fn judge_tuner_screen(checks: &mut Checks, drawer: &crate::restart::DrawerRu
 /// figure-sized quad the screen cannot account for is somebody drawn twice,
 /// and two quads on one corner is somebody drawn on top of themselves.
 pub fn judge_figures(checks: &mut Checks, run: &Conducted, shot: &Shot, what: &str) {
-    let camera = verify::run_camera(verify::HEADLESS_VIEWPORT);
+    let camera = shot.camera;
     let map = UiMap::for_camera(&camera);
     let view = camera.visible_bounds();
     let panel = screens::content(
@@ -880,6 +1029,7 @@ pub fn judge_figures(checks: &mut Checks, run: &Conducted, shot: &Shot, what: &s
         &shot.clock,
         &Tuning::SHIPPED,
         screens::reading(&shot.clock, &Tuning::SHIPPED, screens::TICK),
+        &shot.camera,
     );
     judge_cast(checks, &panel, &Lens::on(&shot.sim), &shot.clock, what);
     // Every corner the screen says a figure-weight picture stands at: map

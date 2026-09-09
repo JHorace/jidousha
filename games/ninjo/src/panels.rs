@@ -129,6 +129,19 @@ pub fn feed_drawer(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning) -> Panel {
             theme::SMALL,
             text_tone,
         ));
+        // **One tap deeper, on a decision already made** (UI.md §3e). Only on
+        // the entries that recorded one: a `?` over an arrival or a payout
+        // would be a target promising arithmetic that never existed.
+        if event.judged.is_some() {
+            let why = layout::feed_why(row);
+            let lit = flow.breakdown == Some(crate::flow::Breakdown::Entry(entry.index));
+            panel.text(TextRun::over(
+                crate::ui::centered(why, "?", theme::BODY, why.min.y + 12.0),
+                "?",
+                theme::BODY,
+                if lit { theme::GOLD } else { theme::DIM },
+            ));
+        }
     }
     if entries.is_empty() {
         panel.text(TextRun::over(
@@ -142,21 +155,148 @@ pub fn feed_drawer(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning) -> Panel {
     // The notices band: what the *player* did, and what bounced. Kept apart
     // from the feed on purpose — the feed is the world's, and mixing the two
     // would be the second list this surface exists not to have.
-    panel.text(TextRun::over(
-        layout::notices_title(),
-        "NOTICES - speed, refused asks, rates, restarts",
-        theme::SMALL,
-        theme::FAINT,
-    ));
-    for (index, line) in flow.log.iter().take(layout::NOTICE_ROWS).enumerate() {
+    //
+    // **The band at the foot of the drawer is the breakdown's while a
+    // breakdown is open** (UI.md §3e): the notices are two rows of text and
+    // the arithmetic is what the player just asked for, so the notices step
+    // aside rather than being drawn under it. Nothing is lost — a notice is
+    // the last thing the *player* did, and it is still there when the band is
+    // put away.
+    if flow.breakdown.is_none() {
         panel.text(TextRun::over(
-            layout::notice_row(index),
-            clipped(line, 900.0),
+            layout::notices_title(),
+            "NOTICES - speed, refused asks, rates, restarts",
             theme::SMALL,
-            theme::DIM,
+            theme::FAINT,
+        ));
+        for (index, line) in flow.log.iter().take(layout::NOTICE_ROWS).enumerate() {
+            panel.text(TextRun::over(
+                layout::notice_row(index),
+                clipped(line, 900.0),
+                theme::SMALL,
+                theme::DIM,
+            ));
+        }
+    }
+    panel
+}
+
+/// **The breakdown band**: the arithmetic behind one verdict (UI.md §3e).
+///
+/// One band, one renderer, two askers — a job row asking about an offer the
+/// player has not made yet, and a feed entry asking about a decision already
+/// made. Both hand it an `autonomy::Reckoning`, and the job row's comes out of
+/// the **same** `answers::Reading` that produced the verdict on the row while
+/// the entry's is the `Judged` the scorer returned at the moment it decided.
+/// Neither is a second computation, which is the whole of why a breakdown
+/// cannot disagree with the decision it explains.
+///
+/// Empty when nothing is open, and empty rather than apologetic when a feed
+/// entry carries no reckoning: the `?` on such a row bounces instead of
+/// opening (`flow.rs`), so this state is unreachable from a click.
+pub fn breakdown_band(
+    flow: &Flow,
+    lens: &Lens<'_>,
+    tuning: &crate::constants::Tuning,
+    now: u64,
+) -> Panel {
+    let mut panel = Panel::default();
+    let Some(open) = flow.breakdown else {
+        return panel;
+    };
+    let over = open.over_a_drawer();
+    let row = |at: Vec2, text: String, colour: Color| {
+        if over {
+            TextRun::over(at, text, theme::SMALL, colour)
+        } else {
+            TextRun::new(at, text, theme::SMALL, colour)
+        }
+    };
+    let Some((heading, reckoning)) = read_breakdown(flow, lens, tuning, now, open) else {
+        return panel;
+    };
+    panel.text(row(
+        layout::breakdown_title(),
+        clipped(&heading, layout::BREAKDOWN_TITLE_W),
+        theme::GOLD,
+    ));
+    // Every term, then the total, then — where the verdict is a refusal — what
+    // beat it. The cells run down the first column and then down the second,
+    // and the band holds one more than the widest sum this game can produce.
+    let mut lines: Vec<(String, Color)> = reckoning
+        .terms
+        .iter()
+        .map(|term| {
+            (
+                term.line(),
+                if term.value < 0 {
+                    theme::EMBER
+                } else {
+                    theme::INK
+                },
+            )
+        })
+        .collect();
+    lines.push((format!("= {} in all", reckoning.total()), theme::GOLD));
+    if let Some((rival, score)) = &reckoning.beaten_by {
+        lines.push((format!("{rival} scores {score}"), theme::EMBER));
+    }
+    for (index, (line, colour)) in lines.into_iter().take(layout::BREAKDOWN_CELLS).enumerate() {
+        panel.text(row(
+            layout::breakdown_cell(index),
+            clipped(&line, layout::BREAKDOWN_CELL_W),
+            colour,
         ));
     }
     panel
+}
+
+/// **What is being explained, and the sum behind it** — the one place the two
+/// askers meet.
+///
+/// `None` where the surface that opened the band has since gone (the board
+/// closed under it, the selection put down, an entry past the feed's cap): a
+/// band explaining nothing draws nothing.
+fn read_breakdown(
+    flow: &Flow,
+    lens: &Lens<'_>,
+    tuning: &crate::constants::Tuning,
+    now: u64,
+    open: crate::flow::Breakdown,
+) -> Option<(String, crate::autonomy::Reckoning)> {
+    match open {
+        crate::flow::Breakdown::Job(slot) => {
+            let (site, who) = (flow.board?, flow.selected?);
+            let quest = lens.site(site)?.quest(slot)?;
+            let job = crate::sim::JobId { site, slot };
+            let reading = crate::board::reading_for(flow, lens, tuning, now, who, job, quest.task);
+            // The board's own title says which site, so the heading names the
+            // row and not the journey: a heading clipped at "the posting for
+            // the cry..." is a heading that spent its width on the framing.
+            Some((
+                format!(
+                    "WHY - {} {} {}",
+                    lens.name(who),
+                    reading.verdict.name(),
+                    quest.name
+                ),
+                reading.reckoning,
+            ))
+        }
+        crate::flow::Breakdown::Entry(index) => {
+            let event = lens.events().get(index)?;
+            let reckoning = event.judged.clone()?;
+            Some((
+                format!(
+                    "WHY - {} - {} chose {}",
+                    crate::clock::stamp(event.minute),
+                    lens.party(event.party).map_or("you", |party| party.name),
+                    reckoning.chose
+                ),
+                reckoning,
+            ))
+        }
+    }
 }
 
 /// A feed row's four colours: dimmed throughout when the row is only visible
@@ -427,7 +567,7 @@ fn person_panel(flow: &Flow, lens: &Lens<'_>, who: usize) -> Panel {
     if let Some(id) = flow.explained {
         panel.block(
             origin + sheet::EXPLAIN,
-            &wrap(&crate::traits::explain(id), prose),
+            &wrap(&crate::traits::explain(id, lens.modules()), prose),
             theme::SMALL,
             theme::GOLD,
         );
@@ -478,15 +618,31 @@ pub fn roster_drawer(flow: &Flow, lens: &Lens<'_>) -> Panel {
         theme::DIM,
     ));
     let (explanation, tone) = match flow.explained {
-        Some(id) => (crate::traits::explain(id), theme::GOLD),
+        Some(id) => (crate::traits::explain(id, lens.modules()), theme::GOLD),
         None => ("tap a trait chip for what it does".to_owned(), theme::FAINT),
     };
-    panel.text(TextRun::over(
-        layout::roster_explain(),
-        clipped(&explanation, layout::ROSTER_EXPLAIN_W),
-        theme::SMALL,
-        tone,
-    ));
+    // **Two rows, not one clipped one.** A trait's explanation now says what
+    // the row moves *and* what nothing yet does with it (`traits::explain`'s
+    // dormancy clause), and the clause is the half a one-row clip was eating:
+    // the drawer's rows start at 100 and the band opens at 72, so two rows is
+    // what there is and `floors::layout_floors` asserts the longest
+    // explanation the vocabulary can produce fits in them.
+    let wrapped = wrap(
+        &explanation,
+        columns(layout::ROSTER_EXPLAIN_W, theme::SMALL),
+    );
+    for (index, line) in wrapped
+        .lines()
+        .take(layout::ROSTER_EXPLAIN_ROWS)
+        .enumerate()
+    {
+        panel.text(TextRun::over(
+            layout::roster_explain() + Vec2::new(0.0, index as f32 * (theme::SMALL + 2.0)),
+            line,
+            theme::SMALL,
+            tone,
+        ));
+    }
     for who in 0..lens.people().len().min(layout::ROSTER_ROWS) {
         let open = layout::roster_open(who);
         if let Some(person) = lens.person(who) {

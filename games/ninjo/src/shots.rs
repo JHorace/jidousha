@@ -193,6 +193,7 @@ pub fn judge(checks: &mut Checks, run: &Conducted, tuning: &Tuning) {
             &shot.clock,
             tuning,
             screens::reading(&shot.clock, tuning, screens::TICK),
+            &shot.camera,
         );
         let says = |text: &str| panel.runs.iter().any(|run| run.text.contains(text));
         let missing: Vec<&str> = (0..lens.people().len())
@@ -229,13 +230,16 @@ pub fn judge(checks: &mut Checks, run: &Conducted, tuning: &Tuning) {
         if let Some(id) = shot.flow.explained {
             checks.require(
                 says(
-                    &crate::traits::explain(id)
+                    &crate::traits::explain(id, shot.sim.modules)
                         .chars()
                         .take(24)
                         .collect::<String>(),
                 ),
                 "the roster's explanation is not the line the trait row derives",
-                format!("{id:?} explains as {:?}", crate::traits::explain(id)),
+                format!(
+                    "{id:?} explains as {:?}",
+                    crate::traits::explain(id, shot.sim.modules)
+                ),
             );
         }
         frames::judge_chrome(checks, run, shot, "the roster");
@@ -270,6 +274,7 @@ pub fn judge(checks: &mut Checks, run: &Conducted, tuning: &Tuning) {
                 &shot.clock,
                 tuning,
                 screens::reading(&shot.clock, tuning, screens::TICK),
+                &shot.camera,
             );
             let says = |text: &str| panel.runs.iter().any(|run| run.text.contains(text));
             checks.require(
@@ -388,6 +393,7 @@ fn judge_board(checks: &mut Checks, run: &Conducted, tuning: &Tuning, grid: &cra
             &shot.clock,
             tuning,
             screens::reading(&shot.clock, tuning, screens::TICK),
+            &shot.camera,
         );
         let says = |text: &str| panel.runs.iter().any(|row| row.text.contains(text));
         let Some(site) = shot.flow.board else {
@@ -469,6 +475,7 @@ fn judge_board(checks: &mut Checks, run: &Conducted, tuning: &Tuning, grid: &cra
             &shot.clock,
             tuning,
             screens::reading(&shot.clock, tuning, screens::TICK),
+            &shot.camera,
         );
         let says = |text: &str| panel.runs.iter().any(|row| row.text.contains(text));
         let held: Vec<(usize, usize)> = shot
@@ -550,6 +557,207 @@ fn judge_board(checks: &mut Checks, run: &Conducted, tuning: &Tuning, grid: &cra
             "the conductor's photo schedule names minute 520".to_owned(),
         );
     }
+}
+
+/// **The arithmetic, photographed** (UI.md §3e) — both placements, and each
+/// one asserted against the reckoning the band was built from.
+///
+/// The picture the session exists for is the refusal one: a row somebody will
+/// not take, with every term of the sum, what produced each, the total, and
+/// the job that beat it. A screenshot of a band whose numbers nobody checked
+/// is a screenshot that quietly stops being the scorer's.
+pub fn judge_breakdowns(checks: &mut Checks, run: &Conducted, tuning: &Tuning) {
+    let grid = crate::grid::grid();
+    let band = |shot: &crate::sweep::Shot| -> Vec<String> {
+        screens::content(
+            &shot.flow,
+            &lens::Lens::on(&shot.sim),
+            &grid,
+            &shot.clock,
+            tuning,
+            screens::reading(&shot.clock, tuning, screens::TICK),
+            &shot.camera,
+        )
+        .runs
+        .iter()
+        .filter(|run| run.at.y >= layout::breakdown_panel().min.y)
+        .map(|run| run.text.clone())
+        .collect()
+    };
+    // --- a refused job row, with its sum open -------------------------------
+    if let Some(shot) = run.photo("breakdown") {
+        let rows = band(shot);
+        checks.require(
+            matches!(shot.flow.breakdown, Some(crate::flow::Breakdown::Job(_)))
+                && shot.flow.board.is_some()
+                && shot.flow.selected.is_some(),
+            "the breakdown photograph was taken with no job row's arithmetic open",
+            format!(
+                "the band reads {:?}, the board is {:?} and the selection {:?}",
+                shot.flow.breakdown, shot.flow.board, shot.flow.selected
+            ),
+        );
+        checks.require(
+            rows.iter().any(|row| row.contains("would refuse")),
+            "the breakdown photograph is not of a refusal",
+            format!(
+                "the band's heading reads {:?}; the picture is for the thing a player cannot \
+                 account for, which is a no",
+                rows.first()
+            ),
+        );
+        checks.require(
+            rows.iter().any(|row| row.starts_with("= ")),
+            "the breakdown photograph shows terms with no total under them",
+            format!("the band reads {rows:?}"),
+        );
+        checks.require(
+            rows.iter().any(|row| row.contains("scores")),
+            "a refusal's breakdown does not name the candidate that beat it",
+            format!("the band reads {rows:?}"),
+        );
+        frames::judge_chrome(checks, run, shot, "a refused row's arithmetic");
+        floors::judge_frame_floor(checks, run.font, &shot.frame, "a refused row's arithmetic");
+    } else {
+        checks.require(
+            false,
+            "the job row's breakdown was never photographed",
+            "the conductor's photo schedule names minute 526".to_owned(),
+        );
+    }
+    // --- and the same sum for a decision already made -----------------------
+    if let Some(shot) = run.photo("feedwhy") {
+        let rows = band(shot);
+        let Some(crate::flow::Breakdown::Entry(index)) = shot.flow.breakdown else {
+            checks.require(
+                false,
+                "the feed breakdown photograph was taken with no decision's arithmetic open",
+                format!("the band reads {:?}", shot.flow.breakdown),
+            );
+            return;
+        };
+        checks.require(
+            shot.flow.feed_open,
+            "the feed breakdown photograph was taken with the drawer shut",
+            format!("feed_open is {}", shot.flow.feed_open),
+        );
+        let recorded = shot
+            .sim
+            .events
+            .get(index)
+            .and_then(|event| event.judged.clone());
+        let Some(reckoning) = recorded else {
+            checks.require(
+                false,
+                "the feed breakdown was opened on an entry that recorded no decision",
+                format!(
+                    "entry {index} of {} carries no reckoning",
+                    shot.sim.events.len()
+                ),
+            );
+            return;
+        };
+        // The band on the frame is the record: term for term, and the total.
+        for term in &reckoning.terms {
+            checks.require(
+                rows.iter().any(|row| *row == term.line()),
+                "a recorded term is missing from the band that explains its decision",
+                format!("{:?} is not among {rows:?}", term.line()),
+            );
+        }
+        checks.require(
+            rows.iter()
+                .any(|row| *row == format!("= {} in all", reckoning.total())),
+            "the feed breakdown's total is not the total of the decision it explains",
+            format!(
+                "the record totals {} and the band reads {rows:?}",
+                reckoning.total()
+            ),
+        );
+        frames::judge_chrome(checks, run, shot, "a decision's arithmetic in the feed");
+        floors::judge_frame_floor(
+            checks,
+            run.font,
+            &shot.frame,
+            "a decision's arithmetic in the feed",
+        );
+    } else {
+        checks.require(
+            false,
+            "the feed's breakdown was never photographed",
+            "the conductor's photo schedule names minute 542".to_owned(),
+        );
+    }
+}
+
+/// **The settlement one notch of the wheel out** (UI.md §4).
+///
+/// The picture the label rule exists to make possible, and the one the owner
+/// judges the default camera against. What it asserts is the rule: the map's
+/// words are gone, the pictures are not, and the selected character is still
+/// named — because that name is chrome and no zoom reaches it.
+pub fn judge_zoomed(checks: &mut Checks, run: &Conducted, tuning: &Tuning) {
+    let Some(shot) = run.photo("zoomed") else {
+        checks.require(
+            false,
+            "the zoomed-out settlement was never photographed",
+            "the conductor's photo schedule names tick 20 of the zoomed session".to_owned(),
+        );
+        return;
+    };
+    let lens = lens::Lens::on(&shot.sim);
+    let panel = screens::content(
+        &shot.flow,
+        &lens,
+        &crate::grid::grid(),
+        &shot.clock,
+        tuning,
+        screens::reading(&shot.clock, tuning, screens::TICK),
+        &shot.camera,
+    );
+    checks.require(
+        shot.camera.height > crate::camera::DEFAULT_H,
+        "the zoomed photograph was taken at the default camera",
+        format!(
+            "it was taken at height {:.1} and the default is {:.0}; the wheel notch did not \
+             reach the camera",
+            shot.camera.height,
+            crate::camera::DEFAULT_H
+        ),
+    );
+    checks.require(
+        panel.world_runs.is_empty() && !panel.world_icons.is_empty(),
+        "the zoomed photograph does not show the label rule it was taken for",
+        format!(
+            "{} map words and {} map pictures at height {:.1}",
+            panel.world_runs.len(),
+            panel.world_icons.len(),
+            shot.camera.height
+        ),
+    );
+    let Some(who) = shot.flow.selected else {
+        checks.require(
+            false,
+            "the zoomed photograph was taken with nobody selected",
+            "the one word that survives the zoom is the selected character's name".to_owned(),
+        );
+        return;
+    };
+    checks.require(
+        panel.runs.iter().any(|row| row.text == lens.name(who)),
+        "the selected character is not named on the zoomed-out map",
+        format!(
+            "{} is selected and no chrome row carries their name",
+            lens.name(who)
+        ),
+    );
+    frames::judge_chrome(checks, run, shot, "the settlement one notch out");
+    floors::judge_frame_floor(
+        checks,
+        run.font,
+        &shot.frame,
+        "the settlement one notch out",
+    );
 }
 
 /// The first few words of a reason - what survives the roster's own clip.
