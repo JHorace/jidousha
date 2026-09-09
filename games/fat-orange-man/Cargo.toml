@@ -1,0 +1,20 @@
+[package]
+name = "fat-orange-man"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+# The facade is the whole API a game gets (ADR-0038). Naming any other
+# `jidousha-*` crate, at any depth, fails `tools/check-game-deps`.
+#
+# Phase 2 (the SpacetimeDB backend, GDD §6) adds an optional `spacetimedb-sdk`
+# dependency and an `online` feature here, with its `cargo tree` delta recorded
+# in that commit (agent-practices §5.8). Phase 1 carries no such dependency: the
+# state seam it needs is `src/backend.rs`'s method surface, not a dependency
+# line. See FINDINGS.md G-027 / G-028.
+[dependencies]
+jidousha = { path = "../../crates/jidousha" }
+
+[lints]
+workspace = true
