@@ -14,6 +14,12 @@ no `docs/internal/`; no ADR but 0038 (named by the workflow) and a read of
 skill, `tools/verify`, `tools/build-web`, `tools/serve-web`, `clippy.toml` and
 the root `Cargo.toml` were read as workflow, not as engine internals.
 
+**Phase 2** additionally read the `spacetimedb` / `spacetimedb-sdk` 2.6.0 crate
+source in `~/.cargo/registry` (third-party, not engine code) to settle the
+`#[table(accessor = …)]` macro syntax and the `DbConnectionBuilder` method
+names, and the `spacetime generate`d `module_bindings/` it wrote into this
+crate. Still no engine `src/`, no `docs/internal/`, no unnamed ADR.
+
 ---
 
 ## G-024 — the controllers document has no shape for a game with no target
@@ -86,23 +92,59 @@ other.
 
 ---
 
-## Phase 2 (SpacetimeDB)
+## Phase 2 (SpacetimeDB) — built and exercised
 
 The GDD's architecture (§6) is server-authoritative real-time multiplayer on
 SpacetimeDB. Phase 1 built the whole loop locally with the backend seam
-(`backend.rs`) in place for the online arm. Two open questions belong to Phase 2:
+(`backend.rs`). Phase 2 landed the live arm:
 
-- **G-027 (open, Phase 2):** `spacetimedb-sdk` 2.10 resolves and builds
-  natively from this registry, but its `browser` feature pins `web-sys =0.3.77`
-  / a `wasm-bindgen` set that has to be reconciled against the engine's own web
-  stack (`wasm-bindgen` 0.2.127 in `Cargo.lock`). Whether the SDK's Rust
-  client runs at all on `wasm32-unknown-unknown` inside a `tools/build-web`
-  bundle is unresolved — and if it does not, the online arm is native-only and
-  the deployed web build stays on the local bots.
-- **G-028 (open, Phase 2):** the `spacetime` CLI on this machine is v2.6.0
-  while the SDK is v2.10.0. A local instance + published reducer module is
-  needed before the online arm can be exercised end to end. The reducer module
-  is not a Jidousha game and lives outside this workspace.
+- **Reducer module** `../../../fat-orange-man/server/` (outside this workspace —
+  server code, not a game). `player` + `global_state` tables, `feed` /
+  `set_display_name` / `identity_connected` / `init` reducers, pinned to
+  `spacetimedb = "=2.6.0"` to match the local `spacetime` CLI. Built with
+  `spacetime build`, published to a local instance.
+- **Client** `src/online.rs` behind `--features online` + `--online` (native
+  only). `Backend` is now an enum — `Local(Local)` / `Online(Box<Online>)` — and
+  the callers in `sim.rs` still never branch on which. `Online` connects,
+  subscribes to both tables, calls `feed` on a tap, keeps the client cache
+  current on a background thread, and reconciles the optimistic count against
+  the server's echo.
+- **Exercised** headless via `--online --smoke` (no display on this machine):
+  connect → three taps → `global_state` climbs by three on the server and in the
+  client's subscription. `spacetime sql` confirms it independently.
+
+- **G-027 (resolved — the online arm is native-only):** `spacetimedb-sdk`'s wasm
+  path needs its `browser` feature, whose `web-sys`/`wasm-bindgen` pins fight the
+  engine's own web stack. Rather than force that, the SDK dependency is
+  `cfg(not(target_arch = "wasm32"))` and every `online` code path is
+  `#[cfg(all(feature = "online", not(target_arch = "wasm32")))]`. Result: all
+  four configs compile (default native/wasm, online native/wasm), and a web
+  build with `--features online` **degrades to the seeded bots** rather than
+  failing. Wiring the real backend into the deployed page is future work and
+  starts by resolving that `wasm-bindgen` version fight.
+- **G-028 (resolved):** pinned `spacetimedb = "=2.6.0"` / `spacetimedb-sdk =
+  "=2.6.0"` to match the CLI's 2.6.0 ABI; `spacetime start` runs a local
+  standalone instance fine on this machine; module published and the smoke test
+  passes end to end.
+- **G-029 (docs, open):** the engine documents have **no shape for a backend
+  that is not a pure function of the tick** — by design (`docs/api/` is the
+  deterministic-single-process API), but the `make-game` reading fence assumes
+  every question is answered there. Nothing said whether a networked, background-
+  threaded client can be an engine `Resource` (it can — `spacetimedb_sdk`'s
+  `DbConnection` is `Send + Sync`), where its pump belongs (an `Update` system
+  calling `advance`), or how the optimistic-then-reconciled pattern from GDD §4.1
+  maps onto `fn(&mut World)`. Worked it out from the SDK's own docs and the
+  engine's resource model; recorded so the next networked prototype inherits a
+  starting point. Half the game's decision (the seam shape) and half a gap the
+  documents could name in one paragraph: "the engine is deterministic and
+  single-process on purpose; a game that wants a network backend puts the
+  connection in a `Resource`, pumps it from one `Update` system, and keeps its
+  `--verify` mode on a local deterministic stand-in."
+- **G-030 (the game's own):** `Backend` as an enum trips
+  `clippy::large_enum_variant` once `Online` (a `DbConnection` plus handles) is a
+  variant — the network arm is an order of magnitude bigger than `Local`. Boxed
+  it (`Online(Box<Online>)`); the delegating `match` arms are unchanged because
+  `Box` auto-derefs. A note for any prototype that grows a second heavy backend.
 
 ## Environment note (resolved mid-session)
 

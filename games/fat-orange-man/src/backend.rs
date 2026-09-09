@@ -151,41 +151,60 @@ impl Local {
 
 /// The source of truth behind `FeedState`.
 ///
-/// A struct rather than an enum while there is one source; Phase 2 promotes it
-/// (`Local` / `Online`) without the callers in `sim.rs` changing, because they
-/// only ever call the three methods below.
-pub struct Backend {
-    local: Local,
+/// Two arms, and the callers in `sim.rs` never branch on which: they call
+/// `feed` / `advance` / `snapshot` and nothing else. `Local` is seeded bots,
+/// replayable, and what every gate judges. `Online` (Phase 2, `--features
+/// online` + `--online`) is a live SpacetimeDB instance and is not replayable —
+/// which is the whole reason it is a feature.
+pub enum Backend {
+    /// Seeded bots. The default, and the only arm a `--verify` run uses.
+    Local(Local),
+    /// A live SpacetimeDB instance (GDD §6). Native only, opt-in.
+    #[cfg(all(feature = "online", not(target_arch = "wasm32")))]
+    Online(Box<crate::online::Online>),
 }
 
 impl Backend {
     /// Build the local backend, seeding its field from the world's `Rng`.
     pub fn local(rng: &mut Rng) -> Self {
-        Self {
-            local: Local::seeded(rng),
-        }
+        Self::Local(Local::seeded(rng))
     }
 
     /// Register one tap. Optimistic: applied to the local count at once (GDD
-    /// §4.1). `Local` also confirms it here, so nothing is ever left pending.
+    /// §4.1). `Local` confirms it in the same call; `Online` holds it pending
+    /// until the server echoes it back.
     pub fn feed(&mut self) {
-        self.local.you.confirmed += 1;
+        match self {
+            Self::Local(local) => local.you.confirmed += 1,
+            #[cfg(all(feature = "online", not(target_arch = "wasm32")))]
+            Self::Online(online) => online.feed(),
+        }
     }
 
-    /// Advance the backend by one tick. For `Local` the bots are a pure
-    /// function of the tick, so this is a no-op that exists for the seam: a
-    /// networked arm pumps its connection and reconciles `pending` here.
-    pub fn advance(&mut self, _tick: u64) {}
+    /// Advance the backend by one tick. `Local` is a pure function of the tick,
+    /// so this is a no-op; `Online` pumps its connection and reconciles.
+    pub fn advance(&mut self, _tick: u64) {
+        #[cfg(all(feature = "online", not(target_arch = "wasm32")))]
+        if let Self::Online(online) = self {
+            online.advance();
+        }
+    }
 
     /// The projection every draw system and every check reads.
     pub fn snapshot(&self, tick: u64) -> FeedState {
-        let personal = self.local.you.total();
-        let global = personal + self.local.bot_global(tick);
-        let board = project_board(self.local.entries(tick), BOARD_ROWS);
-        FeedState {
-            personal,
-            global,
-            board,
+        match self {
+            Self::Local(local) => {
+                let personal = local.you.total();
+                let global = personal + local.bot_global(tick);
+                let board = project_board(local.entries(tick), BOARD_ROWS);
+                FeedState {
+                    personal,
+                    global,
+                    board,
+                }
+            }
+            #[cfg(all(feature = "online", not(target_arch = "wasm32")))]
+            Self::Online(online) => online.snapshot(),
         }
     }
 }

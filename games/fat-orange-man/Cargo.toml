@@ -7,14 +7,31 @@ publish.workspace = true
 
 # The facade is the whole API a game gets (ADR-0038). Naming any other
 # `jidousha-*` crate, at any depth, fails `tools/check-game-deps`.
-#
-# Phase 2 (the SpacetimeDB backend, GDD §6) adds an optional `spacetimedb-sdk`
-# dependency and an `online` feature here, with its `cargo tree` delta recorded
-# in that commit (agent-practices §5.8). Phase 1 carries no such dependency: the
-# state seam it needs is `src/backend.rs`'s method surface, not a dependency
-# line. See FINDINGS.md G-027 / G-028.
 [dependencies]
 jidousha = { path = "../../crates/jidousha" }
+
+[features]
+# The SpacetimeDB backend (Phase 2, GDD §6). OFF by default: the default build,
+# `tools/test`, the determinism bans and every `--verify` check judge the local
+# deterministic game. With it on, `--online` swaps the seeded bots for a live
+# SpacetimeDB instance — the run is then not replayable, which is why it is a
+# feature and not the default. The reducer module is `../../../fat-orange-man/server`
+# (outside this workspace — it is server code, not a game). See FINDINGS.md
+# G-027 / G-028.
+online = ["dep:spacetimedb-sdk"]
+
+# Optional and native-only. Pinned exactly to the local `spacetime` CLI (2.6.0)
+# so the client, the module and the instance share an ABI. The SDK's wasm path
+# (`browser` feature) is a separate question — FINDINGS.md G-027 — so the
+# `online` web build is not wired yet and the deployed page stays on the bots.
+#
+# `cargo tree` delta for `--features online` (agent-practices §5.8): adds
+# `spacetimedb-sdk` and its tree — `spacetimedb-client-api-messages`,
+# `spacetimedb-sats`, `spacetimedb-lib`, `tokio`, `tokio-tungstenite`,
+# `tungstenite`, `native-tls`, `http`, `bytes`, `futures-*`, `brotli` — none of
+# which reach the default build.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+spacetimedb-sdk = { version = "=2.6.0", optional = true }
 
 [lints]
 workspace = true

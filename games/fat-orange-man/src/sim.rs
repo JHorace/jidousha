@@ -51,10 +51,9 @@ pub fn open_the_world(world: &mut World) {
     world.insert_resource(camera());
 
     // A harness may plant a backend before the first tick (a fixed board for a
-    // check); otherwise seed one from the world's `Rng`.
+    // check); otherwise pick one.
     if world.find_resource::<Backend>().is_none() {
-        let mut rng = world.resource::<Rng>().clone();
-        let backend = Backend::local(&mut rng);
+        let backend = choose_backend(world);
         world.insert_resource(backend);
     }
     world.insert_resource(Pop::default());
@@ -63,6 +62,28 @@ pub fn open_the_world(world: &mut World) {
     // opening projection is the field at tick 0.
     let opening = world.resource::<Backend>().snapshot(0);
     world.insert_resource(opening);
+}
+
+/// The seeded local backend, unless `--features online` is built and `--online`
+/// was passed — then a live SpacetimeDB instance, and a connection failure is a
+/// hard stop rather than a silent fall back to bots (the player asked for the
+/// live game).
+fn choose_backend(world: &World) -> Backend {
+    #[cfg(all(feature = "online", not(target_arch = "wasm32")))]
+    if std::env::args().any(|argument| argument == "--online") {
+        match crate::online::Online::connect(None, None) {
+            Ok(online) => {
+                println!("[fat-orange-man] connected to SpacetimeDB");
+                return Backend::Online(Box::new(online));
+            }
+            Err(error) => {
+                eprintln!("[fat-orange-man] {error}");
+                std::process::exit(1);
+            }
+        }
+    }
+    let mut rng = world.resource::<Rng>().clone();
+    Backend::local(&mut rng)
 }
 
 /// Feed the orange man when the pointer taps the button or the man himself.

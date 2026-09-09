@@ -28,6 +28,10 @@ mod capture;
 mod checks;
 mod draw;
 mod game;
+#[cfg(all(feature = "online", not(target_arch = "wasm32")))]
+mod module_bindings;
+#[cfg(all(feature = "online", not(target_arch = "wasm32")))]
+mod online;
 mod players;
 mod sim;
 mod verify;
@@ -73,10 +77,25 @@ fn main() -> ExitCode {
     // systems, same config, no window, scripted taps, assertions instead of a
     // person. `std::env::args` is empty on wasm, so this branch is native-only,
     // which is where verification runs.
-    if std::env::args().any(|argument| argument == "--verify") {
+    let args: Vec<String> = std::env::args().collect();
+    if args.iter().any(|argument| argument == "--verify") {
         return verify::run();
     }
-    println!("tap FEED HIM (or the man) to feed him — close the window to quit");
+    #[cfg(all(feature = "online", not(target_arch = "wasm32")))]
+    if args.iter().any(|a| a == "--online") && args.iter().any(|a| a == "--smoke") {
+        // Headless end-to-end check of the live path — for a machine with no
+        // display. Not a `--verify` (talks to a real instance, not replayable).
+        return online::smoke();
+    }
+    #[cfg(all(feature = "online", not(target_arch = "wasm32")))]
+    let online = args.iter().any(|a| a == "--online");
+    #[cfg(not(all(feature = "online", not(target_arch = "wasm32"))))]
+    let online = false;
+    if online {
+        println!("tap FEED HIM (or the man) — feeds go to the live SpacetimeDB instance");
+    } else {
+        println!("tap FEED HIM (or the man) to feed him — close the window to quit");
+    }
     match run(config(), register) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
