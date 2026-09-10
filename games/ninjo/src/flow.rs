@@ -119,6 +119,28 @@ pub struct Flow {
     /// shuts the other — `floors::controls_for` names the pair that is
     /// actually on screen, and the overlap floor is about siblings.
     pub board: Option<usize>,
+    /// **Which job's candidate list is open**, if one is (UI.md §3c).
+    ///
+    /// **Not a second selection.** It holds a *job*, and the only thing it is
+    /// for is naming a person into `selected` — which is the field every other
+    /// select surface writes. A `picked_candidate` beside `selected` was the
+    /// wave-1.1 bug (`FINDINGS.md` G-017) and this is the third surface that
+    /// could have reintroduced it; what refuses it is that there is nowhere
+    /// here to put a person.
+    ///
+    /// **The whole `JobId`, not the slot.** The slot alone would be a number
+    /// read against whichever board happens to be open, and a marker outside
+    /// the picker's own rectangle is still clickable — so a board switched
+    /// under a slot-only picker would list candidates for a different job
+    /// than the `who?` that was tapped. Carrying the site makes that
+    /// impossible to reach rather than merely unlikely, and
+    /// [`Flow::put_the_picker_away`] asserts the pair agrees on every tick.
+    ///
+    /// It belongs to the board: it is `None` whenever the open board is not
+    /// the one it was opened on, because a candidate list for a job nobody
+    /// can see is a panel about nothing — the same rule, in the same shape,
+    /// as the breakdown band's.
+    pub picking: Option<crate::sim::JobId>,
     /// **The selected character** — the one selection this game has.
     ///
     /// One index over the ten people, which is the same index over the ten
@@ -180,6 +202,7 @@ impl Flow {
         self.tuner.open = false;
         self.drilled = None;
         self.board = None;
+        self.picking = None;
         self.selected = None;
         self.offer = None;
         self.post_open = false;
@@ -196,12 +219,33 @@ impl Flow {
     /// surfaces and the band cannot be the thing every one of them remembers.
     fn put_the_band_away(&mut self) {
         let orphaned = match self.breakdown {
-            Some(Breakdown::Job(_)) => self.board.is_none() || self.selected.is_none(),
+            // **And the candidate picker orphans it too**: the picker is the
+            // other tap-deeper move on the same row, it stands in the band's
+            // own space, and two surfaces explaining one row at once is a
+            // screen nobody can read.
+            Some(Breakdown::Job(_)) => {
+                self.board.is_none() || self.selected.is_none() || self.picking.is_some()
+            }
             Some(Breakdown::Entry(_)) => !self.feed_open,
             None => false,
         };
         if orphaned {
             self.breakdown = None;
+        }
+    }
+
+    /// **Put the candidate list away where the board it belongs to has
+    /// gone.**
+    ///
+    /// A picker is about one row of one open board, so every way out of *that*
+    /// board is a way the list can be orphaned — its close, bare ground, a
+    /// drawer, a meter chip, a posting, and **another site's marker**, which
+    /// does not close a board at all but replaces it. One rule in one place
+    /// for the same reason the band has one: it cannot be the thing every one
+    /// of those paths remembers.
+    fn put_the_picker_away(&mut self) {
+        if self.board != self.picking.map(|job| job.site) {
+            self.picking = None;
         }
     }
 
@@ -295,7 +339,9 @@ pub fn handle_input(world: &mut World) {
     // orphaned by, so it is checked once here rather than remembered at each
     // of them — the mistake this replaces left a feed entry's arithmetic
     // lying over the map after the drawer that opened it was shut.
-    world.resource_mut::<Flow>().put_the_band_away();
+    let flow = world.resource_mut::<Flow>();
+    flow.put_the_picker_away();
+    flow.put_the_band_away();
 }
 
 fn read_input(world: &mut World) {
@@ -473,14 +519,66 @@ fn read_input(world: &mut World) {
     // inside the board is the board's, and the ways out of it are its close,
     // bare ground beyond it, a drawer, or the order itself.
     if let Some(site) = world.resource::<Flow>().board {
+        // **The X closes the topmost surface.** One rectangle, because the
+        // picker draws instead of the board and the close the player is
+        // looking at is the picker's while it is up — a second X in a second
+        // place would be a second way to do one thing.
         if layout::board_close().contains(at) {
-            world.resource_mut::<Flow>().board = None;
+            let flow = world.resource_mut::<Flow>();
+            if flow.picking.is_some() {
+                flow.picking = None;
+            } else {
+                flow.board = None;
+            }
             return;
         }
-        if layout::board_fit_chip().contains(at) && world.resource::<Flow>().selected.is_some() {
+        // The fit chip, on whichever of the two surfaces is up: the picker
+        // always has a fit column, the board only with somebody selected.
+        if layout::board_fit_chip().contains(at)
+            && (world.resource::<Flow>().selected.is_some()
+                || world.resource::<Flow>().picking.is_some())
+        {
             let flow = world.resource_mut::<Flow>();
             flow.fit_explained = !flow.fit_explained;
             return;
+        }
+        // **The candidate picker, while it is up, is the whole left column.**
+        // It draws instead of the board, so nothing under it is a target:
+        // choosing names somebody, and every other click inside its rectangle
+        // is the picker's own and does nothing.
+        if let Some(job) = world.resource::<Flow>().picking {
+            let slot = job.slot;
+            let chosen: Vec<usize> = {
+                let sim = world.resource::<Sim>().clone();
+                let lens = Lens::on(&sim);
+                let grid = world.resource::<Grid>().clone();
+                let tuning = *world.resource::<Tuning>();
+                let now = world.resource::<Clock>().minutes;
+                let flow = world.resource::<Flow>().clone();
+                crate::board::candidates(&flow, &lens, &grid, &tuning, now, site, slot)
+                    .into_iter()
+                    .map(|candidate| candidate.who)
+                    .collect()
+            };
+            for (row, who) in chosen.into_iter().enumerate() {
+                if !layout::picker_row(row).contains(at) {
+                    continue;
+                }
+                // **The one selection, written from a fourth door** (UI.md
+                // §3b). It *sets* rather than toggles, the way a faces row
+                // does: the picker's whole job is to name somebody for this
+                // job, and a tap that could un-name the person it just named
+                // would leave the footer reading NOBODY at the moment the
+                // player went to post. Nothing else is written — the picker
+                // does not post, and the row still does.
+                let flow = world.resource_mut::<Flow>();
+                flow.selected = Some(who);
+                flow.picking = None;
+                return;
+            }
+            if layout::picker_panel().contains(at) {
+                return;
+            }
         }
         // **The board's own controls**, before its rows: the wage the next
         // tap offers, and whether it is offered to the selection or to
@@ -504,6 +602,37 @@ fn read_input(world: &mut World) {
             .sites
             .get(site)
             .map_or(0, |board| board.quests.len());
+        // **The `who?` at the end of each open row** (UI.md §3c): the
+        // candidate list for that job, which is how a person is named without
+        // reaching the map. Before the rows, because it stands beside one and
+        // the row is the posting.
+        for slot in 0..jobs.min(layout::BOARD_ROWS) {
+            if !layout::board_who(slot).contains(at) {
+                continue;
+            }
+            let open = crate::sim::JobState::Open
+                == world
+                    .resource::<Sim>()
+                    .sites
+                    .get(site)
+                    .and_then(|board| board.state(slot))
+                    .unwrap_or(crate::sim::JobState::Open);
+            let anyone = world.resource::<Flow>().post_open;
+            if !open {
+                let job = job_name(world, site, slot);
+                let text = format!("{job} is not open - there is nobody to name for it");
+                world.resource_mut::<Flow>().bounce(tick, text);
+            } else if anyone {
+                let text =
+                    "this board is offering to anyone - toggle TO to name somebody".to_owned();
+                world.resource_mut::<Flow>().bounce(tick, text);
+            } else {
+                let job = crate::sim::JobId { site, slot };
+                let flow = world.resource_mut::<Flow>();
+                flow.picking = (flow.picking != Some(job)).then_some(job);
+            }
+            return;
+        }
         // **The verdict's own arithmetic, one tap deeper** (UI.md §3e). Its
         // own target at the end of the row, before the row itself: the row is
         // the posting, and the `?` is the only thing on the board that

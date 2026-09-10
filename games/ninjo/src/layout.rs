@@ -209,13 +209,37 @@ pub fn board_close() -> Rect {
 /// Job row `index` — **the posting target** (wave 1.2). Tapping an open row
 /// posts it to the selected character at the standing rate.
 ///
-/// The whole width of the board, because the wage and the who are the
+/// Most of the width of the board, because the wage and the who are the
 /// **board's** controls and not the row's: a stepper inside a row would be a
 /// control inside a control, which the overlap floor refuses, and a row cut
 /// short to make room for one would leave no room for the verdict's reason —
-/// which is the sentence this wave exists to put on screen.
+/// which is the sentence wave 1.2 exists to put on screen.
+///
+/// **Fifty-two narrower since the candidate picker landed**, which is
+/// [`board_who`]'s target and the gap beside it — and the verdict's reason
+/// came out of it **twenty-eight pixels wider** rather than fifty-two
+/// narrower, because the fit moved up to the row's first line where the
+/// duration had left room (`job::FIT`).
+/// A row's two lines are what the work is and how well it suits somebody over
+/// what kind it is and what they say about it, and the fit belongs to the
+/// first of those readings anyway.
 pub fn board_row(index: usize) -> Rect {
-    Rect::from_min_size(board_row_origin(index), Vec2::new(520.0, 32.0))
+    Rect::from_min_size(board_row_origin(index), Vec2::new(468.0, 32.0))
+}
+
+/// Job row `index`'s **`who?` button** — the candidate list for *that job*
+/// (the candidate-picker session).
+///
+/// A target of its own between the row and its `?`, for the reason the `?` is
+/// one: the row *is* the posting, and a control inside a control is what the
+/// overlap floor refuses. It is what makes the board self-sufficient — a
+/// posting can be aimed at somebody without reaching the map sprite the board
+/// is covering (`FINDINGS.md` G-026).
+pub fn board_who(index: usize) -> Rect {
+    Rect::from_min_size(
+        board_row_origin(index) + Vec2::new(476.0, 0.0),
+        Vec2::new(44.0, 36.0),
+    )
 }
 
 /// Job row `index`'s **why button** — the arithmetic behind the verdict the
@@ -224,10 +248,8 @@ pub fn board_row(index: usize) -> Rect {
 /// A target of its own at the end of the row rather than the verdict cell
 /// made clickable, because the row *is* the posting and a control inside a
 /// control is what the overlap floor refuses — the same separation the roster
-/// row makes between its name box and its chips. Forty-four pixels of the
-/// row's width were given to it, and `job::SAYS_W` gave up the same forty-four:
-/// the verdict keeps its reason, which is the sentence wave 1.2 exists to
-/// print.
+/// row makes between its name box and its chips. It and [`board_who`] stand in
+/// the ninety-six pixels between the row's end and the board's.
 pub fn board_why(index: usize) -> Rect {
     Rect::from_min_size(
         board_row_origin(index) + Vec2::new(528.0, 0.0),
@@ -289,8 +311,8 @@ pub fn board_hint() -> Vec2 {
 pub const BOARD_HINT_W: f32 = 352.0;
 
 /// The columns inside a job row, as offsets from its top-left — two lines:
-/// **what the work is and what it pays** over **what kind it is, who has it,
-/// and how the selected character fits it**.
+/// **what the work is, what it pays, and how the selected character fits it**
+/// over **what kind of work it is and who has it or what they say about it**.
 pub mod job {
     use jidousha::prelude::Vec2;
 
@@ -306,16 +328,24 @@ pub mod job {
     pub const DURATION: Vec2 = Vec2::new(254.0, 3.0);
     /// How wide that may run.
     pub const DURATION_W: f32 = 80.0;
+    /// **The selected character's fit for this work**, at the end of the first
+    /// line — beside the pot and the duration, because how well the work pays
+    /// and how well it suits somebody are one reading of one offer.
+    ///
+    /// It stood on the second line until the candidate picker took the `who?`
+    /// target out of the row's width; the duration had left room here, so the
+    /// verdict's reason came out of the move twenty-eight pixels wider rather
+    /// than fifty-two narrower.
+    pub const FIT: Vec2 = Vec2::new(342.0, 3.0);
+    /// How wide that may run.
+    pub const FIT_W: f32 = 60.0;
     /// The task-type chip's icon.
     pub const TASK_ICON: Vec2 = Vec2::new(8.0, 14.0);
     /// And its word.
     pub const TASK_NAME: Vec2 = Vec2::new(28.0, 17.0);
-    /// How wide that may run.
-    pub const TASK_W: f32 = 56.0;
-    /// The selected character's fit for this work.
-    pub const FIT: Vec2 = Vec2::new(92.0, 17.0);
-    /// How wide that may run.
-    pub const FIT_W: f32 = 60.0;
+    /// How wide that may run — the widest task id is five characters, and the
+    /// six pixels this gave up went to the verdict's reason beside it.
+    pub const TASK_W: f32 = 50.0;
     /// **What the row has to say about itself**: what has become of it, or —
     /// where it is open and somebody is selected — what the scorer says they
     /// would do about a posting here, and why (wave 1.2).
@@ -324,9 +354,134 @@ pub mod job {
     /// somebody's is not a row anybody can be asked for, and a verdict is
     /// strictly more than the word `open` it replaces. The widest cell on the
     /// row, because a verdict without its reason is a number about a person.
-    pub const SAYS: Vec2 = Vec2::new(160.0, 17.0);
+    pub const SAYS: Vec2 = Vec2::new(86.0, 17.0);
+    /// How wide that may run — the same 380 the candidate row's own verdict
+    /// cell has, so one sentence about one offer is cut in the same place on
+    /// both surfaces rather than in two
+    /// (`verify::the_picker_names_a_person` measures the widest against both).
+    pub const SAYS_W: f32 = 380.0;
+}
+
+// ── the candidate picker: who a job could be posted to (UI.md §3c) ─────────
+
+/// How many candidate rows the picker has room for.
+///
+/// Ten, which is the whole cast (`people::roster`) — **everyone appears**,
+/// including the people who are out, because posting to somebody who is out
+/// is legal and travels. `layout_floors` asserts the registry is not larger
+/// than this, because a candidate with no row is a person the board cannot
+/// name, which is the whole defect this surface closes.
+pub const PICKER_ROWS: usize = 10;
+
+/// **The candidate list a job row's `who?` opens.**
+///
+/// It stands where the board stands and is taller than it: ten rows of two
+/// lines each do not fit the board's rectangle, and the space below it is the
+/// breakdown band's, which is why the two are never up together (UI.md §3c —
+/// the picker and the band are the same tap-deeper move on the same row, and
+/// there is one of it).
+///
+/// **It replaces the board rather than sitting beside it**: the left of the
+/// screen is one column, the character panel has the other, and a surface
+/// drawn under another is a row nobody can read lying across a control
+/// somebody can click. So while the picker is up the board draws nothing at
+/// all and the picker's own header carries what the player still needs — the
+/// job's name and the wage its verdicts were read at.
+pub fn picker_panel() -> Rect {
+    Rect::from_min_size(Vec2::new(16.0, 112.0), Vec2::new(576.0, 424.0))
+}
+
+/// Its title row: which job the list is for.
+pub fn picker_title() -> Vec2 {
+    Vec2::new(28.0, 122.0)
+}
+
+/// **And the wage the answers below were read at, on a line of its own.**
+///
+/// Two header lines rather than one, because one clipped: the job's name and
+/// the wage together run past the fit chip on the longest job this game
+/// authors, and what a clip takes off is the tail — which was the wage, and
+/// the wage appears nowhere else while the picker is covering the board's
+/// footer. `layout_floors` asserts both lines fit at the longest name the
+/// scenario holds.
+pub fn picker_wage() -> Vec2 {
+    Vec2::new(28.0, 140.0)
+}
+
+/// How wide either header line may run before it is clipped — up to the fit
+/// chip, which is the board's own and stands in the same place on both
+/// surfaces.
+pub const PICKER_HEAD_W: f32 = 360.0;
+
+/// Candidate row `index` — **the choosing target**, which sets the one
+/// selection and nothing else (UI.md §3b).
+///
+/// The whole width of the picker: the portrait inside it is a picture and not
+/// a target of its own, because the row already answers the only question
+/// this surface asks and a second target inside it would be a control inside
+/// a control.
+pub fn picker_row(index: usize) -> Rect {
+    Rect::from_min_size(
+        Vec2::new(24.0, 160.0 + index as f32 * 34.0),
+        Vec2::new(544.0, 32.0),
+    )
+}
+
+/// The picker's footer hint, under the rows — a wrapped block, because the
+/// fit chip's explanation is a sentence and it is the same sentence the board
+/// prints (`asks::fit_means`).
+pub fn picker_hint() -> Vec2 {
+    Vec2::new(28.0, 502.0)
+}
+
+/// How wide it may run before it wraps — the picker's own width, since
+/// nothing else stands in that band.
+pub const PICKER_HINT_W: f32 = 552.0;
+
+/// The columns inside a candidate row, as offsets from its top-left — two
+/// lines: **who they are, how they fit this work, and where they are** over
+/// **what they would say about the offer, and why**.
+pub mod cand {
+    use jidousha::prelude::Vec2;
+
+    /// The portrait's inset. Drawn at `sheet::PORTRAIT_SCALE`, which fills
+    /// the row's height exactly.
+    pub const PORTRAIT: Vec2 = Vec2::new(0.0, 0.0);
+    /// Where the name starts — clear of the portrait.
+    pub const NAME: Vec2 = Vec2::new(38.0, 3.0);
     /// How wide that may run.
-    pub const SAYS_W: f32 = 352.0;
+    pub const NAME_W: f32 = 96.0;
+    /// Their fit for this job's kind of work — the column the list is sorted
+    /// on.
+    pub const FIT: Vec2 = Vec2::new(140.0, 3.0);
+    /// How wide that may run.
+    pub const FIT_W: f32 = 56.0;
+    /// **Where they are** — at home, or out with where and when the work
+    /// they are on is done.
+    pub const WHERE: Vec2 = Vec2::new(202.0, 3.0);
+    /// How wide that may run.
+    pub const WHERE_W: f32 = 340.0;
+    /// **The journey from wherever they stand** — its own cell rather than
+    /// the tail of the whereabouts, because a clip takes the tail and the
+    /// journey is what a posting to somebody who is out costs.
+    ///
+    /// At the **head** of the second line rather than the end of it: a
+    /// fixed-width column before a ragged one reads as two columns, where a
+    /// ragged one before a fixed one runs its longest row into the next cell
+    /// — which is what the first photograph of this surface showed.
+    pub const TRAVEL: Vec2 = Vec2::new(38.0, 17.0);
+    /// How wide that may run.
+    pub const TRAVEL_W: f32 = 116.0;
+    /// **What the scorer says they would do about this offer**, and why.
+    ///
+    /// The row's second line up to the travel cell, and **wide enough for the
+    /// widest verdict line the scorer produces** —
+    /// `verify::the_picker_names_a_person` measures that over a played world
+    /// and asserts it here, because the reason on a refusal is the rival's own
+    /// sentence and which rival wins is what a played world has.
+    pub const SAYS: Vec2 = Vec2::new(162.0, 17.0);
+    /// How wide that may run.
+    pub const SAYS_W: f32 = 380.0;
 }
 
 // ── the character panel ────────────────────────────────────────────────────

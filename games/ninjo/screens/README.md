@@ -31,11 +31,13 @@ as the change.
 | `ninjo-breakdown-reference.png` | **a verdict's arithmetic, on a refusal** (UI.md §3e): the Old Crypt's board read by Alex with the `?` on the crypt seal tapped — every term of the sum with the trait row or the fact that produced it, the total, and the line saying what beat it (`staying home scores 3`). The thing a player could not account for before this session | 1920x1080 |
 | `ninjo-feedwhy-reference.png` | **the same sum for a decision already made**: the feed with the `?` tapped on `Odd took the second seal at the Old Crypt` — `+6 need - desperation 3 / +4 want - renown / +6 aptitude - fighter / = 16 in all`, which is "why did they go there" answered after the fact from the entry itself | 1920x1080 |
 | `ninjo-zoomed-reference.png` | **the settlement one notch of the wheel out**: every map word gone, every figure still there, and Bob still named in gold because the selected character's name is chrome (UI.md §4). The picture the owner judges the default camera against | 1920x1080 |
+| `ninjo-picker-reference.png` | **a job's candidate picker, open with nobody selected** (UI.md §3c): the Deep Cave's deep survey, and the whole cast under it — best fit first, each with their fit for scout work, the journey from wherever they are standing, what the scorer says they would do about 20g, and where they are (Bob at the Black Vault until d1 10:28, four of them walking home). The picture of a board that can be aimed without reaching the map it is covering (`FINDINGS.md` G-026) | 1920x1080 |
+| `ninjo-chosen-reference.png` | **the board after choosing from it**: Tim named — not the best fit on the list, which is the point — the footer reading `TO Tim`, his panel up beside the board, and the deep survey still `open`, because the picker names a person and the row is what posts | 1920x1080 |
 | `ninjo-tuning-reference.png` | the tuning drawer, MIRE pending in gold, APPLY lit | 1920x1080 |
 
 The settlement, config, living, roster, character, board, ordered, bounce,
-declined, ledger, selection, road-ring, breakdown, feed-breakdown and
-zoomed-out shots are reference-only: they are
+declined, ledger, selection, road-ring, breakdown, feed-breakdown,
+candidate-picker, after-choosing and zoomed-out shots are reference-only: they are
 pictures of *what is on screen*, and the scaling defects the narrow surface
 exists to catch are on the same chrome the map and feed pairs already cover.
 

@@ -43,6 +43,11 @@ pub fn board_targets() -> Vec<(String, Rect)> {
     out.push(("the board's fit chip".to_owned(), layout::board_fit_chip()));
     for slot in 0..layout::BOARD_ROWS {
         out.push((format!("job row {slot}"), layout::board_row(slot)));
+        // **The row's own two controls**, both targets of their own beside it
+        // rather than inside it: the candidate list for that job, and the
+        // arithmetic behind its verdict.
+        out.push((format!("job row {slot}'s who?"), layout::board_who(slot)));
+        out.push((format!("job row {slot}'s why"), layout::board_why(slot)));
     }
     // The board's own two controls (wave 1.2): what the next tap offers, and
     // whom it offers it to.
@@ -52,6 +57,26 @@ pub fn board_targets() -> Vec<(String, Rect)> {
     ));
     out.push(("the board's wage up".to_owned(), layout::board_wage_up()));
     out.push(("the board's who toggle".to_owned(), layout::board_to()));
+    out
+}
+
+/// The base screen's controls with a job's **candidate picker** up.
+///
+/// The picker draws instead of the board and over the whole left column
+/// (UI.md §3c), so the board's own rows and footer controls are not on this
+/// screen at all — a third set of siblings, and the overlap floor is about
+/// siblings. The character panel and the bar are in it, because the picker is
+/// opened from a board that may already have somebody selected.
+pub fn picker_targets() -> Vec<(String, Rect)> {
+    let mut out: Vec<(String, Rect)> = base_targets();
+    out.push((
+        "the candidate picker's close".to_owned(),
+        layout::board_close(),
+    ));
+    out.push(("the board's fit chip".to_owned(), layout::board_fit_chip()));
+    for row in 0..layout::PICKER_ROWS {
+        out.push((format!("candidate row {row}"), layout::picker_row(row)));
+    }
     out
 }
 
@@ -201,6 +226,9 @@ pub fn controls_for(flow: &Flow) -> Vec<(String, Rect)> {
         return ledger_targets();
     }
     if flow.board.is_some() {
+        if flow.picking.is_some() {
+            return picker_targets();
+        }
         return board_targets();
     }
     targets()
@@ -227,10 +255,11 @@ pub fn tuner_targets() -> Vec<(String, Rect)> {
 
 /// The floors that are questions about the layout alone.
 pub fn layout_floors(checks: &mut Checks) {
-    // **Both base screens**: the one the faces list is up on and the one the
-    // job board is up on. They share most of their controls and differ on the
-    // left, and each has to hold the floors on its own.
-    for set in [targets(), board_targets()] {
+    // **All three base screens**: the one the faces list is up on, the one
+    // the job board is up on, and the one a job's candidate picker is up on.
+    // They share most of their controls and differ on the left, and each has
+    // to hold the floors on its own.
+    for set in [targets(), board_targets(), picker_targets()] {
         for (what, rect) in &set {
             let size = rect.size();
             checks.require(
@@ -274,6 +303,104 @@ pub fn layout_floors(checks: &mut Checks) {
                 "row {slot} is {:?} and the board is {:?}",
                 layout::board_row(slot),
                 layout::board_panel()
+            ),
+        );
+    }
+    // **The candidate picker holds the whole cast, in the panel that holds
+    // it** (UI.md §3c). A candidate with no row is a person the board cannot
+    // name, which is the defect this surface exists to close — so the cast is
+    // counted against the rows rather than remembered as ten.
+    for row in 0..layout::PICKER_ROWS {
+        checks.require(
+            inside(layout::picker_panel(), layout::picker_row(row)),
+            "a candidate row runs off the picker that holds it",
+            format!(
+                "row {row} is {:?} and the picker is {:?}",
+                layout::picker_row(row),
+                layout::picker_panel()
+            ),
+        );
+    }
+    {
+        let cast = Sim::opening(&Tuning::SHIPPED, crate::modules::ModuleSet::ALL)
+            .people
+            .len();
+        checks.require(
+            cast <= layout::PICKER_ROWS,
+            "the cast is larger than the candidate picker has rows",
+            format!(
+                "the registry holds {cast} people and the picker draws {}; everyone appears                  on that list, so a person with no row is somebody the board cannot name",
+                layout::PICKER_ROWS
+            ),
+        );
+    }
+    // **Both of the picker's header lines fit the band they run in**, at the
+    // longest job name the scenario authors and the widest wage the steppers
+    // reach: the job says what the list is for and the wage says what its
+    // answers were read at, and the wage appears nowhere else while the
+    // picker is covering the board's footer.
+    {
+        let style = theme::text(theme::SMALL, theme::INK);
+        let sim = Sim::opening(&Tuning::SHIPPED, crate::modules::ModuleSet::ALL);
+        let longest = sim
+            .sites
+            .iter()
+            .flat_map(|site| site.quests.iter())
+            .map(|quest| format!("who for {}?", quest.name))
+            .chain(std::iter::once(format!(
+                "{}g offered - best fit first",
+                crate::asks::RATE_MAX
+            )))
+            .max_by(|a, b| {
+                style
+                    .width_of(a)
+                    .partial_cmp(&style.width_of(b))
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .unwrap_or_default();
+        checks.require(
+            !greater(style.width_of(&longest), layout::PICKER_HEAD_W),
+            "a candidate picker's header line does not fit the band that prints it",
+            format!(
+                "{longest:?} is {:.0} reference pixels wide and the header band is {:.0}; the                  wage is what the answers below were read at and it is on no other surface                  while this one is up",
+                style.width_of(&longest),
+                layout::PICKER_HEAD_W
+            ),
+        );
+    }
+    // **And the longest thing the picker's footer can say fits the band**: it
+    // prints the fit chip's own sentence, which is the board's, and that
+    // sentence grew once already when the dormancy clause landed.
+    {
+        let longest = [
+            crate::asks::fit_means(),
+            format!(
+                "sorted by fit - tap somebody to name them for {}, then tap its row to post it",
+                Sim::opening(&Tuning::SHIPPED, crate::modules::ModuleSet::ALL)
+                    .sites
+                    .iter()
+                    .flat_map(|site| site.quests.iter())
+                    .map(|quest| quest.name)
+                    .max_by_key(|name| name.len())
+                    .unwrap_or_default()
+            ),
+        ]
+        .into_iter()
+        .max_by_key(String::len)
+        .unwrap_or_default();
+        let rows = crate::ui::wrap(
+            &longest,
+            crate::ui::columns(layout::PICKER_HINT_W, theme::SMALL),
+        )
+        .lines()
+        .count();
+        let end = layout::picker_hint().y + rows as f32 * (theme::SMALL + 2.0);
+        checks.require(
+            !greater(end, layout::picker_panel().max.y),
+            "the candidate picker's footer runs off the panel that holds it",
+            format!(
+                "{longest:?} wraps to {rows} rows ending at {end:.0} and the picker ends at                  {:.0}",
+                layout::picker_panel().max.y
             ),
         );
     }
@@ -743,6 +870,27 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
     offering.fit_explained = true;
     offering.offer = Some(crate::asks::RATE_MAX);
     offering.post_open = true;
+    // **The candidate picker, read by nobody** — which is the state it exists
+    // for: an open board over a character's own sprite, and a job that can
+    // still be aimed at that character. Its front open row, so the list is
+    // one the sim can answer.
+    let mut picking = board.clone();
+    picking.selected = None;
+    let picked_site = picking.board.unwrap_or(0);
+    picking.picking = baseline
+        .sim
+        .sites
+        .get(picked_site)
+        .and_then(|site| site.open_slots().next())
+        .map(|slot| crate::sim::JobId {
+            site: picked_site,
+            slot,
+        });
+    // And the same list with somebody already named on it and the fit chip
+    // explaining itself — the loudest that surface gets.
+    let mut picking_named = picking.clone();
+    picking_named.selected = Some(0);
+    picking_named.fit_explained = true;
     // **The ledger**, on a world that has been asked things: every row of it
     // is a posting somebody heard, agreed to or refused.
     let mut ledger = played.clone();
@@ -833,6 +981,20 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
         (
             "the job board with a wage stepped and the fit chip open",
             offering,
+            baseline.sim.clone(),
+            ended_clock,
+            at,
+        ),
+        (
+            "a job's candidate picker, read with nobody selected",
+            picking,
+            baseline.sim.clone(),
+            ended_clock,
+            at,
+        ),
+        (
+            "a job's candidate picker, with somebody named and the fit chip open",
+            picking_named,
             baseline.sim.clone(),
             ended_clock,
             at,

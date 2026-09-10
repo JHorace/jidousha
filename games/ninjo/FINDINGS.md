@@ -30,6 +30,23 @@ vector is safe — it is not, and the placement never normalizes) and
 `crates/*/src/`, no `docs/internal/`, no ADR but 0041, which the handoff names.
 Its one new entry is about this repository's own documents.
 
+**The candidate-picker session (2026-09-10) read** `CLAUDE.md`, the
+`make-game` skill, this game's `UI.md`, `FINDINGS.md`, `screens/README.md` and
+its whole `src/`. No `docs/internal/`, no ADR, and it asked `docs/api/` one
+thing — whether `Rect::overlaps` counts touching edges, since the new controls
+had to be packed into the width the job row gave up. It does not
+(`jidousha-api.md`'s `Rect` reference says so in the signature's own comment:
+"touching edges do not count"), and the answer was accurate and easy to find.
+
+**A reading-fence slip, recorded because the fence is the exercise**
+(`make-game` §0.1): the session opened
+`crates/jidousha-core/src/visual.rs` for that one line **before** looking in
+`docs/api/`, where the answer was. Two lines of engine source were read and
+nothing came of them that the documents did not also say — but "the document
+did answer it and I looked in the wrong place first" is the failure the fence
+exists to measure, so it is written down rather than left out. It is not a
+document finding: nothing was missing and nothing misled.
+
 **The legibility session (2026-09-09) read** `CLAUDE.md`, the `make-game`
 skill, this game's `UI.md`, `GDD.md`, `FINDINGS.md` and its whole `src/`.
 Nothing under `crates/*/src/`, no `docs/internal/`, and no ADR. It asked
@@ -213,6 +230,100 @@ reopens again: play it, zoom out one notch, and say whether the default should
 move and whether two unnamed figures at the settlement is a price worth
 paying. Both are content judgements now rather than measurements.
 
+## The candidate-picker session (2026-09-10) — **1 new finding**, the game's own
+
+The playtest finding the owner reported, and its process half — which is the
+half that matters, because the same disposition list that missed this is the
+one the wave-1 close's audit will be reading.
+
+### G-026 — the game's own: the one surface whose purpose needs the map is the one that covers it
+
+Class: **the game's own** (a playtest finding, with a process half) ·
+Game: ninjo · Files: `games/ninjo/UI.md` §3, §3b, §3c, `src/board.rs`,
+`src/flow.rs` · **Closed by this session; the process half is open**
+
+**What the owner reported (2026-09-09, after the legibility session landed):**
+with the party strip retired, an open site panel can cover character sprites,
+and those characters then cannot be selected — so the posting gesture needs a
+person you may be unable to reach. Selecting first works only if you already
+know what work stands at the site, which is what the board exists to tell you.
+
+Expected: that a board could be opened and posted from wherever it landed.
+Happened: at the reference camera the board's own rectangle covers world
+`x -80..496, y 58..386`, which is most of the settlement's doorstep row — and
+the board swallows clicks inside its whole rectangle on purpose (UI.md §3c,
+so a stray tap between two rows cannot open a different site instead of
+ordering). Every figure under it is therefore unselectable while it is up.
+
+**Why the framing matters more than the fix.** Every drawer in this game
+covers the map and that is accepted. What made this one a defect is not the
+occlusion but the **requirement**: the board is the only surface whose purpose
+needs a map interaction, and it hides the map. So the remedy is not to dock,
+inset, shrink or auto-pan around the panel, and not to bring the strip back in
+any form — it is to make the board able to name a person. §3c's candidate
+picker is that: a `who?` on each open job row, the cast for that job with fit,
+verdict and whereabouts, and choosing writes the one selection.
+
+**The process half, and it is the sharper one.** When the party strip retired,
+its disposition list (UI.md §3) said selection had moved to "the map's figures,
+the roster's rows and a faces list" — three doors, all true. Two of the three
+are drawers, and a drawer shuts the board (`Flow::close_everything`); the
+third is the map, and the map is exactly what the board covers. **So the
+board, which needs a selection to do its own job, was left with no door onto
+one that survives it being open.**
+
+**Listing where a job moved is not the same as checking the new home is
+reachable in every mode the old one was.** That is a different question from
+the one G-024 asks — G-024 is "what is this surface still for?", and this is
+"is the thing that replaced it reachable from everywhere the old one was?" A
+retirement passes the first and fails the second exactly when the replacement
+homes are surfaces that are mutually exclusive with the surface doing the
+asking, which is a property nothing in this repository looks at. It belongs
+beside the S1-residue entry: **the wave-1 close's exemplar audit** (`GDD.md`
+§8) should walk both questions per retired surface, and a retirement's
+disposition list should say, per job, *which surfaces the new home is
+reachable from* and not only where it went.
+
+**What this session did about it:** built the picker, made the board's own
+`who?` and the picker's rows floors-bound controls, added the reachability
+claim as a scripted check (`verify::the_picker_names_a_person`'s sixth part
+opens a board over a character's own sprite and posts to that character with
+no map click, asserting the transcript is byte-identical to the map-selected
+route), and wrote the reach question into UI.md §3 beside the disposition list
+it corrects.
+
+**Two smaller things, recorded because they cost minutes rather than
+decisions:**
+
+- **The board's footer wage and a row's actual offer can be two numbers.**
+  `board::board_wage` shows `flow.offer` or *the first open row's* standing
+  rate, while `board::wage_offered` charges the *tapped row's* task rate — so
+  on a site whose open rows are two task types the footer says one wage and a
+  tap makes another. It predates this session (wave 1.2) and this session did
+  not change it; the picker sidesteps it by printing the wage **its own job**
+  would be offered at in its header, which is the number its verdicts were
+  read at. Worth the owner's ruling: either the footer's stepper is per-task,
+  or the board's wage is one number and the rate a row inherits is that one.
+- **A sub-panel of a surface has to key off the surface's *identity*, not its
+  presence.** The picker's state began as the job's slot, on the breakdown
+  band's precedent (`Flow::breakdown` holds `Breakdown::Job(slot)` and is put
+  away when the board is `None`). That is not enough for either of them: a
+  site marker outside the open panel's rectangle is still clickable and a
+  marker *replaces* a board rather than closing it, so a slot-only sub-panel
+  survives into a board it was not opened on. The picker carries the whole
+  `JobId` and its rule compares the pair; the band was left as it is, because
+  changing it is a change to a surface this session was not sent to touch —
+  **but the same reading applies to it**, and the way in is a marker that
+  falls outside `board_panel()` (the Watchtower's and the Black Vault's do at
+  the reference camera). Worth the next board-touching session's ten minutes.
+- **`board_why` was a click target outside `floors::board_targets`** since the
+  legibility session, so neither the 32x32 floor nor the overlap floor was
+  asked about the `?` at the end of a job row. It passes both; this session
+  added it to the set alongside the new `who?`, and the gap is worth noting
+  because a control that is hit-tested in `flow.rs` and absent from
+  `floors.rs` is a control no floor can see — the same shape as G-023's
+  undeclared draw exemption, one file over.
+
 ## The legibility session (2026-09-09) — **2 new findings**, both the game's own
 
 It closed G-022 above with the measurement that finding asked for. Its two new
@@ -257,6 +368,12 @@ both are surfaces whose question moved.
 **What this session did about it:** retired the strip, listed its four jobs and
 where each now lives (`UI.md` §3), and filed this. It did not touch the two
 candidates above — naming them is the finding, judging them is the audit's.
+
+**And the disposition list it wrote was itself the next finding** (G-026, the
+day after): three of the strip's four jobs moved to surfaces that are mutually
+exclusive with the one still asking for them, and the list recorded *where*
+each job went without asking *from where the new home is reachable*. So the
+audit this entry dispatches owes two questions per retired surface, not one.
 
 ### G-025 — the game's own: a handoff forbade in its fences what it required in its verification
 

@@ -59,6 +59,22 @@ const BREAKDOWN_ROW: usize = 0;
 /// is what makes the number checked rather than remembered.
 const BREAKDOWN_ENTRY: usize = 2;
 
+/// The Deep Cave row the `picker` photograph opens the candidate list for, as
+/// a shipped literal.
+///
+/// Row one: the front row is the mushroom haul, which Steve was ordered to at
+/// minute 32 and which is therefore never open again, and a `who?` on a row
+/// nobody can have bounces. `shots::judge_picker` asserts the row
+/// photographed is open and that the list on it carries a refusal and
+/// somebody who is out, rather than trusting either.
+pub const PICKED_ROW_SLOT: usize = 1;
+
+/// And the candidate row chosen from it — the middle of the list, not its
+/// head: `shots::judge_picker` asserts the chosen person is not the best fit
+/// on the list, because "the player took the top row" is the one reading this
+/// picture must not support.
+pub const PICKED_ROW: usize = 4;
+
 pub fn photographed(viewport: PhysicalSize) -> Conducted {
     // The class the config panel is set to stop on, and where its radio is.
     let pause_row = crate::attention::EventClass::QuestComplete.index();
@@ -204,6 +220,32 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
     // Steve's third chip is `caring`, a motivator, which is what the wave
     // asks the picture to show.
     script.push(click_ui(When::Minute(566), layout::sheet_chip(2).center()));
+    // **The candidate picker, the session's own two pictures.** Put the
+    // selection down first, so what the picker is photographed doing is the
+    // thing it exists for: naming somebody for a job with **nobody selected
+    // at all**, which is the state the board could not be used in. The Deep
+    // Cave, whose rows carry three task types between them, so the fit
+    // column separates people; row one of it, which nobody holds; and by
+    // minute 600 half the band is out on errands of its own, so the list
+    // carries people at home, people on the road and refusals together.
+    script.push(click_ui(When::Minute(596), layout::person_close().center()));
+    script.push(Directive {
+        when: When::Minute(600),
+        what: Act::ClickWorld(
+            layout::marker_rect(LOCATIONS[crate::sim::site_location(1)].tile).center(),
+        ),
+    });
+    script.push(click_ui(
+        When::Minute(606),
+        layout::board_who(PICKED_ROW_SLOT).center(),
+    ));
+    // Then choose somebody off the middle of the list rather than the top of
+    // it, because "best fit" is not the choice this surface is for: the
+    // picture is of a player having weighed the verdict against the fit.
+    script.push(click_ui(
+        When::Minute(616),
+        layout::picker_row(PICKED_ROW).center(),
+    ));
     let photos = [
         // The settlement before anything is dispatched: the whole cast
         // standing at their homes, named. Wave 0b's own exit picture - the
@@ -309,6 +351,25 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
         Photo {
             name: "feedwhy",
             minute: 548,
+            tick: 0,
+            paused: false,
+        },
+        // **The candidate picker, open with nobody selected** (UI.md §3c):
+        // the cast for one job, best fit first, with each of them named, fitted,
+        // answered and placed — the picture of a board that can be aimed
+        // without reaching the map it is covering.
+        Photo {
+            name: "picker",
+            minute: 612,
+            tick: 0,
+            paused: false,
+        },
+        // **And the board after choosing**: the footer reading `TO <name>`,
+        // the character panel up on that person, and the row still the thing
+        // that posts.
+        Photo {
+            name: "chosen",
+            minute: 622,
             tick: 0,
             paused: false,
         },
@@ -1462,7 +1523,9 @@ fn one_selection(checks: &mut Checks) -> Option<Conducted> {
 
     // --- the same act from every surface ------------------------------------
     // Four surfaces show a person; selecting on any of them is one act with
-    // one outcome, which is the whole of the unified rule.
+    // one outcome, which is the whole of the unified rule. The candidate
+    // picker is the newest of them and the one that had to be a *writer* of
+    // this field rather than a second selection beside it.
     let idle_face = {
         let lens = lens::Lens::on(&opening);
         crate::meters::faces(&lens, 0).first().map(|(who, _)| *who)
@@ -1475,7 +1538,37 @@ fn one_selection(checks: &mut Checks) -> Option<Conducted> {
         );
         return Some(reproduction);
     };
-    let surfaces: [(&str, usize, Vec<Directive>); 3] = [
+    // **The candidate picker is the fourth door** (UI.md §3b, the
+    // candidate-picker session): a job row's `who?` opens the cast for that
+    // job, and choosing writes this same one field. Which row is whose is
+    // read off the list's own ordering rather than guessed, so the check
+    // survives a retune of the aptitude weights.
+    let picker_site = 0usize;
+    let picker_slot = 0usize;
+    let picker_row = 2usize;
+    let picker_who = {
+        let flow = crate::flow::Flow {
+            board: Some(picker_site),
+            picking: Some(crate::sim::JobId {
+                site: picker_site,
+                slot: picker_slot,
+            }),
+            ..crate::flow::Flow::default()
+        };
+        crate::board::candidates(
+            &flow,
+            &lens::Lens::on(&opening),
+            &grid::grid(),
+            &tuning,
+            0,
+            picker_site,
+            picker_slot,
+        )
+        .get(picker_row)
+        .map(|candidate| candidate.who)
+        .unwrap_or(0)
+    };
+    let surfaces: [(&str, usize, Vec<Directive>); 4] = [
         (
             "the map sprite",
             4,
@@ -1495,6 +1588,27 @@ fn one_selection(checks: &mut Checks) -> Option<Conducted> {
                 Directive {
                     when: When::Tick(12),
                     what: Act::ClickUi(layout::roster_open(7).center()),
+                },
+            ],
+        ),
+        (
+            "a job's candidate picker",
+            picker_who,
+            vec![
+                Directive {
+                    when: When::Tick(6),
+                    what: Act::ClickWorld(
+                        layout::marker_rect(LOCATIONS[crate::sim::site_location(picker_site)].tile)
+                            .center(),
+                    ),
+                },
+                Directive {
+                    when: When::Tick(12),
+                    what: Act::ClickUi(layout::board_who(picker_slot).center()),
+                },
+                Directive {
+                    when: When::Tick(18),
+                    what: Act::ClickUi(layout::picker_row(picker_row).center()),
                 },
             ],
         ),
@@ -1975,7 +2089,8 @@ fn the_board_is_the_ask(checks: &mut Checks) {
 /// **The selection is presentation, derived from recorded clicks.**
 ///
 /// Nothing about selecting somebody reaches the world: two runs of the same
-/// scenario, one of them clicking its way around every select surface and the
+/// scenario, one of them clicking its way around every select surface —
+/// including a job's candidate picker, which is the newest of them — and the
 /// other clicking nothing at all, produce the same transcript to the
 /// world-minute. That is the whole claim that the one selection added no sim
 /// state, and it is what makes a replay of either run the same world.
@@ -2015,6 +2130,29 @@ fn selection_moves_nothing(checks: &mut Checks) {
         Directive {
             when: When::Tick(52),
             what: Act::ClickWorld(Vec2::ZERO),
+        },
+        // **And the fourth door**: a board opened, a job's candidate list
+        // opened on it, somebody named off that list, and the board put down
+        // again. None of it is a posting — the row is what posts, and this
+        // script never taps one — so all of it has to leave the transcript
+        // where the quiet run leaves it.
+        Directive {
+            when: When::Tick(60),
+            what: Act::ClickWorld(
+                layout::marker_rect(LOCATIONS[crate::sim::site_location(0)].tile).center(),
+            ),
+        },
+        Directive {
+            when: When::Tick(68),
+            what: Act::ClickUi(layout::board_who(0).center()),
+        },
+        Directive {
+            when: When::Tick(76),
+            what: Act::ClickUi(layout::picker_row(5).center()),
+        },
+        Directive {
+            when: When::Tick(84),
+            what: Act::ClickUi(layout::board_close().center()),
         },
     ];
     let (quiet, clicking) = (run_at_speed(&quiet), run_at_speed(&clicking));
@@ -2479,6 +2617,656 @@ fn the_band_belongs_to_its_surface(checks: &mut Checks) {
     }
 }
 
+/// **The candidate picker names a person, and writes nothing else**
+/// (UI.md §3c, the candidate-picker session).
+///
+/// The board was the one surface whose *purpose* required a map interaction:
+/// a posting had to be aimed by selecting a sprite the board itself might be
+/// covering (`FINDINGS.md` G-026). This battery is the six claims that fix
+/// makes, and each of them is one of the failure modes it opens:
+///
+/// 1. every candidate row's fit, verdict and travel are the sim's own answers
+///    for **that** person and **that** job — asserted per row, at the cell's
+///    own position, not "somewhere on the list";
+/// 2. the order is fit-descending with roster-order ties, and the same list
+///    twice for one frame;
+/// 3. choosing writes the one selection and nothing else — no second
+///    selection, which was the wave-1.1 bug and this is the third surface
+///    that could have reintroduced it;
+/// 4. choosing does **not** post, and a posting made after choosing is
+///    byte-identical to one made after selecting the same person on the map;
+/// 5. somebody who is out appears with their state, and a posting to them
+///    travels;
+/// 6. **the complaint itself**: a board opened over a character's own sprite,
+///    and that character posted to without any map click at all.
+fn the_picker_names_a_person(checks: &mut Checks, baseline: &Conducted) -> String {
+    let tuning = Tuning::SHIPPED;
+    let grid = grid::grid();
+    let cast = people::roster();
+    let marker =
+        |site: usize| layout::marker_rect(LOCATIONS[crate::sim::site_location(site)].tile).center();
+
+    // --- 1: every row is the sim's own three answers, per row ---------------
+    // Read off a played world, so the list has people at home, people on the
+    // road and people working on it, and over every open row of every site.
+    let played = baseline.sim.clone();
+    let lens = lens::Lens::on(&played);
+    let now = baseline.minutes;
+    let mut rows_judged = 0usize;
+    let mut out_seen = 0usize;
+    let mut refusals = 0usize;
+    let style = theme::text(theme::SMALL, theme::INK);
+    let mut widest = 0.0f32;
+    let mut worst = String::new();
+    let mut longest_journey = 0.0f32;
+    for site in 0..played.sites.len() {
+        for slot in played.sites[site].open_slots() {
+            let Some(quest) = played.sites[site].quest(slot).copied() else {
+                continue;
+            };
+            let flow = flow::Flow {
+                board: Some(site),
+                picking: Some(crate::sim::JobId { site, slot }),
+                ..flow::Flow::default()
+            };
+            let panel =
+                crate::board::candidate_picker(&flow, &lens, &grid, &tuning, now, site, slot);
+            let cell = |at: Vec2| {
+                panel
+                    .runs
+                    .iter()
+                    .find(|run| {
+                        crate::checks::near(run.at.x, at.x) && crate::checks::near(run.at.y, at.y)
+                    })
+                    .map(|run| run.text.clone())
+            };
+            let listed = crate::board::candidates(&flow, &lens, &grid, &tuning, now, site, slot);
+            checks.require(
+                listed.len() == played.people.len(),
+                "the candidate list leaves somebody out",
+                format!(
+                    "{:?} lists {} of {} people; everyone appears, including the ones who \
+                     are out, because posting to somebody who is out is legal and travels",
+                    quest.name,
+                    listed.len(),
+                    played.people.len()
+                ),
+            );
+            for (row, candidate) in listed.iter().enumerate() {
+                let who = candidate.who;
+                let at = layout::picker_row(row).min;
+                // The three answers, each from the function the sim itself
+                // uses — not from the candidate this surface built.
+                let fit = traits::competence_at(quest.task, &cast[who].traits);
+                let wage = crate::board::wage_offered(&flow, &lens, site, slot, quest.task);
+                let reading = crate::answers::read(
+                    &played,
+                    &tuning,
+                    now,
+                    who,
+                    &crate::asks::preview_posting(
+                        who,
+                        site,
+                        slot,
+                        wage,
+                        lens.standing_rate(quest.task),
+                    ),
+                    crate::sim::JobId { site, slot },
+                );
+                let route = crate::sim::route_out(&grid, &tuning, &played, who, site);
+                let says = cell(at + layout::cand::SAYS);
+                checks.require(
+                    cell(at + layout::cand::NAME).as_deref() == Some(cast[who].name),
+                    "a candidate row is named after somebody else",
+                    format!(
+                        "row {row} of {:?} says {:?} and the list puts {} there",
+                        quest.name,
+                        cell(at + layout::cand::NAME),
+                        cast[who].name
+                    ),
+                );
+                checks.require(
+                    cell(at + layout::cand::FIT).as_deref() == Some(format!("fit {fit}").as_str()),
+                    "a candidate row's fit is not the aptitude the sim reads",
+                    format!(
+                        "{} answers {fit} to traits::competence_at for {} work and row {row} \
+                         of {:?} says {:?}",
+                        cast[who].name,
+                        quest.task.id(),
+                        quest.name,
+                        cell(at + layout::cand::FIT)
+                    ),
+                );
+                checks.require(
+                    says.as_ref()
+                        .is_some_and(|text| text.starts_with(reading.verdict.name())),
+                    "a candidate row's verdict is not the one answers::read gives",
+                    format!(
+                        "answers::read says {:?} of {} at {wage}g for {:?} and row {row} says \
+                         {says:?}",
+                        reading.verdict.name(),
+                        cast[who].name,
+                        quest.name
+                    ),
+                );
+                let wanted = match &route {
+                    Some(route) => format!("{} min away", route.cost),
+                    None => "no way there".to_owned(),
+                };
+                checks.require(
+                    cell(at + layout::cand::TRAVEL).as_deref() == Some(wanted.as_str()),
+                    "a candidate row's travel is not the journey the sim would walk",
+                    format!(
+                        "sim::route_out answers {:?} for {} to {} and row {row} says {:?}",
+                        route.as_ref().map(|route| (route.tiles.len(), route.cost)),
+                        cast[who].name,
+                        LOCATIONS[crate::sim::site_location(site)].name,
+                        cell(at + layout::cand::TRAVEL)
+                    ),
+                );
+                // And their whereabouts is the lens's own sentence, uncut:
+                // a clipped cell on this surface is a person whose state the
+                // player cannot read, which is what the row is for.
+                let where_ = cell(at + layout::cand::WHERE);
+                checks.require(
+                    where_.as_deref() == Some(lens.whereabouts(who).as_str()),
+                    "a candidate row's whereabouts is not the lens's own, or was clipped",
+                    format!(
+                        "the lens says {:?} of {} and row {row} says {where_:?}",
+                        lens.whereabouts(who),
+                        cast[who].name
+                    ),
+                );
+                if !lens.at_home(who) {
+                    out_seen += 1;
+                }
+                if !reading.verdict.takes() {
+                    refusals += 1;
+                }
+                // **And the widest verdict line this world can produce is
+                // measured against the cell that prints it**, over a played
+                // world rather than an opening one: the reason on a refusal
+                // is the rival's own sentence, and which rival wins is
+                // exactly what a played world has and a staged one does not.
+                let line = format!("{} - {}", reading.verdict.name(), reading.why);
+                if crate::checks::greater(style.width_of(&line), widest) {
+                    widest = style.width_of(&line);
+                    worst = line;
+                }
+                if let Some(route) = &route {
+                    let journey = format!("{} min away", route.cost);
+                    longest_journey = longest_journey.max(style.width_of(&journey));
+                }
+                rows_judged += 1;
+            }
+        }
+    }
+    checks.require(
+        !greater(widest, layout::cand::SAYS_W),
+        "a verdict's reason does not fit the candidate row that prints it",
+        format!(
+            "{worst:?} is {widest:.0} reference pixels wide and a candidate's verdict cell is              {:.0}; what a clip takes off a verdict is its reason, which is the half a player              decides on",
+            layout::cand::SAYS_W
+        ),
+    );
+    checks.require(
+        !greater(longest_journey, layout::cand::TRAVEL_W),
+        "a candidate's journey does not fit the cell that prints it",
+        format!(
+            "the longest journey on the list is {longest_journey:.0} reference pixels wide \
+             and the travel cell is {:.0}; a clipped journey is the number a posting to \
+             somebody who is out is decided on",
+            layout::cand::TRAVEL_W
+        ),
+    );
+    checks.require(
+        rows_judged > 0 && out_seen > 0 && refusals > 0,
+        "the candidate battery never met the states it exists to judge",
+        format!(
+            "{rows_judged} candidate rows judged, {out_seen} of them somebody who is out and \
+             {refusals} of them a refusal; a list with nobody out and nobody refusing proves \
+             neither"
+        ),
+    );
+
+    // --- 2: fit-descending, roster-order ties, and the same list twice ------
+    let (site, slot) = played
+        .sites
+        .iter()
+        .enumerate()
+        .find_map(|(site, board)| board.open_slots().next().map(|slot| (site, slot)))
+        .unwrap_or((0, 0));
+    let flow = flow::Flow {
+        board: Some(site),
+        picking: Some(crate::sim::JobId { site, slot }),
+        ..flow::Flow::default()
+    };
+    let once = crate::board::candidates(&flow, &lens, &grid, &tuning, now, site, slot);
+    let twice = crate::board::candidates(&flow, &lens, &grid, &tuning, now, site, slot);
+    let order: Vec<usize> = once.iter().map(|candidate| candidate.who).collect();
+    checks.require(
+        order
+            == twice
+                .iter()
+                .map(|candidate| candidate.who)
+                .collect::<Vec<_>>(),
+        "two readings of one frame produced two candidate orders",
+        format!(
+            "the first read {order:?} and the second {:?}",
+            twice
+                .iter()
+                .map(|candidate| candidate.who)
+                .collect::<Vec<_>>()
+        ),
+    );
+    let sorted = once.windows(2).all(|pair| {
+        pair[0].fit > pair[1].fit || (pair[0].fit == pair[1].fit && pair[0].who < pair[1].who)
+    });
+    checks.require(
+        sorted,
+        "the candidate list is not fit-descending with roster-order ties",
+        format!(
+            "it reads {:?}; the owner's rule is best fit first, and a tie keeps the registry \
+             order it arrived in",
+            once.iter()
+                .map(|candidate| (cast[candidate.who].name, candidate.fit))
+                .collect::<Vec<_>>()
+        ),
+    );
+
+    // --- 3: choosing writes the one selection and nothing else --------------
+    // Over the paused opening world, where nothing moves but the clicking.
+    let opening = crate::sim::Sim::opening(&tuning, modules::ModuleSet::ALL);
+    let open_lens = lens::Lens::on(&opening);
+    let (probe_site, probe_slot) = (0usize, 0usize);
+    let staged = flow::Flow {
+        board: Some(probe_site),
+        picking: Some(crate::sim::JobId {
+            site: probe_site,
+            slot: probe_slot,
+        }),
+        ..flow::Flow::default()
+    };
+    let opening_order: Vec<usize> = crate::board::candidates(
+        &staged, &open_lens, &grid, &tuning, 0, probe_site, probe_slot,
+    )
+    .into_iter()
+    .map(|candidate| candidate.who)
+    .collect();
+    // A row that is neither the front nor the back of the list, so a picker
+    // that quietly selected the best fit would read differently here.
+    let row = 3usize.min(opening_order.len().saturating_sub(1));
+    let wanted = opening_order.get(row).copied().unwrap_or(0);
+    let picked = {
+        let script = [
+            Directive {
+                when: When::Tick(6),
+                what: Act::ClickWorld(marker(probe_site)),
+            },
+            Directive {
+                when: When::Tick(14),
+                what: Act::ClickUi(layout::board_who(probe_slot).center()),
+            },
+            Directive {
+                when: When::Tick(22),
+                what: Act::ClickUi(layout::picker_row(row).center()),
+            },
+        ];
+        let mut session = Session::plain(tuning, &script, 32);
+        session.probe_ticks = &[20, 30];
+        conduct(&session)
+    };
+    let opened = picked.probe(20).map(|(_, flow, ..)| flow.picking);
+    checks.require(
+        opened
+            == Some(Some(crate::sim::JobId {
+                site: probe_site,
+                slot: probe_slot,
+            })),
+        "a job row's who? does not open that job's candidate list",
+        format!("the picker reads {opened:?} after the who? at the end of the row"),
+    );
+    let after = picked.probe(30).map(|(_, flow, ..)| flow.clone());
+    checks.require(
+        after.as_ref().is_some_and(|flow| {
+            flow.selected == Some(wanted)
+                && flow.picking.is_none()
+                && flow.board == Some(probe_site)
+                && !flow.post_open
+                && flow.offer.is_none()
+                && flow.breakdown.is_none()
+        }),
+        "choosing a candidate wrote something other than the one selection",
+        format!(
+            "after choosing row {row} ({}) the flow reads selected={:?} picking={:?} \
+             board={:?} post_open={:?} offer={:?}; the picker names a person into the one \
+             selection and writes nothing else",
+            cast[wanted].name,
+            after.as_ref().map(|flow| flow.selected),
+            after.as_ref().map(|flow| flow.picking),
+            after.as_ref().map(|flow| flow.board),
+            after.as_ref().map(|flow| flow.post_open),
+            after.as_ref().and_then(|flow| flow.offer),
+        ),
+    );
+    checks.require(
+        picked.events.is_empty() && picked.sim.postings.all().is_empty(),
+        "choosing a candidate posted something",
+        format!(
+            "the transcript is {:?} and the ledger holds {} postings; the picker names a \
+             person and the row makes the posting - there is one way to post",
+            transcript(&picked.events),
+            picked.sim.postings.all().len()
+        ),
+    );
+
+    // --- 3b: the list belongs to the board it was opened on -----------------
+    // Every way out of *that* board, including the one that does not close a
+    // board at all: another site's marker replaces it, and a slot-only picker
+    // would then be a number read against a different job's rows. The
+    // invariant is the pair, asserted on every one of them.
+    let ways: [(&str, Vec<Directive>); 4] = [
+        (
+            "the board's own X",
+            vec![Directive {
+                when: When::Tick(30),
+                what: Act::ClickUi(layout::board_close().center()),
+            }],
+        ),
+        (
+            "a drawer's handle",
+            vec![Directive {
+                when: When::Tick(30),
+                what: Act::ClickUi(layout::roster_button().center()),
+            }],
+        ),
+        (
+            "another site's marker, which replaces the board rather than closing it",
+            vec![Directive {
+                when: When::Tick(30),
+                what: Act::ClickWorld(marker(3)),
+            }],
+        ),
+        (
+            "a meter chip, which shuts the board for the faces list",
+            vec![Directive {
+                when: When::Tick(30),
+                what: Act::ClickUi(layout::meter_chip(0).center()),
+            }],
+        ),
+    ];
+    for (what, out) in ways {
+        let mut script = vec![
+            Directive {
+                when: When::Tick(6),
+                what: Act::ClickWorld(marker(probe_site)),
+            },
+            Directive {
+                when: When::Tick(14),
+                what: Act::ClickUi(layout::board_who(probe_slot).center()),
+            },
+        ];
+        script.extend(out);
+        let mut session = Session::plain(tuning, &script, 40);
+        session.probe_ticks = &[38];
+        let left = conduct(&session);
+        let (board, picking) = left
+            .probe(38)
+            .map(|(_, flow, ..)| (flow.board, flow.picking))
+            .unwrap_or((None, None));
+        checks.require(
+            picking.is_none() && picking.is_none_or(|job| Some(job.site) == board),
+            "a candidate list outlived the board it was opened on",
+            format!(
+                "after {what} the board reads {board:?} and the picker holds {picking:?}; a \
+                 list of candidates for a job nobody can see is a panel about nothing, and a \
+                 list read against a *different* board is worse - which is why the picker \
+                 carries the whole JobId and the pair is checked every tick"
+            ),
+        );
+    }
+
+    // --- 4: the posting after choosing is the posting after a map click -----
+    let by_picker = {
+        let script = [
+            Directive {
+                when: When::Tick(6),
+                what: Act::ClickWorld(marker(probe_site)),
+            },
+            Directive {
+                when: When::Tick(14),
+                what: Act::ClickUi(layout::board_who(probe_slot).center()),
+            },
+            Directive {
+                when: When::Tick(22),
+                what: Act::ClickUi(layout::picker_row(row).center()),
+            },
+            Directive {
+                when: When::Tick(30),
+                what: Act::ClickUi(layout::board_row(probe_slot).center()),
+            },
+        ];
+        conduct(&Session::plain(tuning, &script, 40))
+    };
+    let by_sprite = ordered_from(
+        probe_site,
+        probe_slot,
+        &[Directive {
+            when: When::Tick(6),
+            what: sweep::pick_at_home(wanted),
+        }],
+    );
+    checks.require(
+        !by_picker.events.is_empty()
+            && transcript(&by_picker.events) == transcript(&by_sprite.events),
+        "a posting aimed by the picker is not the posting aimed by a map click",
+        format!(
+            "the picker path emitted {:?} and the sprite path {:?}; the picker writes the \
+             same one selection the map does, so the posting cannot know which door it came \
+             through",
+            transcript(&by_picker.events),
+            transcript(&by_sprite.events)
+        ),
+    );
+    checks.require(
+        by_picker
+            .sim
+            .postings
+            .all()
+            .first()
+            .map(|posting| posting.who)
+            == Some(crate::asks::Who::Person(wanted)),
+        "the posting made after choosing is addressed to somebody else",
+        format!(
+            "the ledger's first posting is addressed to {:?} and the row chosen was {}",
+            by_picker
+                .sim
+                .postings
+                .all()
+                .first()
+                .map(|posting| posting.who),
+            cast[wanted].name
+        ),
+    );
+
+    // --- 5: somebody who is out is on the list, and a posting to them travels
+    // One posting sends its taker away, and the next board's list then has to
+    // carry them with their state on it — and a posting made to them from the
+    // list stands unheard on the ledger, which is what "asks travel" means.
+    let travelled = {
+        let away = opening_order.first().copied().unwrap_or(0);
+        let script = vec![
+            Directive {
+                when: When::Tick(6),
+                what: sweep::pick_at_home(away),
+            },
+            Directive {
+                when: When::Tick(14),
+                what: Act::ClickWorld(marker(0)),
+            },
+            Directive {
+                when: When::Tick(22),
+                what: Act::ClickUi(layout::board_row(0).center()),
+            },
+            Directive {
+                when: When::Tick(30),
+                what: Act::ClickWorld(marker(1)),
+            },
+            Directive {
+                when: When::Tick(38),
+                what: Act::ClickUi(layout::board_who(0).center()),
+            },
+        ];
+        let mut session = Session::plain(tuning, &script, 48);
+        session.probe_ticks = &[44];
+        (conduct(&session), away)
+    };
+    let (run, away) = travelled;
+    let listed = run.probe(44).map(|(_, flow, _, sim, clock)| {
+        let lens = lens::Lens::on(sim);
+        let panel =
+            crate::board::candidate_picker(flow, &lens, &grid, &tuning, clock.minutes, 1, 0);
+        let order = crate::board::candidates(flow, &lens, &grid, &tuning, clock.minutes, 1, 0);
+        let row = order
+            .iter()
+            .position(|candidate| candidate.who == away)
+            .unwrap_or(0);
+        let at = layout::picker_row(row).min;
+        (
+            lens.at_home(away),
+            lens.whereabouts(away),
+            panel.runs.iter().any(|run| {
+                crate::checks::near(run.at.x, (at + layout::cand::WHERE).x)
+                    && crate::checks::near(run.at.y, (at + layout::cand::WHERE).y)
+                    && run.text == lens.whereabouts(away)
+            }),
+        )
+    });
+    checks.require(
+        listed
+            .as_ref()
+            .is_some_and(|(home, _, shown)| !*home && *shown),
+        "a character who is out is not on the candidate list with their state",
+        format!(
+            "{} is {:?} and the row for them {}; everyone appears, and the state is what \
+             makes posting to somebody who is out a move the player can see they are making",
+            cast[away].name,
+            listed.as_ref().map(|(_, where_, _)| where_.clone()),
+            match listed.as_ref().map(|(_, _, shown)| *shown) {
+                Some(true) => "says so",
+                Some(false) => "does not say so",
+                None => "was never read",
+            }
+        ),
+    );
+
+    // --- 6: the complaint, closed ------------------------------------------
+    // A board opened over a character's own sprite, and that character posted
+    // to with no map click after the marker: the picker is the whole route.
+    let ui = camera::UiMap::for_camera(&run_camera(HEADLESS_VIEWPORT));
+    let covered = ui.to_world_rect(layout::board_panel());
+    let hidden = (0..cast.len()).find(|who| {
+        floors::inside(covered, layout::home_rect(cast[*who].home)) && opening_order.contains(who)
+    });
+    let Some(hidden) = hidden else {
+        checks.require(
+            false,
+            "no character's sprite stands under the open board, so the complaint cannot be \
+             reproduced",
+            format!("the board covers {covered:?} in world units at the reference camera"),
+        );
+        return "picker: the complaint could not be staged".to_owned();
+    };
+    let hidden_row = opening_order
+        .iter()
+        .position(|who| *who == hidden)
+        .unwrap_or(0);
+    let no_map_click = {
+        let script = [
+            Directive {
+                when: When::Tick(6),
+                what: Act::ClickWorld(marker(probe_site)),
+            },
+            Directive {
+                when: When::Tick(14),
+                what: Act::ClickUi(layout::board_who(probe_slot).center()),
+            },
+            Directive {
+                when: When::Tick(22),
+                what: Act::ClickUi(layout::picker_row(hidden_row).center()),
+            },
+            Directive {
+                when: When::Tick(30),
+                what: Act::ClickUi(layout::board_row(probe_slot).center()),
+            },
+        ];
+        conduct(&Session::plain(tuning, &script, 40))
+    };
+    let by_map = ordered_from(
+        probe_site,
+        probe_slot,
+        &[Directive {
+            when: When::Tick(6),
+            what: sweep::pick_at_home(hidden),
+        }],
+    );
+    checks.require(
+        !no_map_click.events.is_empty()
+            && transcript(&no_map_click.events) == transcript(&by_map.events),
+        "the board cannot post to a character whose sprite it is covering",
+        format!(
+            "{}'s figure at {:?} is inside the open board's own rectangle {covered:?}, and \
+             posting to them through the picker emitted {:?} where the map-selected route \
+             emits {:?}",
+            cast[hidden].name,
+            layout::home_rect(cast[hidden].home),
+            transcript(&no_map_click.events),
+            transcript(&by_map.events)
+        ),
+    );
+    // And the fit chip is one chip with one sentence, on both surfaces: the
+    // picker's footer prints exactly what the board's does.
+    let explained = flow::Flow {
+        board: Some(probe_site),
+        picking: Some(crate::sim::JobId {
+            site: probe_site,
+            slot: probe_slot,
+        }),
+        fit_explained: true,
+        ..flow::Flow::default()
+    };
+    let picker_panel = crate::board::candidate_picker(
+        &explained, &open_lens, &grid, &tuning, 0, probe_site, probe_slot,
+    );
+    let voice = crate::ui::wrap(
+        &crate::asks::fit_means(),
+        crate::ui::columns(layout::PICKER_HINT_W, theme::SMALL),
+    );
+    checks.require(
+        voice
+            .lines()
+            .all(|line| picker_panel.runs.iter().any(|run| run.text == line)),
+        "the picker describes fit in a voice of its own",
+        format!(
+            "asks::fit_means says {:?} and the picker's footer reads {:?}; two surfaces \
+             showing fit must not describe it in two voices",
+            crate::asks::fit_means(),
+            picker_panel
+                .runs
+                .iter()
+                .map(|run| run.text.clone())
+                .collect::<Vec<_>>()
+        ),
+    );
+    format!(
+        "{rows_judged} candidate rows judged over every open job ({out_seen} somebody who is \
+         out, {refusals} refusals); widest verdict line {widest:.0}px against {:.0}px cells; \
+         {} posted to through a board covering their own sprite",
+        layout::cand::SAYS_W,
+        cast[hidden].name
+    )
+}
+
 pub fn run() -> ExitCode {
     let mut checks = Checks::default();
     let tuning = Tuning::SHIPPED;
@@ -2520,6 +3308,8 @@ pub fn run() -> ExitCode {
     selection_moves_nothing(&mut checks);
     // --- the job board, which is where the asking happens ------------------
     the_board_is_the_ask(&mut checks);
+    // --- and the candidate list that makes it self-sufficient ---------------
+    let picker = the_picker_names_a_person(&mut checks, &baseline);
 
     // --- the layout floors --------------------------------------------------
     floors::layout_floors(&mut checks);
@@ -2668,6 +3458,7 @@ pub fn run() -> ExitCode {
     println!("  map text: {legibility}");
     println!("  {labels}");
     println!("  breakdown: {breakdown}");
+    println!("  picker: {picker}");
     println!("  {figures}");
     println!(
         "  people: {} in the registry, {} traits over {} kinds, {} marks, {} reaction cells",
