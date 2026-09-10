@@ -290,6 +290,38 @@ impl<'a> Lens<'a> {
         }
     }
 
+    /// **Where they are, and when the work they are on lets them go** — the
+    /// whereabouts a candidate row says, so a board can name somebody it is
+    /// covering on the map (UI.md §3c).
+    ///
+    /// **The same `Party::status` every other surface reads**, so there is no
+    /// second phrasing of where somebody is; what this adds is the minute,
+    /// which nothing else prints. It is the sim's own scheduled completion
+    /// and not a guess at when they are back through their own door — the walk
+    /// home is a route the sim has but not a minute it has decided, so the
+    /// word is `done` and not `home`.
+    pub fn whereabouts(&self, index: usize) -> String {
+        let names = self.names();
+        match self
+            .sim
+            .parties
+            .iter()
+            .find(|party| party.member == index && party.activity != Activity::Idle)
+        {
+            Some(party) => match party.activity {
+                Activity::Working { until } => {
+                    format!(
+                        "{}, done {}",
+                        party.status(&names),
+                        crate::clock::stamp(until)
+                    )
+                }
+                _ => party.status(&names),
+            },
+            None => "at home".to_owned(),
+        }
+    }
+
     /// Whether this character is standing at their home tile.
     ///
     /// Derived, never stored: a character is at home unless a party they field

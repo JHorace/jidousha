@@ -536,15 +536,25 @@ pub fn content(
     if bare {
         panel.absorb(panels::glance(flow, lens));
         // --- and the site panel a marker opens (UI.md §3c) -----------------
+        //
+        // **One of the two, never both.** The candidate picker draws
+        // *instead* of the board and over the same column: a board under it
+        // would be rows nobody can read lying across controls somebody can
+        // click, which is exactly what the floors refuse, and the picker's
+        // header carries what the covered board was still saying.
         if let Some(site) = flow.board {
-            panel.absorb(crate::board::site_board(
-                flow,
-                lens,
-                grid,
-                tuning,
-                clock.minutes,
-                site,
-            ));
+            panel.absorb(match flow.picking {
+                Some(job) => crate::board::candidate_picker(
+                    flow,
+                    lens,
+                    grid,
+                    tuning,
+                    clock.minutes,
+                    job.site,
+                    job.slot,
+                ),
+                None => crate::board::site_board(flow, lens, grid, tuning, clock.minutes, site),
+            });
         }
     }
 
@@ -739,16 +749,39 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
             .sites
             .get(site)
             .map_or(0, |board| board.quests.len());
-        fill(
-            ctx,
-            layout::board_panel(),
-            theme::PANEL,
-            theme::layers::CARD,
-        );
-        border(ctx, layout::board_panel(), theme::GOLD, theme::layers::CARD);
-        ghost_at(ctx, &map, layout::board_close(), theme::layers::CARD);
-        for slot in 0..jobs.min(layout::BOARD_ROWS) {
-            ghost_at(ctx, &map, layout::board_row(slot), theme::layers::CARD);
+        // **The candidate picker's ground, or the board's** — never both, for
+        // the reason `content` never draws both: the picker replaces the board
+        // in the same column (UI.md §3c).
+        if flow.picking.is_some() {
+            let people = ctx.world.resource::<Sim>().people.len();
+            fill(
+                ctx,
+                layout::picker_panel(),
+                theme::PANEL,
+                theme::layers::CARD,
+            );
+            border(
+                ctx,
+                layout::picker_panel(),
+                theme::GOLD,
+                theme::layers::CARD,
+            );
+            ghost_at(ctx, &map, layout::board_close(), theme::layers::CARD);
+            for row in 0..people.min(layout::PICKER_ROWS) {
+                ghost_at(ctx, &map, layout::picker_row(row), theme::layers::CARD);
+            }
+        } else {
+            fill(
+                ctx,
+                layout::board_panel(),
+                theme::PANEL,
+                theme::layers::CARD,
+            );
+            border(ctx, layout::board_panel(), theme::GOLD, theme::layers::CARD);
+            ghost_at(ctx, &map, layout::board_close(), theme::layers::CARD);
+            for slot in 0..jobs.min(layout::BOARD_ROWS) {
+                ghost_at(ctx, &map, layout::board_row(slot), theme::layers::CARD);
+            }
         }
     }
     if flow.selected.is_some() {

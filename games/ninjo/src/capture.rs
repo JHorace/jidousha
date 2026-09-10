@@ -1,7 +1,7 @@
 //! The captured frames: the screenshots a person looks at (giri's capture
 //! path, re-aimed at the map).
 //!
-//! Twenty pictures. The mid-travel map and the feed are each taken at the
+//! Twenty-two pictures. The mid-travel map and the feed are each taken at the
 //! reference surface and at a narrow one (the narrow set exists to catch
 //! scaling regressions, which are invisible to every assertion that is not
 //! about pixels). The rest are reference only: the settlement before anything
@@ -13,8 +13,10 @@
 //! refusing a row that is already taken), **the arithmetic behind a verdict**
 //! in both its placements (a refused job row, and a decision in the feed),
 //! **the settlement one notch of the wheel out** — the picture the label rule
-//! exists to make possible — and the tuning drawer (a dev surface whose rows
-//! are the smallest type in the game).
+//! exists to make possible — **the candidate picker** open with nobody
+//! selected and the board after choosing from it, which is the posting route
+//! that never touches the map — and the tuning drawer (a dev surface whose
+//! rows are the smallest type in the game).
 //!
 //! A machine with no GPU is not a failure: every runner this project has is
 //! headless and some have no graphics stack at all.
@@ -81,6 +83,8 @@ pub fn capture_screens(
         "roadring",
         "breakdown",
         "feedwhy",
+        "picker",
+        "chosen",
     ] {
         if let Some(shot) = reference.photo(name) {
             wanted.push(Wanted {
