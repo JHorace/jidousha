@@ -30,6 +30,17 @@ vector is safe — it is not, and the placement never normalizes) and
 `crates/*/src/`, no `docs/internal/`, no ADR but 0041, which the handoff names.
 Its one new entry is about this repository's own documents.
 
+**The legibility session (2026-09-09) read** `CLAUDE.md`, the `make-game`
+skill, this game's `UI.md`, `GDD.md`, `FINDINGS.md` and its whole `src/`.
+Nothing under `crates/*/src/`, no `docs/internal/`, and no ADR. It asked
+`docs/api/` **one** thing it had not asked before — whether the input snapshot
+carries a wheel event a scripted run can record, so a picture could be taken
+one notch of the wheel out (it does: `InputEvent::Scrolled`, and the game's
+conductor now has an `Act::Scroll` beside its clicks). The rest of the session
+is arithmetic over the game's own data drawn into `Panel`s the floors already
+judge. It closed **G-022** with its post-fix measurement and files **two new
+entries**, both about *this game* and one of them about a handoff.
+
 **The job-board session (2026-09-06) read** `CLAUDE.md`, the `make-game`
 skill, this game's `UI.md`, `DESIGN.md`, `GDD.md`, `CAST.md`, `FINDINGS.md`
 and its whole `src/`, plus one line of `docs/api/jidousha-testing.md` (the
@@ -162,10 +173,134 @@ row, a name only for the selected character, three tiles between the rows —
 are not to be acted on until they are. The fix session deliberately did not
 touch them.
 
-**What was done:** `floors::map_legibility` states the numbers as a floor and
-the verify report prints them (`map labels 12.0px at the default zoom, 10.7px
-one notch out`), so the next session inherits a measured fact instead of a
-disagreement.
+**What was done (2026-09-08):** `floors::map_legibility` states the numbers as
+a floor and the verify report prints them (`map labels 12.0px at the default
+zoom, 10.7px one notch out`), so the next session inherits a measured fact
+instead of a disagreement.
+
+**Closed 2026-09-09 by the legibility session, and here is what it did and
+what it then measured.** The reopening was right and the fix is neither of the
+layout suggestions: **the floor was being used as a veto and it should have
+been a governor.** A name was going to be drawn whatever the camera did, so the
+twelve-pixel floor could only forbid the zoom; now the *label* yields — a
+label is drawn only where it clears the floor and lands on nothing already
+drawn (a figure, a marker, an earlier label, or a chrome surface that is up),
+in one fixed order, and below the floor none is drawn at all. So:
+
+- **the crowding is gone at the default camera without moving a row or a
+  home.** Of the nineteen words the settlement can say, **twelve survive**;
+  the seven that drop are the ones that were landing on the southern row's
+  heads, which is exactly what this finding measured. `screens/ninjo-settlement-reference.png`
+  is the after picture, and the seven that dropped are the *northern* row's
+  names, so two of the ten figures now stand anonymous at the default zoom.
+  **That is the residual, and it is the owner's to judge**: it is a real cost,
+  it is the price of never drawing a name across a face, and a name only for
+  the selected character (this finding's own second suggestion) is what the
+  chrome label now gives on top of it.
+- **zooming out is permitted**, which is what the wave-1.2 rider wanted and
+  could not have: one notch out drops every map word and keeps every figure
+  (`screens/ninjo-zoomed-reference.png`), and the selected character stays
+  named because that name is chrome. **The default camera was deliberately not
+  moved** — where it should sit is a play judgement, and the point of the rule
+  is that it is now a judgement somebody can make by making it.
+- `floors::map_legibility` keeps stating the two numbers, and
+  `verify::map_labels_are_governed` asserts the rule itself: every drawn label
+  clears the floor and touches nothing, none is drawn below it, the selected
+  name survives both, and the same frame drops the same labels twice running.
+
+**What the owner is asked for**, and the reason this closes rather than
+reopens again: play it, zoom out one notch, and say whether the default should
+move and whether two unnamed figures at the settlement is a price worth
+paying. Both are content judgements now rather than measurements.
+
+## The legibility session (2026-09-09) — **2 new findings**, both the game's own
+
+It closed G-022 above with the measurement that finding asked for. Its two new
+entries are a pattern the owner has now paid for three times, and a handoff
+that forbade in one section the thing it required in another.
+
+### G-024 — the game's own: three surfaces have now outlived the world they were built for, and nobody was looking for the fourth
+
+Class: **the game's own** (a pattern, not an incident) · Game: ninjo ·
+Files: `games/ninjo/UI.md`, `src/flow.rs`, `src/screens.rs`, `GDD.md` §8 ·
+**Open — the wave-1 close's**
+
+Three sessions running have retired a piece of S1 presentation that was
+correct when it was written and wrong by the time it was found, and each was
+found by an owner playtest rather than by a check:
+
+| the residue | what it was for | what made it wrong | found by |
+|---|---|---|---|
+| the **double selection** (G-017) | S1's dispatch pick, beside wave 0a's character selection | wave 1.1 made a party a character, so one roster had two indices over it | the wave-1.1 playtest |
+| the **double figure** (G-023) | three party tokens stacked on a town tile | wave 0b gave every person their own figure, so the token was a second picture of the same person | the wave-1.1 playtest |
+| the **party strip** (this session) | the only way to see and select a one-person band | wave 0a's meters, wave 1.1's roster and the map's own figures took its four jobs one at a time | the wave-1.2 playtest |
+
+**The shape is the same every time**: a surface built for a world where it was
+the *only* answer to a question, kept through the waves that gave that question
+better answers, and retired only when somebody played the build and said it
+felt cluttered. Nothing in this repository asks "what is this surface still
+for?" — the floors ask whether a surface is legible, the content floors ask
+whether it says what it means, and both pass with flying colours on a surface
+nobody needs. **A check cannot find this**; a reading can.
+
+**Where the rest should be swept for**: the wave-1 close's exemplar audit
+(`GDD.md` §8). The audit walks the surfaces against what the built world
+actually needs, and this is the class it should be walking for — the
+candidates a reader should start from being every surface whose justification
+in `UI.md` names a wave earlier than the one that last touched the question it
+answers. Two are visible from here without judging them: the **notices band**
+(the last two things the player did, in a drawer whose feed now carries a `?`
+on every decision) and the **meters band's two chips** (`idle` and `away`,
+which the roster's ten rows now state per person). Neither is wrong today;
+both are surfaces whose question moved.
+
+**What this session did about it:** retired the strip, listed its four jobs and
+where each now lives (`UI.md` §3), and filed this. It did not touch the two
+candidates above — naming them is the finding, judging them is the audit's.
+
+### G-025 — the game's own: a handoff forbade in its fences what it required in its verification
+
+Class: **the game's own** (a handoff defect, and the session deviated) ·
+Game: ninjo · Files: the legibility session's handoff, `games/ninjo/src/sim.rs`
+· **Open — the owner's to rule on**
+
+The legibility handoff's fences say **"no sim state"** twice — in its opening
+line and again in its "You may NOT" list. Its **Verify** section requires that
+"the feed breakdown equals the `Judged` **recorded with that decision**", and
+its work item 1 requires the same breakdown for "a choice already made" so
+that "why did Ludo go there" is answerable *after the fact*.
+
+Expected: to build both halves inside the fence. Happened: **they cannot both
+be met.** The arithmetic behind a decision cannot be recovered later without
+re-running the scorer against a world that has moved — the board has been
+claimed, the wage stepped, the regard drifted — and a breakdown that disagrees
+with the decision it explains is the failure mode the same handoff names first.
+The job row's half needs no record at all (it is a preview of *now*); the
+feed's half needs the terms kept at the moment they were weighed.
+
+**What was done, and on whose authority:** the session kept them, on the
+`Event::gold` precedent — a derived fact recorded on the occurrence because
+recomputing it later would lie, which `sim.rs` already states in those words
+for money. `Event::judged` is a record and not an input: nothing in the
+simulation reads it, no arithmetic depends on it, no transcript prints it, and
+the invariance sweep and every replay are byte-identical with it in place. It
+is nonetheless **a change to a sim struct in a session told not to make one**,
+and it is called out here and in the PR rather than shipped quietly.
+
+**What the owner is asked to rule:** whether "no sim state" in a UI handoff
+means "change no state the world decides from" (which this obeys) or "add no
+field to a sim struct" (which this breaks). The second reading makes the
+feed's half of a breakdown unbuildable by any session that is also forbidden
+to compute a second answer, so the wording is worth settling before the next
+UI handoff inherits it.
+
+**Two smaller things about the same handoff**, recorded because they cost
+minutes rather than decisions: it names `reason_for` as the function that
+collapses a `Judged` to its loudest term — the function is `autonomy::words`,
+and there is no `reason_for` in the crate; and it asks for the party strip's
+jobs to be listed "in the PR", which is where they are, but the durable place
+for them turned out to be `UI.md` §3, since a PR body is not somewhere anybody
+reads twice (`make-game` §C says exactly that about findings).
 
 ## The job-board session (2026-09-06) — **2 new findings**, both the game's own
 

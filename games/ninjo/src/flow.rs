@@ -136,6 +136,16 @@ pub struct Flow {
     /// drawing its own ring (`FINDINGS.md` G-017). This is the one that
     /// replaced them; there is no second one to keep in step.
     pub selected: Option<usize>,
+    /// **Whose arithmetic is open**, if anybody's (UI.md §3e).
+    ///
+    /// The verdict is the headline and this is one tap deeper: the terms of
+    /// the sum behind it, each with what produced it, the total, and — on a
+    /// refusal — the candidate that beat it. One at a time, because the band
+    /// is one band and two sums on it would be a surface nobody could read.
+    ///
+    /// Presentation, like the selection: it is a reading of a `Judged` the
+    /// scorer already returned, and the world does not know it is open.
+    pub breakdown: Option<Breakdown>,
     /// The click-to-focus marker, if one is up.
     pub pulse: Option<Pulse>,
     /// The transient message, if one is up.
@@ -174,6 +184,25 @@ impl Flow {
         self.offer = None;
         self.post_open = false;
         self.fit_explained = false;
+        self.breakdown = None;
+    }
+
+    /// **Put the breakdown band away where what it explains has gone.**
+    ///
+    /// A job row's sum is about a row of an open board read by a selected
+    /// character, and a feed entry's is about an entry of an open drawer; when
+    /// either goes, the band is an explanation of something nobody can see. It
+    /// is one rule in one place because there are a dozen ways out of those
+    /// surfaces and the band cannot be the thing every one of them remembers.
+    fn put_the_band_away(&mut self) {
+        let orphaned = match self.breakdown {
+            Some(Breakdown::Job(_)) => self.board.is_none() || self.selected.is_none(),
+            Some(Breakdown::Entry(_)) => !self.feed_open,
+            None => false,
+        };
+        if orphaned {
+            self.breakdown = None;
+        }
     }
 
     /// Raise a toast, and log the same sentence — nothing appears only in a
@@ -184,6 +213,29 @@ impl Flow {
             text,
             until: tick + TOAST_TICKS,
         });
+    }
+}
+
+/// **Which verdict has its arithmetic showing** (UI.md §3e).
+///
+/// Two surfaces ask the same question of the same kind of answer: a job row
+/// asks it about an offer the player has not made yet, and a feed entry asks
+/// it about a decision already made. One band draws both, out of one
+/// `autonomy::Reckoning`, which is what stops the two from describing one
+/// scorer differently.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Breakdown {
+    /// A row of the open job board, by slot — the offer a tap would make.
+    Job(usize),
+    /// A decision in the feed, by its index in the event log.
+    Entry(usize),
+}
+
+impl Breakdown {
+    /// Whether the band is drawn over a drawer rather than over the map —
+    /// which is the whole of the difference between the two placements.
+    pub fn over_a_drawer(self) -> bool {
+        matches!(self, Breakdown::Entry(_))
     }
 }
 
@@ -237,6 +289,16 @@ pub fn load_scenario(world: &mut World) {
 
 /// Every input of a tick: speed, pan/zoom, and the pointer.
 pub fn handle_input(world: &mut World) {
+    read_input(world);
+    // **The band belongs to the surface that opened it** (UI.md §3e). Every
+    // path out of a board, a drawer or a selection is a path the band can be
+    // orphaned by, so it is checked once here rather than remembered at each
+    // of them — the mistake this replaces left a feed entry's arithmetic
+    // lying over the map after the drawer that opened it was shut.
+    world.resource_mut::<Flow>().put_the_band_away();
+}
+
+fn read_input(world: &mut World) {
     let Some(input) = world.find_resource::<Input>() else {
         return;
     };
@@ -442,6 +504,43 @@ pub fn handle_input(world: &mut World) {
             .sites
             .get(site)
             .map_or(0, |board| board.quests.len());
+        // **The verdict's own arithmetic, one tap deeper** (UI.md §3e). Its
+        // own target at the end of the row, before the row itself: the row is
+        // the posting, and the `?` is the only thing on the board that
+        // explains rather than acts. Tapping it again puts the band away.
+        for slot in 0..jobs.min(layout::BOARD_ROWS) {
+            if !layout::board_why(slot).contains(at) {
+                continue;
+            }
+            let open = crate::sim::JobState::Open
+                == world
+                    .resource::<Sim>()
+                    .sites
+                    .get(site)
+                    .and_then(|board| board.state(slot))
+                    .unwrap_or(crate::sim::JobState::Open);
+            match (world.resource::<Flow>().selected, open) {
+                (Some(_), true) => {
+                    let flow = world.resource_mut::<Flow>();
+                    let want = Breakdown::Job(slot);
+                    flow.breakdown = (flow.breakdown != Some(want)).then_some(want);
+                }
+                // A verdict is about a person, and a row nobody can be asked
+                // for has no offer to weigh. Both say so rather than opening
+                // an empty band.
+                (None, _) => {
+                    let job = job_name(world, site, slot);
+                    let text = format!("select somebody first - the sum behind {job} is theirs");
+                    world.resource_mut::<Flow>().bounce(tick, text);
+                }
+                (Some(_), false) => {
+                    let job = job_name(world, site, slot);
+                    let text = format!("{job} is not open - there is no offer to weigh");
+                    world.resource_mut::<Flow>().bounce(tick, text);
+                }
+            }
+            return;
+        }
         for slot in 0..jobs.min(layout::BOARD_ROWS) {
             if layout::board_row(slot).contains(at) {
                 let flow = world.resource::<Flow>();
@@ -509,25 +608,17 @@ pub fn handle_input(world: &mut World) {
         }
     }
 
-    // The party strip: a chip is one of the four surfaces a person is
-    // selected from, and it selects exactly the way the other three do.
-    //
-    // **No idle gate here.** Selecting is looking at somebody; ordering is the
-    // second click, and that is where being out refuses (`order_dispatch` ->
-    // `sim::Refusal::NotIdle`). A chip that refused the *selection* would be a
-    // second rule about the one selection, and it is what made the strip's
-    // pick feel like a different thing from the map's.
-    let party_count = world.resource::<Sim>().parties.len();
-    for index in 0..party_count {
-        if !layout::party_chip(index).contains(at) {
-            continue;
-        }
-        select(world, index);
+    // **The breakdown band swallows its own rectangle** while it is open, the
+    // way the job board does: it lies over the map, and a click that fell
+    // through it would put the selection down under a surface the player is
+    // reading. Tapping the same `?` again is what puts it away (UI.md §3e).
+    if world.resource::<Flow>().breakdown.is_some() && layout::breakdown_panel().contains(at) {
         return;
     }
 
-    // Anything under the top bar or on the strip band is chrome, not map.
-    if layout::topbar().contains(at) || layout::party_strip().contains(at) {
+    // Anything under the top bar is chrome, not map. The band at the foot of
+    // the screen used to be the party strip's and is the map's again.
+    if layout::topbar().contains(at) {
         return;
     }
 
@@ -662,15 +753,40 @@ fn feed_click(world: &mut World, at: Vec2, tick: u64) {
         return;
     }
     let tuning = *world.resource::<Tuning>();
-    let focus = {
+    let entry_at = |world: &World, hit: &dyn Fn(usize) -> bool| -> Option<usize> {
         let flow = world.resource::<Flow>();
         let lens = Lens::on(world.resource::<Sim>());
         let entries = attention::feed(&lens, flow.show_ignored, attention::feed_cap(&tuning));
         (0..layout::FEED_ROWS)
-            .find(|row| layout::feed_row(*row).contains(at))
+            .find(|row| hit(*row))
             .and_then(|row| entries.get(row).copied())
-            .and_then(|entry| lens.events().get(entry.index).map(|event| event.tile))
+            .map(|entry| entry.index)
     };
+    // **The arithmetic behind a decision already made** (UI.md §3e), on its
+    // own target at the end of the row — the same gesture the job board's
+    // rows carry, before the row itself, because the row is the focus jump.
+    if let Some(index) = entry_at(world, &|row| layout::feed_why(row).contains(at)) {
+        let recorded = world
+            .resource::<Sim>()
+            .events
+            .get(index)
+            .is_some_and(|event| event.judged.is_some());
+        if recorded {
+            let flow = world.resource_mut::<Flow>();
+            let want = Breakdown::Entry(index);
+            flow.breakdown = (flow.breakdown != Some(want)).then_some(want);
+        } else {
+            // Said rather than swallowed: an occurrence nobody decided has no
+            // sum behind it, and a dead target would be the silent failure.
+            world.resource_mut::<Flow>().bounce(
+                tick,
+                "that is something that happened, not something anybody decided".to_owned(),
+            );
+        }
+        return;
+    }
+    let focus = entry_at(world, &|row| layout::feed_row(row).contains(at))
+        .and_then(|index| world.resource::<Sim>().events.get(index).map(|e| e.tile));
     let Some(tile) = focus else {
         world.resource_mut::<Flow>().feed_open = false;
         return;

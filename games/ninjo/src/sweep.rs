@@ -93,6 +93,14 @@ pub enum Act {
     TouchDown(Vec2),
     /// And the up half.
     TouchUp(Vec2),
+    /// **Turn the wheel**, in lines — the zoom the camera reads
+    /// (`camera::SCROLL_STEP` per line, negative for out).
+    ///
+    /// The keys zoom by a rate per second and land wherever the tick falls,
+    /// which is fine to play with and useless to photograph; a notch is the
+    /// unit the label rule is stated in (UI.md §4), so a script that wants
+    /// the map one notch out asks for exactly that.
+    Scroll(f32),
 }
 
 /// One scripted action at one moment.
@@ -134,7 +142,7 @@ pub fn post(minute: u64, party: usize, site: usize, slot: usize) -> [Directive; 
                 minute,
                 lead: ORDER_LEAD,
             },
-            what: Act::ClickUi(layout::party_chip(party).center()),
+            what: pick_at_home(party),
         },
         Directive {
             when: When::Now,
@@ -143,6 +151,46 @@ pub fn post(minute: u64, party: usize, site: usize, slot: usize) -> [Directive; 
         Directive {
             when: When::Now,
             what: Act::ClickUi(layout::board_row(slot).center()),
+        },
+    ]
+}
+
+/// **The click that picks somebody up: their own figure, at their door.**
+///
+/// The party strip retired with the legibility session and the map is the
+/// selection's first door (UI.md §3, §3b), so a script picks somebody the way
+/// a player now does — one click, on the figure. Good for anybody who is
+/// **idle at home**, which is where `where_drawn` puts a figure on the tile
+/// the registry gives them; [`pick_anywhere`] is the door for somebody on the
+/// road.
+///
+/// An index past the roster clicks the town's marker, which opens a board and
+/// makes the next directive of the script visibly land on the wrong surface:
+/// a script naming nobody is a fault in the script, and it fails loudly
+/// rather than selecting nobody quietly.
+pub fn pick_at_home(who: usize) -> Act {
+    let home = crate::people::roster()
+        .get(who)
+        .map_or(LOCATIONS[crate::grid::TOWN].tile, |person| person.home);
+    Act::ClickWorld(layout::home_rect(home).center())
+}
+
+/// **The click that picks somebody up wherever they are**: the roster
+/// drawer's handle, then their row.
+///
+/// Two clicks, and no world position at all, which is what makes it the door
+/// for somebody on the road — the roster row selects, shuts the drawer and
+/// opens their panel (UI.md §3b), so what a script has after it is exactly
+/// what a doorstep click gives it.
+pub fn pick_anywhere(when: When, who: usize) -> [Directive; 2] {
+    [
+        Directive {
+            when,
+            what: Act::ClickUi(layout::roster_button().center()),
+        },
+        Directive {
+            when: When::Now,
+            what: Act::ClickUi(layout::roster_open(who).center()),
         },
     ]
 }
@@ -280,6 +328,11 @@ pub struct Shot {
     pub clock: Clock,
     /// The flow at that tick.
     pub flow: Flow,
+    /// **The camera the frame was drawn with.** Kept since the legibility
+    /// session, because the map's words are now a function of the zoom (UI.md
+    /// §4): a reader that rebuilt the panel at the default camera would judge
+    /// a set of labels the photograph does not carry.
+    pub camera: Camera,
 }
 
 impl Conducted {
@@ -446,6 +499,7 @@ pub fn conduct(session: &Session<'_>) -> Conducted {
                     }
                     Act::TouchDown(at) => steps.push(Act::TouchDown(at)),
                     Act::TouchUp(at) => steps.push(Act::TouchUp(at)),
+                    Act::Scroll(lines) => steps.push(Act::Scroll(lines)),
                 }
                 next_directive += 1;
             }
@@ -501,6 +555,10 @@ pub fn conduct(session: &Session<'_>) -> Conducted {
                         screen: world_camera.world_to_screen(at),
                     });
                 }
+                Act::Scroll(lines) => keyboard.record(InputEvent::Scrolled {
+                    id: PointerId::PRIMARY,
+                    lines,
+                }),
                 Act::ClickUi(_) | Act::ClickWorld(_) => {
                     keyboard.record(InputEvent::ButtonPressed {
                         id: PointerId::PRIMARY,
@@ -553,6 +611,7 @@ pub fn conduct(session: &Session<'_>) -> Conducted {
                         sim: sim.world().resource::<Sim>().clone(),
                         clock: *sim.world().resource::<Clock>(),
                         flow: sim.world().resource::<Flow>().clone(),
+                        camera: *sim.world().resource::<Camera>(),
                     });
                 }
             }

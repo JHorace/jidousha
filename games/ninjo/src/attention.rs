@@ -578,6 +578,7 @@ pub fn judge_at(checks: &mut crate::checks::Checks, tuning: &Tuning) {
             location: Some(0),
             gold: 0,
             note: format!("a probe event at minute {minute}"),
+            judged: None,
         });
     }
     let lens = Lens::on(&sim);

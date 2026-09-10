@@ -167,6 +167,7 @@ pub fn drawer_run() -> DrawerRun {
         sim: shot.sim.clone(),
         clock: shot.clock,
         flow: shot.flow.clone(),
+        camera: shot.camera,
     });
     DrawerRun {
         started_at: Tuning::SHIPPED,

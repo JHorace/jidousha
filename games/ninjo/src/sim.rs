@@ -69,6 +69,22 @@ pub struct Event {
     pub gold: i64,
     /// The mechanical narration after the address.
     pub note: String,
+    /// **The arithmetic behind it**, where this occurrence is a decision
+    /// somebody made — every term of the sum the scorer returned, kept as it
+    /// was returned (`autonomy::Reckoning`).
+    ///
+    /// On the event for the reason [`Event::gold`] is on the event: the sum
+    /// cannot be recomputed later without lying. A board that has since been
+    /// claimed, a wage that has since been stepped and a regard that has
+    /// since drifted would all produce a different total from the one this
+    /// person actually decided on, and a breakdown that disagrees with the
+    /// decision it explains is worse than no breakdown at all.
+    ///
+    /// **It is a record, not an input.** Nothing in the simulation reads it,
+    /// no arithmetic depends on it, and no transcript prints it — a run that
+    /// never opens a breakdown is byte-identical to one that opens every one.
+    /// `None` for every occurrence that is not somebody deciding something.
+    pub judged: Option<crate::autonomy::Reckoning>,
 }
 
 impl Event {
@@ -922,6 +938,7 @@ impl Sim {
             location: crate::grid::location_at(tile),
             gold,
             note,
+            judged: None,
         });
         if self.attention.mode(class) == Mode::PauseAndFocus && self.paused_by.is_none() {
             self.paused_by = Some(Pause {
@@ -958,6 +975,31 @@ impl Sim {
     /// past the auto-pause.
     pub fn emit_action(&mut self, minute: u64, tile: Tile, who: usize, note: String) {
         self.emit(minute, EventClass::ActionStarted, who, tile, note);
+    }
+
+    /// **Keep the arithmetic behind the occurrence just emitted** (UI.md §3e).
+    ///
+    /// Called immediately after the emit that reports a decision, with the
+    /// [`autonomy::Reckoning`] the scorer's own [`autonomy::Judged`] became —
+    /// so the feed's breakdown and the decision are one derivation and not
+    /// two. It writes onto the last event rather than taking a parameter on
+    /// four emitters, because only the two decision classes have a sum and a
+    /// parameter every emitter had to pass `None` for is a parameter nobody
+    /// reads.
+    ///
+    /// A call with no event to attach to is a caller that emitted nothing,
+    /// which is a bug in the caller rather than a state of the world — said
+    /// loudly, never swallowed (CLAUDE.md: no silent failure).
+    pub fn remember(&mut self, reckoning: crate::autonomy::Reckoning) {
+        match self.events.last_mut() {
+            Some(event) => event.judged = Some(reckoning),
+            None => crate::checks::fail(
+                "a decision's arithmetic was recorded against no occurrence",
+                "`Sim::remember` was called with an empty event log; it attaches to the \
+                 occurrence just emitted, so the emit that should have preceded it did not \
+                 happen",
+            ),
+        }
     }
 }
 

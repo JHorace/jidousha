@@ -117,7 +117,10 @@ fn takes_off_the_ladder(sim: &Sim, tuning: &Tuning, who: usize) -> usize {
     for (task, job) in one_job_per_task(sim) {
         for wage in LADDER {
             let posting = asks::preview_posting(who, job.site, job.slot, wage, sim.rates.of(task));
-            if answers::read(sim, tuning, 0, who, &posting, job).0.takes() {
+            if answers::read(sim, tuning, 0, who, &posting, job)
+                .verdict
+                .takes()
+            {
                 taken += 1;
             }
         }
@@ -561,7 +564,7 @@ fn one_function(checks: &mut Checks, tuning: &Tuning) -> String {
             for wage in LADDER {
                 let posting =
                     asks::preview_posting(who, job.site, job.slot, wage, sim.rates.of(*task));
-                let (verdict, _) = answers::read(&sim, tuning, 0, who, &posting, *job);
+                let verdict = answers::read(&sim, tuning, 0, who, &posting, *job).verdict;
                 // Now make it for real and let the world answer.
                 let mut world = sim.clone();
                 let id = asks::post(

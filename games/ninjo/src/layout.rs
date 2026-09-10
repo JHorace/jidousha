@@ -215,7 +215,24 @@ pub fn board_close() -> Rect {
 /// short to make room for one would leave no room for the verdict's reason —
 /// which is the sentence this wave exists to put on screen.
 pub fn board_row(index: usize) -> Rect {
-    Rect::from_min_size(board_row_origin(index), Vec2::new(564.0, 32.0))
+    Rect::from_min_size(board_row_origin(index), Vec2::new(520.0, 32.0))
+}
+
+/// Job row `index`'s **why button** — the arithmetic behind the verdict the
+/// row is showing, one tap deeper (the legibility session).
+///
+/// A target of its own at the end of the row rather than the verdict cell
+/// made clickable, because the row *is* the posting and a control inside a
+/// control is what the overlap floor refuses — the same separation the roster
+/// row makes between its name box and its chips. Forty-four pixels of the
+/// row's width were given to it, and `job::SAYS_W` gave up the same forty-four:
+/// the verdict keeps its reason, which is the sentence wave 1.2 exists to
+/// print.
+pub fn board_why(index: usize) -> Rect {
+    Rect::from_min_size(
+        board_row_origin(index) + Vec2::new(528.0, 0.0),
+        Vec2::splat(36.0),
+    )
 }
 
 fn board_row_origin(index: usize) -> Vec2 {
@@ -309,14 +326,26 @@ pub mod job {
     /// row, because a verdict without its reason is a number about a person.
     pub const SAYS: Vec2 = Vec2::new(160.0, 17.0);
     /// How wide that may run.
-    pub const SAYS_W: f32 = 396.0;
+    pub const SAYS_W: f32 = 352.0;
 }
 
 // ── the character panel ────────────────────────────────────────────────────
 
 /// The panel a selected character opens.
+///
+/// **Twenty-four pixels taller since the party strip retired**, and the rows
+/// inside it closed up by the same: a trait chip's explanation now says what
+/// its row does *and* what nothing yet does with it (`traits::explain`'s
+/// dormancy clause), and that is a sentence rather than a phrase.
+/// `floors::layout_floors` asserts the longest explanation the vocabulary can
+/// produce still ends inside this rectangle, so the panel is sized by the data
+/// rather than by a guess that was true when it was typed.
+///
+/// It stops at the band below it rather than filling the space the strip left,
+/// because that band is the breakdown's and the breakdown wants the width more
+/// than this panel wants the height (§3e).
 pub fn person_panel() -> Rect {
-    Rect::from_min_size(Vec2::new(600.0, 116.0), Vec2::new(344.0, 300.0))
+    Rect::from_min_size(Vec2::new(600.0, 116.0), Vec2::new(344.0, 324.0))
 }
 
 /// Its close button.
@@ -364,65 +393,60 @@ pub mod sheet {
     /// What they are doing and why, wrapped.
     pub const DOING: Vec2 = Vec2::new(12.0, 198.0);
     /// Where they live.
-    pub const HOME: Vec2 = Vec2::new(12.0, 240.0);
+    pub const HOME: Vec2 = Vec2::new(12.0, 224.0);
     /// The chip explanation, when a chip has been tapped.
-    pub const EXPLAIN: Vec2 = Vec2::new(12.0, 258.0);
+    pub const EXPLAIN: Vec2 = Vec2::new(12.0, 242.0);
     /// How wide a wrapped row may run inside the panel.
     pub const PROSE_W: f32 = 320.0;
 }
 
-// ── party strip ────────────────────────────────────────────────────────────
+// ── the breakdown band: the scorer's arithmetic, one tap deeper ───────
 
-/// The always-present strip at the bottom: one chip per party, which since
-/// wave 1.1 is one chip per person.
-pub fn party_strip() -> Rect {
-    Rect::from_min_size(Vec2::new(0.0, 440.0), Vec2::new(DESIGN_W, DESIGN_H - 440.0))
-}
-
-/// The strip's label.
-pub fn party_label() -> Vec2 {
-    Vec2::new(16.0, 443.0)
-}
-
-const PCHIP_X: f32 = 16.0;
-const PCHIP_Y: f32 = 460.0;
-const PCHIP_W: f32 = 176.0;
-const PCHIP_H: f32 = 36.0;
-const PCHIP_GAP: f32 = 12.0;
-/// How many party chips a strip row holds before the next one starts.
-pub const PARTY_COLUMNS: usize = 5;
-
-/// Party chip `index` — click to select an idle party for dispatch.
+/// **The band the party strip left behind** (the legibility session): where a
+/// verdict's arithmetic is shown when somebody asks for it, and nothing at
+/// all the rest of the time.
 ///
-/// Two rows of five, because the founding band is ten and a chip that fits a
-/// name and a status is 176 reference pixels wide: fifty of them in one row
-/// would be a strip nobody could read, and a narrower chip would lose the
-/// status line the strip exists for.
-pub fn party_chip(index: usize) -> Rect {
-    let column = index % PARTY_COLUMNS;
-    let row = index / PARTY_COLUMNS;
-    Rect::from_min_size(
-        Vec2::new(
-            PCHIP_X + column as f32 * (PCHIP_W + PCHIP_GAP),
-            PCHIP_Y + row as f32 * (PCHIP_H + 4.0),
-        ),
-        Vec2::new(PCHIP_W, PCHIP_H),
+/// **The width of the screen**, under everything the base screen can have up:
+/// a term line is a value, a word and what produced it, and two of those side
+/// by side is what makes ten of them readable at a glance. The board ends at
+/// 440 and the character panel stops there with it, so this band lies under
+/// both. It is not a drawer: it is up *with* the surface that opened it,
+/// exactly as the character panel is up with the selection.
+pub fn breakdown_panel() -> Rect {
+    Rect::from_min_size(Vec2::new(16.0, 444.0), Vec2::new(928.0, 92.0))
+}
+
+/// Its title row — what was weighed, and what it came to.
+pub fn breakdown_title() -> Vec2 {
+    Vec2::new(28.0, 450.0)
+}
+
+/// How wide the title may run before it is clipped.
+pub const BREAKDOWN_TITLE_W: f32 = 908.0;
+
+/// How many cells the band holds: five rows of two columns.
+///
+/// Ten, which is one more than the widest sum this game can produce — seven
+/// terms of an answered posting, its total, and the candidate that beat it.
+/// `floors::layout_floors` asserts that headroom against the scorer's own
+/// term count rather than against this comment.
+pub const BREAKDOWN_CELLS: usize = 10;
+
+/// How many cells a column holds — the band reads down, then across.
+pub const BREAKDOWN_ROWS: usize = 5;
+
+/// Where cell `index` starts: down the first column, then down the second.
+pub fn breakdown_cell(index: usize) -> Vec2 {
+    let column = index / BREAKDOWN_ROWS;
+    let row = index % BREAKDOWN_ROWS;
+    Vec2::new(
+        28.0 + column as f32 * 460.0,
+        466.0 + row as f32 * (crate::theme::SMALL + 2.0),
     )
 }
 
-/// The rows inside a party chip, measured from its top-left.
-pub mod pchip {
-    /// The portrait's inset.
-    pub const PORTRAIT: f32 = 2.0;
-    /// The portrait's scale (16 texels at 2 = 32).
-    pub const PORTRAIT_SCALE: f32 = 2.0;
-    /// Where the name starts.
-    pub const NAME_X: f32 = 38.0;
-    /// The name's top.
-    pub const NAME_TOP: f32 = 4.0;
-    /// The status line's top.
-    pub const STATUS_TOP: f32 = 20.0;
-}
+/// How wide one cell's line may run before it is clipped.
+pub const BREAKDOWN_CELL_W: f32 = 448.0;
 
 // ── the roster drawer: every character in one list ─────────────────────────
 
@@ -442,16 +466,25 @@ pub fn roster_explain() -> Vec2 {
     Vec2::new(28.0, 72.0)
 }
 
-/// How wide that row may run before it is clipped.
+/// How wide a row of it may run before it wraps.
 pub const ROSTER_EXPLAIN_W: f32 = 900.0;
+
+/// How many rows the explanation band holds.
+///
+/// Two, which is what stands between the band's own top and the first roster
+/// row — and what the dormancy clause needed: a one-row clip ate the half of
+/// the sentence that says what nothing yet does with the trait, which is the
+/// half the legibility session exists to print.
+pub const ROSTER_EXPLAIN_ROWS: usize = 2;
 
 /// How many roster rows the drawer has room for.
 pub const ROSTER_ROWS: usize = 10;
 
 fn roster_row_origin(index: usize) -> Vec2 {
-    // Thirty-four apart, so the tenth row ends above the party strip's label:
-    // the strip is drawn under every drawer, and a row of text lying across a
-    // control it is not the label of is what the floors refuse.
+    // Thirty-four apart, so the tenth row ends inside the drawer that holds
+    // it. The spacing was set against the party strip's label, which the
+    // legibility session retired; the rows kept their pitch because the
+    // drawer's own rectangle is what binds them and that has not moved.
     Vec2::new(20.0, 100.0 + index as f32 * 34.0)
 }
 
@@ -501,8 +534,8 @@ pub mod rrow {
 
 // ── the feed drawer: the event log, as a view ──────────────────────────────
 
-/// The feed drawer, over the map and under the party strip. The config drawer
-/// uses the same rectangle: two drawers, one shape, never both open.
+/// The feed drawer, over the map. The config drawer uses the same rectangle:
+/// two drawers, one shape, never both open.
 pub fn feed_panel() -> Rect {
     Rect::from_min_size(Vec2::new(0.0, 36.0), Vec2::new(DESIGN_W, 448.0))
 }
@@ -532,9 +565,25 @@ pub const FEED_ROWS: usize = 10;
 
 /// Feed row `index` — click it to look at where it happened.
 pub fn feed_row(index: usize) -> Rect {
+    Rect::from_min_size(feed_row_origin(index), Vec2::new(876.0, 32.0))
+}
+
+fn feed_row_origin(index: usize) -> Vec2 {
+    Vec2::new(20.0, 94.0 + index as f32 * 34.0)
+}
+
+/// Feed row `index`'s **why button** — the arithmetic behind a decision that
+/// has already been made (the legibility session).
+///
+/// The same gesture the job board's rows carry, in the same place on the row,
+/// so "tap the row to act on it, tap the question mark to see the sum" is one
+/// rule rather than two. It answers on the entries that carry a reckoning and
+/// bounces on the ones that do not, because an entry that recorded no
+/// decision has no arithmetic and saying so is cheaper than a dead target.
+pub fn feed_why(index: usize) -> Rect {
     Rect::from_min_size(
-        Vec2::new(20.0, 94.0 + index as f32 * 34.0),
-        Vec2::new(920.0, 32.0),
+        feed_row_origin(index) + Vec2::new(884.0, 0.0),
+        Vec2::splat(36.0),
     )
 }
 
@@ -554,7 +603,7 @@ pub mod entry {
     /// The event's own sentence, on the second line.
     pub const TEXT: Vec2 = Vec2::new(8.0, 18.0);
     /// How wide that sentence may run.
-    pub const TEXT_W: f32 = 900.0;
+    pub const TEXT_W: f32 = 856.0;
 }
 
 /// How many notices the drawer's footer shows.

@@ -1,17 +1,20 @@
 //! The captured frames: the screenshots a person looks at (giri's capture
 //! path, re-aimed at the map).
 //!
-//! Sixteen pictures. The mid-travel map and the feed are each taken at the
+//! Twenty pictures. The mid-travel map and the feed are each taken at the
 //! reference surface and at a narrow one (the narrow set exists to catch
 //! scaling regressions, which are invisible to every assertion that is not
 //! about pixels). The rest are reference only: the settlement before anything
 //! has been dispatched — the cast standing at their homes, named — the
 //! auto-pause config panel, one character's own panel with the selection ring
 //! on their figure, the owner's double-selection reproduction (one character
-//! picked on the strip and another on the map — one ring, on the second), the
+//! picked on the roster and another on the map — one ring, on the second), the
 //! job board in its three states (read by somebody, ordered from, and
-//! refusing a row that is already taken), and the tuning drawer (a dev
-//! surface whose rows are the smallest type in the game).
+//! refusing a row that is already taken), **the arithmetic behind a verdict**
+//! in both its placements (a refused job row, and a decision in the feed),
+//! **the settlement one notch of the wheel out** — the picture the label rule
+//! exists to make possible — and the tuning drawer (a dev surface whose rows
+//! are the smallest type in the game).
 //!
 //! A machine with no GPU is not a failure: every runner this project has is
 //! headless and some have no graphics stack at all.
@@ -61,6 +64,7 @@ pub fn capture_screens(
     drawer: &DrawerRun,
     reproduction: Option<&Conducted>,
     asked: &Conducted,
+    zoomed: &Conducted,
 ) -> String {
     let mut wanted: Vec<Wanted> = Vec::new();
     // The reference-only set: pictures of *what is on screen* rather than of
@@ -75,6 +79,8 @@ pub fn capture_screens(
         "ordered",
         "bounce",
         "roadring",
+        "breakdown",
+        "feedwhy",
     ] {
         if let Some(shot) = reference.photo(name) {
             wanted.push(Wanted {
@@ -140,9 +146,27 @@ pub fn capture_screens(
             );
         }
     }
+    // **The settlement one notch of the wheel out** — the label rule's other
+    // half, and the picture the owner is asked to judge the default camera
+    // against (UI.md §4).
+    if let Some(shot) = zoomed.photo("zoomed") {
+        wanted.push(Wanted {
+            name: "zoomed-reference".to_owned(),
+            surface: verify::HEADLESS_VIEWPORT,
+            frame: shot.frame.clone(),
+            font: zoomed.font,
+        });
+    } else {
+        checks.require(
+            false,
+            "the zoomed-out settlement was never photographed",
+            "the label rule permits zooming out and the picture is how anybody judges it"
+                .to_owned(),
+        );
+    }
     // The reproduction of the wave-1.1 double selection, as it now resolves:
-    // one character picked on the strip and another on the map, and exactly one
-    // ring — the picture the owner's playtest steps produce.
+    // one character picked on the roster and another on the map, and exactly
+    // one ring — the picture the owner's playtest steps produce.
     if let Some(run) = reproduction
         && let Some(shot) = run.photo("selection")
     {
