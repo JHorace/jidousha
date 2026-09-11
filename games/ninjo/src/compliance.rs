@@ -815,7 +815,7 @@ pub fn ask_run() -> crate::sweep::Conducted {
 /// cause, and the one the player would act on.
 pub fn ledger_is_a_view(checks: &mut Checks, run: &crate::sweep::Conducted) {
     let flow = crate::flow::Flow {
-        ledger_open: true,
+        drawer: Some(crate::flow::Drawer::Ledger),
         ..crate::flow::Flow::default()
     };
     let lens = crate::lens::Lens::on(&run.sim);
@@ -920,12 +920,12 @@ pub fn judge_shots(checks: &mut Checks, run: &crate::sweep::Conducted) {
             })
             .count();
         checks.require(
-            shot.flow.ledger_open && open >= 1 && declined == 1,
+            shot.flow.showing(crate::flow::Drawer::Ledger) && open >= 1 && declined == 1,
             "the ledger photograph is not of a ledger with something on it",
             format!(
                 "the drawer is open={} over {open} standing and {declined} refused postings; \
                  the picture is of one posting still recruiting and one that was turned down",
-                shot.flow.ledger_open
+                shot.flow.showing(crate::flow::Drawer::Ledger)
             ),
         );
         crate::frames::judge_chrome(checks, run, shot, "the postings ledger");

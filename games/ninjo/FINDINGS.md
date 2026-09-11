@@ -47,6 +47,16 @@ did answer it and I looked in the wrong place first" is the failure the fence
 exists to measure, so it is written down rather than left out. It is not a
 document finding: nothing was missing and nothing misled.
 
+**The drawers-and-work-list session (2026-09-11) read** `CLAUDE.md`, the
+`make-game` skill, this game's `UI.md`, `FINDINGS.md` and its whole `src/`. No
+file under `crates/*/src/`, no `docs/internal/`, and no ADR. **It asked
+`docs/api/` nothing**, and that is a real answer rather than an empty section:
+every question it had was about this game's own UI state and its own layout
+arithmetic, and the one engine fact it needed — how wide a string is at a size
+— it took from `theme::text(..).width_of`/`columns_in`, which the game has
+called on every surface since S1. Its four entries below are all about *this
+repository*, and the last of them names a class rather than a defect.
+
 **The legibility session (2026-09-09) read** `CLAUDE.md`, the `make-game`
 skill, this game's `UI.md`, `GDD.md`, `FINDINGS.md` and its whole `src/`.
 Nothing under `crates/*/src/`, no `docs/internal/`, and no ADR. It asked
@@ -117,6 +127,200 @@ clicks on rectangles `layout.rs` already knew how to state, and its
 occurrences ride the one scheduler the substrate landed in S1. The engine's
 documents were not the cost of this wave; the two entries below are about
 *this game*, and both are numbers the next playtest is owed.
+
+### G-027 — the game's own, and FINDINGS-when-misled: two drawers were open at once, under a comment that said they could not be
+
+Class: **the game's own** (a playtest defect) **and a doc that misled**
+(a doc comment in this repository) · Game: ninjo · Files:
+`games/ninjo/src/flow.rs`, `src/tuning.rs`, `src/screens.rs`, `src/floors.rs`,
+`UI.md` §3 · **Closed by this session**
+
+**What the owner reported (2026-09-11 playtest):** opening TUNE while ROSTER
+was open drew both, one over the other.
+
+Expected: the rule `UI.md` §3 states — never two at once. Happened: the tuning
+drawer drew its thirty-six stepper rows straight over the roster's ten.
+
+**What was there.** `Flow` carried five independent open-flags —
+`feed_open`, `modes_open`, `roster_open`, `ledger_open` and `Tuner::open` —
+and `screens::content` absorbed each under its own `if`, so any two of them
+being true at once is a frame with two drawers in it. The TUNE handle was
+handled in `tuning.rs` rather than in the handle loop in `flow.rs`, and it
+cleared `feed_open` and `modes_open`: the two flags that existed when it was
+written. `roster_open` and `ledger_open` arrived in wave 1.1 and wave 1.2, and
+nothing pointed at the four lines that had to grow with them. The board and
+the selection were left up under the tuning drawer too, by the same omission.
+
+**The half that is about a document, and it is this repository's own.**
+`Flow::close_everything` carries a comment that reads: *"one place, because 'a
+drawer and a panel are never both up' is a claim the floors assert about pairs
+of controls, and the way to keep it true is to have exactly one function that
+opens anything."* That sentence is what made the defect invisible to a reader.
+**What was done on its authority:** two sessions in a row (the roster, then the
+ledger) added a drawer by adding a flag and a line to that function, read the
+comment as the guarantee it claims to be, and never checked whether the tuning
+drawer — the one drawer that does not go through the handle loop — was
+actually calling it. It was not. The comment described an invariant the code
+had stopped keeping, and it is more expensive than no comment because it is
+what a reader checks *instead of* checking.
+
+**The fix is the type, not the rule.** The five flags are one
+`Option<Drawer>`; `Drawer` gains the tuning drawer as a variant; the render is
+one `match` over that field and the click routing is the same `match` over the
+same field, so "two drawers are open" is unrepresentable and the drawer that
+is drawn is the drawer that answers a click by construction. Opening goes
+through `Flow::open_drawer`, which calls `close_everything` first, so the
+comment's claim is now true of every drawer rather than of four of them. The
+handles, their labels and each drawer's own head row are walked off
+`Drawer::ALL`.
+
+**And the floor that would have caught it** (`UI.md` §4): at most one drawer's
+content in a frame, counted by each drawer's own title row. It is
+unrepresentable *and* asserted, because the next surface to grow an open-flag
+should fail rather than overlap. `verify::one_drawer_at_a_time` walks all
+twenty-five ordered pairs of drawers through the real handles and asks the
+**frame** how many drawers it carries; `floors::floors_bite` stages a frame
+carrying two drawers' content and asserts the floor reports it.
+
+### G-028 — the game's own: a hand-placed offset met a band whose height is data, and no floor looked at text against text
+
+Class: **the game's own** (a playtest defect, with a floor gap) · Game: ninjo
+· Files: `games/ninjo/src/tuning.rs`, `src/layout.rs`, `src/floors.rs`,
+`src/ui.rs`, `UI.md` §4 · **Closed by this session**
+
+**What the owner reported (2026-09-11 playtest):** in the tuning drawer's
+right column, the in-effect stamp and the explanatory prose were drawn over
+one another — the screenshot reads `seed:0at a constant`.
+
+Expected: a stamp and a note, one under the other. Happened: the stamp's last
+row and the hint's first row occupied the same eighteen pixels.
+
+**The arithmetic.** `Tuning::readout` is authored one line per pair of
+constants and the stamp flowed down from y 124 at fourteen pixels a row; the
+prose band's top was the constant `350` in `layout::tuner_hint`. At
+thirty-four constants the stamp ended at 348 and the two cleared by two
+pixels. Wave 1.2 added two more, the stamp reached 362, and the band did not
+move — because it could not: nothing in it was derived from the thing above
+it.
+
+**Why no check saw it.** `floors::judge_panel` asserted chrome text against
+*controls* ("nothing lies across a control it is not the label of") and map
+labels against *each other*, and **never chrome text against chrome text**.
+Every row was inside the UI rect, above the text floor, ASCII, and clear of
+every control; the two rows were simply drawn through each other, which was
+not a question anything asked.
+
+**The fix is in two halves.** The layout is measured: `tuning::prose_top` is
+one function of how many rows the stamp took, read by the drawer that lays the
+column out and by the floor that asserts it fits, so the next constant *moves*
+the band instead of colliding with it. And the hint and the note now share the
+band — only one of them is ever what the player is asking for — which is what
+makes the column fit at its tallest state with two rows of headroom, asserted
+by `floors::tuner_right_column` at `tuning::STAMP_HEADROOM`. **The floor fails
+while there is still room**, so the wave that adds the constant is told to
+re-lay the column rather than finding out from a screenshot.
+
+The other half is the general floor: **no two rows of chrome on one band
+overlap**, over every state `content_floors` judges. *On one band*, because a
+run on a higher layer has its own ground behind it and the breakdown band is
+deliberately drawn over the feed drawer's footer (`UI.md` §3e); two rows on
+the same band are two rows drawn through each other. `floors::floors_bite`
+stages the pre-fix column and asserts the floor reports it, so the floor is
+known to bite.
+
+**One rider, found on the way.** `ui::wrap` ate the caller's own line breaks —
+it split on whitespace — so wrapping the stamp would have joined thirty-six
+numbers into one paragraph. It now wraps each of the caller's lines on its own
+and keeps the breaks, which is the only contract under which "no line is wider
+than the column" is true of every string rather than of every string without a
+newline in it.
+
+### G-029 — the game's own: the character panel had the same defect as the tuning drawer, and the new floor found it
+
+Class: **the game's own** (found by a floor written for something else) ·
+Game: ninjo · Files: `games/ninjo/src/panels.rs`, `src/layout.rs`,
+`src/floors.rs` · **Closed by this session**
+
+The character panel's lower rows — the source line, the activity line, the
+home row and a tapped chip's explanation — sat at four typed offsets: 156,
+198, 224, 242. Each of the first two wraps. At the shipped cast the activity
+line wraps to two rows, which end at 226 — through the home row at 224.
+
+Nobody reported it and no check saw it, for exactly G-028's reason: it is text
+across text, and until this session that was not a question this game asked.
+The floor written for the tuning drawer found it on the first run, on a
+photographed state, which is the whole argument for writing floors as
+questions about the class of defect rather than about the instance.
+
+**The fix is the same fix**: the panel's lower half flows — each block starts
+where the one above it ended — and the flow is budgeted at
+`layout::sheet::LEAD_ROWS` with `floors::layout_floors` asserting the budget
+and `floors::content_floors` rebuilding the real sheet over every judged state
+and requiring every row of it to land inside the panel.
+
+### G-030 — the game's own: the character panel's close button has had no X on it since it was built
+
+Class: **the game's own** (found by looking at the pictures) · Game: ninjo ·
+Files: `games/ninjo/src/screens.rs` · **Closed by this session; the floor gap
+is open**
+
+`screens::ghost` puts a control's ground on `layers::OVERLAY + 1`, which is
+above `layers::TEXT`. Every other base-screen control is drawn with
+`ghost_at(.., layers::CARD)` — the function exists for exactly this reason and
+its own comment says so — but `layout::person_close()` used the plain `ghost`,
+so the panel's `X` was submitted, recorded on the frame, and then painted out
+by its own button. It is visible in `screens/ninjo-person-reference.png` in
+every wave that has one.
+
+**Why nothing caught it.** `frames::judge_chrome` asks whether every row the
+screen said it would draw is *on the frame*; this row is. `judge_figures` asks
+whether the frame carries anything the screen did not say; it does not. **No
+check in this game asks whether a quad is on top of a row**, because the
+`Panel` carries text and icons with their layers and the grounds are drawn
+straight through `ctx` with no record of what they cover. Fixed by using the
+band the function was written for; **a floor for "a control's ground does not
+cover its own label" is not written**, and it needs the panel to carry its
+rectangles the way it carries its rows. That is a sanitation-pass item, not
+this session's.
+
+### G-031 — the class: four defects in four waves, all of them two representations of one fact
+
+Class: **the class** (a pattern across this game's own findings) · Game: ninjo
+· Files: the four entries it names · **Open — for the wave-1 close's exemplar
+audit**
+
+Four defects now, in four consecutive waves, with one shape:
+
+| the defect | the two representations | what kept them in step | who found it |
+|---|---|---|---|
+| **the double selection** (G-017) | S1's dispatch pick and wave 0a's character selection, two indices over one roster | a convention that both be written together | the wave-1.1 playtest |
+| **the double figure** (G-023) | wave 0b's `Panel` figures and wave 1.1's party tokens, two pictures of one person | a convention that the token be drawn only when away | the wave-1.1 playtest |
+| **the board against the retired strip** (G-026) | the strip's disposition list and the surfaces that could actually reach a selection | a convention that the list be checked for coverage | the 2026-09-09 playtest |
+| **the five drawers** (G-027) | five open-flags and the five `if`s that draw them | a comment claiming one function opens everything | the 2026-09-11 playtest |
+
+**The shape is always the same.** Two representations of one fact, kept in
+step by convention rather than by construction; the convention is written down
+*somewhere*, usually in a doc comment near one of the two; a later wave adds
+to one representation and not the other; and no check sees it, because every
+check in this game is written against one of the two representations and
+therefore agrees with itself.
+
+**And the remedy has been the same three times running**: collapse the two
+into one value and let a `match` over it do what a rule was doing. One
+selection (`Flow::selected`), one figure (`screens::where_drawn`), one drawer
+(`Flow::drawer`). Each collapse also made the *check* possible, because there
+was finally one thing to ask about.
+
+**What it is owed.** The wave-1 close's exemplar audit (`GDD.md` §8) should
+walk this game for the remaining pairs rather than waiting for the fifth
+playtest to find one. A start, from this session: `Flow::board` and
+`Flow::picking` (kept in step by `put_the_picker_away`), `Flow::board` and
+`Flow::listing` (by `put_the_list_away`), `Flow::selected` and
+`Flow::breakdown` (by `put_the_band_away`), and `Flow::selected` and
+`Flow::listing` (the same). All four are *checked every tick* rather than
+merely conventional, which is the weaker version of the remedy and the reason
+they have not bitten — but they are still two values where the surfaces they
+describe are one column.
 
 ### G-021 — the game's own: the standing rate is a coarse lever at the rate it ships at
 

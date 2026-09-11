@@ -234,8 +234,10 @@ pub fn printable_strings(checks: &mut Checks, baseline: &Conducted) {
         }
     }
     // The tuning drawer, hovered and pending, and with the longest refusal.
-    let mut tuner = crate::flow::Flow::default();
-    tuner.tuner.open = true;
+    let mut tuner = crate::flow::Flow {
+        drawer: Some(crate::flow::Drawer::Tune),
+        ..crate::flow::Flow::default()
+    };
     tuner.tuner.hover = crate::constants::Field::ALL.first().copied();
     tuner.tuner.pending = crate::presets::PRESETS
         .last()

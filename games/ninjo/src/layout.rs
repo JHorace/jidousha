@@ -484,6 +484,110 @@ pub mod cand {
     pub const SAYS_W: f32 = 380.0;
 }
 
+// ── the work list: the person-side mirror of the candidate picker ─────────
+
+/// How many rows of open work the list has room for.
+///
+/// **Ten, and the cap is declared rather than discovered.** The settlement
+/// authors four sites of six jobs, so a character can have twenty-four jobs
+/// open to them and the column holds ten of two lines each — the same ten
+/// rows, at the same pitch, in the same rectangle as the candidate picker
+/// this surface mirrors. The ten it shows are the ten the sort puts first
+/// (fit descending, ties in site then authored order), and the footer says
+/// how many it is not showing, because a list that silently stopped at ten
+/// would be a list the player could not trust.
+pub const WORK_ROWS: usize = 10;
+
+/// **The list of the work open to the selected character** (UI.md §3f).
+///
+/// It stands where the board and the candidate picker stand, for the reason
+/// the picker does: the left of the screen is one column, the character panel
+/// has the other, and a surface drawn under another is a row nobody can read
+/// lying across a control somebody can click. Tapping a row opens that site's
+/// board in this same rectangle.
+pub fn worklist_panel() -> Rect {
+    picker_panel()
+}
+
+/// Its title row: whose work this is.
+pub fn worklist_title() -> Vec2 {
+    picker_title()
+}
+
+/// The line under it: how much work there is, at what wage, in what order.
+pub fn worklist_note() -> Vec2 {
+    picker_wage()
+}
+
+/// How wide either header line may run before it is clipped — up to the fit
+/// chip, which is the board's own and stands in the same place on all three
+/// surfaces.
+pub const WORKLIST_HEAD_W: f32 = PICKER_HEAD_W;
+
+/// Work row `index` — **the navigating target**: it opens that site's board
+/// with the job in view, and posts nothing (UI.md §3f).
+pub fn worklist_row(index: usize) -> Rect {
+    picker_row(index)
+}
+
+/// The footer hint, under the rows.
+pub fn worklist_hint() -> Vec2 {
+    picker_hint()
+}
+
+/// How wide it may run before it wraps.
+pub const WORKLIST_HINT_W: f32 = PICKER_HINT_W;
+
+/// The columns inside a work row, as offsets from its top-left — two lines:
+/// **what the work is, what it pays, how long it takes and how well it suits
+/// them** over **what the journey costs and what they would say about it**.
+pub mod work {
+    use jidousha::prelude::Vec2;
+
+    /// The task-type chip's icon — the same picture on a job row and on a
+    /// person, because it is the same word.
+    pub const TASK_ICON: Vec2 = Vec2::new(0.0, 0.0);
+    /// The job's name.
+    ///
+    /// **Wide enough for the longest job the scenario authors**, not for the
+    /// longest one it happened to have: `floors::layout_floors` measures every
+    /// authored name against this and every other cell on the row, because a
+    /// clip on this surface takes the tail of the one word that says which
+    /// job a tap is about.
+    pub const NAME: Vec2 = Vec2::new(26.0, 3.0);
+    /// How wide that may run.
+    pub const NAME_W: f32 = 164.0;
+    /// What it pays.
+    pub const POT: Vec2 = Vec2::new(196.0, 3.0);
+    /// How wide that may run.
+    pub const POT_W: f32 = 48.0;
+    /// How long it takes.
+    pub const DURATION: Vec2 = Vec2::new(250.0, 3.0);
+    /// How wide that may run.
+    pub const DURATION_W: f32 = 70.0;
+    /// Their fit for this kind of work — the column the list is sorted on.
+    pub const FIT: Vec2 = Vec2::new(326.0, 3.0);
+    /// How wide that may run.
+    pub const FIT_W: f32 = 56.0;
+    /// **Which site it stands at** — the thing a list across every board has
+    /// to say that a single board never did.
+    pub const WHERE: Vec2 = Vec2::new(388.0, 3.0);
+    /// How wide that may run.
+    pub const WHERE_W: f32 = 150.0;
+    /// **The walk from wherever they stand**, at the head of the second line
+    /// for the reason a candidate row puts it there: a fixed-width column
+    /// before a ragged one reads as two columns.
+    pub const TRAVEL: Vec2 = Vec2::new(26.0, 17.0);
+    /// How wide that may run.
+    pub const TRAVEL_W: f32 = 128.0;
+    /// **What the scorer says they would do about this job at its standing
+    /// rate**, and why — the same sentence, from the same read, that the
+    /// board's own row and a candidate row carry.
+    pub const SAYS: Vec2 = Vec2::new(162.0, 17.0);
+    /// How wide that may run.
+    pub const SAYS_W: f32 = 380.0;
+}
+
 // ── the character panel ────────────────────────────────────────────────────
 
 /// The panel a selected character opens.
@@ -506,6 +610,21 @@ pub fn person_panel() -> Rect {
 /// Its close button.
 pub fn person_close() -> Rect {
     Rect::from_min_size(Vec2::new(900.0, 122.0), Vec2::new(36.0, 32.0))
+}
+
+/// **The door onto the work open to this person** (UI.md §3f) — the chip in
+/// the panel's own header, beside the name it is about and left of the close.
+///
+/// In the header because the panel has nowhere else: at its widest state — a
+/// trait's longest explanation open under the flowed rows — the sheet ends
+/// twelve reference pixels above the panel's foot, and a target is
+/// thirty-two. The header had the room, and the count on it is the one thing
+/// about the list that belongs on the sheet whether or not the list is up.
+pub fn sheet_work() -> Rect {
+    Rect::from_min_size(
+        person_panel().min + Vec2::new(216.0, 6.0),
+        Vec2::new(80.0, 32.0),
+    )
 }
 
 /// How many trait chips a sheet has room for across the panel.
@@ -543,16 +662,33 @@ pub mod sheet {
     pub const NEED_ICON: Vec2 = Vec2::new(12.0, 132.0);
     /// And its number.
     pub const NEED_TEXT: Vec2 = Vec2::new(34.0, 134.0);
-    /// The source line, wrapped.
+    /// **Where the flowed rows start**: the source line, and everything under
+    /// it.
+    ///
+    /// **Measured from here down, not placed.** The source, the activity
+    /// line, the home row and a tapped chip's explanation all wrap, and the
+    /// four used to sit at four typed offsets that were true at the lengths
+    /// of the day: at the shipped cast the activity line wraps to two rows
+    /// and its second row was drawn through the home row (`FINDINGS.md`
+    /// G-029, the same shape as the tuning drawer's). Each block now starts
+    /// where the one above it ended, and `floors::layout_floors` asserts the
+    /// whole flow ends inside the panel at the longest each of them can be.
     pub const SOURCE: Vec2 = Vec2::new(12.0, 156.0);
-    /// What they are doing and why, wrapped.
-    pub const DOING: Vec2 = Vec2::new(12.0, 198.0);
-    /// Where they live.
-    pub const HOME: Vec2 = Vec2::new(12.0, 224.0);
-    /// The chip explanation, when a chip has been tapped.
-    pub const EXPLAIN: Vec2 = Vec2::new(12.0, 242.0);
+    /// The gap between two flowed blocks.
+    pub const FLOW_GAP: f32 = 4.0;
+    /// **How many rows the three blocks above the explanation take at their
+    /// longest**: the source line, the activity line and the home row.
+    ///
+    /// Five — two, two and one. It is a budget rather than a measurement
+    /// because the activity line is written out of a running world and there
+    /// is no static longest; what makes it an assertion instead of a hope is
+    /// `floors::content_floors`, which rebuilds the character panel over every
+    /// state it judges and requires every row of it to land inside the panel.
+    pub const LEAD_ROWS: usize = 5;
     /// How wide a wrapped row may run inside the panel.
     pub const PROSE_W: f32 = 320.0;
+    /// How wide the name may run before the work chip beside it.
+    pub const NAME_W: f32 = 160.0;
 }
 
 // ── the breakdown band: the scorer's arithmetic, one tap deeper ───────
@@ -979,8 +1115,9 @@ pub fn tuner_panel() -> Rect {
 /// Twelve, which is what the drawer's height allows at the target floor, and
 /// three columns of them is what wave 1.1's thirty-four constants need. The
 /// stamp keeps the last two hundred pixels of the screen and the prose band
-/// moved under it: the stamp is the one thing in the drawer that has to stay
-/// legible while every other row is being moved.
+/// is measured down from it (`tuning::prose_top`): the stamp is the one thing
+/// in the drawer that has to stay legible while every other row is being
+/// moved, so it keeps the top of that column and the prose follows it.
 pub const TUNER_ROWS: usize = 12;
 const TUNER_COL_X: f32 = 28.0;
 const TUNER_COL_PITCH: f32 = 240.0;
@@ -1063,10 +1200,16 @@ pub fn tuner_title() -> Vec2 {
     Vec2::new(TUNER_COL_X, 50.0)
 }
 
-/// The prose band, under the stamp: the hint row first, then the note.
-pub fn tuner_hint() -> Vec2 {
-    Vec2::new(TUNER_STAMP_X, 350.0)
-}
+/// The gap between the stamp and the prose band that follows it down the
+/// right column.
+///
+/// **There is no `tuner_hint()` any more, and that is the fix.** The band's
+/// top was a constant 350 while the stamp flowed down from 124 at one row per
+/// two constants, so the thirty-fifth constant put the stamp through the hint
+/// and nothing said so (`FINDINGS.md` G-028). The band's top is now measured
+/// from the stamp above it — `tuning::prose_top`, one function read by the
+/// drawer and by the floor — and this is the only number left in it.
+pub const TUNER_PROSE_GAP: f32 = 10.0;
 
 /// How wide the hint, the note and the stamp may run before they wrap.
 pub fn tuner_prose_width() -> f32 {

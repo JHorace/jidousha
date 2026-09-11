@@ -29,6 +29,14 @@ impl Checks {
         self.problems.len()
     }
 
+    /// **Whether one named claim has failed** — what a check that stages a
+    /// broken screen asks of a throwaway `Checks`, so "this floor bites" is
+    /// an assertion about the floor by name rather than about a count that
+    /// any other fault could satisfy.
+    pub fn reported(&self, what: &str) -> bool {
+        self.problems.iter().any(|(claim, _)| claim == what)
+    }
+
     /// Print everything that failed, and say whether anything did.
     pub fn verdict(&self) -> ExitCode {
         if self.problems.is_empty() {

@@ -192,11 +192,11 @@ pub fn drawer_run() -> DrawerRun {
 pub fn judge(checks: &mut Checks, run: &DrawerRun) {
     // --- the handle opens it, and opening it changes nothing ----------------
     checks.require(
-        run.opened_flow.tuner.open,
+        run.opened_flow.showing(crate::flow::Drawer::Tune),
         "the TUNE handle did not open the tuning drawer",
         format!(
-            "after clicking it the drawer was {:?}",
-            run.opened_flow.tuner.open
+            "after clicking it the open drawer was {:?}",
+            run.opened_flow.drawer
         ),
     );
     checks.require(

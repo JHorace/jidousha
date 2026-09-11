@@ -25,7 +25,7 @@ use crate::path::route;
 use crate::sweep::{Act, Conducted, Directive, Photo, Session, When, conduct, transcript};
 use crate::{
     camera, capture, floors, flow, grid, layout, lens, library, links, modules, mutation, people,
-    restart, screens, shots, sprites, stores, sweep, theme, traits,
+    restart, screens, shots, sprites, stores, sweep, theme, traits, worklist,
 };
 
 /// The surface the reference run draws at: the 960x540 chrome design doubled,
@@ -246,6 +246,21 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
         When::Minute(616),
         layout::picker_row(PICKED_ROW).center(),
     ));
+    // **The work list, this session's own picture** (UI.md §3f). The board
+    // goes down and the person the picker just named stays selected, so the
+    // list is read for somebody the player has already been weighing: by
+    // minute 630 the settlement's open work spans three task types and half
+    // the band is out, which is the mixed spread the surface exists to sort —
+    // fits from nothing to the band's best, and refusals among the yesses.
+    script.push(click_ui(When::Minute(628), layout::board_close().center()));
+    script.push(click_ui(When::Minute(634), layout::sheet_work().center()));
+    // **And TUNE opened over an open ROSTER** — the owner's exact path
+    // (`FINDINGS.md` G-027), photographed as the one drawer it now is.
+    script.push(click_ui(
+        When::Minute(648),
+        layout::roster_button().center(),
+    ));
+    script.push(click_ui(When::Minute(656), layout::tune_button().center()));
     let photos = [
         // The settlement before anything is dispatched: the whole cast
         // standing at their homes, named. Wave 0b's own exit picture - the
@@ -370,6 +385,25 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
         Photo {
             name: "chosen",
             minute: 622,
+            tick: 0,
+            paused: false,
+        },
+        // **The work list**: every job standing open anywhere, read for the
+        // selected character, best fit first — the person-side mirror of the
+        // picker, with the character panel beside it saying whose list it is.
+        Photo {
+            name: "worklist",
+            minute: 640,
+            tick: 0,
+            paused: false,
+        },
+        // **TUNE opened over an open ROSTER**: the owner's path, and one
+        // drawer on the screen at the end of it — with the right column's
+        // stamp and prose band clear of each other, which is the other half
+        // of what the same screenshot showed.
+        Photo {
+            name: "tuneover",
+            minute: 662,
             tick: 0,
             paused: false,
         },
@@ -2617,6 +2651,392 @@ fn the_band_belongs_to_its_surface(checks: &mut Checks) {
     }
 }
 
+/// **One drawer at a time, walked over every pair of drawers there is**
+/// (UI.md §3).
+///
+/// The owner's 2026-09-11 playtest opened TUNE over an open ROSTER and got
+/// both, because five drawers were five independent flags and the render
+/// absorbed each under its own `if` (`FINDINGS.md` G-027). The state is now
+/// unrepresentable — `Flow::drawer` is one `Option<Drawer>` — and this is the
+/// measurement of it, from the player's side rather than the type's: every
+/// drawer opened from every other drawer, through the real handles, and the
+/// **frame** asked how many drawers' content it carries.
+///
+/// Twenty-five pairs, the diagonal included: a handle tapped twice is the
+/// drawer put down, which is the other half of what a handle means.
+fn one_drawer_at_a_time(checks: &mut Checks) -> String {
+    let tuning = Tuning::SHIPPED;
+    let grid = grid::grid();
+    let camera = run_camera(HEADLESS_VIEWPORT);
+    let mut walked = 0;
+    for from in flow::Drawer::ALL {
+        for to in flow::Drawer::ALL {
+            // Somebody selected and a board open first, so the run also says
+            // that opening a drawer puts the map's own surfaces down — the
+            // other half of `Flow::close_everything`'s claim.
+            let script = [
+                Directive {
+                    when: When::Tick(6),
+                    what: sweep::pick_at_home(0),
+                },
+                Directive {
+                    when: When::Tick(12),
+                    what: Act::ClickWorld(
+                        layout::marker_rect(LOCATIONS[crate::sim::site_location(0)].tile).center(),
+                    ),
+                },
+                Directive {
+                    when: When::Tick(18),
+                    what: Act::ClickUi(from.handle().center()),
+                },
+                Directive {
+                    when: When::Tick(24),
+                    what: Act::ClickUi(to.handle().center()),
+                },
+            ];
+            let mut session = Session::plain(tuning, &script, 28);
+            session.probe_ticks = &[22, 28];
+            let run = conduct(&session);
+            let Some((_, opened, ..)) = run.probe(22) else {
+                continue;
+            };
+            checks.require(
+                opened.showing(from),
+                "a drawer handle did not open its own drawer",
+                format!(
+                    "after tapping {}, the open drawer is {:?}",
+                    from.label(),
+                    opened.drawer
+                ),
+            );
+            checks.require(
+                opened.selected.is_none() && opened.board.is_none(),
+                "opening a drawer left a map surface up under it",
+                format!(
+                    "after tapping {}, the selection is {:?} and the board is {:?}",
+                    from.label(),
+                    opened.selected,
+                    opened.board
+                ),
+            );
+            let Some((_, flow, active, sim, clock)) = run.probe(28) else {
+                continue;
+            };
+            let want = (from != to).then_some(to);
+            checks.require(
+                flow.drawer == want,
+                "a drawer handle tapped from inside another drawer did not displace it",
+                format!(
+                    "{} was open, {} was tapped, and the open drawer is {:?} where it should \
+                     be {want:?}",
+                    from.label(),
+                    to.label(),
+                    flow.drawer
+                ),
+            );
+            // **And the frame agrees.** The field is one value, so the
+            // interesting question is whether what is *drawn* follows it —
+            // which is the half the five flags got wrong.
+            let panel = screens::content(
+                flow,
+                &lens::Lens::on(sim),
+                &grid,
+                clock,
+                active,
+                screens::reading(clock, active, screens::TICK),
+                &camera,
+            );
+            let drawing: Vec<&str> = flow::Drawer::ALL
+                .into_iter()
+                .filter(|drawer| panel.runs.iter().any(|run| run.text == drawer.title()))
+                .map(flow::Drawer::label)
+                .collect();
+            checks.require(
+                drawing.len() == usize::from(want.is_some()),
+                "the frame does not carry exactly the one drawer that is open",
+                format!(
+                    "with {from:?} open and {to:?} tapped the field reads {:?} and the frame \
+                     draws {drawing:?}",
+                    flow.drawer
+                ),
+            );
+            walked += 1;
+        }
+    }
+    format!("{walked} drawer pairs walked, one drawer's content in every frame")
+}
+
+/// **The work list is the person side of the board, and it navigates**
+/// (UI.md §3f).
+///
+/// Four claims, each a failure mode the surface opens:
+///
+/// 1. every row's fit, verdict and travel are the sim's own answers for
+///    **that** person and **that** job at that tick — asserted against the
+///    three functions themselves, not against a second reading of the list;
+/// 2. the order is fit-descending with site-then-authored ties, and the same
+///    list twice for one frame;
+/// 3. tapping a row **navigates**: the board opens on that job's site with
+///    the job in view, the selection is untouched and nothing is posted;
+/// 4. none of it is simulation state — the transcript of a run that opens the
+///    list and walks it is the transcript of a run that does not.
+fn the_work_list_navigates(checks: &mut Checks, baseline: &Conducted) -> String {
+    let tuning = Tuning::SHIPPED;
+    let grid = grid::grid();
+    let cast = people::roster();
+    let sim = &baseline.sim;
+    let now = baseline.minutes;
+    let lens = lens::Lens::on(sim);
+    let flow = flow::Flow::default();
+
+    // --- 1: every row is the sim's own three answers ------------------------
+    let mut rows = 0;
+    let mut refusals = 0;
+    let mut widest: f32 = 0.0;
+    for (who, person) in cast.iter().enumerate() {
+        let openings = worklist::openings(&lens, &grid, &tuning, now, who);
+        let panel = worklist::work_list(&flow, &lens, &grid, &tuning, now, who);
+        for (row, opening) in openings.iter().take(layout::WORK_ROWS).enumerate() {
+            let Some(quest) = lens
+                .site(opening.job.site)
+                .and_then(|board| board.quest(opening.job.slot))
+            else {
+                continue;
+            };
+            let fit = traits::competence_at(quest.task, &person.traits);
+            checks.require(
+                opening.fit == fit,
+                "a work row's fit is not the scorer's own aptitude term",
+                format!(
+                    "{} reads fit {} for {} and `competence_at` says {fit}",
+                    person.name, opening.fit, quest.name
+                ),
+            );
+            let route = crate::sim::route_out(&grid, &tuning, sim, who, opening.job.site);
+            checks.require(
+                opening.route.as_ref().map(|route| route.cost)
+                    == route.as_ref().map(|route| route.cost),
+                "a work row's travel is not the route the dispatch would lay",
+                format!(
+                    "{} reads {:?} to {} and `route_out` says {:?}",
+                    person.name,
+                    opening.route.as_ref().map(|route| route.cost),
+                    quest.name,
+                    route.as_ref().map(|route| route.cost)
+                ),
+            );
+            let rate = lens.standing_rate(quest.task);
+            let answer = crate::answers::read(
+                sim,
+                &tuning,
+                now,
+                who,
+                &crate::asks::preview_posting(who, opening.job.site, opening.job.slot, rate, rate),
+                opening.job,
+            );
+            let said = opening
+                .reading
+                .as_ref()
+                .map(|reading| (reading.verdict, reading.why.clone()));
+            // **And the verdict's reason is not clipped**, measured over a
+            // played world rather than guessed at: which rival wins a refusal
+            // is what a played world has, and the rival's own sentence is the
+            // reason (the picker measures its cell the same way).
+            widest = widest.max(theme::text(theme::SMALL, theme::INK).width_of(&format!(
+                "{} - {}",
+                answer.verdict.name(),
+                answer.why
+            )));
+            checks.require(
+                said == Some((answer.verdict, answer.why.clone())),
+                "a work row's verdict is not the scorer's own answer at the standing rate",
+                format!(
+                    "{} reads {said:?} about {} at {rate}g and `answers::read` says {:?}",
+                    person.name,
+                    quest.name,
+                    (answer.verdict, answer.why)
+                ),
+            );
+            refusals += usize::from(!answer.verdict.takes());
+            // **And the row on screen says it**, at that row's own cells —
+            // not "somewhere on the list".
+            let at = layout::worklist_row(row).min;
+            for (cell, want) in [
+                (at + layout::work::NAME, quest.name.to_owned()),
+                (at + layout::work::FIT, format!("fit {fit}")),
+            ] {
+                checks.require(
+                    panel
+                        .runs
+                        .iter()
+                        .any(|run| run.at == cell && run.text == want),
+                    "a work row does not carry its own answer in its own cell",
+                    format!(
+                        "row {row} of {}'s list has nothing reading {want:?} at {cell:?}",
+                        person.name
+                    ),
+                );
+            }
+            rows += 1;
+        }
+    }
+
+    checks.require(
+        !greater(widest, layout::work::SAYS_W),
+        "a work row's verdict cell is narrower than the widest thing the scorer says",
+        format!(
+            "the widest verdict line over a played world is {widest:.0} reference pixels and \
+             the cell is {:.0}",
+            layout::work::SAYS_W
+        ),
+    );
+
+    // --- 2: fit descending, ties in site then authored order, twice alike ---
+    for (who, person) in cast.iter().enumerate() {
+        let once = worklist::openings(&lens, &grid, &tuning, now, who);
+        let twice = worklist::openings(&lens, &grid, &tuning, now, who);
+        checks.require(
+            once.iter().map(|o| o.job).eq(twice.iter().map(|o| o.job)),
+            "two readings of one work list are two different lists",
+            format!(
+                "{} reads {} openings twice, in two orders",
+                person.name,
+                once.len()
+            ),
+        );
+        checks.require(
+            once.windows(2).all(|pair| pair[0].fit >= pair[1].fit),
+            "the work list is not sorted by fit, descending",
+            format!(
+                "{}'s list reads {:?}",
+                person.name,
+                once.iter().map(|o| o.fit).collect::<Vec<_>>()
+            ),
+        );
+        checks.require(
+            once.windows(2).all(|pair| {
+                pair[0].fit > pair[1].fit
+                    || (pair[0].job.site, pair[0].job.slot) < (pair[1].job.site, pair[1].job.slot)
+            }),
+            "a tie in the work list is not broken in site then authored order",
+            format!(
+                "{}'s list reads {:?}",
+                person.name,
+                once.iter()
+                    .map(|o| (o.fit, o.job.site, o.job.slot))
+                    .collect::<Vec<_>>()
+            ),
+        );
+    }
+
+    // --- 3: tapping a row navigates, and posts nothing ----------------------
+    let script = [
+        Directive {
+            when: When::Tick(6),
+            what: sweep::pick_at_home(0),
+        },
+        Directive {
+            when: When::Tick(14),
+            what: Act::ClickUi(layout::sheet_work().center()),
+        },
+        Directive {
+            when: When::Tick(22),
+            what: Act::ClickUi(layout::worklist_row(0).center()),
+        },
+    ];
+    let mut session = Session::plain(tuning, &script, 26);
+    session.probe_ticks = &[18, 26];
+    let walked = conduct(&session);
+    checks.require(
+        walked
+            .probe(18)
+            .is_some_and(|(_, flow, ..)| flow.listing == Some(0) && flow.selected == Some(0)),
+        "the sheet's work chip does not open the work list on the person it is about",
+        format!(
+            "after tapping it the list reads {:?} and the selection {:?}",
+            walked.probe(18).map(|(_, flow, ..)| flow.listing),
+            walked.probe(18).and_then(|(_, flow, ..)| flow.selected)
+        ),
+    );
+    let wanted = walked.probe(18).and_then(|(_, _, active, sim, clock)| {
+        worklist::openings(&lens::Lens::on(sim), &grid, active, clock.minutes, 0)
+            .first()
+            .map(|opening| opening.job)
+    });
+    let landed = walked.probe(26);
+    checks.require(
+        landed.is_some_and(|(_, flow, ..)| flow.board == wanted.map(|job| job.site))
+            && landed.is_some_and(|(_, flow, ..)| flow.listing.is_none()),
+        "a work row does not open its own site's board",
+        format!(
+            "the front row is {wanted:?} and after tapping it the board reads {:?} with the \
+             list {:?}",
+            landed.map(|(_, flow, ..)| flow.board),
+            landed.map(|(_, flow, ..)| flow.listing)
+        ),
+    );
+    checks.require(
+        landed.is_some_and(|(_, flow, ..)| flow.selected == Some(0)),
+        "walking a work row into a board moved the selection",
+        format!(
+            "the selection reads {:?} where it should still be the person the list was about",
+            landed.and_then(|(_, flow, ..)| flow.selected)
+        ),
+    );
+    checks.require(
+        landed.is_some_and(|(_, _, _, sim, _)| sim.postings.all().is_empty()),
+        "a work row posted something",
+        format!(
+            "the ledger holds {} postings after a list row was tapped; the row navigates and \
+             the board's row posts",
+            landed.map_or(0, |(_, _, _, sim, _)| sim.postings.all().len())
+        ),
+    );
+    // **And the job is in view**: the board that opened carries a row for it,
+    // at that row's own cell.
+    if let (Some(job), Some((_, flow, active, sim, clock))) = (wanted, landed) {
+        let lens = lens::Lens::on(sim);
+        let board = crate::board::site_board(flow, &lens, &grid, active, clock.minutes, job.site);
+        let name = lens
+            .site(job.site)
+            .and_then(|site| site.quest(job.slot))
+            .map(|quest| quest.name)
+            .unwrap_or_default();
+        let cell = layout::board_row(job.slot).min + layout::job::NAME;
+        checks.require(
+            board
+                .runs
+                .iter()
+                .any(|run| run.at == cell && run.text == name),
+            "the board a work row opens does not have that job in view",
+            format!(
+                "{name:?} has no row at {cell:?} on the board for site {}",
+                job.site
+            ),
+        );
+    }
+
+    // --- 4: none of it is simulation state ----------------------------------
+    let quiet = conduct(&Session::plain(tuning, &script[..1], 26));
+    checks.require(
+        transcript(&walked.events) == transcript(&quiet.events),
+        "opening the work list changed the world",
+        format!(
+            "the walked run produced {} events and the quiet one {}; the list is \
+             presentation and may not touch an outcome",
+            walked.events.len(),
+            quiet.events.len()
+        ),
+    );
+    format!(
+        "{rows} work rows read over {} people ({refusals} refusals); widest verdict line \
+         {widest:.0}px against {:.0}px cells; a row walks into its own board with the \
+         selection intact and the ledger empty",
+        cast.len(),
+        layout::work::SAYS_W
+    )
+}
+
 /// **The candidate picker names a person, and writes nothing else**
 /// (UI.md §3c, the candidate-picker session).
 ///
@@ -3310,10 +3730,16 @@ pub fn run() -> ExitCode {
     the_board_is_the_ask(&mut checks);
     // --- and the candidate list that makes it self-sufficient ---------------
     let picker = the_picker_names_a_person(&mut checks, &baseline);
+    // --- the work list, which is the same decision from the person's side --
+    let work = the_work_list_navigates(&mut checks, &baseline);
+    // --- and the one drawer there is ----------------------------------------
+    let drawers = one_drawer_at_a_time(&mut checks);
 
     // --- the layout floors --------------------------------------------------
     floors::layout_floors(&mut checks);
     floors::drawer_floors(&mut checks);
+    floors::tuner_right_column(&mut checks);
+    let bites = floors::floors_bite(&mut checks);
     floors::content_floors(&mut checks, &baseline);
     let ui_report = floors::uimap_contract(&mut checks);
     let legibility = floors::map_legibility(&mut checks);
@@ -3458,7 +3884,10 @@ pub fn run() -> ExitCode {
     println!("  map text: {legibility}");
     println!("  {labels}");
     println!("  breakdown: {breakdown}");
+    println!("  floors: {bites}");
     println!("  picker: {picker}");
+    println!("  work list: {work}");
+    println!("  drawers: {drawers}");
     println!("  {figures}");
     println!(
         "  people: {} in the registry, {} traits over {} kinds, {} marks, {} reaction cells",

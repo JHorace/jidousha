@@ -14,7 +14,7 @@ use jidousha::prelude::*;
 
 use crate::attention::{self, CHIP, EventClass, FeedEntry, Mode};
 use crate::constants::Tuning;
-use crate::flow::Flow;
+use crate::flow::{Drawer, Flow};
 use crate::lens::Lens;
 use crate::meters::{self, METERS};
 use crate::sprites::Art;
@@ -58,7 +58,7 @@ pub fn feed_drawer(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning) -> Panel {
     let mut panel = Panel::default();
     panel.text(TextRun::over(
         layout::feed_title(),
-        "FEED - what happened, newest first - click an entry to look at it",
+        Drawer::Feed.title(),
         theme::SMALL,
         theme::DIM,
     ));
@@ -321,7 +321,7 @@ pub fn modes_drawer(lens: &Lens<'_>) -> Panel {
     let mut panel = Panel::default();
     panel.text(TextRun::over(
         layout::modes_title(),
-        "AUTO-PAUSE - what each kind of event does to the world",
+        Drawer::Modes.title(),
         theme::SMALL,
         theme::GOLD,
     ));
@@ -473,7 +473,13 @@ fn faces_panel(lens: &Lens<'_>, index: usize) -> Panel {
 /// The reason is the scorer's own string, read through the lens; nothing here
 /// recomputes it, because a panel that computed its own answer would be the
 /// second decision function GDD §1 forbids.
-fn person_panel(flow: &Flow, lens: &Lens<'_>, who: usize) -> Panel {
+///
+/// **Its lower half flows.** The source line, the activity line, the home row
+/// and a tapped chip's explanation each wrap to as many rows as the data
+/// needs, and each starts where the one above it ended rather than at a typed
+/// offset — the offsets were true at the lengths of the day and the activity
+/// line's second row had grown through the home row (`FINDINGS.md` G-029).
+pub fn person_panel(flow: &Flow, lens: &Lens<'_>, who: usize) -> Panel {
     use layout::sheet;
     let mut panel = Panel::default();
     let origin = layout::person_panel().min;
@@ -486,9 +492,25 @@ fn person_panel(flow: &Flow, lens: &Lens<'_>, who: usize) -> Panel {
     }
     panel.text(TextRun::new(
         origin + sheet::NAME,
-        lens.name(who),
+        clipped(lens.name(who), sheet::NAME_W),
         theme::HEAD,
         theme::INK,
+    ));
+    // **The door onto the work open to them** (UI.md §3f) — the count on the
+    // sheet whether or not the list is up, and the one tap that opens it.
+    // Gold while the list is the surface in the left column, like every other
+    // control that is showing what it opened.
+    let chip = layout::sheet_work();
+    let label = format!("work {}", crate::worklist::open_jobs(lens));
+    panel.text(TextRun::new(
+        crate::ui::centered(chip, &label, theme::SMALL, chip.min.y + 10.0),
+        label,
+        theme::SMALL,
+        if flow.listing == Some(who) {
+            theme::GOLD
+        } else {
+            theme::INK
+        },
     ));
     let close = layout::person_close();
     panel.text(TextRun::new(
@@ -538,37 +560,28 @@ fn person_panel(flow: &Flow, lens: &Lens<'_>, who: usize) -> Panel {
         theme::SMALL,
         theme::EMBER,
     ));
+    // --- the flowed rows: each one starts where the last one ended --------
     let prose = columns(sheet::PROSE_W, theme::SMALL);
-    panel.block(
-        origin + sheet::SOURCE,
-        &wrap(lens.source(who), prose),
-        theme::SMALL,
-        theme::DIM,
-    );
+    let left = origin.x + sheet::SOURCE.x;
+    let mut y = origin.y + sheet::SOURCE.y;
+    let mut flowed = |panel: &mut Panel, text: &str, color| {
+        y = panel.block(Vec2::new(left, y), &wrap(text, prose), theme::SMALL, color)
+            + sheet::FLOW_GAP;
+    };
+    flowed(&mut panel, lens.source(who), theme::DIM);
     let doing = match lens.quest(who) {
         Some(quest) => format!("{} ({})", lens.activity_line(who), quest.name),
         None => lens.activity_line(who),
     };
-    panel.block(
-        origin + sheet::DOING,
-        &wrap(&doing, prose),
-        theme::SMALL,
-        theme::INK,
-    );
+    flowed(&mut panel, &doing, theme::INK);
     let home = lens.home(who).map_or("nowhere".to_owned(), |tile| {
         format!("({}, {})", tile.x, tile.y)
     });
-    panel.text(TextRun::new(
-        origin + sheet::HOME,
-        format!("home {home}"),
-        theme::SMALL,
-        theme::FAINT,
-    ));
+    flowed(&mut panel, &format!("home {home}"), theme::FAINT);
     if let Some(id) = flow.explained {
-        panel.block(
-            origin + sheet::EXPLAIN,
-            &wrap(&crate::traits::explain(id, lens.modules()), prose),
-            theme::SMALL,
+        flowed(
+            &mut panel,
+            &crate::traits::explain(id, lens.modules()),
             theme::GOLD,
         );
     }
@@ -613,7 +626,7 @@ pub fn roster_drawer(flow: &Flow, lens: &Lens<'_>) -> Panel {
     let mut panel = Panel::default();
     panel.text(TextRun::over(
         layout::roster_title(),
-        "ROSTER - everyone, what they carry, and what they are doing about it",
+        Drawer::Roster.title(),
         theme::SMALL,
         theme::DIM,
     ));

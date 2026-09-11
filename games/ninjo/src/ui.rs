@@ -179,6 +179,15 @@ impl Panel {
 /// that draws a generated sentence wraps it itself or draws it off the side of
 /// the world.
 ///
+/// **A line break the caller wrote survives.** The text this wraps is not
+/// always one sentence: the tuning drawer's stamp is `Tuning::readout`, which
+/// is authored as one line per pair of constants, and a wrapper that ate
+/// those breaks would join thirty-six numbers into one paragraph. So each of
+/// the caller's own lines is wrapped on its own and the breaks are kept —
+/// which is also the only contract under which "no line is wider than the
+/// column" is true of every string, rather than of every string without a
+/// newline in it.
+///
 /// **The over-long word is split rather than left long, and that rule was paid
 /// for.** It used to say the opposite, on the grounds that giri's vocabulary had
 /// no such word; the constants stamp is one -
@@ -188,6 +197,13 @@ impl Panel {
 /// wider than the column" has to be true of every string, because the string
 /// that breaks it is always the one added after the rule was written.
 pub fn wrap(text: &str, columns: usize) -> String {
+    if text.contains('\n') {
+        return text
+            .split('\n')
+            .map(|line| wrap(line, columns))
+            .collect::<Vec<_>>()
+            .join("\n");
+    }
     let columns = columns.max(1);
     let mut lines: Vec<String> = Vec::new();
     let mut line = String::new();

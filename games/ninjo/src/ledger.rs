@@ -12,7 +12,7 @@
 //! Everything reads the world through the [`Lens`], like every other surface.
 
 use crate::asks::{self, Answer, Status, Who};
-use crate::flow::Flow;
+use crate::flow::{Drawer, Flow};
 use crate::lens::Lens;
 use crate::panels::clipped;
 use crate::traits::TaskType;
@@ -25,7 +25,7 @@ pub fn ledger_drawer(flow: &Flow, lens: &Lens<'_>) -> Panel {
     let mut panel = Panel::default();
     panel.text(TextRun::over(
         layout::ledger_title(),
-        "LEDGER - every posting you have made, newest first",
+        Drawer::Ledger.title(),
         theme::SMALL,
         theme::DIM,
     ));
