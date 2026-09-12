@@ -197,13 +197,33 @@ laid out in `layout.rs` and asserted in `floors.rs` like every other row.
   two-click dispatch and it lies across two of the four site markers at the
   reference camera, so a body that swallowed clicks would make those two sites
   unorderable.
-- **Never two at once.** Opening any drawer shuts the others and closes both
-  over-the-map panels (`Flow::close_everything`) — which, since the panel *is*
-  the selection, means opening a drawer puts the selection down. A click that
-  is not one of the open drawer's own controls shuts it. Under an open drawer the map's
-  own chrome — the banner, the toast, the meters — draws nothing at all: a
-  row nobody can read lying across a control somebody can click is exactly
-  what the floors forbid.
+- **Never two at once, and it is the type that says so** (the 2026-09-11
+  session). There is **one drawer**: `Flow::drawer` is an `Option<Drawer>`
+  over the five, the render is one `match` over it and the click routing is
+  the same `match` over the same value, so "two drawers are open" is not a
+  rule anybody keeps — it is a state this game cannot represent, and the
+  drawer that is drawn is the drawer that answers a click by construction
+  rather than by two lists agreeing. It was five independent flags absorbed
+  under five `if`s, and the owner opened TUNE over an open ROSTER and got both
+  (`FINDINGS.md` G-027). Opening any drawer **displaces** whatever was open
+  and closes both over-the-map panels (`Flow::close_everything`) — which,
+  since the panel *is* the selection, means opening a drawer puts the
+  selection down; its comment claims exactly that and is now true of every
+  drawer rather than of four of them.
+- **The handles stand above the drawers.** The top bar is not covered, so a
+  handle is live from inside another drawer: one tap displaces, and a tap on
+  the open drawer's own handle puts it down. **The open drawer's handle is
+  lit gold**, like every other control in this game that is showing what it
+  opened, so which one of the five is up is readable from the bar rather than
+  from the screen under it. Every handle and the `r` key go through
+  `Flow::toggle_drawer`, and the five handles, their labels and each drawer's
+  own head row are walked off `Drawer::ALL` — a sixth drawer is a variant of
+  that enum and nothing else to remember.
+- A click that is not one of the open drawer's own controls shuts it (the
+  tuning drawer excepted, which its handle closes). Under an open drawer the
+  map's own chrome — the banner, the toast, the meters — draws nothing at
+  all: a row nobody can read lying across a control somebody can click is
+  exactly what the floors forbid.
 
 ## 3b. Selection, and the dispatch that reads it
 
@@ -216,7 +236,9 @@ never the fix.
 
 **Four doors, one act.** Selecting a person — by their **map sprite**, their
 **roster row's name**, their **face in a faces list**, or their **row in a
-job's candidate picker** (§3c) — does the same thing from every surface. There
+job's candidate picker** (§3c) — does the same thing from every surface.
+**The work list (§3f) is not a fifth**: it is opened *from* a selection and
+names a job, not a person — the picker's mirror, running the other way. There
 were four before the party strip retired too, and the one that went was the one
 that did nothing the other three did not: **no path was lost with it**, which
 is the test a retirement has to pass (§3). The picker is the one that came
@@ -431,6 +453,13 @@ panned around. It names people instead.
   registry is not larger, because a candidate with no row is a person the board
   cannot name, which is the defect this surface exists to close.
 
+**And the work list is this surface read from the other end** (§3f). The
+picker holds a job and lists the people; the work list holds a person and
+lists the jobs. Same decision — whom to post a job to — same three functions
+answering it (`traits::competence_at`, `answers::read`, `Lens::travel`), same
+one chip describing fit, same rule that neither of them posts. Two ways to
+*arrive* at the board's row, one way to post from it.
+
 **This is the assign-picker wave 1.5 was going to invent.** The petition-card
 anatomy recorded at wave 0a names an "assign-picker with willingness hints" as
 part of the card; this is that widget, arriving early because the job board
@@ -520,6 +549,61 @@ more words on the row but the sum itself, one tap deeper.
   them remembers. Under the feed the **notices** band steps aside rather than
   being drawn beneath it.
 
+## 3f. The work list — the board read from the person's side
+
+**The same decision, approached from the person instead of the job.** The
+board serves "whom do I post this job to"; this serves "what work is there for
+*them*". The owner's 2026-09-11 playtest asked for it: finding work for one
+character meant opening four boards in turn and remembering what each held.
+
+- **The door is on the character panel**: a `work N` chip in the sheet's own
+  header, beside the name it is about, carrying the number of jobs standing
+  open anywhere. It is in the header because at its widest state — a trait's
+  longest explanation open under the flowed rows — the sheet ends **twelve
+  reference pixels** above the panel's foot, and a target is thirty-two. The
+  count is the one thing about the list that belongs on the sheet whether or
+  not the list is up.
+- **The list stands in the left column**, in the board's own rectangle,
+  drawing **instead of** the board exactly as the candidate picker does and
+  for the same reason: the left of the screen is one column, the character
+  panel has the other, and a surface drawn under another is a row nobody can
+  read lying across a control somebody can click. `Flow::listing` holds the
+  *person*, the way `Flow::picking` holds the *job*.
+- **A row's anatomy** — task chip, the job's name, its pot, its duration and
+  the **fit** on the first line; the **travel from wherever they stand** and
+  the **verdict at that job's standing rate, with its reason**, on the second;
+  and **which site it stands at**, which is the thing a list across every
+  board has to say that a single board never did.
+- **Every number is the sim's own answer**, from the three functions the board
+  and the picker already call — `traits::competence_at`, `answers::read` (via
+  `board::reading_at`, at the standing rate), `Lens::travel`. Nothing here
+  recomputes anything, and `verify::the_work_list_navigates` asserts every
+  row's three answers against those functions directly.
+- **Sorted by fit, descending; ties in site then authored order** — the walk
+  is sites in registry order and slots in authored order and the sort is
+  stable, so a tie keeps what it arrived with and two readings of one frame
+  are the same list. **The verdict is shown and never sorted on**, exactly as
+  on the picker.
+- **Ten rows, and the cap is declared.** Four sites of six jobs is
+  twenty-four, the column holds ten, and the header says `10 of 24 open` so a
+  list that stops is a list that said it stopped. The ten are the ten the sort
+  puts first; there is no scrolling.
+- **Tapping a row navigates. It does not post.** The board opens on that job's
+  site with the character still selected, the list goes down, and the board's
+  row posts as it has since wave 1.2 — one way to post, two ways to arrive at
+  it. "In view" is the site's whole board: `layout_floors` asserts a row for
+  every job a site is authored with.
+- **Fit is described in one voice because there is one chip.** The board's
+  `what is fit?` stands in the same rectangle here, toggles the same flag and
+  prints the same sentence (`asks::fit_means`) — the third surface to show
+  fit and still the first chip.
+- **It goes away where its person or its column does.** The list is orphaned
+  when the selection moves off it, when a board opens, and when a meter chip
+  is drilled — one rule in one place (`Flow::put_the_list_away`), the same
+  shape as the picker's and the band's.
+- **With the asks module off there are no verdicts**, and the column says so
+  rather than being blank: the module's degrades-to sentence, on this surface.
+
 ## 4. Readability floors — what binds here
 
 giri's §7 floors bind: text ≥ 12 reference pixels; clickable targets ≥
@@ -529,20 +613,56 @@ world unit is one reference pixel); no interactive overlap; no text across
 a control it does not label; stat numbers carry their icon (the treasury's
 coin); ASCII everywhere.
 
-The floors bind **every** surface §3a, §3b, §3c, §3d and §3e add: a feed row, a
+The floors bind **every** surface §3a, §3b, §3c, §3d, §3e and §3f add: a feed
+row, a
 face row, a config radio, a meter chip, a roster row, a **job row**, the
 board's wage steppers and its `TO` toggle, a **ledger row's withdraw**, a
 **rate's steppers and its STAND**, a **`?` and a `who?` on a job row** and a
-**`?` on a feed entry**, a **candidate row**, a trait chip anywhere it appears,
+**`?` on a feed entry**, a **candidate row**, a **work row** and the sheet's
+**work chip**, a trait chip anywhere it appears,
 and the character panel's and the board's
 closes are all at or above the 32x32 target floor, none of them overlaps another control that
 shares its screen, and every row of text is inside the surface that holds it.
 `floors::controls_for` is the one function that says which controls share a
 screen, so the overlap floor is asked about the right set — and since the job
-board, the faces list and a job's candidate picker all share the left of the
-screen and no two of them are ever open together, **the base screen is three
-sets**, `targets()`, `board_targets()` and `picker_targets()`, and
-`layout_floors` judges all three.
+board, the faces list, a job's candidate picker and a person's work list all
+share the left of the screen and no two of them are ever open together, **the
+base screen is four sets**, `targets()`, `board_targets()`,
+`picker_targets()` and `worklist_targets()`, and `layout_floors` judges them.
+
+**Two floors the 2026-09-11 session added, because the screen they were owed
+against was wrong and nothing said so.**
+
+- **No two rows of chrome on one band collide.** `judge_panel` asked chrome
+  text against *controls* and map labels against *each other*, and never
+  chrome against chrome — so the tuning drawer's stamp, which grows a row
+  every other constant, walked into the prose band beside it and passed every
+  check (`FINDINGS.md` G-028). **On one band**, because the layers are what
+  make an overlay legitimate: the breakdown band is drawn over the feed
+  drawer's footer with its own ground behind it and that is deliberate (§3e),
+  while two rows on the same band are two rows drawn through each other.
+- **At most one drawer's content in the frame.** With `Flow::drawer` one
+  `Option<Drawer>` this is unrepresentable (§3), and the floor says it anyway,
+  so the next surface to grow an open-flag of its own fails here rather than
+  being found in a screenshot. It counts by each drawer's own head row
+  (`Drawer::title`), which is the string the drawer prints and the floor
+  reads — one string, so the two cannot drift into a floor that sees nothing.
+
+Both are **demonstrated failing** on the screens they were written for
+(`floors::floors_bite` stages the pre-fix right column and a frame carrying
+two drawers, judges them into a throwaway `Checks`, and asserts each claim is
+reported by name). A floor nobody has seen fail is a floor nobody knows is
+connected.
+
+**A band whose height is data is measured, not offset.** The tuning drawer's
+right column and the character panel's lower rows both used typed offsets that
+were true at the lengths of the day they were typed, and both had grown
+through the row below (`FINDINGS.md` G-028, G-029). Both now flow: each block
+starts where the one above it ended (`tuning::prose_top`, the character
+panel's flowed rows), and `floors::tuner_right_column` asserts the drawer's
+column still fits at `tuning::STAMP_HEADROOM` rows of growth — it fails while
+there is still room, so the wave that adds the constant is told to re-lay the
+column instead of finding out from a screenshot.
 
 **A cell that clips is a floor here, not a nicety.** The picker's four columns
 and the job row's verdict cell are asserted against the widest thing the game
@@ -611,7 +731,7 @@ frame judges hold all three.
 
 ## 5. Screenshot process
 
-Twenty-two PNGs per verify run. Reference-only, because they are pictures of what
+Twenty-four PNGs per verify run. Reference-only, because they are pictures of what
 is on screen rather than of how the chrome scales: **the settlement** at
 world-minute 0 (the whole cast standing at their homes, named, before
 anything is dispatched, which is wave 0b's own exit question), **the
@@ -651,6 +771,14 @@ asserted to be a mixed-fit job whose list carries at least one refusal and at
 least one person who is out, and the row it chooses from is asserted *not* to
 be the best fit on the list, because "the player took the top row" is the one
 reading that picture must not support.
+And, since the 2026-09-11 session, **two more**: **the work list** open on a
+selected character — every job standing open anywhere, sorted by fit, with the
+character panel beside it saying whose list it is (§3f), asserted to carry a
+spread of fits and at least one refusal, because a list of ten identical
+yesses is a picture of a list and not of this decision — and **TUNE opened
+over an open ROSTER**, the owner's exact path, showing one drawer and a right
+column whose stamp and prose are clear of each other. The second is asserted
+to carry exactly one drawer's head row.
 At both the reference surface and
 600x540 narrow: **the mid-travel map** (photographed with two parties on
 visibly different routes) and **the feed mid-pause** (the reason line

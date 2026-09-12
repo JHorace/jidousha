@@ -340,6 +340,26 @@ pub fn reading_for(
     task: crate::traits::TaskType,
 ) -> crate::answers::Reading {
     let wage = wage_offered(flow, lens, job.site, job.slot, task);
+    reading_at(lens, tuning, now, who, job, task, wage)
+}
+
+/// **What one person would say about one job at one wage** — the read every
+/// surface that shows a verdict goes through.
+///
+/// The wage is a parameter because the three surfaces ask about three wages:
+/// a board row and a candidate row ask at the offer in the board's hand, and
+/// the work list asks at the job's **standing rate**, which is what an offer
+/// made from a board nobody has stepped would pay. One derivation either way
+/// — a second one is how a preview comes to disagree with the decision.
+pub fn reading_at(
+    lens: &Lens<'_>,
+    tuning: &Tuning,
+    now: u64,
+    who: usize,
+    job: crate::sim::JobId,
+    task: crate::traits::TaskType,
+    wage: i64,
+) -> crate::answers::Reading {
     lens.would_take(
         tuning,
         now,

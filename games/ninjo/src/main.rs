@@ -75,6 +75,7 @@ mod tuning;
 mod ui;
 mod verify;
 mod web;
+mod worklist;
 
 use constants::Tuning;
 use flow::Flow;
@@ -192,13 +193,18 @@ fn open_the_world(world: &mut World) {
     // opens the drawer on them — accepted or refused.
     let flow = world.resource_mut::<Flow>();
     flow.tuner.pending = tuning;
-    flow.tuner.open = carried;
+    if carried {
+        flow.drawer = Some(crate::flow::Drawer::Tune);
+    }
     if !faults.is_empty() {
         for fault in &faults {
             eprintln!("[ninjo] {fault}");
         }
+        // The fault is written **after** the drawer is opened, not through
+        // `Flow::open_drawer`: opening is what acknowledges a refusal, and
+        // this refusal has not been read yet.
+        flow.drawer = Some(crate::flow::Drawer::Tune);
         flow.tuner.fault = Some(faults.join("  /  "));
-        flow.tuner.open = true;
     }
 }
 

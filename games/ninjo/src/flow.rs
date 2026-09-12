@@ -73,16 +73,19 @@ pub struct Flow {
     /// speed change, a refused order, a restart — none of which happened in
     /// the world and none of which has a world-time or a place.
     pub log: Vec<String>,
-    /// Whether the feed drawer is open.
-    pub feed_open: bool,
-    /// Whether the auto-pause config drawer is open.
-    pub modes_open: bool,
-    /// Whether the roster drawer is open — everyone in one list (wave 1.1's
-    /// clarity slice). The `r` key and the ROSTER handle both open it.
-    pub roster_open: bool,
-    /// **Whether the postings ledger is open** (wave 1.2) — every posting the
-    /// player has made, and the standing rates that price them.
-    pub ledger_open: bool,
+    /// **The one drawer that is open**, if one is (UI.md §3).
+    ///
+    /// One value over the five drawers, which is what makes "two drawers are
+    /// open" a state this game cannot represent rather than a rule somebody
+    /// has to remember. It was five independent flags — `feed_open`,
+    /// `modes_open`, `roster_open`, `ledger_open` and the tuner's own `open`
+    /// — absorbed under five `if`s, and the owner's 2026-09-11 playtest
+    /// opened TUNE over ROSTER and got both (`FINDINGS.md` G-027).
+    ///
+    /// **The render and the click routing are one `match` each over this
+    /// field**, so the drawer that is drawn is the drawer that answers a
+    /// click by construction rather than by two lists agreeing.
+    pub drawer: Option<Drawer>,
     /// **The wage the open board is offering**, where the player has stepped
     /// it off the standing rate.
     ///
@@ -141,6 +144,21 @@ pub struct Flow {
     /// can see is a panel about nothing — the same rule, in the same shape,
     /// as the breakdown band's.
     pub picking: Option<crate::sim::JobId>,
+    /// **Whose work list is open**, if anybody's (UI.md §3f).
+    ///
+    /// **The person-side mirror of the picker**, and the same kind of field:
+    /// the picker holds a *job* and names a person into `selected`; this
+    /// holds a *person* and names a job into `board`. It is not a second
+    /// selection — there is nowhere in the list to put a person, and the
+    /// person it is about is read off `selected` — and it is not a second way
+    /// to post, because tapping a row opens that site's board and the board's
+    /// row is still the one thing that posts (wave 1.2).
+    ///
+    /// **The whole index, not a flag**, for the reason `picking` carries a
+    /// whole `JobId`: a list opened on one person and read against whoever
+    /// happens to be selected would be somebody else's work under their name.
+    /// [`Flow::put_the_list_away`] asserts the pair agrees on every tick.
+    pub listing: Option<usize>,
     /// **The selected character** — the one selection this game has.
     ///
     /// One index over the ten people, which is the same index over the ten
@@ -172,7 +190,9 @@ pub struct Flow {
     pub pulse: Option<Pulse>,
     /// The transient message, if one is up.
     pub toast: Option<Toast>,
-    /// The tuning drawer's state (`tuning.rs`).
+    /// The tuning drawer's state that is **not** its openness (`tuning.rs`):
+    /// the pending set, the hovered row, and a refused link's fault. Its
+    /// openness is [`Flow::drawer`], like every other drawer's.
     pub tuner: Tuner,
     /// The scenario seed on every stamp (DESIGN carries giri's seed
     /// machinery; S1 never reads the `Rng`, and verify asserts it).
@@ -186,28 +206,57 @@ impl Flow {
         self.log.insert(0, line);
     }
 
-    /// Shut every drawer and every panel over the map, and put the selection
+    /// Shut the drawer and every panel over the map, and put the selection
     /// down with them.
     ///
     /// One place, because "a drawer and a panel are never both up" is a claim
     /// the floors assert about *pairs of controls*, and the way to keep it
-    /// true is to have exactly one function that opens anything. The selection
-    /// goes because the character panel *is* the selection (UI.md §3b): there
-    /// is no way to shut that panel and leave somebody picked.
+    /// true is to have exactly one function that opens anything. **Since the
+    /// five open-flags became one `Option<Drawer>` the drawer half of that
+    /// claim is the type's** — this function puts the one value down, and
+    /// there is no second one to forget. The selection goes because the
+    /// character panel *is* the selection (UI.md §3b): there is no way to
+    /// shut that panel and leave somebody picked.
     fn close_everything(&mut self) {
-        self.feed_open = false;
-        self.modes_open = false;
-        self.roster_open = false;
-        self.ledger_open = false;
-        self.tuner.open = false;
+        self.drawer = None;
         self.drilled = None;
         self.board = None;
         self.picking = None;
+        self.listing = None;
         self.selected = None;
         self.offer = None;
         self.post_open = false;
         self.fit_explained = false;
         self.breakdown = None;
+    }
+
+    /// Whether `drawer` is the one that is open.
+    pub fn showing(&self, drawer: Drawer) -> bool {
+        self.drawer == Some(drawer)
+    }
+
+    /// **Open a drawer, displacing whatever was open.**
+    ///
+    /// The one way a drawer opens. Nothing has to remember to shut the
+    /// others: there is one field, and writing it is what shuts them.
+    pub fn open_drawer(&mut self, drawer: Drawer) {
+        self.close_everything();
+        self.drawer = Some(drawer);
+        // Opening the tuning drawer is the acknowledgement a refused link was
+        // waiting for.
+        if drawer == Drawer::Tune {
+            self.tuner.fault = None;
+        }
+    }
+
+    /// **A handle, tapped**: open that drawer, or put it down if it is the
+    /// one already up. Every handle and the `r` key come through here.
+    pub fn toggle_drawer(&mut self, drawer: Drawer) {
+        if self.showing(drawer) {
+            self.close_everything();
+        } else {
+            self.open_drawer(drawer);
+        }
     }
 
     /// **Put the breakdown band away where what it explains has gone.**
@@ -226,7 +275,7 @@ impl Flow {
             Some(Breakdown::Job(_)) => {
                 self.board.is_none() || self.selected.is_none() || self.picking.is_some()
             }
-            Some(Breakdown::Entry(_)) => !self.feed_open,
+            Some(Breakdown::Entry(_)) => !self.showing(Drawer::Feed),
             None => false,
         };
         if orphaned {
@@ -246,6 +295,26 @@ impl Flow {
     fn put_the_picker_away(&mut self) {
         if self.board != self.picking.map(|job| job.site) {
             self.picking = None;
+        }
+    }
+
+    /// **Put the work list away where the person it is about has gone — or
+    /// where something else has taken its column.**
+    ///
+    /// Two orphanings, one rule. The list is the open work read for one
+    /// character, so a list still up after the selection moved would be one
+    /// person's work under another's name; and it stands in the left column,
+    /// which the job board, the candidate picker and a drilled meter chip's
+    /// faces list also stand in, so a list left up under any of them would be
+    /// the thing that is drawn disagreeing with the thing that is clicked —
+    /// which is the defect this whole session is about (`FINDINGS.md` G-027).
+    ///
+    /// One rule in one place for the reason the picker's and the band's are:
+    /// there are a dozen ways to open a board or drill a chip and the list
+    /// cannot be the thing every one of them remembers.
+    fn put_the_list_away(&mut self) {
+        if self.listing != self.selected || self.board.is_some() || self.drilled.is_some() {
+            self.listing = None;
         }
     }
 
@@ -341,6 +410,7 @@ pub fn handle_input(world: &mut World) {
     // lying over the map after the drawer that opened it was shut.
     let flow = world.resource_mut::<Flow>();
     flow.put_the_picker_away();
+    flow.put_the_list_away();
     flow.put_the_band_away();
 }
 
@@ -381,12 +451,10 @@ fn read_input(world: &mut World) {
         apply_speed(world, tick, change);
     }
 
-    // The roster: a registered key opens the same drawer the handle does.
+    // The roster: a registered key opens the same drawer the handle does,
+    // through the same one function.
     if roster_key {
-        let flow = world.resource_mut::<Flow>();
-        let open = flow.roster_open;
-        flow.close_everything();
-        flow.roster_open = !open;
+        world.resource_mut::<Flow>().toggle_drawer(Drawer::Roster);
     }
 
     // Pan and zoom: presentation, still input-driven and so still replayable.
@@ -418,62 +486,49 @@ fn read_input(world: &mut World) {
     let ui = UiMap::for_camera(world.resource::<Camera>());
     let at = ui.ui_of(at_world);
 
-    // The tuning drawer first, and every tick: it covers the screen while it
-    // is open, so what it does not want is the only thing anything under it
-    // gets.
-    if tuning::handle_pointer(world, at, tick, clicked) {
-        return;
-    }
+    // The tuning drawer's hover, every tick: a row's meaning appears by
+    // pointing at it, click or no click.
+    tuning::hover(world, at);
     if !clicked {
         return;
     }
 
-    // The two attention drawers swallow clicks while they are open, exactly
-    // as the tuning drawer does: they cover the screen, and a click that fell
-    // through would act on a marker the player cannot see.
-    if world.resource::<Flow>().feed_open {
-        feed_click(world, at, tick);
-        return;
-    }
-    if world.resource::<Flow>().modes_open {
-        modes_click(world, at);
-        return;
-    }
-    if world.resource::<Flow>().roster_open {
-        roster_click(world, at);
-        return;
-    }
-    if world.resource::<Flow>().ledger_open {
-        ledger_click(world, at, tick);
-        return;
-    }
-    for (handle, open) in [
-        (layout::feed_button(), Drawer::Feed),
-        (layout::modes_button(), Drawer::Modes),
-        (layout::roster_button(), Drawer::Roster),
-        (layout::ledger_button(), Drawer::Ledger),
-    ] {
-        if !handle.contains(at) {
+    // **The handles, before anything a drawer covers.** The top bar stands
+    // above every drawer, so a handle is live from inside another one and
+    // opening displaces what was open — which is one write to one field
+    // (`Flow::toggle_drawer`), not four flags to remember to clear.
+    for drawer in Drawer::ALL {
+        if !drawer.handle().contains(at) {
             continue;
         }
         // **With asks off there is no ledger**, and a handle that opened an
         // empty one would be a surface claiming a module the build does not
         // have. It says so instead (the module's degrades-to sentence).
-        if matches!(open, Drawer::Ledger)
-            && !world.resource::<Sim>().modules.enabled(crate::asks::MODULE)
+        if drawer == Drawer::Ledger && !world.resource::<Sim>().modules.enabled(crate::asks::MODULE)
         {
             world
                 .resource_mut::<Flow>()
                 .bounce(tick, "asks are off - there is no ledger to open".to_owned());
             return;
         }
-        let flow = world.resource_mut::<Flow>();
-        flow.close_everything();
-        match open {
-            Drawer::Feed => flow.feed_open = true,
-            Drawer::Modes => flow.modes_open = true,
-            Drawer::Roster => flow.roster_open = true,
-            Drawer::Ledger => flow.ledger_open = true,
+        world.resource_mut::<Flow>().toggle_drawer(drawer);
+        return;
+    }
+
+    // **A drawer swallows every click inside it**: it covers the screen, and
+    // a click that fell through would act on a marker the player cannot see.
+    //
+    // **One match over the one field**, which is the whole of why the drawer
+    // that is drawn is the drawer that answers — `screens::content` matches
+    // the same value to decide what to draw, so a drawer cannot be drawn by
+    // one list and clicked by another (`FINDINGS.md` G-027).
+    if let Some(drawer) = world.resource::<Flow>().drawer {
+        match drawer {
+            Drawer::Tune => tuning::click(world, at, tick),
+            Drawer::Roster => roster_click(world, at),
+            Drawer::Ledger => ledger_click(world, at, tick),
+            Drawer::Feed => feed_click(world, at, tick),
+            Drawer::Modes => modes_click(world, at),
         }
         return;
     }
@@ -506,6 +561,51 @@ fn read_input(world: &mut World) {
             return;
         }
     }
+    // **The work list, while it is up, is the whole left column** (UI.md
+    // §3d). It draws instead of the board, so nothing under it is a target:
+    // a row opens that site's board with this character still selected, the
+    // close puts the list away, and every other click inside its rectangle is
+    // the list's own and does nothing.
+    if let Some(who) = world.resource::<Flow>().listing {
+        if layout::board_close().contains(at) {
+            world.resource_mut::<Flow>().listing = None;
+            return;
+        }
+        if layout::board_fit_chip().contains(at) {
+            let flow = world.resource_mut::<Flow>();
+            flow.fit_explained = !flow.fit_explained;
+            return;
+        }
+        let openings: Vec<crate::sim::JobId> = {
+            let sim = world.resource::<Sim>().clone();
+            let lens = Lens::on(&sim);
+            let grid = world.resource::<Grid>().clone();
+            let tuning = *world.resource::<Tuning>();
+            let now = world.resource::<Clock>().minutes;
+            crate::worklist::openings(&lens, &grid, &tuning, now, who)
+                .into_iter()
+                .map(|opening| opening.job)
+                .collect()
+        };
+        for (row, job) in openings.into_iter().take(layout::WORK_ROWS).enumerate() {
+            if !layout::worklist_row(row).contains(at) {
+                continue;
+            }
+            // **It navigates, and it posts nothing** (UI.md §3f). The board
+            // opens on that job's site with the same person still selected,
+            // and the board's row is the one thing that posts — which is what
+            // keeps "one way to post" true of a surface that shows every job
+            // in the settlement.
+            let flow = world.resource_mut::<Flow>();
+            flow.listing = None;
+            flow.board = Some(job.site);
+            return;
+        }
+        if layout::worklist_panel().contains(at) {
+            return;
+        }
+    }
+
     // **The job board's own controls**: a row is the order, and the close puts
     // the board away.
     //
@@ -701,6 +801,22 @@ fn read_input(world: &mut World) {
             flow.explained = None;
             return;
         }
+        // **The work chip, tapped**: the work open to this person, in the
+        // left column (UI.md §3f). It toggles, like every other tap-deeper
+        // control, and it displaces whatever else is standing in that column
+        // — the board and the picker are the other two, and one column holds
+        // one surface.
+        if layout::sheet_work().contains(at) {
+            let flow = world.resource_mut::<Flow>();
+            flow.listing = (flow.listing != Some(who)).then_some(who);
+            if flow.listing.is_some() {
+                flow.board = None;
+                flow.picking = None;
+                flow.drilled = None;
+                flow.breakdown = None;
+            }
+            return;
+        }
         // **A trait chip, tapped**: the same gesture the roster's rows answer,
         // over the same rectangles, showing the same derived line.
         let carried: Vec<crate::traits::TraitId> = {
@@ -827,17 +943,76 @@ fn select(world: &mut World, who: usize) {
     flow.selected = (flow.selected != Some(who)).then_some(who);
 }
 
-/// Which drawer a handle opens.
-#[derive(Clone, Copy, Debug)]
-enum Drawer {
-    /// The feed.
-    Feed,
-    /// The auto-pause config.
-    Modes,
-    /// The roster.
+/// **The five drawers** — and, since they became one value, the whole of
+/// what "which drawer is open" can say (UI.md §3).
+///
+/// One enum, walked: the handles in the top bar, the click routing, the
+/// render and the floors all read this list rather than each carrying their
+/// own. A sixth drawer is a variant here and nothing else to remember.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Drawer {
+    /// The live tuning drawer (`tuning.rs`).
+    Tune,
+    /// The roster: everyone in one list.
     Roster,
     /// The postings ledger, and the standing rates beside it.
     Ledger,
+    /// The feed: what happened, newest first.
+    Feed,
+    /// The auto-pause config.
+    Modes,
+}
+
+impl Drawer {
+    /// Every drawer there is, **in handle order** — which is the order the
+    /// top bar draws them in and the order the floors walk.
+    pub const ALL: [Drawer; 5] = [
+        Drawer::Tune,
+        Drawer::Roster,
+        Drawer::Ledger,
+        Drawer::Feed,
+        Drawer::Modes,
+    ];
+
+    /// The word on its handle.
+    pub fn label(self) -> &'static str {
+        match self {
+            Drawer::Tune => "TUNE",
+            Drawer::Roster => "ROSTER",
+            Drawer::Ledger => "LEDGER",
+            Drawer::Feed => "FEED",
+            Drawer::Modes => "MODES",
+        }
+    }
+
+    /// Its handle in the top bar.
+    pub fn handle(self) -> Rect {
+        match self {
+            Drawer::Tune => layout::tune_button(),
+            Drawer::Roster => layout::roster_button(),
+            Drawer::Ledger => layout::ledger_button(),
+            Drawer::Feed => layout::feed_button(),
+            Drawer::Modes => layout::modes_button(),
+        }
+    }
+
+    /// **The head row its own content draws**, verbatim.
+    ///
+    /// One string, read by the drawer that prints it and by the floor that
+    /// counts how many drawers are in a frame (`floors::judge_panel`): a
+    /// title written twice is two things that can drift, and the floor would
+    /// stop seeing the drawer it is looking for.
+    pub fn title(self) -> &'static str {
+        match self {
+            Drawer::Tune => "TUNING - the constants the simulation reads",
+            Drawer::Roster => {
+                "ROSTER - everyone, what they carry, and what they are doing about it"
+            }
+            Drawer::Ledger => "LEDGER - every posting you have made, newest first",
+            Drawer::Feed => "FEED - what happened, newest first - click an entry to look at it",
+            Drawer::Modes => "AUTO-PAUSE - what each kind of event does to the world",
+        }
+    }
 }
 
 /// A click inside the open roster drawer.
@@ -866,7 +1041,7 @@ fn roster_click(world: &mut World, at: Vec2) {
             return;
         }
     }
-    world.resource_mut::<Flow>().roster_open = false;
+    world.resource_mut::<Flow>().drawer = None;
 }
 
 /// A click inside the open feed drawer.
@@ -917,12 +1092,12 @@ fn feed_click(world: &mut World, at: Vec2, tick: u64) {
     let focus = entry_at(world, &|row| layout::feed_row(row).contains(at))
         .and_then(|index| world.resource::<Sim>().events.get(index).map(|e| e.tile));
     let Some(tile) = focus else {
-        world.resource_mut::<Flow>().feed_open = false;
+        world.resource_mut::<Flow>().drawer = None;
         return;
     };
     world.resource_mut::<Camera>().center = tile.center();
     let flow = world.resource_mut::<Flow>();
-    flow.feed_open = false;
+    flow.drawer = None;
     flow.pulse = Some(Pulse {
         tile,
         until: tick + attention::pulse_ticks(&tuning),
@@ -946,7 +1121,7 @@ fn modes_click(world: &mut World, at: Vec2) {
     }
     // Anything that is not one of this drawer's own controls shuts it — the
     // handle included, so the handle toggles. Exactly the feed's rule.
-    world.resource_mut::<Flow>().modes_open = false;
+    world.resource_mut::<Flow>().drawer = None;
 }
 
 /// One speed change: `None` is the pause toggle, `Some` picks a rate and
@@ -1188,7 +1363,7 @@ fn ledger_click(world: &mut World, at: Vec2, tick: u64) {
         }
     }
     let _ = tick;
-    world.resource_mut::<Flow>().ledger_open = false;
+    world.resource_mut::<Flow>().drawer = None;
 }
 
 /// The art store and its handles, inserted before anything draws.

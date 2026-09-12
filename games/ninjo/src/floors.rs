@@ -13,13 +13,13 @@ use crate::camera::UiMap;
 use crate::checks::{Checks, greater, near};
 use crate::clock::Clock;
 use crate::constants::Tuning;
-use crate::flow::Flow;
+use crate::flow::{Drawer, Flow};
 use crate::grid::LOCATIONS;
 use crate::lens::Lens;
 use crate::sim::Sim;
 use crate::sweep::{Conducted, Shot};
 use crate::ui::Panel;
-use crate::{camera, layout, screens, theme, verify};
+use crate::{camera, layout, panels, screens, theme, tuning, verify};
 
 /// Whether `bounds` sits inside `area`, to within a hundredth of a unit.
 pub fn inside(area: Rect, bounds: Rect) -> bool {
@@ -80,6 +80,23 @@ pub fn picker_targets() -> Vec<(String, Rect)> {
     out
 }
 
+/// The base screen's controls with the **work list** up instead of a board.
+///
+/// The list stands in the board's own rectangle and draws instead of it
+/// (UI.md §3f), so the board's rows and footer controls are not on this
+/// screen at all — a fourth set of siblings, and the overlap floor is about
+/// siblings. The character panel is in it, because the list is the
+/// selection's own surface and the selection is what the panel is.
+pub fn worklist_targets() -> Vec<(String, Rect)> {
+    let mut out: Vec<(String, Rect)> = base_targets();
+    out.push(("the work list's close".to_owned(), layout::board_close()));
+    out.push(("the board's fit chip".to_owned(), layout::board_fit_chip()));
+    for row in 0..layout::WORK_ROWS {
+        out.push((format!("work row {row}"), layout::worklist_row(row)));
+    }
+    out
+}
+
 /// Every rectangle the postings ledger answers a click in: a withdrawal per
 /// standing posting, and the standing rates' own steppers and postings.
 pub fn ledger_targets() -> Vec<(String, Rect)> {
@@ -126,23 +143,7 @@ fn base_targets() -> Vec<(String, Rect)> {
     for (index, label) in screens::chip_labels().into_iter().enumerate() {
         out.push((format!("the {label} chip"), layout::speed_chip(index)));
     }
-    out.push(("the feed drawer's handle".to_owned(), layout::feed_button()));
-    out.push((
-        "the ledger drawer's handle".to_owned(),
-        layout::ledger_button(),
-    ));
-    out.push((
-        "the roster drawer's handle".to_owned(),
-        layout::roster_button(),
-    ));
-    out.push((
-        "the tuning drawer's handle".to_owned(),
-        layout::tune_button(),
-    ));
-    out.push((
-        "the auto-pause drawer's handle".to_owned(),
-        layout::modes_button(),
-    ));
+    out.extend(handle_targets());
     for (index, spec) in crate::meters::METERS.iter().enumerate() {
         out.push((
             format!("the {} meter chip", spec.id),
@@ -153,6 +154,7 @@ fn base_targets() -> Vec<(String, Rect)> {
         "the character panel's close".to_owned(),
         layout::person_close(),
     ));
+    out.push(("the sheet's work chip".to_owned(), layout::sheet_work()));
     for slot in 0..layout::SHEET_CHIPS {
         out.push((
             format!("the sheet's trait chip {slot}"),
@@ -160,6 +162,18 @@ fn base_targets() -> Vec<(String, Rect)> {
         ));
     }
     out
+}
+
+/// **The five handles**, off the one list of drawers there is.
+///
+/// They are on every screen this game has, drawer or no drawer: the top bar
+/// stands above the drawers and a handle answers a click from inside one
+/// (UI.md §3), so they share a screen with whatever else is up.
+fn handle_targets() -> Vec<(String, Rect)> {
+    Drawer::ALL
+        .into_iter()
+        .map(|drawer| (format!("the {} handle", drawer.label()), drawer.handle()))
+        .collect()
 }
 
 /// Every rectangle the feed drawer answers a click in.
@@ -210,20 +224,25 @@ pub fn roster_targets() -> Vec<(String, Rect)> {
 /// the label of" is a question about *what is on screen together*, and a
 /// drawer covers everything under it.
 pub fn controls_for(flow: &Flow) -> Vec<(String, Rect)> {
-    if flow.tuner.open {
-        return tuner_targets();
+    // **A match over the one drawer**, the same value `screens::content`
+    // draws from and `flow::read_input` routes clicks with: three readers,
+    // one field, so the controls this floor judges are the controls that are
+    // actually on screen.
+    if let Some(drawer) = flow.drawer {
+        let mut out = match drawer {
+            Drawer::Tune => tuner_targets(),
+            Drawer::Roster => roster_targets(),
+            Drawer::Ledger => ledger_targets(),
+            Drawer::Feed => feed_targets(),
+            Drawer::Modes => modes_targets(),
+        };
+        // The handles stand above every drawer and stay live inside one, so
+        // they share the screen with whatever the drawer carries.
+        out.extend(handle_targets());
+        return out;
     }
-    if flow.feed_open {
-        return feed_targets();
-    }
-    if flow.modes_open {
-        return modes_targets();
-    }
-    if flow.roster_open {
-        return roster_targets();
-    }
-    if flow.ledger_open {
-        return ledger_targets();
+    if flow.listing.is_some() {
+        return worklist_targets();
     }
     if flow.board.is_some() {
         if flow.picking.is_some() {
@@ -290,6 +309,95 @@ pub fn layout_floors(checks: &mut Checks) {
                     format!("{what} at {rect:?} overlaps {other_what} at {other:?}"),
                 );
             }
+        }
+    }
+    // **Every cell of a work row holds the content the scenario authors**
+    // (UI.md §3f). A list across every board is the one surface where a clip
+    // takes the word that says *which* job a tap is about, so the cells are
+    // measured against the authored names rather than eyeballed against the
+    // ones that happened to be longest the day they were typed.
+    {
+        let opening = crate::sim::Sim::opening(&Tuning::SHIPPED, crate::modules::ModuleSet::ALL);
+        let width = |text: &str| theme::text(theme::SMALL, theme::INK).width_of(text);
+        let mut cells: Vec<(String, String, f32)> = Vec::new();
+        for site in &opening.sites {
+            for quest in &site.quests {
+                cells.push((
+                    "a job's name".to_owned(),
+                    quest.name.to_owned(),
+                    layout::work::NAME_W,
+                ));
+                cells.push((
+                    "a job's pot".to_owned(),
+                    format!("{}g", quest.pot),
+                    layout::work::POT_W,
+                ));
+                cells.push((
+                    "a job's duration".to_owned(),
+                    format!("{} min", quest.duration),
+                    layout::work::DURATION_W,
+                ));
+            }
+        }
+        for location in LOCATIONS {
+            cells.push((
+                "a site's name".to_owned(),
+                location.name.to_owned(),
+                layout::work::WHERE_W,
+            ));
+        }
+        for (what, text, cell) in cells {
+            checks.require(
+                !greater(width(&text), cell),
+                "a work row's cell is narrower than the content the scenario authors",
+                format!(
+                    "{what}, {text:?}, is {:.0} reference pixels wide and its cell is {cell:.0}",
+                    width(&text)
+                ),
+            );
+        }
+        // **And both header lines fit the band that prints them**, at the
+        // longest name in the cast and the fullest the settlement can be: the
+        // count and the wage are what the answers below were read at and they
+        // are on no other surface while this one is up.
+        let style = theme::text(theme::SMALL, theme::INK);
+        let jobs: usize = opening.sites.iter().map(|site| site.quests.len()).sum();
+        let header = [
+            format!(
+                "the work open to {}",
+                crate::people::roster()
+                    .iter()
+                    .map(|person| person.name)
+                    .max_by_key(|name| name.len())
+                    .unwrap_or_default()
+            ),
+            format!(
+                "{} of {jobs} open - at the standing rate",
+                layout::WORK_ROWS
+            ),
+        ];
+        for line in header {
+            checks.require(
+                !greater(style.width_of(&line), layout::WORKLIST_HEAD_W),
+                "a work list header line does not fit the band that prints it",
+                format!(
+                    "{line:?} is {:.0} reference pixels wide and the header band is {:.0}",
+                    style.width_of(&line),
+                    layout::WORKLIST_HEAD_W
+                ),
+            );
+        }
+        // And the whole row lands inside the panel that holds it.
+        for row in 0..layout::WORK_ROWS {
+            checks.require(
+                inside(layout::worklist_panel(), layout::worklist_row(row)),
+                "a work row is outside the list that holds it",
+                format!(
+                    "row {row} is {:?} and the list is {:?}",
+                    layout::worklist_row(row),
+                    layout::worklist_panel()
+                ),
+            );
         }
     }
     // Every job row is inside the panel that holds it, and the board has a row
@@ -440,16 +548,26 @@ pub fn layout_floors(checks: &mut Checks) {
             .lines()
             .count()
     };
+    // **The character panel's flowed rows, at the longest each of them can
+    // be** (UI.md §3a). The source, the activity line, the home row and a
+    // tapped chip's explanation each start where the one above ended, so the
+    // question is not whether one offset is right but whether the whole flow
+    // fits — counted off the data the rows are built from, over every
+    // character the registry holds.
     let sheet_rows = rows(layout::sheet::PROSE_W);
+    let flow_rows = layout::sheet::LEAD_ROWS + sheet_rows;
     let sheet_end = layout::person_panel().min.y
-        + layout::sheet::EXPLAIN.y
-        + sheet_rows as f32 * (theme::SMALL + 2.0);
+        + layout::sheet::SOURCE.y
+        + flow_rows as f32 * (theme::SMALL + 2.0)
+        + 4.0 * layout::sheet::FLOW_GAP;
     checks.require(
         !greater(sheet_end, layout::person_panel().max.y),
-        "a trait's explanation runs off the character panel that holds it",
+        "the character panel's flowed rows run off the panel that holds them",
         format!(
-            "{longest:?} wraps to {sheet_rows} rows ending at {sheet_end:.0} and the panel \
-             ends at {:.0}",
+            "the widest flow is {flow_rows} rows ({} above the explanation, and the longest \
+             explanation, {longest:?}, wraps to {sheet_rows}) ending at {sheet_end:.0} and the \
+             panel ends at {:.0}",
+            layout::sheet::LEAD_ROWS,
             layout::person_panel().max.y
         ),
     );
@@ -598,6 +716,137 @@ pub fn drawer_floors(checks: &mut Checks) {
     ] {
         drawer_floor(checks, drawer, &controls, handle);
     }
+}
+
+/// **The tuning drawer's right column fits the drawer, with room to grow.**
+///
+/// The stamp is `Tuning::readout` and it grows a row every other constant
+/// `constants.rs` gains; the prose band under it is measured down from the
+/// stamp (`tuning::prose_top`), so growth moves the band rather than colliding
+/// with it — until the band runs off the drawer's foot, which is what this
+/// asserts, at the longest prose the drawer can print and
+/// `tuning::STAMP_HEADROOM` rows before it is a problem.
+///
+/// **The floor fails while there is still room**, so the wave that adds the
+/// constant is told to re-lay this column instead of finding out from a
+/// screenshot the way the owner did (`FINDINGS.md` G-028).
+pub fn tuner_right_column(checks: &mut Checks) {
+    let prose = crate::ui::columns(layout::tuner_prose_width(), theme::SMALL);
+    let rows = |text: &str| crate::ui::wrap(text, prose).lines().count();
+    // The two tallest states the band takes. The hint and the note share it
+    // and only one of them is ever up (`tuning::drawer`), so the worst case is
+    // whichever is taller: the longest single hint, or the resting line with
+    // the APPLY note under it.
+    let longest_hint = crate::constants::Field::ALL
+        .iter()
+        .map(|field| format!("{} - {}", field.name(), field.meaning()))
+        .chain(crate::links::refusals())
+        .map(|line| rows(&line))
+        .max()
+        .unwrap_or(1);
+    let resting = rows(tuning::RESTING_HINT) + rows(tuning::APPLY_NOTE);
+    let prose_rows = longest_hint.max(resting);
+    let stamp_rows = tuning::stamp_text(&Tuning::SHIPPED, 0).lines().count();
+    for extra in 0..=tuning::STAMP_HEADROOM {
+        let end =
+            tuning::prose_top(stamp_rows + extra) + prose_rows as f32 * (theme::SMALL + 2.0) + 4.0;
+        checks.require(
+            !greater(end, layout::tuner_panel().max.y),
+            "the tuning drawer's right column runs off the drawer",
+            format!(
+                "at {stamp_rows} rows of stamp plus {extra} of headroom the prose band starts \
+                 at {:.0}, runs {prose_rows} rows and ends at {end:.0}; the drawer ends at \
+                 {:.0}. Re-lay the right column before adding the constant",
+                tuning::prose_top(stamp_rows + extra),
+                layout::tuner_panel().max.y
+            ),
+        );
+    }
+}
+
+/// **The two new floors, demonstrated failing on the screens they were
+/// written for.**
+///
+/// A floor nobody has seen fail is a floor nobody knows is connected. Both of
+/// these were written because a screen the owner photographed on 2026-09-11
+/// was wrong and every check passed, so both are staged here on that screen —
+/// the tuning drawer's right column as it was laid out before this session,
+/// and two drawers' content in one frame — and the assertion is that judging
+/// those screens *reports*, by the name of the claim.
+///
+/// The judge runs into a throwaway `Checks`, so a floor doing its job here
+/// does not fail the run.
+pub fn floors_bite(checks: &mut Checks) -> String {
+    let sim = Sim::opening(&Tuning::SHIPPED, crate::modules::ModuleSet::ALL);
+    let lens = Lens::on(&sim);
+    let flow = Flow {
+        drawer: Some(Drawer::Tune),
+        ..Flow::default()
+    };
+
+    // --- the right column, at the offset it had before this session --------
+    //
+    // The stamp flowed down from the label and the prose band began at a
+    // typed 350; at thirty-six constants the stamp's last rows reached 362,
+    // and "seed 0" was drawn through "point at a constant for what it does".
+    const PRE_FIX_HINT_Y: f32 = 350.0;
+    let prose = crate::ui::columns(layout::tuner_prose_width(), theme::SMALL);
+    let mut before = Panel::default();
+    before.block(
+        layout::tuner_stamp() + Vec2::new(0.0, 14.0),
+        &tuning::stamp_text(&Tuning::SHIPPED, 0),
+        theme::SMALL,
+        theme::INK,
+    );
+    before.block(
+        Vec2::new(layout::tuner_stamp().x, PRE_FIX_HINT_Y),
+        &crate::ui::wrap(tuning::RESTING_HINT, prose),
+        theme::SMALL,
+        theme::FAINT,
+    );
+    let mut staged = Checks::default();
+    judge_panel(
+        &mut staged,
+        &before,
+        "the tuning drawer's right column at its pre-fix offset",
+        &[],
+    );
+    let overlap_bites = staged.reported("two rows of chrome text overlap");
+    checks.require(
+        overlap_bites,
+        "the chrome-overlap floor does not fail on the screen it was written for",
+        format!(
+            "the stamp laid out from {:?} and the prose band at y {PRE_FIX_HINT_Y} is the \
+             owner's 2026-09-11 screenshot, and judging it reported {} problem(s)",
+            layout::tuner_stamp(),
+            staged.failures()
+        ),
+    );
+
+    // --- two drawers' content in one frame ---------------------------------
+    //
+    // The state itself is now unrepresentable — `Flow::drawer` is one value —
+    // so it is staged by absorbing two drawers' panels, which is what the
+    // five open-flags made `screens::content` do.
+    let mut both = panels::roster_drawer(&flow, &lens);
+    both.absorb(tuning::drawer(&flow, &Tuning::SHIPPED));
+    let mut staged = Checks::default();
+    judge_panel(&mut staged, &both, "TUNE drawn over an open ROSTER", &[]);
+    let count_bites = staged.reported("two drawers' content is in one frame");
+    checks.require(
+        count_bites,
+        "the one-drawer floor does not fail on the screen it was written for",
+        format!(
+            "a frame carrying both the roster's and the tuning drawer's content reported {} \
+             problem(s), and none of them was the drawer count",
+            staged.failures()
+        ),
+    );
+    format!(
+        "chrome overlap bites on the pre-fix right column ({} problems), the drawer count \
+         bites on TUNE over ROSTER ({} problems)",
+        overlap_bites as usize, count_bites as usize
+    )
 }
 
 /// One drawer's controls against the floors.
@@ -806,13 +1055,13 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
         paused_sim.pauses = 1;
     }
     let mut feed_open = played.clone();
-    feed_open.feed_open = true;
+    feed_open.drawer = Some(Drawer::Feed);
     feed_open.show_ignored = true;
     let mut modes_open = played.clone();
-    modes_open.modes_open = true;
+    modes_open.drawer = Some(Drawer::Modes);
     // The roster, with a chip's explanation up: the loudest that surface gets.
     let mut roster_open = played.clone();
-    roster_open.roster_open = true;
+    roster_open.drawer = Some(Drawer::Roster);
     roster_open.explained = crate::traits::TRAITS
         .iter()
         .max_by_key(|def| {
@@ -891,10 +1140,22 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
     let mut picking_named = picking.clone();
     picking_named.selected = Some(0);
     picking_named.fit_explained = true;
+    // **The work list, on the character the settlement suits worst and the
+    // one it suits best** — the two ends of the fit spread, so the surface is
+    // judged with a refusal on it and with an agreement on it. Its loudest
+    // state has the fit chip explaining itself as well.
+    let mut listed = played.clone();
+    listed.selected = Some(0);
+    listed.listing = Some(0);
+    let mut listed_last = played.clone();
+    let last = baseline.sim.people.len().saturating_sub(1);
+    listed_last.selected = Some(last);
+    listed_last.listing = Some(last);
+    listed_last.fit_explained = true;
     // **The ledger**, on a world that has been asked things: every row of it
     // is a posting somebody heard, agreed to or refused.
     let mut ledger = played.clone();
-    ledger.ledger_open = true;
+    ledger.drawer = Some(Drawer::Ledger);
     // **The two states the legibility session added** (UI.md §3e): a job row's
     // arithmetic open on the board, and a decision's arithmetic open under
     // the feed — the band's two placements, both judged.
@@ -939,6 +1200,20 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
         (
             "the roster with an explanation open",
             roster_open,
+            baseline.sim.clone(),
+            ended_clock,
+            at,
+        ),
+        (
+            "the work list open on the first of the cast",
+            listed,
+            baseline.sim.clone(),
+            ended_clock,
+            at,
+        ),
+        (
+            "the work list at its loudest, with the fit chip explaining itself",
+            listed_last,
             baseline.sim.clone(),
             ended_clock,
             at,
@@ -1041,6 +1316,25 @@ pub fn content_floors(checks: &mut Checks, baseline: &Conducted) {
         );
         judge_panel(checks, &panel, what, &controls_for(&flow));
         judge_cast(checks, &panel, &Lens::on(&sim), &clock, what);
+        // **The character panel's flowed rows land inside it** (UI.md §3a).
+        // `layout_floors` budgets the flow at `sheet::LEAD_ROWS`; this is
+        // what turns that budget into an assertion, over the sheets a played
+        // world actually produces.
+        if let Some(who) = flow.selected {
+            let sheet = panels::person_panel(&flow, &Lens::on(&sim), who);
+            for run in &sheet.runs {
+                checks.require(
+                    inside(layout::person_panel(), run.bounds()),
+                    "a row of the character panel runs off the panel that holds it",
+                    format!(
+                        "{what}: {:?} occupies {:?} and the panel is {:?}",
+                        run.text,
+                        run.bounds(),
+                        layout::person_panel()
+                    ),
+                );
+            }
+        }
     }
 }
 
@@ -1088,6 +1382,56 @@ pub fn judge_panel(checks: &mut Checks, panel: &Panel, what: &str, controls: &[(
             format!("{what}: {:?} occupies {:?}", text.text, text.bounds()),
         );
     }
+    // **No two rows of chrome on one band collide** — the floor the tuning
+    // drawer's right column needed and did not have.
+    //
+    // `judge_panel` asked chrome text against *controls* and map labels
+    // against *each other*, and never chrome against chrome; so the stamp
+    // growing a row every other constant walked into the prose band beside it
+    // and no check said a word (`FINDINGS.md` G-028). **On one band**, because
+    // the layers are what make an overlay legitimate: the breakdown band is
+    // drawn over the feed drawer's footer with its own ground behind it and
+    // that is deliberate (UI.md §3e), while two rows on the same band are two
+    // rows drawn through each other.
+    let mut chrome: Vec<&crate::ui::TextRun> = panel.runs.iter().collect();
+    chrome.sort_by_key(|run| run.layer);
+    for (index, text) in chrome.iter().enumerate() {
+        for other in chrome.iter().skip(index + 1) {
+            if other.layer != text.layer {
+                continue;
+            }
+            checks.require(
+                !text.bounds().overlaps(other.bounds()),
+                "two rows of chrome text overlap",
+                format!(
+                    "{what}: {:?} at {:?} and {:?} at {:?}, both on band {}",
+                    text.text,
+                    text.bounds(),
+                    other.text,
+                    other.bounds(),
+                    text.layer
+                ),
+            );
+        }
+    }
+    // **At most one drawer's content in the frame.**
+    //
+    // With `Flow::drawer` a single `Option<Drawer>` this is unrepresentable,
+    // and the floor says it anyway: the next surface to grow an open-flag of
+    // its own should fail here rather than be found in a screenshot. It
+    // counts the drawers by the head row each of them draws — `Drawer::title`,
+    // the one string the drawer prints and this reads, so the two cannot
+    // drift apart into a floor that sees nothing.
+    let drawers: Vec<&'static str> = Drawer::ALL
+        .into_iter()
+        .filter(|drawer| panel.runs.iter().any(|run| run.text == drawer.title()))
+        .map(Drawer::label)
+        .collect();
+    checks.require(
+        drawers.len() <= 1,
+        "two drawers' content is in one frame",
+        format!("{what}: {drawers:?} are all drawing, and a drawer covers the screen"),
+    );
     // Map labels never collide with each other — the authored placement's
     // own floor.
     for (index, text) in panel.world_runs.iter().enumerate() {
@@ -1243,6 +1587,17 @@ pub fn judge_figures(checks: &mut Checks, run: &Conducted, shot: &Shot, what: &s
         &shot.camera,
     );
     judge_cast(checks, &panel, &Lens::on(&shot.sim), &shot.clock, what);
+    // **The frame half of this floor is a question about the map, and a
+    // drawer covers the map.**
+    //
+    // It counts quads at the figure weight, which is thirty-two — and
+    // thirty-two is also the target floor, so the tuning drawer's seventy-two
+    // stepper buttons are seventy-two figure-sized squares that no cast
+    // member stands at. The screen half above still runs on every frame; this
+    // half is asked of the frames where the map is the thing being looked at.
+    if shot.flow.drawer.is_some() {
+        return;
+    }
     // Every corner the screen says a figure-weight picture stands at: map
     // content where it is, chrome through the same mapping it is drawn with.
     let mut wanted: Vec<Vec2> = panel

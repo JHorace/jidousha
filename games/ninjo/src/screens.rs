@@ -28,7 +28,7 @@ use crate::camera::UiMap;
 use crate::checks::greater;
 use crate::clock::{Clock, Rate, stamp};
 use crate::constants::Tuning;
-use crate::flow::Flow;
+use crate::flow::{Drawer, Flow};
 use crate::grid::{Grid, LOCATIONS, TOWN, Tile};
 use crate::lens::Lens;
 use crate::sim::{Activity, Sim};
@@ -303,18 +303,22 @@ pub fn content(
         theme::HEAD,
         theme::GOLD,
     ));
-    for (rect, label) in [
-        (layout::feed_button(), "FEED"),
-        (layout::roster_button(), "ROSTER"),
-        (layout::ledger_button(), "LEDGER"),
-        (layout::tune_button(), "TUNE"),
-        (layout::modes_button(), "MODES"),
-    ] {
+    // **The handles, walked off the one list of drawers there is**
+    // (`Drawer::ALL`) — the same list the click routing and the render match
+    // over, so a sixth drawer cannot get a handle and no home or a home and
+    // no handle.
+    for drawer in Drawer::ALL {
+        let rect = drawer.handle();
+        let label = drawer.label();
         panel.text(TextRun::new(
             ui::centered(rect, label, theme::SMALL, rect.min.y + 10.0),
             label,
             theme::SMALL,
-            theme::DIM,
+            if flow.showing(drawer) {
+                theme::GOLD
+            } else {
+                theme::DIM
+            },
         ));
     }
     // **Under an open drawer, the map's own chrome says nothing.** A drawer
@@ -322,11 +326,7 @@ pub fn content(
     // nobody can read lying across a control somebody can click — and the
     // floors judge exactly that. The tuning drawer carries the toast in its
     // own prose band, so nothing is lost by keeping quiet here.
-    let bare = !flow.feed_open
-        && !flow.modes_open
-        && !flow.tuner.open
-        && !flow.roster_open
-        && !flow.ledger_open;
+    let bare = flow.drawer.is_none();
     if bare && let Some(toast) = &flow.toast {
         panel.text(TextRun::new(
             layout::toast_at(),
@@ -542,7 +542,22 @@ pub fn content(
         // would be rows nobody can read lying across controls somebody can
         // click, which is exactly what the floors refuse, and the picker's
         // header carries what the covered board was still saying.
-        if let Some(site) = flow.board {
+        //
+        // **And the work list is the third of them** (UI.md §3f), the
+        // person-side mirror of the picker: it draws instead of the board in
+        // the board's own rectangle, and tapping one of its rows is what
+        // opens the board there. One column, one surface — the same rule the
+        // picker's own placement is.
+        if let Some(who) = flow.listing {
+            panel.absorb(crate::worklist::work_list(
+                flow,
+                lens,
+                grid,
+                tuning,
+                clock.minutes,
+                who,
+            ));
+        } else if let Some(site) = flow.board {
             panel.absorb(match flow.picking {
                 Some(job) => crate::board::candidate_picker(
                     flow,
@@ -564,21 +579,21 @@ pub fn content(
     // the drawer's footer when they are.
     panel.absorb(panels::breakdown_band(flow, lens, tuning, clock.minutes));
 
-    // --- drawers ------------------------------------------------------------
-    if flow.feed_open {
-        panel.absorb(panels::feed_drawer(flow, lens, tuning));
-    }
-    if flow.modes_open {
-        panel.absorb(panels::modes_drawer(lens));
-    }
-    if flow.ledger_open {
-        panel.absorb(crate::ledger::ledger_drawer(flow, lens));
-    }
-    if flow.roster_open {
-        panel.absorb(panels::roster_drawer(flow, lens));
-    }
-    if flow.tuner.open {
-        panel.absorb(tuning::drawer(flow, tuning));
+    // --- the one drawer, if one is open -------------------------------------
+    //
+    // **A match over `Flow::drawer`, not five `if`s over five flags.** The
+    // five flags were what let TUNE draw over an open ROSTER (`FINDINGS.md`
+    // G-027); one value means the drawn drawer and the clicked drawer
+    // (`flow::read_input`'s match over the same field) cannot be two
+    // different drawers.
+    if let Some(drawer) = flow.drawer {
+        panel.absorb(match drawer {
+            Drawer::Tune => tuning::drawer(flow, tuning),
+            Drawer::Roster => panels::roster_drawer(flow, lens),
+            Drawer::Ledger => crate::ledger::ledger_drawer(flow, lens),
+            Drawer::Feed => panels::feed_drawer(flow, lens, tuning),
+            Drawer::Modes => panels::modes_drawer(lens),
+        });
     }
     panel
 }
@@ -742,7 +757,32 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
     }
     // The job board: its ground, its rows, and its close. A row is a target,
     // and a target with no edge is a thing nobody knows they may tap.
-    if let Some(site) = flow.board {
+    // **The work list's ground, in the board's own rectangle** (UI.md §3f):
+    // the third surface of the one left-hand column, drawn instead of the
+    // board exactly as the picker is.
+    if let Some(who) = flow.listing {
+        let open = {
+            let sim = ctx.world.resource::<Sim>();
+            crate::worklist::open_jobs(&Lens::on(sim)).min(layout::WORK_ROWS)
+        };
+        let _ = who;
+        fill(
+            ctx,
+            layout::worklist_panel(),
+            theme::PANEL,
+            theme::layers::CARD,
+        );
+        border(
+            ctx,
+            layout::worklist_panel(),
+            theme::GOLD,
+            theme::layers::CARD,
+        );
+        ghost_at(ctx, &map, layout::board_close(), theme::layers::CARD);
+        for row in 0..open {
+            ghost_at(ctx, &map, layout::worklist_row(row), theme::layers::CARD);
+        }
+    } else if let Some(site) = flow.board {
         let jobs = ctx
             .world
             .resource::<Sim>()
@@ -797,7 +837,13 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
             theme::GOLD,
             theme::layers::CARD,
         );
-        ghost(ctx, &map, layout::person_close());
+        // **On the card's own band, not an overlay's.** These two are base-screen
+        // controls, so their ground goes under the panel's text rather than over
+        // it — `ghost`'s default band is an overlay's, and the close button spent
+        // three waves with its own X painted out from under it
+        // (`FINDINGS.md` G-030).
+        ghost_at(ctx, &map, layout::person_close(), theme::layers::CARD);
+        ghost_at(ctx, &map, layout::sheet_work(), theme::layers::CARD);
     }
     // **The breakdown band**, and only while somebody has asked a verdict why
     // (UI.md §3e). It is drawn over whatever is under it — the map, or the
@@ -815,7 +861,10 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
     }
 
     // Drawers.
-    if flow.feed_open || flow.modes_open || flow.roster_open || flow.ledger_open {
+    if matches!(
+        flow.drawer,
+        Some(Drawer::Feed | Drawer::Modes | Drawer::Roster | Drawer::Ledger)
+    ) {
         fill(
             ctx,
             layout::feed_panel(),
@@ -829,7 +878,7 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
             theme::layers::OVERLAY,
         );
     }
-    if flow.roster_open {
+    if flow.showing(Drawer::Roster) {
         // Every row's own ground, and the chips over it: a chip is a target,
         // and a target with no edge is a thing nobody knows they may tap.
         for row in 0..layout::ROSTER_ROWS.min(ctx.world.resource::<Sim>().people.len()) {
@@ -844,7 +893,7 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
             }
         }
     }
-    if flow.feed_open {
+    if flow.showing(Drawer::Feed) {
         ghost(ctx, &map, layout::feed_ignored_toggle());
         let triggered = Lens::on(ctx.world.resource::<Sim>())
             .pause()
@@ -867,7 +916,7 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
     // **The ledger's own targets**: a withdrawal per standing posting, and
     // the standing rates' steppers and postings — every one of them an edge,
     // because a target with no edge is a thing nobody knows they may tap.
-    if flow.ledger_open {
+    if flow.showing(Drawer::Ledger) {
         let standing: Vec<usize> = Lens::on(ctx.world.resource::<Sim>())
             .postings()
             .iter()
@@ -886,7 +935,7 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
             ghost(ctx, &map, layout::rates_post(row));
         }
     }
-    if flow.modes_open {
+    if flow.showing(Drawer::Modes) {
         let held: Vec<crate::attention::Mode> = {
             let sim = ctx.world.resource::<Sim>();
             let lens = Lens::on(sim);
@@ -907,12 +956,12 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
         }
     }
     // The character panel's own trait chips, when one is open over the map.
-    if flow.selected.is_some() && !flow.tuner.open {
+    if flow.selected.is_some() && flow.drawer.is_none() {
         for slot in 0..layout::SHEET_CHIPS {
             ghost_at(ctx, &map, layout::sheet_chip(slot), theme::layers::CARD);
         }
     }
-    if flow.tuner.open {
+    if flow.showing(Drawer::Tune) {
         fill(
             ctx,
             layout::tuner_panel(),

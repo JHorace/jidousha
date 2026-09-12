@@ -33,11 +33,14 @@ as the change.
 | `ninjo-zoomed-reference.png` | **the settlement one notch of the wheel out**: every map word gone, every figure still there, and Bob still named in gold because the selected character's name is chrome (UI.md §4). The picture the owner judges the default camera against | 1920x1080 |
 | `ninjo-picker-reference.png` | **a job's candidate picker, open with nobody selected** (UI.md §3c): the Deep Cave's deep survey, and the whole cast under it — best fit first, each with their fit for scout work, the journey from wherever they are standing, what the scorer says they would do about 20g, and where they are (Bob at the Black Vault until d1 10:28, four of them walking home). The picture of a board that can be aimed without reaching the map it is covering (`FINDINGS.md` G-026) | 1920x1080 |
 | `ninjo-chosen-reference.png` | **the board after choosing from it**: Tim named — not the best fit on the list, which is the point — the footer reading `TO Tim`, his panel up beside the board, and the deep survey still `open`, because the picker names a person and the row is what posts | 1920x1080 |
+| `ninjo-worklist-reference.png` | **the work list** (UI.md §3f): every job standing open anywhere, read for Tim — sorted by fit, with each job's pot, duration, travel from where he stands, the site it stands at, and what he would say about it at the standing rate. `10 of 12 open` says the cap out loud; two `reluctant`s at the top and eight refusals under them is the spread the surface exists to sort, and his own panel beside it carries the `work 12` chip the list was opened from | 1920x1080 |
+| `ninjo-tuneover-reference.png` | **TUNE opened over an open ROSTER** — the owner's exact 2026-09-11 path (`FINDINGS.md` G-027), showing one drawer and not two, with the right column's stamp ending at `seed 0` and the prose band starting clear below it (G-028) | 1920x1080 |
 | `ninjo-tuning-reference.png` | the tuning drawer, MIRE pending in gold, APPLY lit | 1920x1080 |
 
 The settlement, config, living, roster, character, board, ordered, bounce,
 declined, ledger, selection, road-ring, breakdown, feed-breakdown,
-candidate-picker, after-choosing and zoomed-out shots are reference-only: they are
+candidate-picker, after-choosing, work-list, TUNE-over-ROSTER and zoomed-out
+shots are reference-only: they are
 pictures of *what is on screen*, and the scaling defects the narrow surface
 exists to catch are on the same chrome the map and feed pairs already cover.
 

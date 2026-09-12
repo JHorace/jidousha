@@ -85,6 +85,8 @@ pub fn capture_screens(
         "feedwhy",
         "picker",
         "chosen",
+        "worklist",
+        "tuneover",
     ] {
         if let Some(shot) = reference.photo(name) {
             wanted.push(Wanted {

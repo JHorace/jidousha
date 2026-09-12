@@ -13,6 +13,7 @@ use jidousha::prelude::Vec2;
 use crate::attention;
 use crate::checks::Checks;
 use crate::constants::Tuning;
+use crate::flow::Drawer;
 use crate::grid::Tile;
 use crate::sim::Activity;
 use crate::sweep::{Conducted, Shot};
@@ -44,9 +45,9 @@ pub fn judge(checks: &mut Checks, run: &Conducted, tuning: &Tuning) {
     // --- the feed, photographed with the world stopped ---------------------
     if let Some(shot) = run.photo("feed") {
         checks.require(
-            shot.flow.feed_open,
+            shot.flow.showing(Drawer::Feed),
             "the feed photograph was taken with the drawer shut",
-            format!("feed_open is {}", shot.flow.feed_open),
+            format!("the open drawer is {:?}", shot.flow.drawer),
         );
         let lens = lens::Lens::on(&shot.sim);
         checks.require(
@@ -96,13 +97,13 @@ pub fn judge(checks: &mut Checks, run: &Conducted, tuning: &Tuning) {
     if let Some(shot) = run.photo("modes") {
         let lens = lens::Lens::on(&shot.sim);
         checks.require(
-            shot.flow.modes_open
+            shot.flow.showing(Drawer::Modes)
                 && lens.attention().mode(attention::EventClass::QuestComplete)
                     == attention::Mode::PauseAndFocus,
             "the config photograph does not show the class the session was stopped by",
             format!(
-                "the drawer is open={} and the config reads {}",
-                shot.flow.modes_open,
+                "the open drawer is {:?} and the config reads {}",
+                shot.flow.drawer,
                 lens.attention().stamp()
             ),
         );
@@ -176,14 +177,88 @@ pub fn judge(checks: &mut Checks, run: &Conducted, tuning: &Tuning) {
         );
     }
 
+    // --- the work list, on somebody with a mixed spread of fits ------------
+    if let Some(shot) = run.photo("worklist") {
+        let lens = lens::Lens::on(&shot.sim);
+        let Some(who) = shot.flow.listing else {
+            checks.require(
+                false,
+                "the work list photograph was taken with no list up",
+                format!("the list reads {:?}", shot.flow.listing),
+            );
+            return;
+        };
+        checks.require(
+            shot.flow.selected == Some(who),
+            "the work list photograph is of one person's work under another's name",
+            format!(
+                "the list is {who:?}'s and the selection is {:?}",
+                shot.flow.selected
+            ),
+        );
+        // **The picture is of the decision, so it has to show a decision being
+        // hard**: fits that separate people and a refusal among the answers.
+        // A list of ten yesses at one fit is a picture of a list, not of this
+        // one.
+        let openings = crate::worklist::openings(&lens, &grid, tuning, shot.clock.minutes, who);
+        let shown = &openings[..openings.len().min(layout::WORK_ROWS)];
+        let spread = shown.iter().map(|o| o.fit).max().unwrap_or(0)
+            - shown.iter().map(|o| o.fit).min().unwrap_or(0);
+        let refused = shown
+            .iter()
+            .filter(|o| o.reading.as_ref().is_some_and(|r| !r.verdict.takes()))
+            .count();
+        checks.require(
+            spread > 0 && refused >= 1 && shown.len() >= 2,
+            "the work list photograph does not show the spread it is for",
+            format!(
+                "{} rows, a fit spread of {spread} and {refused} refusal(s); the picture is of \
+                 a player weighing fit against what somebody would say",
+                shown.len()
+            ),
+        );
+        frames::judge_chrome(checks, run, shot, "the work list");
+        floors::judge_frame_floor(checks, run.font, &shot.frame, "the work list");
+    }
+
+    // --- TUNE opened over an open ROSTER: one drawer, the owner's path ------
+    if let Some(shot) = run.photo("tuneover") {
+        checks.require(
+            shot.flow.showing(Drawer::Tune),
+            "the TUNE-over-ROSTER photograph was not taken with the tuning drawer up",
+            format!("the open drawer is {:?}", shot.flow.drawer),
+        );
+        let panel = screens::content(
+            &shot.flow,
+            &lens::Lens::on(&shot.sim),
+            &grid,
+            &shot.clock,
+            tuning,
+            screens::reading(&shot.clock, tuning, screens::TICK),
+            &shot.camera,
+        );
+        let drawing: Vec<&str> = Drawer::ALL
+            .into_iter()
+            .filter(|drawer| panel.runs.iter().any(|run| run.text == drawer.title()))
+            .map(Drawer::label)
+            .collect();
+        checks.require(
+            drawing == ["TUNE"],
+            "the TUNE-over-ROSTER photograph carries more than the one drawer",
+            format!("the frame draws {drawing:?}"),
+        );
+        frames::judge_chrome(checks, run, shot, "TUNE over an open roster");
+        floors::judge_frame_floor(checks, run.font, &shot.frame, "TUNE over an open roster");
+    }
+
     // --- the roster, with a chip's explanation open -------------------------
     if let Some(shot) = run.photo("roster") {
         checks.require(
-            shot.flow.roster_open && shot.flow.explained.is_some(),
+            shot.flow.showing(Drawer::Roster) && shot.flow.explained.is_some(),
             "the roster photograph does not show the surface it is for",
             format!(
-                "the drawer is open={} and the explained chip is {:?}",
-                shot.flow.roster_open, shot.flow.explained
+                "the open drawer is {:?} and the explained chip is {:?}",
+                shot.flow.drawer, shot.flow.explained
             ),
         );
         // Every row's activity line is the lens's own, reason and all.
@@ -915,9 +990,9 @@ pub fn judge_breakdowns(checks: &mut Checks, run: &Conducted, tuning: &Tuning) {
             return;
         };
         checks.require(
-            shot.flow.feed_open,
+            shot.flow.showing(Drawer::Feed),
             "the feed breakdown photograph was taken with the drawer shut",
-            format!("feed_open is {}", shot.flow.feed_open),
+            format!("the open drawer is {:?}", shot.flow.drawer),
         );
         let recorded = shot
             .sim
