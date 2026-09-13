@@ -247,24 +247,32 @@ flag in the Linux job.
 It is absent from `deploy`'s `needs` on purpose — a best-effort platform that
 could block production would be tier-1 with extra steps.
 
-**What it costs, measured on the first green run.** **4m29s** of wall time with
-a warm dependency cache, for all four steps. At the current merge rate — 50
-merges in the 26 days to 2026-09-13, so roughly **58 `main` pushes a month** —
-that is about **260 macOS runner-minutes a month**. A macOS runner bills at ten
-times a Linux one, so those minutes cost what ~2,600 Linux minutes would: on
-GitHub's published rate for the 3-core arm64 runner, **about $21 a month**, and
-nothing at all while the repository is public and inside its included minutes.
+**What it costs, measured.** Two green runs, and they differ by more than
+double, so both are here rather than an average:
+
+| run | cache | wall time |
+|---|---|---|
+| first green | prefix-restored after a `Cargo.lock` change — most of the workspace recompiled | **4m29s** |
+| next green, docs-only diff | full hit | **2m08s** |
+
+**Quote the range, not a figure.** The number a month costs depends on how
+often the lockfile moves, and this branch happened to move it. At the current
+merge rate — 50 merges in the 26 days to 2026-09-13, so roughly **58 `main`
+pushes a month** — that is **125 to 260 macOS runner-minutes a month**. A macOS
+runner bills at ten times a Linux one, so on GitHub's published rate for the
+3-core arm64 runner it is **about $10–21 a month**, and nothing at all while the
+repository is inside its included minutes.
 
 **What the per-PR alternative would have cost** is the number that made the
-decision: at three pushes per pull request it is three to four times the above,
-**$60–85 a month**, to re-check a platform nobody ships on against a diff that
-has usually not touched it. The label plus a push is what buys that back, and a
+decision: at three pushes per pull request, three to four times the above —
+**$30–85 a month** — to re-check a platform nobody ships on against diffs that
+mostly have not touched it. The label plus a push is what buys that back, and
 `workflow_dispatch` is there for the case where somebody wants it anyway.
 
-Two notes on reading that figure. The first run for a given cache key pays a
-full cold compile and is not 4m29s; and the job compiles the workspace twice by
-construction — clippy's fingerprints are not `cargo test`'s — which is the price
-of the lint step being the only macOS lint there is.
+One structural note on reading those figures: the job compiles the workspace
+**twice** by construction, because clippy's fingerprints are not `cargo test`'s.
+That is the price of the lint step, and the lint step is the only macOS lint
+there is.
 
 ## 4. How to test it
 
