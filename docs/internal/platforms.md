@@ -52,20 +52,61 @@ never a reason to loosen an assertion, a floor or a recorded expectation.** The
 usual suspects would be libm, FMA contraction and SIMD codegen — the class
 ADR-0009's deterministic trig already exists because of.
 
-**What the first macOS run said, and it is worth reading carefully.** The
-job's first real run reported **1041 passed, 10 failed** — and every one of the
-ten was a GPU test that died in `wgpu::Instance::new`, not one recorded
-expectation (§5, P-006). Nothing in the simulation, the ECS, the math, the
-transcripts, the plan model or the record/replay suites moved. So the run is
-evidence in both directions at once: it found a real port defect, and it found
-**no determinism defect** in the part of the engine determinism is a property
-of. The claim the repository may make once the job is green is stated in §6
-with what is still owed against it.
+**It has now been tested, and this is what the run said.** `macos-latest` is
+Apple Silicon, so the first green macOS job is also this engine's **first
+aarch64 build and first aarch64 run** — the sharper of the two tests, because
+it is float codegen rather than an operating system.
 
-**And the two halves of a port are different evidence.** The compile half was
-proved by cross-compiling in a Linux container; the run half was not, and could
-not have been. P-006 is the case that settles it: `cargo clippy --target
-aarch64-apple-darwin` was clean on a tree that panicked at startup on a Mac.
+```
+[tools/test] PASS — 1051 passed, 0 failed, 0 ignored          aarch64-apple-darwin
+[tools/test] PASS — 1057 passed, 0 failed, 0 ignored          x86_64-unknown-linux-gnu
+```
+
+**The six-test difference is accounted for exactly, and none of it is a skip
+that hides anything**: five are `process.rs`'s `/proc` parsers, which are
+`#[cfg(target_os = "linux")]` because they parse a file macOS does not have,
+and one is `golden.rs`'s reference comparison, Linux-only by the deliberate
+decision in renderer.md §9.
+
+**And the transcripts are identical.** Every `--verify` line from every game
+and every example, the two runs side by side with the checkout path
+normalised, differs in exactly one place:
+
+```
+- the family: Fira Sans, Fira Sans Bold — ready after 343 ticks
++ the family: Fira Sans, Fira Sans Bold — ready after 1008 ticks
+```
+
+That counter is how many loop iterations passed before a font finished loading
+from disk. It is reported, not asserted, and it moves **between two runs on the
+same machine** — 337 and 343 on two consecutive Linux runs here. It is not a
+determinism reading and nothing asserts on it.
+
+Everything that *is* a determinism reading matched to the digit, including the
+float-heavy ones:
+
+```
+ball stayed inside Rect { min: Vec2(-14.645854, -6.346791), max: Vec2(16.951197, 6.3492584) }
+```
+
+— identical on both, after 4000 ticks of accumulated physics. So are pong's
+rally counts and its controller's 0.13-unit aiming error, slalom's 24-of-24
+over three seeds, ninjo's 103 conducted events, its speed-invariance sweep, its
+thirteen scorer decisions and its 36-of-36 mutation round.
+
+**So the engine can now say this, and could not before: replay transcripts are
+byte-identical across operating system *and* across architecture, on
+x86_64-unknown-linux-gnu, x86_64-pc-windows-msvc and aarch64-apple-darwin.**
+The claim is exactly as strong as the recorded expectations it rests on, and
+nothing was weakened to reach it.
+
+**The two halves of a port are different evidence, and P-006 is what settles
+it.** The compile half was proved by cross-compiling in a Linux container —
+`cargo check` and `cargo clippy --target aarch64-apple-darwin` need no Apple
+SDK. That is real evidence and it is not this. `clippy` was clean on a tree
+that panicked at startup on an actual Mac, because a wgpu backend is a Cargo
+feature (§5, P-006). Cross-compiling proves the compile; only running proves
+the rest.
 
 ## 3. What "best-effort development platform" obliges
 
@@ -108,6 +149,11 @@ That is the whole of the reason, and the tier is sized to it.
 - **A platform-conditional in a game.** Games are platform-agnostic. Every
   branch this document describes is in the engine or in `tools/`, and a game
   under `games/` has none and must not acquire one.
+
+**All five obligations are met as of 2026-09-13** — the macOS job is green,
+`tools/doctor` reports `ENV_OK` on the runner, and §2 has what `tools/test`
+returned. Two things are still owed and neither is one of these five, because
+neither can come from CI at all: §6.
 
 **Promotion has a trigger, not a date: a game shipping on macOS.** Until then a
 feature that cannot exist here is allowed to answer `n/a`, and a future session
