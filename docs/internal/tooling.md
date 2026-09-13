@@ -181,11 +181,97 @@ second mode would be a second way to do one thing.
   developer machine run the same pinned channel, components, and targets. Editing
   that file to route around a failure is a human decision (CLAUDE.md "Never").
 
+## 3a. Standing somewhere else — the macOS branches
+
+Full tier and obligations: **platforms.md**. What belongs here is which scripts
+changed, which did not, and the CI job's shape and price.
+
+**Two doctor checks got a macOS branch, and the rest needed none.**
+`check_graphics` and `check_gpu` were Linux-shaped — `DISPLAY`, Vulkan ICD
+manifests under `/usr/share/vulkan/icd.d` — and everything else in `CHECKS` asks
+about rustup, cargo, Python, disk, git or a socket, which are the same questions
+everywhere. The two branches are **statements rather than probes**, and the
+reason is stated in each: a Linux machine can be headless invisibly, so Linux is
+probed; a Mac cannot be, and Metal ships with the operating system, so there is
+no ICD to be missing and nothing an agent could install. The invariant they
+serve is the one that makes doctor worth running at all — **`ENV_OK` must be
+reachable on every supported platform**, and a check that answered only
+"platform darwin — not probed" would satisfy the letter of that and none of its
+purpose. Three tests hold it: each branch is `INFO` with an empty `fix`, the two
+together aggregate to `ENV_OK`, and an unknown platform still falls through to
+"not probed" rather than inheriting a claim about Metal.
+
+**`tools/serve-web` learned where macOS keeps a browser.** `shutil.which` finds
+nothing on a Mac — Chrome and Chromium install as application bundles and put no
+executable on `PATH` — so `browser_candidates()` now ends with the four bundle
+paths, system-wide and per-user. It was split out of `chromium()` so the order
+is testable without having any of them installed.
+
+**`tools/test`, `tools/verify`, `tools/check-assets` and `tools/check-game-deps`
+needed nothing.** All four are standard-library Python that asks `cargo
+metadata` what exists. `check-assets` is the one worth naming: it walks each
+path component against a directory listing rather than asking the filesystem,
+*because* a case-insensitive filesystem answers yes for the wrong spelling —
+which is macOS's default APFS volume, so the check was built for this platform
+before this platform existed (assets.md §2).
+
+**Nothing replaces xvfb, because nothing has to.** Linux needs a virtual display
+plus lavapipe to render headless. Metal renders offscreen with no window server,
+so `tools/verify` and the frame capture work on a stock Mac with nothing
+installed and nothing wrapped around them.
+
+**The CI job, and what it costs.** `ci.yml`'s `macos` job runs on pushes to
+`main` and on demand, and **not on every PR** — a macOS runner bills at roughly
+ten times a Linux one, and this project's CI wall time is already something
+somebody had to work on. On demand is two handles: `workflow_dispatch`, and the
+`macos` label on a pull request followed by a push. The label is deliberately
+*not* itself a trigger: adding `labeled` to the workflow's `pull_request` types
+would re-run every job in the file — and cancel the in-flight run, since
+`concurrency` cancels in progress — every time anybody touched any label.
+
+Its steps are ordered cheapest-first so a failure costs the least: doctor,
+clippy, the wasm check, then `tools/test`.
+
+**Two of those steps answer questions nothing else can, and they are different
+questions.** clippy is the only place the `#[cfg(target_os = "macos")]` side of
+the tree is linted — the cross-target check that stood in for it while this job
+was being written found three dead-code warnings latent on *both* non-Linux
+platforms (platforms.md §5, P-001). But `tools/test` is the step that found the
+defect that mattered, and **clippy could not have**: the workspace compiled and
+linted clean for `aarch64-apple-darwin` while panicking at startup on an actual
+Mac, because wgpu's Metal backend is a Cargo feature and none was enabled
+(P-006). Cross-compiling proves the compile half of a port. Only running it
+proves the rest, which is the argument for a runner rather than a `--target`
+flag in the Linux job.
+
+It is absent from `deploy`'s `needs` on purpose — a best-effort platform that
+could block production would be tier-1 with extra steps.
+
+**What it costs, measured on the first green run.** **4m29s** of wall time with
+a warm dependency cache, for all four steps. At the current merge rate — 50
+merges in the 26 days to 2026-09-13, so roughly **58 `main` pushes a month** —
+that is about **260 macOS runner-minutes a month**. A macOS runner bills at ten
+times a Linux one, so those minutes cost what ~2,600 Linux minutes would: on
+GitHub's published rate for the 3-core arm64 runner, **about $21 a month**, and
+nothing at all while the repository is public and inside its included minutes.
+
+**What the per-PR alternative would have cost** is the number that made the
+decision: at three pushes per pull request it is three to four times the above,
+**$60–85 a month**, to re-check a platform nobody ships on against a diff that
+has usually not touched it. The label plus a push is what buys that back, and a
+`workflow_dispatch` is there for the case where somebody wants it anyway.
+
+Two notes on reading that figure. The first run for a given cache key pays a
+full cold compile and is not 4m29s; and the job compiles the workspace twice by
+construction — clippy's fingerprints are not `cargo test`'s — which is the price
+of the lint step being the only macOS lint there is.
+
 ## 4. How to test it
 
 `tools/tests/test_tools.py` holds behavioral tests for the parsing, verdict, and
 counter logic — the parts that silently rot. `tools/test` runs them as its first
-phase, so they run on every test invocation and in CI on Linux and Windows.
+phase, so they run on every test invocation and in CI on Linux and Windows —
+and on macOS when that job runs (§3a).
 
 The scripts are extensionless executables; the tests load them by path
 (`load_tool("doctor")`) rather than importing by name.
@@ -639,3 +725,14 @@ a row (stop rule printed, `failure-streak.json` count 2).
 - **Doctor treats a `cargo metadata` manifest error as `INFO`, not an
   environment fault**: a malformed `Cargo.toml` is the agent's own code, so the
   verdict stays `ENV_OK` ("go debug it") with the parse error quoted.
+- **A `cfg`-gated test takes its helpers with it, or CI cannot see the
+  warnings.** `golden.rs` gates its reference comparison on
+  `target_os = "linux"`; the three helpers and six imports that serve only it
+  were left ungated, so every other target compiled them unused. `-D warnings`
+  would have failed on both — and did not, because clippy has only ever run on
+  `ubuntu-latest`, where the test is compiled in. A second lint target is the
+  only thing that finds this class, which is the macOS job's first argument for
+  itself. Cross-checking without a Mac is one command:
+  `cargo clippy --workspace --all-targets --all-features --target
+  aarch64-apple-darwin` needs `rustup target add` and no Apple SDK, because
+  `check` and `clippy` do not link.

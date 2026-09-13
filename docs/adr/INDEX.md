@@ -18,7 +18,7 @@ disagrees with the file it names, the file is right and this index is a bug.
 
 ## By topic
 
-- **Language, scope and platform** — 0001 · 0004 · 0005 · 0037
+- **Language, scope and platform** — 0001 · 0004 · 0005 · 0037 · 0044
 - **Architecture and the ECS** — 0002 · 0006 · 0007 · 0013 · 0039
 - **Rendering and the backend boundary** — 0003 · 0008 · 0015 · 0016 · 0018 · 0020 · 0021 · 0024
 - **Coordinates, math and units** — 0009 · 0010 · 0012
@@ -76,6 +76,7 @@ disagrees with the file it names, the file is right and this index is a bug.
 | [0041](0041-a-per-tick-driver-reports-a-full-alpha.md) | a driver that draws once per tick reports `alpha == 1.0` | accepted · 2026-08-23 |
 | [0042](0042-a-typeface-is-an-asset-a-size-is-an-atlas-and-a-measurement-is-an-api.md) | A typeface is an asset, a size is an atlas, and a measurement is part of the API | accepted · 2026-08-29 |
 | [0043](0043-touch-is-snapshot-data-and-the-first-finger-is-the-cursor.md) | touch is snapshot data, and the first finger is the cursor | accepted · 2026-08-29 |
+| [0044](0044-macos-is-a-development-platform-not-tier-1.md) | macOS is a supported development platform, and not tier 1 — **extends 0005**, whose tier-1 set is unchanged | accepted · 2026-09-13 |
 
 ## The two superseded records, and by what
 

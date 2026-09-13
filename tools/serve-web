@@ -340,15 +340,38 @@ def canvas_is_drawn(png: bytes) -> "tuple[bool, str]":
     return (share > 0.5 or drawn_on > 0.005, detail)
 
 
+# Where macOS keeps a browser. `shutil.which` finds nothing on a Mac: Chrome
+# and Chromium install as application bundles and put no executable on PATH, so
+# the paths inside the bundles are the only way to find one without asking the
+# user to set JIDOUSHA_CHROMIUM. Both the system-wide and the per-user install
+# locations, because a Mac with no admin rights has the second (platforms.md §4).
+MACOS_BROWSERS = (
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    "~/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "~/Applications/Chromium.app/Contents/MacOS/Chromium",
+)
+
+
+def browser_candidates() -> "list[str]":
+    """Every path a headless-capable browser might be at, in the order to try.
+
+    Split out of `chromium` so the order and the macOS expansion are testable
+    without a machine that has any of them installed.
+    """
+    return [
+        os.environ.get("JIDOUSHA_CHROMIUM") or "",
+        "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
+        shutil.which("chromium") or "",
+        shutil.which("chromium-browser") or "",
+        shutil.which("google-chrome") or "",
+        *(os.path.expanduser(path) for path in MACOS_BROWSERS),
+    ]
+
+
 def chromium() -> "str | None":
     """A headless-capable Chromium, if this machine has one."""
-    for candidate in (
-        os.environ.get("JIDOUSHA_CHROMIUM"),
-        "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
-        shutil.which("chromium"),
-        shutil.which("chromium-browser"),
-        shutil.which("google-chrome"),
-    ):
+    for candidate in browser_candidates():
         if candidate and Path(candidate).exists():
             return candidate
     # A glob, so a browser update does not silently disable the check.

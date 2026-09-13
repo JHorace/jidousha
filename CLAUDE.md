@@ -58,6 +58,7 @@ failure. Delete it in the commit that resolves the blockage.
 | Run a maintenance/sanitation pass | `docs/templates/SANITATION.md` (typed, fenced, dispatched by ledger evidence) |
 | Find that a doc misled you | file it in the ledger — `docs/agent-practices.md` §2.5 |
 | Touch web build/deploy | `docs/internal/web-publish.md` |
+| Wonder what a platform promises, or write code that cannot exist on one | `docs/internal/platforms.md` (tiers, and what may answer `n/a`) |
 | Wonder why code looks wrong | The `DELIBERATE:` tag near it → linked ADR |
 
 ## Top conventions (full list: docs/conventions.md)

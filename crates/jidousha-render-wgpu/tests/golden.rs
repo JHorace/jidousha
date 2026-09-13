@@ -18,15 +18,21 @@
 //! `target/verify/golden/` — the diff paints differing pixels magenta, so what
 //! moved is the only bright thing in it.
 
-use std::path::{Path, PathBuf};
-
 use jidousha_core::Color;
 use jidousha_core::math::{Mat4, Vec2};
 use jidousha_render_core::{
-    BackendTextureId, Batch, Camera, FramePlan, PhysicalSize, QuadVertex, RawImage, RenderBackend,
-    Tolerance, compare, decode_png, diff_image, encode_png,
+    BackendTextureId, Batch, Camera, FramePlan, PhysicalSize, QuadVertex, RenderBackend, Tolerance,
+    compare,
 };
 use jidousha_render_wgpu::WgpuBackend;
+
+// Only the reference comparison reads or writes a file, and it is Linux-only
+// for the reason stated on it below — so its imports carry the same `cfg`
+// rather than sitting unused on every other platform (platforms.md §5).
+#[cfg(target_os = "linux")]
+use jidousha_render_core::{RawImage, decode_png, diff_image, encode_png};
+#[cfg(target_os = "linux")]
+use std::path::{Path, PathBuf};
 
 /// The size every golden image is taken at.
 ///
@@ -159,12 +165,22 @@ fn view_projection() -> Mat4 {
     .view_projection()
 }
 
+/// The three helpers below serve the one Linux-only test and nothing else, so
+/// they carry its `cfg` too.
+///
+/// Without it a macOS or Windows build of this file compiles three functions
+/// nobody calls, which is a `dead_code` warning — and CI turns warnings into
+/// errors. It went unnoticed because clippy ran on Linux only, where the test
+/// that calls them is compiled in; the first `--target aarch64-apple-darwin`
+/// check of this workspace found all three (platforms.md §5).
+#[cfg(target_os = "linux")]
 fn golden_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("golden")
 }
 
+#[cfg(target_os = "linux")]
 fn artifact_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("..")
@@ -180,6 +196,7 @@ fn artifact_dir() -> PathBuf {
 /// when the file is missing: a reference that writes itself on first run would
 /// turn every unexplained change into a new reference, which is the one way a
 /// golden test can assert nothing at all.
+#[cfg(target_os = "linux")]
 fn check_against_reference(name: &str, captured: &RawImage) {
     let reference = golden_dir().join(format!("{name}.png"));
     if std::env::var_os("JIDOUSHA_BLESS").is_some() {

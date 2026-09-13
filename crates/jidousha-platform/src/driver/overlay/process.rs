@@ -315,13 +315,37 @@ fn hundred_nanoseconds(kernel: FileTime, user: FileTime) -> f32 {
     (units(kernel) + units(user)) as f32 / 1e7
 }
 
-/// Everywhere else, including the web: nothing to read.
+/// Whether this build has an implementation of [`read`] at all.
+///
+/// The panel needs to tell two `None`s apart, and only this file knows which
+/// is which: a run younger than two samples has no *share* yet and will have
+/// one shortly, while a platform with no `read` here will never have one. Both
+/// print `n/a`, and a reader who cannot tell them apart waits for a number
+/// that is not coming (platforms.md §3).
+///
+/// A `const` rather than a second `cfg` at the panel: the condition is this
+/// module's, and stating it twice is how the two stop agreeing.
+pub(crate) const IMPLEMENTED: bool = cfg!(any(target_os = "linux", windows));
+
+/// Everywhere else — macOS and the web — nothing to read.
 ///
 /// The web deliberately: a page has no process counters, `performance.memory`
 /// is a Chrome-only estimate of the whole tab, and the honest reading a wasm
-/// build *can* take is its own linear memory, which `memory.rs` answers. The
-/// panel prints `n/a` on the process line and says which platform it is on
-/// (frame-pacing.md §7).
+/// build *can* take is its own linear memory, which `memory.rs` answers.
+///
+/// macOS for a different reason, and **the dependency budget is not it**
+/// (ADR-0044). The two readings are there — `task_info` with
+/// `MACH_TASK_BASIC_INFO` answers both, `resident_size` for the memory and
+/// `user_time + system_time` for the CPU — and reaching them would be a third
+/// hand-declared `extern` block beside the Windows one above, from
+/// `libSystem`, with no new crate. What stopped it is that it cannot be
+/// *written* honestly from a machine that cannot compile or run it: an
+/// unsafe FFI block nobody has executed is the one kind of code this file
+/// must not acquire. macOS is a best-effort development platform and `n/a`
+/// is a landing it is allowed (platforms.md §3).
+///
+/// The panel prints `n/a` on the process line and says which of the two
+/// reasons applies (frame-pacing.md §7).
 #[cfg(not(any(target_os = "linux", windows)))]
 fn read() -> Counters {
     Counters {
