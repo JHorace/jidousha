@@ -162,9 +162,9 @@ pub fn run(config: GameConfig, setup: impl FnOnce(&mut App)) -> Result<(), RunEr
     // events nowhere else — and winit enforces it on every native platform, so
     // a violation is a panic here rather than a mystery on one developer's
     // machine. Nothing in this crate moves it: the event loop is created inline
-    // on the caller's thread and no thread is spawned anywhere below it. Which
-    // has been true since M5 and was true by nobody's decision until macOS was
-    // read for (platforms.md §3, §5).
+    // on the caller's thread and no thread is spawned anywhere below it. That
+    // has been true since M5, and until macOS it was true by nobody's decision
+    // — which is what this comment changes (platforms.md §3, §5).
     let event_loop = winit::event_loop::EventLoop::new().map_err(|error| {
         // winit reports a missing display as an OS error, which is the case a
         // headless runner and an SSH session both hit. Naming it precisely is

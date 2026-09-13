@@ -13,10 +13,22 @@ tier-1 set is unchanged**
 
 ADR-0005 set the tier-1 set — Linux, Windows, Web — and said of the rest: "Not
 targeted: macOS/iOS for now (wgpu/winit keep the door open at near-zero cost)."
-That sentence is the one this record answers. It was right about the door: this
-work needed no new dependency, no backend selection code, and no change to the
-frame loop's shape. It is the sentence's *other* half — "not targeted" — that
-has stopped being true, and the reason is not technical.
+That sentence is the one this record answers. It was right about the door, with
+one correction worth carrying: this work needed no new crate, no backend
+selection code and no change to the frame loop's shape — but "not targeted" had
+been **acted on**, not merely recorded. `jidousha-render-wgpu` listed wgpu's
+backends explicitly and omitted `metal`, citing ADR-0005's target list, and a
+wgpu backend is a Cargo feature rather than a runtime choice. So a macOS build
+did not degrade: it panicked in `wgpu::Instance::new` (platforms.md §5, P-006).
+The door was open and one bolt had been drawn across it, in a comment that read
+as a decision rather than as something to revisit.
+
+That is the argument for this record being a record. A target list acted on in
+six places and written down in one is a target list that goes stale silently;
+the next change to it needs somewhere to look.
+
+It is the sentence's other half — "not targeted" — that has stopped being true,
+and the reason is not technical.
 
 **A second developer builds games on this engine and works on macOS** (owner
 decision, 2026-09-13). That is the whole of the motivation, and it is worth
@@ -40,7 +52,10 @@ is only correct because something says a platform is allowed to answer `n/a`.
 
 ## Decision
 
-**macOS is a best-effort development platform.** aarch64 and x86_64. It obliges:
+**macOS is a best-effort development platform.** aarch64 and x86_64. Its wgpu
+backend feature (`metal`) is enabled, which is what makes the rest of this list
+possible at all and which costs Linux, Windows and the web zero crates. It
+obliges:
 
 - `cargo check` and `cargo build`, native and wasm, clean;
 - `cargo clippy -- -D warnings` clean **on macOS**, because the
@@ -69,9 +84,12 @@ being free and this record gets superseded by one that prices them.
 
 ## Rationale
 
-**Why a tier rather than just doing the work.** The work is small and mostly
-already done — the door ADR-0005 described really was open. What is not small is
-the *standing question*: for every future feature, does macOS count? A platform
+**Why a tier rather than just doing the work.** The work is small — one Cargo
+feature, two doctor branches, a CI job — and P-006 above is why "small" is not
+"safe to leave undecided": the one change that mattered was a line somebody had
+written *on the authority of the previous target list*, and only a decision
+record makes the next such line findable. What is not small is the *standing
+question*: for every future feature, does macOS count? A platform
 with no tier gets that question re-litigated each time, and the cheapest answer
 in the moment is usually "make it work everywhere", which is how a best-effort
 platform silently becomes a tier-1 one without anybody deciding to pay for it.
@@ -122,6 +140,11 @@ one push instead.
   running the build on a real Mac and watching it, and frame-pacing readings on
   Metal. Neither is a blocker for this decision and both are conditions on
   calling the platform *checked*. A CI artifact is not the first of them.
+- **`jidousha-render-wgpu` compiles wgpu's Metal backend.** Measured price
+  (agent-practices §5.8): +0 crates on Linux, Windows and the web, +9 on macOS,
+  all of them already in winit's Apple tree. It is not the kind of dependency
+  question the budget is for — without it the platform does not run at all, and
+  it is invisible to every other target.
 - **A third platform now exists for every future feature to consider**, which is
   the durable effect. "Does this work on macOS, and if not, may it answer `n/a`?"
   has an answer before the feature is designed.

@@ -52,9 +52,20 @@ never a reason to loosen an assertion, a floor or a recorded expectation.** The
 usual suspects would be libm, FMA contraction and SIMD codegen — the class
 ADR-0009's deterministic trig already exists because of.
 
-**What is proved, and how far.** See §6 for what is still owed; the short
-version is that the compile-time half was proved in this container and the
-run-time half is the macOS CI job's to prove.
+**What the first macOS run said, and it is worth reading carefully.** The
+job's first real run reported **1041 passed, 10 failed** — and every one of the
+ten was a GPU test that died in `wgpu::Instance::new`, not one recorded
+expectation (§5, P-006). Nothing in the simulation, the ECS, the math, the
+transcripts, the plan model or the record/replay suites moved. So the run is
+evidence in both directions at once: it found a real port defect, and it found
+**no determinism defect** in the part of the engine determinism is a property
+of. The claim the repository may make once the job is green is stated in §6
+with what is still owed against it.
+
+**And the two halves of a port are different evidence.** The compile half was
+proved by cross-compiling in a Linux container; the run half was not, and could
+not have been. P-006 is the case that settles it: `cargo clippy --target
+aarch64-apple-darwin` was clean on a tree that panicked at startup on a Mac.
 
 ## 3. What "best-effort development platform" obliges
 
@@ -79,8 +90,8 @@ That is the whole of the reason, and the tier is sized to it.
 
 - **Per-PR CI.** A macOS runner bills at roughly ten times a Linux one. The job
   runs on pushes to `main` and on demand — `workflow_dispatch`, or the `macos`
-  label on a pull request followed by a push. §5 of tooling.md has the shape and
-  the measured cost.
+  label on a pull request followed by a push. tooling.md §3a has the job's
+  shape and its measured cost.
 - **Every instrument reading.** The perf panel's process CPU and RSS read
   `n/a` here (frame-pacing.md §7), and that is a landing rather than a gap. The
   panel already prints `gpu n/a` honestly where a device offers no timestamp
@@ -104,22 +115,43 @@ designing one should read that as permission rather than as a bug to fix.
 
 ## 4. Where the branches are
 
-Every platform-conditional in the tree, and why each exists. The list is short
-on purpose: **the frame loop does not fork.** `driver/mod.rs::about_to_wait`
-reads `RenderBackend::presentation` and decides, and macOS changes nothing about
-its shape — a per-platform fork is the failure mode the native-pacing work
+**There are two conditional axes and they are not the same size.** Keeping them
+apart is what makes this section short enough to be complete.
+
+**The web/native axis** — `cfg(target_arch = "wasm32")` — is large: 72 sites
+across 14 files, most of them in `jidousha-platform`. It is ADR-0005's subject,
+not this document's, and macOS adds nothing to it. The lifecycle split in
+`lib.rs::run_app` is its head (the browser owns the loop and never gives it
+back) and the rest follows from that and from the web having no filesystem, no
+process counters and no wall clock.
+
+**The per-operating-system axis is two files.** That is the whole of it in the
+engine, verified rather than remembered:
+
+```
+$ grep -rn 'target_os\|cfg(windows)\|cfg(unix)' crates/ --include='*.rs'
+crates/jidousha-platform/src/driver/overlay/process.rs
+crates/jidousha-render-wgpu/tests/golden.rs
+```
+
+**And the frame loop is in neither.** `driver/mod.rs::about_to_wait` reads
+`RenderBackend::presentation` and decides; `driver/pacing.rs` and
+`driver/frame.rs` carry no `cfg` at all. macOS changes nothing about their
+shape, and a per-platform fork there is the failure mode the native-pacing work
 already named (frame-pacing.md §6.3).
+
+So the complete per-OS inventory, engine and tooling together:
 
 | Where | Branch | Why |
 |---|---|---|
-| `jidousha-platform/src/lib.rs` — `run_app` | `target_arch = "wasm32"` | The browser owns the loop and never gives it back (ADR-0005). The engine's one lifecycle `cfg`. |
-| `jidousha-platform/src/lib.rs` — `run` | none; a `CONTRACT:` comment | The event loop is created on the caller's thread, and that thread must be the main one. §5 is the finding. |
 | `…/driver/overlay/process.rs` | `target_os = "linux"` · `windows` · else | Two system calls per platform, hand-rolled. macOS takes the `else` arm and reads nothing. |
-| `…/driver/overlay/panel.rs` — `cpu_line`, `memory_line` | `process::IMPLEMENTED` | So the two `n/a`s are told apart: "no reading yet" and "no reading here" send a reader in opposite directions. |
+| `…/driver/overlay/panel.rs` — `cpu_line`, `memory_line` | `process::IMPLEMENTED`, a `const` from the file above | So the two `n/a`s are told apart: "no reading yet" and "no reading here" send a reader in opposite directions. Not a second `cfg` — one condition, stated once. |
 | `jidousha-render-wgpu/tests/golden.rs` | `target_os = "linux"` | The reference comparison, and the three helpers and six imports that serve only it (§5). |
+| `jidousha-platform/src/lib.rs` — `run` | **no branch**; a `CONTRACT:` comment and a `# Panics` | The event loop is created on the caller's thread, and that thread must be the main one. Listed because a reader looking for the macOS branch should find out there isn't one, and why (§5, P-002). |
 | `tools/doctor` — `check_graphics` | `darwin` | A windowed run needs the logged-in session and the main thread; a headless one needs no display at all. |
 | `tools/doctor` — `check_gpu` | `darwin` | Metal ships with the OS, so there is no ICD to be missing and nothing to install — and the golden *comparison* is still Linux-only. |
 | `tools/serve-web` — `browser_candidates` | macOS bundle paths | `shutil.which` finds nothing on a Mac: browsers install as bundles and put no executable on PATH. |
+| `jidousha-render-wgpu/Cargo.toml` — wgpu's feature list | one feature per backend, `metal` among them | **The per-OS condition that is not a `cfg`**, and the one that bit (§5, P-006). A backend absent from this list does not degrade on the platform that needs it; it panics in `Instance::new`. |
 
 **What replaces what, for a headless run.** Linux needs `xvfb` plus `lavapipe`
 because a Linux machine with no display server cannot make a surface and a
@@ -189,6 +221,44 @@ be. A macOS developer reading it cannot tell whether to wait. Not a false
 sentence — which is why it survived — but a sentence that costs its reader the
 thing it was written to give them. Now two sentences, chosen by a `const` in the
 module that knows.
+
+**P-006 — a wgpu backend is a Cargo feature, and macOS had none — so nothing
+fell back and nothing reported an absent adapter; `wgpu::Instance::new`
+panicked.** `jidousha-render-wgpu`'s manifest listed wgpu's backends
+explicitly and said, in as many words, that `metal` was "dropped because macOS
+is not a target". Correct when written. What it meant in practice was not the
+graceful degradation every other absence in this repository produces: a macOS
+build panicked at instance construction with *"No wgpu backend feature that is
+implemented for the target platform was enabled"*, taking every GPU test and
+every game's capture with it — ten test failures and `game-verify:ninjo`, on
+the macOS job's first real run.
+
+Three things about it are worth more than the fix:
+
+- **Cross-compilation cannot find this, and it was the thing that found
+  everything else.** `cargo check` and `cargo clippy --target
+  aarch64-apple-darwin` were clean before and after: the code compiles and
+  lints perfectly well with no backend compiled in for the target it is being
+  compiled *for*. Only running it on the platform says otherwise. The compile
+  half and the run half of a port are genuinely different evidence, and this is
+  the case that proves it.
+- **"No adapter is not a failure" did not apply**, because the failure was
+  upstream of the adapter question. renderer.md §9's skip path handles
+  `request_adapter` returning `None`; there was no instance to ask.
+- **It was not caught by review or by a document**, and a document is what
+  caused it: the manifest comment was the record of a decision (ADR-0005's
+  target list), so it read as a deliberate exclusion rather than as something
+  to re-examine when the target list changed. The durable defence is that
+  ADR-0044 now exists for a future target-list change to find.
+
+The fix is one word in a feature list, and its measured price (agent-practices
+§5.8) is the reason it needs no budget conversation: **+0 crates on Linux,
+Windows and the web**, because wgpu-hal's Apple dependencies are
+`cfg(target_vendor = "apple")`; **+9 on macOS** — `wgpu-core-deps-apple`,
+`raw-window-metal`, `objc2-metal`, `objc2-quartz-core`, `objc2-core-graphics`,
+`objc2-core-foundation`, `objc2-foundation`, `objc2` and `block2`, all of them
+already reachable through winit's own Apple tree. `tools/dep-count` reads the
+lockfile rather than a build, so it reports 258 → 262.
 
 **P-005 — the `tools/` scripts' "standard library only" rule paid off on a
 platform nobody wrote it for**, and it is worth recording as a confirmation

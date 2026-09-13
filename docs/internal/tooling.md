@@ -230,14 +230,22 @@ would re-run every job in the file — and cancel the in-flight run, since
 `concurrency` cancels in progress — every time anybody touched any label.
 
 Its steps are ordered cheapest-first so a failure costs the least: doctor,
-clippy, the wasm check, then `tools/test`. **clippy is the step that justifies
-the job existing** rather than a macOS note in a document: it is the only place
-the `#[cfg(target_os = "macos")]` side of the tree is linted, and the first
-cross-check of this workspace found three dead-code warnings that had been
-latent on *both* non-Linux platforms for as long as the file had existed
-(platforms.md §5, P-001). It is absent from `deploy`'s `needs` on purpose — a
-best-effort platform that could block production would be tier-1 with extra
-steps.
+clippy, the wasm check, then `tools/test`.
+
+**Two of those steps answer questions nothing else can, and they are different
+questions.** clippy is the only place the `#[cfg(target_os = "macos")]` side of
+the tree is linted — the cross-target check that stood in for it while this job
+was being written found three dead-code warnings latent on *both* non-Linux
+platforms (platforms.md §5, P-001). But `tools/test` is the step that found the
+defect that mattered, and **clippy could not have**: the workspace compiled and
+linted clean for `aarch64-apple-darwin` while panicking at startup on an actual
+Mac, because wgpu's Metal backend is a Cargo feature and none was enabled
+(P-006). Cross-compiling proves the compile half of a port. Only running it
+proves the rest, which is the argument for a runner rather than a `--target`
+flag in the Linux job.
+
+It is absent from `deploy`'s `needs` on purpose — a best-effort platform that
+could block production would be tier-1 with extra steps.
 
 ## 4. How to test it
 

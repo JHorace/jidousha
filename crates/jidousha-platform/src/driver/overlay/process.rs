@@ -333,8 +333,8 @@ pub(crate) const IMPLEMENTED: bool = cfg!(any(target_os = "linux", windows));
 /// is a Chrome-only estimate of the whole tab, and the honest reading a wasm
 /// build *can* take is its own linear memory, which `memory.rs` answers.
 ///
-/// macOS for a different reason, and it is a budget decision rather than a
-/// technical one (ADR-0044). The two readings are there — `task_info` with
+/// macOS for a different reason, and **the dependency budget is not it**
+/// (ADR-0044). The two readings are there — `task_info` with
 /// `MACH_TASK_BASIC_INFO` answers both, `resident_size` for the memory and
 /// `user_time + system_time` for the CPU — and reaching them would be a third
 /// hand-declared `extern` block beside the Windows one above, from

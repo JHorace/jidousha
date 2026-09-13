@@ -577,6 +577,13 @@ a GPU and lands with R4.
   three functions and six imports serve only that test, so on any other target
   they compiled unused — a `-D warnings` failure that Linux-only clippy could
   not see (platforms.md §5, P-001).
+- **No adapter is not a failure — but no *backend* is, and they are different
+  absences.** The skip path below handles `request_adapter` answering `None`. It
+  cannot handle there being no instance to ask: a wgpu backend is a Cargo
+  feature, and a target compiled with none panics inside `wgpu::Instance::new`
+  before any of this runs. macOS was in exactly that state until ADR-0044
+  (platforms.md §5, P-006), and the tell is that the panic names a *feature*
+  rather than a device. Adding a target means checking that list first.
 - **No adapter is not a failure.** Every runner is headless and some have no
   graphics stack at all; the tests say so and pass, and `tools/doctor` reports
   whether the tier can run, so a skipped tier is a diagnosable fact rather than

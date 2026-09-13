@@ -10,16 +10,28 @@ publish.workspace = true
 jidousha-core = { path = "../jidousha-core" }
 jidousha-render-core = { path = "../jidousha-render-core" }
 # DELIBERATE: features listed rather than inherited, as the platform crate does
-# with winit. Two departures from wgpu's defaults, both from ADR-0005's target
-# list: `metal` is dropped because macOS is not a target, and `webgl` is added
-# because it is not a default and ADR-0003 §4 requires the WebGL2 fallback to
-# stay viable for hardware without WebGPU.
+# with winit. One departure from wgpu's defaults now: `webgl` is added because
+# it is not a default and ADR-0003 §4 requires the WebGL2 fallback to stay
+# viable for hardware without WebGPU.
+#
+# `metal` used to be the second departure — dropped, in as many words, "because
+# macOS is not a target". It is one now (ADR-0044), and this line is what that
+# costs. Note what the omission actually did, because it is worth knowing about
+# every backend in this list: a wgpu backend is a *Cargo feature*, so a macOS
+# build with none enabled did not fall back and did not report an absent
+# adapter — `wgpu::Instance::new` panicked at construction with "No wgpu
+# backend feature that is implemented for the target platform was enabled".
+# Every GPU test and every game's capture died there, and nothing caught it
+# until a macOS runner ran them: the code compiles and lints perfectly well
+# with no backend for the target it is being compiled for (platforms.md §5,
+# P-006).
 wgpu = { version = "30", default-features = false, features = [
     "std",
     "parking_lot",
     "wgsl",
     "dx12",
     "vulkan",
+    "metal",
     "gles",
     "webgpu",
     "webgl",

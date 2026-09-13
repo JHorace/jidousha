@@ -24,13 +24,13 @@ use jidousha_render_core::{
     BackendTextureId, Batch, Camera, FramePlan, PhysicalSize, QuadVertex, RenderBackend, Tolerance,
     compare,
 };
+use jidousha_render_wgpu::WgpuBackend;
 
 // Only the reference comparison reads or writes a file, and it is Linux-only
 // for the reason stated on it below — so its imports carry the same `cfg`
 // rather than sitting unused on every other platform (platforms.md §5).
 #[cfg(target_os = "linux")]
 use jidousha_render_core::{RawImage, decode_png, diff_image, encode_png};
-use jidousha_render_wgpu::WgpuBackend;
 #[cfg(target_os = "linux")]
 use std::path::{Path, PathBuf};
 
