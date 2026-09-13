@@ -572,7 +572,11 @@ a GPU and lands with R4.
   Metal device fills edge pixels differently enough that a tolerance loose
   enough to accept it would be loose enough to accept a real regression.
   Everything else in the file — the offscreen target, capture, unpadding, the
-  clear colour, render-twice stability — runs everywhere.
+  clear colour, render-twice stability — runs everywhere. **The `cfg` covers the
+  comparison's helpers and imports too**, and did not until macOS was built for:
+  three functions and six imports serve only that test, so on any other target
+  they compiled unused — a `-D warnings` failure that Linux-only clippy could
+  not see (platforms.md §5, P-001).
 - **No adapter is not a failure.** Every runner is headless and some have no
   graphics stack at all; the tests say so and pass, and `tools/doctor` reports
   whether the tier can run, so a skipped tier is a diagnosable fact rather than
