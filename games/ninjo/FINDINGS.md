@@ -57,6 +57,127 @@ arithmetic, and the one engine fact it needed — how wide a string is at a size
 called on every surface since S1. Its four entries below are all about *this
 repository*, and the last of them names a class rather than a defect.
 
+**Wave 1.3 (needs + settlement, 2026-09-13) read** `CLAUDE.md`, the
+`make-game` skill, this game's own `GDD.md`, `DESIGN.md`, `UI.md`, `CAST.md`
+and `FINDINGS.md`, and its whole `src/`. It opened no file under
+`crates/*/src/`, no `docs/internal/`, and no ADR. **It asked `docs/api/`
+nothing new** — the economy is arithmetic over the game's own data, its one new
+surface is a `Panel` like every other, its two new inputs are clicks on
+rectangles `layout.rs` already knew how to state, and its three new
+occurrences ride the one scheduler S1 landed. Its four entries below are all
+about *this game*.
+
+### G-032 — the game's own: the camp runs out of work before the band is whole
+
+Class: **the game's own** (a design fact the staged start exposed) · Game:
+ninjo · Files: `games/ninjo/src/autonomy.rs`, `src/settlement.rs` · Open, and
+the owner's to price
+
+The staged start seats the camp with four founders and lets the other six walk
+in across days one to three (`CAST.md` §4). The settlement authors twenty-four
+jobs across four sites and **the sites run dry** — DESIGN §10's open question,
+answered the simpler way — so with the player idle the board is fully claimed
+**by minute 2232**, which is the middle of day two. Hana, Ludo, Ines and Odd
+arrive to a settlement with nothing left to do.
+
+What this cost: wave 1.1's alive sweep asserted *everybody* takes paid work
+with the player idle, which was true of a world where the whole cast stood in
+the camp at minute zero. It is not true of this one, and the assertion had to
+be re-scoped to "everybody who was in the camp while work stood open took
+some", with the latecomers counted, named in the report, and asserted to be
+**exactly** the people who arrived after the last row was claimed — so an
+unexplained idler is still a failure rather than an excuse.
+
+**The industry is the designed answer and an idle player never builds it.** In
+the attentive sweep, where the scripted player builds the works on the first
+day it can afford them, the settlement finishes forty-seven jobs against the
+idle player's twenty-four and only one person is short at the end of day three
+(`screens/ninjo-tenfold-reference.png` is that world). So the limp floor
+exists exactly where GDD §5 says it does — *in the settlement*, not in the
+camp — and what the wave leaves open is whether an idle settlement should be
+able to reach it at all. That is a design question for the owner and not
+something this session invented an answer to.
+
+Expected: a board that outlasts the arrival column. Happened: it does not, and
+the module that fixes it is behind a player decision. Owner: the owner's
+(GDD §5, §10).
+
+### G-033 — the game's own: nothing lowers desperation, so the escalation pipe has no other end
+
+Class: **the game's own** (a design gap) · Game: ninjo · Files:
+`games/ninjo/src/needs.rs`, `src/people.rs` · Open
+
+GDD §5's needs row says "shortfall raises desperation (escalation pipe)" and
+says nothing about what lowers it. Wave 1.3 built exactly that: a shortfall
+presses by one step, held inside `people::DESPERATION_MAX`, and **no writer
+anywhere lowers it**. Paying an interval in full does nothing; earning a wage
+does nothing; the industry standing does nothing.
+
+Over the three world-days the economy sweep runs, that is fine and the shipped
+numbers are legible — the gradient over the cast reads exactly as `CAST.md`
+§4's fiction does (Steve 8, Bob and Ludo 6, Rin and Goro 5, Alex and Tim
+untouched at 2). Over a long game it is a ratchet: everybody who has ever been
+broke converges on the ceiling and the scorer's opening term stops
+distinguishing anybody. **The session did not invent a relief rule**, because
+inventing one is a design decision and the handoff fences this wave at the
+first rung of the pipe; wave 1.5's petitions are the next writer of
+desperation and the natural place to decide it.
+
+Expected: a pipe with two ends. Happened: one, by design, and the second is
+unspecified. Owner: the owner (GDD §5's needs row, and wave 1.5).
+
+### G-034 — the game's own: the tuning drawer is full
+
+Class: **the game's own** (a layout ceiling) · Game: ninjo · Files:
+`games/ninjo/src/layout.rs`, `src/tuning.rs`, `src/floors.rs` · Open
+
+Three constants took the drawer from thirty-six to thirty-nine. Twelve stepper
+rows at a pitch of thirty-four did not hold them, so the pitch dropped to
+thirty-two — which is the target floor exactly, and the last row this geometry
+has: `110 + 12 x 32 + 32` is 526 against a screen of 540. Three columns of
+thirteen is **thirty-nine, and thirty-nine is what the game has**.
+
+A fourth stepper column does not fit beside the stamp column at 960 reference
+pixels: a row is 232 wide (a name, two buttons and the value between them) and
+four of those plus a stamp column wide enough to read comes to more than the
+screen. So the fortieth constant needs the **right column moved**, not
+narrowed. `floors::tuner_has_room` is the floor that says so — it asserts the
+next index's stepper is still inside the drawer, and it fails on the fortieth
+rather than on a screenshot. The right column itself also reached its declared
+headroom, and `tuning::APPLY_NOTE` gave up two rows of wording to keep it
+inside the drawer.
+
+Expected: room. Happened: none left, and the next wave is told rather than
+finding out. Owner: this game's UI.
+
+### G-035 — the game's own: a self-chosen job pays the worker nothing, and the scorer weighs its pot anyway
+
+Class: **the game's own** (a scorer/economy seam the needs wave exposed) ·
+Game: ninjo · Files: `games/ninjo/src/autonomy.rs` (the pot term),
+`src/sim.rs` (`work_done`) · Open
+
+GDD §4.1 is exact: a site's pot mints **into the treasury**, and what a worker
+gets is a wage — a posting's (§3b) or an industry shift's. So a character who
+decides for themselves to walk to the Deep Cave and haul mushrooms earns
+**nothing at all**, and the forty gold goes to the player.
+
+The scorer's pot term nonetheless weighs `quest.pot` at the carrier's own
+`pot_affinity` — "the pot is 40g" is a *reason* a character gives for going
+(`screens/ninjo-feed-reference.png` carries one). Before this wave nothing
+turned on it. Now upkeep burns and the money matters, and the seam is visible:
+somebody is drawn toward work by a number that is not theirs.
+
+It is left alone on purpose — the handoff's fences are explicit that this wave
+may not "change the posting rules, the scorer's terms, or the selection", and
+the pot term is wave 1.1's. Whether the pot should pull a self-chooser at all,
+pull them at a reduced weight, or imply a default share (GDD §4.1's TRANSFER
+port names "shares/wages ... per the dispatch offer") is a design decision, and
+it is the one that decides how brutal an unattended settlement is meant to be.
+
+Expected: the money a character is drawn to is money they get. Happened: for a
+self-chosen job it is not, and the wave that made that matter is not the wave
+allowed to fix it. Owner: the owner (GDD §4.1, §3b).
+
 **The legibility session (2026-09-09) read** `CLAUDE.md`, the `make-game`
 skill, this game's `UI.md`, `GDD.md`, `FINDINGS.md` and its whole `src/`.
 Nothing under `crates/*/src/`, no `docs/internal/`, and no ADR. It asked

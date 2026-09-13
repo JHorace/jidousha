@@ -135,7 +135,8 @@ fn takes_off_the_ladder(sim: &Sim, tuning: &Tuning, who: usize) -> usize {
 /// check here that recomputed its expectation from the drawer would make its
 /// own constant invisible. Everything is staged: no run is conducted.
 pub fn judge_at(checks: &mut Checks, tuning: &Tuning) {
-    let sim = Sim::opening(tuning, ModuleSet::ALL);
+    let mut sim = Sim::opening(tuning, ModuleSet::ALL);
+    sim.everybody_here();
     let index = |id: &str| {
         sim.people
             .iter()
@@ -334,6 +335,7 @@ pub fn judge_module(checks: &mut Checks, baseline: &crate::sweep::Conducted) -> 
 
     // --- 2: withdrawn before it was heard is never answered -----------------
     let mut staged = Sim::opening(&tuning, ModuleSet::ALL);
+    staged.everybody_here();
     let grid = crate::grid::grid();
     let alex = staged
         .people
@@ -398,6 +400,7 @@ pub fn judge_module(checks: &mut Checks, baseline: &crate::sweep::Conducted) -> 
         .position(|person| person.id == "ludo")
         .unwrap_or(0);
     let mut dropped = Sim::opening(&tuning, ModuleSet::ALL);
+    dropped.everybody_here();
     let posted = asks::post(
         &mut dropped,
         &grid,
@@ -436,6 +439,7 @@ pub fn judge_module(checks: &mut Checks, baseline: &crate::sweep::Conducted) -> 
 
     // --- 8: with the module off, nothing can be posted ----------------------
     let mut off = Sim::opening(&tuning, ModuleSet::ALL.without(1));
+    off.everybody_here();
     let refused = asks::post(
         &mut off,
         &grid,
@@ -500,6 +504,7 @@ fn messengers(checks: &mut Checks) -> String {
     // to the minute.
     let grid = crate::grid::grid();
     let mut staged = Sim::opening(&tuning, ModuleSet::ALL);
+    staged.everybody_here();
     let alex = staged
         .people
         .iter()
@@ -555,7 +560,8 @@ fn messengers(checks: &mut Checks) -> String {
 /// what the character does about it has to be what the row said they would.
 fn one_function(checks: &mut Checks, tuning: &Tuning) -> String {
     let grid = crate::grid::grid();
-    let sim = Sim::opening(tuning, ModuleSet::ALL);
+    let mut sim = Sim::opening(tuning, ModuleSet::ALL);
+    sim.everybody_here();
     let jobs = one_job_per_task(&sim);
     let mut cases = 0usize;
     let mut disagreements: Vec<String> = Vec::new();
@@ -631,6 +637,7 @@ fn policy(checks: &mut Checks, tuning: &Tuning) -> String {
     let grid = crate::grid::grid();
     let staged = |rate: i64| -> Vec<Option<JobId>> {
         let mut sim = Sim::opening(tuning, ModuleSet::ALL);
+        sim.everybody_here();
         sim.rates
             .step(TaskType::Fight, rate - sim.rates.of(TaskType::Fight));
         let wage = sim.rates.of(TaskType::Fight);

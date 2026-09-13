@@ -445,9 +445,31 @@ pub fn settle_wage(sim: &mut Sim, tuning: &Tuning, who: usize) -> i64 {
     };
     let (wage, expectation) = (posting.wage, posting.rate_at_posting);
     sim.treasury -= wage;
+    sim.ports.transferred += wage;
     if let Some(person) = sim.people.get_mut(who) {
         person.wallet += wage;
     }
+    wage_regard(sim, tuning, who, wage, expectation);
+    if let Some(party) = sim.parties.get_mut(who) {
+        party.posting = None;
+    }
+    wage
+}
+
+/// **The wage-vs-expectation rule** (GDD §4.2's third operation), on its own.
+///
+/// Paying above what the work was expected to pay moves the worker's edge
+/// toward the player up by `wage_regard`, and paying below it moves it down.
+/// **One function, two callers**: a posting's wage is judged against the rate
+/// the posting recorded (so moving the rates afterwards cannot retroactively
+/// make somebody feel cheated), and an industry shift's wage is judged against
+/// the standing rate for its own kind of work — which is what makes the
+/// per-industry wage and the standing rates one policy family rather than two
+/// rules that happen to agree today.
+///
+/// It goes through `adjust_regard` like every other write, so the bounds hold
+/// the result.
+pub fn wage_regard(sim: &mut Sim, tuning: &Tuning, who: usize, wage: i64, expectation: i64) {
     let delta = match wage.cmp(&expectation) {
         std::cmp::Ordering::Greater => tuning.wage_regard,
         std::cmp::Ordering::Less => -tuning.wage_regard,
@@ -457,10 +479,6 @@ pub fn settle_wage(sim: &mut Sim, tuning: &Tuning, who: usize) -> i64 {
         sim.shared
             .adjust_regard(tuning, who, Regarded::Player, delta);
     }
-    if let Some(party) = sim.parties.get_mut(who) {
-        party.posting = None;
-    }
-    wage
 }
 
 /// **The drop seam** — a character abandons a posting's job because something

@@ -494,6 +494,17 @@ pub fn post(sim: &mut Sim, grid: &Grid, tuning: &Tuning, now: u64, offer: Offer)
     if !sim.modules.enabled(MODULE) {
         return None;
     }
+    // **An industry's standing slots are not postable** (wave 1.3). A shift
+    // pays the industry's own wage, set on the settlement panel, and a posting
+    // over it would be a second wage for one shift and a second surface for
+    // one decision. There is no gesture that produces one — the camp's marker
+    // opens the settlement panel and not a board — and this is the door being
+    // shut rather than the absence being trusted.
+    if let What::Job(job) = what
+        && crate::settlement::industry_at(sim, job.site).is_some()
+    {
+        return None;
+    }
     let rate = rate_for(sim, what);
     let id = sim.postings.all().len();
     let posting = Posting {

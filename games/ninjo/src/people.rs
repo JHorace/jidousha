@@ -26,7 +26,9 @@ use crate::traits::TraitId;
 /// **The `source` line is the proven differentiator** (giri's DESIGN §3, borne
 /// out in play): two characters at desperation 5 are two different problems,
 /// and the sentence that says why is what makes them read as people rather
-/// than as a number. It is bound at generation and never edited afterwards.
+/// than as a number. It is bound at generation **and rewritten by what happens
+/// to them** (GDD §3) — wave 1.3's shortfall is its first writer, which is why
+/// it is an owned string and not the `&'static str` the roster authors.
 #[derive(Clone, Debug)]
 pub struct Character {
     /// The id a log line, a link or a save names them by. ASCII, lowercase.
@@ -46,12 +48,40 @@ pub struct Character {
     /// Need. The opener of every willingness sum, and the motive behind every
     /// bad decision the later waves will let them make.
     pub desperation: i64,
-    /// Why the need presses — bound at generation, never empty.
-    pub source: &'static str,
+    /// **The line they were generated with** — bound once, never written.
+    ///
+    /// Kept beside [`Character::source`] so a rewrite composes with what they
+    /// came here as instead of erasing it: a person who has gone short three
+    /// times is still the person who sends half of everything to their
+    /// sister, and a source line that lost that would make every shortfall
+    /// the same problem, which is the one thing this line exists not to be.
+    pub origin: &'static str,
+    /// Why the need presses — opens as [`Character::origin`], rewritten by
+    /// the events that press (GDD §3), never empty.
+    pub source: String,
+    /// **The world-minute they are in the camp from** (`CAST.md` §4's arrival
+    /// column, wave 1.3).
+    ///
+    /// Zero for the four founders, who are here when the game opens; a later
+    /// minute for the six who came after them, each of whom arrives as an
+    /// occurrence on the one scheduler. Authored content, never written.
+    pub present_from: u64,
+    /// **Whether they are in the camp yet.**
+    ///
+    /// Written once, by the arrival occurrence their [`Character::present_from`]
+    /// schedules. It is a flag rather than a comparison against the clock
+    /// because the lens has no clock: presence is a fact about the world that
+    /// every surface reads the same way, and a surface that worked it out from
+    /// a minute it was handed would be a second answer.
+    pub present: bool,
+    /// **How many intervals they have gone short** (the needs module, wave
+    /// 1.3) — what the rewritten source line counts, and what the economy
+    /// sweep's differential measure is over.
+    pub shortfalls: u64,
     /// The petition this character is currently carrying, if any.
     ///
     /// The slot GDD §3 asks foundation for; the ledger that fills it is the
-    /// petitions module (wave 1.3). Wave 0b opens every character with it
+    /// petitions module (wave 1.5). Wave 0b opens every character with it
     /// empty and asserts so — an occupied slot before petitions exist would
     /// mean something wrote through a door nobody has built yet.
     pub active_petition: Option<usize>,
@@ -75,8 +105,12 @@ pub fn roster() -> Vec<Character> {
             traits: vec![TraitId::Fight, TraitId::Greedy, TraitId::Indebted],
             wallet: 6,
             desperation: 4,
-            source: "owes the collector at the toll-house, who counts days",
+            origin: "owes the collector at the toll-house, who counts days",
+            source: String::new(),
+            shortfalls: 0,
             active_petition: None,
+            present_from: 0,
+            present: true,
         },
         Character {
             id: "steve",
@@ -86,8 +120,12 @@ pub fn roster() -> Vec<Character> {
             traits: vec![TraitId::Labor, TraitId::Loyal, TraitId::Caring],
             wallet: 3,
             desperation: 5,
-            source: "sends half of everything to a sister whose hands gave out",
+            origin: "sends half of everything to a sister whose hands gave out",
+            source: String::new(),
+            shortfalls: 0,
             active_petition: None,
+            present_from: 0,
+            present: true,
         },
         Character {
             id: "alex",
@@ -97,8 +135,12 @@ pub fn roster() -> Vec<Character> {
             traits: vec![TraitId::Scout, TraitId::Cold, TraitId::Restless],
             wallet: 12,
             desperation: 1,
-            source: "has not slept a full month in one place since childhood",
+            origin: "has not slept a full month in one place since childhood",
+            source: String::new(),
+            shortfalls: 0,
             active_petition: None,
+            present_from: 0,
+            present: true,
         },
         Character {
             id: "tim",
@@ -108,8 +150,12 @@ pub fn roster() -> Vec<Character> {
             traits: vec![TraitId::Labor, TraitId::Proud, TraitId::Vengeful],
             wallet: 20,
             desperation: 2,
-            source: "keeps the tally, and is owed by half the camp",
+            origin: "keeps the tally, and is owed by half the camp",
+            source: String::new(),
+            shortfalls: 0,
             active_petition: None,
+            present_from: 0,
+            present: true,
         },
         Character {
             id: "rin",
@@ -119,8 +165,12 @@ pub fn roster() -> Vec<Character> {
             traits: vec![TraitId::Craft, TraitId::Maker, TraitId::Loyal],
             wallet: 5,
             desperation: 2,
-            source: "cooks for ten on a fire built for three",
+            origin: "cooks for ten on a fire built for three",
+            source: String::new(),
+            shortfalls: 0,
             active_petition: None,
+            present_from: 600,
+            present: false,
         },
         Character {
             id: "goro",
@@ -130,8 +180,12 @@ pub fn roster() -> Vec<Character> {
             traits: vec![TraitId::Fight, TraitId::Renown, TraitId::Proud],
             wallet: 9,
             desperation: 3,
-            source: "left home to be talked about, and nobody is talking yet",
+            origin: "left home to be talked about, and nobody is talking yet",
+            source: String::new(),
+            shortfalls: 0,
             active_petition: None,
+            present_from: 1080,
+            present: false,
         },
         Character {
             id: "hana",
@@ -141,8 +195,12 @@ pub fn roster() -> Vec<Character> {
             traits: vec![TraitId::Scout, TraitId::Caring, TraitId::Vengeful],
             wallet: 7,
             desperation: 2,
-            source: "came for her brother; stays exactly as long as he does",
+            origin: "came for her brother; stays exactly as long as he does",
+            source: String::new(),
+            shortfalls: 0,
             active_petition: None,
+            present_from: 1920,
+            present: false,
         },
         Character {
             id: "ludo",
@@ -152,8 +210,12 @@ pub fn roster() -> Vec<Character> {
             traits: vec![TraitId::Labor, TraitId::Fight, TraitId::Indebted],
             wallet: 2,
             desperation: 4,
-            source: "works off a debt that was his father's before it was his",
+            origin: "works off a debt that was his father's before it was his",
+            source: String::new(),
+            shortfalls: 0,
             active_petition: None,
+            present_from: 2400,
+            present: false,
         },
         Character {
             id: "ines",
@@ -163,8 +225,12 @@ pub fn roster() -> Vec<Character> {
             traits: vec![TraitId::Craft, TraitId::Maker, TraitId::Craven],
             wallet: 10,
             desperation: 2,
-            source: "mends what breaks, and would rather be far from what breaks it",
+            origin: "mends what breaks, and would rather be far from what breaks it",
+            source: String::new(),
+            shortfalls: 0,
             active_petition: None,
+            present_from: 3300,
+            present: false,
         },
         Character {
             id: "odd",
@@ -174,10 +240,24 @@ pub fn roster() -> Vec<Character> {
             traits: vec![TraitId::Fight, TraitId::Renown, TraitId::Restless],
             wallet: 8,
             desperation: 3,
-            source: "took the same job as Goro twice, and only one of them got paid",
+            origin: "took the same job as Goro twice, and only one of them got paid",
+            source: String::new(),
+            shortfalls: 0,
             active_petition: None,
+            present_from: 3960,
+            present: false,
         },
     ]
+    .into_iter()
+    // **The source line opens as the line they were generated with.** Written
+    // here rather than authored twice, because two copies of one sentence is
+    // two things that can drift, and the rewrite (`needs::burn`) composes onto
+    // `origin` so the two are never the same string for long.
+    .map(|person| Character {
+        source: person.origin.to_owned(),
+        ..person
+    })
+    .collect()
 }
 
 /// The personalities `CAST.md` §3.3 **parks**: kept as rows of the vocabulary
@@ -188,6 +268,44 @@ pub fn roster() -> Vec<Character> {
 /// Declared here rather than as a field on the trait row, because being on a
 /// sheet is a casting decision and not a property of the word.
 pub const PARKED: &[TraitId] = &[TraitId::Pious, TraitId::Pragmatic, TraitId::Upright];
+
+/// **How far desperation runs.**
+///
+/// Need opens the scorer's sum (`autonomy::weigh`), so an unbounded
+/// desperation would be an unbounded term: a person who had gone short for a
+/// week would take any work at any wage for the rest of the scenario, and the
+/// scorer would stop being a comparison at all. Ten, which is twice the
+/// highest the roster is authored at, so the authored band is the middle of
+/// the range rather than the top of it.
+///
+/// A code constant and not a drawer row for the reason `asks::RATE_MAX` is
+/// one: it is the range a number lives in, not a number anybody tunes.
+pub const DESPERATION_MAX: i64 = 10;
+
+/// **The four founders** — who is standing in the camp when the game opens
+/// (`CAST.md` §4, and §1's "a band arrived a season ago").
+///
+/// Derived from the roster rather than listed, so the founding band is a
+/// property of the arrival column and not a second list that could disagree
+/// with it.
+pub fn founders() -> Vec<usize> {
+    roster()
+        .iter()
+        .enumerate()
+        .filter(|(_, person)| person.present_from == 0)
+        .map(|(index, _)| index)
+        .collect()
+}
+
+/// **Press on somebody**, and hold the result inside the range.
+///
+/// The one write to desperation, so nothing anywhere can push it past
+/// [`DESPERATION_MAX`] or below nothing — the shape `stores::adjust_regard`
+/// gives regard, for the same reason: the bound is decided in one place and no
+/// later wave's caller can get around it.
+pub fn press(person: &mut Character, by: i64) {
+    person.desperation = (person.desperation + by).clamp(0, DESPERATION_MAX);
+}
 
 /// The registry's own validation — the authoring claims prose cannot hold.
 ///
@@ -288,7 +406,7 @@ pub fn registry(checks: &mut crate::checks::Checks, tuning: &crate::constants::T
             person.active_petition.is_none(),
             "a character opens the scenario already carrying a petition",
             format!(
-                "{:?} opens with petition {:?}, and the petitions module is wave 1.3 - \
+                "{:?} opens with petition {:?}, and the petitions module is wave 1.5 - \
                  something wrote through a door nobody has built",
                 person.id, person.active_petition
             ),
@@ -299,6 +417,85 @@ pub fn registry(checks: &mut crate::checks::Checks, tuning: &crate::constants::T
             format!(
                 "{:?} opens at {}g and desperation {}",
                 person.id, person.wallet, person.desperation
+            ),
+        );
+        checks.require(
+            person.desperation <= DESPERATION_MAX,
+            "a character opens past the desperation a shortfall can press them to",
+            format!(
+                "{:?} opens at desperation {} and the range is 0 to {DESPERATION_MAX}",
+                person.id, person.desperation
+            ),
+        );
+        // **The arrival column** (`CAST.md` §4, wave 1.3): present at minute
+        // zero, or arriving at a minute the scheduler can address.
+        checks.require(
+            person.present == (person.present_from == 0),
+            "somebody's presence disagrees with the minute they arrive",
+            format!(
+                "{:?} opens present={} with present_from={}; the camp opens with exactly the \
+                 people whose arrival minute is zero",
+                person.id, person.present, person.present_from
+            ),
+        );
+        if index > 0 {
+            let before = &cast[index - 1];
+            checks.require(
+                person.present_from >= before.present_from,
+                "the roster's arrival column is out of order",
+                format!(
+                    "{:?} arrives at minute {} and {:?} before them at {}; CAST.md §4 is read \
+                     top to bottom as the order the camp filled up",
+                    person.id, person.present_from, before.id, before.present_from
+                ),
+            );
+        }
+    }
+    // **The camp opens with the four founders**, and the six who came later
+    // arrive after it (`CAST.md` §4, §1).
+    let founding = founders();
+    checks.require(
+        founding.len() == 4,
+        "the camp does not open with the four founders",
+        format!(
+            "{} of the roster are present at minute zero; CAST.md §4 seats Bob, Steve, Alex \
+             and Tim at the fire and the other six arrive over the first days",
+            founding.len()
+        ),
+    );
+    for (index, person) in cast.iter().enumerate() {
+        checks.require(
+            founding.contains(&index) == matches!(person.id, "bob" | "steve" | "alex" | "tim"),
+            "the founding band is not the four CAST.md names",
+            format!(
+                "{:?} is {}a founder",
+                person.id,
+                if founding.contains(&index) {
+                    ""
+                } else {
+                    "not "
+                }
+            ),
+        );
+    }
+    // **And the opening four can do some of the opening work** — otherwise
+    // the first decisions the player is offered are not decisions. Asserted
+    // over the board the scenario actually authors, per founder.
+    let opening = crate::sim::Sim::opening(tuning, crate::modules::ModuleSet::ALL);
+    for who in founding.iter().copied() {
+        let suits = opening
+            .sites
+            .iter()
+            .flat_map(|site| site.open_slots().filter_map(|slot| site.quest(slot)))
+            .any(|quest| crate::traits::competence_at(quest.task, &cast[who].traits) > 0);
+        checks.require(
+            suits,
+            "a founder has no open work they are any good at on the opening day",
+            format!(
+                "{:?} stands in a camp whose whole board is work they have no aptitude for; \
+                 the coverage matrix is over the ten and the opening four are who the first \
+                 decisions are about",
+                cast[who].id
             ),
         );
     }

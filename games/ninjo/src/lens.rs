@@ -203,9 +203,61 @@ impl<'a> Lens<'a> {
 
     // ── the people ───────────────────────────────────────────────────────
 
-    /// Everyone in the settlement, in registry order.
+    /// Everyone the registry holds, in registry order — **including the
+    /// people who have not arrived yet**.
+    ///
+    /// The raw list, kept because a party index *is* a roster index and a
+    /// surface that indexed a filtered list would be indexing a different
+    /// world. What a surface almost always wants is [`Lens::roll`].
     pub fn people(&self) -> &'a [Character] {
         &self.sim.people
+    }
+
+    /// **Everybody who is actually in the camp, in registry order** — the
+    /// staged start's one filter (`CAST.md` §4, wave 1.3).
+    ///
+    /// One function, every reader: the map's figures, the meters' chips, the
+    /// roster's rows, a job's candidate list and the state-of-the-camp line
+    /// all walk this, so "a person who has not arrived has no party and no
+    /// token" is one derivation rather than a filter each surface remembers.
+    /// The simulation asks the same question through `Character::present`,
+    /// which the arrival occurrence is the only writer of.
+    pub fn roll(&self) -> Vec<usize> {
+        (0..self.sim.people.len())
+            .filter(|who| self.present(*who))
+            .collect()
+    }
+
+    /// Whether this person has arrived in the camp yet.
+    pub fn present(&self, index: usize) -> bool {
+        self.person(index).is_some_and(|person| person.present)
+    }
+
+    /// **The world-minute they arrive**, for a roster row that has to say a
+    /// person is expected rather than missing.
+    pub fn arrives(&self, index: usize) -> u64 {
+        self.person(index).map_or(0, |person| person.present_from)
+    }
+
+    /// How many intervals this person has failed to meet (the needs module).
+    pub fn shortfalls(&self, index: usize) -> u64 {
+        self.person(index).map_or(0, |person| person.shortfalls)
+    }
+
+    /// Whether the needs module is on — what a surface says instead of a
+    /// number when it is not (the module's degrades-to sentence, on screen).
+    pub fn needs_on(&self) -> bool {
+        self.sim.modules.enabled(crate::needs::MODULE)
+    }
+
+    /// Whether the settlement module is on.
+    pub fn settlement_on(&self) -> bool {
+        self.sim.modules.enabled(crate::settlement::MODULE)
+    }
+
+    /// **What the settlement has built, and what it pays for a shift of it.**
+    pub fn settlement(&self) -> &'a crate::settlement::Settlement {
+        &self.sim.settlement
     }
 
     /// One character, if there is one at this index.
@@ -231,7 +283,8 @@ impl<'a> Lens<'a> {
     /// Why it presses — the sentence that makes two identical desperations two
     /// different problems (GDD §3).
     pub fn source(&self, index: usize) -> &'a str {
-        self.person(index).map_or("", |person| person.source)
+        self.person(index)
+            .map_or("", |person| person.source.as_str())
     }
 
     /// What they carry, in the order the registry authored it.
@@ -394,6 +447,7 @@ impl<'a> Lens<'a> {
 /// `Sim` it was built from, after that `Sim` has been mutated.
 pub fn identity(checks: &mut crate::checks::Checks, tuning: &Tuning) {
     let mut sim = Sim::opening(tuning, crate::modules::ModuleSet::ALL);
+    sim.everybody_here();
     // Write something into every store, through the write API, so the
     // accessors have more than zeroes to agree about.
     let (a, b) = (0usize, 1usize);
@@ -553,6 +607,7 @@ pub fn identity(checks: &mut crate::checks::Checks, tuning: &Tuning) {
             .to_owned(),
     );
     let mut moved = Sim::opening(tuning, crate::modules::ModuleSet::ALL);
+    moved.everybody_here();
     let out = moved.parties[0].member;
     moved.parties[0].activity = Activity::Working { until: 99 };
     let lens = Lens::on(&moved);

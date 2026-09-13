@@ -167,6 +167,33 @@ laid out in `layout.rs` and asserted in `floors.rs` like every other row.
   and the *reason* each is counted, never a bare number. Clicking a face
   selects that character (§3b) — the fourth door, and the same act as the
   other three.
+  **Four chips since wave 1.3**, where there were two: `idle` and `away` are
+  where everybody is, and **`short`** and **`desperate`** are the pressure
+  surface — who cannot meet their upkeep this interval, and who the need has
+  pressed past the threshold. The first pair partitions the camp; the second
+  cuts across it, so somebody can be idle *and* short, which is exactly the
+  state the player is meant to act on. **The `short` chip's set is the set the
+  simulation is about to take money from and fail to find it**: one predicate
+  (`needs::is_short`), and `meters::registry` asserts it by running the burn
+  and comparing the people it pressed against the people the chip named. A
+  chip narrowed to 140 units to make room for the line beside it, which is
+  what `desperate 10` needs and no more.
+- **The state-of-the-camp line**, on the same band and right of the chips:
+  **who is here, how many of them are short, what is held, and what the day
+  burns** — `6 here - 4 short - 615g - 34g/d`. It is on the band rather than
+  under it because the band under the meters is the pause banner's, and two
+  rows of chrome on one band are two rows drawn through each other (§4).
+  Every figure is derived from the same per-character truths the shortfall
+  logic uses — the roll, `needs::is_short`, the sim's own treasury, and
+  `needs::burn_per_day` over the present roster's own `upkeep_of` — and
+  `needs::judge_at` asserts the daily burn against the roster's costs rather
+  than against a second reading of the same string. **There is no income and
+  no net figure on it**, and that is deliberate: this build records no window
+  to derive one over, and a guessed number on the glance band would be the
+  surface that disagrees with the sim. The check asserts the words are absent.
+  It is one string with two placements — the settlement panel prints it with
+  the idle count after it (§3g), because two wordings of one subject are two
+  things that can drift.
 - **The pause banner**, under the meters: one line, gold, present only while
   the world has stopped itself, saying the class, the place and what
   happened. The same sentence appears in the feed's header when the drawer is
@@ -604,6 +631,53 @@ character meant opening four boards in turn and remembering what each held.
 - **With the asks module off there are no verdicts**, and the column says so
   rather than being blank: the module's degrades-to sentence, on this surface.
 
+## 3g. The settlement panel — the camp's own marker, and what can be built
+
+**The one marker that never had a board has one now** (wave 1.3). What stands
+at Kawaza is not work to be posted but **capacity to be built**, so the camp's
+marker opens the surface where that decision is made, and it opens nothing
+else: the industry's standing slots live at the camp, and a board over them
+would be a second way to reach work the scorer fills for itself.
+
+- **It stands in the left column and draws instead of the board, the candidate
+  picker and the work list** — the fourth surface of the one column, for the
+  reason those three draw instead of each other: the left of the screen is one
+  surface at a time and the character panel has the other. Opening any of the
+  four puts the other three down.
+- **The header is two lines**: `Kawaza - a camp` or `Kawaza - a settlement`,
+  which is the phasing arc's first beat said in the one place the player can
+  cause it (`CAST.md` §1); and under it the **state-of-the-camp line** (§3a)
+  with the idle count after it — one string, two placements.
+- **An industry's row is two lines and three controls.** The task chip and the
+  name, then what it costs and what it opens — `180g - 3 slots` before it
+  stands, `3 slots, 2 free` after; then **who is on it, named** (`on it: Rin,
+  Ines`), because this game's argument is that a settlement is people and
+  "2 of 3" is the bare number the chips are forbidden to be; then **what the
+  wage means against the standing rate for that kind of work**
+  (`20g a shift - the 20g craft rate`, or `over`/`under` it), which is the one
+  expectation `answers::wage_regard` judges a payment against — so the row says
+  what the simulation is about to do rather than a second opinion about it.
+- **The three levers are chunky and beside the row, never inside it**: `BUILD`
+  while it is not standing (`STANDING` after, and faint while the treasury
+  cannot pay), and a wage stepper (`- 20g +`) always, because what camp work
+  pays is a decision before and after. The third lever is the **levy**, and it
+  is the tuning drawer's `industry_levy` row rather than a fourth control
+  here: it is settlement-wide policy with no per-industry reading, and two
+  ways to move one number is the second way this repo's first convention
+  refuses.
+- **A refused build bounces in the established style** — a toast under the bar
+  and the same sentence in the notices, naming the two numbers (`the camp works
+  costs 180g and the treasury holds 92g`) — and changes nothing else.
+- **The panel swallows clicks inside its own rectangle**, as the board does and
+  for the board's reason: it *is* the decision surface, and a marker answering
+  a click that landed between two rows would open a site instead of building
+  something. The ways out are its close, bare ground beyond it, any drawer, or
+  another marker.
+- **Nothing is posted from here and no shift is postable.** A shift pays the
+  industry's own wage; the scorer sends whoever wants the work. With the
+  settlement module off the panel opens on nothing buildable and says so —
+  the module's degrades-to sentence, on this surface.
+
 ## 4. Readability floors — what binds here
 
 giri's §7 floors bind: text ≥ 12 reference pixels; clickable targets ≥
@@ -613,22 +687,40 @@ world unit is one reference pixel); no interactive overlap; no text across
 a control it does not label; stat numbers carry their icon (the treasury's
 coin); ASCII everywhere.
 
-The floors bind **every** surface §3a, §3b, §3c, §3d, §3e and §3f add: a feed
+The floors bind **every** surface §3a, §3b, §3c, §3d, §3e, §3f and §3g add: a
+feed
 row, a
 face row, a config radio, a meter chip, a roster row, a **job row**, the
 board's wage steppers and its `TO` toggle, a **ledger row's withdraw**, a
 **rate's steppers and its STAND**, a **`?` and a `who?` on a job row** and a
 **`?` on a feed entry**, a **candidate row**, a **work row** and the sheet's
-**work chip**, a trait chip anywhere it appears,
-and the character panel's and the board's
+**work chip**, an **industry row's BUILD and its wage steppers**, a trait chip
+anywhere it appears,
+and the character panel's, the board's and the settlement panel's
 closes are all at or above the 32x32 target floor, none of them overlaps another control that
 shares its screen, and every row of text is inside the surface that holds it.
 `floors::controls_for` is the one function that says which controls share a
 screen, so the overlap floor is asked about the right set — and since the job
-board, the faces list, a job's candidate picker and a person's work list all
-share the left of the screen and no two of them are ever open together, **the
-base screen is four sets**, `targets()`, `board_targets()`,
-`picker_targets()` and `worklist_targets()`, and `layout_floors` judges them.
+board, the faces list, a job's candidate picker, a person's work list and the
+settlement panel all share the left of the screen and no two of them are ever
+open together, **the base screen is five sets**, `targets()`,
+`board_targets()`, `picker_targets()`, `worklist_targets()` and
+`works_targets()`, and `layout_floors` judges them.
+
+**A glance line fits the band it stands on.** The state-of-the-camp line (§3a)
+is measured against its own widest reading — a camp of ten with a five-figure
+treasury — rather than against the reading it happens to have today, because a
+line that clipped would be a glance the player has to open something else to
+finish. `needs::judge_at` is where that is asserted, and it is why the meter
+chips narrowed when the band went from two of them to four.
+
+**And the tuning drawer says when it is full.** `floors::tuner_has_room` asks
+whether the *next* constant's stepper would still be inside the drawer, so it
+fails while the drawer still draws — the same discipline `tuner_right_column`
+keeps for the stamp. Wave 1.3 re-laid the grid to three columns of fourteen
+(`FINDINGS.md` G-034); past forty-two, re-laying means **moving the right
+column**, because four stepper columns and a readable stamp column do not both
+fit across 960.
 
 **Two floors the 2026-09-11 session added, because the screen they were owed
 against was wrong and nothing said so.**
@@ -731,7 +823,7 @@ frame judges hold all three.
 
 ## 5. Screenshot process
 
-Twenty-four PNGs per verify run. Reference-only, because they are pictures of what
+Twenty-eight PNGs per verify run. Reference-only, because they are pictures of what
 is on screen rather than of how the chrome scales: **the settlement** at
 world-minute 0 (the whole cast standing at their homes, named, before
 anything is dispatched, which is wave 0b's own exit question), **the
@@ -771,6 +863,23 @@ asserted to be a mixed-fit job whose list carries at least one refusal and at
 least one person who is out, and the row it chooses from is asserted *not* to
 be the best fit on the list, because "the player took the top row" is the one
 reading that picture must not support.
+And, since wave 1.3, **four more, and they are pictures of *time***: **the
+camp on the day somebody first goes short** — the `short` chip lit, the faces
+list drilled into it, and each face saying what they hold against what the camp
+is asking for; **the settlement panel over a camp that can build** (the works
+priced, the slots named, BUILD gold and the treasury behind it) and **the same
+panel after it is built** (`Kawaza - a settlement`, three slots standing,
+`STANDING` where the verb was); and **a camp with all ten of the band in it**,
+past the last arrival the column schedules. They are taken on a session of
+their own (`verify::settled`), because the reference session stops at minute
+800 and none of that has happened yet: the first interval of upkeep falls due
+at the end of day one, the treasury does not hold a building until a day's work
+has been banked, and the last of the six who came later walks in on the evening
+of day three. Nothing is posted in it and no rate is moved — it is the playtest
+the wave asks the owner for, scripted. The **settlement** picture at minute
+zero is now its opposite number and is asserted to be **the founding band
+alone**, because the pair is only worth keeping while the first one really is
+four people.
 And, since the 2026-09-11 session, **two more**: **the work list** open on a
 selected character — every job standing open anywhere, sorted by fit, with the
 character panel beside it saying whose list it is (§3f), asserted to carry a
@@ -834,6 +943,14 @@ footer — is a `TextRun` in the `Panel`, and its portraits are `Panel` icons, s
 `floors::judge_panel` judges what it says and `frames::judge_chrome` finds each
 row on the frame. That is why `shots::judge_picker` can assert every
 photographed candidate row is the person the list puts there.
+
+**The settlement panel adds no exemption** (§3g). Its fill, its border and its
+button ghosts are chrome fills like the board's; every row of text on it — the
+two header lines, each industry's name, cost, hands and wage line, the BUILD
+verb, the stepper glyphs and the wage between them, the footer — is a
+`TextRun` in the `Panel`, and its task chips are `Panel` icons. So
+`floors::judge_panel` judges what it says and `frames::judge_chrome` finds each
+row on the frame.
 
 **The breakdown band adds no exemption** (§3e). Its fill and its border are
 chrome fills, like the character panel's; every row of text on it — the

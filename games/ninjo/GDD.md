@@ -186,7 +186,7 @@ and the town is **Kawaza**.
   the budget's ledger.
 
 *Implemented (w0a):* all of it except the petition cards, which are wave
-1.3's to build to the anatomy recorded in §6 below. What the build decided
+1.5's to build to the anatomy recorded in §6 below. What the build decided
 that the mockup and this section left open:
 
 - **The event-class table is `src/attention.rs`**, one row per class carrying
@@ -386,15 +386,16 @@ section left open.
 Holders: player treasury, character wallets. **Mint at sources, burn
 at sinks, conserved between holders**; the ports, exhaustively:
 
-- MINT: site pots (→ treasury, on task resolution); industry wages
-  (→ worker wallets).
+- MINT: site pots (→ treasury, on task resolution) **[built, S1/w1.2]**;
+  industry wages (→ worker wallets) **[built, w1.3]**.
 - TRANSFER: shares/wages (treasury → wallets, per the dispatch
-  offer); petition rewards (petitioner wallet → satisfier); petition
-  gifts (treasury → wallet).
-- BURN: upkeep (wallets; trait-modulated); industry construction
-  (treasury); declared consequences where stated.
+  offer) **[built, w1.2]**; petition rewards (petitioner wallet → satisfier)
+  *[w1.5]*; petition gifts (treasury → wallet) *[w1.5]*.
+- BURN: upkeep (wallets; trait-modulated) **[built, w1.3]**; industry
+  construction (treasury) **[built, w1.3]**; declared consequences where
+  stated *[w1.5]*.
 - The industry levy knob exists, default 0 (passive income is
-  upgraded into).
+  upgraded into) **[built, w1.3 — the `industry_levy` drawer row]**.
 
 **Treasury-margin**: pots land in the treasury; promised shares pay
 out; the remainder is the player's income — the player as contractor.
@@ -421,6 +422,33 @@ still the player's and the wage is the worker's, which is the treasury-margin
 this section describes, and the job board's row is where the two are seen
 together.
 
+*Implemented (w1.3): the rest of the ports, and the conservation identity as a
+recorded ledger.* Upkeep is the BURN out of wallets (`needs::burn`,
+trait-modulated by `traits::upkeep_of` — its first caller); building is the
+BURN out of the treasury and the first real sink the player has
+(`settlement::build`); an industry shift is the MINT **into the worker's
+wallet**, with the levy minted into the treasury beside it
+(`settlement::settle_shift`). A site's pot and an industry's shift are the same
+`work_done`, and which port the gold moves through is read off `Site::industry`
+rather than branched on a name.
+
+- **What is in the purse is what is taken.** Upkeep never overdraws anybody:
+  the shortfall is what could not be found, and what it does is press
+  desperation and rewrite the source line, not go on the books as a debt. That
+  is the limp-floor's arithmetic half, and the economy sweep asserts it over
+  every world it runs.
+- **`Sim::ports` is the ledger** — every port totalled, as a record nothing in
+  the simulation reads. The conservation identity is checkable rather than
+  argued: the treasury plus every purse, less what the purses opened holding,
+  is exactly what was minted less what was burned, and `economy::judge_at` and
+  `economy::judge_sweeps` assert it on every world of the sweep. A movement
+  belonging to no named port shows up as the difference.
+- **And it is the only honest source for a flow figure on a surface.** The
+  state-of-the-camp line carries no income and no net, because this build
+  records no *window* to derive one over; the handoff's instruction was to omit
+  it rather than estimate it, and `needs::judge_at` asserts the line says
+  neither word.
+
 ### 4.2 Regard (the master currency)
 
 Directed integer edges, char→player and char→char, default 0, range
@@ -440,6 +468,13 @@ constants; classes are the spec):
 
 Regard is also the information network (transitive knowledge), dormant
 until the knowledge module.
+
+*Amended (w1.3): the same rule, two callers.* An industry shift's wage is
+judged against the **standing rate for its own kind of work**, through the same
+`answers::wage_regard` a posting's wage goes through — which is what makes the
+per-industry wage and the standing rates one policy family rather than two
+rules that happen to agree today. The gold each port moves is its own (§4.1);
+the rule about how paying it *feels* is one function.
 
 *Implemented (w1.2): the wage-vs-expectation operation, the third of the
 five.* Paying a posting's wage moves the worker's edge toward the player by
@@ -627,6 +662,49 @@ produces are the *fits* rather than the pride — Alex will not leave scouting,
 Ines and Rin will not leave crafting — and that pride's own refusal needs the
 gift-and-charity field 1.5 gives it.
 
+*Implemented (w1.3): needs and settlement.* `src/needs.rs` is the list, the
+burn and the shortfall; `src/settlement.rs` is the industry table, the state
+and the three levers; `src/camp.rs` is the panel the camp's own marker opens.
+Their registry rows are the third and fourth in `modules.rs` and the matrix is
+five passes.
+
+- **A need is a row and a constant.** `needs::NEEDS` is GDD §6's format with
+  one entry, and both of its numbers are **fields on the row** rather than
+  values in it (`Field::UpkeepCoin`, `Field::UpkeepHours`) — so the list stays
+  data, the drawer stays the one place a number lives, and a second need is a
+  row here plus a constant there with nothing else edited. The cost for one
+  person is `traits::upkeep_of` and nothing else: this module adds no
+  arithmetic of its own to what a trait means.
+- **A shortfall presses and rewrites.** Desperation moves one step, held inside
+  `people::DESPERATION_MAX` by the one writer there is (`people::press`), and
+  the `source` line is **composed onto** the line they were generated with
+  rather than replacing it — `Character::origin` is kept beside it for exactly
+  that. Two people at desperation five are two different problems, and
+  `needs::judge_at` asserts that over the whole cast after a burn.
+- **Desperation was already the scorer's opening term**, so a sliding person
+  takes worse work with *nothing changed in `autonomy.rs`*. The wave verified
+  that rather than building it: `needs::judge_module` weighs one job at two
+  desperations and asserts the difference is exactly `need_weight` a step.
+- **An industry is a site.** Its standing slots are one more entry of
+  `Sim::sites`, standing at the camp itself — `sim::SITE_LOCATIONS` is a table
+  now rather than `site + 1` — so the scorer, the dispatch, the journey and the
+  completion are the ones that already existed and **no term was added to the
+  scorer**: a shift is a job, and the wage is the job's pot. What makes a slot
+  *standing* is that finishing it opens it again.
+- **What is not postable**: an industry's slots. A shift pays the industry's
+  own wage, set on the settlement panel, and a posting over it would be a
+  second wage for one shift and a second surface for one decision. No gesture
+  produces one — the camp's marker opens the panel rather than a board — and
+  `asks::post` refuses one anyway, because a door nobody can reach is still a
+  door.
+- **The staged start is content made mechanical.** Every roster row carries a
+  `present_from` world-minute; the camp opens with the four founders and the
+  six who came later arrive as occurrences on the one scheduler (`CAST.md`
+  §4). **The lens filters by presence** — `Lens::roll` is the one derivation —
+  so the map, the roster, the meters, the candidate picker and the camp line
+  all follow it, and a person who has not arrived has no party, no token, no
+  chip and no row.
+
 *Implemented (w0b): the registry as machinery, empty of rows.*
 `src/modules.rs` holds the table above's shape (`ModuleSpec`: id, tier, wave,
 degrades-to), the per-module disable flags (`ModuleSet`, a bitmask planted as
@@ -653,8 +731,16 @@ all walk the table, so nothing else changes.
   pressure params. The tutorial is the most-pinned scenario;
   freeplay is the least.
 - **Needs list**: kind, interval, base cost (v1: one row — coin).
+
+*Implemented (w1.3): the needs list, whole.* `needs::NEEDS` is one row —
+`coin`, every `upkeep_hours`, at a base of `upkeep_coin` — and the two numbers
+are **`constants::Field` values on the row** rather than literals in it. That
+is what keeps both halves of this format true at once: the list is data (a
+second need is a row) and every number in it is drawer-tunable and rides every
+stamp, which is what GDD §9's "a mutated wage or upkeep constant must break a
+band" needs in order to be checkable at all.
 - **Petition card** (the anatomy, recorded by wave 0a's mockup for **wave
-  1.3 to build**; not built now): who is asking (portrait + name) + a trait
+  1.5 to build**; not built now): who is asking (portrait + name) + a trait
   chip + the request text + the reward + a timer bar against the deadline +
   the **declared consequence**, and an assign-picker carrying **willingness
   hints** per candidate. The card is the petition's whole surface; the feed
@@ -707,10 +793,10 @@ session per handoff stands)
   ninjo. **Done.**
 - **0a Attention** — interactive mockup first (design side, runs the
   real event data shapes), then the handoff. (Next handoff.)
-- **1.1 autonomy** → **1.2 asks** → **1.3 needs + settlement** (one session —
-  the economy loop halves are one concern; the wage lever goes from
-  under-driven to live, and standing rates and the per-industry wage are one
-  policy family) → **1.4 resolution** (fit matters) → **1.5 petitions** →
+- **1.1 autonomy** → **1.2 asks** → **1.3 needs + settlement** (**done** — one
+  session, as planned; it also landed the staged start and the pressure
+  surface, and it is the wave that made the world push back) → **1.4
+  resolution** (fit matters) → **1.5 petitions** →
   **1.6 injector** (wave close: sanitation whose first pass is the UI exemplar
   audit; the vocabulary question) → MVP gate. Each lands into a running world;
   owner sanity-plays between sessions but fun is not judged. **Reordered
@@ -818,6 +904,65 @@ expectation a shipped literal.
 
 Economy sweeps wait for an economy.
 
+*Implemented (w1.3): the economy sweeps, and the attention differential.*
+`src/economy.rs` is both, and `src/needs.rs`'s own battery is the module half.
+
+- **Two hundred idle-player seeds, and what they became.** This build reads no
+  `Rng` — `verify::seed_independence` asserts the transcript identical at
+  far-apart seeds — so there is no seed to draw an economy from, and the sweep
+  walks the population that actually exists: **the order in which ten people
+  meet a finite board.** World *k* opens with every scheduled first rescore
+  rotated per roster place (`Sim::stagger_first_looks`), and nothing else
+  differs — every constant, rate and authored pot is the shipped one, which is
+  what lets a mutated `upkeep_coin` move all of them at once. The sweep runs
+  **sixty-four orders of thinking under each of two players** rather than two
+  hundred under one, for the reason stated in the run's own report: the idle
+  half turns out to be **order-invariant** — all sixty-four reach the same
+  treasury, the same shortfall count and the same median purse — so the
+  remaining worlds are redundant rather than merely unaffordable, and the
+  sweep asserts that invariance rather than assuming it. Deviation, stated.
+- **The worlds are driven through `sim::advance_to`**, the same one door
+  `sim::fire_due` fires occurrences through, with the clock and the auto-pause
+  left upstairs. A conducted run drives a headless app, an input script and a
+  renderer, and a hundred and twenty-eight settlements of three world-days is
+  more than that costs. There is no second simulation: `fire_due` is now that
+  call plus the two things only a `World` can do.
+- **The bands, and the limp floor.** Idle, at the shipped constants: 1260g
+  banked, the whole authored board finished by people nobody told to finish it,
+  a median purse of **nothing**, fourteen shortfalls over three world-days, and
+  nobody past desperation 8 of a possible 10. The floor is asserted in the
+  three things that can be said about a world with no death in it — no purse
+  overdrawn, nobody at the ceiling, every job finished — **and in a fourth that
+  is the owner's own decision**: the slide is *uneven*. Some of the camp goes
+  short and some does not, and a world that pressed everybody or nobody fails.
+- **Steve shortfalls first, in every world** (`CAST.md` §4.1's
+  pariah-candidate), and it is the staged start that made the claim real: on
+  day one the camp is four people, Steve carries the highest upkeep multiplier
+  among them and the smallest purse, and he is the only one of the four whose
+  wallet cannot meet the first interval. It is not registry order — Bob is
+  index 0 and pays his first interval in full.
+- **The attention differential**, which is the point. The same sixty-four
+  worlds under a scripted attentive player whose whole policy is three rules,
+  stated in the test's own words and deliberately dumb: build the first
+  industry once the treasury can pay for it; post the best-fitting open job to
+  everybody standing idle, at the standing rate; raise the most-refused rate a
+  step when a day's refusals outran its agreements. **The measure is the count
+  of upkeep shortfalls over three world-days**, and the margin is that the
+  attentive player's *worst* world produces at least **eight fewer** of them
+  than the idle player's — six against fourteen, less than half. The second
+  measure is the median purse, where the worst attentive world holds **17g**
+  against the idle player's nothing. Both are shipped literals the mutation
+  round moves. The comparison is worst-against-every, not median-against-median,
+  because what is claimed is that competence beats neglect and not that it
+  usually does.
+- **What the attention bought is the industry**: every attentive world stands
+  it up and every one of them therefore has work after the board is spent —
+  forty-seven jobs finished against the idle twenty-four. That is the
+  limp-floor the settlement module is for, said as a fact about the sweep.
+- **Median desperation separates nothing** (3 against 3) and is reported rather
+  than asserted. The person in the middle of the camp is not the person who
+  slides — which is the finding, not a defect in the measure.
+
 *Implemented (w1.2): the asks battery, and the distribution sweep the ladder
 was waiting for.* `src/compliance.rs` is the module's own, and it carries the
 five claims GDD §9 owes it:
@@ -858,6 +1003,12 @@ literal.
 
 ## 10. Confidence & open ledger
 
+**The economy is built and swept, and not yet played** (wave 1.3): the bands
+hold, the limp floor is asserted and competence beats neglect by a stated
+margin at the shipped constants, but whether the pressure *reads* — whether a
+player can feel the settlement needing them, and see what looking away cost —
+is the owner's next playtest and nothing here can answer it.
+
 Foundation: grid/clock/pathfinding **played**; people substrate
 **played** (in giri; ported and green here); attention **built and
 owner-playable** — the mockup raised it to mocked and wave 0a landed it, and
@@ -865,6 +1016,19 @@ the played verdict is the owner's next playtest (does the world interrupt
 you at the right moments, and only those?). All modules **speculative** —
 correct and expected; wave gates convert speculation to played evidence one
 wave at a time.
+
+Open, and **new with wave 1.3** (the three the economy raised, all in
+`FINDINGS.md`): **the camp runs out of work before the band is whole** — the
+authored board is claimed by the middle of day two and the last four arrivals
+find nothing, which the industry answers and an idle player never builds
+(G-032); **nothing lowers desperation**, so the escalation pipe has one end and
+wave 1.5's petitions are the natural place to decide the other (G-033); and
+**a self-chosen job pays the worker nothing while the scorer weighs its pot
+anyway** (G-035) — GDD §4.1 is exact that a site's pot is the treasury's, so
+whether the pot should pull a self-chooser at all, pull them less, or imply a
+default share is the decision that sets how brutal an unattended settlement is.
+Beside them: **the tuning drawer is three rows from full** (G-034), and the
+fortieth constant needs its right column moved.
 
 Open (deliberately): **the expectation model beyond the standing rate**
 (fit-adjusted? regard-adjusted?) · **open postings travelling** (this wave:

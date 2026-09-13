@@ -147,6 +147,34 @@ pub struct Tuning {
     /// player in regard — and, below it, costs (GDD §4.2's wage-vs-expectation
     /// operation, at the expectation the posting recorded).
     pub wage_regard: i64,
+
+    // ── needs and settlement (GDD §5; wave 1.3) ───────────────────────────
+    /// **What one interval of upkeep costs before anybody's motivators
+    /// multiply it**, in gold (GDD §4.1's BURN port; `needs::NEEDS` owns the
+    /// interval).
+    ///
+    /// The one number the economy sweep's bands are a function of, which is
+    /// why it is a drawer row and the interval beside it is the needs list's
+    /// own data: GDD §9 asks that a mutated upkeep constant break a band, and
+    /// this is the upkeep constant it means.
+    pub upkeep_coin: i64,
+    /// **World-hours from one interval of upkeep to the next** (`needs::NEEDS`
+    /// reads it off the row).
+    ///
+    /// A day at the shipped set: the camp's tally is squared once a day, which
+    /// is what keeps a slide legible — an interval short enough to press four
+    /// times a day presses everybody to the desperation ceiling inside two,
+    /// and a ceiling everybody is at says nothing about who is vulnerable.
+    pub upkeep_hours: i64,
+    /// **What one worked industry shift pays the treasury**, in gold — the
+    /// levy knob, and the only passive income this game has.
+    ///
+    /// Shipped at zero, because passive income is upgraded into and not
+    /// started with (GDD §4.1). It is a drawer row rather than a lever on the
+    /// settlement panel because the drawer is where a settlement-wide policy
+    /// with no per-industry reading belongs, and because two ways to move one
+    /// number is the second way this repo's first convention refuses.
+    pub industry_levy: i64,
 }
 
 impl Resource for Tuning {}
@@ -202,6 +230,9 @@ impl Tuning {
         alive_days: 3,
         ask_targeted: 6,
         wage_regard: 1,
+        upkeep_coin: 5,
+        upkeep_hours: 24,
+        industry_levy: 0,
     };
 
     /// The constants in effect, as the lines the drawer's stamp and every
@@ -227,7 +258,9 @@ impl Tuning {
              pot{} regard{} idle{}\n\
              visit {}m +{} both{}\n\
              bonds {} alive {}d\n\
-             ask +{} wage +/-{}",
+             ask +{} wage +/-{}\n\
+             upkeep {}g/{}h\n\
+             levy {}g",
             self.road_cost,
             self.plains_cost,
             self.forest_cost,
@@ -264,6 +297,9 @@ impl Tuning {
             self.alive_days,
             self.ask_targeted,
             self.wage_regard,
+            self.upkeep_coin,
+            self.upkeep_hours,
+            self.industry_levy,
         )
     }
 
@@ -308,6 +344,9 @@ impl Tuning {
             Field::AliveDays => &mut self.alive_days,
             Field::AskTargeted => &mut self.ask_targeted,
             Field::WageRegard => &mut self.wage_regard,
+            Field::UpkeepCoin => &mut self.upkeep_coin,
+            Field::UpkeepHours => &mut self.upkeep_hours,
+            Field::IndustryLevy => &mut self.industry_levy,
         }
     }
 
@@ -517,6 +556,12 @@ pub enum Field {
     AskTargeted,
     /// What paying off the standing rate moves regard by.
     WageRegard,
+    /// What one interval of upkeep costs before traits multiply it.
+    UpkeepCoin,
+    /// World-hours between one interval of upkeep and the next.
+    UpkeepHours,
+    /// What one worked industry shift pays the treasury.
+    IndustryLevy,
 }
 
 impl Field {
@@ -558,6 +603,9 @@ impl Field {
         Field::AliveDays,
         Field::AskTargeted,
         Field::WageRegard,
+        Field::UpkeepCoin,
+        Field::UpkeepHours,
+        Field::IndustryLevy,
     ];
 
     /// The name DESIGN gives this constant.
@@ -599,6 +647,9 @@ impl Field {
             Field::AliveDays => "alive_days",
             Field::AskTargeted => "ask_targeted",
             Field::WageRegard => "wage_regard",
+            Field::UpkeepCoin => "upkeep_coin",
+            Field::UpkeepHours => "upkeep_hours",
+            Field::IndustryLevy => "industry_levy",
         }
     }
 
@@ -662,6 +713,9 @@ impl Field {
             Field::AliveDays => "days the alive sweep allows a job",
             Field::AskTargeted => "what being asked by name adds",
             Field::WageRegard => "what paying off the rate moves regard",
+            Field::UpkeepCoin => "base upkeep, per interval, per person",
+            Field::UpkeepHours => "world-hours between upkeep intervals",
+            Field::IndustryLevy => "what a worked shift pays the treasury",
         }
     }
 }

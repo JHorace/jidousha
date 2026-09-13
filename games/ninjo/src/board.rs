@@ -461,7 +461,14 @@ pub fn candidates(
         return Vec::new();
     };
     let job = crate::sim::JobId { site, slot };
-    let mut out: Vec<Candidate> = (0..lens.people().len().min(layout::PICKER_ROWS))
+    // **The cast, which is the camp and not the registry** (`CAST.md` §4's
+    // arrival column, wave 1.3): a person who has not walked into Kawaza yet
+    // is not somebody a job can be aimed at, and a row naming them would be a
+    // posting the world would refuse to hear.
+    let mut out: Vec<Candidate> = lens
+        .roll()
+        .into_iter()
+        .take(layout::PICKER_ROWS)
         .map(|who| Candidate {
             who,
             fit: lens.competence(who, task),

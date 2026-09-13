@@ -177,6 +177,15 @@ pub struct Site {
     /// INVARIANT: the same length as `quests` — a job with no state is a row
     /// the board could not draw and dispatch could not judge.
     pub states: Vec<JobState>,
+    /// **Which settlement industry's standing slots these are**, if they are
+    /// any (wave 1.3).
+    ///
+    /// The one fact that tells a completed job which of GDD §4.1's ports its
+    /// gold moves through — a site's pot mints into the treasury, an
+    /// industry's wage mints into the worker's wallet — and the one that makes
+    /// a finished slot open again instead of staying spent. `None` for every
+    /// authored quest site, which is why nothing else here changed.
+    pub industry: Option<usize>,
 }
 
 impl Site {
@@ -467,6 +476,71 @@ enum Occ {
         /// Whose turn it is.
         who: usize,
     },
+    /// **One need's interval falls due** (GDD §5's needs module, wave 1.3),
+    /// and reschedules itself. Ambient in the sense drift is: a burn that was
+    /// met is nothing that happened to anybody, and only a shortfall reaches
+    /// the feed.
+    Upkeep {
+        /// Which row of `needs::NEEDS`.
+        need: usize,
+    },
+    /// **Somebody who came later arrives in the camp** (`CAST.md` §4's
+    /// arrival column, wave 1.3).
+    ///
+    /// One per character whose `present_from` is not zero, addressed at that
+    /// world-minute like every other occurrence — which is the whole of what
+    /// makes the staged start speed-invariant.
+    Arrival {
+        /// Who has arrived.
+        who: usize,
+    },
+}
+
+/// **Every port gold moves through, totalled** (GDD §4.1's exhaustive list).
+///
+/// Conservation is the claim this exists to make checkable: the treasury plus
+/// every wallet, less what the wallets opened holding, is exactly what was
+/// minted less what was burned — and a movement that belonged to no named port
+/// would show up as the difference. Transfers are between holders and cancel,
+/// so the total is kept for a report rather than for the identity.
+///
+/// **A record, not an input.** Nothing in the simulation reads it and no
+/// arithmetic depends on it, exactly as `Event::judged` is a record.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Ports {
+    /// MINT: site pots, into the treasury on resolution.
+    pub minted_pots: i64,
+    /// MINT: industry wages, into worker wallets (and the levy beside them).
+    pub minted_wages: i64,
+    /// BURN: upkeep, out of wallets, trait-modulated.
+    pub burned_upkeep: i64,
+    /// BURN: industry construction, out of the treasury.
+    pub burned_building: i64,
+    /// TRANSFER: a posting's wage, treasury to wallet. Between holders, so it
+    /// cancels in the identity.
+    pub transferred: i64,
+}
+
+impl Ports {
+    /// What the holders should add up to, given what the wallets opened with.
+    pub fn expected(&self, opening_wallets: i64) -> i64 {
+        opening_wallets + self.minted_pots + self.minted_wages
+            - self.burned_upkeep
+            - self.burned_building
+    }
+
+    /// The ledger on one line, for a report.
+    pub fn line(&self) -> String {
+        format!(
+            "minted {}g in pots and {}g in wages, burned {}g in upkeep and {}g in building, \
+             transferred {}g in posted wages",
+            self.minted_pots,
+            self.minted_wages,
+            self.burned_upkeep,
+            self.burned_building,
+            self.transferred
+        )
+    }
 }
 
 /// The moving world, held as one resource.
@@ -476,8 +550,11 @@ pub struct Sim {
     pub parties: Vec<Party>,
     /// Every quest site, in `LOCATIONS` order (sans the town).
     pub sites: Vec<Site>,
-    /// Pots accumulate here. No spending in S1 (DESIGN §5).
+    /// Pots accumulate here, wages and buildings leave from here.
     pub treasury: i64,
+    /// **What has moved, by port** (GDD §4.1) — the conservation test's
+    /// ground truth and the only place a flow figure may honestly come from.
+    pub ports: Ports,
     /// Everything that has happened, in firing order — the log's source and
     /// the sweep's transcript.
     pub events: Vec<Event>,
@@ -503,6 +580,13 @@ pub struct Sim {
     /// **What the settlement pays per task type** — the standing rates, the
     /// policy lever the mass moves by.
     pub rates: Rates,
+    /// **What the settlement has built, and what it pays for a shift of it**
+    /// (GDD §5's settlement module, wave 1.3).
+    ///
+    /// Sim state and recorded input, like the rates beside it: building and
+    /// stepping a wage are the two new inputs a recording carries, and the
+    /// settlement panel is a view of this and nothing else.
+    pub settlement: crate::settlement::Settlement,
     /// Which modules this scenario opened with (GDD §5).
     ///
     /// Sim state for the same reason the config is: it changes what the world
@@ -522,9 +606,24 @@ pub struct Sim {
 
 impl Resource for Sim {}
 
-/// The `LOCATIONS` index a site index names (sites skip the town).
+/// **Where each site stands**, by `LOCATIONS` index, in `Sim::sites` order.
+///
+/// The four authored quest sites are `LOCATIONS[1..]`, in order — which is
+/// what this was arithmetic for until wave 1.3 — and the settlement's standing
+/// slots are the fifth entry, at the camp itself: the first building is the
+/// camp's own fire with a roof over it (`CAST.md` §1), so it wants no marker
+/// of its own and the camp's marker is where it is reached.
+///
+/// A table rather than `site + 1`, so a site that is not the next location is
+/// a row here and not a special case at thirty-five call sites.
+pub const SITE_LOCATIONS: &[usize] = &[1, 2, 3, 4, crate::grid::TOWN];
+
+/// The `LOCATIONS` index a site index names.
 pub fn site_location(site: usize) -> usize {
-    site + 1
+    SITE_LOCATIONS
+        .get(site)
+        .copied()
+        .unwrap_or(crate::grid::TOWN)
 }
 
 /// One party per character, standing at their own doorstep.
@@ -750,8 +849,25 @@ fn authored_sites() -> Vec<Site> {
                 location,
                 quests,
                 states,
+                industry: None,
             }
         })
+        // **And the settlement's own sites, one per industry, empty** (wave
+        // 1.3). They stand at the camp and hold no work until somebody builds
+        // them: a camp is a camp until the first building goes up, and an
+        // industry with rows before it was built would be a board the scorer
+        // could take work off for free.
+        .chain(
+            crate::settlement::INDUSTRIES
+                .iter()
+                .enumerate()
+                .map(|(index, spec)| Site {
+                    location: site_location(spec.site),
+                    quests: Vec::new(),
+                    states: Vec::new(),
+                    industry: Some(index),
+                }),
+        )
         .collect()
 }
 
@@ -849,10 +965,12 @@ impl Sim {
             parties: authored_parties(&people),
             sites: authored_sites(),
             treasury: 0,
+            ports: Ports::default(),
             events: Vec::new(),
             people,
             postings: Postings::default(),
             rates: Rates::opening(),
+            settlement: crate::settlement::Settlement::opening(),
             shared: Shared::opening(),
             attention: Attention::opening(),
             modules,
@@ -864,34 +982,105 @@ impl Sim {
         seed_relationships(&mut sim, tuning);
         sim.schedule(stores::drift_interval(tuning), Occ::Drift);
         if modules.enabled(crate::autonomy::MODULE) {
+            // **Only the people who are here.** The six who came later are
+            // scheduled by their own arrival, which is what makes presence a
+            // fact about the world rather than a filter every reader has to
+            // remember.
             for who in 0..sim.parties.len() {
-                sim.schedule(
-                    crate::autonomy::first_score(tuning, who),
-                    Occ::Rescore { who },
-                );
+                if sim.people.get(who).is_some_and(|person| person.present) {
+                    sim.schedule(
+                        crate::autonomy::first_score(tuning, who),
+                        Occ::Rescore { who },
+                    );
+                }
+            }
+        }
+        // **The staged start** (`CAST.md` §4): one occurrence per person who
+        // is not a founder, at the world-minute the roster authors.
+        for who in 0..sim.people.len() {
+            if let Some(person) = sim.people.get(who)
+                && !person.present
+            {
+                sim.schedule(person.present_from, Occ::Arrival { who });
+            }
+        }
+        // **And the needs**, one occurrence per row of the list. With the
+        // module off nothing is scheduled at all, which is the degrades-to
+        // sentence said by the queue rather than by a flag consulted at every
+        // firing (`autonomy`'s own precedent).
+        if modules.enabled(crate::needs::MODULE) {
+            for row in 0..crate::needs::NEEDS.len() {
+                if let Some(need) = crate::needs::NEEDS.get(row) {
+                    sim.schedule(
+                        crate::needs::first_burn(tuning, need),
+                        Occ::Upkeep { need: row },
+                    );
+                }
             }
         }
         sim
     }
 
+    /// **Stage the whole camp as arrived** — an instrument, not a game path.
+    ///
+    /// The staged start is content (`CAST.md` §4) and most of the batteries
+    /// are about something else: whether one figure is drawn per person,
+    /// whether a job row's verdict equals the world's answer, whether a trait
+    /// sum is the arithmetic the vocabulary says. Those claims are about the
+    /// *whole cast*, and a world where six of them are not born yet would
+    /// judge them over four people and call it a pass. The batteries whose
+    /// subject **is** the staged start conduct real runs and never call this.
+    pub fn everybody_here(&mut self) {
+        for person in &mut self.people {
+            person.present = true;
+        }
+    }
+
+    /// **Re-deal when each person first looks up** — the economy sweep's whole
+    /// population (GDD §9, wave 1.3).
+    ///
+    /// An instrument, not a game path: this build reads no `Rng`, so an
+    /// "idle-player seed" has nothing to draw an economy from. What a seed
+    /// would have varied is the order in which ten people meet a finite
+    /// board — who reaches the mushroom haul first and who finds it taken —
+    /// so the sweep varies exactly that and nothing the player controls, by
+    /// rotating every scheduled first rescore by `by` minutes. Every constant,
+    /// rate and authored pot is the shipped one in all of them.
+    pub fn stagger_first_looks(&mut self, tuning: &Tuning, by: u64) {
+        let cadence = crate::autonomy::interval(tuning).max(1);
+        for occurrence in &mut self.queue {
+            if let Occ::Rescore { who } = occurrence.kind {
+                // **Per roster place**, so the rotation re-orders rather than
+                // shifting everybody equally — a world where all ten look up a
+                // minute later is the same world, and the thing a seed would
+                // have varied is who looks up *first*. Held inside one cadence
+                // so nobody's first look is pushed past their second.
+                occurrence.at += by.saturating_mul(who as u64 + 1) % cadence;
+            }
+        }
+    }
+
     /// Whether everything is home and nothing a party is waiting on is
     /// scheduled — the world at rest (the sweep's stopping condition).
     ///
-    /// **Ambient occurrences do not count.** Regard drift and the scorer's
-    /// cadence both reschedule themselves forever, so a queue that had to be
-    /// empty would mean the world was never at rest once anybody could think.
-    /// At rest means nobody is abroad and nothing is going to move them
-    /// *before the next ambient occurrence* — which, with autonomy on, is a
-    /// lull rather than an ending, and the sweep says so by stopping at a
-    /// world-minute instead.
+    /// **Ambient occurrences do not count.** Regard drift, the scorer's
+    /// cadence and the upkeep interval all reschedule themselves forever, and
+    /// an arrival is a date on the calendar rather than a journey anybody is
+    /// waiting on — so a queue that had to be empty would mean the world was
+    /// never at rest once anybody could think. At rest means nobody is abroad
+    /// and nothing is going to move them *before the next ambient occurrence*
+    /// — which, with autonomy on, is a lull rather than an ending, and the
+    /// sweep says so by stopping at a world-minute instead.
     pub fn at_rest(&self) -> bool {
-        self.queue
+        self.queue.iter().all(|occurrence| {
+            matches!(
+                occurrence.kind,
+                Occ::Drift | Occ::Rescore { .. } | Occ::Upkeep { .. } | Occ::Arrival { .. }
+            )
+        }) && self
+            .parties
             .iter()
-            .all(|occurrence| matches!(occurrence.kind, Occ::Drift | Occ::Rescore { .. }))
-            && self
-                .parties
-                .iter()
-                .all(|party| party.activity == Activity::Idle)
+            .all(|party| party.activity == Activity::Idle)
     }
 
     /// Everyone's name, in registry order — what a status line needs to say
@@ -964,6 +1153,30 @@ impl Sim {
         note: String,
     ) {
         self.emit(minute, class, party, tile, note);
+    }
+
+    /// Record a needs-module occurrence — today the upkeep shortfall (wave
+    /// 1.3).
+    ///
+    /// Public for the reason [`Sim::emit_ask`] is: the arithmetic belongs to
+    /// the module and the emission belongs here, because this is the one door
+    /// past which an event can stop the world.
+    pub fn emit_need(&mut self, minute: u64, who: usize, tile: Tile, note: String) {
+        self.emit(minute, EventClass::UpkeepShortfall, who, tile, note);
+    }
+
+    /// Record a settlement occurrence — a building, or the slots it opened.
+    ///
+    /// Its party is [`PLAYER`], because building is the player's own act and
+    /// nobody in Kawaza signs for it — the same index a posting is made under,
+    /// which is what makes the feed read it as *you*.
+    pub fn emit_settlement(&mut self, minute: u64, class: EventClass, tile: Tile, note: String) {
+        self.emit(minute, class, PLAYER, tile, note);
+    }
+
+    /// Record somebody arriving in the camp (`CAST.md` §4's arrival column).
+    pub fn emit_joined(&mut self, minute: u64, who: usize, tile: Tile, note: String) {
+        self.emit(minute, EventClass::Joined, who, tile, note);
     }
 
     /// Record an `action-started` — the scorer's own class, and the one place
@@ -1241,10 +1454,31 @@ pub fn fire_due(world: &mut World) {
     let tuning = *world.resource::<Tuning>();
     // The grid is read, never written: cloning a 48x27 byte table per firing
     // span would also be fine, but a split borrow through two resources is not
-    // available, so take the cheap copy only when something is actually due.
+    // available, so take the cheap copy once.
+    let grid = world.resource::<Grid>().clone();
+    advance_to(world.resource_mut::<Sim>(), &grid, &tuning, now);
+    // **The auto-pause, applied**: the world stopping itself is a simulation
+    // transition, so it happens here, in the tick the event fired, before
+    // anything draws. The clock is the speed, and speed 0 is the pause;
+    // nothing synthesises an input, which is what makes a replay reproduce
+    // the pause rather than reproduce a click.
+    if world.resource::<Sim>().paused_by.is_some() {
+        world.resource_mut::<Clock>().paused = true;
+    }
+}
+
+/// **Fire everything the world owes up to `now`, in world-time order** — the
+/// one door an occurrence comes through.
+///
+/// Split out of [`fire_due`] at wave 1.3 so the economy sweep can run a world
+/// forward without an app around it (`economy.rs`): two hundred settlements of
+/// several world-days each is a population a conducted run cannot afford, and
+/// a second loop over the queue would be a second simulation. The `World` half
+/// of `fire_due` — reading the clock, taking the grid, applying the pause — is
+/// all that is left up there, and this is everything that *happens*.
+pub fn advance_to(sim: &mut Sim, grid: &Grid, tuning: &Tuning, now: u64) {
     loop {
         let due = {
-            let sim = world.resource::<Sim>();
             let mut best: Option<(usize, u64, u64)> = None;
             for (slot, occurrence) in sim.queue.iter().enumerate() {
                 if occurrence.at > now {
@@ -1259,32 +1493,59 @@ pub fn fire_due(world: &mut World) {
             best.map(|(slot, _, _)| slot)
         };
         let Some(slot) = due else { break };
-        let grid = world.resource::<Grid>().clone();
-        let sim = world.resource_mut::<Sim>();
         let occurrence = sim.queue.remove(slot);
         match occurrence.kind {
-            Occ::TileEntry { party } => tile_entry(sim, &grid, &tuning, occurrence.at, party),
-            Occ::WorkDone { party } => work_done(sim, &grid, &tuning, occurrence.at, party),
+            Occ::TileEntry { party } => tile_entry(sim, grid, tuning, occurrence.at, party),
+            Occ::WorkDone { party } => work_done(sim, grid, tuning, occurrence.at, party),
             Occ::Drift => {
-                sim.shared.drift(&tuning);
-                sim.schedule(occurrence.at + stores::drift_interval(&tuning), Occ::Drift);
+                sim.shared.drift(tuning);
+                sim.schedule(occurrence.at + stores::drift_interval(tuning), Occ::Drift);
             }
             Occ::Rescore { who } => {
                 sim.schedule(
-                    occurrence.at + crate::autonomy::interval(&tuning),
+                    occurrence.at + crate::autonomy::interval(tuning),
                     Occ::Rescore { who },
                 );
-                crate::autonomy::rescore(sim, &grid, &tuning, occurrence.at, who);
+                crate::autonomy::rescore(sim, grid, tuning, occurrence.at, who);
             }
+            Occ::Upkeep { need } => {
+                if let Some(row) = crate::needs::NEEDS.get(need) {
+                    sim.schedule(
+                        occurrence.at + crate::needs::interval(tuning, row),
+                        Occ::Upkeep { need },
+                    );
+                }
+                crate::needs::burn(sim, tuning, occurrence.at, need);
+            }
+            Occ::Arrival { who } => arrive(sim, tuning, occurrence.at, who),
         }
     }
-    // **The auto-pause, applied**: the world stopping itself is a simulation
-    // transition, so it happens here, in the tick the event fired, before
-    // anything draws. The clock is the speed, and speed 0 is the pause;
-    // nothing synthesises an input, which is what makes a replay reproduce
-    // the pause rather than reproduce a click.
-    if world.resource::<Sim>().paused_by.is_some() {
-        world.resource_mut::<Clock>().paused = true;
+}
+
+/// **Somebody who came later walks into the camp** (`CAST.md` §4).
+///
+/// Presence is written here and nowhere else, and their first rescore is
+/// scheduled from the minute they arrived — so the staggered cadence they join
+/// on is theirs rather than a leftover of a world they were not in.
+fn arrive(sim: &mut Sim, tuning: &Tuning, at: u64, who: usize) {
+    let Some(person) = sim.people.get_mut(who) else {
+        return;
+    };
+    if person.present {
+        return;
+    }
+    person.present = true;
+    let (home, name, origin) = (person.home, person.name, person.origin);
+    if let Some(party) = sim.parties.get_mut(who) {
+        party.tile = home;
+    }
+    sim.emit_joined(at, who, home, format!("arrived in Kawaza - {origin}"));
+    let _ = name;
+    if sim.modules.enabled(crate::autonomy::MODULE) {
+        sim.schedule(
+            at + crate::autonomy::first_score(tuning, who),
+            Occ::Rescore { who },
+        );
     }
 }
 
@@ -1489,7 +1750,22 @@ fn work_done(sim: &mut Sim, grid: &Grid, tuning: &Tuning, at: u64, index: usize)
             if let Some(state) = sim.sites[site].states.get_mut(slot) {
                 *state = JobState::Done { by: index };
             }
-            sim.treasury += quest.pot;
+            // **Which port this job's gold moves through** (GDD §4.1), read
+            // off the site rather than branched on a name: a quest site's pot
+            // is minted into the treasury, and an industry's shift is minted
+            // into the worker's wallet with the levy beside it. A shift's slot
+            // then opens again, which is the whole of what makes it standing.
+            let shift = crate::settlement::industry_at(sim, site).is_some();
+            let (paid, levied) = if shift {
+                let moved = crate::settlement::settle_shift(sim, tuning, index, site);
+                sim.ports.minted_wages += moved.0 + moved.1;
+                crate::settlement::reopen(sim, JobId { site, slot });
+                moved
+            } else {
+                sim.treasury += quest.pot;
+                sim.ports.minted_pots += quest.pot;
+                (0, 0)
+            };
             // **The wage, paid on completion** (GDD §4.1's TRANSFER port):
             // treasury to wallet, and the regard the paying moves. Nothing is
             // paid for work nobody posted, which is why this reads the
@@ -1499,23 +1775,41 @@ fn work_done(sim: &mut Sim, grid: &Grid, tuning: &Tuning, at: u64, index: usize)
             // The rest term's whole state: work weighs less on somebody who
             // just finished some (`autonomy.rs`).
             sim.parties[index].rested_until = at + crate::autonomy::rest_minutes(tuning);
+            let (into_treasury, note) = if shift {
+                (
+                    levied,
+                    format!(
+                        "worked {} - {paid}g earned, {levied}g levied ({treasury}g held) - \
+                         turning for home",
+                        quest.name
+                    ),
+                )
+            } else if wage > 0 {
+                (
+                    quest.pot,
+                    format!(
+                        "completed {} - {}g in, {wage}g paid out ({treasury}g held) - turning \
+                         for home",
+                        quest.name, quest.pot
+                    ),
+                )
+            } else {
+                (
+                    quest.pot,
+                    format!(
+                        "completed {} - {}g into the treasury ({treasury}g held) - turning for \
+                         home",
+                        quest.name, quest.pot
+                    ),
+                )
+            };
             sim.emit_paying(
                 at,
                 EventClass::QuestComplete,
                 index,
                 tile,
-                quest.pot,
-                if wage > 0 {
-                    format!(
-                        "completed {} - {}g in, {wage}g paid out ({}g held) - turning for home",
-                        quest.name, quest.pot, treasury
-                    )
-                } else {
-                    format!(
-                        "completed {} - {}g into the treasury ({}g held) - turning for home",
-                        quest.name, quest.pot, treasury
-                    )
-                },
+                into_treasury,
+                note,
             );
         }
         Errand::Visit { toward } => settle_visit(sim, tuning, member, toward),

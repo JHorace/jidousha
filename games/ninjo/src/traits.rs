@@ -1004,9 +1004,9 @@ pub fn explain(id: TraitId, modules: ModuleSet) -> String {
 /// **The no-dead-motivator rule, as far as this build can assert it**
 /// (`CAST.md` §3.2): every motivator row has at least one template whose
 /// source class is `motivator` and whose trigger names it. The template table
-/// is wave 1.3's; until it exists the rule is asserted against this declared
+/// is wave 1.5's; until it exists the rule is asserted against this declared
 /// list, which is `CAST.md` §6's five templates read off the document.
-/// **Wave 1.3 replaces this constant with a walk over the real table** and the
+/// **Wave 1.5 replaces this constant with a walk over the real table** and the
 /// assertion in [`vocabulary`] does not change.
 pub const TEMPLATED_MOTIVATORS: &[TraitId] = &[
     TraitId::Indebted,

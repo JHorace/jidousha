@@ -273,7 +273,11 @@ pub fn judge(checks: &mut Checks, run: &Conducted, tuning: &Tuning) {
             &shot.camera,
         );
         let says = |text: &str| panel.runs.iter().any(|run| run.text.contains(text));
-        let missing: Vec<&str> = (0..lens.people().len())
+        // **Everybody in the camp** — the lens's roll, which is the same list
+        // the drawer draws off (`CAST.md` §4's arrival column, wave 1.3).
+        let missing: Vec<&str> = lens
+            .roll()
+            .into_iter()
             .filter(|who| !says(lens.name(*who)))
             .map(|who| lens.name(who))
             .collect();
@@ -1131,6 +1135,11 @@ fn judge_tokens(checks: &mut Checks, shot: &Shot) {
     let lens = lens::Lens::on(&shot.sim);
     let mut travelling = 0;
     for (index, party) in shot.sim.parties.iter().enumerate() {
+        // Somebody who has not arrived has no party on the map to photograph
+        // (`CAST.md` §4's arrival column, wave 1.3).
+        if !lens.present(index) {
+            continue;
+        }
         if matches!(
             party.activity,
             Activity::Outbound { .. } | Activity::Homebound { .. }
@@ -1187,5 +1196,160 @@ fn judge_tokens(checks: &mut Checks, shot: &Shot) {
         distinct.len() >= 2,
         "the two travelling parties are not on visibly different routes",
         format!("outbound goals: {routes:?}"),
+    );
+}
+
+/// **The wave-1.3 photographs, judged** (UI.md §5): the pressure, the answer
+/// to it, and the camp the arrival column fills up.
+///
+/// Every claim is about the *picture*, not about the world behind it: what is
+/// asserted is that the thing the picture is for is on screen, because a
+/// photograph of the wrong frame is worth nothing and nobody can tell by
+/// looking at a filename.
+pub fn judge_settled(checks: &mut Checks, run: &Conducted, tuning: &Tuning) -> String {
+    let mut report = String::new();
+    // --- the day somebody first goes short ---------------------------------
+    if let Some(shot) = run.photo("short") {
+        let lens = lens::Lens::on(&shot.sim);
+        let chip = crate::meters::METERS
+            .iter()
+            .position(|spec| spec.id == "short")
+            .unwrap_or(0);
+        let faces = crate::meters::faces(&lens, tuning, chip);
+        checks.require(
+            shot.flow.drilled == Some(chip) && !faces.is_empty(),
+            "the shortfall photograph does not show the chip drilled into",
+            format!(
+                "the drilled chip reads {:?} and the short chip counts {}; the picture is of \
+                 the faces behind a count, not of the count",
+                shot.flow.drilled,
+                faces.len()
+            ),
+        );
+        // **And each face says what it is about**: what they are holding
+        // against what the camp is asking for, which is the same comparison
+        // the burn is about to make. The sentence that makes two identical
+        // desperations two different problems is the source line, one tap
+        // further in on the panel a face opens (GDD §3).
+        let reasons: Vec<String> = faces.iter().map(|(_, why)| why.clone()).collect();
+        checks.require(
+            reasons
+                .iter()
+                .zip(&faces)
+                .all(|(why, (who, _))| why.contains(&format!("{}g of", lens.wallet(*who)))),
+            "the faces behind the short chip do not say what they hold against what they owe",
+            format!("they read {reasons:?}; a chip drills into faces with reasons, never a count"),
+        );
+        let short_of = shot
+            .sim
+            .people
+            .iter()
+            .filter(|person| person.shortfalls > 0)
+            .count();
+        checks.require(
+            short_of > 0,
+            "the shortfall photograph was taken before anybody had gone short",
+            format!(
+                "at minute {} nobody in the camp has failed an interval",
+                shot.clock.minutes
+            ),
+        );
+        report = format!("{} short, {} drilled", short_of, faces.len());
+    }
+    // --- the settlement panel, before and after ---------------------------
+    let panel_says = |shot: &Shot, needle: &str| {
+        let panel = screens::content(
+            &shot.flow,
+            &lens::Lens::on(&shot.sim),
+            &crate::grid::grid(),
+            &shot.clock,
+            tuning,
+            screens::reading(&shot.clock, tuning, screens::TICK),
+            &shot.camera,
+        );
+        panel.runs.iter().any(|run| run.text.contains(needle))
+    };
+    if let Some(shot) = run.photo("works") {
+        let spec = crate::settlement::INDUSTRIES.first();
+        checks.require(
+            shot.flow.works
+                && !shot.sim.settlement.any_standing()
+                && spec.is_some_and(|spec| shot.sim.treasury >= spec.cost)
+                && panel_says(shot, "BUILD"),
+            "the buildable photograph is not of a camp that can build",
+            format!(
+                "the panel reads works={}, anything standing={}, and the treasury holds {}g \
+                 against a cost of {:?}",
+                shot.flow.works,
+                shot.sim.settlement.any_standing(),
+                shot.sim.treasury,
+                spec.map(|spec| spec.cost)
+            ),
+        );
+    }
+    if let Some(shot) = run.photo("built") {
+        checks.require(
+            shot.flow.works
+                && shot.sim.settlement.any_standing()
+                && panel_says(shot, "STANDING")
+                && crate::settlement::free_slots(&lens::Lens::on(&shot.sim), 0) > 0,
+            "the built photograph is not of a settlement with standing work in it",
+            format!(
+                "the panel reads works={}, standing={} and {} slots open",
+                shot.flow.works,
+                shot.sim.settlement.any_standing(),
+                crate::settlement::free_slots(&lens::Lens::on(&shot.sim), 0)
+            ),
+        );
+        report.push_str(&format!(
+            "; built for {}g at minute {}",
+            crate::settlement::INDUSTRIES
+                .first()
+                .map_or(0, |spec| spec.cost),
+            shot.clock.minutes
+        ));
+    }
+    // --- and the camp with all ten of them in it --------------------------
+    if let Some(shot) = run.photo("tenfold") {
+        let lens = lens::Lens::on(&shot.sim);
+        checks.require(
+            lens.roll().len() == shot.sim.people.len(),
+            "the whole-camp photograph was taken before the band was whole",
+            format!(
+                "{} of {} are in Kawaza at minute {}; CAST.md §4 seats the last of them on \
+                 day three",
+                lens.roll().len(),
+                shot.sim.people.len(),
+                shot.clock.minutes
+            ),
+        );
+        report.push_str(&format!("; {} in the camp at the end", lens.roll().len()));
+    }
+    report
+}
+
+/// **The opening picture is the founding band, and only them** (`CAST.md` §4).
+///
+/// Asserted against the *photograph's own world* rather than against the
+/// roster, because what the picture is for is the difference between a camp of
+/// four and a settlement of ten — and the pair of pictures is only worth
+/// keeping while the first one really is four.
+pub fn judge_opening_camp(checks: &mut Checks, run: &Conducted) {
+    let Some(shot) = run.photo("settlement") else {
+        return;
+    };
+    let lens = lens::Lens::on(&shot.sim);
+    let here: Vec<&str> = lens.roll().into_iter().map(|who| lens.name(who)).collect();
+    let founders: Vec<&str> = crate::people::founders()
+        .into_iter()
+        .map(|who| lens.name(who))
+        .collect();
+    checks.require(
+        here == founders && shot.clock.minutes == 0,
+        "the opening photograph is not of the founding band alone",
+        format!(
+            "at minute {} the camp holds {here:?} and CAST.md §4 opens it with {founders:?}",
+            shot.clock.minutes
+        ),
     );
 }

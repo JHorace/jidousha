@@ -6,14 +6,14 @@
 //! has a world-time and a place, proved out under the name giri-rt and adopted
 //! here (`VARIANT.md` records that verdict).
 //!
-//! What runs today: waves 0b and 0a. The substrate's dispatch/travel/resolve
-//! loop, **the people substrate** - a character registry standing at its home
-//! tiles, the trait vocabulary, and the shared-state stores (regard, bonds and
-//! grudges, marks) - and **the attention architecture**: an event-class table,
-//! a feed that is a view of the sim's event log, per-class auto-pause the
-//! simulation performs itself, meters that open into faces, and a panel for
-//! one character. Autonomy, needs, petitions and asks are later waves; nobody
-//! decides anything for themselves yet.
+//! What runs today: the substrate, the people, the attention architecture, and
+//! **wave 1's economy loop through 1.3** - the scorer everybody decides with
+//! (`autonomy.rs`), the postings the player rules by (`asks.rs`,
+//! `answers.rs`), the upkeep that presses on everybody who lives here
+//! (`needs.rs`) and the capacity the player can build to answer it
+//! (`settlement.rs`, `camp.rs`). The camp opens with its four founders and the
+//! six who came later arrive over the first days. Resolution, petitions and
+//! the injector are waves 1.4 to 1.6.
 //!
 //! The seams this build exists to lay: `src/lens.rs` is the one read-path every
 //! screen goes through, `src/stores.rs` holds the shared state and the only
@@ -23,7 +23,8 @@
 //!
 //! Pointer and keyboard. No audio. **No randomness**: the seed plumbing and
 //! stamps remain from giri, and no `Rng` read exists yet - verify asserts
-//! the whole event transcript identical under far-apart seeds.
+//! the whole event transcript identical under far-apart seeds, and the economy
+//! sweep varies the order people think in rather than a draw nobody makes.
 //!
 //! Play it:  `cargo run -p ninjo`
 //! On the web: `tools/build-web ninjo && tools/serve-web ninjo`
@@ -40,11 +41,13 @@ mod attention;
 mod autonomy;
 mod board;
 mod camera;
+mod camp;
 mod capture;
 mod checks;
 mod clock;
 mod compliance;
 mod constants;
+mod economy;
 mod floors;
 mod flow;
 mod frames;
@@ -57,6 +60,7 @@ mod links;
 mod meters;
 mod modules;
 mod mutation;
+mod needs;
 mod panels;
 mod path;
 mod pauses;
@@ -64,6 +68,7 @@ mod people;
 mod presets;
 mod restart;
 mod screens;
+mod settlement;
 mod shots;
 mod sim;
 mod sprites;

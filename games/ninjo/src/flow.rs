@@ -144,6 +144,14 @@ pub struct Flow {
     /// can see is a panel about nothing — the same rule, in the same shape,
     /// as the breakdown band's.
     pub picking: Option<crate::sim::JobId>,
+    /// **Whether the settlement panel is open** (UI.md §3g, wave 1.3).
+    ///
+    /// A flag and not an index, because there is one camp: the panel lists
+    /// every industry there is, and what a click on one of its rows names is
+    /// the *industry*, which the row's own rectangle already says. It shares
+    /// the left column with the board, the picker and the work list, and
+    /// opening any of them puts it down.
+    pub works: bool,
     /// **Whose work list is open**, if anybody's (UI.md §3f).
     ///
     /// **The person-side mirror of the picker**, and the same kind of field:
@@ -220,6 +228,7 @@ impl Flow {
     fn close_everything(&mut self) {
         self.drawer = None;
         self.drilled = None;
+        self.works = false;
         self.board = None;
         self.picking = None;
         self.listing = None;
@@ -313,9 +322,27 @@ impl Flow {
     /// there are a dozen ways to open a board or drill a chip and the list
     /// cannot be the thing every one of them remembers.
     fn put_the_list_away(&mut self) {
-        if self.listing != self.selected || self.board.is_some() || self.drilled.is_some() {
+        if self.listing != self.selected
+            || self.board.is_some()
+            || self.drilled.is_some()
+            || self.works
+        {
             self.listing = None;
         }
+    }
+
+    /// **Open the settlement panel, and put down whatever had the column.**
+    ///
+    /// The left of the screen is one surface at a time (UI.md §3c, §3f), so
+    /// the panel that is drawn is the panel that answers a click by
+    /// construction — the same rule the board, the picker and the work list
+    /// keep between themselves.
+    fn open_the_works(&mut self) {
+        self.works = !self.works;
+        self.board = None;
+        self.picking = None;
+        self.listing = None;
+        self.drilled = None;
     }
 
     /// Raise a toast, and log the same sentence — nothing appears only in a
@@ -393,9 +420,13 @@ pub fn load_scenario(world: &mut World) {
     // that changes what the world does, so a recording that did not say what
     // work paid would be a recording of an unknown world.
     let rates = world.resource::<Sim>().rates.stamp();
+    // **And what the settlement has built**, which is sim state the player
+    // writes and which changes what the world does — so a recording that did
+    // not carry it would be a recording of an unknown settlement (wave 1.3).
+    let works = world.resource::<Sim>().settlement.stamp();
     let flow = world.resource_mut::<Flow>();
     flow.note(format!(
-        "seed {seed} - {} - {rates} - the world opens paused; space runs it",
+        "seed {seed} - {} - {rates} - {works} - the world opens paused; space runs it",
         modules.stamp()
     ));
 }
@@ -548,8 +579,9 @@ fn read_input(world: &mut World) {
     }
     if let Some(drilled) = world.resource::<Flow>().drilled {
         let faces = {
+            let tuning = *world.resource::<Tuning>();
             let lens = Lens::on(world.resource::<Sim>());
-            meters::faces(&lens, drilled)
+            meters::faces(&lens, &tuning, drilled)
         };
         for (row, (who, _)) in faces.into_iter().take(layout::FACE_ROWS).enumerate() {
             if layout::faces_row(row).contains(at) {
@@ -558,6 +590,37 @@ fn read_input(world: &mut World) {
             }
         }
         if layout::faces_panel().contains(at) {
+            return;
+        }
+    }
+    // **The settlement panel, while it is up, is the whole left column**
+    // (UI.md §3g). It draws instead of the board and the work list, for the
+    // reason they draw instead of each other, and its three controls are the
+    // BUILD verb and the two halves of a wage stepper.
+    if world.resource::<Flow>().works {
+        if layout::works_close().contains(at) {
+            world.resource_mut::<Flow>().works = false;
+            return;
+        }
+        for index in 0..crate::settlement::INDUSTRIES.len().min(layout::WORKS_ROWS) {
+            if layout::works_build(index).contains(at) {
+                build_it(world, tick, index);
+                return;
+            }
+            for (rect, delta) in [
+                (
+                    layout::works_wage_down(index),
+                    -crate::settlement::WAGE_STEP,
+                ),
+                (layout::works_wage_up(index), crate::settlement::WAGE_STEP),
+            ] {
+                if rect.contains(at) {
+                    step_the_wage(world, index, delta);
+                    return;
+                }
+            }
+        }
+        if layout::works_panel().contains(at) {
             return;
         }
     }
@@ -872,13 +935,29 @@ fn read_input(world: &mut World) {
     // (UI.md §3c). The two clicks a dispatch takes are unchanged in number and
     // changed in what the second one lands on: a named job instead of a site
     // whose front row the player could not see.
+    //
+    // **And the camp's own marker opens the settlement panel** (UI.md §3g,
+    // wave 1.3), which is the same gesture on the one marker that never had a
+    // board: what stands at Kawaza is not work to be posted but capacity to be
+    // built, so the marker opens the surface where that decision is made. It
+    // is tested first, because the industry's standing slots are a site whose
+    // location *is* the camp and a board over them would be the second way to
+    // reach work the scorer fills for itself.
+    if layout::marker_rect(crate::grid::LOCATIONS[crate::grid::TOWN].tile).contains(at_world) {
+        world.resource_mut::<Flow>().open_the_works();
+        return;
+    }
     for (site_index, site) in world.resource::<Sim>().sites.clone().iter().enumerate() {
+        if site.industry.is_some() {
+            continue;
+        }
         let marker = layout::marker_rect(crate::grid::LOCATIONS[site.location].tile);
         if !marker.contains(at_world) {
             continue;
         }
         let flow = world.resource_mut::<Flow>();
         flow.board = (flow.board != Some(site_index)).then_some(site_index);
+        flow.works = false;
         flow.drilled = None;
         return;
     }
@@ -930,6 +1009,44 @@ fn read_input(world: &mut World) {
     let flow = world.resource_mut::<Flow>();
     flow.selected = None;
     flow.board = None;
+}
+
+/// **Build an industry** — a recorded input, and the treasury's first real
+/// sink (GDD §4.1).
+///
+/// The decision is `settlement::build`'s and the refusal is said out loud: a
+/// build the treasury cannot pay for bounces with the two numbers on it, in
+/// the established style, and changes nothing.
+fn build_it(world: &mut World, tick: u64, index: usize) {
+    let now = world.resource::<Clock>().minutes;
+    let outcome = {
+        let sim = world.resource_mut::<Sim>();
+        crate::settlement::build(sim, now, index)
+    };
+    let name = crate::settlement::INDUSTRIES
+        .get(index)
+        .map_or("it", |spec| spec.name);
+    let flow = world.resource_mut::<Flow>();
+    match outcome {
+        Ok(()) => flow.note(format!("{} - built {name}", stamp(now))),
+        Err(refusal) => flow.bounce(tick, refusal.message(name)),
+    }
+}
+
+/// **Step an industry's wage** — a recorded input, like a standing rate's
+/// stepper and for the same reason: it changes what the world does.
+fn step_the_wage(world: &mut World, index: usize, delta: i64) {
+    let now = world.resource::<Clock>().minutes;
+    let held = {
+        let sim = world.resource_mut::<Sim>();
+        crate::settlement::step_wage(sim, index, delta)
+    };
+    let name = crate::settlement::INDUSTRIES
+        .get(index)
+        .map_or("it", |spec| spec.name);
+    world
+        .resource_mut::<Flow>()
+        .note(format!("{} - {name} now pays {held}g a shift", stamp(now)));
 }
 
 /// **Select a person** — the one thing every select surface does.
@@ -1021,20 +1138,26 @@ impl Drawer {
 /// explanation. Anything else shuts the drawer, exactly as the feed's and the
 /// config's own rule.
 fn roster_click(world: &mut World, at: Vec2) {
-    let people = world.resource::<Sim>().people.len();
-    for who in 0..people.min(layout::ROSTER_ROWS) {
+    // **The same roll the drawer drew**, so the row a click lands on is the
+    // row the player was looking at — one ordering, two readers, which is what
+    // the work list and the candidate picker keep between their own pair.
+    let roll: Vec<usize> = {
+        let lens = Lens::on(world.resource::<Sim>());
+        lens.roll()
+    };
+    for (row, who) in roll.into_iter().take(layout::ROSTER_ROWS).enumerate() {
         let carried: Vec<crate::traits::TraitId> = {
             let lens = Lens::on(world.resource::<Sim>());
             lens.traits(who).to_vec()
         };
         for (slot, id) in carried.into_iter().take(layout::SHEET_CHIPS).enumerate() {
-            if layout::roster_chip(who, slot).contains(at) {
+            if layout::roster_chip(row, slot).contains(at) {
                 let flow = world.resource_mut::<Flow>();
                 flow.explained = (flow.explained != Some(id)).then_some(id);
                 return;
             }
         }
-        if layout::roster_open(who).contains(at) {
+        if layout::roster_open(row).contains(at) {
             let flow = world.resource_mut::<Flow>();
             flow.close_everything();
             flow.selected = Some(who);
