@@ -385,11 +385,11 @@ pub fn modes_drawer(lens: &Lens<'_>) -> Panel {
 ///
 /// All of it sits over the map rather than in a drawer, because these are the
 /// surfaces the player is meant to read without asking for them.
-pub fn glance(flow: &Flow, lens: &Lens<'_>) -> Panel {
+pub fn glance(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning) -> Panel {
     let mut panel = Panel::default();
     for (index, spec) in METERS.iter().enumerate() {
         let chip = layout::meter_chip(index);
-        let count = meters::count(lens, index);
+        let count = meters::count(lens, tuning, index);
         // **A chip colourises only when it has something to say** (the
         // mockup's rule): a zero is a chip you are allowed to not look at.
         let tone = if count == 0 {
@@ -411,6 +411,21 @@ pub fn glance(flow: &Flow, lens: &Lens<'_>) -> Panel {
             tone,
         ));
     }
+    // **The state of the camp, in one line** (UI.md §3a, wave 1.3): who is
+    // here, how many of them cannot pay for themselves, what is held, and what
+    // the day burns — every figure from the same per-character truths the
+    // shortfall logic uses (`needs::camp_line`), and no income figure at all,
+    // because this build records no window to derive one from and a guess on
+    // this band would be the surface that disagrees with the sim.
+    panel.text(TextRun::new(
+        layout::camp_line_at(),
+        clipped(
+            &crate::needs::camp_line(lens, tuning),
+            layout::camp_line_width(),
+        ),
+        theme::SMALL,
+        theme::DIM,
+    ));
     if let Some(reason) = attention::reason_line(lens) {
         panel.text(TextRun::new(
             layout::banner_at(),
@@ -420,7 +435,7 @@ pub fn glance(flow: &Flow, lens: &Lens<'_>) -> Panel {
         ));
     }
     if let Some(drilled) = flow.drilled {
-        panel.absorb(faces_panel(lens, drilled));
+        panel.absorb(faces_panel(lens, tuning, drilled));
     }
     if let Some(who) = flow.selected {
         panel.absorb(person_panel(flow, lens, who));
@@ -429,7 +444,7 @@ pub fn glance(flow: &Flow, lens: &Lens<'_>) -> Panel {
 }
 
 /// The faces behind one chip: who is counted, and the reason each is.
-fn faces_panel(lens: &Lens<'_>, index: usize) -> Panel {
+fn faces_panel(lens: &Lens<'_>, tuning: &Tuning, index: usize) -> Panel {
     let mut panel = Panel::default();
     let label = METERS.get(index).map_or("", |spec| spec.label);
     panel.text(TextRun::new(
@@ -438,7 +453,7 @@ fn faces_panel(lens: &Lens<'_>, index: usize) -> Panel {
         theme::SMALL,
         theme::DIM,
     ));
-    for (row, (who, reason)) in meters::faces(lens, index)
+    for (row, (who, reason)) in meters::faces(lens, tuning, index)
         .into_iter()
         .take(layout::FACE_ROWS)
         .enumerate()
@@ -656,8 +671,17 @@ pub fn roster_drawer(flow: &Flow, lens: &Lens<'_>) -> Panel {
             tone,
         ));
     }
-    for who in 0..lens.people().len().min(layout::ROSTER_ROWS) {
-        let open = layout::roster_open(who);
+    // **Everyone in the camp, in registry order** — the lens's roll, so the
+    // roster follows the arrival column without a filter of its own
+    // (`CAST.md` §4, wave 1.3). A row is a *place in the drawer*, not a
+    // roster index: the fifth person to arrive takes the fifth row.
+    for (row, who) in lens
+        .roll()
+        .into_iter()
+        .take(layout::ROSTER_ROWS)
+        .enumerate()
+    {
+        let open = layout::roster_open(row);
         if let Some(person) = lens.person(who) {
             let mut face = IconRun::new(
                 open.min + rrow::PORTRAIT,
@@ -681,7 +705,7 @@ pub fn roster_drawer(flow: &Flow, lens: &Lens<'_>) -> Panel {
             .enumerate()
         {
             let mut chip = trait_chip(
-                layout::roster_chip(who, slot),
+                layout::roster_chip(row, slot),
                 id,
                 flow.explained == Some(id),
             );

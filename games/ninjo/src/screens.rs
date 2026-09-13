@@ -158,6 +158,13 @@ fn nudge(rank: usize) -> Vec2 {
 /// `None` for an index that names nobody, which is the only answer there is:
 /// a person who is not in the registry is not standing anywhere.
 pub fn stands_at(lens: &Lens<'_>, who: usize, now: f32) -> Option<Vec2> {
+    // **Somebody who has not arrived stands nowhere** (`CAST.md` §4's arrival
+    // column, wave 1.3). The map follows the lens's roll from here without a
+    // per-surface edit: no place means no figure, no name, no ring and no
+    // hit-test, because every one of those reads this one answer.
+    if !lens.present(who) {
+        return None;
+    }
     // INVARIANT: an idle party stands on its member's home tile, so this
     // branch and the one below agree today — and it is here because the
     // *person's* door is the authority for where a person at home stands, not
@@ -355,7 +362,7 @@ pub fn content(
     // words it hides are the words it carries in full: a site's name and the
     // count of what is open there. So while a board is up the map is a picture
     // and the board is the words (UI.md §3c).
-    let worded = bare && flow.board.is_none();
+    let worded = bare && flow.board.is_none() && !flow.works;
 
     // **The floor governs the labels, and the zoom no longer yields to them**
     // (UI.md §4, `FINDINGS.md` G-022). A name is drawn in world units and
@@ -534,7 +541,7 @@ pub fn content(
 
     // --- the attention surfaces over the map (GDD §3, wave 0a) -------------
     if bare {
-        panel.absorb(panels::glance(flow, lens));
+        panel.absorb(panels::glance(flow, lens, tuning));
         // --- and the site panel a marker opens (UI.md §3c) -----------------
         //
         // **One of the two, never both.** The candidate picker draws
@@ -548,7 +555,13 @@ pub fn content(
         // the board's own rectangle, and tapping one of its rows is what
         // opens the board there. One column, one surface — the same rule the
         // picker's own placement is.
-        if let Some(who) = flow.listing {
+        if flow.works {
+            // **The settlement panel** (UI.md §3g), which the camp's own
+            // marker opens: the fourth surface of the one left column, drawn
+            // instead of the other three for the reason they are drawn
+            // instead of each other.
+            panel.absorb(crate::camp::settlement_panel(flow, lens, tuning));
+        } else if let Some(who) = flow.listing {
             panel.absorb(crate::worklist::work_list(
                 flow,
                 lens,
@@ -760,7 +773,31 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
     // **The work list's ground, in the board's own rectangle** (UI.md §3f):
     // the third surface of the one left-hand column, drawn instead of the
     // board exactly as the picker is.
-    if let Some(who) = flow.listing {
+    // **The settlement panel's own ground** (UI.md §3g), first of the four
+    // surfaces that share this column, because it displaces the other three.
+    if flow.works {
+        fill(
+            ctx,
+            layout::works_panel(),
+            theme::PANEL,
+            theme::layers::CARD,
+        );
+        border(ctx, layout::works_panel(), theme::GOLD, theme::layers::CARD);
+        ghost_at(ctx, &map, layout::works_close(), theme::layers::CARD);
+        let standing = ctx.world.resource::<Sim>().settlement.clone();
+        for index in 0..crate::settlement::INDUSTRIES.len().min(layout::WORKS_ROWS) {
+            if !standing.standing(index) {
+                ghost_at(ctx, &map, layout::works_build(index), theme::layers::CARD);
+            }
+            ghost_at(
+                ctx,
+                &map,
+                layout::works_wage_down(index),
+                theme::layers::CARD,
+            );
+            ghost_at(ctx, &map, layout::works_wage_up(index), theme::layers::CARD);
+        }
+    } else if let Some(who) = flow.listing {
         let open = {
             let sim = ctx.world.resource::<Sim>();
             crate::worklist::open_jobs(&Lens::on(sim)).min(layout::WORK_ROWS)
@@ -793,7 +830,10 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
         // the reason `content` never draws both: the picker replaces the board
         // in the same column (UI.md §3c).
         if flow.picking.is_some() {
-            let people = ctx.world.resource::<Sim>().people.len();
+            // **One ghost per candidate the list actually has**, which is the
+            // camp and not the registry (`CAST.md` §4): an edge around a row
+            // nobody is on is an edge around nothing.
+            let people = Lens::on(ctx.world.resource::<Sim>()).roll().len();
             fill(
                 ctx,
                 layout::picker_panel(),
@@ -881,7 +921,13 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
     if flow.showing(Drawer::Roster) {
         // Every row's own ground, and the chips over it: a chip is a target,
         // and a target with no edge is a thing nobody knows they may tap.
-        for row in 0..layout::ROSTER_ROWS.min(ctx.world.resource::<Sim>().people.len()) {
+        //
+        // **One row per person in the camp**, which is the lens's roll and not
+        // the registry (`CAST.md` §4's arrival column, wave 1.3): a ghost under
+        // a row nobody is on is an edge around nothing, and on the opening day
+        // it would be six of them.
+        let here = Lens::on(ctx.world.resource::<Sim>()).roll().len();
+        for row in 0..layout::ROSTER_ROWS.min(here) {
             fill(
                 ctx,
                 layout::roster_open(row),

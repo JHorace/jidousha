@@ -676,12 +676,15 @@ pub const RUN_UNTIL: u64 = 800;
 /// Stated as literals because they are where an auto-pause on
 /// `quest-complete` stops the world, and a resume has to be addressed at one:
 /// the clock is holding, so a resume cannot be addressed by the clock
-/// (`When::MinuteHeld` counts ticks from the minute's first arrival). All but
-/// the last are minutes [`expected_events`] pins; the last falls in the tail
-/// between the invariance window and the end of the run.
-pub const COMPLETIONS: [u64; 13] = [
-    180, 181, 202, 432, 470, 497, 567, 569, 576, 603, 608, 628, 786,
-];
+/// (`When::MinuteHeld` counts ticks from the minute's first arrival).
+///
+/// **Six since wave 1.3**, where it was thirteen: the camp opens with four
+/// people instead of ten (`CAST.md` §4's arrival column), so six fewer of them
+/// are out finishing work inside the run. Every one of these six is a minute
+/// [`expected_events`] pins, and the tail between the window and the end of the
+/// run is now empty — Bob leaves at 720 and is still walking when the run
+/// stops.
+pub const COMPLETIONS: [u64; 6] = [180, 181, 202, 432, 497, 628];
 
 /// The shared script under one speed prologue: four **postings** at fixed
 /// world-times — three people asked at once, then a fourth ask to the
@@ -760,16 +763,19 @@ pub fn speed_scripts() -> Vec<(&'static str, Vec<Directive>)> {
 pub fn expected_events() -> Vec<(u64, EventClass, usize, Option<usize>)> {
     // (minute, class, party, location index - None on an unnamed tile)
     //
-    // **Wave 1.2's timeline is wave 1.1's, plus twelve.** A posting is the
-    // player's own act, so its party is `sim::PLAYER` — the index that names
-    // nobody in the roster, which is what makes the feed read it as *you*.
-    // The four scripted
-    // asks add three occurrences each at the minute they are made — the
-    // posting, the hearing, and the agreement — and change nothing else: the
-    // founding band takes all four at the standing rates, so the journeys,
-    // the completions and everybody else's own choices are minute for minute
-    // what they were before the player stopped ordering. That is the claim
-    // this list is, and it is why nothing was re-timed to make it pass.
+    // **Wave 1.3's timeline is wave 1.2's, less the six who had not arrived.**
+    // The staged start (`CAST.md` §4) opens the camp with the four founders,
+    // and the four scripted postings are all to founders — so every minute the
+    // player's own hand causes is **unchanged, to the minute**: the postings at
+    // 16, 32, 48 and 360, the hearings and agreements in the same world-minute,
+    // the arrivals at 80, 91 and 102, the completions at 180, 181 and 202. What
+    // is gone is what the six who came later used to decide for themselves in
+    // the first twelve hours, and what is new is one line: **Rin walks into
+    // Kawaza at 600**, which is the first arrival the scenario's own content
+    // schedules.
+    //
+    // Nothing was re-timed to make this pass. The claim is that the staged
+    // start removed people and moved nobody, and the list is what says so.
     vec![
         (16, EventClass::PostingMade, sim::PLAYER, Some(0)),
         (16, EventClass::AskHeard, 0, None),
@@ -799,76 +805,27 @@ pub fn expected_events() -> Vec<(u64, EventClass, usize, Option<usize>)> {
         (290, EventClass::Returned, 0, None),
         (312, EventClass::ActionStarted, 3, None),
         (312, EventClass::Departed, 3, None),
-        (336, EventClass::ActionStarted, 4, None),
-        (336, EventClass::Departed, 4, None),
         (342, EventClass::Arrived, 1, Some(1)),
         (342, EventClass::WorkBegan, 1, Some(1)),
-        (360, EventClass::ActionStarted, 5, None),
-        (360, EventClass::Departed, 5, None),
         (360, EventClass::PostingMade, sim::PLAYER, Some(0)),
         (360, EventClass::AskHeard, 0, None),
         (360, EventClass::AskAgreed, 0, None),
         (360, EventClass::Departed, 0, None),
-        (384, EventClass::ActionStarted, 6, None),
-        (384, EventClass::Departed, 6, None),
         (387, EventClass::Arrived, 3, Some(2)),
         (387, EventClass::WorkBegan, 3, Some(2)),
-        (390, EventClass::Arrived, 4, Some(1)),
-        (390, EventClass::WorkBegan, 4, Some(1)),
-        (408, EventClass::ActionStarted, 7, None),
-        (408, EventClass::Departed, 7, None),
-        (432, EventClass::ActionStarted, 8, None),
-        (432, EventClass::Departed, 8, None),
         (432, EventClass::QuestComplete, 1, Some(1)),
-        (439, EventClass::Arrived, 5, Some(2)),
-        (439, EventClass::WorkBegan, 5, Some(2)),
         (448, EventClass::Arrived, 0, Some(4)),
         (448, EventClass::WorkBegan, 0, Some(4)),
-        (456, EventClass::ActionStarted, 9, None),
-        (456, EventClass::Departed, 9, None),
-        (470, EventClass::QuestComplete, 4, Some(1)),
-        (476, EventClass::Arrived, 9, Some(3)),
-        (476, EventClass::WorkBegan, 9, Some(3)),
-        (477, EventClass::Arrived, 7, Some(2)),
-        (477, EventClass::WorkBegan, 7, Some(2)),
-        (488, EventClass::Arrived, 6, Some(1)),
-        (488, EventClass::WorkBegan, 6, Some(1)),
         (497, EventClass::QuestComplete, 3, Some(2)),
-        (503, EventClass::Arrived, 8, Some(2)),
-        (503, EventClass::WorkBegan, 8, Some(2)),
         (512, EventClass::Returned, 1, None),
         (512, EventClass::ActionDone, 1, None),
-        (526, EventClass::Returned, 4, None),
-        (526, EventClass::ActionDone, 4, None),
-        (567, EventClass::QuestComplete, 7, Some(2)),
-        (569, EventClass::QuestComplete, 5, Some(2)),
         (569, EventClass::Returned, 3, None),
         (569, EventClass::ActionDone, 3, None),
-        (576, EventClass::QuestComplete, 9, Some(3)),
-        (596, EventClass::Returned, 9, None),
-        (596, EventClass::ActionDone, 9, None),
-        (603, EventClass::QuestComplete, 8, Some(2)),
-        (608, EventClass::QuestComplete, 6, Some(1)),
+        (600, EventClass::Joined, 4, None),
         (628, EventClass::QuestComplete, 0, Some(4)),
-        (639, EventClass::Returned, 7, None),
-        (639, EventClass::ActionDone, 7, None),
-        (648, EventClass::ActionStarted, 7, None),
-        (648, EventClass::Departed, 7, None),
-        (651, EventClass::Returned, 5, None),
-        (651, EventClass::ActionDone, 5, None),
-        (671, EventClass::Returned, 8, None),
-        (671, EventClass::ActionDone, 8, None),
-        (696, EventClass::ActionStarted, 9, None),
-        (696, EventClass::Departed, 9, None),
-        (706, EventClass::Arrived, 7, Some(3)),
-        (706, EventClass::WorkBegan, 7, Some(3)),
-        (716, EventClass::Arrived, 9, Some(3)),
-        (716, EventClass::WorkBegan, 9, Some(3)),
         (718, EventClass::Returned, 0, None),
         (720, EventClass::ActionStarted, 0, None),
         (720, EventClass::Departed, 0, None),
-        (720, EventClass::Returned, 6, None),
-        (720, EventClass::ActionDone, 6, None),
     ]
 }
 
@@ -878,7 +835,12 @@ pub fn expected_events() -> Vec<(u64, EventClass, usize, Option<usize>)> {
 /// The player asks for four of them and the scorer takes the rest, which is
 /// itself the module's loudest claim: a world where people go looking for work
 /// is a world where the board empties without anybody being told to empty it.
-pub const EXPECTED_TREASURY: i64 = 595;
+///
+/// **Three hundred since wave 1.3**, where it was 595: the six who came later
+/// are not in the camp for the first twelve hours, so the two jobs they used
+/// to finish inside the window are not finished inside it. The four the player
+/// asked for still are, which is why [`EXPECTED_WAGES`] did not move.
+pub const EXPECTED_TREASURY: i64 = 300;
 
 /// And what it pays **out** in wages inside the same window (GDD §4.1's
 /// TRANSFER port, wave 1.2).

@@ -73,7 +73,7 @@ pub const PICKED_ROW_SLOT: usize = 1;
 /// head: `shots::judge_picker` asserts the chosen person is not the best fit
 /// on the list, because "the player took the top row" is the one reading this
 /// picture must not support.
-pub const PICKED_ROW: usize = 4;
+pub const PICKED_ROW: usize = 3;
 
 pub fn photographed(viewport: PhysicalSize) -> Conducted {
     // The class the config panel is set to stop on, and where its radio is.
@@ -141,13 +141,14 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
         When::Minute(440),
         layout::roster_button().center(),
     ));
-    let ludo = people::roster()
-        .iter()
-        .position(|person| person.id == "ludo")
-        .unwrap_or(0);
+    // **The second row's third chip**, which is Steve's `caring` — a
+    // motivator, which is what the picture is for. A *row*, not a roster
+    // index: the drawer lists the camp and the camp is four people on the
+    // first day (`CAST.md` §4), so a row addressed by somebody's place in the
+    // registry would land on empty drawer and shut it.
     script.push(click_ui(
         When::Minute(452),
-        layout::roster_chip(ludo, 2).center(),
+        layout::roster_chip(1, 2).center(),
     ));
     // **The job board, the wave's own pictures.** Shut the roster, pick Alex —
     // the band's scout, home since minute 212 and idle, so the board answers
@@ -296,7 +297,7 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
         // was told to go anywhere and people are on the road anyway.
         Photo {
             name: "living",
-            minute: 400,
+            minute: 330,
             tick: 0,
             paused: false,
         },
@@ -424,6 +425,116 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
         resume_after: Some((Key::Digit1, 20)),
     })
 }
+
+/// **The wave's own session: the economy, watched** (wave 1.3).
+///
+/// A run of its own rather than four more photographs on the reference
+/// session, because what this wave's pictures are of is **time**: the first
+/// interval of upkeep falls due at the end of day one, the six who came later
+/// arrive across days one to three, and the treasury does not hold a building
+/// until a day's work has been banked. The reference session stops at minute
+/// 800 and none of that has happened yet.
+///
+/// Nothing is posted here and no rate is moved: the player watches, opens the
+/// camp's own panel, builds the one thing there is, and watches some more —
+/// which is exactly the playtest the wave asks the owner for.
+pub fn settled(viewport: PhysicalSize) -> Conducted {
+    let click_ui = |when: When, at: Vec2| Directive {
+        when,
+        what: Act::ClickUi(at),
+    };
+    let camp = layout::marker_rect(LOCATIONS[crate::grid::TOWN].tile).center();
+    let short_chip = crate::meters::METERS
+        .iter()
+        .position(|spec| spec.id == "short")
+        .unwrap_or(0);
+    let script = vec![
+        Directive {
+            when: When::Tick(5),
+            what: Act::Tap(Key::Digit3),
+        },
+        // **The day somebody first goes short.** The first interval falls due
+        // at the end of day one; a few minutes later the chip is lit and this
+        // is the drill into the faces behind it — the portrait, and the
+        // rewritten source line that says *why this person* is in trouble.
+        click_ui(
+            When::Minute(SHORT_MINUTE - 8),
+            layout::meter_chip(short_chip).center(),
+        ),
+        // Then the camp's own marker, which opens the settlement panel: the
+        // treasury has a day of work in it and the works are buildable.
+        click_ui(
+            When::Minute(BUILD_MINUTE - 24),
+            layout::meter_chip(short_chip).center(),
+        ),
+        Directive {
+            when: When::Minute(BUILD_MINUTE - 16),
+            what: Act::ClickWorld(camp),
+        },
+        // And the verb itself.
+        click_ui(
+            When::Minute(BUILD_MINUTE + 8),
+            layout::works_build(0).center(),
+        ),
+        // Put the panel down so the last picture is of the settlement rather
+        // than of a panel over it.
+        click_ui(
+            When::Minute(BUILD_MINUTE + 40),
+            layout::works_close().center(),
+        ),
+    ];
+    let photos = [
+        Photo {
+            name: "short",
+            minute: SHORT_MINUTE,
+            tick: 0,
+            paused: false,
+        },
+        Photo {
+            name: "works",
+            minute: BUILD_MINUTE,
+            tick: 0,
+            paused: false,
+        },
+        Photo {
+            name: "built",
+            minute: BUILD_MINUTE + 24,
+            tick: 0,
+            paused: false,
+        },
+        Photo {
+            name: "tenfold",
+            minute: WHOLE_MINUTE,
+            tick: 0,
+            paused: false,
+        },
+    ];
+    conduct(&Session {
+        tuning: Tuning::SHIPPED,
+        modules: crate::modules::ModuleSet::ALL,
+        seed: None,
+        directives: &script,
+        photos: &photos,
+        probe_ticks: &[],
+        viewport,
+        max_ticks: 6_000,
+        stop_at_rest: false,
+        stop_at_minute: Some(WHOLE_MINUTE + 40),
+        resume_after: Some((Key::Digit3, 20)),
+    })
+}
+
+/// The minute the `short` picture is taken at — a few minutes after the first
+/// interval of upkeep falls due, so the chip is lit and the faces behind it
+/// have their reasons.
+pub const SHORT_MINUTE: u64 = 1480;
+
+/// And the minute the settlement panel is opened and built at.
+pub const BUILD_MINUTE: u64 = 1600;
+
+/// And the minute the camp is whole: past the last arrival `CAST.md` §4
+/// schedules, which is Odd on the evening of day three.
+pub const WHOLE_MINUTE: u64 = 4040;
 
 /// **The settlement, one notch of the wheel out** — its own short session.
 ///
@@ -1122,7 +1233,8 @@ fn one_figure_each(checks: &mut Checks) -> String {
     };
 
     // --- the opening scenario: every character idle at their own door -------
-    let opening = crate::sim::Sim::opening(&tuning, modules::ModuleSet::ALL);
+    let mut opening = crate::sim::Sim::opening(&tuning, modules::ModuleSet::ALL);
+    opening.everybody_here();
     let at_home = figures(&opening, &flow::Flow::default());
     checks.require(
         at_home.len() == cast.len(),
@@ -1562,7 +1674,9 @@ fn one_selection(checks: &mut Checks) -> Option<Conducted> {
     // this field rather than a second selection beside it.
     let idle_face = {
         let lens = lens::Lens::on(&opening);
-        crate::meters::faces(&lens, 0).first().map(|(who, _)| *who)
+        crate::meters::faces(&lens, &tuning, 0)
+            .first()
+            .map(|(who, _)| *who)
     };
     let Some(idle_face) = idle_face else {
         checks.require(
@@ -1605,15 +1719,15 @@ fn one_selection(checks: &mut Checks) -> Option<Conducted> {
     let surfaces: [(&str, usize, Vec<Directive>); 4] = [
         (
             "the map sprite",
-            4,
+            2,
             vec![Directive {
                 when: When::Tick(6),
-                what: Act::ClickWorld(cast[4].home.center()),
+                what: Act::ClickWorld(cast[2].home.center()),
             }],
         ),
         (
             "the roster row's name",
-            7,
+            1,
             vec![
                 Directive {
                     when: When::Tick(6),
@@ -1621,7 +1735,7 @@ fn one_selection(checks: &mut Checks) -> Option<Conducted> {
                 },
                 Directive {
                     when: When::Tick(12),
-                    what: Act::ClickUi(layout::roster_open(7).center()),
+                    what: Act::ClickUi(layout::roster_open(1).center()),
                 },
             ],
         ),
@@ -2050,7 +2164,8 @@ fn the_board_is_the_ask(checks: &mut Checks) {
         .iter()
         .position(|person| person.id == "ines")
         .unwrap_or(0);
-    let staged = crate::sim::Sim::opening(&tuning, modules::ModuleSet::ALL);
+    let mut staged = crate::sim::Sim::opening(&tuning, modules::ModuleSet::ALL);
+    staged.everybody_here();
     let mut flow = crate::flow::Flow {
         selected: Some(ines),
         board: Some(1),
@@ -2390,7 +2505,8 @@ fn attribution_is_derived(checks: &mut Checks) {
     // And over the scorer's own terms, on a staged world: the rows a term
     // names are the rows whose fields moved it, and the words are theirs.
     let tuning = Tuning::SHIPPED;
-    let sim = crate::sim::Sim::opening(&tuning, modules::ModuleSet::ALL);
+    let mut sim = crate::sim::Sim::opening(&tuning, modules::ModuleSet::ALL);
+    sim.everybody_here();
     for who in 0..sim.people.len() {
         let carried = sim.people[who].traits.clone();
         for action in crate::autonomy::candidates(&sim, who) {
@@ -2439,7 +2555,8 @@ fn attribution_is_derived(checks: &mut Checks) {
 /// happened to ask in.
 fn map_labels_are_governed(checks: &mut Checks) -> String {
     let tuning = Tuning::SHIPPED;
-    let sim = crate::sim::Sim::opening(&tuning, modules::ModuleSet::ALL);
+    let mut sim = crate::sim::Sim::opening(&tuning, modules::ModuleSet::ALL);
+    sim.everybody_here();
     let clock = crate::clock::Clock::opening();
     let grid = grid::grid();
     let lens = lens::Lens::on(&sim);
@@ -3102,14 +3219,16 @@ fn the_picker_names_a_person(checks: &mut Checks, baseline: &Conducted) -> Strin
             };
             let listed = crate::board::candidates(&flow, &lens, &grid, &tuning, now, site, slot);
             checks.require(
-                listed.len() == played.people.len(),
+                listed.len() == lens.roll().len(),
                 "the candidate list leaves somebody out",
                 format!(
-                    "{:?} lists {} of {} people; everyone appears, including the ones who \
-                     are out, because posting to somebody who is out is legal and travels",
+                    "{:?} lists {} of the {} people who are in the camp; everyone present \
+                     appears, including the ones who are out on the road, because posting to \
+                     somebody who is out is legal and travels - and nobody who has not \
+                     arrived does (CAST.md §4)",
                     quest.name,
                     listed.len(),
-                    played.people.len()
+                    lens.roll().len()
                 ),
             );
             for (row, candidate) in listed.iter().enumerate() {
@@ -3182,6 +3301,26 @@ fn the_picker_names_a_person(checks: &mut Checks, baseline: &Conducted) -> Strin
                         cast[who].name,
                         LOCATIONS[crate::sim::site_location(site)].name,
                         cell(at + layout::cand::TRAVEL)
+                    ),
+                );
+                // **And their need state is the sim's own** (wave 1.3): the
+                // desperation the panel shows and the `short` chip's own
+                // predicate, so the row a posting is aimed from cannot say
+                // somebody is coping while the burn is about to take the last
+                // of their money.
+                checks.require(
+                    cell(at + layout::cand::NEED).as_deref()
+                        == Some(crate::board::need_mark(&lens, &tuning, who).as_str()),
+                    "a candidate row's need is not the need the sim would act on",
+                    format!(
+                        "{:?} row {row} reads {:?} for {} and the sim says {:?} (desperation \
+                         {}, short {})",
+                        quest.name,
+                        cell(at + layout::cand::NEED),
+                        lens.name(who),
+                        crate::board::need_mark(&lens, &tuning, who),
+                        lens.desperation(who),
+                        crate::needs::is_short(&lens, &tuning, who)
                     ),
                 );
                 // And their whereabouts is the lens's own sentence, uncut:
@@ -3714,6 +3853,7 @@ pub fn run() -> ExitCode {
         ),
     );
     shots::judge(&mut checks, &photographed_run, &tuning);
+    shots::judge_opening_camp(&mut checks, &photographed_run);
     shots::judge_breakdowns(&mut checks, &photographed_run, &tuning);
 
     // --- the culling, both ways --------------------------------------------
@@ -3739,6 +3879,7 @@ pub fn run() -> ExitCode {
     floors::layout_floors(&mut checks);
     floors::drawer_floors(&mut checks);
     floors::tuner_right_column(&mut checks);
+    floors::tuner_has_room(&mut checks);
     let bites = floors::floors_bite(&mut checks);
     floors::content_floors(&mut checks, &baseline);
     let ui_report = floors::uimap_contract(&mut checks);
@@ -3836,6 +3977,13 @@ pub fn run() -> ExitCode {
     modules::registry(&mut checks);
     let matrix = module_matrix(&mut checks);
     let scorer = crate::autonomy::judge_module(&mut checks, &baseline);
+    // --- the modules this wave built, and the economy they make -------------
+    crate::settlement::registry(&mut checks, &tuning);
+    crate::needs::judge_at(&mut checks, &tuning);
+    let needs = crate::needs::judge_module(&mut checks, &baseline);
+    crate::economy::judge_at(&mut checks, &tuning);
+    let wage_lever = crate::economy::judge_the_wage(&mut checks, &tuning);
+    let economy = crate::economy::judge_sweeps(&mut checks, &tuning);
     let compliance = crate::compliance::judge_module(&mut checks, &baseline);
     let asked = crate::compliance::ask_run();
     crate::compliance::judge_shots(&mut checks, &asked);
@@ -3852,15 +4000,21 @@ pub fn run() -> ExitCode {
     // --- the pictures a person looks at ------------------------------------
     let narrow = photographed(NARROW_VIEWPORT);
     let zoomed_run = zoomed(HEADLESS_VIEWPORT);
+    // --- the wave's own four pictures: pressure, capacity, and a whole camp -
+    let settled_run = settled(HEADLESS_VIEWPORT);
+    let settled_report = shots::judge_settled(&mut checks, &settled_run, &tuning);
     shots::judge_zoomed(&mut checks, &zoomed_run, &tuning);
     let captured = capture::capture_screens(
         &mut checks,
-        &photographed_run,
-        &narrow,
-        &drawer,
-        reproduction.as_ref(),
-        &asked,
-        &zoomed_run,
+        &capture::Sessions {
+            reference: &photographed_run,
+            narrow: &narrow,
+            drawer: &drawer,
+            reproduction: reproduction.as_ref(),
+            asked: &asked,
+            zoomed: &zoomed_run,
+            settled: &settled_run,
+        },
     );
 
     let verdict = checks.verdict();
@@ -3879,6 +4033,10 @@ pub fn run() -> ExitCode {
         tuning.readout().replace('\n', "  ")
     );
     println!("  {sweep_summary}");
+    println!("  {needs}");
+    println!("  {economy}");
+    println!("  {wage_lever}");
+    println!("  {settled_report}");
     println!("  seed 0 stamped; transcripts identical at seeds 7 and 7777777 (no Rng read in S1)");
     println!("  ui mapping: {ui_report}");
     println!("  map text: {legibility}");

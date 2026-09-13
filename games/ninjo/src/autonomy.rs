@@ -261,7 +261,10 @@ pub fn candidates(sim: &Sim, who: usize) -> Vec<Action> {
         }
     }
     for (other, party) in sim.parties.iter().enumerate() {
-        if other != who && party.activity == Activity::Idle {
+        // **And only people who are in the camp**: a doorstep nobody lives at
+        // yet is not somewhere to go (`CAST.md` §4's arrival column).
+        let here = sim.people.get(other).is_some_and(|person| person.present);
+        if other != who && here && party.activity == Activity::Idle {
             out.push(Action::Socialize { toward: other });
         }
     }
@@ -491,6 +494,10 @@ pub fn rescore(sim: &mut Sim, grid: &Grid, tuning: &Tuning, now: u64, who: usize
     if !sim.modules.enabled(MODULE) {
         return;
     }
+    // Nobody thinks about the camp's work before they are in the camp.
+    if sim.people.get(who).is_none_or(|person| !person.present) {
+        return;
+    }
     if sim
         .parties
         .get(who)
@@ -650,7 +657,8 @@ pub fn judge_at(checks: &mut crate::checks::Checks, tuning: &Tuning) {
         "three world-days of 1440 minutes",
     );
 
-    let sim = Sim::opening(tuning, crate::modules::ModuleSet::ALL);
+    let mut sim = Sim::opening(tuning, crate::modules::ModuleSet::ALL);
+    sim.everybody_here();
     let index = |id: &str| {
         sim.people
             .iter()
@@ -1013,6 +1021,40 @@ pub fn judge_module(
 /// hundred and ninety-odd are the same run, and eight far-apart seeds are what
 /// is worth the wall time until randomness lands.
 fn judge_alive(checks: &mut crate::checks::Checks, tuning: &Tuning) -> String {
+    // **The eager worker, staged** (`CAST.md` §4.1). Ludo takes whatever work
+    // is open the first time he is asked to think about it — indebted favours
+    // any paid work and he has no pride to spend, so there is no board he
+    // waits out.
+    //
+    // Staged since wave 1.3, where it used to be read off the alive run: Ludo
+    // is one of the six who came later and walks into a camp whose board is
+    // already spent, so the played world can no longer offer him the thing the
+    // claim is about. What is claimed is what he *does with an offer*, and a
+    // world where there is no offer cannot say.
+    {
+        let mut staged = Sim::opening(tuning, crate::modules::ModuleSet::ALL);
+        staged.everybody_here();
+        let ludo = staged
+            .people
+            .iter()
+            .position(|person| person.id == "ludo")
+            .unwrap_or(0);
+        let judged = choose(
+            &staged,
+            tuning,
+            first_score(tuning, ludo),
+            ludo,
+            &candidates(&staged, ludo),
+        );
+        checks.require(
+            matches!(judged.action, Action::SeekWork { .. }),
+            "the eager worker did not take work the first time he was asked to think",
+            format!(
+                "with the whole board open, Ludo chose {:?} - {}",
+                judged.action, judged.reason
+            ),
+        );
+    }
     let seeds = [0u64, 1, 7, 99, 1_000, 65_535, 7_777_777, 4_294_967_291];
     let window = alive_window(tuning);
     let mut summary = String::new();
@@ -1045,19 +1087,72 @@ fn judge_alive(checks: &mut crate::checks::Checks, tuning: &Tuning) -> String {
                 *count += 1;
             }
         }
+        // **The minute the settlement ran out of work.** The sites are
+        // finite (DESIGN §10's open question, answered the simpler way), so
+        // the last job anybody claimed is the last job there was — read off
+        // the run rather than counted from the authoring, because what the
+        // claim is about is the world this run actually had.
+        let dry_at = run
+            .events
+            .iter()
+            .filter(|event| {
+                event.class == crate::attention::EventClass::Departed
+                    && event.note.starts_with("departed for")
+            })
+            .map(|event| event.minute)
+            .max()
+            .unwrap_or(0);
+        // **Everybody who was in the camp while work stood open took some.**
+        //
+        // Wave 1.1 could say this of the whole cast, because the whole cast
+        // was standing in the camp at minute zero. The staged start
+        // (`CAST.md` §4, wave 1.3) is what narrowed it: the six who came
+        // later walk into a settlement whose board is being emptied while
+        // they travel, and the ones who arrive after the last row is claimed
+        // have nothing to take — which is not the scorer failing but the
+        // settlement running out of work, and is exactly the hole the
+        // industry is built to fill (GDD §5's settlement module). So the
+        // claim is over the people who *had* a board, and the rest are
+        // counted and named in the report.
+        let first_look = |who: usize| run.sim.people[who].present_from + first_score(tuning, who);
         let idle: Vec<&str> = (0..people)
-            .filter(|who| first_job[*who].is_none())
+            .filter(|who| first_job[*who].is_none() && first_look(*who) <= dry_at)
             .map(|who| run.sim.people[who].name)
             .collect();
         checks.require(
             idle.is_empty(),
             "somebody never took a job in a world where nobody was told to",
             format!(
-                "at seed {seed}, {idle:?} took no paid work in {} world-days; the settlement \
-                 must limp without the player (GDD §1)",
+                "at seed {seed}, {idle:?} took no paid work in {} world-days and the board \
+                 was still being claimed at minute {dry_at}; the settlement must limp \
+                 without the player (GDD §1)",
                 tuning.alive_days
             ),
         );
+        let latecomers: Vec<&str> = (0..people)
+            .filter(|who| first_job[*who].is_none())
+            .map(|who| run.sim.people[who].name)
+            .collect();
+        // And the ones who found nothing are **exactly** the ones who arrived
+        // after it was gone: an unexplained idler would be a scorer fault
+        // wearing a settlement fault's clothes.
+        for name in &latecomers {
+            let who = run
+                .sim
+                .people
+                .iter()
+                .position(|person| person.name == *name)
+                .unwrap_or(0);
+            checks.require(
+                first_look(who) > dry_at,
+                "somebody had work to take and did not take it",
+                format!(
+                    "at seed {seed}, {name} was first weighed at minute {} with the board \
+                     still being claimed at {dry_at}, and took nothing",
+                    first_look(who)
+                ),
+            );
+        }
         // **Nobody is dispatched while already out**: the scorer never
         // countermands a journey, and the dispatch loop refuses one anyway.
         let mut out: Vec<bool> = vec![false; people];
@@ -1087,23 +1182,7 @@ fn judge_alive(checks: &mut crate::checks::Checks, tuning: &Tuning) -> String {
         // alive on" means once the cadence is staggered by roster index and
         // *who goes first* is a fact about the roster's order rather than
         // about anybody's appetite.
-        let ludo = run
-            .sim
-            .people
-            .iter()
-            .position(|person| person.id == "ludo")
-            .unwrap_or(0);
         let most = jobs.iter().copied().max().unwrap_or(0);
-        checks.require(
-            first_job.get(ludo).copied().flatten() == Some(first_score(tuning, ludo)),
-            "the eager worker did not take work the first time he was asked to think",
-            format!(
-                "at seed {seed}, Ludo first departed for work at {:?} and he is first \
-                 weighed at minute {}",
-                first_job.get(ludo).copied().flatten(),
-                first_score(tuning, ludo)
-            ),
-        );
         // How many of the band waited a round before taking anything - a
         // number the report carries rather than an assertion, because at the
         // shipped weights a board of six jobs a site suits everybody and
@@ -1115,10 +1194,12 @@ fn judge_alive(checks: &mut crate::checks::Checks, tuning: &Tuning) -> String {
             .count();
         if summary.is_empty() {
             summary = format!(
-                "alive sweep: {} seeds x {} world-days, everybody worked, busiest {most} jobs, {} waited",
+                "alive sweep: {} seeds x {} world-days, the board ran dry at minute {dry_at}, \
+                 everybody in the camp before then worked, busiest {most} jobs, {patient} \
+                 waited, {} arrived to a spent settlement",
                 seeds.len(),
                 tuning.alive_days,
-                patient
+                latecomers.len()
             );
         }
     }
@@ -1135,6 +1216,7 @@ fn judge_alive(checks: &mut crate::checks::Checks, tuning: &Tuning) -> String {
 fn judge_presets(checks: &mut crate::checks::Checks, tuning: &Tuning) {
     let spend = |tuning: &Tuning| {
         let mut sim = Sim::opening(tuning, crate::modules::ModuleSet::ALL);
+        sim.everybody_here();
         for site in &mut sim.sites {
             site.states = vec![crate::sim::JobState::Done { by: 0 }; site.quests.len()];
         }

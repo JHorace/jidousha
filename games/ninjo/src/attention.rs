@@ -120,6 +120,19 @@ pub enum EventClass {
     AskDropped,
     /// The player took a posting down.
     PostingWithdrawn,
+    /// **Somebody could not meet their upkeep this interval** (the needs
+    /// module, wave 1.3) — the first rung of the escalation pipe, and the one
+    /// occurrence in this game that rewrites the person it is about: the note
+    /// carries the new source line, so the feed says *why* this person is in
+    /// trouble rather than only that they are.
+    UpkeepShortfall,
+    /// **Somebody arrived in the camp** (`CAST.md` §4's six who came later).
+    Joined,
+    /// **The player built something** — the treasury's first real sink, and
+    /// the beat where a camp becomes a settlement (`CAST.md` §1).
+    Built,
+    /// And the standing job slots that building opened.
+    IndustryOpened,
 }
 
 /// One row of the event-class table: what a class is called, how it is drawn,
@@ -146,9 +159,11 @@ pub struct ClassSpec {
 /// `ignore` because the map already shows motion, and a completion is `log`
 /// because it is worth knowing and not worth stopping for. The
 /// petition/consequence family that opens on `pause-and-focus` arrives with
-/// the petitions module (wave 1.3) — no class this build has is one, so a
-/// shipped scenario never auto-pauses until the player asks for it in the
-/// config panel. That is the mockup's answer, not an oversight.
+/// the petitions module (wave 1.5); the one class that stops a shipped
+/// scenario today is wave 1.2's `ask-declined`, and **none of wave 1.3's four
+/// joins it** — pressure that stopped the world every time somebody went short
+/// would stop it every day, and the chips and the camp line are where that
+/// pressure is meant to be read.
 ///
 /// Wave 1.1 adds the scorer's two: `action-started` opens on `log`, because
 /// the reason a character left is the one thing the feed exists to carry, and
@@ -258,6 +273,41 @@ pub const CLASSES: &[ClassSpec] = &[
         color: theme::DIM,
         icon: Art::Maker,
         default_mode: Mode::Ignore,
+    },
+    // **Needs and settlement's four** (wave 1.3). All four are `log`: none of
+    // them is a thing the player has to answer *now*, and the class that stops
+    // the world is still the refusal by name. A shortfall is the loudest of
+    // the four and it is still not a pause, because pressure that stopped the
+    // world every time somebody went short would stop it four times a day —
+    // the chips and the camp line are where that pressure is meant to be read,
+    // and the config panel is where a player who wants to be stopped says so.
+    ClassSpec {
+        class: EventClass::UpkeepShortfall,
+        id: "upkeep-shortfall",
+        color: theme::EMBER,
+        icon: Art::Flame,
+        default_mode: Mode::Log,
+    },
+    ClassSpec {
+        class: EventClass::Joined,
+        id: "joined",
+        color: theme::REGARD,
+        icon: Art::Caring,
+        default_mode: Mode::Log,
+    },
+    ClassSpec {
+        class: EventClass::Built,
+        id: "built",
+        color: theme::GOLD,
+        icon: Art::QuestVault,
+        default_mode: Mode::Log,
+    },
+    ClassSpec {
+        class: EventClass::IndustryOpened,
+        id: "industry-opened",
+        color: theme::INK,
+        icon: Art::Labor,
+        default_mode: Mode::Log,
     },
 ];
 

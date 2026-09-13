@@ -10,9 +10,10 @@
 //! route's literal sees), the trait arithmetic (the mark constants), the
 //! store battery (the regard bounds, the write thresholds and the drift), the
 //! attention battery (the feed's cap and the focus pulse), the scorer
-//! battery (every weight, every cadence, and the relationship preset), or the
+//! battery (every weight, every cadence, and the relationship preset), the
 //! asks battery (the targeted bonus, the wage's regard, and the compliance
-//! bands the ladder is swept over).
+//! bands the ladder is swept over), or the economy battery (what upkeep costs,
+//! how often it falls due, and what a worked shift pays the settlement).
 //!
 //! The round grows with the drawer by construction: it walks `Field::ALL`, so
 //! a constant added to `constants.rs` arrives here needing only a
@@ -45,6 +46,7 @@ pub fn mutation_round(checks: &mut Checks) -> String {
         attention::judge_at(&mut probe, &mutated);
         autonomy::judge_at(&mut probe, &mutated);
         crate::compliance::judge_at(&mut probe, &mutated);
+        crate::economy::judge_at(&mut probe, &mutated);
         let shipped = Tuning::SHIPPED.field(field);
         if probe.failures() > 0 {
             noticed += 1;
@@ -62,9 +64,9 @@ pub fn mutation_round(checks: &mut Checks) -> String {
             "a tuning constant can be changed without any check noticing",
             format!(
                 "{} moved from {shipped} to {} and the order script, the pacing probes, the \
-                 path battery, the trait arithmetic, the store battery, the attention battery \
-                 and the scorer battery all still passed; a check that survives its own \
-                 constant moving is not measuring it",
+                 path battery, the trait arithmetic, the store battery, the attention battery, \
+                 the scorer battery and the economy battery all still passed; a check that \
+                 survives its own constant moving is not measuring it",
                 field.name(),
                 perturbation(field),
             ),
@@ -150,5 +152,17 @@ fn perturbation(field: Field) -> i64 {
         Field::AskTargeted => 0,
         // And paying off the standing rate stops moving regard at all.
         Field::WageRegard => 0,
+        // **Upkeep becomes ruinous**: every wallet in the economy sweep's two
+        // hundred settlements empties in one interval, which moves every band
+        // and every shortfall count the sweep pins (GDD §9's "a mutated wage
+        // or upkeep constant must break a band").
+        Field::UpkeepCoin => 60,
+        // And the interval collapses to an hour, so the same ruin arrives
+        // twenty-four times a day instead of once: every band the economy
+        // sweep pins moves, and so does the invariance run's transcript.
+        Field::UpkeepHours => 1,
+        // And the levy takes the whole of a shift, which moves the treasury
+        // band and the worker's take with it.
+        Field::IndustryLevy => 60,
     }
 }

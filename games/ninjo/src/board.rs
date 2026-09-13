@@ -461,7 +461,14 @@ pub fn candidates(
         return Vec::new();
     };
     let job = crate::sim::JobId { site, slot };
-    let mut out: Vec<Candidate> = (0..lens.people().len().min(layout::PICKER_ROWS))
+    // **The cast, which is the camp and not the registry** (`CAST.md` §4's
+    // arrival column, wave 1.3): a person who has not walked into Kawaza yet
+    // is not somebody a job can be aimed at, and a row naming them would be a
+    // posting the world would refuse to hear.
+    let mut out: Vec<Candidate> = lens
+        .roll()
+        .into_iter()
+        .take(layout::PICKER_ROWS)
         .map(|who| Candidate {
             who,
             fit: lens.competence(who, task),
@@ -580,6 +587,28 @@ pub fn candidate_picker(
                 theme::FAINT
             },
         ));
+        // **How badly they need it** (wave 1.3) — their desperation, and a
+        // mark when they cannot meet this interval's upkeep. The third thing
+        // the choice turns on, and the one that was not on the row before
+        // anything could go short: `needs::is_short` is the chip's own
+        // predicate and the burn's, so a row cannot say somebody is coping
+        // while the sim is about to take the last of their money.
+        let short = crate::needs::is_short(lens, tuning, candidate.who);
+        panel.text(TextRun::new(
+            at + layout::cand::NEED,
+            clipped(
+                &need_mark(lens, tuning, candidate.who),
+                layout::cand::NEED_W,
+            ),
+            theme::SMALL,
+            if short {
+                theme::EMBER
+            } else if crate::needs::is_desperate(lens, candidate.who) {
+                theme::GOLD
+            } else {
+                theme::FAINT
+            },
+        ));
         // **Where they are** — the whereabouts line, so somebody who is out
         // reads as out, with where and when the work they are on is done.
         panel.text(TextRun::new(
@@ -642,4 +671,22 @@ pub fn candidate_picker(
         theme::FAINT,
     );
     panel
+}
+
+/// **How badly somebody needs the work**, in four glyphs — their desperation,
+/// and `!` where they cannot meet this interval's upkeep (UI.md §3c, §3f).
+///
+/// One function, two surfaces: a candidate row and the work list's header say
+/// the same thing about the same person the same way, and both read
+/// `needs::is_short` rather than a comparison of their own.
+pub fn need_mark(lens: &Lens<'_>, tuning: &Tuning, who: usize) -> String {
+    format!(
+        "d{}{}",
+        lens.desperation(who),
+        if crate::needs::is_short(lens, tuning, who) {
+            "!"
+        } else {
+            ""
+        }
+    )
 }
