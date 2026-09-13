@@ -440,7 +440,15 @@ def check_cargo_metadata() -> Check:
 
 
 def check_graphics() -> Check:
-    """Report display capability. Never blocking: nothing before R0 needs a GPU."""
+    """Report display capability. Never blocking: nothing before R0 needs a GPU.
+
+    Each supported platform gets a branch or a stated reason for not having one
+    (platforms.md §4). The Linux branch probes, because a Linux machine can be
+    headless in a way that is invisible until a window fails to open; macOS
+    cannot be — a Mac either has a window server or is not a Mac anybody is
+    running a game on — so its branch states what is true rather than probing
+    for it.
+    """
     if sys.platform.startswith("linux"):
         display = os.environ.get("WAYLAND_DISPLAY") or os.environ.get("DISPLAY")
         if not display:
@@ -451,6 +459,18 @@ def check_graphics() -> Check:
                 "(practices §6.5); windowed examples (M5+) need a display",
             )
         return Check("graphics", INFO, f"display {display} available")
+    if sys.platform == "darwin":
+        # Nothing here replaces Linux's xvfb, because nothing has to: Metal
+        # renders offscreen with no window server at all, so `tools/test` and
+        # `tools/verify` need no display and a windowed run needs only the
+        # logged-in session a person is already sitting at (platforms.md §3).
+        return Check(
+            "graphics",
+            INFO,
+            "macOS: a windowed run needs the logged-in desktop session (and the "
+            "event loop on the main thread); a headless one needs no display at "
+            "all — Metal renders offscreen (platforms.md §3)",
+        )
     return Check("graphics", INFO, f"platform {sys.platform} — display capability not probed")
 
 
@@ -510,9 +530,25 @@ def check_gpu() -> Check:
     something inferred from a quiet log — a skipped test that nobody knows is
     skipped is the thing to avoid.
 
-    Only Linux is probed, because only Linux answers cheaply. Elsewhere the
-    golden tests are the authority, as they are everywhere.
+    Linux is probed because on Linux the answer is a file that is either there
+    or not, and its absence is the difference between the tier running and
+    skipping. macOS gets a branch that states rather than probes, for the
+    opposite reason: Metal ships with the operating system, so there is nothing
+    that can be missing and nothing to install. Elsewhere the golden tests are
+    the authority, as they are everywhere.
     """
+    if sys.platform == "darwin":
+        # Both halves matter to a reader deciding whether their run proved
+        # anything: the capture tests do run here, and the one test that
+        # compares against a checked-in PNG does not (renderer.md §9).
+        return Check(
+            "gpu",
+            INFO,
+            "macOS: Metal ships with the OS, so wgpu always finds an adapter and "
+            "the golden tier's capture, unpadding and stability tests run. The "
+            "comparison against a checked-in reference is Linux-only by design — "
+            "a Metal device fills edge pixels differently (renderer.md §9)",
+        )
     if not sys.platform.startswith("linux"):
         return Check("gpu", INFO, f"platform {sys.platform} — adapters not probed")
     drivers = vulkan_drivers()

@@ -178,6 +178,50 @@ class DoctorGpuTest(unittest.TestCase):
         self.assertEqual(doctor.check_gpu().fix, "")
 
 
+class DoctorMacosTest(unittest.TestCase):
+    """The two checks that were Linux-shaped, answering on a third platform.
+
+    A doctor that cannot reach ENV_OK on a supported platform is a doctor
+    nobody runs (platforms.md §4), so what these assert is not the wording but
+    the two properties that keep ENV_OK reachable: INFO, and no `fix`. The
+    substrings are the part a macOS reader actually needs — that Metal is the
+    adapter, and that a headless run needs no display — because a branch that
+    said only "not probed" would be the honest skip this session was asked to
+    replace.
+    """
+
+    def test_the_gpu_check_on_macos_names_metal_and_the_comparison_it_skips(self):
+        with unittest.mock.patch.object(doctor.sys, "platform", "darwin"):
+            check = doctor.check_gpu()
+        self.assertEqual(check.status, doctor.INFO)
+        self.assertEqual(check.fix, "")
+        self.assertIn("Metal", check.detail)
+        self.assertIn("Linux-only", check.detail)
+
+    def test_the_graphics_check_on_macos_says_a_headless_run_needs_no_display(self):
+        with unittest.mock.patch.object(doctor.sys, "platform", "darwin"):
+            check = doctor.check_graphics()
+        self.assertEqual(check.status, doctor.INFO)
+        self.assertEqual(check.fix, "")
+        self.assertIn("main thread", check.detail)
+        self.assertIn("offscreen", check.detail)
+
+    def test_neither_macos_branch_can_stop_env_ok(self):
+        # The whole point of giving them branches rather than leaving them to
+        # the `platform {sys.platform}` fallthrough: a Mac must be able to pass.
+        with unittest.mock.patch.object(doctor.sys, "platform", "darwin"):
+            checks = [doctor.check_gpu(), doctor.check_graphics()]
+        self.assertEqual(doctor.verdict(checks), ("ENV_OK", 0))
+
+    def test_an_unknown_platform_still_falls_through_rather_than_guessing(self):
+        # Adding a branch for macOS must not turn every other platform into a
+        # claim about Metal. FreeBSD gets the honest "not probed" it had.
+        with unittest.mock.patch.object(doctor.sys, "platform", "freebsd14"):
+            check = doctor.check_gpu()
+        self.assertEqual(check.status, doctor.INFO)
+        self.assertIn("not probed", check.detail)
+
+
 class CheckAssetsTest(unittest.TestCase):
     FILE_BACKED = 'const ASSET_ROOT: &str = "assets";\nAssets::new(FileSource::new(ASSET_ROOT));\n'
     MEMORY_BACKED = 'let mut source = MemorySource::new();\nassets.load_texture("nowhere.png");\n'
@@ -2374,6 +2418,35 @@ def png_bytes(width, height, rows, filter_kind=0):
 
 class ServeWebTest(unittest.TestCase):
     """The web harness: the version check, and the screenshot decoder."""
+
+    def test_a_macos_application_bundle_is_a_browser_candidate(self):
+        # `shutil.which` finds nothing on a Mac — Chrome and Chromium install
+        # as bundles and put no executable on PATH — so without these entries
+        # the check reports "no browser" on a machine that has one
+        # (platforms.md §4). Both install locations: a Mac without admin
+        # rights has the per-user one and not the other.
+        with unittest.mock.patch.dict(os.environ, {"HOME": "/Users/dev"}):
+            candidates = serve_web.browser_candidates()
+        self.assertIn(
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", candidates
+        )
+        self.assertIn(
+            "/Users/dev/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            candidates,
+        )
+
+    def test_the_first_candidate_that_exists_is_the_one_chosen(self):
+        # Order is the contract: JIDOUSHA_CHROMIUM first, the rest after, and a
+        # path that is not there is skipped rather than returned.
+        with tempfile.TemporaryDirectory() as directory:
+            binary = Path(directory) / "Google Chrome"
+            binary.write_text("", encoding="utf-8")
+            with unittest.mock.patch.object(
+                serve_web,
+                "browser_candidates",
+                lambda: ["", "/no/such/browser", str(binary)],
+            ):
+                self.assertEqual(serve_web.chromium(), str(binary))
 
     def test_an_unfiltered_png_decodes_to_its_pixels(self):
         rows = [[(255, 0, 0), (0, 255, 0)], [(0, 0, 255), (10, 20, 30)]]

@@ -115,6 +115,16 @@ pub fn asset_source(root: &str) -> impl jidousha_assets::ByteSource {
 /// about the game — a headless CI runner gets the first one, and its message
 /// says to use `headless` instead (core.md §9).
 ///
+/// # Panics
+///
+/// If it is called from a thread that is not the process's main thread. The
+/// event loop belongs to the main thread on macOS — AppKit will not deliver
+/// events to any other — and winit enforces that on every native platform so
+/// the restriction cannot be discovered late, on the one platform that has it.
+/// Calling this from `main`, which is what every example and every game does,
+/// satisfies it; spawning a thread to "run the game in the background" does
+/// not, and there is no way to make it (platforms.md §3).
+///
 /// # Platform notes
 ///
 /// On native this returns when the window closes. On the web it returns
@@ -147,6 +157,14 @@ pub fn run(config: GameConfig, setup: impl FnOnce(&mut App)) -> Result<(), RunEr
     let simulation = jidousha_core::build(config, setup);
     let driver = Driver::new(config, simulation);
 
+    // CONTRACT: this call, and therefore `run` itself, happens on the main
+    // thread. macOS requires it — AppKit owns the run loop and delivers window
+    // events nowhere else — and winit enforces it on every native platform, so
+    // a violation is a panic here rather than a mystery on one developer's
+    // machine. Nothing in this crate moves it: the event loop is created inline
+    // on the caller's thread and no thread is spawned anywhere below it. Which
+    // has been true since M5 and was true by nobody's decision until macOS was
+    // read for (platforms.md §3, §5).
     let event_loop = winit::event_loop::EventLoop::new().map_err(|error| {
         // winit reports a missing display as an OS error, which is the case a
         // headless runner and an SSH session both hit. Naming it precisely is

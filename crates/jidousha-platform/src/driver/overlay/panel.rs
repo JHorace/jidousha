@@ -19,7 +19,7 @@ use core::fmt::Write as _;
 
 use jidousha_render_core::Presentation;
 
-use super::{BAR, Level, Overlay, SNAPSHOT_KEY, TICK_BUCKETS, memory};
+use super::{BAR, Level, Overlay, SNAPSHOT_KEY, TICK_BUCKETS, memory, process};
 
 impl Overlay {
     /// Build the panel's text.
@@ -122,8 +122,16 @@ impl Overlay {
             None => {
                 "process n/a - a page has no process counters; read busy above instead".to_owned()
             }
+            // Two different `n/a`s, and the difference is what a reader does
+            // next: wait, or stop waiting (process.rs's `IMPLEMENTED`).
             #[cfg(not(target_arch = "wasm32"))]
-            None => "process n/a - no reading yet, or none this platform offers".to_owned(),
+            None if process::IMPLEMENTED => {
+                "process n/a - no reading yet; a share is a difference and one \
+                 sample is not one"
+                    .to_owned()
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            None => "process n/a - no process counters on this platform".to_owned(),
         }
     }
 
@@ -155,7 +163,10 @@ impl Overlay {
         if let Some(linear) = memory::linear_bytes() {
             return format!("wasm linear {}", memory::megabytes(linear));
         }
-        "n/a - no process reading on this platform".to_owned()
+        if process::IMPLEMENTED {
+            return "n/a - no reading yet".to_owned();
+        }
+        "n/a - no process counters on this platform".to_owned()
     }
 
     /// What the snapshot key does, and what the last press did.

@@ -14,6 +14,14 @@ on:
   push:
     branches: ["main"]
   pull_request:
+  # The macOS job's on-demand handle (ADR-0044): it is deliberately not on
+  # every PR, so there has to be a way to ask for one. Two things to know
+  # before using it. It runs **every** job in this file, not just `macos` —
+  # a dispatch is "run CI now", and per-job triggers do not exist — so the
+  # Linux suite's time is part of its price. And it can only be dispatched
+  # against a ref once this file is on the default branch; before then, the
+  # `macos` label plus a push is the handle that works.
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -103,6 +111,79 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: frames-${{ matrix.os }}
+          path: |
+            target/verify/*.png
+            target/verify/golden/*.png
+          if-no-files-found: ignore
+
+  # macOS is a **best-effort development platform**, not tier-1 (ADR-0044,
+  # platforms.md). That tier is what sizes this job, and the sizing is the
+  # decision: a macOS runner bills at roughly ten times a Linux one, and the
+  # CI-time work exists because wall time on this project already mattered.
+  #
+  # So it runs on pushes to `main` and on demand, and **not on every PR**. On
+  # demand is two handles: `workflow_dispatch` above, and the `macos` label on
+  # a pull request — apply the label, then push (a label change is not itself a
+  # trigger here, deliberately: adding `labeled` to the `pull_request` types
+  # would re-run *every* job in this file, and cancel the in-flight run, each
+  # time anybody touched any label).
+  #
+  # It is absent from `deploy`'s `needs` on purpose. A best-effort platform
+  # that could block production would be tier-1 with extra steps, and the
+  # promotion trigger in ADR-0044 is a game shipping on macOS, not a green job.
+  macos:
+    name: macOS (best-effort; main + on demand)
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'macos')
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # The dependency cache — see the header note. Keyed per OS like the test
+      # job's, so it never shares with a Linux or Windows runner.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: macos-latest
+      # First, because it is the cheapest and because a doctor that cannot
+      # reach ENV_OK on a supported platform is a doctor nobody will run
+      # (agent-practices §6.1, platforms.md §4). No rasterizer is installed
+      # before it: Metal ships with the OS, so the step Linux needs here has
+      # no macOS counterpart and needs none.
+      - run: python tools/doctor
+      # The reason a macOS job exists at all rather than a macOS *note*: this
+      # is the only place the `#[cfg(target_os = "macos")]` side of the tree is
+      # compiled and linted. Linux clippy cannot see it, and did not — the
+      # first cross-check of this workspace found three dead-code warnings that
+      # had been latent on both non-Linux platforms (platforms.md §5).
+      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      # A macOS host building for the web. Cheap relative to the step below and
+      # it keeps the web target's "green everywhere" claim honest.
+      - run: cargo check --workspace --target wasm32-unknown-unknown
+      # The headline. Every recorded expectation in the repository, checked
+      # against a run on a different operating system and a different
+      # architecture: if this passes, replay transcripts are byte-identical
+      # across both (platforms.md §2). Nothing here weakens a floor or an
+      # assertion to get there — a transcript that differs is the finding.
+      - name: tools/test
+        run: python tools/test
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report-macos
+          path: target/verify/report.json
+          if-no-files-found: warn
+      # The frames a macOS run drew. Downloadable for the same reason the Linux
+      # and Windows ones are — and with one extra caveat that belongs beside
+      # them rather than in a commit message: **a CI artifact is not the
+      # person-looked-at-it check** (platforms.md §6). Nobody has watched a
+      # window open on this platform until somebody has.
+      - name: Upload rendered frames
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frames-macos
           path: |
             target/verify/*.png
             target/verify/golden/*.png

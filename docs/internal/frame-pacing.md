@@ -877,6 +877,55 @@ The overlay prints the mode rather than only the rate for exactly this reason �
 | off-by-default, in pixels | `crates/jidousha/tests/frame_overlay.rs`, which writes `target/verify/overlay-{off,on,perf}.png` |
 | the level-2 sections | §7 below, and `driver/overlay/{phases,process,memory,snapshot}.rs` |
 
+### 6.7 macOS — what is known, and what is owed
+
+Status: **the code path is read; the readings are owed** (platforms.md §6).
+macOS is a best-effort development platform (ADR-0044) and this section is
+smaller than §6.5 on purpose — but it says which half is which, because §6.2's
+own lesson was that the backend's behaviour was assumed rather than read, and
+the assumption was wrong on two platforms at once.
+
+**Read, not inferred — wgpu-hal 30.0.0, `src/metal/adapter.rs`.** The Metal
+backend reports `present_modes: [Fifo, Immediate]` on macOS 10.13 and later,
+and `[Fifo]` on anything older. So `Fifo` is offered **unconditionally**, which
+is the strongest form of §6.2's Metal row: `init::configure` finds
+`WANTED_PRESENT_MODE` in the capabilities and sets it, every time, with no
+fallback arm reachable. `surface.rs` then maps `Fifo` to
+`CAMetalLayer.setDisplaySyncEnabled(true)` — the layer waits for the display,
+which is what `Fifo` is supposed to mean and is not what DX12's `Mailbox` or
+this project's Linux Vulkan surface did.
+
+Three consequences follow from that without measuring anything:
+
+- **`presentation()` returns `Presentation::Vsync`.** `presentation_of(Fifo)` is
+  the first match arm.
+- **`FALLBACK_CAP_HZ` never engages.** `Presentation::Vsync.needs_a_cap()` is
+  `false`, so `about_to_wait` takes the `Poll` arm and the display does the
+  waiting. The cap exists for the surface that will not wait, and Metal always
+  will.
+- **The loop's shape is unchanged.** There is no macOS branch anywhere in
+  `driver/mod.rs`, `driver/pacing.rs` or `driver/frame.rs`, and adding one would
+  be the failure mode §6.3 named. macOS is the third platform to take a path
+  that was written for none of them specifically.
+
+**What is owed, and why it is not here.** §6.5's table is *measured* — a
+`pacing` line off a running build, a presented frame rate, and a CPU share
+before and after. None of that can be taken without a display: this session's
+container has no Mac, and the macOS CI runner has no refresh rate to wait for,
+which is the same limitation §6.5 row 4 already records for Xvfb ("`Fifo` is a
+request to wait, and a display server with nothing to wait for grants it without
+waiting"). A number from either would look like a reading and not be one. **So
+the macOS row of §6.5 is owed from a person's own machine**, with the overlay
+on — `JIDOUSHA_FRAMETIME=1 cargo run --release -p ninjo` — and what to paste
+back is the `pacing` line, the `present` rate and the `ticks/fr` counts.
+
+Note the one thing the owner's own before/after will *not* show, because there
+is nothing to show: on Metal there was no defect. §6.2's audit found wgpu's
+default configuration choosing a non-waiting mode on Vulkan and DX12; the Metal
+row of that table lists `Fifo` first, so a macOS build was getting vsync even
+before `WANTED_PRESENT_MODE` existed. The fix costs macOS nothing and buys it
+nothing, and saying so is more useful than implying a saving.
+
 ---
 
 ## 7. The performance panel — `JIDOUSHA_FRAMETIME=2`
@@ -1014,6 +1063,32 @@ WebGL2 has no timestamps at all, so every web build takes the `n/a` path.
 **Milliseconds, never a percentage**: GPU *utilization* needs vendor libraries
 this engine does not have, and one invented from a frame time would look like an
 answer without being one (renderer.md §12a).
+
+**`cpu` and `memory`'s first tier read `n/a` on macOS, and that is a landing.**
+The same asymmetry `gpu n/a` already is, one paragraph up, and for the same
+reason: the panel prints a blank where a reading does not exist here rather than
+a zero or a guess. macOS is a best-effort development platform (ADR-0044,
+platforms.md §3), and reaching these two would be a third hand-declared `extern`
+block beside the Windows one — `task_info` with `MACH_TASK_BASIC_INFO` answers
+both, from `libSystem`, with no new crate — which is a cost the tier does not
+oblige anybody to pay and which nobody should pay *blind*: an unsafe FFI block
+written on a machine that cannot compile or run it is worse than an `n/a`. The
+route is recorded on `process::read`'s `else` arm so the next session with a Mac
+in front of it does not have to find it again.
+
+**Two `n/a`s, and they mean opposite things.** `process n/a - no reading yet` is
+a Linux or Windows run younger than two samples, and a number is coming. `no
+process counters on this platform` is macOS, and one is not. The panel picks
+between them off `process::IMPLEMENTED` rather than off a second `cfg`, so the
+condition is stated once, in the module that owns it. The line used to read "no
+reading yet, or none this platform offers" — true on both and actionable on
+neither (platforms.md §5, P-004).
+
+**What is *not* `n/a` here** is the larger half: the frame breakdown, the busy
+share and the whole engine-tracked accounting tier are this module's own
+measurements and work on macOS exactly as they do everywhere. `busy` is in
+particular the share that stays answerable when `cpu` is not — the same
+substitution the web already makes.
 
 **`memory` — three tiers, and they do not add up.** They answer different
 questions and are only ever compared with themselves:
