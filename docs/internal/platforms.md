@@ -306,6 +306,30 @@ Windows and the web**, because wgpu-hal's Apple dependencies are
 already reachable through winit's own Apple tree. `tools/dep-count` reads the
 lockfile rather than a build, so it reports 258 → 262.
 
+**P-007 — `Snapshots::write` throws away the error, so a CI failure in it
+cannot be diagnosed at all.** Not a macOS finding: it surfaced on the Windows
+job, once, in this branch. The overlay's snapshot key failed to write its file
+and the only two things anybody can read about it are the panel's
+`could not write under target/` and the test's `target/ was not writable from
+this test` — neither of which says *what the operating system said*. No errno,
+no path, no failing step. `write` has four `None` returns
+(`create_dir_all(…).ok()?`, a non-`AlreadyExists` open error, `write_all(…).ok()?`,
+and the index loop running out) and from outside they are indistinguishable.
+
+It did not reproduce on the one re-run the stop rule allows (agent-practices
+§6.3), so it stands as a transient, and this entry is what stands in for the
+diagnosis nobody could make: **a failure that cannot say why is a failure that
+gets called a flake**, and this one may or may not be one.
+
+Against CLAUDE.md's third convention — "No silent failure … Error messages
+state what happened, likely cause, and fix" — this is a gap with a name and a
+one-commit fix: carry the `io::Error` into the string the panel shows and the
+test prints. **Deliberately not fixed here.** It is neither macOS's nor this
+brief's, and a session that widened into another subsystem's error handling on
+the strength of one unreproduced CI failure would be doing the thing this
+repository's fences exist to prevent. Filed so the next reader of that code
+has the reason already written down.
+
 **P-005 — the `tools/` scripts' "standard library only" rule paid off on a
 platform nobody wrote it for**, and it is worth recording as a confirmation
 rather than a defect (§2.5 asks for both). Four of the six scripts needed no
