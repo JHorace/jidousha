@@ -2425,15 +2425,25 @@ class ServeWebTest(unittest.TestCase):
         # the check reports "no browser" on a machine that has one
         # (platforms.md §4). Both install locations: a Mac without admin
         # rights has the per-user one and not the other.
-        with unittest.mock.patch.dict(os.environ, {"HOME": "/Users/dev"}):
-            candidates = serve_web.browser_candidates()
+        candidates = serve_web.browser_candidates()
         self.assertIn(
             "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", candidates
         )
+        # The per-user one is asserted *through* `expanduser` rather than
+        # against a literal home directory, because this suite also runs on
+        # Windows, where `~` expands off USERPROFILE and joins with a
+        # backslash. Pinning a POSIX home here is the same class of Linux-ism
+        # this branch exists to remove, and it failed the Windows job once
+        # before it was written this way.
         self.assertIn(
-            "/Users/dev/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            os.path.expanduser(
+                "~/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+            ),
             candidates,
         )
+        # The property that makes the expansion load-bearing: an unexpanded `~`
+        # matches no file, so a candidate carrying one can never be chosen.
+        self.assertEqual([path for path in candidates if "~" in path], [], candidates)
 
     def test_the_first_candidate_that_exists_is_the_one_chosen(self):
         # Order is the contract: JIDOUSHA_CHROMIUM first, the rest after, and a
