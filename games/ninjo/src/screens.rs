@@ -830,7 +830,10 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
         // the reason `content` never draws both: the picker replaces the board
         // in the same column (UI.md §3c).
         if flow.picking.is_some() {
-            let people = ctx.world.resource::<Sim>().people.len();
+            // **One ghost per candidate the list actually has**, which is the
+            // camp and not the registry (`CAST.md` §4): an edge around a row
+            // nobody is on is an edge around nothing.
+            let people = Lens::on(ctx.world.resource::<Sim>()).roll().len();
             fill(
                 ctx,
                 layout::picker_panel(),

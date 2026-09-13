@@ -523,6 +523,174 @@ fn judge_a_shift(checks: &mut crate::checks::Checks, tuning: &Tuning) {
     );
 }
 
+/// **What the wage lever actually reaches** (the wave's decision-surface
+/// table, and the answer it got).
+///
+/// The decision table asks for "a wage step changes at least one worker's next
+/// choice". **It does not, at the shipped constants and this cast**, and this
+/// is the instrument that says so rather than a check written until it passed.
+///
+/// The reason is a seam between two waves, not a defect in either:
+/// `answers::terms` feels a *posted* wage by `pot_affinity` **plus
+/// desperation**, so a posting reaches anybody who needs money; but an
+/// industry's slots are filled by self-choice, and `autonomy::weigh`'s pot term
+/// for a self-chosen job is `pot_affinity` **alone** — which in this cast is
+/// `greedy`, and `greedy` is Bob. So the wage moves exactly one person's sum,
+/// and never across the idle floor, because his `indebted` want already carries
+/// him over it.
+///
+/// What is asserted is therefore the honest pair: **the lever reaches the
+/// decision function** (Bob's sum moves by exactly the arithmetic, a shipped
+/// literal) and **the ladder moves nobody's answer** (also a literal, so the
+/// day it starts to it fails here and this comment is what gets rewritten).
+/// `FINDINGS.md` G-035 is the entry; the fences forbid touching the scorer's
+/// terms, which is what the fix would be.
+pub fn judge_the_wage(checks: &mut crate::checks::Checks, tuning: &Tuning) -> String {
+    let Some(spec) = crate::settlement::INDUSTRIES.first() else {
+        return String::new();
+    };
+    let mut sim = Sim::opening(tuning, ModuleSet::ALL);
+    sim.everybody_here();
+    sim.treasury = spec.cost;
+    let _ = crate::settlement::build(&mut sim, 0, 0);
+    // The settlement's own board, worked out; and nobody pressed, so what is
+    // being measured is the wage and not the desperation under it. This is the
+    // world the works are *for*: a shift is the only paid work in Kawaza, and
+    // what it has to beat is staying home.
+    for site in 0..sim.sites.len() {
+        if sim.sites[site].industry.is_some() {
+            continue;
+        }
+        for slot in 0..sim.sites[site].states.len() {
+            sim.sites[site].states[slot] = crate::sim::JobState::Done { by: 0 };
+        }
+    }
+    for person in &mut sim.people {
+        person.desperation = 0;
+    }
+    let shift = crate::autonomy::Action::SeekWork {
+        job: sim::JobId {
+            site: spec.site,
+            slot: 0,
+        },
+    };
+    let weigh = |sim: &Sim, who: usize| -> i64 {
+        crate::autonomy::weigh(sim, tuning, 0, who, shift)
+            .iter()
+            .map(|term| term.value)
+            .sum()
+    };
+    let on_shift = |sim: &Sim| -> usize {
+        let lens = Lens::on(sim);
+        lens.roll()
+            .into_iter()
+            .filter(|who| {
+                matches!(
+                    crate::autonomy::choose(
+                        sim,
+                        tuning,
+                        0,
+                        *who,
+                        &crate::autonomy::candidates(sim, *who),
+                    )
+                    .action,
+                    crate::autonomy::Action::SeekWork { job } if job.site == spec.site
+                )
+            })
+            .count()
+    };
+    // --- 1: the lever reaches the decision function ------------------------
+    let greedy = sim
+        .people
+        .iter()
+        .position(|person| person.id == "bob")
+        .unwrap_or(0);
+    let opening = sim.settlement.wage(0);
+    let at_opening = weigh(&sim, greedy);
+    crate::settlement::step_wage(&mut sim, 0, crate::settlement::WAGE_MAX);
+    let at_ceiling = weigh(&sim, greedy);
+    checks.require(
+        at_opening == GREEDY_AT_THE_OPENING_WAGE && at_ceiling == GREEDY_AT_THE_CEILING,
+        "stepping an industry's wage does not reach the scorer at all",
+        format!(
+            "the one carrier of a pot affinity weighs a shift at {at_opening} for {opening}g \
+             and {at_ceiling} for {}g; the shipped settlement weighs \
+             {GREEDY_AT_THE_OPENING_WAGE} and {GREEDY_AT_THE_CEILING}. The wage is the \
+             slot's own pot, so a wage that moved no sum would mean the lever did not reach \
+             the decision function at all",
+            sim.settlement.wage(0)
+        ),
+    );
+    // --- 2: and what it moves, over the panel's whole range ----------------
+    //
+    // Walked in the panel's own step, exactly as `compliance.rs` walks the
+    // standing rates: what a lever is worth is how much of it a player has to
+    // spend before anybody does anything differently.
+    crate::settlement::step_wage(&mut sim, 0, -crate::settlement::WAGE_MAX);
+    let mut ladder: Vec<(i64, usize)> = Vec::new();
+    loop {
+        ladder.push((sim.settlement.wage(0), on_shift(&sim)));
+        if sim.settlement.wage(0) >= crate::settlement::WAGE_MAX {
+            break;
+        }
+        crate::settlement::step_wage(&mut sim, 0, crate::settlement::WAGE_STEP);
+    }
+    let moves: Vec<i64> = ladder
+        .windows(2)
+        .filter(|pair| pair[0].1 != pair[1].1)
+        .map(|pair| pair[1].0)
+        .collect();
+    let seated = ladder
+        .iter()
+        .find(|(wage, _)| *wage == opening)
+        .map_or(0, |(_, count)| *count);
+    checks.require(
+        moves == WAGE_LADDER_MOVES && seated == SHIFTS_AT_THE_OPENING_WAGE,
+        "the wage lever moves the camp somewhere the shipped settlement does not say",
+        format!(
+            "walking the stepper from 0g to {}g in {}g steps changes who takes a shift at \
+             {moves:?}, and {seated} of the camp take one at the opening {opening}g; the \
+             shipped settlement moves them at {WAGE_LADDER_MOVES:?} and seats \
+             {SHIFTS_AT_THE_OPENING_WAGE}. An empty list is this session's own finding and \
+             not a passing check: the day the lever starts to move somebody, this fails and \
+             `FINDINGS.md` G-035 is what gets rewritten",
+            crate::settlement::WAGE_MAX,
+            crate::settlement::WAGE_STEP
+        ),
+    );
+    format!(
+        "the wage lever: it reaches the scorer ({at_opening} at {opening}g, {at_ceiling} at \
+         {}g for the one carrier of a pot affinity) and over the panel's whole range it moves \
+         the camp's answer at {moves:?} - {seated} take a shift at any wage, which is \
+         FINDINGS G-035",
+        crate::settlement::WAGE_MAX
+    )
+}
+
+/// What the cast's one carrier of a pot affinity weighs a shift at, at the
+/// wage the works open on — a shipped literal, so a lever that stopped
+/// reaching the scorer fails here.
+pub const GREEDY_AT_THE_OPENING_WAGE: i64 = 8;
+
+/// And at the panel's ceiling.
+pub const GREEDY_AT_THE_CEILING: i64 = 12;
+
+/// **Every wage the camp's answer changes at**, walking the settlement panel's
+/// own stepper across its own range, over a settlement whose sites are dry and
+/// whose people are unpressed.
+///
+/// **Empty, and that is the finding** (`FINDINGS.md` G-035): a self-chosen
+/// job's pot is felt by `pot_affinity` alone, only `greedy` carries one, and
+/// the one character who has it is over the idle floor on his `indebted` want
+/// before the wage says anything. It is a shipped literal so that the day the
+/// scorer's money term changes, this check fails and says so.
+pub const WAGE_LADDER_MOVES: &[i64] = &[];
+
+/// And how many of the camp take a shift, at any wage the panel can reach: the
+/// two makers, whose trade it is, and the two indebted, whose want covers any
+/// paid work.
+pub const SHIFTS_AT_THE_OPENING_WAGE: usize = 4;
+
 /// **The economy sweeps** (GDD §9) — the population, the limp floor, and the
 /// attention differential, run once.
 pub fn judge_sweeps(checks: &mut crate::checks::Checks, tuning: &Tuning) -> String {

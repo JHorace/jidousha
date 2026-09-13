@@ -657,6 +657,9 @@ would be a second way to reach work the scorer fills for itself.
   (`20g a shift - the 20g craft rate`, or `over`/`under` it), which is the one
   expectation `answers::wage_regard` judges a payment against — so the row says
   what the simulation is about to do rather than a second opinion about it.
+  **What the wage is *not* is a lever on who comes**, at the shipped constants:
+  `FINDINGS.md` G-035 measured it, and the footer says what is true instead —
+  the wage is what a shift is worth to whoever takes it.
 - **The three levers are chunky and beside the row, never inside it**: `BUILD`
   while it is not standing (`STANDING` after, and faint while the treasury
   cannot pay), and a wage stepper (`- 20g +`) always, because what camp work

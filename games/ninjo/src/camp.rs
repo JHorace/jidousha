@@ -205,8 +205,8 @@ pub fn settlement_panel(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning) -> Panel 
          the work the sites authored"
             .to_owned()
     } else if lens.settlement().any_standing() {
-        "a shift is standing work: nobody is posted to it and nobody is ordered onto it - the \
-         wage is what makes somebody choose it, and a finished shift opens again"
+        "a shift is standing work: nobody is posted to it and nobody is ordered onto it, and \
+         a finished shift opens again. the wage is what it is worth to whoever takes it"
             .to_owned()
     } else {
         format!(

@@ -150,7 +150,7 @@ inside the drawer.
 Expected: room. Happened: none left, and the next wave is told rather than
 finding out. Owner: this game's UI.
 
-### G-035 — the game's own: a self-chosen job pays the worker nothing, and the scorer weighs its pot anyway
+### G-035 — the game's own: a self-chosen job's money is felt by one personality, so the industry's wage lever moves nobody
 
 Class: **the game's own** (a scorer/economy seam the needs wave exposed) ·
 Game: ninjo · Files: `games/ninjo/src/autonomy.rs` (the pot term),
@@ -167,16 +167,42 @@ The scorer's pot term nonetheless weighs `quest.pot` at the carrier's own
 turned on it. Now upkeep burns and the money matters, and the seam is visible:
 somebody is drawn toward work by a number that is not theirs.
 
+**And the seam has a second half, which is what this wave ran into.** There are
+two money terms in this game and they are not the same arithmetic:
+
+| where | what scales the money |
+|---|---|
+| `answers::terms` — a **posted** job | `pot_affinity` **+ desperation** |
+| `autonomy::weigh` — a **self-chosen** job | `pot_affinity` alone |
+
+The first reaches anybody who needs money; the second reaches only whoever
+carries a pot affinity, and the neutral value is **zero** — so in this cast it
+is `greedy`, and `greedy` is Bob alone.
+
+An industry's slots are filled by self-choice (that is what "standing job
+slots the scorer fills" means), so **the per-industry wage is felt by one
+character in ten**, and never across a threshold: Bob's `indebted` want already
+carries him over the idle floor before the wage says anything. The decision
+table for this wave asks that "a wage step changes at least one worker's next
+choice in the median seed", and at the shipped constants **it does not**.
+`economy::judge_the_wage` is the instrument that says so — it asserts the lever
+*reaches the decision function* (Bob's sum moves 8 → 12 across the panel's
+range, shipped literals) and that the ladder moves **nobody's answer**, as an
+empty shipped literal, so the day it starts to, the check fails and this entry
+is what gets rewritten.
+
 It is left alone on purpose — the handoff's fences are explicit that this wave
 may not "change the posting rules, the scorer's terms, or the selection", and
-the pot term is wave 1.1's. Whether the pot should pull a self-chooser at all,
-pull them at a reduced weight, or imply a default share (GDD §4.1's TRANSFER
-port names "shares/wages ... per the dispatch offer") is a design decision, and
-it is the one that decides how brutal an unattended settlement is meant to be.
+both money terms are earlier waves'. The candidate fixes are all one-line and
+all design decisions: give the neutral row a pot affinity of one; add
+desperation to the self-chosen pot the way the posted wage has it; or give a
+self-chosen job a default share so the money a character is drawn to is money
+they get. The third also answers the first half of this entry.
 
-Expected: the money a character is drawn to is money they get. Happened: for a
-self-chosen job it is not, and the wave that made that matter is not the wave
-allowed to fix it. Owner: the owner (GDD §4.1, §3b).
+Expected: the money a character is drawn to is money they get, and a wage the
+player can move is a wage that moves somebody. Happened: neither, for a
+self-chosen job — and the wave that made both matter is not the wave allowed to
+fix either. Owner: the owner (GDD §4.1, §3b, and `autonomy::weigh`'s pot term).
 
 **The legibility session (2026-09-09) read** `CLAUDE.md`, the `make-game`
 skill, this game's `UI.md`, `GDD.md`, `FINDINGS.md` and its whole `src/`.

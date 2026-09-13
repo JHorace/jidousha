@@ -691,6 +691,15 @@ five passes.
   completion are the ones that already existed and **no term was added to the
   scorer**: a shift is a job, and the wage is the job's pot. What makes a slot
   *standing* is that finishing it opens it again.
+- **What the wage lever measured.** Stepping an industry's wage reaches the
+  scorer through the pot term wave 1.1 wrote — the wage *is* the slot's pot —
+  and `economy::judge_the_wage` walks the panel's whole range in the panel's
+  own step to say what that is worth. The answer is that it **moves the sum and
+  moves nobody's answer**: a self-chosen job's pot is felt by `pot_affinity`
+  alone, only `greedy` carries one, and the one character who does is over the
+  idle floor on another term before the wage speaks. That is `FINDINGS.md`
+  G-035 and it is the decision-surface row this wave did not land as specified;
+  the fix is one line in a term the fences forbid this wave to touch.
 - **What is not postable**: an industry's slots. A shift pays the industry's
   own wage, set on the settlement panel, and a posting over it would be a
   second wage for one shift and a second surface for one decision. No gesture

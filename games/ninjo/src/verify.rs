@@ -3303,6 +3303,26 @@ fn the_picker_names_a_person(checks: &mut Checks, baseline: &Conducted) -> Strin
                         cell(at + layout::cand::TRAVEL)
                     ),
                 );
+                // **And their need state is the sim's own** (wave 1.3): the
+                // desperation the panel shows and the `short` chip's own
+                // predicate, so the row a posting is aimed from cannot say
+                // somebody is coping while the burn is about to take the last
+                // of their money.
+                checks.require(
+                    cell(at + layout::cand::NEED).as_deref()
+                        == Some(crate::board::need_mark(&lens, &tuning, who).as_str()),
+                    "a candidate row's need is not the need the sim would act on",
+                    format!(
+                        "{:?} row {row} reads {:?} for {} and the sim says {:?} (desperation \
+                         {}, short {})",
+                        quest.name,
+                        cell(at + layout::cand::NEED),
+                        lens.name(who),
+                        crate::board::need_mark(&lens, &tuning, who),
+                        lens.desperation(who),
+                        crate::needs::is_short(&lens, &tuning, who)
+                    ),
+                );
                 // And their whereabouts is the lens's own sentence, uncut:
                 // a clipped cell on this surface is a person whose state the
                 // player cannot read, which is what the row is for.
@@ -3962,6 +3982,7 @@ pub fn run() -> ExitCode {
     crate::needs::judge_at(&mut checks, &tuning);
     let needs = crate::needs::judge_module(&mut checks, &baseline);
     crate::economy::judge_at(&mut checks, &tuning);
+    let wage_lever = crate::economy::judge_the_wage(&mut checks, &tuning);
     let economy = crate::economy::judge_sweeps(&mut checks, &tuning);
     let compliance = crate::compliance::judge_module(&mut checks, &baseline);
     let asked = crate::compliance::ask_run();
@@ -4014,6 +4035,7 @@ pub fn run() -> ExitCode {
     println!("  {sweep_summary}");
     println!("  {needs}");
     println!("  {economy}");
+    println!("  {wage_lever}");
     println!("  {settled_report}");
     println!("  seed 0 stamped; transcripts identical at seeds 7 and 7777777 (no Rng read in S1)");
     println!("  ui mapping: {ui_report}");

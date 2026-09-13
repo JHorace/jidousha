@@ -452,7 +452,7 @@ pub const PICKER_HEAD_W: f32 = 360.0;
 pub fn picker_row(index: usize) -> Rect {
     Rect::from_min_size(
         Vec2::new(24.0, 160.0 + index as f32 * 34.0),
-        Vec2::new(544.0, 32.0),
+        Vec2::new(552.0, 32.0),
     )
 }
 
@@ -485,11 +485,23 @@ pub mod cand {
     pub const FIT: Vec2 = Vec2::new(140.0, 3.0);
     /// How wide that may run.
     pub const FIT_W: f32 = 56.0;
+    /// **How badly they need it** — their desperation, and a mark when they
+    /// cannot meet this interval's upkeep (wave 1.3).
+    ///
+    /// Its own cell between the fit and the whereabouts, because it is the
+    /// third thing the choice turns on and the row already had two ragged
+    /// cells: what somebody brings to the work, what the work would cost
+    /// them to reach, and **what they are up against** are three readings and
+    /// a clip on any of them takes a different half.
+    pub const NEED: Vec2 = Vec2::new(200.0, 3.0);
+    /// How wide that may run — four glyphs of the five-by-seven face, which
+    /// is `d10!` and nothing longer.
+    pub const NEED_W: f32 = 40.0;
     /// **Where they are** — at home, or out with where and when the work
     /// they are on is done.
-    pub const WHERE: Vec2 = Vec2::new(202.0, 3.0);
+    pub const WHERE: Vec2 = Vec2::new(244.0, 3.0);
     /// How wide that may run.
-    pub const WHERE_W: f32 = 340.0;
+    pub const WHERE_W: f32 = 306.0;
     /// **The journey from wherever they stand** — its own cell rather than
     /// the tail of the whereabouts, because a clip takes the tail and the
     /// journey is what a posting to somebody who is out costs.

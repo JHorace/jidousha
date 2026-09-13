@@ -130,10 +130,19 @@ pub fn work_list(
 ) -> Panel {
     let mut panel = Panel::default();
     let openings = openings(lens, grid, tuning, now, who);
+    // **Whose list, and what they are up against** (wave 1.3). The same
+    // `board::need_mark` a candidate row carries, because the work list and
+    // the picker are the same decision approached from two sides and a person
+    // whose need reads one way on one of them and another way on the other is
+    // two answers to one question.
     panel.text(TextRun::new(
         layout::worklist_title(),
         clipped(
-            &format!("the work open to {}", lens.name(who)),
+            &format!(
+                "the work open to {} - {}",
+                lens.name(who),
+                board::need_mark(lens, tuning, who)
+            ),
             layout::WORKLIST_HEAD_W,
         ),
         theme::SMALL,
