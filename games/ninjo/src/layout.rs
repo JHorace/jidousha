@@ -118,22 +118,51 @@ pub fn meters_band() -> Rect {
     Rect::from_min_size(Vec2::new(0.0, 36.0), Vec2::new(DESIGN_W, 40.0))
 }
 
+/// How far apart the meter chips stand, and how wide one is.
+///
+/// **Narrowed at wave 1.3**, where the band went from two chips to four and
+/// grew a state-of-the-camp line to the right of them. A chip has to hold its
+/// longest label and count — `desperate 10`, twelve glyphs of the
+/// five-by-seven face — and everything past that is the line's.
+const CHIP_PITCH: f32 = 144.0;
+const CHIP_W: f32 = 140.0;
+
 /// Meter chip `index` — click it for the faces behind the count.
 pub fn meter_chip(index: usize) -> Rect {
     Rect::from_min_size(
-        Vec2::new(16.0 + index as f32 * 158.0, 40.0),
-        Vec2::new(150.0, 32.0),
+        Vec2::new(16.0 + index as f32 * CHIP_PITCH, 40.0),
+        Vec2::new(CHIP_W, 32.0),
     )
 }
 
 /// The rows inside a meter chip, from its top-left.
 pub mod mchip {
     /// The icon's inset.
-    pub const ICON: f32 = 8.0;
+    pub const ICON: f32 = 6.0;
     /// The label's left.
-    pub const LABEL_X: f32 = 30.0;
+    pub const LABEL_X: f32 = 26.0;
     /// The label's top.
     pub const LABEL_TOP: f32 = 10.0;
+}
+
+/// **The state-of-the-camp line**, on the meters band and right of the chips
+/// (UI.md §3a, wave 1.3).
+///
+/// The band is the glance, and this is the glance's sentence: who is here, how
+/// many of them are short, what the treasury holds and what upkeep burns in a
+/// day. It stands right of the last chip rather than under the band because
+/// the band under the meters is the pause banner's, and two rows of chrome on
+/// one band are two rows drawn through each other (UI.md §4).
+pub fn camp_line_at() -> Vec2 {
+    Vec2::new(
+        16.0 + crate::meters::METERS.len() as f32 * CHIP_PITCH,
+        meter_chip(0).min.y + 10.0,
+    )
+}
+
+/// How wide the camp line may run before it is clipped — the rest of the band.
+pub fn camp_line_width() -> f32 {
+    DESIGN_W - camp_line_at().x - 16.0
 }
 
 /// The pause banner, under the meters — why the world stopped itself.
@@ -423,7 +452,7 @@ pub const PICKER_HEAD_W: f32 = 360.0;
 pub fn picker_row(index: usize) -> Rect {
     Rect::from_min_size(
         Vec2::new(24.0, 160.0 + index as f32 * 34.0),
-        Vec2::new(544.0, 32.0),
+        Vec2::new(552.0, 32.0),
     )
 }
 
@@ -456,11 +485,23 @@ pub mod cand {
     pub const FIT: Vec2 = Vec2::new(140.0, 3.0);
     /// How wide that may run.
     pub const FIT_W: f32 = 56.0;
+    /// **How badly they need it** — their desperation, and a mark when they
+    /// cannot meet this interval's upkeep (wave 1.3).
+    ///
+    /// Its own cell between the fit and the whereabouts, because it is the
+    /// third thing the choice turns on and the row already had two ragged
+    /// cells: what somebody brings to the work, what the work would cost
+    /// them to reach, and **what they are up against** are three readings and
+    /// a clip on any of them takes a different half.
+    pub const NEED: Vec2 = Vec2::new(200.0, 3.0);
+    /// How wide that may run — four glyphs of the five-by-seven face, which
+    /// is `d10!` and nothing longer.
+    pub const NEED_W: f32 = 40.0;
     /// **Where they are** — at home, or out with where and when the work
     /// they are on is done.
-    pub const WHERE: Vec2 = Vec2::new(202.0, 3.0);
+    pub const WHERE: Vec2 = Vec2::new(244.0, 3.0);
     /// How wide that may run.
-    pub const WHERE_W: f32 = 340.0;
+    pub const WHERE_W: f32 = 306.0;
     /// **The journey from wherever they stand** — its own cell rather than
     /// the tail of the whereabouts, because a clip takes the tail and the
     /// journey is what a posting to somebody who is out costs.
@@ -587,6 +628,119 @@ pub mod work {
     /// How wide that may run.
     pub const SAYS_W: f32 = 380.0;
 }
+
+// ── the settlement panel: the camp marker's own surface (UI.md §3g) ────────
+
+/// How many industry rows the settlement panel has room for.
+///
+/// `layout_floors` asserts the industry table is not longer than this,
+/// because an industry with no row is a building nobody can put up.
+pub const WORKS_ROWS: usize = 4;
+
+/// **The settlement panel**, which the camp's own marker opens.
+///
+/// It stands where the board, the candidate picker and the work list stand and
+/// draws instead of them, for the reason they draw instead of each other: the
+/// left of the screen is one column, the character panel has the other, and a
+/// surface drawn under another is a row nobody can read lying across a control
+/// somebody can click.
+pub fn works_panel() -> Rect {
+    Rect::from_min_size(Vec2::new(16.0, 112.0), Vec2::new(576.0, 328.0))
+}
+
+/// Its title row: the camp, and what it is now.
+pub fn works_title() -> Vec2 {
+    Vec2::new(28.0, 122.0)
+}
+
+/// The line under it — the treasury, who is idle and who is short, which are
+/// the facts a build decision turns on.
+pub fn works_state() -> Vec2 {
+    Vec2::new(28.0, 140.0)
+}
+
+/// How wide either header row may run before it is clipped.
+pub const WORKS_HEAD_W: f32 = 524.0;
+
+/// Industry row `index` — two lines of reading, with its controls beside it
+/// rather than inside it (the overlap floor's own rule).
+pub fn works_row(index: usize) -> Rect {
+    Rect::from_min_size(
+        Vec2::new(24.0, 162.0 + index as f32 * 56.0),
+        Vec2::new(560.0, 52.0),
+    )
+}
+
+/// The columns inside an industry row, as offsets from its top-left.
+pub mod works {
+    use jidousha::prelude::Vec2;
+
+    /// The task chip.
+    pub const TASK_ICON: Vec2 = Vec2::new(4.0, 2.0);
+    /// The industry's name.
+    pub const NAME: Vec2 = Vec2::new(26.0, 4.0);
+    /// How wide it may run — fourteen glyphs of the five-by-seven face, which
+    /// is what `the camp works` is.
+    pub const NAME_W: f32 = 140.0;
+    /// What it costs, or what it opened.
+    pub const COST: Vec2 = Vec2::new(170.0, 4.0);
+    /// How wide that may run — up to the BUILD verb.
+    pub const COST_W: f32 = 168.0;
+    /// Who is on it, and how much of it is free.
+    pub const HANDS: Vec2 = Vec2::new(4.0, 22.0);
+    /// How wide that may run — the whole row, up to the controls.
+    pub const HANDS_W: f32 = 336.0;
+    /// What the shift is worth against the standing rate.
+    pub const AGAINST: Vec2 = Vec2::new(4.0, 38.0);
+    /// How wide that may run.
+    pub const AGAINST_W: f32 = 336.0;
+}
+
+/// The BUILD verb on industry row `index` — the treasury's first real sink.
+pub fn works_build(index: usize) -> Rect {
+    Rect::from_min_size(
+        works_row(index).min + Vec2::new(344.0, 2.0),
+        Vec2::new(96.0, 32.0),
+    )
+}
+
+/// The wage stepper's `-` on industry row `index`.
+pub fn works_wage_down(index: usize) -> Rect {
+    Rect::from_min_size(
+        works_row(index).min + Vec2::new(448.0, 2.0),
+        Vec2::splat(32.0),
+    )
+}
+
+/// Where the wage itself is drawn, between the two buttons.
+pub fn works_wage_value(index: usize) -> Rect {
+    Rect::from_min_size(
+        works_row(index).min + Vec2::new(480.0, 2.0),
+        Vec2::new(40.0, 32.0),
+    )
+}
+
+/// And the `+`.
+pub fn works_wage_up(index: usize) -> Rect {
+    Rect::from_min_size(
+        works_row(index).min + Vec2::new(520.0, 2.0),
+        Vec2::splat(32.0),
+    )
+}
+
+/// The panel's own close — the board's, in the board's own place, because the
+/// two never share a screen.
+pub fn works_close() -> Rect {
+    board_close()
+}
+
+/// The footer hint, under the rows.
+pub fn works_hint() -> Vec2 {
+    Vec2::new(28.0, 398.0)
+}
+
+/// How wide it may run before it wraps.
+pub const WORKS_HINT_W: f32 = 552.0;
 
 // ── the character panel ────────────────────────────────────────────────────
 
@@ -1051,12 +1205,13 @@ pub fn modes_prose_width() -> f32 {
 
 /// How many config rows a column holds before the next one starts.
 ///
-/// **Seven since wave 1.2**: the asks module's six classes take the table
-/// from seven rows to thirteen, and thirteen rows of forty pixels is a
-/// drawer twice the height of the screen. Two columns of seven is what fits,
-/// and the radios narrow to eighty-four to make room for the second column —
-/// still two and a half times the target floor.
-pub const MODES_ROWS: usize = 7;
+/// **Nine since wave 1.3**: needs and settlement bring four classes, and
+/// seventeen rows over two columns of seven would leave three of them with
+/// nowhere to be configured. Nine rows of forty pixels ends the second column
+/// at 460, which is where the footer moved to make room for — and eighteen
+/// slots is one more than the table has, so the eighteenth class is a row and
+/// nothing else to remember.
+pub const MODES_ROWS: usize = 9;
 const MODES_COL_X: f32 = 20.0;
 const MODES_COL_PITCH: f32 = 468.0;
 const MODES_RADIO_W: f32 = 84.0;
@@ -1099,8 +1254,12 @@ pub fn modes_radio(index: usize, mode: usize) -> Rect {
 }
 
 /// The drawer's footer: what a change to this panel is.
+///
+/// **Under the ninth row**, which ends at 460 — it stood at 398 while a column
+/// held seven, and a footer that stayed there would have been a row of prose
+/// drawn through two rows of radios (UI.md §4's chrome-against-chrome floor).
 pub fn modes_footer() -> Vec2 {
-    Vec2::new(28.0, 398.0)
+    Vec2::new(28.0, 470.0)
 }
 
 // ── the tuning drawer (giri's geometry, at the module's constants) ────────
@@ -1112,17 +1271,33 @@ pub fn tuner_panel() -> Rect {
 
 /// How many stepper rows a column holds before the next one starts.
 ///
-/// Twelve, which is what the drawer's height allows at the target floor, and
-/// three columns of them is what wave 1.1's thirty-four constants need. The
-/// stamp keeps the last two hundred pixels of the screen and the prose band
+/// **Fourteen since wave 1.3**, where it was twelve at a pitch of thirty-four.
+/// Three constants took the drawer from thirty-six to thirty-nine, and the
+/// column was re-laid rather than stretched: the pitch drops to the target
+/// floor exactly — a stepper is thirty-two and two rows of thirty-two may
+/// touch but never overlap — and the head of the drawer gives up twenty
+/// pixels, with the title at 38 and the presets on the band under it. Fourteen
+/// rows is what that buys: `90 + 13 x 32 + 32` is 538 against a screen of 540,
+/// and a fifteenth would not fit at any lead.
+///
+/// **Three columns of fourteen is forty-two**, so the drawer has three rows of
+/// room after this wave's thirty-nine. `floors::tuner_has_room` is the floor
+/// that says when it does not: it asks whether the *next* constant's stepper
+/// would still be inside the drawer, so it fails while the drawer still draws.
+/// Re-laying past forty-two means **moving the right column**, not narrowing
+/// the rows — a row is a name, two buttons and the value between them, and
+/// four columns of that plus a stamp column wide enough to read comes to more
+/// than 960.
+///
+/// The stamp keeps the last two hundred pixels of the screen and the prose band
 /// is measured down from it (`tuning::prose_top`): the stamp is the one thing
 /// in the drawer that has to stay legible while every other row is being
 /// moved, so it keeps the top of that column and the prose follows it.
-pub const TUNER_ROWS: usize = 12;
+pub const TUNER_ROWS: usize = 14;
 const TUNER_COL_X: f32 = 28.0;
 const TUNER_COL_PITCH: f32 = 240.0;
-const TUNER_ROW_Y: f32 = 110.0;
-const TUNER_ROW_PITCH: f32 = 34.0;
+const TUNER_ROW_Y: f32 = 90.0;
+const TUNER_ROW_PITCH: f32 = 32.0;
 /// The steppers' - and + size: the smallest target in the game, exactly the
 /// floor.
 const TUNER_STEP: f32 = 32.0;
@@ -1185,19 +1360,19 @@ pub fn tuner_presets_label() -> Vec2 {
 /// Preset button `index`.
 pub fn tuner_preset(index: usize) -> Rect {
     Rect::from_min_size(
-        Vec2::new(112.0 + index as f32 * 128.0, 72.0),
+        Vec2::new(112.0 + index as f32 * 128.0, 54.0),
         Vec2::new(120.0, 32.0),
     )
 }
 
 /// The commit verb, on the preset row.
 pub fn tuner_apply() -> Rect {
-    Rect::from_min_size(Vec2::new(824.0, 72.0), Vec2::new(120.0, 32.0))
+    Rect::from_min_size(Vec2::new(824.0, 54.0), Vec2::new(120.0, 32.0))
 }
 
 /// The drawer's title.
 pub fn tuner_title() -> Vec2 {
-    Vec2::new(TUNER_COL_X, 50.0)
+    Vec2::new(TUNER_COL_X, 38.0)
 }
 
 /// The gap between the stamp and the prose band that follows it down the
@@ -1223,7 +1398,7 @@ const TUNER_STAMP_X: f32 = 756.0;
 /// The stamp: the constants actually in effect, always visible while the
 /// drawer is open.
 pub fn tuner_stamp() -> Vec2 {
-    Vec2::new(TUNER_STAMP_X, 110.0)
+    Vec2::new(TUNER_STAMP_X, 92.0)
 }
 
 // ── the map's own geometry (world units, not UI units) ─────────────────────

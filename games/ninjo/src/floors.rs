@@ -97,6 +97,37 @@ pub fn worklist_targets() -> Vec<(String, Rect)> {
     out
 }
 
+/// The base screen's controls with the **settlement panel** up instead of a
+/// board (UI.md §3g).
+///
+/// It stands in the board's own rectangle and draws instead of it, for the
+/// reason the picker and the work list do, so the board's rows and footer are
+/// not on this screen at all — a fifth set of siblings, and the overlap floor
+/// is about siblings. Its own controls are the close and, per industry row,
+/// the BUILD verb and the two halves of a wage stepper.
+pub fn works_targets() -> Vec<(String, Rect)> {
+    let mut out: Vec<(String, Rect)> = base_targets();
+    out.push((
+        "the settlement panel's close".to_owned(),
+        layout::works_close(),
+    ));
+    for index in 0..layout::WORKS_ROWS {
+        out.push((
+            format!("industry row {index}'s BUILD"),
+            layout::works_build(index),
+        ));
+        out.push((
+            format!("industry row {index}'s wage down"),
+            layout::works_wage_down(index),
+        ));
+        out.push((
+            format!("industry row {index}'s wage up"),
+            layout::works_wage_up(index),
+        ));
+    }
+    out
+}
+
 /// Every rectangle the postings ledger answers a click in: a withdrawal per
 /// standing posting, and the standing rates' own steppers and postings.
 pub fn ledger_targets() -> Vec<(String, Rect)> {
@@ -241,6 +272,9 @@ pub fn controls_for(flow: &Flow) -> Vec<(String, Rect)> {
         out.extend(handle_targets());
         return out;
     }
+    if flow.works {
+        return works_targets();
+    }
     if flow.listing.is_some() {
         return worklist_targets();
     }
@@ -278,7 +312,13 @@ pub fn layout_floors(checks: &mut Checks) {
     // the job board is up on, and the one a job's candidate picker is up on.
     // They share most of their controls and differ on the left, and each has
     // to hold the floors on its own.
-    for set in [targets(), board_targets(), picker_targets()] {
+    for set in [
+        targets(),
+        board_targets(),
+        picker_targets(),
+        worklist_targets(),
+        works_targets(),
+    ] {
         for (what, rect) in &set {
             let size = rect.size();
             checks.require(
@@ -618,7 +658,8 @@ pub fn layout_floors(checks: &mut Checks) {
     // clipped term is a term whose attribution is the half that goes.
     {
         let tuning = Tuning::SHIPPED;
-        let sim = Sim::opening(&tuning, crate::modules::ModuleSet::ALL);
+        let mut sim = Sim::opening(&tuning, crate::modules::ModuleSet::ALL);
+        sim.everybody_here();
         let style = theme::text(theme::SMALL, theme::INK);
         let mut lines: Vec<String> = Vec::new();
         for who in 0..sim.people.len() {
@@ -759,6 +800,49 @@ pub fn tuner_right_column(checks: &mut Checks) {
                  {:.0}. Re-lay the right column before adding the constant",
                 tuning::prose_top(stamp_rows + extra),
                 layout::tuner_panel().max.y
+            ),
+        );
+    }
+}
+
+/// **The tuning drawer has room for the constant after the ones it has**
+/// (`FINDINGS.md` G-034).
+///
+/// The stepper grid is three columns of [`layout::TUNER_ROWS`], and wave 1.3
+/// filled it exactly. So the floor is asked about the *next* index rather than
+/// about the last one: it fails while the drawer still draws, which is the
+/// same discipline `tuner_right_column` keeps for the stamp — the wave that
+/// adds the constant is told to re-lay the column instead of finding out from
+/// a screenshot.
+///
+/// Re-laying means **moving the right column**, not narrowing the stepper
+/// rows: a row is a name, two buttons and the value between them, and four
+/// columns of that plus a stamp column wide enough to read comes to more than
+/// 960 reference pixels.
+pub fn tuner_has_room(checks: &mut Checks) {
+    let next = crate::constants::Field::ALL.len();
+    let drawer = layout::tuner_panel();
+    for (what, rect) in [
+        ("its -", layout::tuner_minus(next)),
+        ("its +", layout::tuner_plus(next)),
+        ("its row", layout::tuner_row(next)),
+    ] {
+        checks.require(
+            inside(drawer, rect),
+            "the tuning drawer has no room for another constant",
+            format!(
+                "constant {next} would put {what} at ({:.0}, {:.0})-({:.0}, {:.0}) and the \
+                 drawer is ({:.0}, {:.0})-({:.0}, {:.0}). Re-lay the right column before \
+                 adding it: a fourth stepper column and a readable stamp column do not both \
+                 fit across the screen",
+                rect.min.x,
+                rect.min.y,
+                rect.max.x,
+                rect.max.y,
+                drawer.min.x,
+                drawer.min.y,
+                drawer.max.x,
+                drawer.max.y
             ),
         );
     }
@@ -1181,6 +1265,24 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
         selected: Some(0),
         ..Flow::default()
     };
+    // **The settlement panel, in both of its states** (UI.md §3g): a camp with
+    // nothing built and a settlement with the works standing and somebody on
+    // them, which are the two things its rows say and the two lengths they say
+    // them at.
+    let works = Flow {
+        works: true,
+        ..played.clone()
+    };
+    let mut standing = baseline.sim.clone();
+    standing.everybody_here();
+    standing.treasury = 10_000;
+    let _ = crate::settlement::build(&mut standing, ended_clock.minutes, 0);
+    if let Some(spec) = crate::settlement::INDUSTRIES.first()
+        && let Some(site) = standing.sites.get_mut(spec.site)
+        && let Some(state) = site.states.first_mut()
+    {
+        *state = crate::sim::JobState::Claimed { by: 0 };
+    }
     vec![
         (opening.0, opening.1, opening.2, opening.3, at),
         (
@@ -1285,6 +1387,20 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
             "a site's job board with nobody selected",
             unread,
             baseline.sim.clone(),
+            ended_clock,
+            at,
+        ),
+        (
+            "the settlement panel over a camp with nothing built",
+            works.clone(),
+            baseline.sim.clone(),
+            ended_clock,
+            at,
+        ),
+        (
+            "the settlement panel with the works standing and somebody on them",
+            works,
+            standing,
             ended_clock,
             at,
         ),
@@ -1712,6 +1828,24 @@ pub fn judge_cast(checks: &mut Checks, panel: &Panel, lens: &Lens<'_>, clock: &C
             .filter(|icon| icon.art == person.icon)
             .map(crate::ui::IconRun::bounds)
             .collect();
+        // **Somebody who has not arrived has no figure at all** (`CAST.md` §4,
+        // wave 1.3) — the other half of "one person, one figure": a person who
+        // is not in the camp is drawn nowhere, and the floor says so in both
+        // directions so a presence bug cannot hide as a missing sprite.
+        if !lens.present(index) {
+            checks.require(
+                mine.is_empty(),
+                "somebody who has not arrived is drawn on the map",
+                format!(
+                    "{what}: {} figure(s) carry {}'s portrait and they do not reach Kawaza \
+                     until minute {}",
+                    mine.len(),
+                    lens.name(index),
+                    lens.arrives(index)
+                ),
+            );
+            continue;
+        }
         checks.require(
             mine.len() == 1,
             "a character is not drawn on the map exactly once",
@@ -1757,7 +1891,9 @@ pub fn judge_cast(checks: &mut Checks, panel: &Panel, lens: &Lens<'_>, clock: &C
             // tiles from the tile their party was on. A figure that stands
             // somewhere its person does not has to have another figure as its
             // reason.
-            let alone = (0..lens.people().len())
+            let alone = lens
+                .roll()
+                .into_iter()
                 .filter(|other| *other != index)
                 .filter_map(|other| screens::stands_at(lens, other, now))
                 .all(|theirs| !greater(FIGURES_APART, theirs.distance(place)));

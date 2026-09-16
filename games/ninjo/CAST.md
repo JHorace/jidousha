@@ -12,9 +12,9 @@ vocabulary is `src/traits.rs`, the ten sheets and their homes are
 `src/people.rs`, the task types are on every quest row, the relationship
 presets are the `bonds_preset` drawer row, and the coverage matrix and the
 no-dead-motivator rule are assertions the registry runs. What 1.1 did *not*
-build is s6's template table — petitions are wave 1.3 — so the no-dead
+build is s6's template table — petitions are **wave 1.5** — so the no-dead
 rule is asserted against a declared list of the five motivators s6 covers
-(`traits::TEMPLATED_MOTIVATORS`), and 1.3 repoints that constant at the real
+(`traits::TEMPLATED_MOTIVATORS`), and 1.5 repoints that constant at the real
 table without the assertion changing. The `*Implemented*` notes below are
 per-section.
 
@@ -71,9 +71,9 @@ gone from the tree, this sentence included.
 | task id | what it is | where it shows up at MVP |
 |---|---|---|
 | `fight` | clear a site of what is in it | site jobs at the crypt and the cave |
-| `labor` | camp work; the generic industry's shifts | industry slots (1.2); haul/survey site jobs |
+| `labor` | camp work; haul and stores | haul/survey site jobs |
 | `scout` | travel-heavy; go and look | the far sites; the fiction asks-travel rides on |
-| `craft` | mend, build | rare at camp; grows with industry; the first building |
+| `craft` | mend, build | the camp works' standing shifts (1.3); the first building |
 
 Every authored quest/site job carries a task type from wave 1.1 on
 (data on the quest row). Resolution (1.4) reads the aptitude whose id
@@ -123,9 +123,16 @@ than summing everything the carrier can do.
 **`favors` is a new field on the motivator row** (neutral: none): the
 task type this want's pressure applies to, `any` meaning any paid work.
 The scorer (1.1) adds `pressure` to a candidate whose task type matches
-(or to every paid candidate for `any`). Needs (1.2) reads `upkeep`.
+(or to every paid candidate for `any`). Needs (1.3) reads `upkeep`.
 This is the row's whole mechanical surface; the *petition* half of each
 motivator is s6.
+
+*Implemented (w1.3): `upkeep` is read.* `traits::upkeep_of` had been written
+since 1.1 and called by nothing; `needs::cost_of` is its first caller, and the
+multipliers are what make one interval of the camp's upkeep cost Steve 7g,
+Bob 6g and Alex the base 5g. The whole gradient of who slides and who does not
+comes out of this column and the purses in s4 — nothing else in the economy
+distinguishes one person from another.
 
 *Implemented (w1.1):* `favors` is a field on the row (`Favors::None` neutral,
 `Any`, or `Task(t)`), asserted neutral on every non-motivator row like every
@@ -143,8 +150,9 @@ names it. Checkable as data validation - add the check.
 
 *Implemented (w1.1):* `traits::vocabulary` asserts it against
 `TEMPLATED_MOTIVATORS`, the declared list of the five s6 writes a template
-for, and asserts besides that no motivator has zero pressure. Wave 1.3
-replaces the constant with a walk over the real table.
+for, and asserts besides that no motivator has zero pressure. Wave **1.5**
+replaces the constant with a walk over the real table — the templates are
+petitions' and petitions moved (GDD s8).
 
 ### 3.3 Personalities (giri's nine, audited)
 
@@ -158,7 +166,7 @@ betrayal ladder's era (asks, wave 2, and after).
 |---|---|---|
 | `greedy` | keep | pot pull is a scorer term from 1.1 |
 | `loyal` | keep | bonds x2 shape whom they work beside and whom they obey |
-| `proud` | keep | the ask refuser; refuses charity when gifts exist (1.3 - needs a field then; see s8) |
+| `proud` | keep | the ask refuser; refuses charity when gifts exist (1.5 - needs a field then; see s8) |
 | `craven` | keep | danger terms x2 once fight tasks carry danger (1.4); dormant until then, harmless |
 | `vengeful` | keep | grudges x2, never decay - the repeat-refusal story |
 | `cold` | keep | edges x1/2 both ways - the one who cannot be bought with regard |
@@ -186,18 +194,49 @@ Mongrel names on purpose: a band drawn from everywhere. The four
 tiles are the 1.1 session's to place (passable, unshared, off named
 locations - the registry asserts it).
 
-| id | name | role | traits | wallet | desp. | source line |
-|---|---|---|---|---|---|---|
-| `bob` | Bob | founder, fighter | fighter, greedy, indebted | 6 | 4 | owes the collector at the toll-house, who counts days |
-| `steve` | Steve | founder, laborer | laborer, loyal, caring | 3 | 5 | sends half of everything to a sister whose hands gave out |
-| `alex` | Alex | founder, scout | scout, cold, restless | 12 | 1 | has not slept a full month in one place since childhood |
-| `tim` | Tim | founder, quartermaster (camp-follower) | laborer, proud, vengeful | 20 | 2 | keeps the tally, and is owed by half the camp |
-| `rin` | Rin | cook (camp-follower) | crafter, maker, loyal | 5 | 2 | cooks for ten on a fire built for three |
-| `goro` | Goro | fighter | fighter, renown, proud | 9 | 3 | left home to be talked about, and nobody is talking yet |
-| `hana` | Hana | scout | scout, caring, vengeful | 7 | 2 | came for her brother; stays exactly as long as he does |
-| `ludo` | Ludo | laborer, fights when asked | laborer, fighter, indebted | 2 | 4 | works off a debt that was his father's before it was his |
-| `ines` | Ines | crafter | crafter, maker, craven | 10 | 2 | mends what breaks, and would rather be far from what breaks it |
-| `odd` | Odd | fighter | fighter, renown, restless | 8 | 3 | took the same job as Goro twice, and only one of them got paid |
+| id | name | role | traits | wallet | desp. | arrives | source line |
+|---|---|---|---|---|---|---|---|
+| `bob` | Bob | founder, fighter | fighter, greedy, indebted | 6 | 4 | d1 00:00 | owes the collector at the toll-house, who counts days |
+| `steve` | Steve | founder, laborer | laborer, loyal, caring | 3 | 5 | d1 00:00 | sends half of everything to a sister whose hands gave out |
+| `alex` | Alex | founder, scout | scout, cold, restless | 12 | 1 | d1 00:00 | has not slept a full month in one place since childhood |
+| `tim` | Tim | founder, quartermaster (camp-follower) | laborer, proud, vengeful | 20 | 2 | d1 00:00 | keeps the tally, and is owed by half the camp |
+| `rin` | Rin | cook (camp-follower) | crafter, maker, loyal | 5 | 2 | d1 10:00 | cooks for ten on a fire built for three |
+| `goro` | Goro | fighter | fighter, renown, proud | 9 | 3 | d1 18:00 | left home to be talked about, and nobody is talking yet |
+| `hana` | Hana | scout | scout, caring, vengeful | 7 | 2 | d2 08:00 | came for her brother; stays exactly as long as he does |
+| `ludo` | Ludo | laborer, fights when asked | laborer, fighter, indebted | 2 | 4 | d2 16:00 | works off a debt that was his father's before it was his |
+| `ines` | Ines | crafter | crafter, maker, craven | 10 | 2 | d3 07:00 | mends what breaks, and would rather be far from what breaks it |
+| `odd` | Odd | fighter | fighter, renown, restless | 8 | 3 | d3 18:00 | took the same job as Goro twice, and only one of them got paid |
+
+**The arrival column is the backstory, in order** (wave 1.3). The camp opens
+with the four founders, because §1 says a band arrived a season ago and it is
+*that* band; the other six are "the six who came later" made mechanical rather
+than a new fiction, and the order is the fiction's own:
+
+- **Rin first**, and soonest — the cook follows the fire she built, and the
+  camp is hers to feed before it is anything else.
+- **Goro next**, drawn by what an unclaimed crossing pays a fighter.
+- **Hana after Goro**, because she came for her brother and cannot have
+  arrived before him. The arrival column is where "stays exactly as long as he
+  does" first means something.
+- **Ludo**, following the debt, at the first place that was hiring.
+- **Ines** when there is something worth mending, which is after the band has
+  been breaking things for two days.
+- **Odd last**, arriving to find Goro already here and already talked about —
+  the grudge §5 seeds is a thing that has now had time to happen.
+
+The times are drawer-invariant content: each row carries a `present_from`
+world-minute and the arrival is an occurrence on the one scheduler, so it is
+world-time addressed and speed-invariant like everything else, and the lens
+filters every surface by presence off one derivation (`Lens::roll`).
+
+*Implemented (w1.3): the arrival column.* The camp opens with the four whose
+minute is zero and the six who came later arrive as occurrences; the registry
+asserts the column is monotonic, that presence agrees with it, that the
+founding band is exactly these four names, and — separately, because a camp
+whose opening four cannot do any of the opening work is a camp whose first
+decisions are not decisions — that **each founder has at least one open job
+they have an aptitude for** on the opening board. The coverage matrix in §7
+still applies to the whole roster.
 
 *Implemented (w1.1):* all ten, in this order, in `people::roster`. **Homes are
 two rows of tents south of the road and east of the ford** — y=15 at x
@@ -211,12 +250,36 @@ character.
 
 | module | demo character | why this one |
 |---|---|---|
-| needs (1.2) | **Steve** - the pariah-candidate | highest upkeep multiplier (caring 3/2), lowest wallet among earners, labor pays least: first to shortfall with the player idle |
+| needs (1.3) | **Steve** - the pariah-candidate | highest upkeep multiplier (caring 3/2), lowest wallet among earners, labor pays least: first to shortfall with the player idle |
 | autonomy (1.1) | **Ludo** - the eager worker | indebted pressure 3, favors any, no pride: takes whatever work is open without being asked; the character the scorer is most visibly alive on |
 | asks (1.2) | **Tim** - the proud refuser | proud refuses; vengeful turns a repeat into a grudge; and he holds the tally, so the refusal costs the player something |
-| petitions (1.3) | **Goro** - the petition fountain | renown fires the proving-job template most often; Odd makes every answer to it a social problem |
-| settlement (1.2) | **Rin** - the industry seed | maker; her petition asks for the first building; the camp fire becoming a kitchen is the first-building beat and the baker-dream's ancestor |
-| events-director (1.5) | **Bob** - the loan-shark debtor | indebted + greedy; the collector's canned template has a natural target from minute one |
+| petitions (1.5) | **Goro** - the petition fountain | renown fires the proving-job template most often; Odd makes every answer to it a social problem |
+| settlement (1.3) | **Rin** - the industry seed | maker; her petition asks for the first building; the camp fire becoming a kitchen is the first-building beat and the baker-dream's ancestor |
+| events-director (1.6) | **Bob** - the loan-shark debtor | indebted + greedy; the collector's canned template has a natural target from minute one |
+
+*Implemented (w1.3): both of this wave's demo claims are assertions now.*
+
+- **Steve shortfalls first**, and it is the staged start that made the claim
+  true rather than merely likely. On day one the camp is the four founders;
+  Steve's `caring` multiplies the base upkeep to 7g and he opens with 3g, and
+  he is the only one of the four who cannot meet the first interval — Bob pays
+  his in full with a gold left over. `economy::PARIAH` is the shipped literal
+  and the sweep asserts it in **every** world it runs, which is a stronger
+  claim than the median one the handoff asked for. It is not registry order:
+  Bob is index 0.
+- **Rin is the industry seed**, mechanically: the camp works are `craft` work
+  (§2), the fire she cooks on with a roof over it, and she is the only crafter
+  in Kawaza for two world-days — she arrives on day one and Ines on day three
+  — so the first shift the works ever open is hers to take. Her *petition* for
+  the building is still wave 1.5's; what 1.3 makes true is that the settlement
+  the player builds runs on her trade.
+
+**Ludo's claim moved from the played run to a staged one** and that is a
+deviation worth naming: he is one of the six who came later, and by the time he
+walks in on day two the board has been claimed (`FINDINGS.md` G-032). What the
+claim is about is what he does *with an offer*, and a world with no offer left
+cannot say — so `autonomy::judge_alive` now stages a full board and asserts he
+takes work at the first minute he is asked to think.
 
 ## 5. Seeded relationships (the `authored` preset)
 
@@ -411,13 +474,19 @@ the answer is no; after that a rename costs prose.
   like every other founder. Pride's own refusal needs the field 1.5 owes it
   (below), and until then the demo character for this module is a promise
   rather than a demonstration.
-- **1.3 needs + settlement**: needs reads `upkeep`; the pariah-candidate
-  check (Steve shortfalls first in the idle-player sweep at the shipped
-  numbers - an assertion on the seeds, not a hope). The per-industry wage and
-  the standing rates are one policy family; the drift the asks wave measured
-  (a wage must beat a six-point aptitude to move somebody) is the number to
-  price camp work against.
-- **1.5 petitions**: the template table in this format; consequence vocabulary;
+- **1.3 needs + settlement** (*done*): needs reads `upkeep`; the
+  pariah-candidate check landed as an assertion over every world of the economy
+  sweep rather than over the median one. The per-industry wage and the standing
+  rates are one policy family and the code says so — an industry opens at the
+  standing rate for its own kind of work (the registry asserts it), it steps by
+  the rates panel's own step, and a payment is judged against that rate through
+  the same `answers::wage_regard` a posting's wage goes through. The drift the
+  asks wave measured is why the works pay `craft` work exactly the craft rate:
+  a camp wage that opened off the rate would be a correction of the authoring
+  rather than a decision the player made.
+  **The arrival column is §4's**, and the order is the backstory's.
+- **1.5 petitions**: the template table in this format (and
+  `traits::TEMPLATED_MOTIVATORS` repoints at it); consequence vocabulary;
   `proud` needs a field for refusing gifts (the row currently has no
   numeric hook for it); the per-character visited set for T4;
   `walks-out` uses autonomy's away-state.

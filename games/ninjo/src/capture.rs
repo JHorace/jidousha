@@ -59,15 +59,38 @@ fn capture_size(surface: PhysicalSize) -> PhysicalSize {
 }
 
 /// Render every wanted frame and write the PNGs.
-pub fn capture_screens(
-    checks: &mut Checks,
-    reference: &Conducted,
-    narrow: &Conducted,
-    drawer: &DrawerRun,
-    reproduction: Option<&Conducted>,
-    asked: &Conducted,
-    zoomed: &Conducted,
-) -> String {
+pub struct Sessions<'a> {
+    // **One argument, seven sessions.** The run photographs seven scripted
+    // worlds and this writes the pictures from all of them; seven parameters
+    // in a row is a call nobody can read and a lint the workspace turns into
+    // an error.
+    /// The photographed session at the reference surface.
+    pub reference: &'a Conducted,
+    /// And at the narrow one.
+    pub narrow: &'a Conducted,
+    /// The tuning drawer's own scripted session.
+    pub drawer: &'a DrawerRun,
+    /// The wave-1.1 double-selection reproduction, if it was staged.
+    pub reproduction: Option<&'a Conducted>,
+    /// The asks module's session — a refusal, and the ledger.
+    pub asked: &'a Conducted,
+    /// The zoomed-out settlement.
+    pub zoomed: &'a Conducted,
+    /// The wave-1.3 session: pressure, capacity, and a whole camp.
+    pub settled: &'a Conducted,
+}
+
+/// Write every picture this run took.
+pub fn capture_screens(checks: &mut Checks, sessions: &Sessions<'_>) -> String {
+    let Sessions {
+        reference,
+        narrow,
+        drawer,
+        reproduction,
+        asked,
+        zoomed,
+        settled,
+    } = *sessions;
     let mut wanted: Vec<Wanted> = Vec::new();
     // The reference-only set: pictures of *what is on screen* rather than of
     // how the chrome scales, which the map and feed pairs already cover.
@@ -149,6 +172,26 @@ pub fn capture_screens(
                 false,
                 "an asks capture was never photographed",
                 format!("the {name} photo is missing from the asks run"),
+            );
+        }
+    }
+    // **The wave-1.3 four**: the camp on the day somebody first cannot pay for
+    // themselves, the settlement panel with the works buildable and with them
+    // standing, and a camp with all ten of the band in it — the pictures of
+    // the pressure, of the answer to it, and of the arrival column's end.
+    for name in ["short", "works", "built", "tenfold"] {
+        if let Some(shot) = settled.photo(name) {
+            wanted.push(Wanted {
+                name: format!("{name}-reference"),
+                surface: verify::HEADLESS_VIEWPORT,
+                frame: shot.frame.clone(),
+                font: settled.font,
+            });
+        } else {
+            checks.require(
+                false,
+                "an economy capture was never photographed",
+                format!("the {name} photo is missing from the settled run"),
             );
         }
     }

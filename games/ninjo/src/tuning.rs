@@ -68,8 +68,8 @@ pub fn dirty(pending: &Tuning, active: &Tuning) -> bool {
 /// A constant, because `floors::tuner_right_column` measures the very string
 /// the drawer prints: a note the floor guessed at would be a floor about a
 /// different screen.
-pub const APPLY_NOTE: &str = "APPLY restarts the scenario with the new values. every recording \
-                              and verify report is stamped with the constants in effect.";
+pub const APPLY_NOTE: &str = "APPLY restarts the scenario. every recording and report carries \
+                              the set in effect.";
 
 /// What the prose band says when the player is pointing at nothing.
 pub const RESTING_HINT: &str = "point at a constant for what it does";
@@ -85,6 +85,13 @@ const STAMP_LEAD: f32 = 14.0;
 /// while there is still room, so the wave that adds the fifth constant is
 /// told to re-lay this column instead of finding out from a screenshot
 /// (`FINDINGS.md` G-028).
+///
+/// **Wave 1.3 spent most of the room in the other column.** Three constants
+/// took the steppers from thirty-six to thirty-nine, which is exactly three
+/// columns of thirteen, and [`APPLY_NOTE`] lost two rows of wording to keep
+/// this one inside the drawer. The stepper grid is now the binding
+/// constraint (`floors::tuner_has_room`), and a fortieth constant needs the
+/// right column moved before it needs anything else.
 pub const STAMP_HEADROOM: usize = 2;
 
 /// **The stamp, wrapped to the column it stands in** — what is actually in

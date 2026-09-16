@@ -12,11 +12,11 @@ as the change.
 
 | File | Screen | Surface |
 |---|---|---|
-| `ninjo-settlement-reference.png` | the settlement at world-minute 0 — the whole cast standing at their home tiles, before anything is dispatched. **Ten figures for ten people since 2026-09-08**; before that it was the picture of the double-drawn cast, and all ten pairs were in it (`FINDINGS.md` G-023). **Named since 2026-09-09 only where a name fits**: the label rule drops the seven words that were landing on other people's heads, which is what G-022 measured and this is the after picture of | 1920x1080 |
+| `ninjo-settlement-reference.png` | the camp at world-minute 0 — **the four founders**, standing at their home tiles, before anything is dispatched. **Four and not ten since wave 1.3**: the staged start seats Bob, Steve, Alex and Tim at the fire and the other six walk in across days one to three (`CAST.md` §4), and this picture's opposite number is `ninjo-tenfold-reference.png`. The `short 1` chip is already lit — Steve cannot meet the first interval and the camp has earned nothing yet | 1920x1080 |
 | `ninjo-modes-reference.png` | the auto-pause config, with `quest-complete` set to pause — the change this session's photographed run is stopped by | 1920x1080 |
 | `ninjo-map-reference.png` | the map at world-minute 44 — two parties mid-travel on visibly different routes, with each site's open-job count under its marker | 1920x1080 |
 | `ninjo-feed-reference.png` | the feed at the first completion, with the world stopped: the reason line, and the entry that caused it ringed in gold | 1920x1080 |
-| `ninjo-living-reference.png` | world-minute 400 — **nobody was told to go anywhere**, and five of the ten are on the road because they decided to be | 1920x1080 |
+| `ninjo-living-reference.png` | world-minute 330 — **nobody was told to go anywhere**, and half the camp that is in it is on the road because they decided to be | 1920x1080 |
 | `ninjo-roster-reference.png` | the roster drawer: everyone, their chips, their purse, their desperation, and what they are doing with the reason they are doing it — with a trait chip tapped and its explanation wrapped across the two rows above — the second of which is the dormancy clause the one-row clip used to eat | 1920x1080 |
 | `ninjo-person-reference.png` | Steve's panel, opened by clicking his figure, with the `caring` chip tapped and the line that chip derives at the foot of the sheet | 1920x1080 |
 | `ninjo-board-reference.png` | **the Deep Cave's job board**, read by Alex: six rows of name, task chip, pot, duration and state, with his fit for each, the travel from his own door, and — on the one open row — what the scorer says he would do about a posting there (`reluctant - good at scout work`). The footer carries the wage the next tap would offer and whom it would go to | 1920x1080 |
@@ -35,11 +35,16 @@ as the change.
 | `ninjo-chosen-reference.png` | **the board after choosing from it**: Tim named — not the best fit on the list, which is the point — the footer reading `TO Tim`, his panel up beside the board, and the deep survey still `open`, because the picker names a person and the row is what posts | 1920x1080 |
 | `ninjo-worklist-reference.png` | **the work list** (UI.md §3f): every job standing open anywhere, read for Tim — sorted by fit, with each job's pot, duration, travel from where he stands, the site it stands at, and what he would say about it at the standing rate. `10 of 12 open` says the cap out loud; two `reluctant`s at the top and eight refusals under them is the spread the surface exists to sort, and his own panel beside it carries the `work 12` chip the list was opened from | 1920x1080 |
 | `ninjo-tuneover-reference.png` | **TUNE opened over an open ROSTER** — the owner's exact 2026-09-11 path (`FINDINGS.md` G-027), showing one drawer and not two, with the right column's stamp ending at `seed 0` and the prose band starting clear below it (G-028) | 1920x1080 |
-| `ninjo-tuning-reference.png` | the tuning drawer, MIRE pending in gold, APPLY lit | 1920x1080 |
+| `ninjo-tuning-reference.png` | the tuning drawer, MIRE pending in gold, APPLY lit — **three columns of fourteen since wave 1.3**, with the wave's three new rows (`upkeep_coin`, `upkeep_hours`, `industry_levy`) at the foot of the third and the stamp carrying `upkeep 5g/24h` and `levy 0g` (`FINDINGS.md` G-034) | 1920x1080 |
+| `ninjo-short-reference.png` | **the day somebody first goes short** (wave 1.3): the first interval of upkeep has fallen due at the end of day one, the `short` chip is lit gold, and drilling it names the four who cannot pay for themselves with what each of them holds against what the camp is asking — never a bare count | 1920x1080 |
+| `ninjo-works-reference.png` | **the settlement panel, over a camp that can build**: the camp's own marker opened it, the state-of-the-camp line reads `6 here - 4 short - 615g - 34g/d - 3 idle`, the camp works are priced at 180g for three craft slots, and BUILD is gold because the treasury can pay for it | 1920x1080 |
+| `ninjo-built-reference.png` | **and the same panel after it is built**: `Kawaza - a settlement` where it said `a camp`, three slots standing and free, `STANDING` where the verb was, and the treasury down by exactly what it cost. The first standing building is a beat (`CAST.md` §1) and this is it | 1920x1080 |
+| `ninjo-tenfold-reference.png` | **the camp with all ten of the band in it**, on the evening of day three — past Odd, the last arrival the column schedules. Every site is dry and the works are being worked: two figures stand at Kawaza on shifts nobody posted, and one person is short where an unbuilt settlement would have left most of them so | 1920x1080 |
 
 The settlement, config, living, roster, character, board, ordered, bounce,
 declined, ledger, selection, road-ring, breakdown, feed-breakdown,
-candidate-picker, after-choosing, work-list, TUNE-over-ROSTER and zoomed-out
+candidate-picker, after-choosing, work-list, TUNE-over-ROSTER, short, works,
+built, tenfold and zoomed-out
 shots are reference-only: they are
 pictures of *what is on screen*, and the scaling defects the narrow surface
 exists to catch are on the same chrome the map and feed pairs already cover.
