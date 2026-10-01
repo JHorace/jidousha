@@ -53,7 +53,8 @@ pub struct CardReading {
 /// The seats board slot `quest` shows while `hand` (a hero, and where they would
 /// land) is held: everyone seated but the hero in hand, who has left their seat;
 /// and the hero in hand too, where they would land, if that is an empty seat on
-/// this quest and they would go (SPEC §5.4 "live preview": a card with room).
+/// this quest and they would go (SPEC §5.4 "live preview": a card with room;
+/// SPEC-GAPS KG-28: the whole card reads this party).
 /// With nothing in hand it is the seats as they are.
 pub fn preview_seats(
     house: &House,
@@ -121,6 +122,7 @@ pub fn read_card(
                 &[&content.lore.year_counts[q.trouble as usize]],
             )
         } else {
+            // SPEC-GAPS KG-29: one line, joined by a space, as SPEC §5.4 quotes it.
             format!(
                 "{} {}",
                 &words[W::QuestCardNoOne],

@@ -15,6 +15,7 @@ use crate::checks::Checks;
 use crate::forecast::{card_percentages, forecast, percent};
 use crate::house::House;
 use crate::quest::{base_demand, post};
+use crate::quest_card::read_card;
 use crate::quest_sheet::{place_history, quest_sheet};
 use crate::screen::Target;
 use crate::scripted::{card_lines, lines_in};
@@ -187,6 +188,77 @@ pub fn check_rules(checks: &mut Checks) -> String {
             "Quested here three times: 0 in triumph, 1 in disaster.".to_owned(),
             "Elsbeth Thorne was lost at the Drowned Coast.".to_owned(),
         ],
+    );
+    // The card at stakes year 1 never shows: a trouble of one, renown above danger,
+    // a house of 40 renown, two patrons — Garrick and Brannoc on Grave goods.
+    let mut house: House = sim.world().resource::<House>().clone();
+    let (garrick, brannoc) = (
+        crate::verify::hero_named(&sim, "Garrick"),
+        crate::verify::hero_named(&sim, "Brannoc"),
+    );
+    house.renown = 40;
+    house.patrons = 2;
+    {
+        let q = &mut house.board[0].quest;
+        q.demand = 14;
+        q.renown = 5;
+        q.danger = 4;
+    }
+    house.board[1].quest.trouble = 1;
+    let card = read_card(content, &house, 0, &[garrick, brannoc], None);
+    expect(
+        checks,
+        "the card counts patrons, its own renown and the house's renown",
+        (
+            card.you_bring.as_deref(),
+            card.renown.as_str(),
+            card.unanswered.as_str(),
+        ),
+        (Some("you bring 14"), "Renown +5", "unanswered -3"),
+    );
+    expect(
+        checks,
+        "the card's odds at 14 against 14 are CONSTANTS §3's at 0",
+        card.odds.clone(),
+        Some(["Succeed 58%", "triumph 8%", "Setback 42%", "disaster 3%"].map(String::from)),
+    );
+    let sheet = quest_sheet(content, &house, 0, &[garrick, brannoc]);
+    checks.require(
+        sheet
+            .lines
+            .iter()
+            .any(|l| l.text == "A patron at Court" && l.value.as_deref() == Some("+2"))
+            && sheet
+                .lines
+                .iter()
+                .any(|l| l.text == "You bring" && l.value.as_deref() == Some("14")),
+        "the sheet's breakdown ends with the patrons and adds up to the card",
+        format!(
+            "{:?}",
+            sheet
+                .lines
+                .iter()
+                .map(|l| (&l.text, &l.value))
+                .collect::<Vec<_>>()
+        ),
+    );
+    expect(
+        checks,
+        "an empty quest at trouble 1 shows its trouble line for a year",
+        read_card(content, &house, 1, &[], None).idle,
+        Some("The tide has had the Drowned Coast to itself for a year.".to_owned()),
+    );
+    // A board posted under trouble: a seat fewer, danger and renown up, demand up.
+    let mut troubled: House = sim.world().resource::<House>().clone();
+    troubled.places[crate::ids::Place::Barrow.index()].trouble = 1;
+    troubled.post_board(content, &mut Rng::from_seed(9));
+    let q = &troubled.board[0].quest;
+    checks.require(
+        (q.trouble, q.seats, q.danger, q.renown) == (1, 1, 3, 3)
+            && troubled.board[0].seats.len() == 1
+            && (5..=7).contains(&q.demand),
+        "Grave goods posted at trouble 1: one seat, danger 3, renown 3, demand 1 x 6 +- 1",
+        format!("{q:?}"),
     );
     let (now, _) = checks.counts();
     format!(

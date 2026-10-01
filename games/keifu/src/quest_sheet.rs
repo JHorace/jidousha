@@ -133,10 +133,10 @@ pub fn quest_sheet(content: &Content, house: &House, quest: usize, party: &[Hero
         fmt(&words[W::QuestSheetDice], &[&DICE_MIDPOINT.to_string()]),
         None,
     ));
-    // SPEC-GAPS KG-25: on the sheet each outcome carries its own band's odds.
+    // SPEC-GAPS KG-25: on the sheet each outcome carries its own band's odds — all
+    // 0% with nobody going, as SPEC §6 gives an empty party.
     let odds = forecast(power, q.demand, !party.is_empty());
-    let shown =
-        |outcome: Outcome| (!party.is_empty()).then(|| format!("{}%", percent(odds.ways(outcome))));
+    let shown = |outcome: Outcome| Some(format!("{}%", percent(odds.ways(outcome))));
     out.push(line(
         Ink::Body,
         fmt(
@@ -278,7 +278,9 @@ mod tests {
         let sheet = quest_sheet(&content, &house, 1, &[]);
         let lines = texts(&sheet);
         assert!(lines.contains(&("No one is going.".to_owned(), None)));
-        assert!(lines.iter().all(|(t, v)| v.is_none() || t == "You bring"));
+        assert!(!lines.iter().any(|(t, _)| t == "You bring"));
+        let odds: Vec<&str> = lines.iter().filter_map(|(_, v)| v.as_deref()).collect();
+        assert_eq!(odds, ["0%", "0%", "0%", "0%"]);
         assert_eq!(
             sheet.history,
             [
