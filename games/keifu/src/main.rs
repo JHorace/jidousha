@@ -17,9 +17,11 @@
 
 #![allow(missing_docs)]
 
+mod art;
 mod bonds;
 mod calendar;
 mod capture;
+mod cast;
 mod chance;
 mod checks;
 mod constants;
@@ -143,6 +145,13 @@ fn found_the_house(world: &mut World) {
     };
     world.insert_resource(house);
     world.insert_resource(content);
+    // Only if nothing has installed a store already: a verify run puts a scripted
+    // one in before Startup, so when the art arrives is part of its script.
+    if world.find_resource::<Assets>().is_none() {
+        world.insert_resource(art::store());
+    }
+    let art = art::Art::load(world.resource_mut::<Assets>());
+    world.insert_resource(art);
     world.insert_resource(UiState::default());
     world.insert_resource(camera());
 }
@@ -187,6 +196,24 @@ fn follow_the_pointer(world: &mut World) {
 /// Submit the page.
 fn draw_the_page(ctx: &mut DrawCtx) {
     let page = read_the_page(&ctx.world);
+    let sprites: Vec<(Transform, Sprite)> = {
+        let art = ctx.world.resource::<art::Art>();
+        page.figures
+            .iter()
+            .map(|mark| {
+                let sprite = Sprite {
+                    size: mark.rect.size(),
+                    tint: mark.tint,
+                    layer: mark.layer,
+                    ..Sprite::new(art.texture(mark.figure))
+                };
+                (Transform::at(mark.rect.center()), sprite)
+            })
+            .collect()
+    };
+    for (transform, sprite) in &sprites {
+        ctx.sprite(transform, sprite);
+    }
     for shape in &page.shapes {
         ctx.rect(shape.rect, shape.color, Depth::layer(shape.layer));
     }

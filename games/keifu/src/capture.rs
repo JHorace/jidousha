@@ -1,21 +1,23 @@
 //! The pictures: recorded frames rendered on a GPU and written out as PNGs.
 //!
-//! The path is `examples/prototype_kit/capture.rs`'s, less the art half: this game
-//! draws only shapes and text, so `create_builtin_textures` is the whole texture
-//! table (docs/api/jidousha-capture.md). Three pictures: the W0+W1 oracle screen
-//! (top bar and Garrick's sheet), a child's sheet, and the family screen.
+//! The path is `examples/prototype_kit/capture.rs`'s, art half included: the
+//! built-in textures first, then the same sprites loaded in the same order from
+//! the same scripted store, so the plan's texture ids mean the same thing here
+//! (docs/api/jidousha-capture.md). Three pictures: the W0+W1 oracle screen (top
+//! bar, the cast's cards and Garrick's sheet), a child's sheet, and the family.
 
 use std::path::{Path, PathBuf};
 
 use jidousha::prelude::*;
 use jidousha::testing::{
-    FONT_TEXTURE, FrameRecord, FrameRecorder, RenderBackend, RenderError, WgpuBackend,
-    create_builtin_textures, encode_png,
+    BackendTextureId, FONT_TEXTURE, FrameRecord, FrameRecorder, RenderBackend, RenderError,
+    WgpuBackend, create_builtin_textures, encode_png, upload_ready_textures,
 };
 
+use crate::art::Art;
 use crate::checks::Checks;
 use crate::screen::{Target, WINDOW};
-use crate::verify::{hero_named, point_at, session};
+use crate::verify::{ART_ARRIVES, hero_named, point_at, session, store};
 
 /// The recorder's 16:9 shape, at full size so the sheet's small type reads.
 const CAPTURE_SIZE: PhysicalSize = PhysicalSize::new(1280, 720);
@@ -29,35 +31,44 @@ fn one_line(message: &str) -> String {
 
 /// Capture the three pictures; returns the summary lines, the first one being the
 /// `capture:` line `tools/verify` reads.
-pub fn capture_all(
-    checks: &mut Checks,
-    recorder: &mut FrameRecorder,
-    garrick: &FrameRecord,
-) -> Vec<String> {
+///
+/// Each picture is staged in its own session and recorded by its own fresh
+/// recorder: a recorder uploads the art once per session it settles, so only a
+/// recorder that saw one session holds the art at the ids a replay recreates.
+pub fn capture_all(checks: &mut Checks) -> Vec<String> {
     checks.require(
         CAPTURE_SIZE.width * WINDOW.height == CAPTURE_SIZE.height * WINDOW.width,
         "the capture is not the recorder's shape",
         format!("{CAPTURE_SIZE:?} against {WINDOW:?}"),
     );
-    let mut sim = session(crate::verify::SEEDS[0]);
-    let wren = hero_named(&sim, "Wren");
-    point_at(&mut sim, Target::Hero(wren), false);
-    let child = recorder.draw(&mut sim);
-    point_at(&mut sim, Target::OpenFamily, true);
-    let elsbeth = hero_named(&sim, "Maren");
-    point_at(&mut sim, Target::Hero(elsbeth), false);
-    let family = recorder.draw(&mut sim);
-    let font = recorder.font_texture();
     let mut lines = Vec::new();
-    for (index, (frame, file)) in [
-        (garrick, "keifu.png"),
-        (&child, "keifu-child.png"),
-        (&family, "keifu-family.png"),
+    for (index, (stage, file)) in [
+        (&["Garrick"][..], "keifu.png"),
+        (&["Wren"][..], "keifu-child.png"),
+        (&["", "Maren"][..], "keifu-family.png"),
     ]
     .into_iter()
     .enumerate()
     {
-        let said = capture(checks, frame, font, file);
+        let mut recorder = FrameRecorder::new(WINDOW);
+        let mut sim = session(crate::verify::SEEDS[0]);
+        for name in stage {
+            if name.is_empty() {
+                point_at(&mut sim, Target::OpenFamily, true);
+            } else {
+                let id = hero_named(&sim, name);
+                point_at(&mut sim, Target::Hero(id), false);
+            }
+        }
+        let frame = crate::verify::frame(&mut recorder, &mut sim);
+        // Where this recorder put each sprite, for the replay to match.
+        let art = Art::load(&mut store());
+        let ids: Vec<(TextureId, BackendTextureId)> = crate::art::ROLES
+            .map(|(_, figure)| art.texture(figure).texture_id())
+            .into_iter()
+            .map(|id| (id, recorder.texture(id)))
+            .collect();
+        let said = capture(checks, &frame, recorder.font_texture(), &ids, file);
         lines.push(if index == 0 {
             format!("capture: {said}")
         } else {
@@ -70,7 +81,8 @@ pub fn capture_all(
 fn capture(
     checks: &mut Checks,
     frame: &FrameRecord,
-    font: jidousha::testing::BackendTextureId,
+    font: BackendTextureId,
+    art: &[(TextureId, BackendTextureId)],
     file: &str,
 ) -> String {
     let mut gpu = WgpuBackend::offscreen(CAPTURE_SIZE);
@@ -100,15 +112,36 @@ fn capture(
     if !gpu.is_ready() {
         return "skipped, the GPU handshake never finished".to_owned();
     }
-    let textures = create_builtin_textures(&mut gpu);
+    let mut textures = create_builtin_textures(&mut gpu);
+    // The same sprites, asked for in the same order, resolved and uploaded: a store
+    // only has texels for what was loaded, so a replay that skipped this would
+    // render placeholders where the plan names the cast.
+    let mut assets = store();
+    let _ = Art::load(&mut assets);
+    let _ = assets.commit(ART_ARRIVES);
+    upload_ready_textures(&mut assets, &mut gpu, &mut textures);
     checks.require(
-        textures.resolve(FONT_TEXTURE) == font,
+        textures.resolve(FONT_TEXTURE) == font
+            && art
+                .iter()
+                .all(|(id, recorded)| textures.resolve(*id) == *recorded),
         "the replay's texture ids do not mean what the recorded plan means",
         format!(
-            "recorder font {font:?}, backend font {:?}",
-            textures.resolve(FONT_TEXTURE)
+            "recorder font {font:?}, backend font {:?}; sprites recorded {:?}, replayed {:?}",
+            textures.resolve(FONT_TEXTURE),
+            art.iter().map(|(_, b)| *b).collect::<Vec<_>>(),
+            art.iter()
+                .map(|(id, _)| textures.resolve(*id))
+                .collect::<Vec<_>>()
         ),
     );
+    if textures.resolve(FONT_TEXTURE) != font
+        || art
+            .iter()
+            .any(|(id, recorded)| textures.resolve(*id) != *recorded)
+    {
+        return format!("{file} not written: the replay's texture ids drifted");
+    }
     if let Err(error) = gpu.render(&frame.plan) {
         checks.require(
             false,

@@ -13,12 +13,15 @@
 //!    printed, labelled, for the owner to hold beside the original's card.
 //! 4. **The W0 machinery**: calendar, text conventions, pools, bags (`foundations.rs`).
 //! 5. **Readability floors** over every surface this build has (`floors.rs`).
-//! 6. **A picture** of each oracle's screen (`capture.rs`).
+//! 6. **The cast's sprites**: every role imported, every card its role's texture (`cast.rs`).
+//! 7. **A picture** of each oracle's screen (`capture.rs`).
 
 use std::process::ExitCode;
 
 use jidousha::prelude::*;
-use jidousha::testing::{FrameRecord, FrameRecorder, InputScript, InputSnapshot};
+use jidousha::testing::{
+    FrameRecord, FrameRecorder, InputScript, InputSnapshot, MemorySource, decode_png,
+};
 
 use crate::checks::{Checks, fail};
 use crate::content::Content;
@@ -29,12 +32,80 @@ use crate::screen::{Page, Row, Target, UiState, WINDOW, camera};
 /// oracles are fully determined by the authored household).
 pub const SEEDS: [u64; 3] = [1, 0x5eed, 0xdead_beef];
 
-/// A fresh game on `seed`, founded (Startup has run).
+/// The tick the scripted art arrives on: the first one, so every recorded frame has it.
+pub const ART_ARRIVES: u64 = 1;
+
+/// Every sprite file, baked into the binary, by the path the game asks for it by.
+///
+/// A verify run reads no files; the bytes are the ones the window shows, so a
+/// picture that stopped decoding fails here rather than passing on a stub.
+pub const ART_FILES: [(&str, &[u8]); 10] = [
+    (
+        "hero_knight.png",
+        include_bytes!("../assets/hero_knight.png"),
+    ),
+    (
+        "hero_warrior.png",
+        include_bytes!("../assets/hero_warrior.png"),
+    ),
+    (
+        "hero_ranger.png",
+        include_bytes!("../assets/hero_ranger.png"),
+    ),
+    (
+        "hero_scholar.png",
+        include_bytes!("../assets/hero_scholar.png"),
+    ),
+    (
+        "hero_priest.png",
+        include_bytes!("../assets/hero_priest.png"),
+    ),
+    ("hero_sage.png", include_bytes!("../assets/hero_sage.png")),
+    ("hero_elder.png", include_bytes!("../assets/hero_elder.png")),
+    (
+        "hero_hermit.png",
+        include_bytes!("../assets/hero_hermit.png"),
+    ),
+    ("hero_child.png", include_bytes!("../assets/hero_child.png")),
+    (
+        "heirloom_blade.png",
+        include_bytes!("../assets/heirloom_blade.png"),
+    ),
+];
+
+/// The art store a verify run uses: the real PNGs, arriving on `ART_ARRIVES`.
+pub fn store() -> Assets {
+    let mut source = MemorySource::new();
+    for (path, bytes) in ART_FILES {
+        let texture = match decode_png(bytes) {
+            Ok(texture) => texture,
+            Err(error) => fail(
+                "a sprite no longer decodes",
+                &format!(
+                    "games/keifu/assets/{path} is baked into verify and does not decode: {error}"
+                ),
+            ),
+        };
+        source.insert_texture(path, texture);
+        source.complete_at(path, ART_ARRIVES);
+    }
+    Assets::new(source)
+}
+
+/// A fresh game on `seed`, founded (Startup has run), with the scripted art store.
 pub fn session(seed: u64) -> HeadlessSim {
     let mut sim = headless(crate::config(seed), crate::register);
     sim.world_mut().insert_resource(RunSeed(seed));
+    // Before Startup, which installs the file-backed store only if none is here.
+    sim.world_mut().insert_resource(store());
     sim.tick();
     sim
+}
+
+/// Settle the art, then record one frame — every frame this run records.
+pub fn frame(recorder: &mut FrameRecorder, sim: &mut HeadlessSim) -> FrameRecord {
+    recorder.settle_assets(sim, ART_ARRIVES);
+    recorder.draw(sim)
 }
 
 /// Move the pointer to `at` (world units) for one tick, clicking if asked.
@@ -135,11 +206,12 @@ pub fn run() -> ExitCode {
     summary.push(crate::sessions::check_family(&mut checks, &mut recorder));
     summary.push(crate::sessions::check_seeds(&mut checks, &content));
     summary.push(crate::sessions::check_staged_sheets(&mut checks));
+    summary.push(crate::cast::check_art(&mut checks, &mut recorder));
     summary.push(crate::floors::check(&mut checks, &mut recorder));
     let Some(garrick_frame) = garrick_frame else {
         fail("no frame of Garrick's sheet was recorded", "SEEDS is empty");
     };
-    let captures = crate::capture::capture_all(&mut checks, &mut recorder, &garrick_frame);
+    let captures = crate::capture::capture_all(&mut checks);
 
     let (passed, failed) = checks.counts();
     if failed == 0 {

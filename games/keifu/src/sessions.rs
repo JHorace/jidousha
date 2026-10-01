@@ -103,7 +103,7 @@ pub fn check_family(checks: &mut Checks, recorder: &mut FrameRecorder) -> String
         "Maren's remembrance is wrong",
         format!("wanted {remembered:?}, shown {shown:?}"),
     );
-    let _ = recorder.draw(&mut sim);
+    let _ = crate::verify::frame(recorder, &mut sim);
     point_at(&mut sim, Target::CloseFamily, true);
     let closed = !sim.world().resource::<UiState>().family_open;
     checks.require(

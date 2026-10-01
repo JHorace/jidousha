@@ -111,7 +111,7 @@ fn judge(
     // Everything the page holds was submitted: a rectangle and a line are one quad
     // each, and type one per character.
     let chars: usize = page.rows.iter().map(|row| row.text.chars().count()).sum();
-    let expected = page.shapes.len() + page.links.len() + chars;
+    let expected = page.shapes.len() + page.links.len() + page.figures.len() + chars;
     checks.require(
         frame.quad_count() == expected,
         "the frame does not hold what the page says to draw",
@@ -156,7 +156,7 @@ pub fn check(checks: &mut Checks, recorder: &mut FrameRecorder) -> String {
         font: recorder.font_texture(),
     };
     let mut sim = session(crate::verify::SEEDS[0]);
-    let frame = recorder.draw(&mut sim);
+    let frame = crate::verify::frame(recorder, &mut sim);
     judge(
         checks,
         &mut tally,
@@ -177,7 +177,7 @@ pub fn check(checks: &mut Checks, recorder: &mut FrameRecorder) -> String {
     };
     for id in &seated {
         point_at(&mut sim, Target::Hero(*id), false);
-        let frame = recorder.draw(&mut sim);
+        let frame = crate::verify::frame(recorder, &mut sim);
         let name = format!(
             "summer, {}'s sheet",
             sim.world().resource::<House>().heroes[*id].name
@@ -191,7 +191,7 @@ pub fn check(checks: &mut Checks, recorder: &mut FrameRecorder) -> String {
             pointing: None,
         },
     );
-    let frame = recorder.draw(&mut sim);
+    let frame = crate::verify::frame(recorder, &mut sim);
     judge(
         checks,
         &mut tally,
@@ -203,7 +203,7 @@ pub fn check(checks: &mut Checks, recorder: &mut FrameRecorder) -> String {
     let everyone = sim.world().resource::<House>().heroes.len();
     for id in 0..everyone {
         point_at(&mut sim, Target::Hero(id), false);
-        let frame = recorder.draw(&mut sim);
+        let frame = crate::verify::frame(recorder, &mut sim);
         let name = format!(
             "family, {}",
             sim.world().resource::<House>().heroes[id].name

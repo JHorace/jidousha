@@ -6,6 +6,7 @@
 
 use jidousha::prelude::*;
 
+use crate::art::{Figure, figure_named, hero_figure};
 use crate::constants::{DREAD_LIMIT, ROSTER_SEATS, YARD_SPOTS};
 use crate::content::Content;
 use crate::family::top_bar;
@@ -41,6 +42,8 @@ pub const FAMILY_BUTTON: Rect = Rect {
 /// The sheet's type size, and its line pitch.
 const SHEET_SIZE: f32 = MIN_TEXT;
 const SHEET_PITCH: f32 = 17.0;
+/// The heirloom's sprite on the sheet: 16 px art at 2x.
+const HEIRLOOM_FIGURE: f32 = 32.0;
 
 /// Where card `slot` of a grid starting at `top` sits.
 pub fn card_rect(top: f32, slot: usize) -> Rect {
@@ -212,29 +215,22 @@ pub fn button(page: &mut Page, rect: Rect, label: &str, target: Target, layer: i
 }
 
 /// The tint the original puts on a hero's sprite (SPEC §5.4): dead grey, wounded red,
-/// elder grey. Otherwise the stand-in figure takes the vocation's aptitude colour.
-pub fn figure_tint(content: &Content, hero: &Hero) -> Color {
+/// elder grey; otherwise none. (Session 1's stand-in rectangle took its vocation's
+/// aptitude colour in the "otherwise" case; a sprite carries its own colours.)
+pub fn figure_tint(hero: &Hero) -> Color {
     if hero.fate == Fate::Dead || hero.phase() == Phase::Elder {
         ink::GONE
     } else if hero.wounded {
         ink::WARN
-    } else if hero.phase() == Phase::Child {
-        ink::CHILD
     } else {
-        let _ = content;
-        ink::APTITUDE[vocation_aptitude(hero).index()]
+        Color::WHITE
     }
 }
 
-/// The aptitude a hero's vocation trains (CONSTANTS §2).
-fn vocation_aptitude(hero: &Hero) -> crate::ids::Aptitude {
-    use crate::ids::{Aptitude, Vocation};
-    match hero.vocation {
-        Vocation::Knight | Vocation::Warrior => Aptitude::Might,
-        Vocation::Ranger | Vocation::Scholar => Aptitude::Wits,
-        Vocation::Priest | Vocation::Sage => Aptitude::Spirit,
-    }
-}
+/// A hero's sprite on a card: 16 px art at 3x; a child's at 2x, standing on the
+/// same ground line, so a child reads smaller than the grown.
+const FIGURE: f32 = 48.0;
+const CHILD_FIGURE: f32 = 32.0;
 
 /// A hero card: figure, name, age, a pip per point of dread, a gold pip if settled.
 fn hero_card(
@@ -247,9 +243,20 @@ fn hero_card(
 ) {
     let hero = &heroes[id];
     page.shape(rect, if hot { ink::HOT } else { ink::PANEL }, layers::PANEL);
-    let figure = Rect::from_min_size(rect.min + Vec2::new(10.0, 12.0), Vec2::new(26.0, 60.0));
-    page.shape(figure, figure_tint(content, hero), layers::MARK);
-    let text_x = rect.min.x + 44.0;
+    let size = if hero.phase() == Phase::Child {
+        CHILD_FIGURE
+    } else {
+        FIGURE
+    };
+    let ground = rect.min + Vec2::new(4.0 + FIGURE * 0.5, 18.0 + FIGURE);
+    let figure = Rect::from_min_size(ground - Vec2::new(size * 0.5, size), Vec2::splat(size));
+    page.figure(
+        figure,
+        hero_figure(content, hero),
+        figure_tint(hero),
+        layers::MARK,
+    );
+    let text_x = rect.min.x + 58.0;
     page.text(
         layers::TEXT,
         Vec2::new(text_x, rect.min.y + 10.0),
@@ -308,6 +315,27 @@ fn sheet(page: &mut Page, content: &Content, heroes: &[Hero], id: HeroId) {
         };
         if line.ink == Ink::Heading && y > top {
             y += 6.0;
+        }
+        // The heirloom's sprite, at 2x, at the right of its heading's row.
+        if line.ink == Ink::Heading
+            && line.text == content.words[W::SheetHeirloom]
+            && let Some(heirloom) = &heroes[id].heirloom
+        {
+            let figure: Figure = match figure_named(&heirloom.sprite) {
+                Some(figure) => figure,
+                None => panic!(
+                    "[keifu] the heirloom {} is drawn with {:?}, which no imported sprite \
+                     plays\n  fix: import one (art/import_sprites.py) and add its role",
+                    heirloom.name, heirloom.sprite
+                ),
+            };
+            let at = Vec2::new(x + column - HEIRLOOM_FIGURE, y);
+            page.figure(
+                Rect::from_min_size(at, Vec2::splat(HEIRLOOM_FIGURE)),
+                figure,
+                Color::WHITE,
+                layers::MARK,
+            );
         }
         // Stage marks, so done / current / upcoming read without colour as well.
         let text = match line.ink {

@@ -95,7 +95,7 @@ pub fn check_w0_and_w1(
     seed: u64,
 ) -> (String, FrameRecord) {
     let mut sim = session(seed);
-    let frame = recorder.draw(&mut sim);
+    let frame = crate::verify::frame(recorder, &mut sim);
     let font = recorder.font_texture();
     let page = page_of(&sim);
     for want in W0_TOP_BAR {
@@ -112,7 +112,7 @@ pub fn check_w0_and_w1(
 
     let garrick = hero_named(&sim, "Garrick");
     point_at(&mut sim, Target::Hero(garrick), false);
-    let frame = recorder.draw(&mut sim);
+    let frame = crate::verify::frame(recorder, &mut sim);
     let page = page_of(&sim);
     let mut at = 0;
     for want in W1_GARRICK_IN_ORDER {
@@ -194,7 +194,8 @@ fn check_dread_pips(checks: &mut Checks, page: &Page, seed: u64) {
 /// The cards: Garrick's figure is grey (he is an elder) and Maren's is not; one dread
 /// pip per point of dread (Garrick 2, Maren 1).
 fn check_cards(checks: &mut Checks, sim: &HeadlessSim, page: &Page, seed: u64) {
-    let grey = |c: Color| (c.r - c.g).abs() < 0.02 && (c.g - c.b).abs() < 0.06;
+    // An elder's sprite is tinted the grey ink; anyone else's is untinted.
+    let grey = |c: Color| c == ink::GONE;
     for (name, want_grey, want_pips) in [("Garrick", true, 2), ("Maren", false, 1)] {
         let id = hero_named(sim, name);
         let Some(card) = page
@@ -217,7 +218,11 @@ fn check_cards(checks: &mut Checks, sim: &HeadlessSim, page: &Page, seed: u64) {
             .map(|s| s.color)
             .collect();
         let pips = inside.iter().filter(|c| **c == ink::DREAD).count();
-        let figure = inside.iter().find(|c| **c != ink::DREAD).copied();
+        let figure = page
+            .figures
+            .iter()
+            .find(|f| card.contains_rect(f.rect))
+            .map(|f| f.tint);
         checks.require(
             pips == want_pips && figure.is_some_and(|c| grey(c) == want_grey),
             "a card's dread pips or figure tint are wrong",
