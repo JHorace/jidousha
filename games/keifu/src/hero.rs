@@ -71,20 +71,42 @@ pub struct Heirloom {
     pub provenance: String,
 }
 
-/// A blessing, as the sheet shows it. W3 gives it scope and power.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Blessing {
-    /// Its title.
-    pub title: String,
+/// Where a blessing applies (SPEC §6 line 7).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Scope {
+    /// On a quest carrying this tag.
+    AgainstTag(Tag),
+    /// On a quest at this place.
+    AtPlace(Place),
+    /// On every quest.
+    Everywhere,
 }
 
-/// What a deed was. W2 writes the two fear deeds; later waves add their kinds.
+/// A blessing (SPEC §3.2, §14.1): its title, where it applies and how much it adds.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Blessing {
+    /// "Garrick's rest".
+    pub title: String,
+    /// Where it applies.
+    pub scope: Scope,
+    /// What it adds there.
+    pub power: i32,
+}
+
+/// What a deed was. W2 writes the two fear deeds, W3 the three dream deeds; later
+/// waves add their kinds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DeedKind {
     /// Dread reached 5 (SPEC §10.4).
     Broken,
     /// Courage reached 3 (SPEC §10.3).
     ConqueredFear,
+    /// A dream stage done, the dream not yet fulfilled (SPEC §9.3).
+    DreamStep,
+    /// A dream fulfilled (SPEC §9.4).
+    DreamFulfilled,
+    /// A legacy left (SPEC §14.1).
+    LeftLegacy,
 }
 
 /// One entry in a hero's record of deeds (SPEC §3.2). The telling is never shown;

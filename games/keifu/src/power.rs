@@ -5,13 +5,14 @@
 //! extends these functions rather than writing a second sum, so the card, the
 //! sheet and the roll keep reading one number.
 
+use crate::blessing::blessing_power;
 use crate::bonds::steadying_companion;
 use crate::constants::{PATRON_POWER, WOUND_PENALTY, bond_power, fear_penalty};
 use crate::content::{Content, QuestTemplate};
 use crate::destiny::door_power;
 use crate::fear::{fear_power, fears};
 use crate::hero::{Hero, HeroId};
-use crate::ids::{Aptitude, Tag};
+use crate::ids::{Aptitude, Place, Tag};
 use crate::text::fmt;
 use crate::words::W;
 
@@ -20,6 +21,8 @@ use crate::words::W;
 pub struct QuestFacts<'q> {
     /// What it needs.
     pub aptitude: Aptitude,
+    /// Where it is.
+    pub place: Place,
     /// What it carries.
     pub tags: &'q [Tag],
     /// Whether it is one of the Door's locks.
@@ -31,6 +34,7 @@ impl<'q> QuestFacts<'q> {
     pub fn of(template: &'q QuestTemplate) -> Self {
         Self {
             aptitude: template.aptitude,
+            place: template.place,
             tags: &template.tags,
             door_lock: false,
         }
@@ -38,19 +42,9 @@ impl<'q> QuestFacts<'q> {
 }
 
 /// One member's contribution (SPEC §6 lines 1-7, then the floor): effective
-/// aptitude, heirloom, fear or conquered fear, wound, the Door's promise; never
-/// below 0.
+/// aptitude, heirloom, fear or conquered fear, wound, the Door's promise, every
+/// blessing that applies; never below 0.
 pub fn member_power(hero: &Hero, quest: QuestFacts<'_>) -> i32 {
-    // Line 7 needs a blessing's scope and power, which W3 gives it. Nothing blesses
-    // anyone before W3, so this is unreachable; it is loud so it cannot go quiet.
-    if !hero.blessings.is_empty() {
-        panic!(
-            "[keifu] {} holds a blessing and blessings have no power yet\n  likely cause: \
-             a W3 rule landed without extending power::member_power\n  fix: add SPEC §6 \
-             line 7 here",
-            hero.name
-        );
-    }
     let mut sum = hero.effective(quest.aptitude);
     if let Some(heirloom) = &hero.heirloom
         && heirloom.aptitude == quest.aptitude
@@ -62,6 +56,7 @@ pub fn member_power(hero: &Hero, quest: QuestFacts<'_>) -> i32 {
         sum -= WOUND_PENALTY;
     }
     sum += door_power(hero, quest.door_lock);
+    sum += blessing_power(hero, quest.place, quest.tags);
     sum.max(0)
 }
 
@@ -211,6 +206,7 @@ mod tests {
         let tags = [Tag::Water];
         assert_eq!(fear_line(&content, &heroes, &[garrick], &tags), None);
         let quest = QuestFacts {
+            place: Place::Deepwood,
             aptitude: Aptitude::Spirit,
             tags: &tags,
             door_lock: false,
@@ -226,6 +222,7 @@ mod tests {
         heroes[pip].wounded = true;
         heroes[pip].fear.dread = 5;
         let quest = QuestFacts {
+            place: Place::Deepwood,
             aptitude: Aptitude::Might,
             tags: &[Tag::Dark],
             door_lock: false,
@@ -238,11 +235,13 @@ mod tests {
         let (_, mut heroes) = founded();
         let (garrick, ysolde) = (id(&heroes, "Garrick"), id(&heroes, "Ysolde"));
         let might = QuestFacts {
+            place: Place::Deepwood,
             aptitude: Aptitude::Might,
             tags: &[],
             door_lock: false,
         };
         let wits = QuestFacts {
+            place: Place::Deepwood,
             aptitude: Aptitude::Wits,
             tags: &[],
             door_lock: false,
@@ -253,6 +252,7 @@ mod tests {
         heroes[garrick].wounded = true;
         assert_eq!(member_power(&heroes[garrick], might), 4);
         let lock = QuestFacts {
+            place: Place::SealedDoor,
             aptitude: Aptitude::Wits,
             tags: &[Tag::Dark, Tag::Cold],
             door_lock: true,
@@ -272,6 +272,45 @@ mod tests {
     }
 
     #[test]
+    fn a_blessing_adds_its_power_where_it_applies_before_the_floor() {
+        let (content, mut heroes) = founded();
+        let (garrick, pip) = (id(&heroes, "Garrick"), id(&heroes, "Pip"));
+        let lamps = content
+            .quest_templates
+            .iter()
+            .find(|t| t.title == "The lamps in the Barrow")
+            .expect("a Barrow quest against the Undead");
+        let grave = content
+            .quest_templates
+            .iter()
+            .find(|t| t.title == "Grave goods")
+            .expect("the opening Barrow quest");
+        // Garrick: Spirit 4 on the lamps (Dark, Undead); Might 7 - 2 + 1 on grave goods.
+        assert_eq!(member_power(&heroes[garrick], QuestFacts::of(lamps)), 4);
+        assert_eq!(member_power(&heroes[garrick], QuestFacts::of(grave)), 6);
+        let rest = crate::hero::Blessing {
+            title: "Garrick's rest".into(),
+            scope: crate::hero::Scope::AgainstTag(Tag::Undead),
+            power: 2,
+        };
+        heroes[garrick].blessings.push(rest.clone());
+        assert_eq!(member_power(&heroes[garrick], QuestFacts::of(lamps)), 6);
+        assert_eq!(
+            member_power(&heroes[garrick], QuestFacts::of(grave)),
+            6,
+            "grave goods carries no Undead"
+        );
+        // A child of twelve, wounded, afraid of the dark: -1 + 1... the blessing counts before the floor.
+        heroes[pip].age = 12;
+        heroes[pip].wounded = true;
+        heroes[pip].blessings.push(rest);
+        // Pip: Spirit 2 - 1 (youth) - 2 (Dark, dread 0) - 2 (wounded) + 2 = -1, floored to 0.
+        assert_eq!(member_power(&heroes[pip], QuestFacts::of(lamps)), 0);
+        heroes[pip].wounded = false;
+        assert_eq!(member_power(&heroes[pip], QuestFacts::of(lamps)), 1);
+    }
+
+    #[test]
     fn bonds_add_their_power_once_per_pair_rivals_subtract_and_patrons_add_one_each() {
         let (_, mut heroes) = founded();
         let (garrick, maren, odo, ysolde, brannoc) = (
@@ -286,6 +325,7 @@ mod tests {
         form(&mut heroes, odo, ysolde, BondKind::Companion, 1);
         assert_eq!(bonds_power(&heroes, &[odo, ysolde]), 0);
         let quest = QuestFacts {
+            place: Place::Deepwood,
             aptitude: Aptitude::Wits,
             tags: &[],
             door_lock: false,

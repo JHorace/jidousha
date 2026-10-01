@@ -1,0 +1,589 @@
+### C1 narrow blessing power 2 -> 3
+@ src/constants.rs
+- pub const NARROW_BLESSING_POWER: i32 = 2;
++ pub const NARROW_BLESSING_POWER: i32 = 3;
+
+### C2 broad blessing power 1 -> 2
+@ src/constants.rs
+- pub const BROAD_BLESSING_POWER: i32 = 1;
++ pub const BROAD_BLESSING_POWER: i32 = 2;
+
+### C3 blade names 10 -> 9
+@ src/constants.rs
+- pub const BLADE_NAMES: usize = 10;
++ pub const BLADE_NAMES: usize = 9;
+
+### C4 court dream renown 4 -> 5
+@ src/constants.rs
+- pub const COURT_DREAM_RENOWN: i32 = 4;
++ pub const COURT_DREAM_RENOWN: i32 = 5;
+
+### C5 worthy student goal 2 -> 3
+@ src/constants.rs
+-     (DreamKind::WorthyStudent, 0, 2),
++     (DreamKind::WorthyStudent, 0, 3),
+
+### C6 walk every road goal 3 -> 2
+@ src/constants.rs
+-     (DreamKind::WalkEveryRoad, 0, 3),
++     (DreamKind::WalkEveryRoad, 0, 2),
+
+### C7 barrow goal on the wrong stage
+@ src/constants.rs
+-     (DreamKind::QuietTheBarrow, 1, 2),
++     (DreamKind::QuietTheBarrow, 2, 2),
+
+### C8 default stage goal 1 -> 2
+@ src/constants.rs
+-         .map_or(1, |(_, _, goal)| *goal)
++         .map_or(2, |(_, _, goal)| *goal)
+
+### L1 a child grown leaves a tale
+@ src/dream_lore.rs
+-         DreamKind::ForgeABlade | DreamKind::WalkEveryRoad | DreamKind::SeeAChildGrown => {
++         DreamKind::ForgeABlade | DreamKind::WalkEveryRoad => {
+
+### L2 is_wed read as has_a_child
+@ src/dream_lore.rs
+-                 "is_wed" => Predicate::IsWed,
++                 "is_wed" => Predicate::HasAChild,
+
+### L3 a new road read as every road
+@ src/dream_lore.rs
+-                 "walked_a_new_road" => Predicate::WalkedANewRoad,
++                 "walked_a_new_road" => Predicate::WalkedEveryRoad,
+
+### L4 standing beside read as faring alone
+@ src/dream_lore.rs
+-                 "stood_beside_a_student" => Predicate::StoodBesideAStudent,
++                 "stood_beside_a_student" => Predicate::StudentFaredAlone,
+
+### L5 call tellings: apart told as any
+@ src/dream_lore.rs
+-             text(&calls, "apart")?,
++             text(&calls, "any")?,
+
+### L6 effects: against-tag told as at-place
+@ src/legacy_lore.rs
+-             text(&effects, "AGAINST_TAG")?,
++             text(&effects, "AT_PLACE")?,
+
+### L7 tale titles: the sea told as the roof
+@ src/legacy_lore.rs
+-             text(&tales, "SEE_THE_SEA")?,
++             text(&tales, "ROOF_OF_THE_WORLD")?,
+
+### L8 the barrow's blessing expected against the dark
+@ src/legacy_lore.rs
+-                 (ScopeLore::AgainstTag(Tag::Undead), NARROW_BLESSING_POWER),
++                 (ScopeLore::AgainstTag(Tag::Dark), NARROW_BLESSING_POWER),
+
+### L9 road-book expected of Might
+@ src/legacy_lore.rs
+-             read_heirloom(&heirlooms, "WALK_EVERY_ROAD", Aptitude::Wits)?,
++             read_heirloom(&heirlooms, "WALK_EVERY_ROAD", Aptitude::Might)?,
+
+### M1 renown strictly more
+@ src/moment.rs
+-         Predicate::RenownIsAtLeast(renown) => return me.renown >= renown,
++         Predicate::RenownIsAtLeast(renown) => return me.renown > renown,
+
+### M2 wed means a friend
+@ src/moment.rs
+-         Predicate::IsWed => return me.bonds.iter().any(|b| b.kind == BondKind::Spouse),
++         Predicate::IsWed => return me.bonds.iter().any(|b| b.kind == BondKind::Friend),
+
+### M3 a child means a parent
+@ src/moment.rs
+-         Predicate::HasAChild => return me.bonds.iter().any(|b| b.kind == BondKind::Child),
++         Predicate::HasAChild => return me.bonds.iter().any(|b| b.kind == BondKind::Parent),
+
+### M4 a grown child may be dead
+@ src/moment.rs
+-                     && heroes[b.other].is_living()
++                     && true
+
+### M5 a grown child need not be grown
+@ src/moment.rs
+-                     && heroes[b.other].is_adult()
++                     && true
+
+### M6 any winter is the one wanted
+@ src/moment.rs
+-         (Predicate::SpentTheWinter(want), Moment::Winter(action)) => *action == want,
++         (Predicate::SpentTheWinter(_want), Moment::Winter(_action)) => true,
+
+### M7 minding a child is not teaching the young
+@ src/moment.rs
+-             matches!(action, WinterAction::Teach | WinterAction::MindAChild)
++             matches!(action, WinterAction::Teach)
+
+### M8 everyone is present
+@ src/moment.rs
+-             let present = quest.party.contains(&hero);
++             let present = true;
+
+### M9 the door is a road
+@ src/moment.rs
+-             let questing = quest.place != Place::SealedDoor;
++             let questing = true;
+
+### M10 went to a place without going
+@ src/moment.rs
+-                     present && quest.place == place
++                     quest.place == place
+
+### M11 faced a tag without going
+@ src/moment.rs
+-                     present && quest.tags.contains(&tag)
++                     quest.tags.contains(&tag)
+
+### M12 fared strictly better
+@ src/moment.rs
+-                 Predicate::FaredAtLeast(outcome) => present && quest.outcome >= outcome,
++                 Predicate::FaredAtLeast(outcome) => present && quest.outcome > outcome,
+
+### M13 a new road is an old one
+@ src/moment.rs
+-                     present && questing && !me.roads_walked.contains(&quest.place)
++                     present && questing && me.roads_walked.contains(&quest.place)
+
+### M14 every road includes the door
+@ src/moment.rs
+-                             .filter(|place| **place != Place::SealedDoor)
++                             .filter(|_place| true)
+
+### M15 every road does not count the one walked
+@ src/moment.rs
+-                             .all(|place| *place == quest.place || me.roads_walked.contains(place))
++                             .all(|place| me.roads_walked.contains(place))
+
+### M16 beside a student without going
+@ src/moment.rs
+-                     present && taught_one_of(heroes, hero, quest.party)
++                     taught_one_of(heroes, hero, quest.party)
+
+### M17 a student alone while present
+@ src/moment.rs
+-                     !present
++                     present
+
+### M18 a student alone fares a setback
+@ src/moment.rs
+-                         && quest.outcome >= Outcome::Success
++                         && quest.outcome >= Outcome::Setback
+
+### M19 anyone bonded is a student taught
+@ src/moment.rs
+-         .any(|&member| heroes[hero].bond_to(member).is_some_and(|bond| bond.taught))
++         .any(|&member| heroes[hero].bond_to(member).is_some())
+
+### M20 the setup place is always the coast
+@ src/moment.rs
+-                         PlaceParam::Setup => setup_of(dream).place,
++                         PlaceParam::Setup => Place::DrownedCoast,
+
+### M21 the setup tag is always water
+@ src/moment.rs
+-                         TagParam::Setup => setup_of(dream).tag,
++                         TagParam::Setup => Tag::Water,
+
+### W1 the burden is tested even when the own dream moved
+@ src/witness.rs
+-     if !advance(content, house, hero, Held::Own, moment, &mut lines) {
++     if advance(content, house, hero, Held::Own, moment, &mut lines) || true {
+
+### W2 the dead witness
+@ src/witness.rs
+-         if house.heroes[hero].is_living() {
++         if true {
+
+### W3 the bearing is always one's own
+@ src/witness.rs
+-         Some(owner) => fmt(&words[W::DreamBearingOwned], &[&house.heroes[owner].name]),
++         Some(_owner) => fmt(&words[W::DreamBearingOwned], &[&house.heroes[hero].name]),
+
+### W4 a count finishes a stage one early
+@ src/witness.rs
+-     if count < goal {
++     if count < goal - 1 {
+
+### W5 a stage done skips the next
+@ src/witness.rs
+-     dream.current += 1;
++     dream.current += 2;
+
+### W6 what is left is what was done
+@ src/witness.rs
+-     let next = told_task(content, &dream.stages[dream.current].task, about);
++     let next = told_task(content, &dream.stages[stage].task, about);
+
+### W7 the counted line gives the goal for the count
+@ src/witness.rs
+-                 &count.to_string(),
++                 &goal.to_string(),
+
+### W8 fulfilment does not settle
+@ src/witness.rs
+-     me.settled = true;
++     me.settled = false;
+
+### W9 fulfilment keeps dread
+@ src/witness.rs
+-     me.fear.dread = 0;
++     me.fear.dread = me.fear.dread;
+
+### W10 an owned dream is told as one's own
+@ src/witness.rs
+-     let line = match owner {
++     let line = match None::<&crate::hero::Hero> {
+
+### W11 the told title is the bearer's even when owned
+@ src/witness.rs
+-     let title = told_title(content, dream, owner.map_or(me.pronoun, |o| o.pronoun));
++     let title = told_title(content, dream, me.pronoun);
+
+### W12 a step deed has no place
+@ src/witness.rs
+-         Moment::Quest(quest) => Some(quest.place),
++         Moment::Quest(_quest) => None,
+
+### W13 a fulfilled own dream still blocks the burden
+@ src/witness.rs
+-     if dream.is_fulfilled() {⏎        return false;
++     if dream.is_fulfilled() {⏎        return true;
+
+### G1 the legacy is named for the fulfiller
+@ src/legacy.rs
+-     let dreamer = dream.owner.unwrap_or(fulfiller);
++     let dreamer = fulfiller;
+
+### G2 blades are never counted
+@ src/legacy.rs
+-             house.blades_named += 1;
++             house.blades_named += 0;
+
+### G3 the road-book is named for its maker
+@ src/legacy.rs
+-             fmt(&legacies.heirlooms[1].name, &[&house.heroes[dreamer].name]),
++             fmt(&legacies.heirlooms[1].name, &[&house.heroes[fulfiller].name]),
+
+### G4 the cradle-ring takes the dreamer's house
+@ src/legacy.rs
+-                 &[&house.heroes[fulfiller].house],
++                 &[&house.heroes[dreamer].house],
+
+### G5 provenance names the first name only
+@ src/legacy.rs
+-             &[&house.heroes[fulfiller].full_name(), &year.to_string()],
++             &[&house.heroes[fulfiller].name, &year.to_string()],
+
+### G6 the sea's tale takes the otherwise title
+@ src/legacy.rs
+-                 DreamKind::SeeTheSea => &titles[0],
++                 DreamKind::SeeTheSea => &titles[3],
+
+### G7 the court's tale takes the roof's title
+@ src/legacy.rs
+-                 DreamKind::KnownAtCourt => &titles[2],
++                 DreamKind::KnownAtCourt => &titles[1],
+
+### G8 a tale is about its teller
+@ src/legacy.rs
+-                 about: dreamer,
++                 about: fulfiller,
+
+### G9 the legacy is not recorded
+@ src/legacy.rs
+-     hero.legacy = (kind, telling.clone());
++     hero.legacy = (kind, String::new());
+
+### G10 no left-legacy deed
+@ src/legacy.rs
+-         kind: DeedKind::LeftLegacy,
++         kind: DeedKind::DreamStep,
+
+### G11 the old heirloom never reaches the heir
+@ src/legacy.rs
+-                 heroes[heir].heirloom = Some(old);
++                 heroes[heir].heirloom = None;
+
+### G12 a dead child is an heir
+@ src/legacy.rs
+-         if child.is_living() && child.heirloom.is_none() {
++         if child.heirloom.is_none() {
+
+### G13 a child with full hands is an heir
+@ src/legacy.rs
+-         if child.is_living() && child.heirloom.is_none() {
++         if child.is_living() {
+
+### G14 the latest born is the heir
+@ src/legacy.rs
+-         if first.is_none_or(|f| heroes[candidate].born_year < heroes[f].born_year) {
++         if first.is_none_or(|f| heroes[candidate].born_year > heroes[f].born_year) {
+
+### G15 a spouse is no heir
+@ src/legacy.rs
+-                     && (bond.kind == BondKind::Spouse || bond.taught)
++                     && bond.taught
+
+### G16 the taught are no heirs
+@ src/legacy.rs
+-                     && (bond.kind == BondKind::Spouse || bond.taught)
++                     && bond.kind == BondKind::Spouse
+
+### G17 the dead are fallback heirs
+@ src/legacy.rs
+-                 other.is_living()
++                 true
+
+### G18 a full hand is a fallback heir
+@ src/legacy.rs
+-                     && other.heirloom.is_none()
++                     && true
+
+### G19 the blood stops at a child who cannot take it
+@ src/legacy.rs
+-             of_the_blood(heroes, bond.other, found);
++             let _ = bond;
+
+### G20 the heirloom line's effect and provenance swap
+@ src/legacy.rs
+-                 &[&name, &effect, &provenance],
++                 &[&name, &provenance, &effect],
+
+### B1 avenging leaves patience
+@ src/blessing.rs
+-         DreamKind::AvengeTheLost => 1,
++         DreamKind::AvengeTheLost => 2,
+
+### B2 the barrow leaves a debt
+@ src/blessing.rs
+-         DreamKind::QuietTheBarrow => 0,
++         DreamKind::QuietTheBarrow => 1,
+
+### B3 the debt is paid at the coast
+@ src/blessing.rs
+-             Some(setup) => Scope::AtPlace(setup.place),
++             Some(_setup) => Scope::AtPlace(Place::DrownedCoast),
+
+### B4 the fulfiller is not blessed
+@ src/blessing.rs
+-     let mut candidates = vec![fulfiller];
++     let mut candidates = vec![];
+
+### B5 the dreamer's line is not blessed
+@ src/blessing.rs
+-     for ancestor in [dreamer, fulfiller] {
++     for ancestor in [fulfiller, fulfiller] {
+
+### B6 the fulfiller's line is not blessed
+@ src/blessing.rs
+-     for ancestor in [dreamer, fulfiller] {
++     for ancestor in [dreamer, dreamer] {
+
+### B7 every blessing reaches the taught
+@ src/blessing.rs
+-     if kind == DreamKind::WorthyStudent {
++     if true {
+
+### B8 patience reaches every bond
+@ src/blessing.rs
+-                 .filter(|bond| bond.taught)
++                 .filter(|_bond| true)
+
+### B9 the dead are blessed
+@ src/blessing.rs
+-         if hero.is_living() && !hero.blessings.iter().any(|b| b.title == blessing.title) {
++         if !hero.blessings.iter().any(|b| b.title == blessing.title) {
+
+### B10 a title is laid twice
+@ src/blessing.rs
+-         if hero.is_living() && !hero.blessings.iter().any(|b| b.title == blessing.title) {
++         if hero.is_living() {
+
+### B11 against a tag applies everywhere
+@ src/blessing.rs
+-         Scope::AgainstTag(tag) => tags.contains(&tag),
++         Scope::AgainstTag(_tag) => true,
+
+### B12 at a place applies elsewhere
+@ src/blessing.rs
+-         Scope::AtPlace(at) => at == place,
++         Scope::AtPlace(at) => at != place,
+
+### B13 everywhere applies nowhere
+@ src/blessing.rs
+-         Scope::Everywhere => true,
++         Scope::Everywhere => false,
+
+### B14 every blessing adds one
+@ src/blessing.rs
+-         .map(|blessing| blessing.power)
++         .map(|_blessing| 1)
+
+### B15 the place is told by its title
+@ src/blessing.rs
+-             &[&power, &content.lore.places[place.index()].name],
++             &[&power, &content.lore.places[place.index()].title],
+
+### B16 the blessing is named for the fulfiller
+@ src/legacy.rs
+-             let blessing = word_blessing(content, dream, &house.heroes[dreamer]);
++             let blessing = word_blessing(content, dream, &house.heroes[fulfiller]);
+
+### P1 line 7 removed
+@ src/power.rs
+-     sum += blessing_power(hero, quest.place, quest.tags);
++     sum += 0;
+
+### P2 line 7 after the floor
+@ src/power.rs
+-     sum += blessing_power(hero, quest.place, quest.tags);
++     let sum = sum.max(0) + blessing_power(hero, quest.place, quest.tags);
+
+### P3 a quest is always at the barrow
+@ src/power.rs
+-             place: template.place,
++             place: Place::Barrow,
+
+### K1 a fulfilled dream is asked its stage
+@ src/calls.rs
+-     if dream.is_fulfilled() {
++     if false {
+
+### K2 the year's own stages call
+@ src/calls.rs
+-     if met(Moment::YearTurn) {
++     if false {
+
+### K3 a triumph anywhere calls the seated away
+@ src/calls.rs
+-     if !going && met(Moment::Quest(anywhere)) {
++     if met(Moment::Quest(anywhere)) {
+
+### K4 anywhere is only a success
+@ src/calls.rs
+-         outcome: Outcome::Triumph,
++         outcome: Outcome::Success,
+
+### K5 anywhere is the barrow
+@ src/calls.rs
+-         place: Place::SealedDoor,
++         place: Place::Barrow,
+
+### K6 the dreamer is not added
+@ src/calls.rs
+-         with.push(hero);
++         let _ = hero;
+
+### K7 going answers nothing more than needed
+@ src/calls.rs
+-     if needed.is_some() || going {
++     if needed.is_some() {
+
+### K8 a success is told as going
+@ src/calls.rs
+-             Outcome::Success => Telling::Succeed,
++             Outcome::Success => Telling::Go,
+
+### K9 no apart calls
+@ src/calls.rs
+-         .then_some(Telling::StayBehind)
++         .then_some(Telling::Go)
+
+### K10 a burden call is told as the dream
+@ src/calls.rs
+-         burden: true,⏎        telling,
++         burden: false,⏎        telling,
+
+### K11 children are called
+@ src/calls.rs
+-         .filter(|&id| heroes[id].is_living() && heroes[id].is_adult())
++         .filter(|&id| heroes[id].is_living())
+
+### K12 the dead are called
+@ src/calls.rs
+-         .filter(|&id| heroes[id].is_living() && heroes[id].is_adult())
++         .filter(|&id| heroes[id].is_adult())
+
+### K13 the stay-behind telling is the triumph one
+@ src/calls.rs
+-         Telling::StayBehind => &tellings[0],
++         Telling::StayBehind => &tellings[1],
+
+### K14 the word stays upper-case
+@ src/calls.rs
+-         &[&me.name, &words[which].to_lowercase(), task, &he, telling],
++         &[&me.name, &words[which].to_owned(), task, &he, telling],
+
+### K15 the sheet tells the first stage
+@ src/calls.rs
+-         .and_then(|d| d.stages.get(d.current))
++         .and_then(|d| d.stages.first())
+
+### K16 the card's names as a name list
+@ src/calls.rs
+-         &[&names.join(&content.lore.name_list_separator)],
++         &[&crate::text::name_list(content, &names)],
+
+### R1 a fulfilled gained dream makes rivals
+@ src/rivals.rs
+-     if gained.is_fulfilled() {
++     if false {
+
+### R2 oneself is a rival
+@ src/rivals.rs
+-         if other != hero
++         if true
+
+### R3 the dead are rivals
+@ src/rivals.rs
+-             && them.is_living()
++             && true
+
+### R4 children are rivals
+@ src/rivals.rs
+-             && them.is_adult()
++             && true
+
+### R5 a different dream makes rivals
+@ src/rivals.rs
+-             .is_some_and(|dream| dream.kind == gained.kind && !dream.is_fulfilled());
++             .is_some_and(|dream| dream.kind != gained.kind && !dream.is_fulfilled());
+
+### R6 a fulfilled dream still rivals
+@ src/rivals.rs
+-             .is_some_and(|dream| dream.kind == gained.kind && !dream.is_fulfilled());
++             .is_some_and(|dream| dream.kind == gained.kind);
+
+### R7 a companionship stands in the way
+@ src/rivals.rs
+-             .is_none_or(|bond| bond.kind == BondKind::Companion);
++             .is_none();
+
+### R8 kin are rivals
+@ src/rivals.rs
+-             && !kin(heroes, hero, other)
++             && true
+
+### R9 dream rivals become friends
+@ src/rivals.rs
+-             form(heroes, hero, other, BondKind::Rival, year);
++             form(heroes, hero, other, BondKind::Friend, year);
+
+### R10 the rival's title is the gainer's even when owned
+@ src/rivals.rs
+-         .map_or(heroes[hero].pronoun, |owner| heroes[owner].pronoun);
++         .map_or(heroes[hero].pronoun, |_owner| heroes[hero].pronoun);
+
+### S1 the sheet shows no blessing effect
+@ src/sheet.rs
+-         out.push(line(Ink::Note, blessing_effect(content, blessing)));
++         let _ = blessing_effect;
+
+### H1 the house starts with a blade named
+@ src/house.rs
+-             blades_named: 0,
++             blades_named: 1,

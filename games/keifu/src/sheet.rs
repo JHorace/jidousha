@@ -4,6 +4,7 @@
 //! draws its lines and the verify run reads the same lines, so the picture and
 //! the oracle cannot disagree. Layout is the screen's; words come from content.
 
+use crate::blessing::blessing_effect;
 use crate::constants::{
     BONDS_SHOWN, CONQUERED_FEAR_BONUS, COURAGE_TO_CONQUER, DREAD_LIMIT, LEGACY_HEIRLOOM_BONUS,
     TALE_YEARLY_RENOWN, WOUND_PENALTY, fear_penalty, phase_adjustment,
@@ -178,6 +179,7 @@ pub fn hero_sheet(content: &Content, heroes: &[Hero], id: HeroId) -> Sheet {
     for blessing in &hero.blessings {
         out.push(line(Ink::Heading, &words[W::SheetBlessed]));
         out.push(line(Ink::Body, blessing.title.clone()));
+        out.push(line(Ink::Note, blessing_effect(content, blessing)));
     }
     if hero.legacy.0 != LegacyKind::None {
         out.push(line(Ink::Heading, &words[W::SheetLeaves]));
@@ -285,6 +287,7 @@ fn dream_lines(content: &Content, heroes: &[Hero], dream: &Dream, out: &mut Vec<
             out.push(line(ink, task));
         }
     }
+    // SPEC-GAPS KG-23: the promise is shown under a fulfilled dream too.
     let legacy = content.dreams[dream.kind.index()].legacy;
     let promise = &content.legacies.promises[legacy.index()];
     let promise = match legacy {

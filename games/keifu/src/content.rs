@@ -9,9 +9,11 @@
 
 use crate::constants::{BOND_RANK_POWER_GRIEF, DOOR_LOCKS, DOOR_YEARS, bond_mirror};
 use crate::constants::{CROWN_RENOWN, DOOR_DESTINY_POWER, OUTLIVING_DREAD, PATRON_POWER};
+use crate::dream_lore::{DreamFormats, DreamLore, read_dream_formats, read_dreams};
 use crate::household::{Founding, read_household};
-use crate::ids::{Aptitude, BondKind, Destiny, DreamKind, LegacyKind, Place, Pool, Tag};
+use crate::ids::{Aptitude, BondKind, Destiny, Place, Pool, Tag};
 use crate::json::{At, Json, SchemaError, parse};
+use crate::legacy_lore::{LegacyLore, read_legacies};
 use crate::words::{Words, read_words};
 
 /// Every content file, by name, as baked in.
@@ -108,50 +110,6 @@ pub struct BondLore {
     pub kinship: Vec<[String; 2]>,
 }
 
-/// One stage of a dream, as authored.
-pub struct StageLore {
-    /// "Win a triumph at the Barrow", or a `%` template.
-    pub task: String,
-    /// Whether `task` takes the setup argument.
-    pub templated: bool,
-    /// How many times the stage must be met.
-    pub goal: i32,
-}
-
-/// One dream, as authored.
-pub struct DreamLore {
-    /// "To lay the Barrow's dead to rest", or a `%` template.
-    pub title: String,
-    /// For a templated title: the argument with no lost hero, for HE, for SHE.
-    pub title_arguments: Option<[String; 3]>,
-    /// What it leaves when fulfilled.
-    pub legacy: LegacyKind,
-    /// The three stages.
-    pub stages: Vec<StageLore>,
-}
-
-/// `dreams.json`'s format pieces.
-pub struct DreamFormats {
-    /// "% (%/%)".
-    pub progress: String,
-    /// " my ".
-    pub pronoun_find: String,
-    /// " % ".
-    pub pronoun_replace: String,
-    /// " you".
-    pub object_suffix: String,
-    /// "% %".
-    pub object_format: String,
-}
-
-/// `legacies.json`, the parts a sheet reads.
-pub struct LegacyLore {
-    /// "If it is ever done, ..." by `LegacyKind`.
-    pub promises: Vec<String>,
-    /// "+% % on quests."
-    pub heirloom_effect: String,
-}
-
 /// `names.json`.
 pub struct Names {
     /// Thirty-two names for him.
@@ -222,10 +180,7 @@ pub fn load() -> Result<Content, SchemaError> {
         quest_templates: read_quest_templates(&at("quests.json")?)?,
         blood_of_prophecy: text_at(&destinies, "blood_of_prophecy")?,
         bonds: read_bonds(&at("bonds.json")?)?,
-        dreams: table(&dreams_at, "dreams", DreamKind::ALL, DreamKind::id)?
-            .iter()
-            .map(read_dream)
-            .collect::<Result<_, SchemaError>>()?,
+        dreams: read_dreams(&dreams_at)?,
         dream_formats: read_dream_formats(&dreams_at)?,
         legacies: read_legacies(&at("legacies.json")?)?,
         pools: read_pools(&at("writing.json")?)?,
@@ -410,70 +365,6 @@ fn read_bonds(at: &At<'_>) -> Result<BondLore, SchemaError> {
         lore.kinship.push(telling);
     }
     Ok(lore)
-}
-
-fn read_dream(item: &At<'_>) -> Result<DreamLore, SchemaError> {
-    let at = item;
-    let templated = |owned: &At<'_>, key: &str| -> Result<bool, SchemaError> {
-        Ok(match owned.find(key)? {
-            Some(flag) => flag.bool()?,
-            None => false,
-        })
-    };
-    let title_arguments = if templated(item, "title_is_template")? {
-        let args = at.key("title_argument")?;
-        Some([
-            text(&args, "no_lost_hero")?,
-            text(&args, "lost_hero_HE")?,
-            text(&args, "lost_hero_SHE")?,
-        ])
-    } else {
-        None
-    };
-    let stages = at
-        .key("stages")?
-        .items()?
-        .iter()
-        .map(|stage| {
-            Ok(StageLore {
-                task: text(stage, "task")?,
-                templated: templated(stage, "task_is_template")?,
-                goal: stage.key("goal")?.int()?,
-            })
-        })
-        .collect::<Result<Vec<_>, SchemaError>>()?;
-    if stages.len() != crate::constants::DREAM_STAGE_COUNT {
-        return Err(at.reject(format!("{} stages; a dream has 3", stages.len())));
-    }
-    Ok(DreamLore {
-        title: text(item, "title")?,
-        title_arguments,
-        legacy: id_at(at, "legacy", LegacyKind::find)?,
-        stages,
-    })
-}
-
-fn read_dream_formats(at: &At<'_>) -> Result<DreamFormats, SchemaError> {
-    let swap = at.key("title_pronoun_swap")?;
-    let object = at.key("task_object_swap")?;
-    Ok(DreamFormats {
-        progress: text_at(at, "progress_format")?,
-        pronoun_find: text(&swap, "find")?,
-        pronoun_replace: text(&swap, "replace_with")?,
-        object_suffix: text(&object, "suffix")?,
-        object_format: text(&object, "format")?,
-    })
-}
-
-fn read_legacies(at: &At<'_>) -> Result<LegacyLore, SchemaError> {
-    let promises = at.key("promises")?;
-    Ok(LegacyLore {
-        promises: LegacyKind::ALL
-            .iter()
-            .map(|kind| text(&promises, kind.id()))
-            .collect::<Result<_, _>>()?,
-        heirloom_effect: text_at(at, "heirloom_effect")?,
-    })
 }
 
 fn read_pools(at: &At<'_>) -> Result<Vec<Vec<String>>, SchemaError> {

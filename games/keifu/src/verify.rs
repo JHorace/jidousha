@@ -11,10 +11,14 @@
 //! 3. **W2's oracle** — Maren and Garrick's fear line and power on the bell — and
 //!    a staged story over every W2 rule (`w2.rs`). The oracle's three strings are
 //!    printed, labelled, for the owner to hold beside the original's card.
-//! 4. **The W0 machinery**: calendar, text conventions, pools, bags (`foundations.rs`).
-//! 5. **Readability floors** over every surface this build has (`floors.rs`).
-//! 6. **The cast's sprites**: every role imported, every card its role's texture (`cast.rs`).
-//! 7. **A picture** of each oracle's screen (`capture.rs`).
+//! 4. **W3's oracle** — Garrick's dream call on a Barrow quest, the card's mark and
+//!    the quest sheet's line, a staged triumph that settles him and lays "Garrick's
+//!    rest" on his line — and a staged story over witnessing, fulfilment, legacies
+//!    and dream rivals (`w3.rs`). The vector is printed, labelled, the same way.
+//! 5. **The W0 machinery**: calendar, text conventions, pools, bags (`foundations.rs`).
+//! 6. **Readability floors** over every surface this build has (`floors.rs`).
+//! 7. **The cast's sprites**: every role imported, every card its role's texture (`cast.rs`).
+//! 8. **A picture** of each oracle's screen (`capture.rs`).
 
 use std::process::ExitCode;
 
@@ -203,6 +207,10 @@ pub fn run() -> ExitCode {
     summary.push(w2_line);
     summary.extend(w2_vector);
     summary.push(crate::w2::check_rules(&mut checks));
+    let (w3_line, w3_vector) = crate::w3::check_oracle(&mut checks);
+    summary.push(w3_line);
+    summary.extend(w3_vector);
+    summary.push(crate::w3::check_rules(&mut checks));
     summary.push(crate::sessions::check_family(&mut checks, &mut recorder));
     summary.push(crate::sessions::check_seeds(&mut checks, &content));
     summary.push(crate::sessions::check_staged_sheets(&mut checks));
@@ -216,7 +224,7 @@ pub fn run() -> ExitCode {
     let (passed, failed) = checks.counts();
     if failed == 0 {
         println!(
-            "verified keifu: W0, W1 and W2 oracles hold on {} seeds, {passed} checks",
+            "verified keifu: W0, W1, W2 and W3 oracles hold on {} seeds, {passed} checks",
             SEEDS.len()
         );
     } else {

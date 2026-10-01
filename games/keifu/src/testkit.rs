@@ -20,3 +20,10 @@ pub fn id(heroes: &[Hero], name: &str) -> HeroId {
         .position(|hero| hero.name == name)
         .expect("a founding hero by that name")
 }
+
+/// The content and a founded house, in year 1's summer.
+pub fn house() -> (Content, House) {
+    let content = crate::content::load().expect("the content loads");
+    let house = House::found(&content, 1).expect("the household founds");
+    (content, house)
+}

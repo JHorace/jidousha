@@ -1,5 +1,5 @@
 //! Keifu (系譜): a port of Lineage to Jidousha. Session 1 built modules W0 and W1;
-//! session 2 builds W2 and gives the cast its sprites.
+//! session 2 built W2 and gave the cast its sprites; session 3 builds W3.
 //!
 //! W0 is the foundation: the content in `spec/content/` loaded and validated, the
 //! lore tables, the calendar and the Door countdown, the randomness primitives
@@ -7,8 +7,11 @@
 //! from it, the founding household in creation order, the roster, the hero card
 //! and sheet, and the family screen's membership. W2 is bonds, fears, grief and
 //! destinies as state and pure rules (`bonds`, `fear`, `grief`, `destiny`), with
-//! the power sum and fear line its oracle reads (`power`); nothing triggers them
-//! until quests arrive in W4-W6.
+//! the power sum and fear line its oracle reads (`power`). W3 is dreams and
+//! legacies: moments and their predicates (`moment`), witnessing and fulfilment
+//! (`witness`), dream calls (`calls`), legacies and the heir of the blood
+//! (`legacy`, `blessing`), and dream rivals (`rivals`). Nothing triggers W2's or
+//! W3's rules until quests, the hearth and the turning arrive (W4-W8).
 //!
 //! What the player can do in this build: point at a hero to read their sheet, and
 //! open the family to see everyone who has lived. Nothing advances the year yet.
@@ -22,8 +25,10 @@
 #![allow(missing_docs)]
 
 mod art;
+mod blessing;
 mod bonds;
 mod calendar;
+mod calls;
 mod capture;
 mod cast;
 mod chance;
@@ -32,6 +37,7 @@ mod constants;
 mod content;
 mod destiny;
 mod dream;
+mod dream_lore;
 mod family;
 mod fear;
 mod floors;
@@ -42,9 +48,13 @@ mod house;
 mod household;
 mod ids;
 mod json;
+mod legacy;
+mod legacy_lore;
 mod lore;
+mod moment;
 mod oracles;
 mod power;
+mod rivals;
 mod screen;
 mod sessions;
 mod sheet;
@@ -55,6 +65,8 @@ mod text;
 mod tree;
 mod verify;
 mod w2;
+mod w3;
+mod witness;
 mod words;
 
 use std::process::ExitCode;

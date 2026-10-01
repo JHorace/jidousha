@@ -16,6 +16,7 @@ use crate::ids::Place;
 use crate::text::WritingMemory;
 
 /// The whole run's state (SPEC §3.1), as far as W1 builds it.
+#[derive(Clone)]
 pub struct House {
     /// The seed this run's generator was made from — explicit, recorded state.
     pub seed: u64,
@@ -33,8 +34,21 @@ pub struct House {
     pub fallen: Vec<Vec<HeroId>>,
     /// Per-pool memory of the last line written.
     pub writing: WritingMemory,
-    /// House tales, by title.
-    pub tales: Vec<String>,
+    /// House tales, oldest first.
+    pub tales: Vec<Tale>,
+    /// Blades forged this run; the next takes blade name `blades_named mod 10`.
+    pub blades_named: usize,
+}
+
+/// A house tale (SPEC §3.1): its title, whom it is about, and the year it was first told.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Tale {
+    /// "The tale of Pip and the sea".
+    pub title: String,
+    /// The dreamer it is about.
+    pub about: HeroId,
+    /// The year it was left.
+    pub since: i32,
 }
 
 impl Resource for House {}
@@ -65,6 +79,7 @@ impl House {
             fallen: founded.fallen,
             writing: WritingMemory::default(),
             tales: Vec::new(),
+            blades_named: 0,
         };
         house.prepare_summer();
         Ok(house)

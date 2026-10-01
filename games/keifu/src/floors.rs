@@ -5,7 +5,8 @@
 //! other, nothing the built-in face cannot draw — all against measured extents.
 //! Plus the camera floor: nothing drawn off screen, with the margin printed.
 //! Surfaces: the summer screen with nobody pointed at and with each hero's sheet,
-//! and the family screen with nobody pointed at and with each node's remembrance.
+//! and the family screen with nobody pointed at and with each node's remembrance;
+//! then W3's settled and blessed sheets, staged.
 
 use jidousha::testing::{BackendTextureId, FrameRecord, FrameRecorder};
 
@@ -210,8 +211,43 @@ pub fn check(checks: &mut Checks, recorder: &mut FrameRecorder) -> String {
         );
         judge(checks, &mut tally, &name, &page_of(&sim), &frame, true);
     }
+    // W3's sheets: Garrick settled, blessed and holding a forged blade; Maren with
+    // Thornfall and the blessing; Pip blessed; and the family's word for Garrick.
+    let content = match crate::content::load() {
+        Ok(content) => content,
+        Err(error) => crate::checks::fail("the content did not load", &error.to_string()),
+    };
+    crate::w3::stage_settled(&content, sim.world_mut().resource_mut::<House>());
+    set_ui(&mut sim, UiState::default());
+    let staged = ["Garrick", "Maren", "Pip"].map(|name| crate::verify::hero_named(&sim, name));
+    for id in staged {
+        point_at(&mut sim, Target::Hero(id), false);
+        let frame = crate::verify::frame(recorder, &mut sim);
+        let name = format!(
+            "W3, {}'s sheet",
+            sim.world().resource::<House>().heroes[id].name
+        );
+        judge(checks, &mut tally, &name, &page_of(&sim), &frame, false);
+    }
+    set_ui(
+        &mut sim,
+        UiState {
+            family_open: true,
+            pointing: None,
+        },
+    );
+    point_at(&mut sim, Target::Hero(staged[0]), false);
+    let frame = crate::verify::frame(recorder, &mut sim);
+    judge(
+        checks,
+        &mut tally,
+        "W3, the family on Garrick",
+        &page_of(&sim),
+        &frame,
+        true,
+    );
     checks.require(
-        tally.surfaces == 2 + seated.len() + everyone,
+        tally.surfaces == 2 + seated.len() + everyone + staged.len() + 1,
         "a surface was not judged",
         format!("{} surfaces", tally.surfaces),
     );

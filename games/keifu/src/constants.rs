@@ -1,4 +1,4 @@
-//! The rule numbers W0, W1 and W2 read, each copied from `spec/CONSTANTS.md`.
+//! The rule numbers W0 to W3 read, each copied from `spec/CONSTANTS.md`.
 //!
 //! Numbers are rules, not hand-authored words, so they live in source. Where a
 //! number also appears in a content file, `content::load` checks the two agree
@@ -6,7 +6,7 @@
 //! source line cited here wins" — a disagreement is a spec bug to report, never a
 //! thing to paper over).
 
-use crate::ids::{Aptitude, BondKind, Phase};
+use crate::ids::{Aptitude, BondKind, DreamKind, Phase};
 
 /// `DOOR_YEARS`: ordinary years before the Door (CONSTANTS §1).
 pub const DOOR_YEARS: i32 = 25;
@@ -111,6 +111,28 @@ pub const LEGACY_HEIRLOOM_BONUS: i32 = 2;
 pub const TALE_YEARLY_RENOWN: i32 = 1;
 /// `DREAM_STAGE_COUNT` (CONSTANTS §11).
 pub const DREAM_STAGE_COUNT: usize = 3;
+/// `NARROW_BLESSING_POWER`: a blessing against a tag or at a place (CONSTANTS §11).
+pub const NARROW_BLESSING_POWER: i32 = 2;
+/// `BROAD_BLESSING_POWER`: a blessing on every quest (CONSTANTS §11).
+pub const BROAD_BLESSING_POWER: i32 = 1;
+/// Blade names: ten, used in order, cycling (CONSTANTS §11).
+pub const BLADE_NAMES: usize = 10;
+/// `COURT_DREAM_RENOWN`: "Earn 4 renown", personal renown (CONSTANTS §11).
+pub const COURT_DREAM_RENOWN: i32 = 4;
+/// The stage goals that are not 1: (dream, stage index, goal) (CONSTANTS §11).
+pub const STAGE_GOALS_ABOVE_ONE: [(DreamKind, usize, i32); 3] = [
+    (DreamKind::WorthyStudent, 0, 2),
+    (DreamKind::WalkEveryRoad, 0, 3),
+    (DreamKind::QuietTheBarrow, 1, 2),
+];
+
+/// A stage's goal: 1, except the three CONSTANTS §11 names.
+pub fn stage_goal(kind: DreamKind, stage: usize) -> i32 {
+    STAGE_GOALS_ABOVE_ONE
+        .iter()
+        .find(|(dream, index, _)| *dream == kind && *index == stage)
+        .map_or(1, |(_, _, goal)| *goal)
+}
 
 /// `DOOR_LOCKS`: demands of the Might, Wits, Spirit locks (CONSTANTS §12).
 pub const DOOR_LOCKS: [i32; 3] = [34, 34, 34];
