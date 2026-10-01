@@ -160,4 +160,49 @@ mod tests {
             Some(BondKind::Rival)
         );
     }
+
+    #[test]
+    fn siblings_with_no_bond_between_them_are_still_kin_and_never_dream_rivals() {
+        let (content, mut heroes) = founded();
+        let wren = id(&heroes, "Wren");
+        let mut sibling = heroes[wren].clone();
+        sibling.name = "Ash".into();
+        sibling.bonds.clear();
+        heroes.push(sibling);
+        let ash = heroes.len() - 1;
+        let road = heroes[id(&heroes, "Ysolde")]
+            .dream
+            .clone()
+            .expect("Ysolde dreams");
+        heroes[wren].age = 12;
+        heroes[ash].age = 12;
+        heroes[ash].dream = Some(road.clone());
+        heroes[wren].dream = Some(road.clone());
+        assert!(heroes[wren].bond_to(ash).is_none());
+        let lines = dream_rivals(&content, &mut heroes, wren, &road, 5);
+        // Ysolde is a rival; Ash, a sister by the same parents, is not.
+        assert_eq!(lines.len(), 1);
+        assert!(heroes[wren].bond_to(ash).is_none());
+    }
+
+    #[test]
+    fn a_carried_dream_is_told_with_its_owners_pronoun_in_the_rivals_line() {
+        let (content, mut heroes) = founded();
+        let (garrick, maren, ysolde) = (
+            id(&heroes, "Garrick"),
+            id(&heroes, "Maren"),
+            id(&heroes, "Ysolde"),
+        );
+        heroes[ysolde].dream = Some(avenge(&content, Place::HighPass, Tag::Cold, Pronoun::He));
+        let mut gained = heroes[maren].dream.clone().expect("Maren dreams");
+        gained.owner = Some(maren);
+        heroes[garrick].burden = Some(gained.clone());
+        let lines = dream_rivals(&content, &mut heroes, garrick, &gained, 3);
+        assert_eq!(
+            lines,
+            [
+                "Garrick wants what Ysolde wants: to avenge her mother. There is only room for one of them to be first. They are rivals."
+            ]
+        );
+    }
 }

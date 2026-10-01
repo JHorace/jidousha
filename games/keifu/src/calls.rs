@@ -425,5 +425,13 @@ mod tests {
             .collect();
         assert!(!names.contains(&pip));
         assert!(!names.contains(&maren));
+        // Nor are the dead: Garrick's dream would call him to the Barrow.
+        assert!(names.contains(&garrick));
+        heroes[garrick].fate = crate::hero::Fate::Dead;
+        let names: Vec<HeroId> = called(&content, &heroes, grave, &[])
+            .iter()
+            .map(|(id, _)| *id)
+            .collect();
+        assert!(!names.contains(&garrick));
     }
 }

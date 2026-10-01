@@ -477,4 +477,39 @@ mod tests {
         );
         assert!(!crate::fear::can_dread(&house.heroes[garrick]));
     }
+
+    #[test]
+    fn a_father_carrying_his_daughters_vengeance_tells_it_as_hers_and_pays_her_debt() {
+        let (content, mut house) = house();
+        let (garrick, maren) = (id(&house.heroes, "Garrick"), id(&house.heroes, "Maren"));
+        let mut carried = house.heroes[maren].dream.clone();
+        if let Some(dream) = carried.as_mut() {
+            dream.owner = Some(maren);
+            dream.advance_to_stage(2);
+        }
+        house.heroes[garrick].burden = carried;
+        let party = [garrick];
+        let coast = quest(
+            Place::DrownedCoast,
+            &[Tag::Water, Tag::Beasts],
+            Outcome::Success,
+            &party,
+        );
+        assert_eq!(
+            witness(&content, &mut house, garrick, &coast),
+            [
+                "Garrick has done what Maren could not: to avenge her mother. It is finished. He is settled now, and dread has no hold on him.",
+                "It leaves a blessing, Maren's debt, paid: +2 at the Drowned Coast, for Garrick, Pip and Maren and every child born to them.",
+            ]
+        );
+        assert_eq!(house.heroes[garrick].legacy.1, "Maren's debt, paid");
+        assert_eq!(
+            house.heroes[pip_of(&house)].blessings[0].scope,
+            Scope::AtPlace(Place::DrownedCoast)
+        );
+    }
+
+    fn pip_of(house: &House) -> HeroId {
+        id(&house.heroes, "Pip")
+    }
 }

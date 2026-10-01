@@ -252,6 +252,20 @@ mod tests {
             !stage_met(&content, &heroes, maren, &dream, 2, &coast),
             "the setup tag, not Water"
         );
+        dream.setup = Some(Setup {
+            place: Place::HighPass,
+            tag: Tag::Water,
+            lost: None,
+        });
+        assert!(
+            stage_met(&content, &heroes, maren, &dream, 1, &pass),
+            "the setup place, not the Coast"
+        );
+        assert!(!stage_met(&content, &heroes, maren, &dream, 1, &coast));
+        assert!(
+            !stage_met(&content, &heroes, maren, &dream, 2, &coast),
+            "the setup tag, not Water"
+        );
     }
 
     #[test]

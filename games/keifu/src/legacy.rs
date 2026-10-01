@@ -389,7 +389,10 @@ mod tests {
                 "It leaves an heirloom: Ysolde's road-book. +2 Wits on quests. Every road there is, written down by Maren Thorne and finished in year 9."
             ]
         );
-        let ring = Dream::build(&content, DreamKind::SeeAChildGrown, None, None).expect("builds");
+        let mut ring =
+            Dream::build(&content, DreamKind::SeeAChildGrown, None, None).expect("builds");
+        // Aud Hale dreamt it; Ysolde Vane made it: the ring is the maker's house's.
+        ring.owner = Some(id(&house.heroes, "Aud"));
         let lines = leave_legacy(&content, &mut house, ysolde, &ring, 9);
         assert_eq!(
             lines[0],
@@ -439,5 +442,30 @@ mod tests {
                 "The tale of Odo at Court"
             ]
         );
+    }
+
+    #[test]
+    fn a_living_spouse_with_empty_hands_comes_before_the_taught_and_full_hands_take_nothing() {
+        let (_, mut house) = house();
+        let (odo, ysolde, wren) = (
+            id(&house.heroes, "Odo"),
+            id(&house.heroes, "Ysolde"),
+            id(&house.heroes, "Wren"),
+        );
+        form(&mut house.heroes, odo, ysolde, BondKind::Spouse, 2);
+        form(&mut house.heroes, wren, odo, BondKind::Mentor, 2);
+        if let Some(bond) = house.heroes[odo].bonds.iter_mut().find(|b| b.other == wren) {
+            bond.taught = true;
+        }
+        assert_eq!(heir(&house.heroes, odo), Some(ysolde));
+        let thornfall = house.heroes[id(&house.heroes, "Garrick")].heirloom.clone();
+        house.heroes[ysolde].heirloom = thornfall.clone();
+        assert_eq!(
+            heir(&house.heroes, odo),
+            Some(wren),
+            "the wife's hands are full"
+        );
+        house.heroes[wren].heirloom = thornfall;
+        assert_eq!(heir(&house.heroes, odo), None, "and so are the student's");
     }
 }

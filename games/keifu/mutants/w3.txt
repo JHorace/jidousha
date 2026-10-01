@@ -38,10 +38,10 @@
 -         .map_or(1, |(_, _, goal)| *goal)
 +         .map_or(2, |(_, _, goal)| *goal)
 
-### L1 a child grown leaves a tale
+### L1 the heirloom dreams leave tales
 @ src/dream_lore.rs
--         DreamKind::ForgeABlade | DreamKind::WalkEveryRoad | DreamKind::SeeAChildGrown => {
-+         DreamKind::ForgeABlade | DreamKind::WalkEveryRoad => {
+-             LegacyKind::Heirloom⏎        }⏎        DreamKind::SeeTheSea
++             LegacyKind::Tale⏎        }⏎        DreamKind::SeeTheSea
 
 ### L2 is_wed read as has_a_child
 @ src/dream_lore.rs
