@@ -132,12 +132,16 @@ pub fn check_seeds(checks: &mut Checks, content: &Content) -> String {
         "the run seed is not the recorded one",
         format!("{} {} {}", seed(&a), seed(&b), seed(&c)),
     );
-    let mut engine = a.world_mut().resource_mut::<Rng>().clone();
+    // An engine seed unlike the run seed, so the two generators can tell apart.
+    let mut mixed = headless(crate::config(1), crate::register);
+    mixed.world_mut().insert_resource(crate::house::RunSeed(7));
+    mixed.tick();
+    let mut engine = mixed.world().resource::<Rng>().clone();
     let mut fresh = Rng::from_seed(7);
     checks.require(
         engine.next_u32() == fresh.next_u32(),
         "the game's generator is not the one the recorded seed makes",
-        "after founding on seed 7, the world Rng and Rng::from_seed(7) disagree".to_owned(),
+        "engine seed 1, run seed 7: the world Rng and Rng::from_seed(7) disagree".to_owned(),
     );
     let before = crate::family::top_bar(content_of(&a), a.world().resource::<House>());
     let drawn = match begin_another_house(a.world_mut(), content) {
@@ -288,6 +292,39 @@ pub fn check_staged_sheets(checks: &mut Checks) -> String {
             "Succeed against Water",
             "If it is ever done, it will leave a tale, worth 1 renown a year for ever.",
         ],
+    );
+    // The carried dream shows its current stage and nothing else (SPEC §19.1).
+    let burden: Vec<String> = lines(&heroes, pip)
+        .into_iter()
+        .skip_while(|l| l != "BURDEN")
+        .take(5)
+        .collect();
+    checks.require(
+        burden
+            == [
+                "BURDEN",
+                "to see the sea",
+                "Taken up from Elsbeth Thorne.",
+                "Succeed against Water",
+                "If it is ever done, it will leave a tale, worth 1 renown a year for ever.",
+            ],
+        "a carried dream shows other than its current stage",
+        format!("{burden:?}"),
+    );
+    // A companion bond is never shown.
+    let odo = by("Odo");
+    heroes[odo].bonds.push(crate::hero::Bond {
+        kind: crate::ids::BondKind::Companion,
+        other: pip,
+        since: 0,
+        taught: false,
+        shared_successes: 0,
+    });
+    let odo_lines = lines(&heroes, odo);
+    checks.require(
+        !odo_lines.iter().any(|l| l.contains("Pip")),
+        "the sheet shows a companion bond",
+        format!("{odo_lines:?}"),
     );
     expect(
         checks,

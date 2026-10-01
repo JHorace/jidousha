@@ -67,6 +67,18 @@ fn judge(
     let sheet = crate::summer::SHEET;
     let midline = sheet.center().x;
     let two_columns = rows.iter().any(|r| r.panel == sheet && r.at.x >= midline);
+    for row in rows.iter().filter(|r| two_columns && r.panel == sheet) {
+        checks.require(
+            row.bounds().max.x <= sheet.max.x - crate::screen::PAD * 0.5,
+            "the sheet's right column runs into the panel's edge",
+            format!(
+                "{name}: {:?} ends at {:.1}, panel edge {:.1}",
+                row.text,
+                row.bounds().max.x,
+                sheet.max.x
+            ),
+        );
+    }
     for row in rows
         .iter()
         .filter(|r| two_columns && r.panel == sheet && r.at.x < midline)
