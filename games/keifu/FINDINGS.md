@@ -285,3 +285,96 @@ returning an error for an unknown texture rather than panicking.
   wounded red, as session 1 built them. Session 1's rectangle took its vocation's aptitude
   colour otherwise; multiplied into a coloured sprite that would stain it, so "otherwise"
   is now untinted, which is what §5.4 lists.
+
+---
+
+## Session 3 (W3)
+
+**Reading discipline, session 3.** Read: `CLAUDE.md`, the `make-game` skill, the crate whole
+(`SPEC-GAPS.md`, `FINDINGS.md`, `src/`), and from `spec/` MODULES.md, SPEC.md §0-§9,
+§12-§16 and §17-§23, CONSTANTS.md's dream and legacy rows, OPEN-QUESTIONS.md's dream
+entries, `content/README.md`, and the content files W3 reads (`dreams.json`,
+`legacies.json`, `household.json`, `quests.json`'s Barrow templates, the dream, legacy and
+bond keys of `lines.json` and `ui-text.json`). From `docs/api/`: the testing document's
+mutation passage, for the harness. **Engine source: not opened.** `games/ninjo/` and
+`attic/`: not opened; `grep -oh "^### G-0[0-9]*" games/*/FINDINGS.md` read the G-headings
+only, to continue the sequence (G-039's method). No sibling game read.
+
+### G-044 — the handoff's mutation harness was never committed
+
+Class: process · Session: keifu 3 · Owner: the `make-game` skill (§A.6, §B.5) and the keifu
+handoff
+
+**Doing:** "every W3 constant, table entry and predicate mutated at least once through the
+session-1/2 harness".
+
+**Expected:** the harness in the repository — the testing document's two hard errors built
+in, and the session's mutation list beside it, so a later session reruns the old faults and
+adds its own.
+
+**Happened:** neither session committed it. FINDINGS describes it ("a mutation that matches
+other than once is an error; one that does not build is re-cut") and nothing else of it
+exists: not under `games/keifu/`, not under `tools/`. The lists of sessions 1 and 2 (78 and
+80 faults) are gone with it, so their rounds cannot be rerun against W3's changes.
+
+**What I did:** wrote `games/keifu/mutants/mutate.py` from the testing document's passage and
+session 2's description — a find that matches other than once stops the run before
+anything is written, a mutation that does not build is reported NOT BUILT and never counted,
+each file is restored from the bytes read, the tree is checked clean after — with `--jobs N`
+running the list over N worktrees of HEAD (a round of 118 takes about five minutes). The W3
+list is `mutants/w3.txt`. Both are committed.
+
+**Fix:** a line in the skill's §A.6: commit the harness and every round's list with the game
+— a mutation round that cannot be rerun is evidence for one commit only.
+
+### docs/api: 0 findings
+
+W3 is pure rules over the game's own state. The only engine surfaces it touched — a
+`HeadlessSim`'s world, the per-session recorder of the capture path — are the ones sessions 1
+and 2 already used, and the capture document's rule as G-043 corrected it (one recorder per
+picture's session) carried the fourth picture without change. Nothing was asked of the
+documents that they had not already answered.
+
+### The game's own (session 3)
+
+- **"Grave goods" carries the Dark, not the Undead.** The handoff's "a Barrow/Undead quest"
+  is two quests in `quests.json`: the year-1 card quest "Grave goods" (Dark only) and "The
+  lamps in the Barrow" (Dark, Undead). Garrick's current stage asks only the Barrow and a
+  triumph, so both call him ("He must triumph"); his rest adds +2 on the lamps and nothing on
+  grave goods. Verify asserts all four, and prints the vector for "Grave goods", the quest
+  W4's oracle seats him on.
+- **The mutation round: 117 of 118 noticed.** 118 faults over every W3 constant
+  (blessing powers, blade count, the Court's renown, the three stage goals and the default),
+  every lore table entry W3 reads, every predicate of SPEC §9.1, witnessing (own first, one
+  stage, counting, settling, the lines), legacies (dreamer and fulfiller, the three heirlooms,
+  the tale titles, the record and the deed), the heir of the blood and its fallback, blessing
+  wording, recipients and reach, power line 7, every step of the dream call, the card and
+  sheet lines, and dream rivals. Round one: 106 of 117 noticed, one not built (re-cut to build); the final round reran the
+  whole list against the tightened checks. Ten
+  escapes were loose checks, every one a test whose hero masked the rule — a childless test
+  hero who was also wed, a setup that was always the Coast, an owned dream with no " my " in
+  its title, a ring made by its own dreamer, no living spouse, no student with full hands, no
+  dead dreamer, kin who also held a bond — so the rules were written right and their tests
+  were not yet discriminating. One of the ten fixes did not land: rustfmt had rewrapped the
+  line my edit searched for, and the next round showed the escape again — the testing
+  document's silent-miss warning, met in a hand edit. **The escape left is equivalent:** K7
+  (`needed.is_some() || going` to `needed.is_some()`): when the dreamer is seated, step 5's
+  absent moment *is* step 4's moment (the party already holds them), so it finds nothing and
+  the call is `None` either way. The instruments: `cargo test` alone noticed 115,
+  verify alone 48; two only verify saw (a fulfilled dream asked its stage panics there first;
+  the sheet's blessing-effect line is read only off the staged sheets).
+- **Two heirloom sprites are not imported.** W3's rules can forge a road-book
+  (`reward-guidebook`) and a cradle-ring (`reward-ring`); session 2 imported only the blade.
+  The sheet panics loudly if it is asked to draw an heirloom with no imported role
+  (`summer.rs`), so nothing goes quiet, but no live source makes one before W6-W8. Verify
+  reads those sheets as lines, not pictures. The session that wires a source imports the two
+  sprites (the depot was not reachable from this session's container).
+- **LEAVES shows the latest legacy only.** A hero who fulfils two dreams (verify's Garrick:
+  his own, then Brannoc's blade as a burden) records the second; §3.2 gives a hero one
+  legacy field. Not a gap — the epitaph's LEFT part (W9) reads the same field.
+- **BLESSED shows the title and its effect** ("Garrick's rest" / "+2 against Undead"), the
+  way HEIRLOOM shows a name and its effect; presentation only.
+- **The capture has a fourth picture,** `keifu-w3-garrick.png`: Garrick after the oracle's
+  triumph and the blade — settled (the gold pip on his card), "Fulfilled." twice, Emberwake in
+  hand with Thornfall gone to Maren, BLESSED "Garrick's rest". Committed as
+  `screens/w3-garrick-settled.png`.
