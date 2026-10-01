@@ -378,3 +378,118 @@ documents that they had not already answered.
   triumph and the blade — settled (the gold pip on his card), "Fulfilled." twice, Emberwake in
   hand with Thornfall gone to Maren, BLESSED "Garrick's rest". Committed as
   `screens/w3-garrick-settled.png`.
+
+---
+
+## Session 4 (W4)
+
+**Reading discipline, session 4.** Read: `CLAUDE.md`, the `make-game` skill,
+`docs/templates/DECISIONS.md`, the crate whole (`SPEC-GAPS.md`, `FINDINGS.md`, `src/`,
+`mutants/`), and from `spec/` MODULES.md, SPEC.md §0-§8 and §14.4, CONSTANTS.md whole, and
+the content W4 reads (`quests.json`, `ui-text.json`'s `quest_card`, `quest_sheet` and
+`summer`, `bonds.json`'s pairs, `lore.json`'s places and counts, `household.json`). From
+`docs/api/`: the API document's input passages (`Input`, the touch mirror, `PointerState`)
+and the testing document's scripted-input passages (`InputScript`, `SnapshotBuilder`,
+`InputEvent`, `FingerId`, the pointer-click example). **Engine source: not opened.**
+`games/ninjo/` and `attic/`: not opened; `grep -oh "^### G-0[0-9]*" games/*/FINDINGS.md`
+read the G-headings only (G-039's method). No sibling game read.
+
+### G-045 — a drag cannot be written with the scripted-input type the testing document teaches
+
+Class: docs · Session: keifu 4 · Owner: `docs/api/jidousha-testing.md` (scripted input)
+
+**Doing:** "drive the drag itself through the scripted pointer" — a press on a card, moves
+with the button held, a release over a seat.
+
+**Expected:** `InputScript` to hold a pointer button over a range of ticks, the way `hold`
+holds a key; or the document to say how a drag is scripted.
+
+**Happened:** `InputScript` has `pointer_at` and `click`, and `click` is a tap ("pressed,
+held, and released, all on that one tick"); there is no pointer `hold`. The document's
+pointer passage shows only a click. `SnapshotBuilder` is presented for a keyboard controller
+("send events, not states"), and nothing says that `InputEvent::ButtonPressed` and
+`PointerMoved` fed through it are how a held pointer is scripted.
+
+**What I did:** read `SnapshotBuilder` and `InputEvent` in the reference, inferred that the
+builder is the general path, and wrote `src/scripted.rs` on it: press (move + button down),
+moves on later ticks, release. It worked first time, so the gap cost reading rather than
+debugging.
+
+**Fix:** a short paragraph after the pointer-click example: "a drag is a press, moves and a
+release over several ticks — feed `InputEvent`s through `SnapshotBuilder`", with five lines
+of code; or `InputScript::hold_button(button, ticks)`.
+
+### G-046 — where the touch mirror and focus loss happen, as a test sees them
+
+Class: docs · Session: keifu 4 · Owner: `docs/api/jidousha-api.md` (the touch paragraphs)
+and `docs/api/jidousha-testing.md`
+
+**Doing:** asserting the handoff's "the touch mirror makes it tappable for free" by dragging
+with a finger in verify, and undoing a drag the system takes away.
+
+**Expected:** to know whether `Touched` events fed through `SnapshotBuilder` move the primary
+pointer (the mirror), or only the windowed driver does; whether losing focus releases held
+buttons; and what `InputSnapshot::new()` reports for `window_focused` (only
+`SnapshotBuilder::new` is documented as focused).
+
+**Happened:** the API document says "the engine puts the first finger down onto the primary
+pointer" without saying which layer does it, and is silent on focus and held buttons.
+
+**What I did:** tried it: a finger fed through the builder drags exactly as the mouse does,
+and a `Cancelled` touch reaches `touches()`. The game treats `!window_focused()` or a
+cancelled touch, mid-drag, as the drag taken away, and only reads focus while something is in
+hand — so whatever `InputSnapshot::new()` reports cannot matter. Verify drives both
+(`w4::check_drags`).
+
+**Fix:** one sentence each: the mirror is the builder's (so tests get it), what focus loss
+does to held buttons, and `InputSnapshot::new()`'s focus.
+
+### G-047 — the W4 handoff carried no decision-surface table
+
+Class: process · Session: keifu 4 · Owner: the keifu handoff template, and `make-game` §D.1
+
+**Doing:** starting W4, whose live drag is the port's first player decision.
+
+**Expected:** the handoff's decision-surface table, or the line "Decisions: none new".
+
+**Happened:** neither. The handoff specified the card's contents and the drag closely, which
+nearly is the table, but §D.1 makes the omission a stop.
+
+**What I did:** drafted the one-row table from the handoff and SPEC §5.3-§6 (which heroes to
+send on which quest; the card, previewed live, and the quest sheet; drag and release; one
+function `power::party_power` + the forecast; asserted by the W4 oracle's drags and the
+floors) and asked the owner, who approved it as drafted. The PR carries it.
+
+**Fix:** the keifu handoffs for W5-W10 carry the table from the start; W6 ("Set out") and W7
+(the hearth) each add a decision.
+
+### docs/api: 2 findings
+
+G-045 and G-046 above. Everything else W4 asked the documents (pointer positions through the
+camera, the per-session recorder of G-043, the floors' text measurement) they had answered.
+
+### The game's own (session 4)
+
+- **W5 scaffold.** Year 1's board is the two forced opening quests, each posted from its own
+  template by the real stakes formula at its place's trouble, in place order
+  (`House::post_board`, marked `W5 SCAFFOLD`). It draws four numbers from the run's generator
+  at founding (calm seats, then the wobble, for each), so session 1's recorded
+  "another house" seed was re-recorded (`sessions.rs` `SEED_AFTER_SEVEN`). No other year has
+  a board; W5 replaces the function whole.
+- **The board fills the right panel and the sheets are raised over it.** The hero sheet needs
+  about 520 px of height and the board two rows of 300; there is not room for both. A sheet
+  is raised while a hero or a quest is pointed at and nothing is in hand, and lowered by a
+  drag, so the card a hero is held over is always on screen (the original's sheets are
+  pop-ups too). One consequence: "<watched> will not go." can only be read while the hero is
+  in hand, because pointing at a hero raises their sheet over the board.
+- **The help line lives in the board's empty slots.** Year 1 posts two quests, so it fits
+  below them. W5's full board of four leaves no room for it — W5 needs to give it a home.
+- **The preview and the drop read one function.** `House::landing` answers "where would
+  they land" for both, so the card cannot preview a seat the release will not give
+  (SPEC-GAPS KG-28 records what that settles).
+- **The breakdown and the sum are asserted equal.** `power_lines::party_lines` builds §6
+  line by line from the same pieces `power::member_power` sums, and panics if the two ever
+  disagree, rather than rewriting session 2's sum.
+- **The mutation round.** W3's list rerun against W4: 117 of 118 noticed, the same
+  equivalent escape as session 3 (K7). W4's list (`mutants/w4.txt`, 134 faults) — see the
+  closing numbers in the PR and below.

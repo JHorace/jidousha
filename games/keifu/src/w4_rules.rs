@@ -260,6 +260,77 @@ pub fn check_rules(checks: &mut Checks) -> String {
         "Grave goods posted at trouble 1: one seat, danger 3, renown 3, demand 1 x 6 +- 1",
         format!("{q:?}"),
     );
+    // W2's party on the bell, line by line: Thornfall is Might, so it is not carried.
+    let (maren, odo) = (
+        crate::verify::hero_named(&sim, "Maren"),
+        crate::verify::hero_named(&sim, "Odo"),
+    );
+    let house: House = sim.world().resource::<House>().clone();
+    let bell = quest_sheet(content, &house, 1, &[maren, garrick]);
+    let from = bell.lines.iter().position(|l| l.text == "You bring");
+    let breakdown: Vec<(&str, Option<&str>)> = from
+        .map(|at| &bell.lines[at..at + 7])
+        .unwrap_or_default()
+        .iter()
+        .map(|l| (l.text.as_str(), l.value.as_deref()))
+        .collect();
+    expect(
+        checks,
+        "W2's party on the bell, line by line",
+        breakdown,
+        vec![
+            ("You bring", Some("4")),
+            ("Maren, Spirit 3", None),
+            ("  fears deep water", Some("-2")),
+            ("Garrick, Spirit 4", None),
+            ("  fears deep water", Some("-3")),
+            ("Maren and Garrick, child and parent", Some("+2")),
+            ("Two dice, less 7, are added to that.", None),
+        ],
+    );
+    // A call that hangs on the party: Odo, wanting to see a student he taught succeed
+    // without him, is called to stay behind only when Maren is going.
+    let mut staged: House = sim.world().resource::<House>().clone();
+    match crate::dream::Dream::build(content, crate::ids::DreamKind::WorthyStudent, None, None) {
+        Ok(mut dream) => {
+            dream.advance_to_stage(2);
+            staged.heroes[odo].dream = Some(dream);
+        }
+        Err(error) => checks.require(false, "WORTHY_STUDENT builds", error),
+    }
+    crate::bonds::form(
+        &mut staged.heroes,
+        odo,
+        maren,
+        crate::ids::BondKind::Student,
+        1,
+    );
+    for bond in staged.heroes[odo]
+        .bonds
+        .iter_mut()
+        .filter(|b| b.other == maren)
+    {
+        bond.taught = true;
+    }
+    expect(
+        checks,
+        "the Dream: line reads the party: Odo is called only when his student goes",
+        (
+            read_card(content, &staged, 0, &[], None).dream,
+            read_card(content, &staged, 0, &[maren], None).dream,
+        ),
+        (
+            Some("Dream: Garrick, Ysolde".to_owned()),
+            Some("Dream: Garrick, Ysolde, Odo".to_owned()),
+        ),
+    );
+    let sheet = quest_sheet(content, &staged, 0, &[maren]);
+    let call = "Odo's dream: See a student succeed without you. He must stay behind.";
+    checks.require(
+        sheet.lines.iter().any(|l| l.text == call),
+        "the sheet tells a stay-behind call",
+        format!("wanted {call:?}"),
+    );
     let (now, _) = checks.counts();
     format!(
         "W4 rules: {} checks over CONSTANTS §3 entry by entry, stakes, costs and the sheet",
