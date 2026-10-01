@@ -27,6 +27,8 @@ pub struct House {
     pub roster: [Option<HeroId>; ROSTER_SEATS],
     /// House renown, floored at 0.
     pub renown: i32,
+    /// Heroes ever crowned; each adds +1 to every quest (SPEC §6).
+    pub patrons: i32,
     /// Per place, the heroes who fell there.
     pub fallen: Vec<Vec<HeroId>>,
     /// Per-pool memory of the last line written.
@@ -59,6 +61,7 @@ impl House {
             heroes: founded.heroes,
             roster: [None; ROSTER_SEATS],
             renown: HOUSE_RENOWN_AT_START,
+            patrons: 0,
             fallen: founded.fallen,
             writing: WritingMemory::default(),
             tales: Vec::new(),

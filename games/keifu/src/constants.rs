@@ -1,4 +1,4 @@
-//! The rule numbers W0 and W1 read, each copied from `spec/CONSTANTS.md`.
+//! The rule numbers W0, W1 and W2 read, each copied from `spec/CONSTANTS.md`.
 //!
 //! Numbers are rules, not hand-authored words, so they live in source. Where a
 //! number also appears in a content file, `content::load` checks the two agree
@@ -44,6 +44,9 @@ pub const COURAGE_TO_CONQUER: i32 = 3;
 /// `CONQUERED_FEAR_BONUS` (CONSTANTS §6).
 pub const CONQUERED_FEAR_BONUS: i32 = 2;
 
+/// `REST_DREAD_SHED`: dread shed by resting at the fire, not if broken (CONSTANTS §6).
+pub const REST_DREAD_SHED: i32 = 1;
+
 /// Fear penalty: `2 + dread / 2`, integer division (CONSTANTS §6).
 pub fn fear_penalty(dread: i32) -> i32 {
     2 + dread / 2
@@ -61,9 +64,20 @@ pub const BOND_RANK_POWER_GRIEF: [(i32, i32, i32); 8] = [
     (4, 2, 2),
 ];
 
+/// A bond kind's rank: a bond is replaced only by a kind of strictly higher rank
+/// (CONSTANTS §7, SPEC §12.1).
+pub fn bond_rank(kind: BondKind) -> i32 {
+    BOND_RANK_POWER_GRIEF[kind.index()].0
+}
+
 /// The power a bond of `kind` adds in a shared party (CONSTANTS §7).
 pub fn bond_power(kind: BondKind) -> i32 {
     BOND_RANK_POWER_GRIEF[kind.index()].1
+}
+
+/// The dread a mourner holding a bond of `kind` to the dead takes (CONSTANTS §6, §7).
+pub fn bond_grief(kind: BondKind) -> i32 {
+    BOND_RANK_POWER_GRIEF[kind.index()].2
 }
 
 /// The mirror kind, as the other hero holds the bond (SPEC §12.1).
@@ -76,6 +90,15 @@ pub fn bond_mirror(kind: BondKind) -> BondKind {
         other => other,
     }
 }
+
+/// `DOOR_DESTINY_POWER`: +5 at each Door lock for the Door's promisee (CONSTANTS §8).
+pub const DOOR_DESTINY_POWER: i32 = 5;
+/// `CROWN_RENOWN`: personal renown the crown needs to claim (CONSTANTS §8).
+pub const CROWN_RENOWN: i32 = 8;
+/// `PATRON_POWER`: +1 per patron on every quest with anyone seated (CONSTANTS §8).
+pub const PATRON_POWER: i32 = 1;
+/// `OUTLIVING_DREAD`: extra grief for OUTLIVE_THOSE_YOU_LOVE, when grief applies (CONSTANTS §8).
+pub const OUTLIVING_DREAD: i32 = 2;
 
 /// `YARD_SPOTS`: children shown in the yard (CONSTANTS §9).
 pub const YARD_SPOTS: usize = 6;

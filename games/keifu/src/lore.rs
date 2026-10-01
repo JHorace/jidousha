@@ -56,6 +56,10 @@ pub struct Lore {
     pub phases: Vec<PhaseLore>,
     /// Vocation titles, by `Vocation`.
     pub vocations: Vec<String>,
+    /// The original's sprite names per vocation (its own, its elder's), by `Vocation`.
+    pub vocation_sprites: Vec<[String; 2]>,
+    /// The original's sprite name for every child.
+    pub child_sprite: String,
     /// By `Pronoun`.
     pub pronouns: Vec<PronounLore>,
     /// By calendar month.
@@ -142,6 +146,16 @@ pub fn read_lore(at: &At<'_>) -> Result<Lore, SchemaError> {
             crate::ids::Vocation::ALL,
             crate::ids::Vocation::id,
         )?)?,
+        vocation_sprites: table(
+            at,
+            "vocations",
+            crate::ids::Vocation::ALL,
+            crate::ids::Vocation::id,
+        )?
+        .iter()
+        .map(|v| Ok([text(v, "sprite")?, text(v, "elder_sprite")?]))
+        .collect::<Result<_, SchemaError>>()?,
+        child_sprite: text_at(at, "child_sprite")?,
         pronouns: crate::ids::Pronoun::ALL
             .iter()
             .map(|p| {

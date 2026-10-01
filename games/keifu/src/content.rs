@@ -8,8 +8,9 @@
 //! message naming the file, the path inside it, and what was expected.
 
 use crate::constants::{BOND_RANK_POWER_GRIEF, DOOR_LOCKS, DOOR_YEARS, bond_mirror};
+use crate::constants::{CROWN_RENOWN, DOOR_DESTINY_POWER, OUTLIVING_DREAD, PATRON_POWER};
 use crate::household::{Founding, read_household};
-use crate::ids::{Aptitude, BondKind, Destiny, DreamKind, LegacyKind, Pool};
+use crate::ids::{Aptitude, BondKind, Destiny, DreamKind, LegacyKind, Place, Pool, Tag};
 use crate::json::{At, Json, SchemaError, parse};
 use crate::words::{Words, read_words};
 
@@ -49,7 +50,7 @@ pub const FILES: [(&str, &str); 15] = [
 /// Typed reading of these lands with the wave that uses them; until then their
 /// shape is held at the top level so a renamed or missing table fails now.
 const LATER_WAVES: [(&str, &[&str]); 4] = [
-    ("quests.json", &["templates", "opening_quests"]),
+    ("quests.json", &["opening_quests"]),
     (
         "ghost.json",
         &["title", "aptitude", "seats", "danger", "premise", "endings"],
@@ -78,6 +79,20 @@ pub struct DestinyLore {
     pub doom: String,
     /// "Gift: ..." (empty for UNSPOKEN).
     pub gift: String,
+    /// Whether the Seer can speak it (SPEC §13): all but UNSPOKEN and the Door.
+    pub speakable: bool,
+}
+
+/// A quest template, the parts W2's power sum reads. W4/W5 read the rest.
+pub struct QuestTemplate {
+    /// Where.
+    pub place: Place,
+    /// "The bell under the tide".
+    pub title: String,
+    /// What it needs.
+    pub aptitude: Aptitude,
+    /// What it carries (may be a subset of its place's tags).
+    pub tags: Vec<Tag>,
 }
 
 /// `bonds.json`.
@@ -88,6 +103,9 @@ pub struct BondLore {
     pub shown: Vec<bool>,
     /// Gendered titles (HE, SHE) for the kinds that have them, by `BondKind`.
     pub gendered: Vec<Option<[String; 2]>>,
+    /// The kinship telling of a bond's other hero, by `BondKind`, then by the
+    /// other's pronoun (HE, SHE); the same word twice for an ungendered kind.
+    pub kinship: Vec<[String; 2]>,
 }
 
 /// One stage of a dream, as authored.
@@ -154,6 +172,8 @@ pub struct Content {
     pub blood_of_prophecy: String,
     /// `bonds.json`.
     pub bonds: BondLore,
+    /// `quests.json` templates, in file order.
+    pub quest_templates: Vec<QuestTemplate>,
     /// `dreams.json`, by `DreamKind`.
     pub dreams: Vec<DreamLore>,
     /// `dreams.json`'s format pieces.
@@ -198,16 +218,8 @@ pub fn load() -> Result<Content, SchemaError> {
     let destinies = at("destinies.json")?;
     let dreams_at = at("dreams.json")?;
     Ok(Content {
-        destinies: table(&destinies, "destinies", Destiny::ALL, Destiny::id)?
-            .iter()
-            .map(|d| {
-                Ok(DestinyLore {
-                    prophecy: text(d, "prophecy")?,
-                    doom: text(d, "doom")?,
-                    gift: text(d, "gift")?,
-                })
-            })
-            .collect::<Result<_, SchemaError>>()?,
+        destinies: read_destinies(&destinies)?,
+        quest_templates: read_quest_templates(&at("quests.json")?)?,
         blood_of_prophecy: text_at(&destinies, "blood_of_prophecy")?,
         bonds: read_bonds(&at("bonds.json")?)?,
         dreams: table(&dreams_at, "dreams", DreamKind::ALL, DreamKind::id)?
@@ -277,13 +289,93 @@ pub fn table<'a, T: Copy>(
     Ok(items)
 }
 
+/// The destinies, with every number a doom or gift renders checked against
+/// CONSTANTS.md, and the speakable set checked against SPEC §13.
+fn read_destinies(at: &At<'_>) -> Result<Vec<DestinyLore>, SchemaError> {
+    // (destiny, template key, the constant it renders) for the numbers W2's rules read.
+    let rendered: [(Destiny, &str, &str, i32); 4] = [
+        (
+            Destiny::OutliveThoseYouLove,
+            "doom_template",
+            "doom",
+            OUTLIVING_DREAD,
+        ),
+        (Destiny::WearACrown, "doom_template", "doom", CROWN_RENOWN),
+        (Destiny::WearACrown, "gift_template", "gift", PATRON_POWER),
+        (
+            Destiny::OpenTheSealedDoor,
+            "gift_template",
+            "gift",
+            DOOR_DESTINY_POWER,
+        ),
+    ];
+    let items = table(at, "destinies", Destiny::ALL, Destiny::id)?;
+    let mut out = Vec::new();
+    for (kind, d) in Destiny::ALL.iter().zip(&items) {
+        for (destiny, template, field, value) in rendered {
+            if destiny == *kind
+                && crate::text::fmt(&text(d, template)?, &[&value.to_string()]) != text(d, field)?
+            {
+                return Err(d.reject(format!(
+                    "{field} does not render {template} with {value} (CONSTANTS.md §8)"
+                )));
+            }
+        }
+        let speakable = d.key("speakable")?.bool()?;
+        if speakable != !matches!(kind, Destiny::Unspoken | Destiny::OpenTheSealedDoor) {
+            return Err(d.reject(
+                "speakable disagrees with SPEC §13 (all but UNSPOKEN and the Door)".into(),
+            ));
+        }
+        out.push(DestinyLore {
+            prophecy: text(d, "prophecy")?,
+            doom: text(d, "doom")?,
+            gift: text(d, "gift")?,
+            speakable,
+        });
+    }
+    let order = strings(at, "speakable_order")?;
+    let want: Vec<&str> = Destiny::ALL
+        .iter()
+        .filter(|kind| out[kind.index()].speakable)
+        .map(|kind| kind.id())
+        .collect();
+    if order != want {
+        return Err(at.reject(format!(
+            "speakable_order is {order:?}; the speakable destinies in canonical order are {want:?}"
+        )));
+    }
+    Ok(out)
+}
+
+fn read_quest_templates(at: &At<'_>) -> Result<Vec<QuestTemplate>, SchemaError> {
+    at.key("templates")?
+        .items()?
+        .iter()
+        .map(|item| {
+            let tags = strings(item, "tags")?
+                .iter()
+                .map(|id| Tag::find(id).ok_or_else(|| item.reject(format!("tag {id:?}"))))
+                .collect::<Result<_, _>>()?;
+            Ok(QuestTemplate {
+                place: id_at(item, "place", Place::find)?,
+                title: text(item, "title")?,
+                aptitude: id_at(item, "aptitude", Aptitude::find)?,
+                tags,
+            })
+        })
+        .collect()
+}
+
 fn read_bonds(at: &At<'_>) -> Result<BondLore, SchemaError> {
     let kinds = table(at, "kinds", BondKind::ALL, BondKind::id)?;
     let gendered = at.key("gendered_titles")?;
+    let kinship = at.key("kinship_tellings")?;
     let mut lore = BondLore {
         titles: Vec::new(),
         shown: Vec::new(),
         gendered: Vec::new(),
+        kinship: Vec::new(),
     };
     for (kind, item) in BondKind::ALL.iter().zip(&kinds) {
         let numbers = (
@@ -304,6 +396,18 @@ fn read_bonds(at: &At<'_>) -> Result<BondLore, SchemaError> {
             Some(forms) => Some([text(&forms, "HE")?, text(&forms, "SHE")?]),
             None => None,
         });
+        // A kind the table does not name takes `otherwise` ("friend").
+        let telling = match kinship.find(kind.id())? {
+            Some(forms) => match forms.str() {
+                Ok(word) => [word.clone(), word],
+                Err(_) => [text(&forms, "HE")?, text(&forms, "SHE")?],
+            },
+            None => {
+                let word = text(&kinship, "otherwise")?;
+                [word.clone(), word]
+            }
+        };
+        lore.kinship.push(telling);
     }
     Ok(lore)
 }

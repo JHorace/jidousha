@@ -71,14 +71,6 @@ pub mod ink {
     pub const GONE: Color = Color::rgb(0.45, 0.45, 0.50);
     /// The departed (crowned).
     pub const GOLD: Color = Color::rgb(0.86, 0.72, 0.30);
-    /// Might, Wits, Spirit figure tints.
-    pub const APTITUDE: [Color; 3] = [
-        Color::rgb(0.93, 0.55, 0.25),
-        Color::rgb(0.30, 0.75, 0.72),
-        Color::rgb(0.90, 0.50, 0.70),
-    ];
-    /// A child's figure.
-    pub const CHILD: Color = Color::rgb(0.78, 0.74, 0.62);
     /// An empty pip.
     pub const PIP_EMPTY: Color = Color::rgb(0.30, 0.30, 0.36);
     /// A dread pip.
@@ -142,6 +134,19 @@ pub struct Shape {
     pub layer: i16,
 }
 
+/// A sprite: which role, where, tinted how.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FigureMark {
+    /// Where, in world units.
+    pub rect: Rect,
+    /// Which role's sprite.
+    pub figure: crate::art::Figure,
+    /// Multiplied into the sprite.
+    pub tint: Color,
+    /// In which band.
+    pub layer: i16,
+}
+
 /// Everything one frame draws, and where the pointer can land.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Page {
@@ -151,6 +156,8 @@ pub struct Page {
     pub shapes: Vec<Shape>,
     /// Tree links: from, to.
     pub links: Vec<(Vec2, Vec2)>,
+    /// Sprites.
+    pub figures: Vec<FigureMark>,
     /// Hit targets, front first.
     pub targets: Vec<(Rect, Target)>,
     /// Logical lines begun so far.
@@ -199,6 +206,16 @@ impl Page {
     /// Add a filled rectangle in band `layer`.
     pub fn shape(&mut self, rect: Rect, color: Color, layer: i16) {
         self.shapes.push(Shape { rect, color, layer });
+    }
+
+    /// Add a sprite of `figure` filling `rect`, tinted, in band `layer`.
+    pub fn figure(&mut self, rect: Rect, figure: crate::art::Figure, tint: Color, layer: i16) {
+        self.figures.push(FigureMark {
+            rect,
+            figure,
+            tint,
+            layer,
+        });
     }
 
     /// Every logical line, its wrapped rows joined back with spaces, with the
@@ -271,6 +288,7 @@ pub fn page(content: &Content, house: &House, ui: &UiState) -> Page {
         page.lines_begun += overlay.lines_begun;
         page.shapes.extend(overlay.shapes);
         page.links.extend(overlay.links);
+        page.figures.extend(overlay.figures);
         page.targets = overlay.targets;
     }
     page

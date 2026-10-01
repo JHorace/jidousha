@@ -78,6 +78,35 @@ pub struct Blessing {
     pub title: String,
 }
 
+/// What a deed was. W2 writes the two fear deeds; later waves add their kinds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DeedKind {
+    /// Dread reached 5 (SPEC §10.4).
+    Broken,
+    /// Courage reached 3 (SPEC §10.3).
+    ConqueredFear,
+}
+
+/// One entry in a hero's record of deeds (SPEC §3.2). The telling is never shown;
+/// the epitaph (W9) reads the deeds themselves.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Deed {
+    /// What it was.
+    pub kind: DeedKind,
+    /// The year it happened.
+    pub year: i32,
+    /// The hero's age then.
+    pub age: i32,
+    /// Where, when it happened somewhere.
+    pub place: Option<Place>,
+    /// How much it weighs (a quest's danger, a lock's index); 0 for the fear deeds.
+    pub weight: i32,
+    /// The other hero it concerns: the mourned, for a break by grief.
+    pub other: Option<HeroId>,
+    /// "was broken by deep water at the Drowned Coast".
+    pub telling: String,
+}
+
 /// Living, dead, or departed (crowned).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Fate {
@@ -124,6 +153,8 @@ pub struct Hero {
     pub blessings: Vec<Blessing>,
     /// Scars.
     pub scars: Vec<String>,
+    /// The record of deeds, in the order they happened.
+    pub deeds: Vec<Deed>,
     /// What a fulfilled dream left, and its telling.
     pub legacy: (LegacyKind, String),
     /// Personal renown.

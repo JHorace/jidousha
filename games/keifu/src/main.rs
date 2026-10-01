@@ -1,10 +1,14 @@
-//! Keifu (系譜): a port of Lineage to Jidousha. Session 1 builds modules W0 and W1.
+//! Keifu (系譜): a port of Lineage to Jidousha. Session 1 built modules W0 and W1;
+//! session 2 builds W2 and gives the cast its sprites.
 //!
 //! W0 is the foundation: the content in `spec/content/` loaded and validated, the
 //! lore tables, the calendar and the Door countdown, the randomness primitives
 //! and the text conventions. W1 is the household: the hero model and what derives
 //! from it, the founding household in creation order, the roster, the hero card
-//! and sheet, and the family screen's membership.
+//! and sheet, and the family screen's membership. W2 is bonds, fears, grief and
+//! destinies as state and pure rules (`bonds`, `fear`, `grief`, `destiny`), with
+//! the power sum and fear line its oracle reads (`power`); nothing triggers them
+//! until quests arrive in W4-W6.
 //!
 //! What the player can do in this build: point at a hero to read their sheet, and
 //! open the family to see everyone who has lived. Nothing advances the year yet.
@@ -17,16 +21,22 @@
 
 #![allow(missing_docs)]
 
+mod art;
+mod bonds;
 mod calendar;
 mod capture;
+mod cast;
 mod chance;
 mod checks;
 mod constants;
 mod content;
+mod destiny;
 mod dream;
 mod family;
+mod fear;
 mod floors;
 mod foundations;
+mod grief;
 mod hero;
 mod house;
 mod household;
@@ -34,13 +44,17 @@ mod ids;
 mod json;
 mod lore;
 mod oracles;
+mod power;
 mod screen;
 mod sessions;
 mod sheet;
 mod summer;
+#[cfg(test)]
+mod testkit;
 mod text;
 mod tree;
 mod verify;
+mod w2;
 mod words;
 
 use std::process::ExitCode;
@@ -135,6 +149,13 @@ fn found_the_house(world: &mut World) {
     };
     world.insert_resource(house);
     world.insert_resource(content);
+    // Only if nothing has installed a store already: a verify run puts a scripted
+    // one in before Startup, so when the art arrives is part of its script.
+    if world.find_resource::<Assets>().is_none() {
+        world.insert_resource(art::store());
+    }
+    let art = art::Art::load(world.resource_mut::<Assets>());
+    world.insert_resource(art);
     world.insert_resource(UiState::default());
     world.insert_resource(camera());
 }
@@ -179,6 +200,24 @@ fn follow_the_pointer(world: &mut World) {
 /// Submit the page.
 fn draw_the_page(ctx: &mut DrawCtx) {
     let page = read_the_page(&ctx.world);
+    let sprites: Vec<(Transform, Sprite)> = {
+        let art = ctx.world.resource::<art::Art>();
+        page.figures
+            .iter()
+            .map(|mark| {
+                let sprite = Sprite {
+                    size: mark.rect.size(),
+                    tint: mark.tint,
+                    layer: mark.layer,
+                    ..Sprite::new(art.texture(mark.figure))
+                };
+                (Transform::at(mark.rect.center()), sprite)
+            })
+            .collect()
+    };
+    for (transform, sprite) in &sprites {
+        ctx.sprite(transform, sprite);
+    }
     for shape in &page.shapes {
         ctx.rect(shape.rect, shape.color, Depth::layer(shape.layer));
     }
