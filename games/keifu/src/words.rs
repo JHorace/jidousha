@@ -1,0 +1,135 @@
+//! Every `ui-text.json` and `lines.json` string this build shows, resolved by key at load.
+//!
+//! Each `W` names one key. `read_words` looks every one of them up when the game
+//! starts, so a renamed or missing key stops the game with the key's path rather
+//! than leaving a blank on a screen nobody happened to open.
+
+use crate::json::{At, SchemaError};
+
+/// Which file a key is in.
+#[derive(Clone, Copy)]
+enum File {
+    Ui,
+    Lines,
+}
+
+/// Declares `W`, one variant per key, and the table of where each one lives.
+macro_rules! words {
+    ($($variant:ident = $file:ident $path:literal),+ $(,)?) => {
+        /// One string the game shows, by its content key.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        pub enum W {
+            $(
+                #[doc = $path]
+                $variant
+            ),+
+        }
+
+        const KEYS: &[(W, File, &str)] = &[$((W::$variant, File::$file, $path)),+];
+    };
+}
+
+words! {
+    TopYear = Ui "top_bar.year",
+    TopLastSummer = Ui "top_bar.last_summer",
+    TopRenown = Ui "top_bar.house_renown",
+    TopDoorCountdown = Ui "top_bar.door_countdown",
+    TopDoorOpen = Ui "top_bar.door_open",
+    TopDoorTags = Ui "top_bar.door_tags",
+    SummerHousehold = Ui "summer.household",
+    SummerYard = Ui "summer.yard",
+    SummerNoChildren = Ui "summer.no_children",
+    SummerHelp = Ui "summer.help",
+    SheetDream = Ui "hero_sheet.dream",
+    SheetBurden = Ui "hero_sheet.burden",
+    SheetHeirloom = Ui "hero_sheet.heirloom",
+    SheetBlessed = Ui "hero_sheet.blessed",
+    SheetLeaves = Ui "hero_sheet.leaves",
+    SheetScar = Ui "hero_sheet.scar",
+    SheetChildStation = Ui "hero_sheet.child_station",
+    SheetStation = Ui "hero_sheet.station",
+    SheetDied = Ui "hero_sheet.died",
+    SheetLeft = Ui "hero_sheet.left",
+    SheetRenownWounded = Ui "hero_sheet.renown_wounded",
+    SheetRenownSettled = Ui "hero_sheet.renown_settled",
+    SheetRenown = Ui "hero_sheet.renown",
+    SheetAptitudeNote = Ui "hero_sheet.aptitude_note",
+    SheetAptitudeNoteAdjusted = Ui "hero_sheet.aptitude_note_adjusted",
+    SheetWoundedWarning = Ui "hero_sheet.wounded_warning",
+    SheetTooYoung = Ui "hero_sheet.too_young",
+    SheetTakenUp = Ui "hero_sheet.taken_up",
+    SheetFulfilled = Ui "hero_sheet.fulfilled",
+    SheetSettled = Ui "hero_sheet.settled",
+    SheetDread = Ui "hero_sheet.dread",
+    SheetCourage = Ui "hero_sheet.courage",
+    SheetPenalty = Ui "hero_sheet.penalty",
+    SheetDestinyCome = Ui "hero_sheet.destiny_come",
+    SheetDestiny = Ui "hero_sheet.destiny",
+    SheetBondGone = Ui "hero_sheet.bond_gone",
+    SheetBonds = Ui "hero_sheet.bonds",
+    SheetNoBonds = Ui "hero_sheet.no_bonds",
+    SheetMoreBonds = Ui "hero_sheet.more_bonds",
+    FamilyHeading = Ui "family.heading",
+    FamilySubline = Ui "family.subline",
+    FamilyTallyNone = Ui "family.tally_none",
+    FamilyTallyOne = Ui "family.tally_one",
+    FamilyTallyMany = Ui "family.tally_many",
+    FamilyTally = Ui "family.tally",
+    FamilyHelp = Ui "family.remembrance_help",
+    FamilyLivingStation = Ui "family.living_station",
+    FamilyLivingTooYoung = Ui "family.living_too_young",
+    FamilyLivingDone = Ui "family.living_done",
+    FamilyLivingWants = Ui "family.living_wants",
+    FamilyLivingBurden = Ui "family.living_burden",
+    FamilyLivingNoFear = Ui "family.living_no_fear",
+    FamilyLivingBroken = Ui "family.living_broken",
+    FamilyLivingFears = Ui "family.living_fears",
+    FamilyLivingSeer = Ui "family.living_seer",
+    FamilyOpen = Ui "family.buttons.open",
+    FamilyClose = Ui "family.buttons.close",
+    FearStateBornBrave = Lines "fear.state_born_brave",
+    FearStateConquered = Lines "fear.state_conquered",
+    FearStateBroken = Lines "fear.state_broken",
+    FearState = Lines "fear.state",
+    FearEffect = Lines "fear.effect",
+    FearEffectConquered = Lines "fear.effect_conquered",
+    FearEffectBroken = Lines "fear.effect_broken",
+    YearWord = Lines "turning.year_word",
+    YearsWord = Lines "turning.years_word",
+}
+
+/// The resolved strings, indexable by `W`.
+pub struct Words(Vec<String>);
+
+impl std::ops::Index<W> for Words {
+    type Output = str;
+
+    fn index(&self, word: W) -> &str {
+        &self.0[word as usize]
+    }
+}
+
+/// Look up every `W` in the two files.
+pub fn read_words(ui: At<'_>, lines: At<'_>) -> Result<Words, SchemaError> {
+    let lines = lines.key("lines")?;
+    let mut out = Vec::with_capacity(KEYS.len());
+    for (index, (word, file, path)) in KEYS.iter().enumerate() {
+        debug_assert_eq!(
+            *word as usize, index,
+            "KEYS is in W's order by construction"
+        );
+        let found = match file {
+            // `ui-text.json` nests by dotted path; `lines.json` keys contain the dots.
+            File::Ui => path
+                .split('.')
+                .try_fold(ui.clone(), |at, part| at.key(part))?,
+            File::Lines => lines.key(path)?,
+        };
+        // A leaf is either a plain string or an object carrying `text`.
+        out.push(match found.str() {
+            Ok(text) => text,
+            Err(_) => found.key("text")?.str()?,
+        });
+    }
+    Ok(Words(out))
+}
