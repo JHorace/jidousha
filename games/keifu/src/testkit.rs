@@ -7,7 +7,7 @@ use crate::house::House;
 /// The content and the founding heroes, in creation order.
 pub fn founded() -> (Content, Vec<Hero>) {
     let content = crate::content::load().expect("the content loads");
-    let heroes = House::found(&content, 1)
+    let heroes = House::found(&content, 1, &mut jidousha::prelude::Rng::from_seed(1))
         .expect("the household founds")
         .heroes;
     (content, heroes)
@@ -24,6 +24,7 @@ pub fn id(heroes: &[Hero], name: &str) -> HeroId {
 /// The content and a founded house, in year 1's summer.
 pub fn house() -> (Content, House) {
     let content = crate::content::load().expect("the content loads");
-    let house = House::found(&content, 1).expect("the household founds");
+    let house = House::found(&content, 1, &mut jidousha::prelude::Rng::from_seed(1))
+        .expect("the household founds");
     (content, house)
 }

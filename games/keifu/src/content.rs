@@ -8,7 +8,9 @@
 //! message naming the file, the path inside it, and what was expected.
 
 use crate::constants::{BOND_RANK_POWER_GRIEF, DOOR_LOCKS, DOOR_YEARS, bond_mirror};
-use crate::constants::{CROWN_RENOWN, DOOR_DESTINY_POWER, OUTLIVING_DREAD, PATRON_POWER};
+use crate::constants::{
+    CROWN_RENOWN, DOOR_DESTINY_POWER, MAXIMUM_SEATS, OUTLIVING_DREAD, PATRON_POWER,
+};
 use crate::dream_lore::{DreamFormats, DreamLore, read_dream_formats, read_dreams};
 use crate::household::{Founding, read_household};
 use crate::ids::{Aptitude, BondKind, Destiny, Place, Pool, Tag};
@@ -51,8 +53,7 @@ pub const FILES: [(&str, &str); 15] = [
 ///
 /// Typed reading of these lands with the wave that uses them; until then their
 /// shape is held at the top level so a renamed or missing table fails now.
-const LATER_WAVES: [(&str, &[&str]); 4] = [
-    ("quests.json", &["opening_quests"]),
+const LATER_WAVES: [(&str, &[&str]); 3] = [
     (
         "ghost.json",
         &["title", "aptitude", "seats", "danger", "premise", "endings"],
@@ -95,12 +96,23 @@ pub struct QuestTemplate {
     pub aptitude: Aptitude,
     /// What it carries (may be a subset of its place's tags).
     pub tags: Vec<Tag>,
+    /// The fewest calm seats it is posted with.
+    pub seats_low: i32,
+    /// The most.
+    pub seats_high: i32,
+    /// Its calm danger.
+    pub danger: i32,
+    /// "Robbers went in at dusk. Bring them out, or what is left."
+    pub premise: String,
 }
 
 /// `bonds.json`.
 pub struct BondLore {
     /// Kind titles, by `BondKind`.
     pub titles: Vec<String>,
+    /// The phrase a pair holding this kind is named by in a power line
+    /// ("parent and child"), by `BondKind`.
+    pub pairs: Vec<String>,
     /// Whether the sheet shows the kind, by `BondKind`.
     pub shown: Vec<bool>,
     /// Gendered titles (HE, SHE) for the kinds that have them, by `BondKind`.
@@ -132,6 +144,8 @@ pub struct Content {
     pub bonds: BondLore,
     /// `quests.json` templates, in file order.
     pub quest_templates: Vec<QuestTemplate>,
+    /// `quests.json` `opening_quests`: the templates forced onto year 1's board, by index.
+    pub opening_quests: Vec<usize>,
     /// `dreams.json`, by `DreamKind`.
     pub dreams: Vec<DreamLore>,
     /// `dreams.json`'s format pieces.
@@ -178,6 +192,7 @@ pub fn load() -> Result<Content, SchemaError> {
     Ok(Content {
         destinies: read_destinies(&destinies)?,
         quest_templates: read_quest_templates(&at("quests.json")?)?,
+        opening_quests: read_opening_quests(&at("quests.json")?)?,
         blood_of_prophecy: text_at(&destinies, "blood_of_prophecy")?,
         bonds: read_bonds(&at("bonds.json")?)?,
         dreams: read_dreams(&dreams_at)?,
@@ -312,12 +327,44 @@ fn read_quest_templates(at: &At<'_>) -> Result<Vec<QuestTemplate>, SchemaError> 
                 .iter()
                 .map(|id| Tag::find(id).ok_or_else(|| item.reject(format!("tag {id:?}"))))
                 .collect::<Result<_, _>>()?;
+            let (seats_low, seats_high) = (
+                item.key("seats_low")?.int()?,
+                item.key("seats_high")?.int()?,
+            );
+            let danger = item.key("danger")?.int()?;
+            if !(1..=seats_high).contains(&seats_low)
+                || seats_high > MAXIMUM_SEATS as i32
+                || danger < 0
+            {
+                return Err(item.reject(format!(
+                    "seats {seats_low}..{seats_high} or danger {danger} cannot be posted \
+                     (SPEC §5.2 needs 1 <= seats_low <= seats_high <= MAXIMUM_SEATS, danger >= 0)"
+                )));
+            }
             Ok(QuestTemplate {
                 place: id_at(item, "place", Place::find)?,
                 title: text(item, "title")?,
                 aptitude: id_at(item, "aptitude", Aptitude::find)?,
                 tags,
+                seats_low,
+                seats_high,
+                danger,
+                premise: text(item, "premise")?,
             })
+        })
+        .collect()
+}
+
+/// The opening quests, each named by a template's title.
+fn read_opening_quests(at: &At<'_>) -> Result<Vec<usize>, SchemaError> {
+    let templates = read_quest_templates(at)?;
+    strings(at, "opening_quests")?
+        .iter()
+        .map(|title| {
+            templates
+                .iter()
+                .position(|t| &t.title == title)
+                .ok_or_else(|| at.reject(format!("opening quest {title:?} names no template")))
         })
         .collect()
 }
@@ -328,6 +375,7 @@ fn read_bonds(at: &At<'_>) -> Result<BondLore, SchemaError> {
     let kinship = at.key("kinship_tellings")?;
     let mut lore = BondLore {
         titles: Vec::new(),
+        pairs: Vec::new(),
         shown: Vec::new(),
         gendered: Vec::new(),
         kinship: Vec::new(),
@@ -346,6 +394,7 @@ fn read_bonds(at: &At<'_>) -> Result<BondLore, SchemaError> {
             )));
         }
         lore.titles.push(text(item, "title")?);
+        lore.pairs.push(text(item, "pair")?);
         lore.shown.push(item.key("shown")?.bool()?);
         lore.gendered.push(match gendered.find(kind.id())? {
             Some(forms) => Some([text(&forms, "HE")?, text(&forms, "SHE")?]),

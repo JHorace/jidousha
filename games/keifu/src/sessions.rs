@@ -119,7 +119,9 @@ pub fn check_family(checks: &mut Checks, recorder: &mut FrameRecorder) -> String
 
 /// The seed another house draws after a house founded on seed 7: the engine `Rng`'s
 /// sequence, recorded the first time it ran, so a change to how it is drawn shows.
-const SEED_AFTER_SEVEN: u64 = 0xf131_7856_0a08_cba5;
+/// Re-recorded in session 4: year 1's board now draws four numbers at founding
+/// (two quests, seats then wobble each), so the draw comes four later.
+const SEED_AFTER_SEVEN: u64 = 0x5504_a624_1e60_5676;
 
 /// Seeds are recorded state; the household does not depend on them; a new house reseeds.
 pub fn check_seeds(checks: &mut Checks, content: &Content) -> String {
@@ -137,11 +139,17 @@ pub fn check_seeds(checks: &mut Checks, content: &Content) -> String {
     mixed.world_mut().insert_resource(crate::house::RunSeed(7));
     mixed.tick();
     let mut engine = mixed.world().resource::<Rng>().clone();
+    // The founding draws the board's stakes from the run generator; replay it.
     let mut fresh = Rng::from_seed(7);
+    if let Err(error) = House::found(content, 7, &mut fresh) {
+        checks.require(false, "the house could not be founded", error);
+    }
     checks.require(
         engine.next_u32() == fresh.next_u32(),
         "the game's generator is not the one the recorded seed makes",
-        "engine seed 1, run seed 7: the world Rng and Rng::from_seed(7) disagree".to_owned(),
+        "engine seed 1, run seed 7: the world Rng and Rng::from_seed(7), past the founding, \
+         disagree"
+            .to_owned(),
     );
     let before = crate::family::top_bar(content_of(&a), a.world().resource::<House>());
     let drawn = match begin_another_house(a.world_mut(), content) {
@@ -398,7 +406,11 @@ pub fn check_staged_sheets(checks: &mut Checks) -> String {
         &["Knight, youth, aged 12", "Might 0 (-1)"],
     );
     // A dead child leaves the yard; a dead adult leaves the roster.
-    let mut staged_house = match House::found(content, crate::verify::SEEDS[0]) {
+    let mut staged_house = match House::found(
+        content,
+        crate::verify::SEEDS[0],
+        &mut Rng::from_seed(crate::verify::SEEDS[0]),
+    ) {
         Ok(house) => house,
         Err(error) => {
             checks.require(false, "the house could not be founded", error);

@@ -1,4 +1,4 @@
-//! The rule numbers W0 to W3 read, each copied from `spec/CONSTANTS.md`.
+//! The rule numbers W0 to W4 read, each copied from `spec/CONSTANTS.md`.
 //!
 //! Numbers are rules, not hand-authored words, so they live in source. Where a
 //! number also appears in a content file, `content::load` checks the two agree
@@ -36,6 +36,43 @@ pub fn phase_adjustment(phase: Phase, aptitude: Aptitude) -> i32 {
 
 /// `WOUND_PENALTY` (CONSTANTS §3).
 pub const WOUND_PENALTY: i32 = 2;
+/// `DICE_SIDES`: two dice, each uniform 1..6 (CONSTANTS §3).
+pub const DICE_SIDES: i32 = 6;
+/// `DICE_MIDPOINT`: subtracted from the dice sum (CONSTANTS §3).
+pub const DICE_MIDPOINT: i32 = 7;
+/// `TRIUMPH_MARGIN`: margin >= 4 is a triumph (CONSTANTS §3).
+pub const TRIUMPH_MARGIN: i32 = 4;
+/// `SETBACK_MARGIN`: margin -1..-4 is a setback, <= -5 a disaster (CONSTANTS §3).
+pub const SETBACK_MARGIN: i32 = 4;
+/// `DEATH_PER_DANGER`: each member's death chance in a disaster, per danger (CONSTANTS §3).
+pub const DEATH_PER_DANGER: f64 = 0.15;
+/// `TRIUMPH_RENOWN`: extra renown on a triumph (CONSTANTS §3).
+pub const TRIUMPH_RENOWN: i32 = 1;
+/// `MAXIMUM_SEATS`: the party array's size (CONSTANTS §3).
+pub const MAXIMUM_SEATS: usize = 4;
+/// `QUEST_COUNT`: quests on a board (CONSTANTS §3).
+pub const QUEST_COUNT: usize = 4;
+
+/// `DEMAND_PER_SEAT` (CONSTANTS §4).
+pub const DEMAND_PER_SEAT: i32 = 3;
+/// `YEARS_PER_DEMAND_STEP`: +1 demand per seat every six years (CONSTANTS §4).
+pub const YEARS_PER_DEMAND_STEP: i32 = 6;
+/// `DEMAND_WOBBLE`: the wobble is uniform in -1..=+1 (CONSTANTS §4).
+pub const DEMAND_WOBBLE: i32 = 1;
+/// `TROUBLE_SEATS`: seats lost per trouble (CONSTANTS §4).
+pub const TROUBLE_SEATS: i32 = 1;
+/// `TROUBLE_DEMAND`: per-seat demand per trouble (CONSTANTS §4).
+pub const TROUBLE_DEMAND: i32 = 1;
+/// `DANGER_LIMIT` (CONSTANTS §4).
+pub const DANGER_LIMIT: i32 = 4;
+/// `TROUBLE_LIMIT`: the most trouble a place holds (CONSTANTS §4).
+pub const TROUBLE_LIMIT: i32 = 2;
+/// `UNANSWERED_RENOWN`: the base cost of an unanswered quest (CONSTANTS §4).
+pub const UNANSWERED_RENOWN: i32 = 1;
+/// `TROUBLED_RENOWN`: +1 if the quest was generated with trouble (CONSTANTS §4).
+pub const TROUBLED_RENOWN: i32 = 1;
+/// `RENOWN_PER_EXPECTATION`: + house renown / 20 (CONSTANTS §4).
+pub const RENOWN_PER_EXPECTATION: i32 = 20;
 
 /// `DREAD_LIMIT` (CONSTANTS §6).
 pub const DREAD_LIMIT: i32 = 5;

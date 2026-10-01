@@ -22,6 +22,8 @@ pub struct PlaceLore {
     pub name: String,
     /// What a quest there carries.
     pub tags: Vec<Tag>,
+    /// "The Barrow's dead have walked %1 unanswered."
+    pub trouble_line: String,
 }
 
 /// A phase's words.
@@ -66,6 +68,8 @@ pub struct Lore {
     pub seasons: Vec<String>,
     /// 0..=12 as words.
     pub count_words: Vec<String>,
+    /// "no time", "a year", "two years", "three years": a trouble line's span, by trouble.
+    pub year_counts: Vec<String>,
     /// "% times".
     pub count_words_beyond: String,
     /// "before the first year".
@@ -127,6 +131,7 @@ pub fn read_lore(at: &At<'_>) -> Result<Lore, SchemaError> {
                     title: text(p, "title")?,
                     name: text(p, "name")?,
                     tags,
+                    trouble_line: text(p, "trouble_line")?,
                 })
             })
             .collect::<Result<_, SchemaError>>()?,
@@ -169,6 +174,7 @@ pub fn read_lore(at: &At<'_>) -> Result<Lore, SchemaError> {
             .collect::<Result<_, SchemaError>>()?,
         seasons: strings(at, "seasons")?,
         count_words: strings(at, "count_words")?,
+        year_counts: strings(at, "year_counts")?,
         count_words_beyond: text_at(at, "count_words_beyond")?,
         year_before_first: text(&year_tellings, "before_first_year")?,
         year_last_summer: text(&year_tellings, "last_summer")?,

@@ -15,10 +15,15 @@
 //!    the quest sheet's line, a staged triumph that settles him and lays "Garrick's
 //!    rest" on his line — and a staged story over witnessing, fulfilment, legacies
 //!    and dream rivals (`w3.rs`). The vector is printed, labelled, the same way.
-//! 5. **The W0 machinery**: calendar, text conventions, pools, bags (`foundations.rs`).
-//! 6. **Readability floors** over every surface this build has (`floors.rs`).
-//! 7. **The cast's sprites**: every role imported, every card its role's texture (`cast.rs`).
-//! 8. **A picture** of each oracle's screen (`capture.rs`).
+//! 5. **W4's oracle**, the first played one — Garrick and Brannoc dragged onto
+//!    "Grave goods" by the scripted pointer, the card read mid-hold and seated, the
+//!    demand's band and CONSTANTS §3's mapping over a sweep of seeds, the quest
+//!    sheet's §6 lines — then the drags that do not seat, W4's rules, and W2's
+//!    and W3's oracles graduated onto the real card (`w4.rs`, `w4_rules.rs`).
+//! 6. **The W0 machinery**: calendar, text conventions, pools, bags (`foundations.rs`).
+//! 7. **Readability floors** over every surface this build has (`floors.rs`).
+//! 8. **The cast's sprites**: every role imported, every card its role's texture (`cast.rs`).
+//! 9. **A picture** of each oracle's screen (`capture.rs`).
 
 use std::process::ExitCode;
 
@@ -211,6 +216,14 @@ pub fn run() -> ExitCode {
     summary.push(w3_line);
     summary.extend(w3_vector);
     summary.push(crate::w3::check_rules(&mut checks));
+    let (w4_line, w4_vector) = crate::w4::check_oracle(&mut checks);
+    summary.push(w4_line);
+    summary.extend(w4_vector);
+    summary.push(crate::w4::check_drags(&mut checks));
+    summary.push(crate::w4_rules::check_rules(&mut checks));
+    let (inherited, inherited_vector) = crate::w4_rules::check_inherited(&mut checks);
+    summary.push(inherited);
+    summary.extend(inherited_vector);
     summary.push(crate::sessions::check_family(&mut checks, &mut recorder));
     summary.push(crate::sessions::check_seeds(&mut checks, &content));
     summary.push(crate::sessions::check_staged_sheets(&mut checks));
@@ -224,7 +237,7 @@ pub fn run() -> ExitCode {
     let (passed, failed) = checks.counts();
     if failed == 0 {
         println!(
-            "verified keifu: W0, W1, W2 and W3 oracles hold on {} seeds, {passed} checks",
+            "verified keifu: W0, W1, W2, W3 and W4 oracles hold on {} seeds, {passed} checks",
             SEEDS.len()
         );
     } else {

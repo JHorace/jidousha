@@ -1,9 +1,10 @@
 //! W2's oracle and its rules, asked of the running game's own house.
 //!
 //! MODULES.md's W2 oracle seats Maren and Garrick on "The bell under the tide" in
-//! year 1 and reads the card's fear line and "you bring". The card is W4's; the
-//! rules are here, so the oracle is asked of them directly and its three strings
-//! are printed for the owner to hold beside the original's card.
+//! year 1 and reads the card's fear line and "you bring". The rules are asked
+//! directly here, and since W4 the same strings are read off the real card after
+//! two drags (`w4::check_inherited`); the three strings are printed for the owner
+//! to hold beside the original's card.
 //!
 //! Then a staged year-1 story walks every W2 rule once on a copy of the founding
 //! household — a bond formed, kept and changed; a fear broken at the Coast; a
@@ -34,6 +35,8 @@ use crate::verify::{SEEDS, content_of, hero_named, session};
 pub const W2_FEAR_ITEMS: [&str; 2] = ["Maren -2, steadied", "Garrick -3, steadied"];
 /// MODULES.md W2: "you bring 4" (1 + 1 + 2 for parent and child).
 pub const W2_YOU_BRING: &str = "you bring 4";
+/// The whole line as the card shows it (SPEC-GAPS KG-7's glue).
+pub const W2_FEAR_LINE: &str = "Fear: Maren -2, steadied, Garrick -3, steadied";
 /// The quest the oracle seats them on, and where it is (`quests.json`).
 const BELL: &str = "The bell under the tide";
 
@@ -85,7 +88,7 @@ pub fn check_oracle(checks: &mut Checks) -> (String, Vec<String>) {
         );
         let line = fear_line(content, &house.heroes, &party, &bell.tags);
         checks.require(
-            line.as_deref() == Some("Fear: Maren -2, steadied, Garrick -3, steadied"),
+            line.as_deref() == Some(W2_FEAR_LINE),
             "W2 oracle: the whole fear line reads as the card would show it",
             format!("seed {seed:#x}: {line:?}"),
         );

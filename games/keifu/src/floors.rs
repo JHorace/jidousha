@@ -6,7 +6,8 @@
 //! Plus the camera floor: nothing drawn off screen, with the margin printed.
 //! Surfaces: the summer screen with nobody pointed at and with each hero's sheet,
 //! and the family screen with nobody pointed at and with each node's remembrance;
-//! then W3's settled and blessed sheets, staged.
+//! then W3's settled and blessed sheets, staged; then W4's board — the hand
+//! mid-drag, seated cards, quest sheets and history panels, and a staged worst case.
 
 use jidousha::testing::{BackendTextureId, FrameRecord, FrameRecorder};
 
@@ -185,13 +186,7 @@ pub fn check(checks: &mut Checks, recorder: &mut FrameRecorder) -> String {
         );
         judge(checks, &mut tally, &name, &page_of(&sim), &frame, false);
     }
-    set_ui(
-        &mut sim,
-        UiState {
-            family_open: true,
-            pointing: None,
-        },
-    );
+    set_ui(&mut sim, UiState::family());
     let frame = crate::verify::frame(recorder, &mut sim);
     judge(
         checks,
@@ -229,13 +224,7 @@ pub fn check(checks: &mut Checks, recorder: &mut FrameRecorder) -> String {
         );
         judge(checks, &mut tally, &name, &page_of(&sim), &frame, false);
     }
-    set_ui(
-        &mut sim,
-        UiState {
-            family_open: true,
-            pointing: None,
-        },
-    );
+    set_ui(&mut sim, UiState::family());
     point_at(&mut sim, Target::Hero(staged[0]), false);
     let frame = crate::verify::frame(recorder, &mut sim);
     judge(
@@ -246,8 +235,9 @@ pub fn check(checks: &mut Checks, recorder: &mut FrameRecorder) -> String {
         &frame,
         true,
     );
+    let w4 = w4_surfaces(checks, &mut tally, recorder);
     checks.require(
-        tally.surfaces == 2 + seated.len() + everyone + staged.len() + 1,
+        tally.surfaces == 2 + seated.len() + everyone + staged.len() + 1 + w4,
         "a surface was not judged",
         format!("{} surfaces", tally.surfaces),
     );
@@ -255,4 +245,72 @@ pub fn check(checks: &mut Checks, recorder: &mut FrameRecorder) -> String {
         "floors: {} surfaces, {} rows, smallest type {:.0} (floor {MIN_TEXT:.0}), closest type to the edge {:.2} px",
         tally.surfaces, tally.rows, tally.smallest, tally.clearance
     )
+}
+
+/// W4's surfaces: the hand mid-drag; both cards seated; both quest sheets and their
+/// history panels; and a staged worst case — a troubled quest of three seats with
+/// three seated, bonds, fears and patrons, beside a troubled empty quest whose
+/// place has been visited and has its fallen. Returns how many were judged.
+fn w4_surfaces(checks: &mut Checks, tally: &mut Tally, recorder: &mut FrameRecorder) -> usize {
+    use crate::board::Slot;
+    use crate::w4::{away, seat, stage_mid_drag};
+    let before = tally.surfaces;
+    let mut judge_now = |checks: &mut Checks,
+                         tally: &mut Tally,
+                         sim: &mut jidousha::prelude::HeadlessSim,
+                         name: &str| {
+        let frame = crate::verify::frame(recorder, sim);
+        judge(checks, tally, name, &page_of(sim), &frame, false);
+    };
+    let mut sim = session(crate::verify::SEEDS[0]);
+    stage_mid_drag(&mut sim);
+    judge_now(
+        checks,
+        tally,
+        &mut sim,
+        "W4, Brannoc in hand over Grave goods",
+    );
+    let mut sim = session(crate::verify::SEEDS[0]);
+    seat(&mut sim, "Garrick", Slot::Quest { quest: 0, seat: 0 });
+    seat(&mut sim, "Brannoc", Slot::Quest { quest: 0, seat: 1 });
+    seat(&mut sim, "Maren", Slot::Quest { quest: 1, seat: 0 });
+    seat(&mut sim, "Odo", Slot::Quest { quest: 1, seat: 1 });
+    away(&mut sim);
+    judge_now(checks, tally, &mut sim, "W4, both cards seated");
+    for quest in 0..2 {
+        point_at(&mut sim, Target::Quest(quest), false);
+        judge_now(
+            checks,
+            tally,
+            &mut sim,
+            &format!("W4, quest sheet {quest}, seated"),
+        );
+    }
+    let mut sim = session(crate::verify::SEEDS[0]);
+    point_at(&mut sim, Target::Quest(1), false);
+    judge_now(
+        checks,
+        tally,
+        &mut sim,
+        "W4, the bell's sheet, nobody going",
+    );
+    // The worst case, staged on the session's own house.
+    let mut sim = session(crate::verify::SEEDS[0]);
+    crate::w4::stage_worst(&mut sim);
+    judge_now(
+        checks,
+        tally,
+        &mut sim,
+        "W4 staged, three on a troubled quest",
+    );
+    for quest in 0..2 {
+        point_at(&mut sim, Target::Quest(quest), false);
+        judge_now(
+            checks,
+            tally,
+            &mut sim,
+            &format!("W4 staged, quest sheet {quest}"),
+        );
+    }
+    tally.surfaces - before
 }

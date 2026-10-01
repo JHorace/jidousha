@@ -3,9 +3,11 @@
 //! The path is `examples/prototype_kit/capture.rs`'s, art half included: the
 //! built-in textures first, then the same sprites loaded in the same order from
 //! the same scripted store, so the plan's texture ids mean the same thing here
-//! (docs/api/jidousha-capture.md). Four pictures: the W0+W1 oracle screen (top
-//! bar, the cast's cards and Garrick's sheet), a child's sheet, the family, and
-//! W3's Garrick — settled, blessed, and holding the blade he carried a dream to.
+//! (docs/api/jidousha-capture.md). Six pictures: the W0+W1 oracle screen (top
+//! bar, the cast's cards and Garrick's sheet), a child's sheet, the family,
+//! W3's Garrick — settled, blessed, and holding the blade he carried a dream to —
+//! and W4's two: Brannoc held over "Grave goods" beside Garrick, the card
+//! previewing them both, and the quest sheet once both are seated.
 
 use std::path::{Path, PathBuf};
 
@@ -30,7 +32,7 @@ fn one_line(message: &str) -> String {
     message.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// Capture the four pictures; returns the summary lines, the first one being the
+/// Capture the six pictures; returns the summary lines, the first one being the
 /// `capture:` line `tools/verify` reads.
 ///
 /// Each picture is staged in its own session and recorded by its own fresh
@@ -48,6 +50,10 @@ pub fn capture_all(checks: &mut Checks) -> Vec<String> {
         (&["Wren"][..], "keifu-child.png"),
         (&["", "Maren"][..], "keifu-family.png"),
         (&["w3", "Garrick"][..], "keifu-w3-garrick.png"),
+        (&["w4-drag"][..], "keifu-w4-drag.png"),
+        (&["w4-sheet"][..], "keifu-w4-sheet.png"),
+        (&["w4-worst"][..], "keifu-w4-worst.png"),
+        (&["w4-worst", "q0"][..], "keifu-w4-worst-sheet.png"),
     ]
     .into_iter()
     .enumerate()
@@ -59,6 +65,15 @@ pub fn capture_all(checks: &mut Checks) -> Vec<String> {
                 point_at(&mut sim, Target::OpenFamily, true);
             } else if *name == "w3" {
                 stage_w3(&mut sim);
+            } else if *name == "w4-drag" {
+                crate::w4::stage_mid_drag(&mut sim);
+            } else if *name == "w4-worst" {
+                crate::w4::stage_worst(&mut sim);
+            } else if *name == "q0" {
+                point_at(&mut sim, Target::Quest(0), false);
+            } else if *name == "w4-sheet" {
+                let _ = crate::w4::seat_the_oracle(&mut sim);
+                point_at(&mut sim, Target::Quest(0), false);
             } else {
                 let id = hero_named(&sim, name);
                 point_at(&mut sim, Target::Hero(id), false);
