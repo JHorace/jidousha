@@ -28,6 +28,7 @@ disagrees with the file it names, the file is right and this index is a bug.
 - **Checking a game — the verification surface** — 0022 · 0026 · 0027 · 0028 · 0031 · 0032 · 0033
 - **The documentation product** — 0025 · 0030 · 0034 · 0035
 - **Milestones and prototypes** — 0029 · 0036 · 0038
+- **Process — unattended agent work** — 0045
 
 ## Every record
 
@@ -77,6 +78,7 @@ disagrees with the file it names, the file is right and this index is a bug.
 | [0042](0042-a-typeface-is-an-asset-a-size-is-an-atlas-and-a-measurement-is-an-api.md) | A typeface is an asset, a size is an atlas, and a measurement is part of the API | accepted · 2026-08-29 |
 | [0043](0043-touch-is-snapshot-data-and-the-first-finger-is-the-cursor.md) | touch is snapshot data, and the first finger is the cursor | accepted · 2026-08-29 |
 | [0044](0044-macos-is-a-development-platform-not-tier-1.md) | macOS is a supported development platform, and not tier 1 — **extends 0005**, whose tier-1 set is unchanged | accepted · 2026-09-13 |
+| [0045](0045-yakin-stateless-ticks-state-in-git.md) | yakin: stateless scheduled ticks keep all state in git — a branch is a claim, a pushed CHECKPOINT is progress, a PR is the only output | accepted · 2026-10-01 |
 
 ## The two superseded records, and by what
 

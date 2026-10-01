@@ -55,6 +55,7 @@ failure. Delete it in the commit that resolves the blockage.
 | Write a game with the engine | `docs/api/` (all four files) and `examples/` ONLY — never `src/` |
 | Build a game, or land a wave or module into one | the `make-game` skill — it owns both session shapes (ADR-0038 for where a game lives) |
 | Write — or implement — a game handoff | `docs/templates/DECISIONS.md`, the decision-surface table a handoff must carry (`make-game` §D) |
+| Run as a yakin tick, or change the burn-down pipeline | `tools/yakin/README.md` (ADR-0045) |
 | Run a maintenance/sanitation pass | `docs/templates/SANITATION.md` (typed, fenced, dispatched by ledger evidence) |
 | Find that a doc misled you | file it in the ledger — `docs/agent-practices.md` §2.5 |
 | Touch web build/deploy | `docs/internal/web-publish.md` |
