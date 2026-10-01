@@ -1,7 +1,7 @@
 //! A small JSON reader for the content files, and typed accessors that fail loudly.
 //!
 //! The spec's content is JSON (`spec/content/README.md`), and the engine reads
-//! no data format of its own, so the game carries this ~250-line reader rather
+//! no data format of its own, so the game carries this small reader rather
 //! than a new dependency (FINDINGS G-036). It parses the whole of RFC 8259 that
 //! the content uses — objects, arrays, strings with escapes, numbers, booleans,
 //! null — and keeps object keys in file order, because the content's order is

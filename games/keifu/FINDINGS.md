@@ -36,7 +36,7 @@ crate such as `serde_json` is in bounds for a game. I could not tell whether pro
 was a human decision.
 
 **What I did:** compiled the files in with `include_str!` (the same bytes on native and
-web, nothing to wait for, deterministic) and wrote a ~300-line JSON reader in the game
+web, nothing to wait for, deterministic) and wrote a JSON reader in the game (~300 lines plus tests)
 (`src/json.rs`), with every accessor naming the path that reached it. No dependency added.
 That is a defensible answer, and it was still a guess about policy.
 
@@ -123,5 +123,22 @@ read nothing else in it. Disclosed here so the fence stays auditable.
   being an elder."), the dream's legacy promise, the heirloom's provenance and the fear's
   effect line are hover text in the original; here they are always on the sheet, because a
   pointer cannot hover over a hover. Presentation is free; the information is all present.
+- **The mutation round: 74 of 78 noticed.** 78 one-line faults across every constant
+  and every derived quantity, harness-checked (a replace that matches nothing is an error,
+  a build that fails is not counted). Of the four the run does not notice, three are
+  equivalent (`id < other` to `<=` over distinct ids; a no-op match arm; `rfind` for
+  `find` over hit targets that never overlap). One is a real escape: narrowing the
+  sheet's column gutter by 6 px, which no founding sheet's text comes close enough to the
+  edge to show. Rounds one to three found eleven loose checks first — among them a
+  calendar check that a +2-years-per-summer fault passed (it only read odd years) and a
+  pip check that returned silently when its row was missing.
+- **Confirmation of `jidousha-testing.md`'s mutation passage.** Its warning that a
+  search-and-replace matching nothing "writes the file back unchanged and reports
+  success" was exact: my own editing script dropped two staged checks that way, and only
+  the next mutation round showed it.
+- **Small windows.** The layout is in constants for 1280x720 (the API document's
+  prototype answer). `tools/serve-web keifu --check`'s 640x480 browser draws it at half
+  size, where the 14 px type is 7 px and not readable (`screens/web-640x480.png`). The
+  floors hold at the window the game opens at; a phone-width layout is a later session's.
 - **0 findings against the capture document.** F-141's paragraph (shapes-and-text games
   need only `create_builtin_textures`) was exactly what this game needed.
