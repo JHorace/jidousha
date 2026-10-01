@@ -83,6 +83,8 @@ pub fn break_hero(
 ) -> Vec<String> {
     let words = &content.words;
     let noun = content.lore.tags[heroes[id].fear.tag.index()].noun.clone();
+    // SPEC-GAPS KG-12: place for a break at a place, none for grief; weight 0; and
+    // `grief.occasion` unread — grief has its own scar and deed strings.
     let (scar, telling, place, other) = match occasion {
         Occasion::Grief(dead) => {
             let name = &heroes[dead].name;
@@ -174,6 +176,7 @@ pub fn conquer(
 /// Shedding by the fire (SPEC §10.2): 1 dread, never below 0, not if broken.
 /// Returns whether any was shed (the rest line says so, W7).
 pub fn shed_dread(hero: &mut Hero) -> bool {
+    // SPEC-GAPS KG-11: nothing is shed at 0.
     if hero.fear.broken || hero.fear.dread <= 0 {
         return false;
     }

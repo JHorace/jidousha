@@ -1,10 +1,14 @@
-//! Keifu (系譜): a port of Lineage to Jidousha. Session 1 builds modules W0 and W1.
+//! Keifu (系譜): a port of Lineage to Jidousha. Session 1 built modules W0 and W1;
+//! session 2 builds W2 and gives the cast its sprites.
 //!
 //! W0 is the foundation: the content in `spec/content/` loaded and validated, the
 //! lore tables, the calendar and the Door countdown, the randomness primitives
 //! and the text conventions. W1 is the household: the hero model and what derives
 //! from it, the founding household in creation order, the roster, the hero card
-//! and sheet, and the family screen's membership.
+//! and sheet, and the family screen's membership. W2 is bonds, fears, grief and
+//! destinies as state and pure rules (`bonds`, `fear`, `grief`, `destiny`), with
+//! the power sum and fear line its oracle reads (`power`); nothing triggers them
+//! until quests arrive in W4-W6.
 //!
 //! What the player can do in this build: point at a hero to read their sheet, and
 //! open the family to see everyone who has lived. Nothing advances the year yet.

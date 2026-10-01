@@ -142,3 +142,146 @@ read nothing else in it. Disclosed here so the fence stays auditable.
   floors hold at the window the game opens at; a phone-width layout is a later session's.
 - **0 findings against the capture document.** F-141's paragraph (shapes-and-text games
   need only `create_builtin_textures`) was exactly what this game needed.
+
+---
+
+## Session 2 (W2 + the art item)
+
+**Reading discipline, session 2.** Read: `CLAUDE.md`, the `make-game` skill, the crate whole
+(`spec/` included), from `docs/api/` the asset, sprite, `MemorySource`, `FrameRecorder` and
+capture passages; from `crates/jidousha/examples/` `prototype_kit` (main, verify, capture) for
+the art half of a capture. The handoff named `docs/internal/assets.md` (read; it does not
+describe the depot — G-040) and ADR-0040 (read). The depot `jidousha-assets` (README,
+LICENSES.md, `tools/`, contact sheets). **Engine source: not opened.** `games/ninjo/` and
+`attic/`: not opened. Three touches to disclose: `grep -o "^### G-0nn"` over
+`games/ninjo/FINDINGS.md` to continue the G-sequence (G-039's method); a `grep -l depot`
+over the repository listed two file *names* under `games/ninjo/`; and an `ls games/*/assets`
+listed the file names in `games/ninjo/assets/`. No contents were read. `games/giri/` does
+not exist any more (it is in `attic/`), so no sibling game was read.
+
+### G-040 — the depot's import flow lives only inside a game folder
+
+Class: process · Session: keifu 2 · Owner: the depot README §5, `docs/internal/assets.md`,
+and the `make-game` skill
+
+**Doing:** importing sprites "through the flow `docs/internal/assets.md` documents", as the
+handoff asked.
+
+**Expected:** the flow in `docs/internal/assets.md`, or a tool under `tools/`.
+
+**Happened:** `docs/internal/assets.md` is the engine's asset-loading design; it never
+mentions the depot, roles or `CREDITS.md`. The depot's README §5 says the flow is
+"`games/<name>/art/import_pack.py`", and the only such script is inside `games/ninjo/` —
+the folder this port is fenced from. The depot's LICENSES.md calls it "the established
+import flow" and the only way art enters a game tree.
+
+**What I did:** wrote keifu's own minimal step from the README's *description* of the flow
+(role-named, PNG-only inside a size envelope, refuses to run without a licence and source,
+writes `CREDITS.md`): `games/keifu/art/import_sprites.py`, which borrows the depot's own PNG
+reader. The size envelope (8..64 px) is my choice; I could not read ninjo's.
+
+**Fix:** move the import step to `tools/` (it is not any one game's), document it beside
+ADR-0040's asset root, and point the depot README at it.
+
+### G-041 — the API document does not say which PNGs the engine can read
+
+Class: docs · Session: keifu 2 · Owner: `docs/api/jidousha-api.md` (Concepts, the assets
+paragraphs; `Assets`, `decode_png`)
+
+**Doing:** loading Kenney Tiny Dungeon tiles straight out of the pack.
+
+**Expected:** "a file that is not a readable PNG resolves Failed" to come with what
+*readable* means — bit depths and colour types.
+
+**Happened:** every Tiny Dungeon tile is a 4-bit palette PNG with `tRNS`. `decode_png`
+refused all ten: "Four bit depth is not supported; re-export as 8-bit". I learned it from
+verify's first run; in the window it would have been ten magenta checkerboards and ten
+error lines. The depot's README calls 1/2/4/8-bit palette PNGs what Kenney's packs *are*,
+so every game that imports from the depot meets this.
+
+**What I did:** the import step re-encodes each sprite as 8-bit RGBA, texel for texel.
+
+**Fix:** one sentence at `asset_source`/`Assets`: the PNG formats the engine decodes (8-bit
+only, it appears) — and, while there, the texture sampling filter (the sprites came out
+crisp at 2x and 3x, so it is nearest; nothing said so, and I scaled to whole multiples in
+case it was not).
+
+### G-042 — `tools/check-assets` passed while checking none of this game's paths
+
+Class: docs (misled) · Session: keifu 2 · Owner: `docs/api/jidousha-api.md` (the assets
+paragraphs) and `tools/check-assets`
+
+**Doing:** the definition-of-done gate "`check-assets` green".
+
+**Expected:** a green run to mean the game's ten `load_texture` paths name files that exist.
+
+**Happened:** the tool only checks loads in a file that *also builds* a filesystem-backed
+store (its docstring says so; `docs/api/` does not). I built the store in `main.rs`'s
+Startup and wrote the loads in `art.rs`, a natural split. `check-assets` exited 0 and
+listed five files, none of them keifu's — a green gate that had looked at nothing.
+
+**What I did on its authority:** nearly reported it green. Then noticed keifu was not in
+its list, moved the store into `art.rs` beside the loads (`art::store`), and confirmed the
+check now lists `games/keifu/src/art.rs` and fails on a mistyped path.
+
+**Fix:** either say the one-file rule where a game author reads about assets, or make the
+tool check every literal load in a crate that builds a file store anywhere.
+
+### G-043 — one recorder across sessions makes a capture's texture ids drift, and the GPU panics
+
+Class: docs · Session: keifu 2 · Owner: `docs/api/jidousha-capture.md`
+
+**Doing:** adding the art half of the capture (`prototype_kit/capture.rs`'s pattern).
+
+**Expected:** that replaying "the same art, uploaded the same way" into a fresh backend
+reproduces the recorder's ids.
+
+**Happened:** session 1 records every frame on one `FrameRecorder` across many sessions.
+Each session has its own store, and `settle_assets` uploads its art again, so by the
+capture the plan named backend texture 69 while a replay had uploaded ten. The id check
+the document asks for caught it — and then `WgpuBackend::render` *panicked* ("a frame plan
+named backend texture 69 which is not uploaded") instead of returning an error.
+
+**What I did:** each picture is staged in its own session and recorded by its own fresh
+recorder, and a drifted id now skips the render with a failed check.
+
+**Fix:** say in the capture document that a recorder whose frame you will capture must have
+seen exactly the store the replay recreates — one session — and consider `render`
+returning an error for an unknown texture rather than panicking.
+
+### The game's own (session 2)
+
+- **The mutation round: 78 of 80 noticed.** 80 one-line faults over every W2 constant,
+  table entry and predicate — bonds (rank rule, mirroring, `since`, self-bonds, the change
+  guard, steadying), fear (penalty, bonus, refusal, the dread rule's three gates, cap and
+  break, breaking's scar, deed and pronoun, conquering, shedding), grief (every branch,
+  bearers, shared kinship, whose side of the bond), destinies (every shield, claim, mend,
+  the Door's +5, may-still-learn, claimed, speaking) and the power sum and fear line —
+  harness-checked as session 1's was (a mutation that matches other than once is an error;
+  one that does not build is re-cut until it does). The instrument is `tools/test`'s two
+  halves: `cargo test` noticed 78, verify alone 42. **The two escapes are equivalent:**
+  `steadying_companion`'s `other != member` is redundant because no hero holds a bond to
+  themselves (`form` refuses one, a mutation the round does notice); and `add_dread`
+  passing an amount of 0 adds nothing and cannot break, since dread 5 is only ever reached
+  by breaking. No loose check was found; the rules were written with their tests.
+- **W2 lands the power sum early.** The W2 oracle reads "you bring 4", so `power.rs` sums
+  SPEC §6 for a party (lines 1-6, the floor, bonds, patrons) and builds the card's fear
+  line. W4 owns the quest model, the line-by-line breakdown and the forecast, and extends
+  these two functions rather than writing its own. Line 7 (blessings) needs W3's blessing
+  scope; until then a blessed hero in a power sum panics, loudly — nothing blesses anyone
+  before W3.
+- **No §19.1 reading was stubbed.** Session 1's sheet already read conquered, broken, born
+  brave and settled from state; W2 makes that state reachable through the real rules, and
+  verify's staged story reads the result off the sheets (Maren broken at the Coast and
+  bearing her father's death; Odo conquered; Pip spoken a destiny).
+- **The picks** (`screens/w2-picks.png`): Kenney Tiny Dungeon, one 16 px family. Knight:
+  full helm. Warrior: horned helm. Ranger (the original's "guard"): green headband. Scholar:
+  the robed woman — the only unarmoured, unbearded civilian left; heroes of either pronoun
+  wear it, as the original's sprites were worn. Priest: the bald, bearded friar. Sage: the
+  wizard. Elder of the fighting callings: the grey-haired veteran. Elder of the learned: the
+  hooded hermit (red-eyed — the pick I am least sure of). Child: the plain, unarmed youth,
+  drawn at two-thirds size because the pack has no child. Blade: the long sword.
+- **The tint rules are unchanged; the stand-in's colour is retired.** Dead grey, elder grey,
+  wounded red, as session 1 built them. Session 1's rectangle took its vocation's aptitude
+  colour otherwise; multiplied into a coloured sprite that would stain it, so "otherwise"
+  is now untinted, which is what §5.4 lists.

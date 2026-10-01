@@ -6,7 +6,7 @@ made, the code site (grep for `SPEC-GAPS KG-n`), and the question for the spec-a
 pass, which has the original and adjudicates every entry. Entries are never deleted; an
 adjudicated one gets a **Resolved:** line.
 
-Session 1 (W0 + W1): 6 entries.
+Session 1 (W0 + W1): 6 entries. Session 2 (W2): 6 entries, KG-7 to KG-12.
 
 ---
 
@@ -80,3 +80,84 @@ Session 1 (W0 + W1): 6 entries.
 - **Port's choice:** prophecy only, read literally from §19.1 (`src/sheet.rs`
   `destiny_section`).
 - **Question:** does `lineage/sheet.jai:183-` print doom and gift for UNSPOKEN?
+
+---
+
+## KG-7 — the glue between a fear-line item and "steadied"
+
+- **Spec says:** §5.4 "Fear: <name> -<penalty> [steadied], ..."; `ui.quest_card.fearful_item`
+  = "% -%" and `ui.quest_card.steadied` = "steadied", two separate strings. MODULES.md's W2
+  oracle quotes the items as **"Maren -2, steadied"** and **"Garrick -3, steadied"**.
+- **Underdetermined:** what joins the item and the word. §5.4's bracket notation reads as a
+  space; the oracle reads as ", ". No content string carries the glue.
+- **Port's choice:** ", " (the lore's name-list separator), as the oracle quotes it, so the
+  whole line reads "Fear: Maren -2, steadied, Garrick -3, steadied" (`src/power.rs`
+  `fear_items`). The W2 oracle asserts exactly the quoted items.
+- **Question:** how does `lineage/quest-card.jai:148-149` join `fearful_item` and `steadied`
+  — and are the items then joined with ", "?
+
+## KG-8 — what makes a card's fear item "steadied", and who is listed
+
+- **Spec says:** §5.4 lists "seated heroes who fear it" with "[steadied]". §10.1 step 3
+  defines the companion who steadies at resolution: "the first *living* other member whose
+  bond with m steadies (power > 0)".
+- **Underdetermined:** (a) whether the card's "steadied" is that same test over the seated
+  party; (b) whether "fear it" means "the fear costs power" (not conquered; a broken fear
+  still counts, §6 line 3) or something narrower.
+- **Port's choice:** (a) the same function as resolution, `bonds::steadying_companion`, so
+  the card cannot say "steadied" when the roll would not steady; (b) listed iff the quest
+  carries the tag and the fear is not conquered — the hero whose fear line costs power
+  (`src/power.rs` `fear_items`, `src/fear.rs` `fears`).
+- **Question:** the condition at `lineage/quest-card.jai:144-150`.
+
+## KG-9 — Form's replacement and `since`; Change with no bond
+
+- **Spec says:** §12.1 a bond records "since (year formed or last changed)"; Form replaces
+  a bond of strictly lower rank "keeping the bond's place in each list"; Change "overwrites
+  both sides regardless of rank **and sets since**".
+- **Underdetermined:** (a) whether Form's replacement also sets `since` (only Change is said
+  to) — it decides "no birth in the wedding's year" (§17.3) for companions or friends who
+  wed; (b) what Change does when the two have no bond.
+- **Port's choice:** (a) yes — a replacement is a change of kind, and §11.3 says the
+  spouses' bond is "formed this year" (`src/bonds.rs` `form`); `taught` and shared successes
+  are kept. (b) a loud panic: every Change the spec names (§11.3 rivals make peace, §12.2
+  rivals to friends and companions to rivals, §4 Brannoc and Ysolde) changes a bond that
+  exists (`src/bonds.rs` `change`).
+- **Question:** `lineage/bond.jai:84-121` — does the replacing branch write `since`, and
+  does Change append when there is no bond?
+
+## KG-10 — the order of a grief line and the break it causes
+
+- **Spec says:** §12.5 "else `lines.grief.dread` and dread += grief (may break M; the scar
+  names D)"; `lines.grief.dread`'s argument is "mourner dread after grief, capped at 5".
+  §10.1 step 7, for facing a fear, orders it explicitly: dread, then the line, then the break.
+- **Underdetermined:** whether `lines.fear.broken` comes before or after the grief line on
+  the page.
+- **Port's choice:** the grief line first, then the break's line, the order §12.5 lists them
+  and the order §10.1 uses (`src/grief.rs` `grieve`).
+- **Question:** `lineage/bond.jai:265-275` — is the line written before `add_dread`?
+
+## KG-11 — shedding dread from zero
+
+- **Spec says:** §10.2 "resting by the fire sheds 1 (not if broken)"; §11.3 the fire's rest
+  writes "one of three lines ..., or nothing if neither applied".
+- **Underdetermined:** whether a hero at dread 0 "sheds" (which decides whether the rest
+  "applied" and so which rest line is written, W7), and whether dread can go below 0.
+- **Port's choice:** nothing is shed at 0, and dread never goes below 0; `shed_dread`
+  reports whether it shed (`src/fear.rs`).
+- **Question:** `lineage/hearth.jai:324-340`.
+
+## KG-12 — the fear deeds' fields
+
+- **Spec says:** §10.4 "a BROKEN deed (with `other` = the mourned when grief)"; §10.3 "a
+  CONQUERED_FEAR deed"; §3.2 a deed is (kind, year, age, place, weight, other, telling);
+  `lines.deed.broken` / `deed.broken_by_grief` / `deed.conquered_fear` give the tellings
+  ("occasion" = `common.at_place`). `lines.grief.occasion` exists but its own note says grief
+  uses `scar.broken_by_grief`.
+- **Underdetermined:** each deed's place and weight, and where `grief.occasion` is used.
+- **Port's choice:** year = the current year, age = the hero's age; place = the quest's
+  place for a break or a conquest at a place, none for a break by grief; weight 0
+  (`src/fear.rs`). `grief.occasion` is not read: a break by grief takes
+  `scar.broken_by_grief` and `deed.broken_by_grief`, which name the dead directly.
+- **Question:** `lineage/fear.jai:51-78` — what place and weight the two deeds record, and
+  whether `grief.occasion` reaches any string the player can read.

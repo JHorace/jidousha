@@ -62,6 +62,7 @@ pub fn grieve(content: &Content, heroes: &mut [Hero], dead: HeroId, year: i32) -
             bearers.push((mourner, kinship));
             continue;
         }
+        // SPEC-GAPS KG-10: the grief line first, then whatever breaking writes.
         let hero = &heroes[mourner];
         let after = (hero.fear.dread + grief).min(DREAD_LIMIT);
         lines.push(fmt(
