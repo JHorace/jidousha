@@ -62,6 +62,25 @@ fn judge(
             format!("{name}: {:?}", row.text),
         );
     }
+    // The sheet's two columns keep a gutter: nothing in the left column reaches
+    // within half a pad of the panel's midline.
+    let sheet = crate::summer::SHEET;
+    let midline = sheet.center().x;
+    let two_columns = rows.iter().any(|r| r.panel == sheet && r.at.x >= midline);
+    for row in rows
+        .iter()
+        .filter(|r| two_columns && r.panel == sheet && r.at.x < midline)
+    {
+        checks.require(
+            row.bounds().max.x <= midline - crate::screen::PAD * 0.5,
+            "the sheet's left column runs into its gutter",
+            format!(
+                "{name}: {:?} ends at {:.1}, midline {midline:.1}",
+                row.text,
+                row.bounds().max.x
+            ),
+        );
+    }
     for (index, row) in rows.iter().enumerate() {
         for other in rows.iter().skip(index + 1) {
             checks.require(

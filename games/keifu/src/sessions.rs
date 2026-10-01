@@ -52,6 +52,26 @@ pub fn check_family(checks: &mut Checks, recorder: &mut FrameRecorder) -> String
         "the tree's links are wrong",
         format!("{} links", page.links.len()),
     );
+    let placed = crate::tree::node_rects(sim.world().resource::<House>());
+    let heroes = &sim.world().resource::<House>().heroes;
+    let rect = |id: usize| placed.iter().find(|(n, _)| *n == id).map(|(_, r)| *r);
+    let mut above = 0;
+    for (child, child_rect) in &placed {
+        for parent in heroes[*child].parents.iter().flatten() {
+            let ok = rect(*parent).is_some_and(|p| p.max.y < child_rect.min.y);
+            above += usize::from(ok);
+            checks.require(
+                ok,
+                "a parent is not drawn above their child",
+                format!("{} under {}", heroes[*child].name, heroes[*parent].name),
+            );
+        }
+    }
+    checks.require(
+        above == 5,
+        "the tree lost a parent link",
+        format!("{above} parent-child pairs above"),
+    );
     let garrick = hero_named(&sim, "Garrick");
     point_at(&mut sim, Target::Hero(garrick), false);
     let page = page_of(&sim);
@@ -111,6 +131,13 @@ pub fn check_seeds(checks: &mut Checks, content: &Content) -> String {
         seed(&a) == 7 && seed(&b) == 7 && seed(&c) == 8,
         "the run seed is not the recorded one",
         format!("{} {} {}", seed(&a), seed(&b), seed(&c)),
+    );
+    let mut engine = a.world_mut().resource_mut::<Rng>().clone();
+    let mut fresh = Rng::from_seed(7);
+    checks.require(
+        engine.next_u32() == fresh.next_u32(),
+        "the game's generator is not the one the recorded seed makes",
+        "after founding on seed 7, the world Rng and Rng::from_seed(7) disagree".to_owned(),
     );
     let before = crate::family::top_bar(content_of(&a), a.world().resource::<House>());
     let drawn = match begin_another_house(a.world_mut(), content) {

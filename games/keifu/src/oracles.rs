@@ -148,6 +148,7 @@ pub fn check_w0_and_w1(
         );
     }
     check_dread_pips(checks, &page, seed);
+    check_cards(checks, &sim, &page, seed);
     (
         format!(
             "oracles: W0 top bar ({} readings) and W1 Garrick sheet ({} lines) on screen",
@@ -186,6 +187,41 @@ fn check_dread_pips(checks: &mut Checks, page: &Page, seed: u64) {
             filled == want_filled && beside.len() == want_of,
             "W1 oracle: Garrick's fear pips are wrong",
             format!("seed {seed:#x}: {filled} filled of {} beside {label:?}, want {want_filled} of {want_of}", beside.len()),
+        );
+    }
+}
+
+/// The cards: Garrick's figure is grey (he is an elder) and Maren's is not; one dread
+/// pip per point of dread (Garrick 2, Maren 1).
+fn check_cards(checks: &mut Checks, sim: &HeadlessSim, page: &Page, seed: u64) {
+    let grey = |c: Color| (c.r - c.g).abs() < 0.02 && (c.g - c.b).abs() < 0.06;
+    for (name, want_grey, want_pips) in [("Garrick", true, 2), ("Maren", false, 1)] {
+        let id = hero_named(sim, name);
+        let Some(card) = page
+            .targets
+            .iter()
+            .find(|(_, t)| *t == Target::Hero(id))
+            .map(|(r, _)| *r)
+        else {
+            checks.require(
+                false,
+                "a card is missing",
+                format!("seed {seed:#x}: {name}"),
+            );
+            continue;
+        };
+        let inside: Vec<Color> = page
+            .shapes
+            .iter()
+            .filter(|s| card.contains_rect(s.rect) && s.rect != card)
+            .map(|s| s.color)
+            .collect();
+        let pips = inside.iter().filter(|c| **c == ink::DREAD).count();
+        let figure = inside.iter().find(|c| **c != ink::DREAD).copied();
+        checks.require(
+            pips == want_pips && figure.is_some_and(|c| grey(c) == want_grey),
+            "a card's dread pips or figure tint are wrong",
+            format!("seed {seed:#x}: {name} has {pips} pips (want {want_pips}), figure {figure:?} (grey wanted: {want_grey})"),
         );
     }
 }
