@@ -341,6 +341,16 @@ pub fn check_staged_sheets(checks: &mut Checks) -> String {
             return "staged sheets: the house could not be founded".to_owned();
         }
     };
+    staged_house.heroes[pip].age = 12;
+    staged_house.reseat();
+    let pip_seated =
+        staged_house.roster.contains(&Some(pip)) && !staged_house.yard().contains(&pip);
+    checks.require(
+        pip_seated,
+        "a hero of twelve is not seated as an adult",
+        format!("yard {:?}", staged_house.yard()),
+    );
+    staged_house.heroes[pip].age = 10;
     staged_house.heroes[wren].fate = crate::hero::Fate::Dead;
     staged_house.heroes[maren].fate = crate::hero::Fate::Dead;
     staged_house.reseat();

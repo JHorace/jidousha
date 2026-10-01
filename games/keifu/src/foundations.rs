@@ -125,6 +125,7 @@ fn check_text(checks: &mut Checks, content: &Content) {
         count_words(content, 12),
         count_words(content, 13),
         year_telling(content, -18),
+        year_telling(content, 0),
         year_telling(content, 1),
         year_telling(content, 25),
         year_telling(content, 26),
@@ -133,6 +134,12 @@ fn check_text(checks: &mut Checks, content: &Content) {
         name_list(content, &["Garrick", "Maren", "Pip"]),
         party_telling(content, &[]),
         party_telling(content, &["Odo", "Wren"]),
+        // content/README.md's own example of `%%`: two arguments back to back.
+        crate::text::fmt(
+            "% wanted %%, and did it.",
+            &["She", "the sea", ", as Elsbeth had"],
+        ),
+        crate::text::fmt("%2 before %1, \\%", &["one", "two"]),
     ];
     checks.require(
         said == [
@@ -140,6 +147,7 @@ fn check_text(checks: &mut Checks, content: &Content) {
             "three times",
             "twelve times",
             "13 times",
+            "before the first year",
             "before the first year",
             "in year 1",
             "in year 25",
@@ -149,6 +157,8 @@ fn check_text(checks: &mut Checks, content: &Content) {
             "Garrick, Maren and Pip",
             "No one",
             "Odo and Wren",
+            "She wanted the sea, as Elsbeth had, and did it.",
+            "two before one, %",
         ],
         "a text convention reads wrong",
         format!("{said:?}"),
