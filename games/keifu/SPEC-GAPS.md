@@ -6,7 +6,8 @@ made, the code site (grep for `SPEC-GAPS KG-n`), and the question for the spec-a
 pass, which has the original and adjudicates every entry. Entries are never deleted; an
 adjudicated one gets a **Resolved:** line.
 
-Session 1 (W0 + W1): 6 entries. Session 2 (W2): 6 entries, KG-7 to KG-12.
+Session 1 (W0 + W1): 6 entries. Session 2 (W2): 6 entries, KG-7 to KG-12. Session 3 (W3):
+12 entries, KG-13 to KG-24.
 
 ---
 
@@ -161,3 +162,137 @@ Session 1 (W0 + W1): 6 entries. Session 2 (W2): 6 entries, KG-7 to KG-12.
   `scar.broken_by_grief` and `deed.broken_by_grief`, which name the dead directly.
 - **Question:** `lineage/fear.jai:51-78` — what place and weight the two deeds record, and
   whether `grief.occasion` reaches any string the player can read.
+
+---
+
+## KG-13 — the "dream"/"burden" word in the quest sheet's call line
+
+- **Spec says:** §5.4 "<Name>'s dream|burden: <current stage task>. <He> must ...";
+  `ui.quest_sheet.dream_call` = "%'s %: %. % must %." with argument 2 "burden/dream".
+- **Underdetermined:** no content key holds the lower-case words "dream" and "burden". The
+  nearest are the sheet's headings `ui.hero_sheet.dream` ("DREAM") and `.burden` ("BURDEN");
+  `lines.dream.bearing_own` is "% dream" (a phrase, not the word).
+- **Port's choice:** the heading lowered whole — "dream", "burden" — so the word still comes
+  from content by key (`src/calls.rs` `call_line`). MODULES.md's W3 oracle quotes the result
+  exactly: "Garrick's dream: Win a triumph at the Barrow. He must triumph."
+- **Question:** is the word a literal at `lineage/quest-card.jai:195`?
+
+## KG-14 — whom a dream line's task is told about
+
+- **Spec says:** §9.2 "Told task: ... a trailing ' you' becomes ' him'/' her' of the hero it is
+  told about". `lines.dream.counted` and `lines.dream.stage_done` take "stage task (told)"; only
+  `lines.heir.takes_dream` says whom ("told about the dream owner").
+- **Underdetermined:** for a carried dream, whether the progress lines tell the task about
+  the bearer or the owner. Only WORTHY_STUDENT's "See a student succeed without you" ends in
+  " you", so it shows only in "What is left: see a student succeed without him|her".
+- **Port's choice:** the bearer — the hero the line is about (`src/witness.rs` `advance`).
+- **Question:** which hero `lineage/tale.jai:426,431` passes to the told-task call.
+
+## KG-15 — the dream deeds' fields
+
+- **Spec says:** §9.3 "a DREAM_STEP deed"; §9.4 "a DREAM_FULFILLED deed"; §14.1 "a LEFT_LEGACY
+  deed"; a deed is (kind, year, age, place, weight, other, telling); the tellings are
+  `lines.deed.dream_step`, `.dream_fulfilled`, `.left_legacy`.
+- **Underdetermined:** each deed's place, weight and other. Nothing the spec describes reads
+  them (the epitaph, W9, reads other deed kinds).
+- **Port's choice:** year now, the hero's age; DREAM_STEP and DREAM_FULFILLED take the quest's
+  place when a quest moment moved the dream and none for a winter or a turning;
+  LEFT_LEGACY no place; weight 0 and no other hero for all three, as KG-12 chose for the fear
+  deeds (`src/witness.rs`, `src/legacy.rs`).
+- **Question:** `lineage/tale.jai:432,451` and `lineage/legacy.jai:184` — the recorded fields.
+
+## KG-16 — the order of a blessing's recipients
+
+- **Spec says:** §14.1 "Recipients: F, all descendants of the dreamer, all descendants of F,
+  and for WORTHY_STUDENT everyone F taught; each living recipient receives it unless they
+  already have a blessing with the same title. `lines.legacy.blessing` names the newly blessed."
+- **Underdetermined:** the order within "all descendants" and "everyone F taught", which is the
+  order the name list reads in.
+- **Port's choice:** the groups in the order listed; descendants in creation order; the taught
+  in F's bond order; a hero already given it earlier in the walk is skipped by the title rule
+  (`src/blessing.rs` `bless`). The W3 oracle — "Garrick, Maren and Pip" — is creation order,
+  which every reading of the rule gives for the founding household.
+- **Question:** how `lineage/legacy.jai:160-178` walks descendants.
+
+## KG-17 — the place word in a blessing's "at" effect
+
+- **Spec says:** `legacies.json` `blessing_effects.AT_PLACE` = "+% at %" with no argument notes.
+- **Underdetermined:** the place's `title` ("The Drowned Coast") or `name` ("the Drowned
+  Coast").
+- **Port's choice:** `name`, the mid-sentence form `content/README.md` defines it as — "+2 at
+  the Drowned Coast" (`src/blessing.rs` `blessing_effect`).
+- **Question:** `lineage/legacy.jai` — which place field the effect prints.
+
+## KG-18 — the order of a new heirloom's lines
+
+- **Spec says:** §14.1 HEIRLOOM: "forge it ... Give it to F (§14.2). Line
+  `lines.legacy.heirloom`." §14.2's giving writes `legacy.hands_full` or
+  `legacy.hung_over_hearth`.
+- **Underdetermined:** whether the giving's line comes before or after "It leaves an heirloom".
+- **Port's choice:** the order §14.1 lists them: the giving's line, then the heirloom's
+  (`src/legacy.rs` `leave_legacy`).
+- **Question:** in `lineage/legacy.jai:130-185`, is the give call (`:111-128`) before or after
+  the line at `:146`?
+
+## KG-19 — the heir of the blood on equal born years
+
+- **Spec says:** §14.2 "among all candidates found choose the earliest born_year".
+- **Underdetermined:** a tie (twins, or two cousins of one year).
+- **Port's choice:** the first found in the walk (children in bond order, depth first), as
+  `firstborn` (§3.2) keeps the first on ties (`src/legacy.rs` `heir`).
+- **Question:** `lineage/legacy.jai:281-304`'s comparison, `<` or `<=`.
+
+## KG-20 — which dreams a dream rival is judged by
+
+- **Spec says:** §12.3 "When a hero gains a dream ... if that dream is dreamt and
+  unfulfilled: every other living adult with an unfulfilled dream of the same kind ...".
+- **Underdetermined:** (a) whether "an unfulfilled dream" of the other hero includes a burden
+  they carry; (b) for a hero who gains a burden (a passed dream), which dream is compared.
+- **Port's choice:** (a) the other's own dream only (`Hero::dream`, the field the model calls
+  "dream"); (b) the dream gained, whichever slot it lands in — the caller passes it
+  (`src/rivals.rs` `dream_rivals`). The rival line's title is told for the gainer (owner's
+  pronoun if owned).
+- **Question:** `lineage/bond.jai:221-239` — does it read `hero.dream` only?
+
+## KG-21 — an heirloom hung over the hearth, at the start of a sentence
+
+- **Spec says:** `lines.legacy.hung_over_hearth` = "% is hung over the hearth. ..." with
+  argument "old heirloom name"; `lines.heir.buried_with` says "heirloom name, first letter
+  capitalized" for the same position.
+- **Underdetermined:** whether a lower-case name ("the Hale cradle-ring") is capitalised here.
+- **Port's choice:** as given, uncapitalised, since this key's argument does not say otherwise
+  (`src/legacy.rs` `give_heirloom`). Every authored or forged name but the cradle-ring starts
+  upper-case.
+- **Question:** `lineage/legacy.jai:123`.
+
+## KG-22 — the card's "Dream:" names: order and separator
+
+- **Spec says:** §5.4 "'Dream: <names>' for every adult whose dream (or burden) this quest would
+  advance"; `ui.quest_card.dreamers` argument "called dreamers, comma-separated". MODULES.md's
+  W3 oracle: the line "include[s] Garrick (Ysolde is also called ...)".
+- **Underdetermined:** the order of the names, and whether "comma-separated" is ", " or the
+  name-list's "a, b and c".
+- **Port's choice:** living adults in creation order, joined with ", " — the lore's separator,
+  as KG-7 chose for the fear line (`src/calls.rs` `dreamers_line`). Garrick seated on "Grave
+  goods" in year 1 reads "Dream: Garrick, Ysolde".
+- **Question:** `lineage/quest-card.jai:130-139`.
+
+## KG-23 — the legacy promise under a fulfilled dream
+
+- **Spec says:** §19.1 DREAM: "... or 'Fulfilled.'; hover gives the legacy promise"
+  (`legacies.json` `promises`: "If it is ever done, it will leave ...").
+- **Underdetermined:** whether a fulfilled dream still offers its promise, which reads oddly
+  once it is done.
+- **Port's choice:** unchanged from session 1 — the promise is shown under every dream, done
+  or not (`src/sheet.rs` `dream_lines`); W3 made "Fulfilled." reachable without deciding this.
+- **Question:** `lineage/sheet.jai`'s hover condition on the dream section.
+
+## KG-24 — a house tale's "about whom" and "since"
+
+- **Spec says:** §3.1 tales are "(title, about whom, since)"; §14.1 "append a house tale titled
+  by the dream kind's format with the dreamer's name".
+- **Underdetermined:** whether "about whom" is the dreamer or the fulfiller, and what "since"
+  records. Nothing W3 builds reads either (the tally counts; §14.3 reads the newest title).
+- **Port's choice:** the dreamer, as the title names them; since = the year it was left
+  (`src/legacy.rs` `leave_legacy`).
+- **Question:** `lineage/legacy.jai:150-155`.

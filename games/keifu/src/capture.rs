@@ -3,8 +3,9 @@
 //! The path is `examples/prototype_kit/capture.rs`'s, art half included: the
 //! built-in textures first, then the same sprites loaded in the same order from
 //! the same scripted store, so the plan's texture ids mean the same thing here
-//! (docs/api/jidousha-capture.md). Three pictures: the W0+W1 oracle screen (top
-//! bar, the cast's cards and Garrick's sheet), a child's sheet, and the family.
+//! (docs/api/jidousha-capture.md). Four pictures: the W0+W1 oracle screen (top
+//! bar, the cast's cards and Garrick's sheet), a child's sheet, the family, and
+//! W3's Garrick — settled, blessed, and holding the blade he carried a dream to.
 
 use std::path::{Path, PathBuf};
 
@@ -29,7 +30,7 @@ fn one_line(message: &str) -> String {
     message.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// Capture the three pictures; returns the summary lines, the first one being the
+/// Capture the four pictures; returns the summary lines, the first one being the
 /// `capture:` line `tools/verify` reads.
 ///
 /// Each picture is staged in its own session and recorded by its own fresh
@@ -46,6 +47,7 @@ pub fn capture_all(checks: &mut Checks) -> Vec<String> {
         (&["Garrick"][..], "keifu.png"),
         (&["Wren"][..], "keifu-child.png"),
         (&["", "Maren"][..], "keifu-family.png"),
+        (&["w3", "Garrick"][..], "keifu-w3-garrick.png"),
     ]
     .into_iter()
     .enumerate()
@@ -55,6 +57,8 @@ pub fn capture_all(checks: &mut Checks) -> Vec<String> {
         for name in stage {
             if name.is_empty() {
                 point_at(&mut sim, Target::OpenFamily, true);
+            } else if *name == "w3" {
+                stage_w3(&mut sim);
             } else {
                 let id = hero_named(&sim, name);
                 point_at(&mut sim, Target::Hero(id), false);
@@ -76,6 +80,18 @@ pub fn capture_all(checks: &mut Checks) -> Vec<String> {
         });
     }
     lines
+}
+
+/// W3's staged sheets (`w3::stage_settled`) on the session's own house.
+fn stage_w3(sim: &mut HeadlessSim) {
+    let content = match crate::content::load() {
+        Ok(content) => content,
+        Err(error) => crate::checks::fail("the content did not load", &error.to_string()),
+    };
+    crate::w3::stage_settled(
+        &content,
+        sim.world_mut().resource_mut::<crate::house::House>(),
+    );
 }
 
 fn capture(

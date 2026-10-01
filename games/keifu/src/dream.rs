@@ -1,7 +1,7 @@
 //! The dream as stored state (SPEC §9.1), and its told title, task and progress (§9.2).
 //!
-//! W1 holds dreams as data the household seeds and the sheet shows. Nothing here
-//! advances a dream on a moment — witnessing and fulfilment are W3.
+//! A dream is data the household seeds and the sheet shows. Moving it on a moment
+//! is `witness` (SPEC §9.3-9.4); what a stage asks for is `moment::stage_met`.
 
 use crate::constants::DREAM_STAGE_COUNT;
 use crate::content::Content;

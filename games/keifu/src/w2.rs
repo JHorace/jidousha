@@ -234,6 +234,7 @@ pub fn check_rules(checks: &mut Checks) -> String {
         -4,
     );
     let bell = QuestFacts {
+        place: Place::DrownedCoast,
         aptitude: crate::ids::Aptitude::Spirit,
         tags: &[Tag::Water],
         door_lock: false,

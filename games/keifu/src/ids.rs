@@ -179,6 +179,18 @@ ids!(
 );
 
 ids!(
+    /// What a hero did with a winter: the moment a winter seat offers (SPEC §9.3, §11.3).
+    WinterAction {
+        Rest = "REST",
+        Train = "TRAIN",
+        Teach = "TEACH",
+        Court = "COURT",
+        MindAChild = "MIND_A_CHILD",
+        TellTheTale = "TELL_THE_TALE",
+    }
+);
+
+ids!(
     /// How a quest went. "At least" comparisons use this order.
     Outcome {
         Disaster = "DISASTER",
