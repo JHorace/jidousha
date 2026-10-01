@@ -158,31 +158,36 @@ pub fn check_w0_and_w1(
     )
 }
 
-/// "fear Water with 2 dread": two filled pips of five beside the Dread row.
+/// "fear Water with 2 dread": two filled pips of five beside Dread, none of three
+/// beside Courage.
 fn check_dread_pips(checks: &mut Checks, page: &Page, seed: u64) {
-    let Some(dread) = page.rows.iter().find(|row| row.text == "Dread") else {
-        return;
-    };
-    let band = dread.bounds();
-    let beside: Vec<Color> = page
-        .shapes
-        .iter()
-        .filter(|s| {
-            s.rect.min.y >= band.min.y
-                && s.rect.max.y <= band.max.y + 2.0
-                && s.rect.min.x > band.max.x
-        })
-        .map(|s| s.color)
-        .collect();
-    let filled = beside.iter().filter(|c| **c == ink::DREAD).count();
-    checks.require(
-        filled == 2 && beside.len() == 5,
-        "W1 oracle: Garrick's dread does not read as 2 of 5",
-        format!(
-            "seed {seed:#x}: {filled} filled pips of {} beside \"Dread\"",
-            beside.len()
-        ),
-    );
+    for (label, want_filled, want_of) in [("Dread", 2, 5), ("Courage", 0, 3)] {
+        let Some(row) = page.rows.iter().find(|row| row.text == label) else {
+            checks.require(
+                false,
+                "W1 oracle: a fear row is missing",
+                format!("seed {seed:#x}: no {label:?} row"),
+            );
+            continue;
+        };
+        let band = row.bounds();
+        let beside: Vec<Color> = page
+            .shapes
+            .iter()
+            .filter(|s| {
+                s.rect.min.y >= band.min.y
+                    && s.rect.max.y <= band.max.y + 2.0
+                    && s.rect.min.x > band.max.x
+            })
+            .map(|s| s.color)
+            .collect();
+        let filled = beside.iter().filter(|c| **c == ink::DREAD).count();
+        checks.require(
+            filled == want_filled && beside.len() == want_of,
+            "W1 oracle: Garrick's fear pips are wrong",
+            format!("seed {seed:#x}: {filled} filled of {} beside {label:?}, want {want_filled} of {want_of}", beside.len()),
+        );
+    }
 }
 
 /// The founding household and every derived quantity W1 owns.

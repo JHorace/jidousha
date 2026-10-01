@@ -97,6 +97,10 @@ pub fn check_family(checks: &mut Checks, recorder: &mut FrameRecorder) -> String
     )
 }
 
+/// The seed another house draws after a house founded on seed 7: the engine `Rng`'s
+/// sequence, recorded the first time it ran, so a change to how it is drawn shows.
+const SEED_AFTER_SEVEN: u64 = 0xf131_7856_0a08_cba5;
+
 /// Seeds are recorded state; the household does not depend on them; a new house reseeds.
 pub fn check_seeds(checks: &mut Checks, content: &Content) -> String {
     let mut a = session(7);
@@ -118,7 +122,7 @@ pub fn check_seeds(checks: &mut Checks, content: &Content) -> String {
     };
     let after = crate::family::top_bar(content, a.world().resource::<House>());
     checks.require(
-        drawn != 7 && seed(&a) == drawn && before == after,
+        drawn == SEED_AFTER_SEVEN && seed(&a) == drawn && before == after,
         "another house did not reseed from the generator, or its founding differs",
         format!("new seed {drawn:#x}, top bar {before:?} -> {after:?}"),
     );
@@ -305,6 +309,59 @@ pub fn check_staged_sheets(checks: &mut Checks) -> String {
         crate::hero::kin(&heroes, wren, twin) && !crate::hero::kin(&heroes, wren, garrick),
         "kin by a shared parent is wrong",
         "Wren and a child of Brannoc and Aud; Wren and her friend Garrick".to_owned(),
+    );
+    // Brannoc's second child, born after Wren: Wren stays the firstborn.
+    heroes[twin].born_year = -3;
+    heroes[brannoc].bonds.push(crate::hero::Bond {
+        kind: crate::ids::BondKind::Child,
+        other: twin,
+        since: -3,
+        taught: false,
+        shared_successes: 0,
+    });
+    checks.require(
+        crate::hero::firstborn(&heroes, brannoc) == Some(wren),
+        "firstborn is not the earliest-born child",
+        format!("{:?}", crate::hero::firstborn(&heroes, brannoc)),
+    );
+    // Twelve is of age.
+    heroes[pip].age = 12;
+    expect(
+        checks,
+        "Pip at twelve",
+        &heroes,
+        pip,
+        &["Knight, youth, aged 12", "Might 0 (-1)"],
+    );
+    // A dead child leaves the yard; a dead adult leaves the roster.
+    let mut staged_house = match House::found(content, crate::verify::SEEDS[0]) {
+        Ok(house) => house,
+        Err(error) => {
+            checks.require(false, "the house could not be founded", error);
+            return "staged sheets: the house could not be founded".to_owned();
+        }
+    };
+    staged_house.heroes[wren].fate = crate::hero::Fate::Dead;
+    staged_house.heroes[maren].fate = crate::hero::Fate::Dead;
+    staged_house.reseat();
+    let yard = staged_house.yard();
+    let seated = staged_house.roster.iter().flatten().count();
+    checks.require(
+        yard == [pip] && seated == 4,
+        "the dead are still in the yard or the roster",
+        format!("yard {yard:?}, {seated} seated"),
+    );
+    // A current stage with a goal of two tells its count.
+    if let Some(dream) = staged_house.heroes[garrick].dream.as_mut() {
+        dream.advance_to_stage(1);
+        dream.stages[1].count = 1;
+    }
+    let remembered = crate::family::remembrance(content, &staged_house, garrick);
+    let want = "Still to do: succeed against the Undead twice (1/2).";
+    checks.require(
+        remembered.iter().any(|line| line.contains(want)),
+        "a goal-2 stage does not tell its count",
+        format!("wanted {want:?} in {remembered:?}"),
     );
     format!("staged sheets: {staged} states no founding hero is in")
 }

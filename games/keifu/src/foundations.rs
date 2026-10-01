@@ -76,6 +76,7 @@ fn check_tables(checks: &mut Checks, content: &Content) {
 /// The calendar walked to the last summer, read through the top bar.
 fn check_calendar(checks: &mut Checks, content: &Content, house: &mut House) {
     let mut seen = Vec::new();
+    let mut years = Vec::new();
     for _ in 0..25 {
         house.calendar.begin_winter();
         let [_, season, ..] = top_bar(content, house);
@@ -83,6 +84,7 @@ fn check_calendar(checks: &mut Checks, content: &Content, house: &mut House) {
             seen.push(season);
         }
         house.calendar.begin_summer();
+        years.push(house.calendar.current_year());
         if house.calendar.current_year() == 25 {
             let [year, _, _, door, _] = top_bar(content, house);
             seen.push(year);
@@ -91,6 +93,15 @@ fn check_calendar(checks: &mut Checks, content: &Content, house: &mut House) {
     }
     let [year, season, _, door, _] = top_bar(content, house);
     seen.extend([year, season, door]);
+    // One year per turning: 2, 3, ... 26, written out rather than computed.
+    let want: Vec<i32> = vec![
+        2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
+    ];
+    checks.require(
+        years == want,
+        "the calendar does not advance one year per summer",
+        format!("{years:?}"),
+    );
     checks.require(
         seen == [
             "Winter",
