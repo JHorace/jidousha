@@ -421,6 +421,14 @@ mod tests {
             witness(&content, &mut house, brannoc, &Moment::YearTurn).is_empty(),
             "Wren is eight"
         );
+        // A child is not a wedding: Maren has Pip and no spouse.
+        let maren = id(&house.heroes, "Maren");
+        house.heroes[maren].dream =
+            Some(Dream::build(&content, DreamKind::SeeAChildGrown, None, None).expect("builds"));
+        assert!(
+            witness(&content, &mut house, maren, &Moment::YearTurn).is_empty(),
+            "Maren is unwed"
+        );
         house.heroes[wren].age = 12;
         assert_eq!(
             witness(&content, &mut house, brannoc, &Moment::YearTurn),
