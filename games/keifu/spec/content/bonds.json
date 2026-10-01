@@ -1,0 +1,124 @@
+{
+  "_source": "lineage/bond.jai:1-82",
+  "kinds": [
+    {
+      "id": "COMPANION",
+      "title": "Companion",
+      "pair": "companions",
+      "rank": 0,
+      "power": 0,
+      "grief": 0,
+      "mirror": "COMPANION",
+      "shown": false
+    },
+    {
+      "id": "FRIEND",
+      "title": "Friend",
+      "pair": "friends",
+      "rank": 1,
+      "power": 1,
+      "grief": 1,
+      "mirror": "FRIEND",
+      "shown": true
+    },
+    {
+      "id": "RIVAL",
+      "title": "Rival",
+      "pair": "rivals",
+      "rank": 1,
+      "power": -1,
+      "grief": 0,
+      "mirror": "RIVAL",
+      "shown": true
+    },
+    {
+      "id": "SPOUSE",
+      "title": "Spouse",
+      "pair": "wed",
+      "rank": 3,
+      "power": 2,
+      "grief": 2,
+      "mirror": "SPOUSE",
+      "shown": true
+    },
+    {
+      "id": "MENTOR",
+      "title": "Mentor",
+      "pair": "student and mentor",
+      "rank": 2,
+      "power": 1,
+      "grief": 1,
+      "mirror": "STUDENT",
+      "shown": true
+    },
+    {
+      "id": "STUDENT",
+      "title": "Student",
+      "pair": "mentor and student",
+      "rank": 2,
+      "power": 1,
+      "grief": 1,
+      "mirror": "MENTOR",
+      "shown": true
+    },
+    {
+      "id": "PARENT",
+      "title": "Parent",
+      "pair": "child and parent",
+      "rank": 4,
+      "power": 2,
+      "grief": 2,
+      "mirror": "CHILD",
+      "shown": true
+    },
+    {
+      "id": "CHILD",
+      "title": "Child",
+      "pair": "parent and child",
+      "rank": 4,
+      "power": 2,
+      "grief": 2,
+      "mirror": "PARENT",
+      "shown": true
+    }
+  ],
+  "gendered_titles": {
+    "PARENT": {
+      "HE": "Father",
+      "SHE": "Mother"
+    },
+    "CHILD": {
+      "HE": "Son",
+      "SHE": "Daughter"
+    },
+    "SPOUSE": {
+      "HE": "Husband",
+      "SHE": "Wife"
+    },
+    "_note": "Keyed by the pronoun of the OTHER hero in the bond (bond.other)."
+  },
+  "kinship_tellings": {
+    "PARENT": {
+      "HE": "father",
+      "SHE": "mother"
+    },
+    "CHILD": {
+      "HE": "son",
+      "SHE": "daughter"
+    },
+    "SPOUSE": {
+      "HE": "husband",
+      "SHE": "wife"
+    },
+    "MENTOR": "teacher",
+    "STUDENT": "student",
+    "RIVAL": "rival",
+    "otherwise": "friend",
+    "sibling": {
+      "HE": "brother",
+      "SHE": "sister"
+    },
+    "no_bond": "companion",
+    "_source": "lineage/bond.jai:54-72"
+  }
+}
