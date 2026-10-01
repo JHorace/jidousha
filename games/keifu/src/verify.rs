@@ -8,9 +8,12 @@
 //!    recorded frame. The expectations are shipped literals copied from
 //!    MODULES.md, never computed from the code under test (`oracles.rs`).
 //! 2. **The founding** and every derived quantity W1 owns (`oracles.rs`).
-//! 3. **The W0 machinery**: calendar, text conventions, pools, bags (`foundations.rs`).
-//! 4. **Readability floors** over every surface this build has (`floors.rs`).
-//! 5. **A picture** of each oracle's screen (`capture.rs`).
+//! 3. **W2's oracle** — Maren and Garrick's fear line and power on the bell — and
+//!    a staged story over every W2 rule (`w2.rs`). The oracle's three strings are
+//!    printed, labelled, for the owner to hold beside the original's card.
+//! 4. **The W0 machinery**: calendar, text conventions, pools, bags (`foundations.rs`).
+//! 5. **Readability floors** over every surface this build has (`floors.rs`).
+//! 6. **A picture** of each oracle's screen (`capture.rs`).
 
 use std::process::ExitCode;
 
@@ -125,6 +128,10 @@ pub fn run() -> ExitCode {
             garrick_frame = Some(frame);
         }
     }
+    let (w2_line, w2_vector) = crate::w2::check_oracle(&mut checks);
+    summary.push(w2_line);
+    summary.extend(w2_vector);
+    summary.push(crate::w2::check_rules(&mut checks));
     summary.push(crate::sessions::check_family(&mut checks, &mut recorder));
     summary.push(crate::sessions::check_seeds(&mut checks, &content));
     summary.push(crate::sessions::check_staged_sheets(&mut checks));
@@ -137,7 +144,7 @@ pub fn run() -> ExitCode {
     let (passed, failed) = checks.counts();
     if failed == 0 {
         println!(
-            "verified keifu: W0 and W1 oracles hold on {} seeds, {passed} checks",
+            "verified keifu: W0, W1 and W2 oracles hold on {} seeds, {passed} checks",
             SEEDS.len()
         );
     } else {

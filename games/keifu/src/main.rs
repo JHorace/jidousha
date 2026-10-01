@@ -17,16 +17,20 @@
 
 #![allow(missing_docs)]
 
+mod bonds;
 mod calendar;
 mod capture;
 mod chance;
 mod checks;
 mod constants;
 mod content;
+mod destiny;
 mod dream;
 mod family;
+mod fear;
 mod floors;
 mod foundations;
+mod grief;
 mod hero;
 mod house;
 mod household;
@@ -34,13 +38,17 @@ mod ids;
 mod json;
 mod lore;
 mod oracles;
+mod power;
 mod screen;
 mod sessions;
 mod sheet;
 mod summer;
+#[cfg(test)]
+mod testkit;
 mod text;
 mod tree;
 mod verify;
+mod w2;
 mod words;
 
 use std::process::ExitCode;

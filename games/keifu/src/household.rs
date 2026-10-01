@@ -165,6 +165,7 @@ fn read_hero(item: &At<'_>) -> Result<FoundingHero, SchemaError> {
             Some(_) => strings(item, "scars")?,
             None => Vec::new(),
         },
+        deeds: Vec::new(),
         legacy: (LegacyKind::None, String::new()),
         renown: count("renown")?,
         wounded: false,

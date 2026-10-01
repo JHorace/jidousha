@@ -22,6 +22,8 @@ macro_rules! ids {
             pub const ALL: &'static [$name] = &[$($name::$variant),+];
 
             /// The position in canonical order — the index into content tables.
+            // Not every enumeration indexes a table yet (`Outcome` waits for W4's card).
+            #[allow(dead_code)]
             pub fn index(self) -> usize {
                 self as usize
             }
@@ -173,5 +175,15 @@ ids!(
         Rests = "RESTS",
         Courages = "COURAGES",
         Friendships = "FRIENDSHIPS",
+    }
+);
+
+ids!(
+    /// How a quest went. "At least" comparisons use this order.
+    Outcome {
+        Disaster = "DISASTER",
+        Setback = "SETBACK",
+        Success = "SUCCESS",
+        Triumph = "TRIUMPH",
     }
 );
