@@ -482,6 +482,12 @@ camera, the per-session recorder of G-043, the floors' text measurement) they ha
   drag, so the card a hero is held over is always on screen (the original's sheets are
   pop-ups too). One consequence: "<watched> will not go." can only be read while the hero is
   in hand, because pointing at a hero raises their sheet over the board.
+- **Pictures** (`screens/`): `w4-drag.png` — Garrick seated on "Grave goods", Brannoc in
+  hand over the card, which previews him in the second seat and reads "Needs Might 9", "you
+  bring 12", "Succeed 92%", "triumph 42%" (CONSTANTS §3 at +3); `w4-quest-sheet.png` — the
+  sheet behind it, the §6 lines with Thornfall's +1, each outcome's odds, the Barrow's
+  history panel; `w4-worst-sheet.png` — the staged worst case (trouble 2, three seated, two
+  patrons), whose sheet runs on into the right column above its history panel.
 - **The help line lives in the board's empty slots.** Year 1 posts two quests, so it fits
   below them. W5's full board of four leaves no room for it — W5 needs to give it a home.
 - **The preview and the drop read one function.** `House::landing` answers "where would
@@ -490,6 +496,18 @@ camera, the per-session recorder of G-043, the floors' text measurement) they ha
 - **The breakdown and the sum are asserted equal.** `power_lines::party_lines` builds §6
   line by line from the same pieces `power::member_power` sums, and panics if the two ever
   disagree, rather than rewriting session 2's sum.
-- **The mutation round.** W3's list rerun against W4: 117 of 118 noticed, the same
-  equivalent escape as session 3 (K7). W4's list (`mutants/w4.txt`, 134 faults) — see the
-  closing numbers in the PR and below.
+- **The mutation rounds.** W3's list rerun against W4's code (`93411c7`): 117 of 118
+  noticed (tests alone 115, verify alone 48), the same equivalent escape as session 3 (K7).
+  W4's own list, `mutants/w4.txt`, is 134 faults: every W4 constant (CONSTANTS §3 and §4),
+  the banding, the dice, the rounding and the card's four sums; the stakes formula line by
+  line; the board, its seats, landing, swap and refusal; the card, the sheet, the breakdown
+  and the history; the pointer and the drawn card; the content W4 reads; and CONSTANTS §3's
+  table entry by entry — each of its 21 rows, and the oracle's three, as verify ships them,
+  so a row the instrument stopped comparing would show. Round one: 131 of 134 noticed, none
+  unbuilt. Two escapes were loose checks, both a state the founding never reaches: no
+  founding party changes a Dream: line on the opening quests (K12 — now a staged
+  stay-behind call, Odo and the student he taught), and nothing read Garrick's breakdown
+  away from Might, where Thornfall must not count (P2 — now W2's bell read line by line).
+  Round two, the whole list again: **133 of 134 noticed** (tests alone 85, verify alone
+  120). **The escape left is equivalent:** K8, "Room for N" told with the calm seats —
+  that line shows only on an untroubled quest, where the seats are the calm seats.
