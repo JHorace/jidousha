@@ -127,6 +127,7 @@ pub fn run() -> ExitCode {
     }
     summary.push(crate::sessions::check_family(&mut checks, &mut recorder));
     summary.push(crate::sessions::check_seeds(&mut checks, &content));
+    summary.push(crate::sessions::check_staged_sheets(&mut checks));
     summary.push(crate::floors::check(&mut checks, &mut recorder));
     let Some(garrick_frame) = garrick_frame else {
         fail("no frame of Garrick's sheet was recorded", "SEEDS is empty");

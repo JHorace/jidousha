@@ -77,6 +77,20 @@ fn judge(
             );
         }
     }
+    // Everything the page holds was submitted: a rectangle and a line are one quad
+    // each, and type one per character.
+    let chars: usize = page.rows.iter().map(|row| row.text.chars().count()).sum();
+    let expected = page.shapes.len() + page.links.len() + chars;
+    checks.require(
+        frame.quad_count() == expected,
+        "the frame does not hold what the page says to draw",
+        format!(
+            "{name}: {} quads, page has {} shapes, {} links, {chars} characters",
+            frame.quad_count(),
+            page.shapes.len(),
+            page.links.len()
+        ),
+    );
     let view = camera().visible_bounds();
     for quad in frame.quads() {
         let bounds = quad.bounds();
