@@ -62,6 +62,7 @@ mod family;
 mod fear;
 mod floors;
 mod floors_w5;
+mod floors_w6;
 mod forecast;
 mod foundations;
 mod generation;
@@ -111,6 +112,7 @@ mod w4_rules;
 mod w5;
 mod w5_shape;
 mod w6;
+mod w6_battery;
 mod witness;
 mod words;
 

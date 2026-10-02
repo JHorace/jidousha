@@ -150,7 +150,14 @@ fn judge(
             ),
         );
     }
-    if !overlay {
+    // The closed house's verdict (W10 SCAFFOLD) is the one screen without the dock.
+    let docked = page.targets.iter().any(|(_, t)| *t == Target::Dock);
+    checks.require(
+        docked || overlay || page.targets.iter().any(|(_, t)| *t == Target::BeginAgain),
+        "a screen that should have the sheet dock has none",
+        name.to_owned(),
+    );
+    if !overlay && docked {
         for (rect, target) in page.targets.iter().filter(|(_, t)| *t != Target::Dock) {
             checks.require(
                 !rect.overlaps(SHEET),
@@ -403,8 +410,9 @@ fn battery(checks: &mut Checks, tally: &mut Tally, recorder: &mut FrameRecorder,
     );
     let w4 = w4_surfaces(checks, tally, recorder);
     let w5 = crate::floors_w5::w5_surfaces(checks, tally, recorder, label);
+    let w6 = crate::floors_w6::w6_surfaces(checks, tally, recorder, label);
     checks.require(
-        tally.surfaces == 2 + seated.len() + everyone + staged.len() + 1 + w4 + w5,
+        tally.surfaces == 2 + seated.len() + everyone + staged.len() + 1 + w4 + w5 + w6,
         "a surface was not judged",
         format!("{label}: {} surfaces", tally.surfaces),
     );

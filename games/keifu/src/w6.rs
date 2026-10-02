@@ -298,11 +298,7 @@ pub fn check_played(checks: &mut Checks) -> (String, Vec<String>) {
         );
         // On to the Meanwhile: the three unanswered places, then the total.
         let mut guard = 0;
-        while !telling_lines(&sim)
-            .first()
-            .is_some_and(|l| l == "Meanwhile")
-            && guard < 12
-        {
+        while telling_lines(&sim).first().is_none_or(|l| l != "Meanwhile") && guard < 12 {
             point_at(&mut sim, Target::GoOn, true);
             guard += 1;
         }
@@ -438,10 +434,12 @@ pub fn stage_ring(sim: &mut HeadlessSim) {
     );
     {
         let house = sim.world_mut().resource_mut::<House>();
-        let mut burden = house.heroes[aud]
-            .dream
-            .clone()
-            .expect("Aud's dream is in household.json");
+        let Some(mut burden) = house.heroes[aud].dream.clone() else {
+            crate::checks::fail(
+                "the forging's stage needs Aud's dream",
+                "household.json gives Aud none",
+            );
+        };
         burden.owner = Some(aud);
         house.heroes[garrick].burden = Some(burden);
     }

@@ -651,9 +651,8 @@ fn a_steadied_win_adds_courage_three_conquers_and_an_unsteadied_loss_adds_two_dr
         "Garrick, steadied by his daughter"
     );
     assert_eq!(
-        house.heroes[maren].fears_faced,
-        1 + 0,
-        "household.json: Maren had faced it 0 times"
+        house.heroes[maren].fears_faced, 1,
+        "household.json: Maren had faced it 0 times; the bell is her first"
     );
     // Garrick alone on the bell, lost: dread +2 and the DREADS line, at 5 he breaks.
     house.heroes[garrick].fear.dread = 3;
