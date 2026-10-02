@@ -11,8 +11,8 @@ are drawer-tunable throughout; shapes are the design.
 the trait words mean, the seeded relationships and the first petition
 templates. It is content where this document is design; where the two disagree
 about a decided thing, this one wins, and `CAST.md`'s vocabulary is
-**provisional through the wave-1 close** (its §7 carries the question the
-playtest asks of it).
+**locked** (owner, 2026-10-02 — petition copy is written against it, so a
+change is a rename; its §7 carries the question the playtest asks of it).
 
 **`DESIGN.md` beside this file is the substrate's technical doc** — the tile
 world, the integer clock, the one scheduler, the pathfinder, the verify
@@ -392,10 +392,10 @@ at sinks, conserved between holders**; the ports, exhaustively:
   A failed job mints nothing.
 - TRANSFER: shares/wages (treasury → wallets, per the dispatch
   offer) **[built, w1.2]**; petition rewards (petitioner wallet → satisfier)
-  *[w1.5]*; petition gifts (treasury → wallet) *[w1.5]*.
+  **[built, w1.5]**; petition gifts (treasury → wallet) **[built, w1.5]**.
 - BURN: upkeep (wallets; trait-modulated) **[built, w1.3]**; industry
   construction (treasury) **[built, w1.3]**; declared consequences where
-  stated *[w1.5]*.
+  stated **[built, w1.5]**.
 - The industry levy knob exists, default 0 (passive income is
   upgraded into) **[built, w1.3 — the `industry_levy` drawer row]**.
 
@@ -481,6 +481,19 @@ ledger; `answers::settle_wage` and `settlement::settle_shift` are gone into it.
   that competition is real in the arithmetic and small in practice. The owner
   prices it.
 
+*Implemented (w1.5): the last three ports, and `gives-away` beside them.*
+All four go through `Sim::ports` and the conservation identity extends over
+them: a **gift** (`pleas::give`, the card's GIVE) is treasury → the petitioner's
+purse, debiting exactly the `{n}` the card shows, and the purse it fills is
+what meets the condition — a gift does not satisfy anything, the predicate
+does; a **reward** (`Reward::Gold`) is petitioner → satisfier on a met
+petition, never an overdraft, and **no template pays one** — T1 to T6 all pay in
+regard (`CAST.md` §6), so the port's first exerciser is a staged row in the
+battery (`petitioned::PAYS_GOLD`); a **declared burn** is `broke`'s purse,
+gone; and **`gives-away`** moves half a purse to `{other}`, conserved.
+`petitioned::conservation` stages each and asserts the identity after it; the
+economy sweeps and the petition-horizon sweeps assert it over every world.
+
 ### 4.2 Regard (the master currency)
 
 Directed integer edges, char→player and char→char, default 0, range
@@ -514,6 +527,19 @@ five.* Paying a posting's wage moves the worker's edge toward the player by
 and down when it fell short — the expectation is the **rate at posting**, so
 moving the rates afterwards cannot retroactively make somebody feel cheated.
 It goes through `adjust_regard` like every other write, so the bounds hold it.
+
+*Implemented (w1.5): the two petition operations.* A met petition moves the
+petitioner's edge toward the player up by `plea_regard` **when the player's
+hand is in it** — a gift, a posting its subject answered since it was voiced,
+or a building put up since that the condition is about or that the meeting
+work was done at (`pleas::players_hand`). A petition met by the world alone is
+met all the same, with full credit (owner, 2026-10-02: incidental credit
+stands), and moves nobody's regard, because no character acts on another's
+petition yet and nobody is the satisfier. A voiced petition that fails moves
+the petitioner's edge toward **the player and nobody else** down by the same
+step — every consequence sours, `sours` included. **Obligation is voicing**:
+nothing here reads a need; a petition never raised, or raised and still on its
+messenger, moves no regard. Drift then walks the edge back like any other mood.
 
 *Implemented (w0b):* the store and the drift; the five operations are their
 callers' business and four of them arrive with the modules that cause them.
@@ -583,6 +609,13 @@ by what exists rather than by what a comment asks for.
   close them.
 - The callers — the acts that cause any of this — arrive with their modules.
   Wave 0b builds the doors and the checks that walk through them.
+
+*Implemented (w1.5): the first grudge with a petition behind it.* A failed
+petition writes `grudge(petitioner → player, PetitionFailed)` when it is a
+**repeat** (they have been failed before) or **egregious** (it was already the
+second ask of an arc — a `next` link's petition, the collector's second
+visit). Through `record_grudge`, so the edge is re-held under the new ceiling
+at once. Over twelve idle days two or three of the camp hold one.
 
 ## 5. Module registry
 
@@ -792,6 +825,49 @@ fifth in `modules.rs` and the matrix is six passes.
   asserts that half), and the pay is unchanged — the share is a wealth port,
   not a roll.
 
+*Implemented (w1.5): petitions.* `src/petitions.rs` is the content — the
+template table, the consequence vocabulary, the predicates; `src/pleas.rs` is
+the record and what happens to one; `src/card.rs` and `src/plead.rs` are the
+card, its two placements and their taps; `src/petitioned.rs` and
+`src/pleashots.rs` are the battery. Its registry row is the sixth in
+`modules.rs` and the matrix is seven passes.
+
+- **Obligation is voicing** (owner, 2026-10-02). A petition is raised by a
+  check and binds at delivery: at once to somebody in the camp, and by the
+  messenger the asks module already rides to somebody out — voiced at their
+  next arrival anywhere, site or home. The deadline counts from that minute.
+  There is **no accept, no decline and no promise**; decline and promise stay
+  recorded variants in §10.
+- **Every step is an occurrence**: the check (`Occ::Plea`, every `plea_hours`,
+  staggered as the scorer is), the cliff (`Occ::Deadline`, addressed at
+  voicing) and a walk-out's return (`Occ::Return`). Satisfaction is judged
+  after every occurrence fires and after a gift — never per frame — so "met at
+  any point before the deadline" is a world-time fact and the invariance sweep
+  holds over all three sources.
+- **One active petition per character**, in the data path: `pleas::raise`
+  refuses anybody whose `active_petition` slot is taken, and the slot is the
+  registry's own field wave 0b laid.
+- **The consequence fired is the card's reference** — `Template::consequence`
+  points into `petitions::DECLARED`, the card prints that pointer and the cliff
+  fires it, and the battery asserts the two are one address.
+- **`walks-out` is presence, not a party.** It drops `Character::present`
+  exactly as the staged start holds it before an arrival, so the map, the
+  roster, the candidate picker and the work list follow through the lens's
+  roll with no edit of their own; the absent are not rescored, not checked and
+  not charged upkeep; and they come back unpaid. A walk-out declared while
+  somebody is out on the road waits for them to come home — nobody walks out of
+  a job half done.
+- **A shortfall answered is a shortfall spent**: `thin-days` counts only the
+  shortfalls since its last petition for that person was met or failed, or the
+  same three would voice it again six hours after it was met.
+- **The director's source class is data and fired by nothing**: the column is
+  in `petitions::SOURCES`, the vocabulary check refuses a director-sourced row,
+  and the injector is 1.6.
+- **Degrades to**: nobody asks the player for anything — no petition, no
+  deadline, no consequence; regard moves only through asks, wages, visits and
+  drift; and nothing lowers desperation. `petitioned::module_off` asserts it
+  over twelve attentive and idle days.
+
 *Implemented (w0b): the registry as machinery, empty of rows.*
 `src/modules.rs` holds the table above's shape (`ModuleSpec`: id, tier, wave,
 degrades-to), the per-module disable flags (`ModuleSet`, a bitmask planted as
@@ -827,7 +903,7 @@ second need is a row) and every number in it is drawer-tunable and rides every
 stamp, which is what GDD §9's "a mutated wage or upkeep constant must break a
 band" needs in order to be checkable at all.
 - **Petition card** (the anatomy, recorded by wave 0a's mockup for **wave
-  1.5 to build**; not built now): who is asking (portrait + name) + a trait
+  1.5 to build**; **built, w1.5** — below): who is asking (portrait + name) + a trait
   chip + the request text + the reward + a timer bar against the deadline +
   the **declared consequence**, and an assign-picker carrying **willingness
   hints** per candidate. The card is the petition's whole surface; the feed
@@ -839,6 +915,38 @@ band" needs in order to be checkable at all.
   world-minute), answered-by (character → agreed | declined + reason), status
   (open | filled | withdrawn). Sim state; replay-carried; every posting is
   recorded input (made and withdrawn are snapshot inputs).
+
+*Implemented (w1.5): the petition/event template, real.* `petitions::Template`
+carries every field above — id, source class, trigger (`Trigger`'s state
+predicates, `opens_day` as the world-time window, `rolled` for the seeded
+roll at `plea_odds`, mixed by occurrence address as resolution's is: G-016's
+rule, G-045's mix), the body (text with `{name}`/`{other}`/`{site}`/`{n}`/
+`{deadline}` and the bench's `{building}`/`{industry}`, deadline in world-days,
+`Reward`, and the declared consequence as a reference into `DECLARED`), and
+`next` links both ways. `TEMPLATES` is `CAST.md` §6 — T1 to T5 as written, their
+chains (`collectors-visit-again`, `proving-job-again` on a repeat failure,
+`first-order` on T5's satisfaction), and **T6 `thin-days`**, the shortfall
+exemplar. **Deadlines are template data, not drawer rows** (deviation from
+`CAST.md` §6's "deadlines are drawer rows"): seven deadline rows would have
+filled the drawer the stamp needs, and a template is content the way the
+standing rates and the class table are; the drawer carries the five petition
+numbers that *are* tuning. `petitions::vocabulary` asserts the table's own
+claims; `traits::vocabulary`'s no-dead-motivator rule walks it
+(`petitions::templated_motivators`).
+
+*Implemented (w1.5): the petition card, to the anatomy.* Who is asking
+(portrait, name, the motivator row's own name and the template id), the
+resolved words, a timer bar against the deadline (ember inside its last day),
+the reward — **"pays in regard" said honestly** where it pays no gold — the
+**"met when" line, derived from the variant the deadline's predicate
+matches** (`Condition::met_when` beside `Condition::met`), and the declared
+consequence as a chip whose explanation is **derived from the vocabulary row's
+fields** (`petitions::explain`), never written per card. No need-state on the
+card (the mockup's verdict): the faces, the roster and the character panel
+carry desperation and the source line. **The assign-picker the 0a anatomy
+named is not on the card**: ARRANGE navigates to the surfaces that already
+carry it (the work list, the board and its candidate picker — UI.md §3c's note
+that the picker *is* this widget), which was the mockup's answer.
 
 *Implemented (w1.2): the posting record, whole.* `asks::Posting` carries every
 field above and the ledger drawer is a view of the vector they live in — there
@@ -884,7 +992,8 @@ session per handoff stands)
   session, as planned; it also landed the staged start and the pressure
   surface, and it is the wave that made the world push back) → **1.4
   resolution** (fit matters — **done**: three tiers, the odds shown, the share)
-→ **1.5 petitions** →
+→ **1.5 petitions** (**done** — the cast asking, obligation as voicing, the
+  pipe's other end) →
   **1.6 injector** (wave close: sanitation whose first pass is the UI exemplar
   audit; the vocabulary question) → MVP gate. Each lands into a running world;
   owner sanity-plays between sessions but fun is not judged. **Reordered
@@ -1140,6 +1249,44 @@ The mutation round grew to forty-five constants and notices all of them,
 through a tenth instrument — the resolution battery, every expectation a
 shipped literal.
 
+*Implemented (w1.5): the petitions battery.* `src/petitioned.rs` and
+`src/pleashots.rs`, every expectation a shipped literal.
+
+- **One source**: every consequence fired over twelve idle days is the card's
+  own reference; a mutated deadline (two days) prints and falls at the same
+  minute; a mutated `{n}` moves the "met when" line and the predicate
+  together; a mutated consequence moves the chip and the firing.
+- **Determinism**: the same seed voices the same petitions with the same
+  words, word for word; **speed-invariance** over the three new sources —
+  three speed scripts to minute 16000, every stop a petition makes resumed by
+  the player's own key, identical transcripts and identical records, with
+  voicings, cliffs and returns all inside the window.
+- **The escalation pipe end to end** (`petitioned::pipe`): Tim, empty-pursed —
+  three shortfalls, `thin-days` voiced at 4392, failed at 10152, walked out,
+  home at 14472; and the arranged twin: a job posted to him at the voicing,
+  met at 4557 by the player's hand, desperation 5 → 4, the source line
+  rewritten to *found paying work*. Both transcripts are literals.
+- **The idle sweep re-judged** at the petition horizon (sixteen worlds, twelve
+  days): voiced 13–17, failed 11–13, walked out 5–10, grudges 2–3, met none —
+  consequences land and somebody always walks out and comes back. **The limp
+  floor at this horizon is the shortfalls', not the petitions'**: the idle
+  ceiling falls at minute 7200 with the module on or off (`FINDINGS.md`
+  G-050), so the floor's three-day form is where it holds, unchanged.
+  **Steve still goes short first** in every world.
+- **The attention differential, re-passed with the policy unchanged**: at the
+  three-day horizon nothing moved (petitions only voice in three days), and at
+  the petition horizon the attentive player's worst world fails seven petitions
+  and walks two people out against neglect's best eleven and five — margins of
+  four petitions and three bodies, pinned.
+- **Module-off**, **conservation** over the gift, the reward, the burn and
+  `gives-away`, and **six photographs** — a voicing mid-pause, Bob's panel
+  before and after his petition was met by a gift, where ARRANGE went, the
+  ledger mixed, and the feed on a `broke`.
+
+The mutation round grew to fifty constants and notices all of them, through an
+eleventh instrument — the petitions battery, every expectation a shipped
+literal.
+
 ## 10. Confidence & open ledger
 
 **The economy is built and swept, and not yet played** (wave 1.3): the bands
@@ -1160,9 +1307,8 @@ Open, and **new with wave 1.3** (the three the economy raised, all in
 `FINDINGS.md`): **the camp runs out of work before the band is whole** — the
 authored board is claimed by the middle of day two and the last four arrivals
 find nothing, which the industry answers and an idle player never builds
-(G-032); **nothing lowers desperation**, so the escalation pipe has one end and
-wave 1.5's petitions are the natural place to decide the other (G-033); and
-G-035 (a self-chosen job paid nothing while the scorer weighed its pot) **closed
+(G-032); **nothing lowers desperation** (G-033) — **closed with wave 1.5**: a met
+petition is the pipe's other end; and G-035 (a self-chosen job paid nothing while the scorer weighed its pot) **closed
 with wave 1.4** — the share, and one money term.
 
 Open, and **new with wave 1.4**: **the share Steve's claim allows is three
@@ -1176,8 +1322,21 @@ fit alone this wave, and a per-job difficulty would be one more input to
 print whatever the function returns), deliberately not built; **should fit
 matter at an industry?** — a shift is never rolled (`resolution::rolls_at`) and
 the settlement panel says so; whether camp work should have odds is open; and
-**the attention config holds twenty classes** (G-047), so the petitions wave's
-family needs a third column first.
+**the attention config holds twenty classes** (G-047) — **closed with wave
+1.5**, re-laid to twenty-four.
+
+Open, and **new with wave 1.5**: **an idle camp is at the desperation ceiling
+before any cliff falls** (G-050) — the limp floor holds three days, not twelve;
+**T3 asks for paying work and is judged on desperation** (G-051), which only
+the other's own petition lowers; **ARRANGE on `thin-days` opens an empty work
+list** once the board is spent (G-052); **nearly everybody carries a petition
+by day four** (G-053), past the mockup's density before 1.6 adds the
+director's; and two shapes recorded, not built: **decline and promise** stay
+variants of the card (obligation is voicing — owner, 2026-10-02), and
+**knowledge-gated credit** (must the petitioner *know* who met it?) waits on
+the knowledge lens. The **director source class** is data only until 1.6.
+`proud`'s refusal of a gift has no field yet: no proud character carries a
+money-shaped petition, so no surface reaches it.
 
 Open (deliberately): **the expectation model beyond the standing rate**
 (fit-adjusted? regard-adjusted?) · **open postings travelling** (this wave:
@@ -1186,10 +1345,10 @@ heard at camp only) · **standing-posting fatigue** · **the ask-spam question**
 (capsule) · **a surface for site-shaped postings**, and a messenger anybody
 can see · the wave-1 class registrations and whether the mockup's
 defaults survive a real petition load (wave 0a shipped them; nothing this
-build has opens on pause) · **the trait vocabulary is provisional through the
-wave-1 close** — the words are `CAST.md` §3, chosen before the context that
-tests them exists, and §7 carries the question the wave-1.5 playtest asks of
-them; a rename is a data edit until 1.3 writes petition copy against them ·
+build has opens on pause) · **the trait vocabulary is locked** (owner,
+2026-10-02): petition copy is written against the shipped words, and a change
+now is a rename, not a data edit — §7 of `CAST.md` carries the question the
+wave-1.5 playtest asks of them ·
 aptitude-change mechanism (two candidates recorded) · bond/grudge
 erasure rules · quest authoring surface beyond template `next` links ·
 settlement stock list beyond gold-only (bound to a famine/siege design
