@@ -40,10 +40,14 @@ pub enum Figure {
     Child,
     /// `reward-sword`: a blade heirloom.
     Blade,
+    /// `reward-guidebook`: a road-book heirloom.
+    RoadBook,
+    /// `reward-ring`: a cradle-ring heirloom.
+    Ring,
 }
 
 /// The original's sprite names, and the role each plays here.
-pub const ROLES: [(&str, Figure); 10] = [
+pub const ROLES: [(&str, Figure); 12] = [
     ("character-knight", Figure::Knight),
     ("character-warrior", Figure::Warrior),
     ("character-guard", Figure::Ranger),
@@ -54,6 +58,8 @@ pub const ROLES: [(&str, Figure); 10] = [
     ("character-hermit", Figure::Hermit),
     ("character-boy", Figure::Child),
     ("reward-sword", Figure::Blade),
+    ("reward-guidebook", Figure::RoadBook),
+    ("reward-ring", Figure::Ring),
 ];
 
 /// The role an original sprite name plays, if this build draws it.
@@ -95,6 +101,11 @@ impl Art {
                 (Figure::Hermit, assets.load_texture("hero_hermit.png")),
                 (Figure::Child, assets.load_texture("hero_child.png")),
                 (Figure::Blade, assets.load_texture("heirloom_blade.png")),
+                (
+                    Figure::RoadBook,
+                    assets.load_texture("heirloom_road_book.png"),
+                ),
+                (Figure::Ring, assets.load_texture("heirloom_ring.png")),
             ],
         }
     }

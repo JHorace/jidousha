@@ -26,13 +26,21 @@
 //!    rules over a fixed battery of seeds run through their summers, with the
 //!    distribution printed; and the ghost slot on staged ghost lists (`w5.rs`,
 //!    `w5_shape.rs`).
-//! 7. **The W0 machinery**: calendar, text conventions, pools, bags (`foundations.rs`).
-//! 8. **Readability floors** over every surface this build has, every page of a
+//! 7. **W6's oracle**, played — year 1, nobody seated, "Stay home": the Meanwhile's
+//!    four "No one went." lines in place order and "-4 renown", the house at 11, and
+//!    next summer's troubled cards, on every recorded seed; the played summer
+//!    (Garrick and Brannoc dragged onto "Grave goods", set out, the story typed at 90
+//!    letters a second, the page and the Meanwhile read, the year moved on) with
+//!    witnessing's live path; the telling's controls and the house closing; a staged
+//!    forging; and the resolution battery, the dice against CONSTANTS §3 at every
+//!    margin, printed (`w6.rs`, `w6_battery.rs`).
+//! 8. **The W0 machinery**: calendar, text conventions, pools, bags (`foundations.rs`).
+//! 9. **Readability floors** over every surface this build has, every page of a
 //!    sheet longer than the dock, at the native window and two web canvases (`floors.rs`).
-//! 9. **The sheet dock** as the player works it: resting, scrolling, a new subject,
-//!    the hero in hand, a drop on it (`dock_checks.rs`).
-//! 10. **The cast's sprites**: every role imported, every card its role's texture (`cast.rs`).
-//! 11. **A picture** of each oracle's screen (`capture.rs`).
+//! 10. **The sheet dock** as the player works it: resting, scrolling, a new subject,
+//!     the hero in hand, a drop on it (`dock_checks.rs`).
+//! 11. **The cast's sprites**: every role imported, every card its role's texture (`cast.rs`).
+//! 12. **A picture** of each oracle's screen (`capture.rs`).
 
 use std::process::ExitCode;
 
@@ -57,7 +65,7 @@ pub const ART_ARRIVES: u64 = 1;
 ///
 /// A verify run reads no files; the bytes are the ones the window shows, so a
 /// picture that stopped decoding fails here rather than passing on a stub.
-pub const ART_FILES: [(&str, &[u8]); 10] = [
+pub const ART_FILES: [(&str, &[u8]); 12] = [
     (
         "hero_knight.png",
         include_bytes!("../assets/hero_knight.png"),
@@ -88,6 +96,14 @@ pub const ART_FILES: [(&str, &[u8]); 10] = [
     (
         "heirloom_blade.png",
         include_bytes!("../assets/heirloom_blade.png"),
+    ),
+    (
+        "heirloom_road_book.png",
+        include_bytes!("../assets/heirloom_road_book.png"),
+    ),
+    (
+        "heirloom_ring.png",
+        include_bytes!("../assets/heirloom_ring.png"),
     ),
 ];
 
@@ -312,6 +328,13 @@ pub fn run() -> ExitCode {
     summary.extend(crate::w5::check_invariant(&mut checks, &content));
     summary.extend(crate::w5_shape::check_shape(&mut checks, &content));
     summary.push(crate::w5::check_ghost_slot(&mut checks, &content));
+    summary.push(crate::w6::check_stay_home(&mut checks));
+    let (played, played_vector) = crate::w6::check_played(&mut checks);
+    summary.push(played);
+    summary.extend(played_vector);
+    summary.push(crate::w6::check_controls(&mut checks));
+    summary.push(crate::w6_stages::check_forging(&mut checks));
+    summary.extend(crate::w6_battery::check_battery(&mut checks, &content));
     summary.push(crate::sessions::check_family(&mut checks, &mut recorder));
     summary.push(crate::sessions::check_seeds(&mut checks, &content));
     summary.push(crate::sessions::check_staged_sheets(&mut checks));
@@ -326,7 +349,7 @@ pub fn run() -> ExitCode {
     let (passed, failed) = checks.counts();
     if failed == 0 {
         println!(
-            "verified keifu: W0, W1, W2, W3, W4 and W5 oracles hold on {} seeds, {passed} checks",
+            "verified keifu: W0, W1, W2, W3, W4, W5 and W6 oracles hold on {} seeds, {passed} checks",
             SEEDS.len()
         );
     } else {

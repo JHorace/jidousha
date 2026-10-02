@@ -13,7 +13,7 @@ use crate::constants::{
 };
 use crate::dream_lore::{DreamFormats, DreamLore, read_dream_formats, read_dreams};
 use crate::household::{Founding, read_household};
-use crate::ids::{Aptitude, BondKind, Destiny, Place, Pool, Tag};
+use crate::ids::{Aptitude, BondKind, Destiny, Outcome, Place, Pool, Tag};
 use crate::json::{At, Json, SchemaError, parse};
 use crate::legacy_lore::{LegacyLore, read_legacies};
 use crate::words::{Words, read_words};
@@ -53,8 +53,7 @@ pub const FILES: [(&str, &str); 15] = [
 ///
 /// Typed reading of these lands with the wave that uses them; until then their
 /// shape is held at the top level so a renamed or missing table fails now.
-const LATER_WAVES: [(&str, &[&str]); 3] = [
-    ("ghost.json", &["endings"]),
+const LATER_WAVES: [(&str, &[&str]); 2] = [
     (
         "epitaph.json",
         &[
@@ -101,6 +100,8 @@ pub struct QuestTemplate {
     pub danger: i32,
     /// "Robbers went in at dusk. Bring them out, or what is left."
     pub premise: String,
+    /// The four endings (`%1` = the party's names), by `Outcome`.
+    pub endings: [String; 4],
 }
 
 /// `bonds.json`.
@@ -159,6 +160,8 @@ pub struct Content {
     pub ghost: crate::ghost::GhostLore,
     /// `door.json`: the Door's tags come from lore; its lock demands from here.
     pub door_locks: Vec<i32>,
+    /// `door.json` `closed_title` and `closed_verdict`: the house closed (W10 SCAFFOLD's screen).
+    pub door_closed: [String; 2],
     /// `ui-text.json` and `lines.json`, the keys this build reads.
     pub words: Words,
 }
@@ -205,6 +208,10 @@ pub fn load() -> Result<Content, SchemaError> {
         },
         founding: read_household(&at("household.json")?)?,
         door_locks: read_door(&at("door.json")?)?,
+        door_closed: [
+            text_at(&at("door.json")?, "closed_title")?,
+            text_at(&at("door.json")?, "closed_verdict")?,
+        ],
         ghost: crate::ghost::read_ghost(&at("ghost.json")?)?,
         words: read_words(at("ui-text.json")?, at("lines.json")?)?,
         lore,
@@ -350,9 +357,21 @@ fn read_quest_templates(at: &At<'_>) -> Result<Vec<QuestTemplate>, SchemaError> 
                 seats_high,
                 danger,
                 premise: text(item, "premise")?,
+                endings: read_endings(item)?,
             })
         })
         .collect()
+}
+
+/// A quest's or a ghost's four endings, by `Outcome` (SPEC §7.1 step 2).
+pub fn read_endings(at: &At<'_>) -> Result<[String; 4], SchemaError> {
+    let endings = at.key("endings")?;
+    Ok([
+        text(&endings, Outcome::Disaster.id())?,
+        text(&endings, Outcome::Setback.id())?,
+        text(&endings, Outcome::Success.id())?,
+        text(&endings, Outcome::Triumph.id())?,
+    ])
 }
 
 /// The opening quests, each named by a template's title.

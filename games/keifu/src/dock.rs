@@ -117,7 +117,7 @@ pub fn lay_out(page: &mut Page, content: &Content, house: &House, ui: &UiState) 
     let area = text_rect();
     let width = area.size().x;
     let lines = match subject(ui) {
-        Subject::Help => help_lines(content, width),
+        Subject::Help => help_lines(content, house, width),
         Subject::Hero(id) => hero_lines(content, &house.heroes, id, width),
         Subject::Quest(quest) => quest_lines(content, house, quest, width),
     };

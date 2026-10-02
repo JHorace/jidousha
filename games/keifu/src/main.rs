@@ -1,6 +1,6 @@
 //! Keifu (系譜): a port of Lineage to Jidousha. Session 1 built modules W0 and W1;
 //! session 2 built W2 and gave the cast its sprites; session 3 built W3; session 4
-//! built W4; session 5 builds W5.
+//! built W4; session 5 built W5; session 6 builds W6.
 //!
 //! W0 is the foundation: the content in `spec/content/` loaded and validated, the
 //! lore tables, the calendar and the Door countdown, the randomness primitives
@@ -19,14 +19,21 @@
 //! W5 is board generation: planning, the reading of likely parties over ordered
 //! pairs, the score and the sixteen-attempt loop with its welcome rule, easing,
 //! template memory and place order (`generation`, `reading`, `easing`), and the
-//! first ghost's quest (`ghost`). Every summer's board is generated; nothing
-//! resolves a quest until W6, and nothing turns the year until W8.
+//! first ghost's quest (`ghost`). W6 is the summer resolved and told: set out
+//! (`resolve`), every step of a quest in order — the reward (`reward`), wounds,
+//! deaths, mending, burning and crowning (`harm`), facing the fear (`facing`),
+//! sharing the road (`road`), witnessing live, the ghost laid — the unanswered
+//! costs and healing at home; the telling as data (`telling`) and as a screen with
+//! its typewriter (`telling_view`); and leaving it (`season`), where the house can
+//! close (`ending_view`, a W10 SCAFFOLD) or the year moves on (a W7/W8 SCAFFOLD:
+//! nothing turns the year until W8).
 //!
 //! What the player can do in this build: point at a hero to read their sheet,
 //! point at a quest to read its sheet and its place's history — both open in the
 //! sheet dock down the right edge (`dock`), which scrolls a long sheet and covers
 //! nothing — drag heroes onto quests and watch the card's odds move while they are
-//! held, and open the family. Nothing advances the year yet.
+//! held, set out (or stay home) and read the telling page by page, and open the
+//! family. Leaving the telling brings the next summer.
 //!
 //! The spec (`spec/SPEC.md`, `spec/CONSTANTS.md`, `spec/content/`) is the only
 //! source of game behaviour; `SPEC-GAPS.md` lists every place it fell silent.
@@ -56,15 +63,21 @@ mod dock_lines;
 mod dream;
 mod dream_lore;
 mod easing;
+mod ending_view;
+mod facing;
 mod family;
 mod fear;
 mod floors;
 mod floors_w5;
+mod floors_w6;
 mod forecast;
 mod foundations;
 mod generation;
 mod ghost;
 mod grief;
+mod harm;
+#[cfg(test)]
+mod harm_tests;
 mod hero;
 mod house;
 mod household;
@@ -82,12 +95,24 @@ mod quest;
 mod quest_card;
 mod quest_sheet;
 mod reading;
+mod resolve;
+#[cfg(test)]
+mod resolve_tests;
+mod reward;
 mod rivals;
+mod road;
+#[cfg(test)]
+mod road_tests;
 mod screen;
 mod scripted;
+mod season;
 mod sessions;
 mod sheet;
 mod summer;
+mod telling;
+#[cfg(test)]
+mod telling_tests;
+mod telling_view;
 #[cfg(test)]
 mod testkit;
 mod text;
@@ -99,6 +124,9 @@ mod w4;
 mod w4_rules;
 mod w5;
 mod w5_shape;
+mod w6;
+mod w6_battery;
+mod w6_stages;
 mod witness;
 mod words;
 
@@ -214,12 +242,18 @@ fn fit_the_camera(world: &mut World) {
     *camera = screen::fitted(camera.viewport);
 }
 
-/// The one reader both phases use: the page for the current state.
+/// The one reader both phases use: the page for the current state, at the frame clock.
 pub fn read_the_page(world: &WorldView<'_>) -> Page {
+    let time = world.resource::<Time>();
+    let clock = screen::Clock {
+        tick: time.tick,
+        dt: time.fixed_dt.0,
+    };
     page(
         world.resource::<Content>(),
         world.resource::<House>(),
         world.resource::<UiState>(),
+        clock,
     )
 }
 

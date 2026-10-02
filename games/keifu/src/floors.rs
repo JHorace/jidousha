@@ -103,6 +103,36 @@ fn judge(
             format!("{name}: {:?}", row.text),
         );
     }
+    // A control keeps its own room: no row but its label within 4 px of a button.
+    let controls = page.targets.iter().filter(|(_, t)| {
+        matches!(
+            t,
+            Target::OpenFamily
+                | Target::CloseFamily
+                | Target::SetOut
+                | Target::GoOn
+                | Target::Leaf(_)
+                | Target::Skip
+                | Target::BeginAgain
+        )
+    });
+    for (rect, target) in controls {
+        let room = Rect {
+            min: rect.min - jidousha::prelude::Vec2::splat(4.0),
+            max: rect.max + jidousha::prelude::Vec2::splat(4.0),
+        };
+        for row in rows.iter().filter(|r| r.panel != *rect) {
+            checks.require(
+                !row.bounds().overlaps(room),
+                "a row of type crowds a control",
+                format!(
+                    "{name}: {:?} at {:?} against {target:?} at {rect:?}",
+                    row.text,
+                    row.bounds()
+                ),
+            );
+        }
+    }
     // The dock: its lines inside its margin and clear of the scrollbar's lane;
     // nothing else's target under it; a scrollbar whenever its sheet is longer.
     // The lane is measured from the dock's edge, not from `text_rect`, so a text
@@ -120,7 +150,14 @@ fn judge(
             ),
         );
     }
-    if !overlay {
+    // The closed house's verdict (W10 SCAFFOLD) is the one screen without the dock.
+    let docked = page.targets.iter().any(|(_, t)| *t == Target::Dock);
+    checks.require(
+        docked || overlay || page.targets.iter().any(|(_, t)| *t == Target::BeginAgain),
+        "a screen that should have the sheet dock has none",
+        name.to_owned(),
+    );
+    if !overlay && docked {
         for (rect, target) in page.targets.iter().filter(|(_, t)| *t != Target::Dock) {
             checks.require(
                 !rect.overlaps(SHEET),
@@ -373,8 +410,9 @@ fn battery(checks: &mut Checks, tally: &mut Tally, recorder: &mut FrameRecorder,
     );
     let w4 = w4_surfaces(checks, tally, recorder);
     let w5 = crate::floors_w5::w5_surfaces(checks, tally, recorder, label);
+    let w6 = crate::floors_w6::w6_surfaces(checks, tally, recorder, label);
     checks.require(
-        tally.surfaces == 2 + seated.len() + everyone + staged.len() + 1 + w4 + w5,
+        tally.surfaces == 2 + seated.len() + everyone + staged.len() + 1 + w4 + w5 + w6,
         "a surface was not judged",
         format!("{label}: {} surfaces", tally.surfaces),
     );

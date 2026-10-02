@@ -157,11 +157,15 @@ impl Quest {
             + renown / RENOWN_PER_EXPECTATION
     }
 
-    /// Each member's death chance in a disaster, as the sheet prints it: `min(danger
-    /// * 0.15, 1)` through CONSTANTS §3's `percent`.
+    /// Each member's death chance in a disaster (SPEC §7.4 step 3): `min(danger * 0.15,
+    /// 1)`. The roll and the sheet's figure both read it.
+    pub fn death_chance(&self) -> f64 {
+        (f64::from(self.danger) * DEATH_PER_DANGER).min(1.0)
+    }
+
+    /// The death chance as the sheet prints it, through CONSTANTS §3's `percent`.
     pub fn death_percent(&self) -> i32 {
-        let chance = (f64::from(self.danger) * DEATH_PER_DANGER).min(1.0);
-        (chance * 100.0 + 0.5) as i32
+        (self.death_chance() * 100.0 + 0.5) as i32
     }
 }
 

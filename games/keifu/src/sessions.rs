@@ -155,7 +155,7 @@ pub fn check_seeds(checks: &mut Checks, content: &Content) -> String {
             .to_owned(),
     );
     let before = crate::family::top_bar(content_of(&a), a.world().resource::<House>());
-    let drawn = match begin_another_house(a.world_mut(), content) {
+    let drawn = match begin_another_house(a.world_mut()) {
         Ok(new) => new,
         Err(error) => {
             checks.require(false, "begin another house failed", error);

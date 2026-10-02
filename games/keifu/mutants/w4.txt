@@ -203,15 +203,15 @@
 - if self.trouble > 0 { TROUBLED_RENOWN } else { 0 }
 + if self.trouble > 1 { TROUBLED_RENOWN } else { 0 }
 
-### Q11 death above certain
+### Q11 death above certain (re-cut s6)
 @ src/quest.rs
-- .min(1.0);
-+ .min(2.0);
+- DEATH_PER_DANGER).min(1.0)
++ DEATH_PER_DANGER).min(2.0)
 
-### Q12 death percent truncates
+### Q12 death percent truncates (re-cut s6)
 @ src/quest.rs
-- (chance * 100.0 + 0.5) as i32
-+ (chance * 100.0) as i32
+- (self.death_chance() * 100.0 + 0.5) as i32
++ (self.death_chance() * 100.0) as i32
 
 ### Q13 every quest needs might
 @ src/quest.rs
@@ -478,10 +478,10 @@
 -         aptitude,⏎        true,⏎
 +         aptitude,⏎        false,⏎
 
-### U1 a tap picks up
+### U1 a tap picks up (re-cut s6)
 @ src/pointer.rs
-- if !ui.family_open && held && !released =>
-+ if !ui.family_open && held =>
+- if !ui.family_open && held && !released && in_summer
++ if !ui.family_open && held && in_summer
 
 ### U2 nothing is ever lost
 @ src/pointer.rs

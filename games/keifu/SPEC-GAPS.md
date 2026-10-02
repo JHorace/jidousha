@@ -8,7 +8,7 @@ adjudicated one gets a **Resolved:** line.
 
 Session 1 (W0 + W1): 6 entries. Session 2 (W2): 6 entries, KG-7 to KG-12. Session 3 (W3):
 12 entries, KG-13 to KG-24. Session 4 (W4): 5 entries, KG-25 to KG-29. Session 5 (W5): 4
-entries, KG-30 to KG-33.
+entries, KG-30 to KG-33. Session 6 (W6): 7 entries, KG-34 to KG-40.
 
 ---
 
@@ -439,3 +439,96 @@ entries, KG-30 to KG-33.
   affected: it lists every call either way. The board reader still counts a ghost's quest's
   callers (§9.6 makes no exception).
 - **Question:** `lineage/quest-card.jai:130-139` — the condition between the two lines.
+
+---
+
+## KG-34 — the summer's deeds' fields
+
+- **Spec says:** §7.1 step 4 a FIRST_QUEST deed "(place, weight = danger)"; §7.3 a TRIUMPH deed
+  "(place, weight = danger)"; §7.4 WOUNDED, SURVIVED_DISASTER, MENDED and CROWNED deeds; §12.2
+  BEFRIENDED deeds "both"; §14.4 LAID_GHOST for each living member. A deed is (kind, year, age,
+  place, weight, other, telling); `lines.deed.*` give the tellings.
+- **Underdetermined:** the place, weight and other of the six deeds the spec gives no fields for.
+  INVENTORY.md lists all six as written and never read.
+- **Port's choice:** dated now at the hero's age, at the quest's place, weight 0; BEFRIENDED's
+  other is the friend (its telling names them), every other deed's none — as KG-12 and KG-15
+  chose for the fear and dream deeds (`src/harm.rs` `deed`, `src/road.rs`).
+- **Question:** the `record_deed` calls at `lineage/tale.jai:253,294,314,330`,
+  `lineage/bond.jai:184` and `lineage/ghost.jai:103`.
+
+## KG-35 — a hero broken mid-summer, seated on a later quest
+
+- **Spec says:** §7.1 step 1 forecasts "with the current party"; OQ-6: an earlier quest's death
+  "grieves (adds dread, can break) heroes seated on later quests". §10.4: a broken hero's fear
+  "still costs power if they are somehow on such a quest (only possible if they break during the
+  Door, §16.2)". §5.3 bounces refusers "after every frame" of the summer scene.
+- **Underdetermined:** whether a hero broken by grief on an earlier page, and seated on a later
+  quest carrying the tag, still goes — §10.4's "only possible at the Door" says it cannot happen,
+  OQ-6 says it can.
+- **Port's choice:** the smallest: each party is read off its seats as it resolves and nothing
+  bounces between quests (resolution is one call, no frame passes), so they go; the fear costs
+  power, and facing it skips them as broken (`src/resolve.rs` `set_out`).
+- **Question:** does `lineage/tale.jai:46-80` re-check refusal per quest?
+
+## KG-36 — when the Meanwhile page exists, and the closing line
+
+- **Spec says:** §8 pages: "then 'Meanwhile' (unanswered lines, unanswered total, home healing)
+  ... if there is nothing at all, a 'A quiet summer' page"; "If the house has closed, the Meanwhile
+  page ends with `ui.telling.house_closed`." The house closes only on leaving the telling (§2.1).
+- **Underdetermined:** (a) whether Meanwhile is shown when it holds no line; (b) what "has
+  closed" means on the screen that comes before the closing; (c) where the closing line goes when
+  every quest was answered and nobody healed (a disaster can spend the renown with no Meanwhile
+  line).
+- **Port's choice:** (a) Meanwhile exists when it has a line; (b) "has closed" is renown at 0,
+  which leaving will act on; (c) the closing line counts as a line, so such a summer gets a
+  Meanwhile page holding only it. "A quiet summer" only when there is no quest page and no
+  Meanwhile line (`src/telling_view.rs` `meanwhile_lines`, `leaves`).
+- **Question:** `scene/scenes/telling.jai:145-172,229-237`.
+
+## KG-37 — the typewriter, the leaf buttons and the skip
+
+- **Spec says:** §8 the story is "typed out at 90 letters per second; the next-button first
+  completes it", "then the outcome word, 'Needed ...', then the page's lines"; "'Go on' (reveal,
+  then next leaf), numbered page buttons (free navigation), 'Skip ahead' (leave immediately)".
+- **Underdetermined:** (a) whether the outcome, the roll and the lines show while the story is
+  still typing; (b) whether a leaf shown again types its story again; (c) whether the numbered
+  buttons number pages or leaves; (d) the typewriter's clock.
+- **Port's choice:** (a) they wait until the story is whole — "then" read as sequence; (b) yes,
+  typing restarts whenever a leaf comes on screen, by "Go on" or by a button; (c) leaves, so every
+  leaf can be reached; (d) the frame clock's ticks since the leaf came on screen, at
+  `TYPEWRITER_LETTERS_PER_SECOND` — render-side only, the house never reads it
+  (`src/telling_view.rs`, `src/pointer.rs` `press`). "Skip ahead" leaves from any leaf, typing or not.
+- **Question:** `scene/scenes/telling.jai:67-69,97` and the page-button handler.
+
+## KG-38 — the crowned's bequest without an heirloom
+
+- **Spec says:** §7.4 Crowned: "If they hold an heirloom: the heir is their nearest kin (§15.3);
+  the bequest records the heirloom, the heir and decided."
+- **Underdetermined:** whether a crowned hero with no heirloom has a decided bequest (W8's death
+  page and W9's epitaph read it; the crowned never get a death page).
+- **Port's choice:** as written — recorded and decided only with an heirloom (`src/harm.rs` `crown`).
+- **Question:** `lineage/tale.jai:332-348` — is `decided` set inside the heirloom branch?
+
+## KG-39 — a hero several heir ranks fit
+
+- **Spec says:** §15.1's heir table: children 0, other descendants 1, spouse 2, "kin (siblings by
+  a shared parent) and D's parents" 3, those D taught 4, a steadying bond 5, everyone else 6;
+  "ordered by rank, then creation order".
+- **Underdetermined:** the rank of a hero two rows fit (a spouse D taught; a parent who is also a
+  friend), and how "D's parents" is known (a PARENT bond, or the parents field).
+- **Port's choice:** the first row that fits, top down — the lowest rank; a parent by either the
+  bond or the dead's parents field (`src/harm.rs` `heir_rank`). W6 reads the list only for the
+  crowned's nearest kin (§15.3); W8's death page will read it whole.
+- **Question:** `lineage/passage.jai:186-217`.
+
+## KG-40 — "the first time ever" for a founder
+
+- **Spec says:** §7.1 step 4 "quests_faced +1; the first time ever, record a FIRST_QUEST deed".
+  Founders arrive with `quests_faced` from `household.json` (Garrick 30) and no deeds; the
+  epitaph's ROADS part has a branch for "No FIRST_QUEST deed" (§20).
+- **Underdetermined:** whether a founder who quested before year 1 records a FIRST_QUEST on their
+  first quest of the run.
+- **Port's choice:** no — the first time ever is the count reaching 1, which a founder with
+  quests behind them never does; the epitaph's no-deed branch is then theirs
+  (`src/resolve.rs` `resolve_rolled`).
+- **Question:** `lineage/tale.jai:163-169` — the condition on the deed.

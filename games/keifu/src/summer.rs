@@ -84,9 +84,39 @@ pub fn screen_rect() -> Rect {
     Rect::from_min_size(Vec2::ZERO, Vec2::new(PAGE_W, PAGE_H))
 }
 
+/// The set-out control (SPEC §5.3), in the bar left of "The family".
+pub const SET_OUT_BUTTON: Rect = Rect {
+    min: Vec2::new(FAMILY_BUTTON.min.x - 124.0, 12.0),
+    max: Vec2::new(FAMILY_BUTTON.min.x - 12.0, 46.0),
+};
+
+/// The set-out control's label: "Set out" if anyone is seated, "Stay home" if nobody
+/// is (SPEC §5.3). The last summer's "Try the Door" is W10's.
+pub fn set_out_label<'c>(content: &'c Content, house: &House) -> &'c str {
+    let anyone = (0..house.board.len()).any(|slot| !house.party(slot).is_empty());
+    if anyone {
+        &content.words[W::SummerSetOut]
+    } else {
+        &content.words[W::SummerStayHome]
+    }
+}
+
 /// Lay the summer screen out.
 pub fn lay_out(page: &mut Page, content: &Content, house: &House, ui: &UiState) {
-    let words = &content.words;
+    lay_out_top_bar(page, content, house);
+    button(
+        page,
+        SET_OUT_BUTTON,
+        set_out_label(content, house),
+        Target::SetOut,
+        layers::PANEL,
+    );
+    lay_out_household(page, content, house, ui);
+}
+
+/// The top bar (SPEC §5.4): year, season, renown, the Door's countdown and tags, and
+/// "The family". The summer and the telling both draw it (SPEC §2.1).
+pub fn lay_out_top_bar(page: &mut Page, content: &Content, house: &House) {
     let top = TOP_BAR;
     page.shape(top, ink::PANEL, layers::PANEL);
     let [year, season, renown, door, door_tags] = top_bar(content, house);
@@ -123,11 +153,15 @@ pub fn lay_out(page: &mut Page, content: &Content, house: &House, ui: &UiState) 
     button(
         page,
         FAMILY_BUTTON,
-        &words[W::FamilyOpen],
+        &content.words[W::FamilyOpen],
         Target::OpenFamily,
         layers::PANEL,
     );
+}
 
+/// The summer's household, yard, board, dock and hand, under the bar.
+fn lay_out_household(page: &mut Page, content: &Content, house: &House, ui: &UiState) {
+    let words = &content.words;
     let screen = screen_rect();
     page.text(
         layers::TEXT,
@@ -237,7 +271,7 @@ const CHILD_FIGURE: f32 = 32.0;
 
 /// A hero card: the figure with the age beside it (and a gold pip if settled), the
 /// name under it, and a pip per point of dread under that.
-fn hero_card(
+pub fn hero_card(
     page: &mut Page,
     content: &Content,
     heroes: &[Hero],

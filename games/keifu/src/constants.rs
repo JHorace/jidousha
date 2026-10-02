@@ -1,4 +1,4 @@
-//! The rule numbers W0 to W5 read, each copied from `spec/CONSTANTS.md`.
+//! The rule numbers W0 to W6 read, each copied from `spec/CONSTANTS.md`.
 //!
 //! Numbers are rules, not hand-authored words, so they live in source. Where a
 //! number also appears in a content file, `content::load` checks the two agree
@@ -48,6 +48,11 @@ pub const SETBACK_MARGIN: i32 = 4;
 pub const DEATH_PER_DANGER: f64 = 0.15;
 /// `TRIUMPH_RENOWN`: extra renown on a triumph (CONSTANTS §3).
 pub const TRIUMPH_RENOWN: i32 = 1;
+/// `YOUTH_QUEST_LEARNING_LIMIT`: a youth learns on a won quest only while base < 5
+/// (CONSTANTS §3).
+pub const YOUTH_QUEST_LEARNING_LIMIT: i32 = 5;
+/// The triumph lesson and the youth lesson: +1 each (CONSTANTS §3).
+pub const QUEST_LESSON: i32 = 1;
 /// `MAXIMUM_SEATS`: the party array's size (CONSTANTS §3).
 pub const MAXIMUM_SEATS: usize = 4;
 /// `QUEST_COUNT`: quests on a board (CONSTANTS §3).
@@ -140,6 +145,11 @@ pub fn bond_grief(kind: BondKind) -> i32 {
     BOND_RANK_POWER_GRIEF[kind.index()].2
 }
 
+/// `FRIENDSHIP_AFTER`: companions become friends at two shared successes (CONSTANTS §7).
+pub const FRIENDSHIP_AFTER: i32 = 2;
+/// Parent and child in a failed party: +1 dread each (CONSTANTS §6).
+pub const FAILURE_SEEN_DREAD: i32 = 1;
+
 /// The mirror kind, as the other hero holds the bond (SPEC §12.1).
 pub fn bond_mirror(kind: BondKind) -> BondKind {
     match kind {
@@ -159,6 +169,16 @@ pub const CROWN_RENOWN: i32 = 8;
 pub const PATRON_POWER: i32 = 1;
 /// `OUTLIVING_DREAD`: extra grief for OUTLIVE_THOSE_YOU_LOVE, when grief applies (CONSTANTS §8).
 pub const OUTLIVING_DREAD: i32 = 2;
+/// `MENDED_BONUS`: +1 to every base aptitude, capped, when mended (CONSTANTS §8).
+pub const MENDED_BONUS: i32 = 1;
+/// `MENDED_DREAD`: dread +2 when mended (CONSTANTS §8).
+pub const MENDED_DREAD: i32 = 2;
+/// `CARRIED_RENOWN`: extra house renown per CARRY_THE_HOUSE member on a won quest (CONSTANTS §8).
+pub const CARRIED_RENOWN: i32 = 1;
+/// `CARRIER_LOSS`: house renown lost when a CARRY_THE_HOUSE hero dies (CONSTANTS §8).
+pub const CARRIER_LOSS: i32 = 4;
+/// `HEIRS_OFFERED`: the most heirs a death page lists, and nearest kin reads (CONSTANTS §10).
+pub const HEIRS_OFFERED: usize = 8;
 
 /// `YARD_SPOTS`: children shown in the yard (CONSTANTS §9).
 pub const YARD_SPOTS: usize = 6;
@@ -196,6 +216,10 @@ pub fn stage_goal(kind: DreamKind, stage: usize) -> i32 {
 
 /// `DOOR_LOCKS`: demands of the Might, Wits, Spirit locks (CONSTANTS §12).
 pub const DOOR_LOCKS: [i32; 3] = [34, 34, 34];
+
+/// The telling's typewriter: story letters per second (CONSTANTS §14). Presentation:
+/// render-side pacing over the fixed sim, which nothing in the house reads.
+pub const TYPEWRITER_LETTERS_PER_SECOND: f32 = 90.0;
 
 /// Bonds shown on the hero sheet before "and N more" (CONSTANTS §14).
 pub const BONDS_SHOWN: usize = 6;

@@ -16,6 +16,7 @@ use crate::ghost::Ghost;
 use crate::hero::{Fate, Hero, HeroId};
 use crate::household::found;
 use crate::ids::Place;
+use crate::telling::Telling;
 use crate::text::WritingMemory;
 
 /// The whole run's state (SPEC §3.1), as far as W1 builds it.
@@ -51,6 +52,12 @@ pub struct House {
     pub templates_last: Vec<Option<usize>>,
     /// What this summer's board generation decided, for the checks.
     pub board_report: Option<BoardReport>,
+    /// This summer's telling, from set out until the player leaves it (SPEC §3.1 `tale`).
+    pub telling: Option<Telling>,
+    /// Heroes who died since the last turning and await their death page (SPEC §3.1).
+    pub mourned: Vec<HeroId>,
+    /// The house has closed: renown was spent when the telling was left (SPEC §2.1).
+    pub closed: bool,
 }
 
 /// A house tale (SPEC §3.1): its title, whom it is about, and the year it was first told.
@@ -99,6 +106,9 @@ impl House {
             ghosts: Vec::new(),
             templates_last: vec![None; Place::ALL.len()],
             board_report: None,
+            telling: None,
+            mourned: Vec::new(),
+            closed: false,
         };
         house.prepare_summer(content, rng);
         Ok(house)
@@ -145,6 +155,25 @@ impl House {
         (living, self.heroes.len() - living)
     }
 
+    /// Change house renown by `delta`, floored at 0 (CONSTANTS §1: "Renown is floored at
+    /// 0 by every change").
+    pub fn add_renown(&mut self, delta: i32) {
+        self.renown = (self.renown + delta).max(0);
+    }
+
+    /// Take `hero` out of every seat: the roster and every quest's (SPEC §7.4, the
+    /// dead and the crowned are "removed from every seat").
+    pub fn unseat(&mut self, hero: HeroId) {
+        for seat in self.roster.iter_mut().filter(|seat| **seat == Some(hero)) {
+            *seat = None;
+        }
+        for posted in &mut self.board {
+            for seat in posted.seats.iter_mut().filter(|seat| **seat == Some(hero)) {
+                *seat = None;
+            }
+        }
+    }
+
     /// The heroes who fell at `place`.
     pub fn fallen_at(&self, place: Place) -> &[HeroId] {
         &self.fallen[place.index()]
@@ -153,10 +182,11 @@ impl House {
 
 /// Begin another house: draw a new seed from the current generator, reseed it,
 /// and found the household again (SPEC §2.1, §22.1). Nothing reads a clock.
-pub fn begin_another_house(world: &mut World, content: &Content) -> Result<u64, String> {
+pub fn begin_another_house(world: &mut World) -> Result<u64, String> {
     let seed = draw_seed(world.resource_mut::<Rng>());
-    world.insert_resource(Rng::from_seed(seed));
-    let house = House::found(content, seed, world.resource_mut::<Rng>())?;
+    let mut rng = Rng::from_seed(seed);
+    let house = House::found(world.resource::<Content>(), seed, &mut rng)?;
+    world.insert_resource(rng);
     world.insert_resource(house);
     Ok(seed)
 }

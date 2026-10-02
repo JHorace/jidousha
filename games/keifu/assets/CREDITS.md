@@ -16,3 +16,5 @@ only: the original Lineage's art is not reused (owner's decision, 2026-10-01).
 | `hero_hermit.png` | hero_hermit (16x16) | `Tiny Dungeon/Tiles/tile_0111.png` | Kenney Game Assets All-in-1 3.7.0 — Tiny Dungeon — https://kenney.nl | CC0 1.0 Universal (public domain dedication) |
 | `hero_child.png` | hero_child (16x16) | `Tiny Dungeon/Tiles/tile_0085.png` | Kenney Game Assets All-in-1 3.7.0 — Tiny Dungeon — https://kenney.nl | CC0 1.0 Universal (public domain dedication) |
 | `heirloom_blade.png` | heirloom_blade (16x16) | `Tiny Dungeon/Tiles/tile_0104.png` | Kenney Game Assets All-in-1 3.7.0 — Tiny Dungeon — https://kenney.nl | CC0 1.0 Universal (public domain dedication) |
+| `heirloom_road_book.png` | heirloom_road_book (8x8) | `Micro Roguelike/Tiles/Colored/tile_0077.png` | Kenney Game Assets All-in-1 3.7.0 — Micro Roguelike — https://kenney.nl | CC0 1.0 Universal (public domain dedication) |
+| `heirloom_ring.png` | heirloom_ring (8x8) | `Micro Roguelike/Tiles/Colored/tile_0089.png` | Kenney Game Assets All-in-1 3.7.0 — Micro Roguelike — https://kenney.nl | CC0 1.0 Universal (public domain dedication) |

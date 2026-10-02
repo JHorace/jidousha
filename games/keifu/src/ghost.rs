@@ -4,7 +4,8 @@
 //! W5 builds what a board reads — the list and the ghost quest; raising a ghost at
 //! a death page and laying one on a won quest are W8's and W6's. Until then nothing
 //! raises one, so the board's ghost slot (§5.2 step 3) is exercised on staged lists.
-//! `ghost.json`'s endings are W6's and stay in `content.rs`'s later-wave shape check.
+//! W6 reads `ghost.json`'s endings for the ghost quest's story and lays a ghost on a
+//! won quest (`lay_ghost`).
 
 use crate::constants::{GHOST_APTITUDE, GHOST_DANGER, GHOST_SEATS};
 use crate::content::{Content, id_at, text};
@@ -21,6 +22,8 @@ pub struct GhostLore {
     pub title: String,
     /// "{name} died with a thing undone: {task}. {He} has not gone far."
     pub premise: String,
+    /// The four endings, by `Outcome`: brace placeholders, then `%1` = the party's names.
+    pub endings: [String; 4],
 }
 
 /// A ghost (SPEC §3.1 `ghosts`): the dead hero, a copy of the undone dream, and
@@ -48,6 +51,7 @@ pub fn read_ghost(at: &At<'_>) -> Result<GhostLore, SchemaError> {
     Ok(GhostLore {
         title: text(at, "title")?,
         premise: text(at, "premise")?,
+        endings: crate::content::read_endings(at)?,
     })
 }
 
@@ -92,6 +96,67 @@ pub fn ghost_text(content: &Content, text: &str, dead: &Hero, dream: &Dream) -> 
         .replace("{He}", &capitalized(&pronoun.subject))
         .replace("{he}", &pronoun.subject)
         .replace("{him}", &pronoun.object)
+}
+
+/// Lay the ghost whose quest was won (SPEC §14.4, `lineage/ghost.jai:83-111`): the
+/// tale "The laying of <name>'s ghost"; the dead hero's dream fate LAID_TO_REST with
+/// the year; `lines.ghost.laid`; a LAID_GHOST deed for each living member; and the
+/// ghost swap-removed from the list. The dream is not fulfilled and leaves nothing
+/// else. The epitaph the original recomposes here is W9's.
+pub fn lay_ghost(
+    f: &crate::resolve::Afield<'_>,
+    house: &mut crate::house::House,
+    dead: HeroId,
+    members: &[HeroId],
+    out: &mut Vec<String>,
+) {
+    use crate::constants::TALE_YEARLY_RENOWN;
+    use crate::words::W;
+    let content = f.content;
+    let Some(at) = house.ghosts.iter().position(|ghost| ghost.hero == dead) else {
+        panic!(
+            "[keifu] a ghost's quest was won and {} has no ghost on the list\n  likely cause: \
+             the ghost was removed while its quest was posted\n  fix: SPEC §14.4 removes a \
+             ghost only when it is laid or taken up",
+            house.heroes[dead].name
+        );
+    };
+    let title = fmt(
+        &content.legacies.ghost_tale_title,
+        &[&house.heroes[dead].name],
+    );
+    house.tales.push(crate::house::Tale {
+        title: title.clone(),
+        about: dead,
+        since: f.year,
+    });
+    let hero = &mut house.heroes[dead];
+    hero.dream_fate = crate::hero::DreamFate::LaidToRest;
+    hero.laid_year = Some(f.year);
+    let subject = &content.lore.pronouns[hero.pronoun.index()].subject;
+    out.push(fmt(
+        &content.words[W::GhostLaid],
+        &[
+            &hero.full_name(),
+            subject,
+            &title,
+            &TALE_YEARLY_RENOWN.to_string(),
+        ],
+    ));
+    let telling = fmt(&content.words[W::DeedLaidGhost], &[&hero.full_name()]);
+    for &member in members {
+        if house.heroes[member].is_living() {
+            crate::harm::deed(
+                f,
+                &mut house.heroes[member],
+                crate::hero::DeedKind::LaidGhost,
+                0,
+                telling.clone(),
+            );
+        }
+    }
+    // [emergent] a swap remove: the last ghost takes the laid one's place (OQ-29).
+    house.ghosts.swap_remove(at);
 }
 
 #[cfg(test)]

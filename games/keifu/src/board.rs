@@ -165,7 +165,14 @@ impl House {
                 .iter()
                 .position(|seat| seat.is_none() || *seat == Some(hero))
                 .map(|seat| Slot::Quest { quest, seat }),
-            Target::OpenFamily | Target::CloseFamily | Target::Dock => None,
+            Target::OpenFamily
+            | Target::CloseFamily
+            | Target::Dock
+            | Target::SetOut
+            | Target::GoOn
+            | Target::Leaf(_)
+            | Target::Skip
+            | Target::BeginAgain => None,
         }
     }
 }

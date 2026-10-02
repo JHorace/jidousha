@@ -64,6 +64,8 @@ pub struct LegacyLore {
     pub blessing_effects: [String; 3],
     /// SEE_THE_SEA's, ROOF_OF_THE_WORLD's, KNOWN_AT_COURT's, and every other tale.
     pub tale_titles: [String; 4],
+    /// "The laying of %'s ghost" (SPEC §14.4).
+    pub ghost_tale_title: String,
 }
 
 fn read_heirloom(at: &At<'_>, key: &str, aptitude: Aptitude) -> Result<HeirloomLore, SchemaError> {
@@ -166,6 +168,7 @@ pub fn read_legacies(at: &At<'_>) -> Result<LegacyLore, SchemaError> {
             text(&tales, "KNOWN_AT_COURT")?,
             text(&tales, "otherwise")?,
         ],
+        ghost_tale_title: text_at(at, "ghost_tale_title")?,
     })
 }
 

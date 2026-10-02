@@ -676,3 +676,145 @@ was one sessions 1-4 had already read and used. The documents were asked nothing
   seated no call can be "stay behind": the only predicate an absent hero meets is a
   student faring alone (§9.1), which needs the student in the party, and the predicates
   that hold at any moment are excluded earlier, at step 2 of §9.6.
+
+---
+
+## Session 6 (W6)
+
+**Reading discipline, session 6.** Read: `CLAUDE.md`, the `make-game` skill,
+`docs/templates/DECISIONS.md`, the crate whole (`SPEC-GAPS.md`, `FINDINGS.md`, `mutants/`,
+`src/`), and from `spec/` MODULES.md, SPEC.md §0-§9, §14-§15 and §18-§23, CONSTANTS.md whole,
+OPEN-QUESTIONS.md whole, ENGINE-USAGE.md §1-§5, INVENTORY.md's telling rows, `content/README.md`,
+and the content W6 reads (`lines.json`'s summer, quest, fate, death, crown, fear, bond, ghost,
+destiny and deed keys; `ui-text.json`'s `telling`, `summer` and `ending`; `writing.json`;
+`quests.json`'s endings; `ghost.json`; `door.json`'s closed verdict; `lore.json`'s places,
+outcomes and `age_at_death`; `legacies.json`'s `ghost_tale_title`). From `docs/api/`: the API
+document's `Time`, `Seconds` and fixed-timestep passages, for the typewriter. The depot
+`jidousha-assets` (cloned sparse: `tools/`, Tiny Dungeon, Tiny Town, Tiny Battle, Tiny Farm,
+Micro Roguelike), its contact sheets rendered with its own `tools/contact_sheet.py`. **Engine
+source: not opened.** `games/ninjo/` and `attic/`: not opened; `grep -oh "^### G-0[0-9]*"
+games/*/FINDINGS.md` read the G-headings only (G-039's method). Two incidental touches, disclosed:
+`tools/test` and `tools/check-assets` print other games' file names in their reports (ninjo's
+captures, `games/ninjo/src/sprites.rs`), and `docs/templates/DECISIONS.md`'s worked row is
+ninjo's. No sibling game read.
+
+### G-050 — the W6 handoff's decision table has four of the template's six columns
+
+Class: process · Session: keifu 6 · Owner: the keifu handoff template, `make-game` §D.1
+
+**Doing:** closing out the handoff's decision-surface table (§D.1, §E).
+
+**Expected:** `docs/templates/DECISIONS.md`'s six columns: decision, must know, surface, action,
+one function, asserted by.
+
+**Happened:** the table has four — decision, surface, mechanics, asserted by. "Must know",
+"action" and "one function" are not there; "mechanics" names the rules instead. §D.1 stops a
+session only for a handoff with *neither* the table nor the "none new" line, so this one is not
+malformed, and its one row ("Set out") is clear enough to build from.
+
+**What I did:** built from it, and filled the three missing cells from the spec and the build in
+the PR's copy of the table: must know — every card's facts as W4 and W5 show them, and the
+control's own label ("Set out" / "Stay home"); action — a press on the control in the top bar;
+one function — `resolve::set_out`, whose dice go through the forecast's `margin` and `outcome`.
+
+**Fix:** the keifu handoffs copy `DECISIONS.md`'s header row as it stands.
+
+### G-051 — "rerun all five lists" where four exist
+
+Class: process (misled) · Session: keifu 6 · Owner: the keifu handoff
+
+**Doing:** the mutation bar: "rerun all five lists, then your own round".
+
+**Expected:** five committed lists under `mutants/`.
+
+**Happened:** there are four — `dock.txt`, `w3.txt`, `w4.txt`, `w5.txt` (sessions 1 and 2's lists
+were never committed, G-044). **What I did on its authority:** looked for a fifth before reading
+G-044 again; then reran the four, with W6's own as the fifth list of the round.
+
+**Fix:** count the lists in the handoff from `ls mutants/`, or name them.
+
+### docs/api: 0 findings
+
+The one new engine question W6 asked — how render-side pacing reads time without the sim
+seeing it — `Time` answers: `tick` and `fixed_dt` are on the resource every system and every
+`HeadlessSim` has, so the typewriter is ticks since its leaf opened times `fixed_dt`, read in the
+page projection and nowhere in the house. Everything else W6 touched (the page, its rows and
+targets, the per-session recorder of G-043, the scripted pointer of G-045) earlier sessions had
+read and used.
+
+### The game's own (session 6)
+
+- **The scene is a projection of the house.** The summer, the telling and the closed house are
+  not a state machine of their own: the page shows the telling while `House::telling` is set, the
+  closed verdict once `House::closed`, the summer otherwise (`screen::page`). So the screen can
+  never disagree with the house, and a replay of the same presses reaches the same screen.
+- **The typewriter is pacing only.** `UiState::typing_from` (the tick a leaf came on screen) and
+  `revealed` are presentation state; the house never reads them, and the sim is the same whether
+  a story typed for a second or a minute. Verify asserts the constant as a literal: nothing on
+  the tick the leaf opens, 45 letters 30 ticks later.
+- **W7/W8 SCAFFOLD.** Leaving the telling of an open house runs `season::pass_the_year`: winter
+  begins and ends, the year counts on, the next summer's board is generated and the household
+  reseated. Nobody ages, rests, learns, dies of age, is born or arrives, and `House::mourned`
+  keeps W6's dead for W8's death pages. W7 and W8 replace the function whole. A house played
+  this way only shrinks — the battery's houses close within six summers more often than not,
+  which is the scaffold's and not the rules'.
+- **W10 SCAFFOLD.** A house whose renown is spent closes when its telling is left; the closed
+  screen (`ending_view.rs`) shows `door.closed_title`, `door.closed_verdict`, "It was year Y,
+  with the Door still R years off." and "Begin another house", so a closed house is not a dead
+  end. W10 replaces it whole. The Door's summer still refuses to generate, loudly.
+- **The sheet dock reads the telling.** Pointing at a member's card, or at a line that names
+  someone, opens their sheet beside the page — the help line `ui.telling.help` promises both.
+  Which hero a line is "about" is the first of the house's heroes the line names
+  (`telling_view::about`), presentation only; the members' cards show them as they are *now*,
+  after the summer (a settled pip, a wound's tint), as "what they are now" says.
+- **The set-out control sits in the top bar,** left of "The family". The first draft crowded
+  the Door's countdown line; the floors now refuse type within 4 px of any control, and the
+  mutation round carries the crowding as a fault (L4).
+- **Heirloom sprites: imported, not from the blade's family.** Tiny Dungeon (the cast's pack) has
+  no book and no ring, and neither has Tiny Town, Tiny Battle or Tiny Farm. Both came from
+  Kenney's Micro Roguelike, 8 px, coloured: the road-book is its scroll (`tile_0077`), the
+  cradle-ring its gold ring with a pink stone (`tile_0089`). On the sheet they draw at 4x in the
+  blade's 32 px box, so their pixels are twice the blade's — the one visible seam in the art.
+  The import flow is G-040's (`art/import_sprites.py`); `CREDITS.md` has both rows;
+  `check-assets` names `art.rs` and is green. The sheet's panic for an unmapped heirloom stays as
+  a guard, and can no longer be reached from the content: the cast check now asks every heirloom
+  `legacies.json` can forge for an imported role. A road-book can only be forged at a winter's
+  hearth (W7), so no summer here draws one; the ring is pictured (`screens/w6-ring.png`).
+- **`lines.fear.steadied` is unreachable** [emergent]: facing's dread amount is 0 or less only
+  with a companion on a won quest, and that case takes the courage branch first. Written where
+  the spec puts it all the same; a fault on it would be equivalent.
+- **The resolution battery's death roll, read once and checked.** On the 400-house battery
+  the roll killed 14/107 at danger 1, 171/702 at 2, 262/548 at 3 and 40/69 at 4, against
+  CONSTANTS §3's 15/30/45/60%. Danger 2 sits 3.3 standard deviations low, inside the 4σ bound
+  but not comfortably, so I checked it before trusting it. The rule alone, 4,000 staged
+  disasters at danger 2, killed 30.4%. The engine's generator showed no lean after low dice
+  (30.0/30.0/31.4% for a 0.3 chance after low, middle and high sums). The other 1,200 houses
+  of a 1,600-house run read 29.7%. It is a draw, and a fixed one: the battery's seeds are
+  recorded, so the number cannot flake. A later change that moves it past 4σ moved the rule.
+- **The mutation rounds.** `mutants/w6.txt` is 100 faults: the ten new constants; set out,
+  the unanswered and healing; every step of §7.1 (the dice, the margin, the patrons, history,
+  quests faced, the first quest, the win, trouble easing both ways, disaster renown, facing,
+  the unlucky pick, the fire on others and on the unlucky one, each member's disaster, the
+  road among the living, witnessing and its party, roads, the crown's place, the ghost, the
+  story); the reward and both lessons; §7.4 (shields, wounds, the fire before the roll,
+  mending, the roll's chance, the dead's deeds, mending's cap, seats, mourning, the fallen,
+  the carrier, grief, the death's tag, patrons); the heir ranks and nearest kin; facing;
+  the road; the ghost laid; the telling's typing, order, closing line, margin telling and
+  roll; "Go on", the leaf buttons, "Skip ahead", lifting a card on the telling, the control's
+  label; leaving, the year and the board; and the control crowding the bar. Round one
+  (`025d9e5`): **71 of 100**, none unbuilt. All 29 escapes were loose checks, mostly a staged
+  hero who masked the rule. Garrick is both the lowest base and unable to learn, so neither
+  the lowest-base rule nor "may still learn" was ever the deciding one. Every founding child
+  is also a descendant, so a parent ranking as a child changed no list. A one-member party
+  makes "the unlucky one" and "each member" the same hero. No test had patrons, carriers, a
+  base of 9, a lost ghost, a crowned member on a ghost's quest, a rival who only succeeded,
+  a settled or conquered hero facing a loss, a steadied loss, a prime adult below 5, a disaster
+  on a Fire quest, a two-tag death, or a wounded hero the roll spared. Each now has a test that
+  fails under its fault (`resolve_tests.rs`, `harm_tests.rs`, `road_tests.rs`, `telling_tests.rs`,
+  `w6.rs`, the battery's death roll). The battery's death-roll rate was added for H5, the roll
+  made a coin; the staged death test noticed H5 anyway. Round two, all five lists against
+  `2da9faf`: **430 of 433 noticed**, none unbuilt — `w6.txt` **100 of 100** (tests alone 84,
+  verify alone 30), `dock.txt` 22 of 22, `w3.txt` 117 of 118, `w4.txt` 133 of 134, `w5.txt`
+  58 of 59. **The three escapes are the known equivalents** of sessions 3-5: K7, K8 and R12.
+  Five earlier faults named code W6 moved and were re-cut to the same fault at the new site,
+  marked "(re-cut s6)": dock K14 and K15, w4 Q11, Q12 and U1.
