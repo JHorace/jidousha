@@ -171,9 +171,14 @@ pub struct Flow {
     /// row (UI.md §3h). Presentation: `card::focused` falls back to the first
     /// row, so a stale id is never a card about nothing.
     pub plea: Option<usize>,
-    /// **Whether the card's consequence chip is showing what it does** — the
-    /// one card on screen, the ledger's or the overlay's.
-    pub consequence_open: bool,
+    /// **Which petition's consequence chip is showing what it does**, if
+    /// one is — the card on screen, the ledger's or the overlay's.
+    ///
+    /// The petition's id and not a flag, so the chip belongs to its card by
+    /// construction: a flag beside the card survived a resume and lit the
+    /// next voicing's chip before anybody tapped it (`FINDINGS.md` G-063),
+    /// the way `explained` is a trait and not a place.
+    pub consequence_open: Option<usize>,
     /// **The selected character** — the one selection this game has.
     ///
     /// One index over the ten people, which is the same index over the ten
@@ -247,7 +252,7 @@ impl Flow {
         self.fit_explained = false;
         self.breakdown = None;
         self.plea = None;
-        self.consequence_open = false;
+        self.consequence_open = None;
     }
 
     /// Whether `drawer` is the one that is open.
@@ -292,8 +297,8 @@ impl Flow {
             // other tap-deeper move on the same row, it stands in the band's
             // own space, and two surfaces explaining one row at once is a
             // screen nobody can read.
-            Some(Breakdown::Job(_)) => {
-                self.board.is_none() || self.selected.is_none() || self.picking.is_some()
+            Some(Breakdown::Job(job)) => {
+                self.board != Some(job.site) || self.selected.is_none() || self.picking.is_some()
             }
             Some(Breakdown::Entry(_)) => !self.showing(Drawer::Feed),
             None => false,
@@ -393,8 +398,14 @@ impl Flow {
 /// scorer differently.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Breakdown {
-    /// A row of the open job board, by slot — the offer a tap would make.
-    Job(usize),
+    /// A row of the open job board — the offer a tap would make.
+    ///
+    /// **The whole `JobId`, not the slot**, for the reason the candidate
+    /// picker carries one (UI.md §3c): a marker that falls through the
+    /// character panel's body replaces the board rather than closing it, and
+    /// a slot read against whichever board is open was a band explaining a
+    /// row nobody tapped, with that row's `?` lit (`FINDINGS.md` G-061).
+    Job(crate::sim::JobId),
     /// A decision in the feed, by its index in the event log.
     Entry(usize),
 }
@@ -633,9 +644,13 @@ fn read_input(world: &mut World) {
         }
         let flow = world.resource_mut::<Flow>();
         flow.drilled = (flow.drilled != Some(index)).then_some(index);
-        // The faces list and the job board share the left of the screen, so
-        // they are never up together — `floors::controls_for` says the same.
+        // The faces list, the job board and the settlement panel share the
+        // left of the screen, so they are never up together —
+        // `floors::controls_for` says the same. The works were not on this
+        // list when the panel arrived in wave 1.3, and a drill over an open
+        // settlement panel drew both (`FINDINGS.md` G-060).
         flow.board = None;
+        flow.works = false;
         return;
     }
     if let Some(drilled) = world.resource::<Flow>().drilled {
@@ -875,7 +890,7 @@ fn read_input(world: &mut World) {
             match (world.resource::<Flow>().selected, open) {
                 (Some(_), true) => {
                     let flow = world.resource_mut::<Flow>();
-                    let want = Breakdown::Job(slot);
+                    let want = Breakdown::Job(crate::sim::JobId { site, slot });
                     flow.breakdown = (flow.breakdown != Some(want)).then_some(want);
                 }
                 // A verdict is about a person, and a row nobody can be asked
@@ -938,6 +953,12 @@ fn read_input(world: &mut World) {
                 flow.picking = None;
                 flow.drilled = None;
                 flow.breakdown = None;
+                // And the settlement panel, which took the column in wave
+                // 1.3 after this list of siblings was written: with it left
+                // up, `put_the_list_away` dropped the list on the same tick
+                // and the tap did nothing and said nothing (`FINDINGS.md`
+                // G-060).
+                flow.works = false;
             }
             return;
         }

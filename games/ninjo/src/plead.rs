@@ -42,7 +42,7 @@ pub fn overlay_click(world: &mut World, at: Vec2, tick: u64) {
     }
     if layout::card_chip(origin).contains(at) {
         let flow = world.resource_mut::<Flow>();
-        flow.consequence_open = !flow.consequence_open;
+        flow.consequence_open = (flow.consequence_open != Some(id)).then_some(id);
         return;
     }
     let chips = [
@@ -79,11 +79,9 @@ pub fn ledger_click(world: &mut World, at: Vec2, tick: u64) {
     };
     for (row, id) in order.iter().take(layout::PLEA_ROWS).enumerate() {
         if layout::plea_row(row).contains(at) {
-            let flow = world.resource_mut::<Flow>();
-            if flow.plea != Some(*id) {
-                flow.consequence_open = false;
-            }
-            flow.plea = Some(*id);
+            // Nothing to reset: the chip is open for its own card's id, so
+            // another row's card comes up with its chip shut by construction.
+            world.resource_mut::<Flow>().plea = Some(*id);
             return;
         }
     }
@@ -94,7 +92,7 @@ pub fn ledger_click(world: &mut World, at: Vec2, tick: u64) {
     let origin = layout::plea_card();
     if layout::card_chip(origin).contains(at) {
         let flow = world.resource_mut::<Flow>();
-        flow.consequence_open = !flow.consequence_open;
+        flow.consequence_open = (flow.consequence_open != Some(id)).then_some(id);
         return;
     }
     let (active, money) =

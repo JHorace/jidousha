@@ -2702,6 +2702,57 @@ fn map_labels_are_governed(checks: &mut Checks) -> String {
         "the selected character is not named on the map at the default zoom",
         format!("{name} is selected and no chrome row carries their name"),
     );
+    // **Under a surface that takes the board's rectangle the map says
+    // nothing** (UI.md §3c, §3f, §3g) — the board, the work list and the
+    // settlement panel alike. The list was left off that rule and twelve
+    // words were drawn under it, hidden by its fill (`FINDINGS.md` G-060).
+    for (what, covered) in [
+        (
+            "the job board",
+            flow::Flow {
+                selected: Some(picked),
+                board: Some(0),
+                ..flow::Flow::default()
+            },
+        ),
+        (
+            "the work list",
+            flow::Flow {
+                selected: Some(picked),
+                listing: Some(picked),
+                ..flow::Flow::default()
+            },
+        ),
+        (
+            "the settlement panel",
+            flow::Flow {
+                works: true,
+                ..flow::Flow::default()
+            },
+        ),
+    ] {
+        let under = screens::content(
+            &covered,
+            &lens,
+            &grid,
+            &clock,
+            &tuning,
+            screens::reading(&clock, &tuning, screens::TICK),
+            &at,
+        );
+        checks.require(
+            under.world_runs.is_empty(),
+            "the map draws words under a surface that takes the board's rectangle",
+            format!(
+                "with {what} up the map still draws {:?}",
+                under
+                    .world_runs
+                    .iter()
+                    .map(|run| run.text.clone())
+                    .collect::<Vec<_>>()
+            ),
+        );
+    }
     // **One notch out**: the words go, the picture stays, and the selection
     // keeps its name because the name is chrome.
     let stepped = build(&out);
@@ -2770,9 +2821,19 @@ fn map_labels_are_governed(checks: &mut Checks) -> String {
 fn the_band_belongs_to_its_surface(checks: &mut Checks) {
     let marker =
         |site: usize| layout::marker_rect(LOCATIONS[crate::sim::site_location(site)].tile).center();
-    let ways: [(&str, Vec<Directive>); 4] = [
+    // **The marker way has to reach the map.** At the reference camera the
+    // Deep Cave's and the Old Crypt's markers lie under the open board, which
+    // swallows its own rectangle — so a click on either is a click on a job
+    // row, and this battery's fourth way was a *posting*: the band went
+    // because the posting put the selection down, and a band that outlived a
+    // replaced board passed here for the wrong reason (`FINDINGS.md` G-062).
+    // The Black Vault's marker lies under the character panel's body, which
+    // falls through (UI.md §3a), so it is the one that replaces the board;
+    // the way carries the board it expects to find, and no event.
+    let ways: [(&str, Option<usize>, Vec<Directive>); 4] = [
         (
             "the board's close",
+            None,
             vec![Directive {
                 when: When::Tick(30),
                 what: Act::ClickUi(layout::board_close().center()),
@@ -2780,6 +2841,7 @@ fn the_band_belongs_to_its_surface(checks: &mut Checks) {
         ),
         (
             "the character panel's close, which puts the selection down",
+            None,
             vec![Directive {
                 when: When::Tick(30),
                 what: Act::ClickUi(layout::person_close().center()),
@@ -2787,20 +2849,22 @@ fn the_band_belongs_to_its_surface(checks: &mut Checks) {
         ),
         (
             "a drawer's handle",
+            None,
             vec![Directive {
                 when: When::Tick(30),
                 what: Act::ClickUi(layout::feed_button().center()),
             }],
         ),
         (
-            "another site's marker, which is a board about something else",
+            "another site's marker, which replaces the board rather than closing it",
+            Some(3),
             vec![Directive {
                 when: When::Tick(30),
-                what: Act::ClickWorld(marker(1)),
+                what: Act::ClickWorld(marker(3)),
             }],
         ),
     ];
-    for (what, out) in ways {
+    for (what, replaced_by, out) in ways {
         // Pick somebody, open a board, open a row's arithmetic — then leave.
         let mut script = vec![
             Directive {
@@ -2843,6 +2907,215 @@ fn the_band_belongs_to_its_surface(checks: &mut Checks) {
                 "after {what} the band still reads {:?}; an explanation of something nobody \
                  can see any more is a panel about nothing",
                 left.probe(34).map(|(_, flow, ..)| flow.breakdown)
+            ),
+        );
+        if let Some(site) = replaced_by {
+            checks.require(
+                left.probe(34)
+                    .is_some_and(|(_, flow, ..)| flow.board == Some(site))
+                    && left.events.is_empty(),
+                "the marker way out of the band did not replace the board",
+                format!(
+                    "after {what} the board reads {:?} and the run emitted {:?}; a way that \
+                     lands on a job row is a posting, and a posting putting the band away \
+                     proves nothing about a replaced board",
+                    left.probe(34).map(|(_, flow, ..)| flow.board),
+                    transcript(&left.events)
+                ),
+            );
+        }
+    }
+}
+
+/// **The left of the screen is one surface at a time** (UI.md §3g), on the
+/// two paths that were not (`FINDINGS.md` G-060).
+///
+/// The job board, the candidate picker, the work list, the settlement panel
+/// and the faces list share one column, and five fields say which is up.
+/// Two of the hand-written clearings predate the settlement panel: a meter
+/// chip's drill left the works up under the faces list, and the sheet's
+/// work chip left them up under a list the tick rule then dropped — a tap
+/// that did nothing and said nothing. Both walked here through the real
+/// handles.
+fn the_left_column_is_one_surface(checks: &mut Checks) {
+    let tuning = Tuning::SHIPPED;
+    let grid = grid::grid();
+    let camera = run_camera(HEADLESS_VIEWPORT);
+    let camp = layout::marker_rect(LOCATIONS[crate::grid::TOWN].tile).center();
+    let click = |tick: u64, at: Vec2| Directive {
+        when: When::Tick(tick),
+        what: Act::ClickUi(at),
+    };
+    // --- a drill over the settlement panel ---------------------------------
+    let script = [
+        Directive {
+            when: When::Tick(6),
+            what: Act::ClickWorld(camp),
+        },
+        click(12, layout::meter_chip(0).center()),
+    ];
+    let mut session = Session::plain(tuning, &script, 18);
+    session.probe_ticks = &[10, 16];
+    let drilled = conduct(&session);
+    checks.require(
+        drilled
+            .probe(10)
+            .is_some_and(|(_, flow, ..)| flow.works && flow.drilled.is_none()),
+        "the camp's marker did not open the settlement panel",
+        format!(
+            "after the marker the flow reads works={:?} drilled={:?}",
+            drilled.probe(10).map(|(_, flow, ..)| flow.works),
+            drilled.probe(10).map(|(_, flow, ..)| flow.drilled)
+        ),
+    );
+    checks.require(
+        drilled
+            .probe(16)
+            .is_some_and(|(_, flow, ..)| !flow.works && flow.drilled == Some(0)),
+        "a meter chip drilled over the settlement panel left the panel up",
+        format!(
+            "after the chip the flow reads works={:?} drilled={:?}; the faces list and the \
+             settlement panel share the left column and are never up together",
+            drilled.probe(16).map(|(_, flow, ..)| flow.works),
+            drilled.probe(16).map(|(_, flow, ..)| flow.drilled)
+        ),
+    );
+    // And the frame carries one left-hand surface: the faces list's title and
+    // not the settlement panel's.
+    if let Some((_, flow, active, sim, clock)) = drilled.probe(16) {
+        let panel = screens::content(
+            flow,
+            &lens::Lens::on(sim),
+            &grid,
+            clock,
+            active,
+            screens::reading(clock, active, screens::TICK),
+            &camera,
+        );
+        let faces = panel
+            .runs
+            .iter()
+            .any(|run| run.text.ends_with("- who, and why"));
+        let works = panel
+            .runs
+            .iter()
+            .any(|run| run.text.starts_with("Kawaza - "));
+        checks.require(
+            faces && !works,
+            "the frame after a drill does not carry exactly the faces list",
+            format!("faces title drawn: {faces}, settlement title drawn: {works}"),
+        );
+    }
+    // --- the work chip over the settlement panel ----------------------------
+    let script = [
+        Directive {
+            when: When::Tick(6),
+            what: Act::ClickWorld(camp),
+        },
+        click(12, layout::meter_chip(0).center()),
+        click(18, layout::faces_row(0).center()),
+        click(24, layout::sheet_work().center()),
+    ];
+    let mut session = Session::plain(tuning, &script, 30);
+    session.probe_ticks = &[28];
+    let listed = conduct(&session);
+    let probe = listed.probe(28);
+    checks.require(
+        probe.is_some_and(|(_, flow, ..)| {
+            flow.selected.is_some()
+                && flow.listing == flow.selected
+                && !flow.works
+                && flow.drilled.is_none()
+        }),
+        "the sheet's work chip did nothing with the settlement panel up",
+        format!(
+            "after the chip the flow reads selected={:?} listing={:?} works={:?} \
+             drilled={:?}; the chip displaces whatever has the column, the settlement \
+             panel included",
+            probe.and_then(|(_, flow, ..)| flow.selected),
+            probe.and_then(|(_, flow, ..)| flow.listing),
+            probe.map(|(_, flow, ..)| flow.works),
+            probe.and_then(|(_, flow, ..)| flow.drilled)
+        ),
+    );
+    checks.require(
+        listed.events.is_empty() && drilled.events.is_empty(),
+        "walking the left column changed the world",
+        format!(
+            "the two walks emitted {} and {} events; the column is presentation",
+            listed.events.len(),
+            drilled.events.len()
+        ),
+    );
+}
+
+/// **A card's consequence chip is open for its own card and no other**
+/// (UI.md §3h; `FINDINGS.md` G-063).
+///
+/// The flag that stood beside the card survived a resume and lit the next
+/// voicing's chip before anybody tapped it. The field is the petition's id
+/// now, so the overlay and the ledger each ask "is it mine" — staged here
+/// on the petitioned camp, both placements, both answers.
+fn the_chip_belongs_to_its_card(checks: &mut Checks) {
+    let tuning = Tuning::SHIPPED;
+    let (pleaded, voiced, clock, last) = floors::petitioned_world();
+    let order = crate::card::ledger_order(&lens::Lens::on(&pleaded));
+    let (Some(first), Some(second)) = (order.first().copied(), order.get(1).copied()) else {
+        checks.require(
+            false,
+            "the petitioned camp has fewer than two petitions on its ledger",
+            format!("the ledger reads {order:?}"),
+        );
+        return;
+    };
+    let other = if first == last { second } else { first };
+    let explained = |panel: &crate::ui::Panel| {
+        panel
+            .runs
+            .iter()
+            .any(|run| run.text.starts_with("on failure:") && run.color == theme::GOLD)
+    };
+    // The overlay: its chip is open only for the voiced petition.
+    for (chip, want) in [(Some(last), true), (Some(other), false), (None, false)] {
+        let flow = flow::Flow {
+            consequence_open: chip,
+            ..flow::Flow::default()
+        };
+        let overlay =
+            crate::card::voicing_overlay(&flow, &lens::Lens::on(&voiced), &tuning, clock.minutes);
+        checks.require(
+            explained(&overlay) == want,
+            "the overlay's consequence chip does not belong to the voiced card",
+            format!(
+                "with the chip open for {chip:?} and {last} voiced, the overlay's chip reads \
+                 explained={}",
+                explained(&overlay)
+            ),
+        );
+    }
+    // The ledger: a card tapped open shows its own chip's state and nobody
+    // else's.
+    for (plea, chip, want) in [
+        (Some(first), Some(first), true),
+        (Some(first), Some(second), false),
+        (Some(second), Some(second), true),
+        (Some(second), Some(first), false),
+    ] {
+        let flow = flow::Flow {
+            drawer: Some(flow::Drawer::Pleas),
+            plea,
+            consequence_open: chip,
+            ..flow::Flow::default()
+        };
+        let drawer =
+            crate::card::pleas_drawer(&flow, &lens::Lens::on(&pleaded), &tuning, clock.minutes);
+        checks.require(
+            explained(&drawer) == want,
+            "the ledger's consequence chip does not belong to the focused card",
+            format!(
+                "with the card on {plea:?} and the chip open for {chip:?}, the chip reads \
+                 explained={}",
+                explained(&drawer)
             ),
         );
     }
@@ -3970,6 +4243,9 @@ pub fn run() -> ExitCode {
     let work = the_work_list_navigates(&mut checks, &baseline);
     // --- and the one drawer there is ----------------------------------------
     let drawers = one_drawer_at_a_time(&mut checks);
+    // --- and the one left-hand column (the wave-1 exemplar audit) ----------
+    the_left_column_is_one_surface(&mut checks);
+    the_chip_belongs_to_its_card(&mut checks);
 
     // --- the layout floors --------------------------------------------------
     floors::layout_floors(&mut checks);

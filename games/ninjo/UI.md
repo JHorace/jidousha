@@ -284,7 +284,10 @@ the deadline is never a surprise.
   `Condition::met`); and the **declared consequence as a chip** —
   `on failure: broke` — whose explanation, tapped, is `petitions::explain` over
   the vocabulary row's fields and the drawer's regard step, never a sentence
-  written per card. **No need-state on the card**: the faces list, the roster
+  written per card. **The chip is open for its own card's id**
+  (`Flow::consequence_open`, since the wave-1 exemplar audit): a flag beside
+  the card survived a resume and lit the next voicing's chip before anybody
+  tapped it (`FINDINGS.md` G-063). **No need-state on the card**: the faces list, the roster
   and the character panel carry desperation and the source line.
 - **The voicing overlay** (`card::voicing_overlay`) is the screen while the
   world is stopped for a `petition-voiced` — a state the sim's own pause says
@@ -474,7 +477,11 @@ The panel is where that decision is made and given.
   beside the row rather than a control inside one.
 - **The board's own two controls** live in the footer band, not on the rows: a
   wage stepper (`- 20g +`) that opens at the standing rate, and a `TO` toggle
-  that switches between the selection and anyone. They are the board's because
+  that switches between the selection and anyone. **Both outlive the board
+  today** (`FINDINGS.md` G-064, open): a wage stepped and a `TO` toggled
+  survive the board's X, bare ground and a marker switch, so the next board
+  opens at the last offer rather than at the standing rate. The remedy is the
+  board as one value, and it is the owner's call. They are the board's because
   a stepper inside a row would be a control inside a control, and because a
   row cut short to make room for one leaves no room for the verdict's reason —
   which is the sentence this wave exists to put on screen.
@@ -578,7 +585,11 @@ panned around. It names people instead.
   whichever board is open, and the list would quietly become one of candidates
   for a different job than the `who?` that was tapped. The pair is checked on
   every tick (`Flow::put_the_picker_away`) and on every way out of a board
-  (`verify::the_picker_names_a_person`).
+  (`verify::the_picker_names_a_person`). **The breakdown band carries the
+  whole `JobId` for the same reason** since the wave-1 exemplar audit
+  (`FINDINGS.md` G-061): a slot read against whichever board was open was a
+  band explaining a row nobody tapped after a marker replaced the board under
+  it, and `Flow::put_the_band_away` compares sites as the picker's rule does.
 - **Ten rows, which is the whole cast**; `floors::layout_floors` asserts the
   registry is not larger, because a candidate with no row is a person the board
   cannot name, which is the defect this surface exists to close.
@@ -730,7 +741,11 @@ character meant opening four boards in turn and remembering what each held.
 - **It goes away where its person or its column does.** The list is orphaned
   when the selection moves off it, when a board opens, and when a meter chip
   is drilled — one rule in one place (`Flow::put_the_list_away`), the same
-  shape as the picker's and the band's.
+  shape as the picker's and the band's. **And under it the map's own words
+  say nothing**, as under the board whose rectangle it takes (§3c): the list
+  was left off that rule and twelve words were drawn under its fill on every
+  frame it was up, invisible to the eye and to the floors (`FINDINGS.md`
+  G-060).
 - **With the asks module off there are no verdicts**, and the column says so
   rather than being blank: the module's degrades-to sentence, on this surface.
 
@@ -746,7 +761,13 @@ would be a second way to reach work the scorer fills for itself.
   picker and the work list** — the fourth surface of the one column, for the
   reason those three draw instead of each other: the left of the screen is one
   surface at a time and the character panel has the other. Opening any of the
-  four puts the other three down.
+  four puts the other three down — **and so do a meter chip's drill and the
+  sheet's work chip**, which were written before this panel existed and left
+  it up: a drill drew the faces list over it, and the work chip's list was
+  dropped on the same tick, a tap that did nothing and said nothing
+  (`FINDINGS.md` G-060). The column is still five fields kept in step by
+  hand; one `Option<Column>` is the remedy the audit proposes, and it is the
+  owner's call.
 - **The header is two lines**: `Kawaza - a camp` or `Kawaza - a settlement`,
   which is the phasing arc's first beat said in the one place the player can
   cause it (`CAST.md` §1); and under it the **state-of-the-camp line** (§3a)
