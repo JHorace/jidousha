@@ -448,18 +448,6 @@ pub fn preview_posting(who: usize, site: usize, slot: usize, wage: i64, rate: i6
     }
 }
 
-/// **What the fit column means, and what it does not mean yet** — the board's
-/// own chip explanation (wave 1.2's clarity rider).
-///
-/// Written like every other chip line: honest about the wave it is in. Fit
-/// weighs into whether somebody agrees today; whether the *work* goes well is
-/// resolution's, and resolution is wave 1.4.
-pub fn fit_means() -> String {
-    "fit: their aptitude for this work. It sways whether they agree; every job succeeds \
-     until resolution lands."
-        .to_owned()
-}
-
 /// **What is being asked for** — the four fields of a posting the player
 /// chooses, as one value.
 ///

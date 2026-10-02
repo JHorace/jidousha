@@ -578,7 +578,14 @@ fn judge_picker(checks: &mut Checks, run: &Conducted, tuning: &Tuning, grid: &cr
             checks.require(
                 cell(crate::layout::cand::NAME).as_deref() == Some(lens.name(candidate.who))
                     && cell(crate::layout::cand::FIT).as_deref()
-                        == Some(format!("fit {fit}").as_str())
+                        == Some(
+                            crate::resolution::fit_cell(
+                                fit,
+                                lens.odds(tuning, candidate.who, crate::sim::JobId { site, slot }),
+                                tuning,
+                            )
+                            .as_str(),
+                        )
                     && cell(crate::layout::cand::WHERE).as_deref()
                         == Some(lens.whereabouts(candidate.who).as_str()),
                 "a photographed candidate row is not the person the list puts there",
@@ -788,10 +795,14 @@ fn judge_board(checks: &mut Checks, run: &Conducted, tuning: &Tuning, grid: &cra
                 jobs.iter().map(|quest| quest.task.id()).collect::<Vec<_>>()
             ),
         );
-        for quest in &jobs {
+        for (slot, quest) in jobs.iter().enumerate() {
             let fit = crate::traits::competence_at(quest.task, lens.traits(who));
             checks.require(
-                says(&format!("fit {fit}")),
+                says(&crate::resolution::fit_cell(
+                    fit,
+                    lens.odds(tuning, who, crate::sim::JobId { site, slot }),
+                    tuning,
+                )),
                 "a photographed job row does not show the fit the sim reads",
                 format!(
                     "{:?} is {} work and {} answers {fit}",

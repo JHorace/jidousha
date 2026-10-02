@@ -60,8 +60,8 @@ fn capture_size(surface: PhysicalSize) -> PhysicalSize {
 
 /// Render every wanted frame and write the PNGs.
 pub struct Sessions<'a> {
-    // **One argument, seven sessions.** The run photographs seven scripted
-    // worlds and this writes the pictures from all of them; seven parameters
+    // **One argument, eight sessions.** The run photographs eight scripted
+    // worlds and this writes the pictures from all of them; eight parameters
     // in a row is a call nobody can read and a lint the workspace turns into
     // an error.
     /// The photographed session at the reference surface.
@@ -78,6 +78,9 @@ pub struct Sessions<'a> {
     pub zoomed: &'a Conducted,
     /// The wave-1.3 session: pressure, capacity, and a whole camp.
     pub settled: &'a Conducted,
+    /// The wave-1.4 session: a posted job failing, its board, a job that went
+    /// well, and the camp a day after a string of failures.
+    pub resolved: &'a Conducted,
 }
 
 /// Write every picture this run took.
@@ -90,6 +93,7 @@ pub fn capture_screens(checks: &mut Checks, sessions: &Sessions<'_>) -> String {
         asked,
         zoomed,
         settled,
+        resolved,
     } = *sessions;
     let mut wanted: Vec<Wanted> = Vec::new();
     // The reference-only set: pictures of *what is on screen* rather than of
@@ -192,6 +196,25 @@ pub fn capture_screens(checks: &mut Checks, sessions: &Sessions<'_>) -> String {
                 false,
                 "an economy capture was never photographed",
                 format!("the {name} photo is missing from the settled run"),
+            );
+        }
+    }
+    // **The wave-1.4 four**: a posted poor fit failing and the world stopped
+    // for it, the job back on its board reading `risky`, a job that went well
+    // in the feed, and the camp a day after a string of failures.
+    for name in ["failed", "reopened", "wentwell", "aftermath"] {
+        if let Some(shot) = resolved.photo(name) {
+            wanted.push(Wanted {
+                name: format!("{name}-reference"),
+                surface: verify::HEADLESS_VIEWPORT,
+                frame: shot.frame.clone(),
+                font: resolved.font,
+            });
+        } else {
+            checks.require(
+                false,
+                "a resolution capture was never photographed",
+                format!("the {name} photo is missing from the resolution run"),
             );
         }
     }

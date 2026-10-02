@@ -395,8 +395,11 @@ pub fn load_scenario(world: &mut World) {
         .unwrap_or_default()
         .0
         .unwrap_or(0);
-    // The Rng is re-seeded so the stamp is honest; S1 never reads it — the
-    // plumbing stays for the phases that will (DESIGN §2).
+    // The Rng is re-seeded so the stamp is honest. **The simulation's own
+    // randomness is the resolution roll** (wave 1.4), which is addressed by
+    // the occurrence and reads the seed off the `Sim` rather than drawing on
+    // this stream — a draw in call order would be the frame-addressed roll
+    // G-016's rule forbids.
     let tuning = *world.resource::<Tuning>();
     world.insert_resource(Rng::from_seed(seed));
     world.insert_resource(crate::grid::grid());
@@ -404,7 +407,9 @@ pub fn load_scenario(world: &mut World) {
         .find_resource::<ModuleSet>()
         .copied()
         .unwrap_or_default();
-    world.insert_resource(Sim::opening(&tuning, modules));
+    let mut opened = Sim::opening(&tuning, modules);
+    opened.seed = seed;
+    world.insert_resource(opened);
     world.insert_resource(Clock::opening());
     let flow = world.resource_mut::<Flow>();
     flow.close_everything();

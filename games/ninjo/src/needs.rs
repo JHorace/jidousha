@@ -608,6 +608,12 @@ pub fn judge_module(
             crate::autonomy::Action::SeekWork { job },
         )
         .iter()
+        // **The opening term itself**, since wave 1.4: desperation now also
+        // scales the money term (a share is felt by need as a wage is —
+        // `autonomy::money`), so the whole sum moves by more than the need
+        // weight and the claim this check makes is about the term that opens
+        // it.
+        .filter(|term| term.what == "need")
         .map(|term| term.value)
         .sum::<i64>()
     };

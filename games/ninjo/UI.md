@@ -130,9 +130,12 @@ not a queue — the import path (`art/`) rode along from giri.
   snapshot, none of it simulation state.
 - **Feed drawer**: §3a. It replaced wave 0b's log drawer, which was a copy
   of the event list; the feed is a view of it.
-- **Tuning drawer**: giri's §12 rules verbatim, at the game's thirty-four
-  constants — three columns of twelve, with the stamp and the prose band in
-  the last two hundred pixels to the right of them — and
+- **Tuning drawer**: giri's §12 rules verbatim, at the game's forty-five
+  constants since wave 1.4 — **four stepper columns of fourteen**, the fourth
+  holding the overflow from the top with the stamp following it down under its
+  last row, and the prose band (a hovered constant's meaning, a refused link,
+  the resting line and the APPLY note) up in the header beside the presets —
+  and
   APPLY restarts the **scenario** (this game's boundary). The stamp ends
   `seed <n>`. The variant picker is gone with the variant machinery.
 - **Trait chips are drawn on the character panel and on every roster row**,
@@ -401,10 +404,22 @@ The panel is where that decision is made and given.
 - **The marker keeps its count** as the glance (§3): the count is what the
   board is read through, and it is the same number the board's header says in
   words. Under an open board the map's own words say nothing (§3).
-- **The fit chip** in the header (`what is fit?`) says what the fit column
-  means and what it does not mean yet — it sways whether somebody agrees, and
-  every job succeeds until resolution lands (wave 1.4). It is derived from the
-  wave it is in, like every other chip line.
+- **The fit cell carries the odds, in a word** (wave 1.4): `fit 2 safe`,
+  `fit 0 risky` — the selected character's fit for that row's work beside the
+  chance it goes wrong, as one of three words (`safe` / `chancy` / `risky`, at
+  the drawer's `odds_safe` and `odds_risky` thresholds over the failure
+  chance). One formatter (`resolution::fit_cell`) over `Lens::odds`, which is
+  `resolution::odds_for` — **the function the roll reads** — so the word on the
+  row cannot say something the roll disagrees with. The picker and the work
+  list print the same cell. Where nothing is rolled (the module off, or an
+  industry's shift) the cell is the fit alone.
+- **The fit chip** in the header (`what is fit?`) says what fit does, **derived,
+  never written** (wave 1.4; `FINDINGS.md` G-046): with resolution on, the odds
+  at every fit the vocabulary can produce, off the curve itself — `fit sways
+  answers and sets odds - fit 2 safe: 11% fail, 24% well; fit 0 risky: 35%
+  fail. well pays as done today.` — and with it off, the trait chips' own
+  dormancy clause. The went-well clause is read off the registry, so the day
+  something reads a shared success it changes by itself.
 - Six rows, which is what a site is authored with; `floors::layout_floors`
   asserts no site holds more, because a job with no row is a job nobody can be
   asked for now that the row is the posting.
@@ -657,9 +672,12 @@ would be a second way to reach work the scorer fills for itself.
   (`20g a shift - the 20g craft rate`, or `over`/`under` it), which is the one
   expectation `answers::wage_regard` judges a payment against — so the row says
   what the simulation is about to do rather than a second opinion about it.
-  **What the wage is *not* is a lever on who comes**, at the shipped constants:
-  `FINDINGS.md` G-035 measured it, and the footer says what is true instead —
-  the wage is what a shift is worth to whoever takes it.
+  **The wage is a lever on who comes since wave 1.4**: a shift's wage is felt
+  by need as well as by greed (`autonomy::money`), and over the camp as it is
+  a step changes who takes a shift (`FINDINGS.md` G-035, closed). Once the works
+  stand, the footer also says **a shift always pays, whatever the fit** —
+  derived from `resolution::rolls_at` by `camp::shift_odds`, so the day a shift
+  gains odds the line changes because the rule did.
 - **The three levers are chunky and beside the row, never inside it**: `BUILD`
   while it is not standing (`STANDING` after, and faint while the treasury
   cannot pay), and a wage stepper (`- 20g +`) always, because what camp work
@@ -719,11 +737,29 @@ chips narrowed when the band went from two of them to four.
 
 **And the tuning drawer says when it is full.** `floors::tuner_has_room` asks
 whether the *next* constant's stepper would still be inside the drawer, so it
-fails while the drawer still draws — the same discipline `tuner_right_column`
-keeps for the stamp. Wave 1.3 re-laid the grid to three columns of fourteen
-(`FINDINGS.md` G-034); past forty-two, re-laying means **moving the right
-column**, because four stepper columns and a readable stamp column do not both
-fit across 960.
+fails while the drawer still draws, and that every name fits its cell; wave
+1.4 moved the right column for the six constants resolution brought
+(`FINDINGS.md` G-034, closed): four stepper columns at a pitch of 232, the
+stamp measured down the fourth column under its last stepper, and the prose
+band in the header. `floors::tuner_right_column` asserts every state of the
+band fits its three rows, that the stamp still ends inside the drawer **at one
+more constant and one more row**, and that **no line the readout authors is
+wrapped** — the first photograph of the fourth column had `forest 7` broken
+across two rows, which puts a value under the wrong name.
+
+**The odds-words bind like every other word on a row** (wave 1.4,
+`floors::odds_words`): each word and each tier name is lowercase ASCII and no
+two are alike; at the shipped thresholds the three words own non-empty bands
+over the failure chance in the order safe, chancy, risky, and the word never
+gets safer as the chance of failure rises; and the widest cell any row can
+print (`fit 2 chancy`) fits the board's, the picker's and the work list's fit
+cells, with the picker's name cell still holding the longest name in the cast.
+**That the word drawn is the sim's odds** is asserted on every row battery —
+board, picker and work list each compare the drawn cell against
+`resolution::cell_for`, built from the roll's own functions — and
+`outcomes::judge_one_function` moves `fail_base` and watches the row and the
+roll move together. The auto-pause config holds twenty classes since the same
+wave (ten rows of thirty-six; `FINDINGS.md` G-047).
 
 **Two floors the 2026-09-11 session added, because the screen they were owed
 against was wrong and nothing said so.**
@@ -826,7 +862,7 @@ frame judges hold all three.
 
 ## 5. Screenshot process
 
-Twenty-eight PNGs per verify run. Reference-only, because they are pictures of what
+Thirty-two PNGs per verify run. Reference-only, because they are pictures of what
 is on screen rather than of how the chrome scales: **the settlement** at
 world-minute 0 (the whole cast standing at their homes, named, before
 anything is dispatched, which is wave 0b's own exit question), **the
@@ -891,6 +927,16 @@ yesses is a picture of a list and not of this decision — and **TUNE opened
 over an open ROSTER**, the owner's exact path, showing one drawer and a right
 column whose stamp and prose are clear of each other. The second is asserted
 to carry exactly one drawer's head row.
+And, since wave 1.4, **four more, taken on a session of their own at seed 3**
+(`outcomes::shot_run`): **a posted job failing** — Steve, a labourer, posted
+to the Old Crypt's second seal (fight work, `fit 0 risky` on the row he was
+posted from), the world stopped by `task-failed` and the banner saying he
+botched it, the wage paid anyway; **that job back on its board** a little
+later with Steve selected, the row open again and reading `fit 0 risky` beside
+his one `fit 2 safe` row; **the feed with a job that went well in it**, beside
+Steve's own botched errand under `own-job-failed`; and **the camp a day after a
+string of failures** — the settlement panel at day two, three jobs having
+failed. Each is asserted to be what it says (`outcomes::judge_shots`).
 At both the reference surface and
 600x540 narrow: **the mid-travel map** (photographed with two parties on
 visibly different routes) and **the feed mid-pause** (the reason line

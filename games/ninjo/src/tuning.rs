@@ -63,43 +63,27 @@ pub fn dirty(pending: &Tuning, active: &Tuning) -> bool {
     pending != active
 }
 
-/// **What APPLY is**, in the drawer's own words — the note under the hint.
+/// **What APPLY is**, in the drawer's own words — the note after the resting
+/// line in the prose band.
 ///
 /// A constant, because `floors::tuner_right_column` measures the very string
 /// the drawer prints: a note the floor guessed at would be a floor about a
-/// different screen.
-pub const APPLY_NOTE: &str = "APPLY restarts the scenario. every recording and report carries \
-                              the set in effect.";
+/// different screen. Shorter since wave 1.4, when the band moved up into the
+/// header and was given three rows.
+pub const APPLY_NOTE: &str = "APPLY restarts the scenario; reports carry the set.";
 
 /// What the prose band says when the player is pointing at nothing.
-pub const RESTING_HINT: &str = "point at a constant for what it does";
+pub const RESTING_HINT: &str = "point at a constant to read it.";
 
 /// The gap between the "in effect:" label and the stamp under it.
-const STAMP_LEAD: f32 = 14.0;
-
-/// **How many more rows of stamp the right column has room for** — the
-/// headroom `floors::tuner_right_column` asserts.
-///
-/// Two, which at `Tuning::readout`'s two-constants-to-a-line shape is about
-/// four more constants. It is asserted rather than hoped for: the floor fails
-/// while there is still room, so the wave that adds the fifth constant is
-/// told to re-lay this column instead of finding out from a screenshot
-/// (`FINDINGS.md` G-028).
-///
-/// **Wave 1.3 spent most of the room in the other column.** Three constants
-/// took the steppers from thirty-six to thirty-nine, which is exactly three
-/// columns of thirteen, and [`APPLY_NOTE`] lost two rows of wording to keep
-/// this one inside the drawer. The stepper grid is now the binding
-/// constraint (`floors::tuner_has_room`), and a fortieth constant needs the
-/// right column moved before it needs anything else.
-pub const STAMP_HEADROOM: usize = 2;
+pub const STAMP_LEAD: f32 = 14.0;
 
 /// **The stamp, wrapped to the column it stands in** — what is actually in
 /// effect, and the text both the drawer and the floor measure.
 ///
-/// `readout` authors its own line breaks (two constants to a line) and
-/// `ui::wrap` keeps them, so this is that shape with any over-long line cut
-/// to the column rather than run off the drawer.
+/// `readout` authors its own line breaks and `ui::wrap` keeps them, so this
+/// is that shape with any over-long line cut to the column rather than run
+/// off the drawer.
 pub fn stamp_text(active: &Tuning, seed: u64) -> String {
     wrap(
         &format!("{}\nseed {seed}", active.readout()),
@@ -107,21 +91,30 @@ pub fn stamp_text(active: &Tuning, seed: u64) -> String {
     )
 }
 
-/// **Where the right column's prose band starts**, given the rows of stamp
-/// above it.
-///
-/// **Measured, not offset.** The band used to start at a hand-placed 350 and
-/// the stamp flowed down from 124; at the game's thirty-six constants the
-/// stamp's last two rows were drawn straight through the hint, which is what
-/// the owner's 2026-09-11 screenshot shows (`FINDINGS.md` G-028). One
-/// function, read by the drawer that lays the column out and by the floor
-/// that asserts it fits, so the next constant moves the band rather than
-/// colliding with it.
-pub fn prose_top(stamp_rows: usize) -> f32 {
-    layout::tuner_stamp().y
-        + STAMP_LEAD
-        + stamp_rows as f32 * (theme::SMALL + 2.0)
-        + layout::TUNER_PROSE_GAP
+/// **Where the stamp ends**, for a drawer of `constants` steppers and a stamp
+/// of `rows` rows — one function, read by the floor that asserts the column
+/// fits (wave 1.4: the stamp follows the fourth stepper column down, so a
+/// constant added moves it, and this is what says by how much).
+pub fn stamp_end(constants: usize, rows: usize) -> f32 {
+    layout::tuner_stamp_for(constants).y + STAMP_LEAD + rows as f32 * (theme::SMALL + 2.0)
+}
+
+/// **What the prose band says right now**, its tone, and whether the APPLY
+/// note follows it — one answer, read by the drawer and measured by the floor.
+pub fn prose(flow: &Flow) -> (String, Color) {
+    let tuner = &flow.tuner;
+    if let Some(fault) = &tuner.fault {
+        (fault.clone(), theme::EMBER)
+    } else if let Some(toast) = &flow.toast {
+        (toast.text.clone(), theme::GOLD)
+    } else if let Some(field) = tuner.hover {
+        (
+            format!("{} - {}", field.name(), field.meaning()),
+            theme::DIM,
+        )
+    } else {
+        (format!("{RESTING_HINT} {APPLY_NOTE}"), theme::FAINT)
+    }
 }
 
 /// Everything the drawer says, as data (`ui::Panel`, like every other screen).
@@ -195,13 +188,11 @@ pub fn drawer(flow: &Flow, active: &Tuning) -> Panel {
         },
     ));
 
-    // --- the right column: the stamp, and the prose band measured under it -
+    // --- the stamp, under the fourth column's last stepper ------------------
     //
-    // **One column read top to bottom**, and laid out in that order: the
-    // stamp is the one thing in the drawer that has to stay legible while
-    // every other row is being moved, so it keeps the top of the column and
-    // the prose starts where it ends. Nothing here is a hand-placed offset —
-    // `prose_top` is the same function the floor measures.
+    // The stamp is the one thing in the drawer that has to stay legible while
+    // every other row is being moved, so it is placed by measurement
+    // (`layout::tuner_stamp`), never by hand.
     panel.text(TextRun::over(
         layout::tuner_stamp(),
         "in effect:",
@@ -216,37 +207,18 @@ pub fn drawer(flow: &Flow, active: &Tuning) -> Panel {
         theme::INK,
     );
 
-    // **The hint and the note are the same band, and only one of them is
-    // what the player is asking for.** The note explains APPLY and is read
-    // once; a hovered constant's meaning, a refused link and an applied set
-    // are each about the thing the player is doing right now, so they take
-    // the band whole. That is also what makes the column fit: the two
-    // longest states are a hover with no note under it and the resting line
-    // with one, and `floors::tuner_right_column` measures both.
-    let (hint, tone, resting) = if let Some(fault) = &tuner.fault {
-        (fault.clone(), theme::EMBER, false)
-    } else if let Some(toast) = &flow.toast {
-        (toast.text.clone(), theme::GOLD, false)
-    } else if let Some(field) = tuner.hover {
-        (
-            format!("{} - {}", field.name(), field.meaning()),
-            theme::DIM,
-            false,
-        )
-    } else {
-        (RESTING_HINT.to_owned(), theme::FAINT, true)
-    };
-    let prose = columns(layout::tuner_prose_width(), theme::SMALL);
-    let at = Vec2::new(layout::tuner_stamp().x, prose_top(stamp.lines().count()));
-    let below = panel.block(at, &wrap(&hint, prose), theme::SMALL, tone);
-    if resting {
-        panel.block(
-            Vec2::new(at.x, below + 4.0),
-            &wrap(APPLY_NOTE, prose),
-            theme::SMALL,
-            theme::FAINT,
-        );
-    }
+    // **The prose band, in the header** (wave 1.4): the hint and the note
+    // are one band and only one state of it is up at a time — a hovered
+    // constant's meaning, a refused link, an applied set, or the resting line
+    // with the APPLY note after it. `floors::tuner_right_column` measures
+    // every one of those states against the band's three rows.
+    let (hint, tone) = prose(flow);
+    panel.block(
+        layout::tuner_hint(),
+        &wrap(&hint, columns(layout::TUNER_HINT_W, theme::SMALL)),
+        theme::SMALL,
+        tone,
+    );
     // Every run of `panel.block` above draws on the base text band; the
     // drawer is an overlay, so they are lifted here rather than at each call.
     for run in &mut panel.runs {

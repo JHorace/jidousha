@@ -21,10 +21,10 @@
 //! branches around, `src/modules.rs` is the registry the module-off verify
 //! matrix iterates, and `src/sim.rs` is the one scheduler.
 //!
-//! Pointer and keyboard. No audio. **No randomness**: the seed plumbing and
-//! stamps remain from giri, and no `Rng` read exists yet - verify asserts
-//! the whole event transcript identical under far-apart seeds, and the economy
-//! sweep varies the order people think in rather than a draw nobody makes.
+//! Pointer and keyboard. No audio. **One source of randomness**: the
+//! resolution roll (wave 1.4), addressed by the seed, the world-minute and the
+//! job — never drawn in call order. Verify asserts the seed reaches nothing
+//! else (with resolution off, far-apart seeds give one transcript).
 //!
 //! Play it:  `cargo run -p ninjo`
 //! On the web: `tools/build-web ninjo && tools/serve-web ninjo`
@@ -61,11 +61,13 @@ mod meters;
 mod modules;
 mod mutation;
 mod needs;
+mod outcomes;
 mod panels;
 mod path;
 mod pauses;
 mod people;
 mod presets;
+mod resolution;
 mod restart;
 mod screens;
 mod settlement;

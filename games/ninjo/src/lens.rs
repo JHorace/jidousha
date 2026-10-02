@@ -105,6 +105,27 @@ impl<'a> Lens<'a> {
         traits::competence_at(task, self.traits(who))
     }
 
+    /// **This character's odds at this job** — `resolution::odds_for`, the
+    /// function the roll reads, so an odds-word on a row is the roll's odds
+    /// (wave 1.4). `None` where nothing is rolled: the module off, or an
+    /// industry's shift.
+    pub fn odds(
+        &self,
+        tuning: &crate::constants::Tuning,
+        who: usize,
+        job: crate::sim::JobId,
+    ) -> Option<crate::resolution::Odds> {
+        let rolled = self
+            .sim
+            .sites
+            .get(job.site)
+            .is_some_and(crate::resolution::rolls_at);
+        if !crate::resolution::live(self.sim) || !rolled {
+            return None;
+        }
+        crate::resolution::odds_for(self.sim, tuning, who, job)
+    }
+
     /// **The journey this character would make to that site**, by the
     /// pathfinder and the terrain costs the sim will walk (`sim::route_out`).
     ///

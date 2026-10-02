@@ -327,15 +327,18 @@ pub fn weigh(sim: &Sim, tuning: &Tuning, now: u64, who: usize, action: Action) -
                     because: format!("good at {} work", quest.task.id()),
                 });
             }
-            // The pot's pull, per ten gold, by the carrier's own affinity.
-            let pull = traits::pot_pull_of(&person.traits);
-            if pull != 0 {
-                terms.push(Term {
-                    what: "pot",
-                    value: pull * quest.pot * tuning.pot_weight / 10,
-                    cause: Cause::Rows(traits::drawn_by_a_pot(&person.traits)),
-                    because: format!("the pot is {}g", quest.pot),
-                });
+            // **The money: what this job would actually pay them** (wave 1.4,
+            // closing `FINDINGS.md` G-035) — their share of the pot, or a
+            // shift's wage, out of the one payout function a completion pays
+            // through. Never the whole pot: the rest of it is the treasury's.
+            let pay = pay_for(sim, tuning, job, None);
+            let (what, because) = if job_is_shift(sim, job) {
+                ("wage", format!("the shift pays {pay}g"))
+            } else {
+                ("share", format!("their share is {pay}g"))
+            };
+            if let Some(term) = money(person, tuning, pay, what, because) {
+                terms.push(term);
             }
             // The rest term: nobody works forever.
             if now < sim.parties.get(who).map_or(0, |party| party.rested_until) {
@@ -374,6 +377,56 @@ pub fn weigh(sim: &Sim, tuning: &Tuning, now: u64, who: usize, action: Action) -
         }
     }
     terms
+}
+
+/// **What this job pays the worker if it is done** — the payout function's
+/// own figure (`resolution::payout`), at the tier a decision is made for.
+///
+/// `wage` is the posted wage the job would be taken for, `None` for their own
+/// idea. One function, two readers: the scorer's money term and the
+/// completion that pays, so what pulls somebody toward work is what the work
+/// pays them, and `resolution::judge_at` asserts the two agree.
+pub fn pay_for(sim: &Sim, tuning: &Tuning, job: sim::JobId, wage: Option<i64>) -> i64 {
+    crate::resolution::payout(sim, tuning, job, wage, crate::resolution::Tier::Done).to_worker()
+}
+
+/// Whether a job is an industry's standing shift rather than a site's job —
+/// which only changes what the money term *calls* its figure.
+fn job_is_shift(sim: &Sim, job: sim::JobId) -> bool {
+    sim.sites
+        .get(job.site)
+        .is_some_and(|site| site.industry.is_some())
+}
+
+/// **The money term** — what a figure of gold the worker would be paid is
+/// worth to them, per ten gold, by pot affinity **and** desperation.
+///
+/// One arithmetic for every kind of pay since wave 1.4: a posted wage, a
+/// self-chosen job's share and a shift's wage are all gold in the same purse,
+/// and wave 1.3 found the self-chosen arm felt by `pot_affinity` alone — one
+/// personality in ten (`FINDINGS.md` G-035's second half). `answers::terms`
+/// calls this for a posting's wage; the scorer calls it for the rest.
+/// No term branches on a trait id: the affinity is the carrier's own rows.
+pub fn money(
+    person: &crate::people::Character,
+    tuning: &Tuning,
+    pay: i64,
+    what: &'static str,
+    because: String,
+) -> Option<Term> {
+    let pull = traits::pot_pull_of(&person.traits) + person.desperation;
+    if pull == 0 || pay == 0 {
+        return None;
+    }
+    Some(Term {
+        what,
+        value: pull * pay * tuning.pot_weight / 10,
+        // The pull is an affinity **and** a need, and somebody with neither
+        // row feels it through desperation alone — so the figure is the fact
+        // and not the vocabulary.
+        cause: Cause::fact(&format!("{what} {pay}g")),
+        because,
+    })
 }
 
 /// **Which rows moved a regard term** — the carrier's own multipliers, on the
@@ -1016,10 +1069,10 @@ pub fn judge_module(
 /// **Alive**: with the player idle, everybody takes work.
 ///
 /// The economy sweep's opening half (GDD §9). The plan asks for ~200 seeds;
-/// this build has **no `Rng` read at all** — `verify::seed_independence`
-/// asserts the whole transcript is identical at seeds far apart — so the other
-/// hundred and ninety-odd are the same run, and eight far-apart seeds are what
-/// is worth the wall time until randomness lands.
+/// eight far-apart seeds are what is worth the wall time of a conducted run.
+/// Until wave 1.4 they were eight copies of one run; since then the seed
+/// reaches the resolution roll (and nothing else, `verify::seed_independence`),
+/// so the eight are eight worlds whose jobs went differently.
 fn judge_alive(checks: &mut crate::checks::Checks, tuning: &Tuning) -> String {
     // **The eager worker, staged** (`CAST.md` §4.1). Ludo takes whatever work
     // is open the first time he is asked to think about it — indebted favours

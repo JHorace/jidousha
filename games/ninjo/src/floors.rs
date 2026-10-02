@@ -379,10 +379,12 @@ pub fn layout_floors(checks: &mut Checks) {
                 ));
             }
         }
+        // The site's name as the row prints it — without its article since
+        // wave 1.4 (`sim::plain`), which is what the odds-word cost the cell.
         for location in LOCATIONS {
             cells.push((
                 "a site's name".to_owned(),
-                location.name.to_owned(),
+                crate::sim::plain(location.name).to_owned(),
                 layout::work::WHERE_W,
             ));
         }
@@ -521,7 +523,11 @@ pub fn layout_floors(checks: &mut Checks) {
     // sentence grew once already when the dormancy clause landed.
     {
         let longest = [
-            crate::asks::fit_means(),
+            crate::resolution::fit_means(&Tuning::SHIPPED, crate::modules::ModuleSet::ALL),
+            crate::resolution::fit_means(
+                &Tuning::SHIPPED,
+                crate::modules::ModuleSet::ALL.without_id(crate::resolution::MODULE),
+            ),
             format!(
                 "sorted by fit - tap somebody to name them for {}, then tap its row to post it",
                 Sim::opening(&Tuning::SHIPPED, crate::modules::ModuleSet::ALL)
@@ -759,46 +765,169 @@ pub fn drawer_floors(checks: &mut Checks) {
     }
 }
 
-/// **The tuning drawer's right column fits the drawer, with room to grow.**
+/// **The odds-words bind like every other word on a row** (wave 1.4).
 ///
-/// The stamp is `Tuning::readout` and it grows a row every other constant
-/// `constants.rs` gains; the prose band under it is measured down from the
-/// stamp (`tuning::prose_top`), so growth moves the band rather than colliding
-/// with it — until the band runs off the drawer's foot, which is what this
-/// asserts, at the longest prose the drawer can print and
-/// `tuning::STAMP_HEADROOM` rows before it is a problem.
+/// Legible: every word and every tier name is lowercase ASCII and no two are
+/// alike. Non-overlapping: at the shipped thresholds the three words' bands
+/// over the failure chance are each non-empty and in order — every failure
+/// percent from 0 to 100 reads exactly one word (by construction) and the
+/// word never gets *safer* as the chance of failure rises. And they fit: the
+/// widest cell any row can print — the highest fit there is beside the
+/// longest word — fits the board's, the picker's and the work list's fit
+/// cells alike. (That the word drawn *is* the sim's odds is
+/// `resolution::judge_one_function`'s, and every row battery's.)
+pub fn odds_words(checks: &mut Checks) {
+    use crate::resolution::{Odds, OddsWord, Tier};
+    let names: Vec<&str> = OddsWord::ALL
+        .iter()
+        .map(|word| word.name())
+        .chain(Tier::ALL.iter().map(|tier| tier.name()))
+        .collect();
+    for name in &names {
+        checks.require(
+            !name.is_empty()
+                && name
+                    .chars()
+                    .all(|glyph| glyph.is_ascii_lowercase() || glyph == ' '),
+            "an odds-word or a tier name is not lowercase ASCII",
+            format!("{name:?}"),
+        );
+        checks.require(
+            names.iter().filter(|other| *other == name).count() == 1,
+            "two odds-words or tier names are the same word",
+            format!("{name:?} appears more than once"),
+        );
+    }
+    let tuning = Tuning::SHIPPED;
+    let read: Vec<usize> = (0..=100)
+        .map(|fail| {
+            let word = Odds { fail, well: 0 }.word(&tuning);
+            OddsWord::ALL
+                .iter()
+                .position(|each| *each == word)
+                .unwrap_or(0)
+        })
+        .collect();
+    checks.require(
+        read.windows(2).all(|pair| pair[0] <= pair[1])
+            && (0..OddsWord::ALL.len()).all(|index| read.contains(&index)),
+        "the odds-words' bands overlap or leave a word out",
+        format!(
+            "over failure chances 0..100 the words run {:?} at safe <= {} and risky >= {}; \
+             each word must own a band and the bands must run safe, chancy, risky",
+            read.iter()
+                .map(|index| OddsWord::ALL[*index].name())
+                .collect::<std::collections::BTreeSet<_>>(),
+            tuning.odds_safe,
+            tuning.odds_risky
+        ),
+    );
+    let top = crate::traits::TaskType::ALL
+        .iter()
+        .map(|task| task.aptitude().def().aptitude)
+        .max()
+        .unwrap_or(0);
+    let style = theme::text(theme::SMALL, theme::INK);
+    let widest = OddsWord::ALL
+        .iter()
+        .map(|word| format!("fit {top} {}", word.name()))
+        .max_by(|a, b| {
+            style
+                .width_of(a)
+                .partial_cmp(&style.width_of(b))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .unwrap_or_default();
+    // And the name cell the odds-word took forty pixels from still holds the
+    // longest name in the cast.
+    for person in crate::people::roster() {
+        checks.require(
+            !greater(style.width_of(person.name), layout::cand::NAME_W),
+            "a candidate row's name cell is narrower than a name in the cast",
+            format!(
+                "{} is {:.0} wide and the cell is {:.0}",
+                person.name,
+                style.width_of(person.name),
+                layout::cand::NAME_W
+            ),
+        );
+    }
+    for (surface, cell) in [
+        ("a job row", layout::job::FIT_W),
+        ("a candidate row", layout::cand::FIT_W),
+        ("a work row", layout::work::FIT_W),
+    ] {
+        checks.require(
+            !greater(style.width_of(&widest), cell),
+            "an odds-word does not fit the fit cell that prints it",
+            format!(
+                "{widest:?} is {:.0} wide and {surface}'s fit cell is {cell:.0}",
+                style.width_of(&widest)
+            ),
+        );
+    }
+}
+
+/// **The tuning drawer's prose band and stamp both fit, with room to grow.**
 ///
-/// **The floor fails while there is still room**, so the wave that adds the
-/// constant is told to re-lay this column instead of finding out from a
-/// screenshot the way the owner did (`FINDINGS.md` G-028).
+/// Two claims since wave 1.4 moved the band (`layout::tuner_hint`). The prose
+/// band — every state it takes: the longest hovered meaning, every refused
+/// link, and the resting line with the APPLY note — wraps into its three
+/// header rows. And the stamp, which follows the fourth stepper column down
+/// (`layout::tuner_stamp_for`), ends inside the drawer **at one more constant
+/// than the game has**, with a row of stamp more besides: the floor fails
+/// while there is still room, so the wave that adds the constant is told to
+/// re-lay the column instead of finding out from a screenshot the way the
+/// owner did (`FINDINGS.md` G-028).
 pub fn tuner_right_column(checks: &mut Checks) {
-    let prose = crate::ui::columns(layout::tuner_prose_width(), theme::SMALL);
+    let prose = crate::ui::columns(layout::TUNER_HINT_W, theme::SMALL);
     let rows = |text: &str| crate::ui::wrap(text, prose).lines().count();
-    // The two tallest states the band takes. The hint and the note share it
-    // and only one of them is ever up (`tuning::drawer`), so the worst case is
-    // whichever is taller: the longest single hint, or the resting line with
-    // the APPLY note under it.
-    let longest_hint = crate::constants::Field::ALL
+    let resting = format!("{} {}", tuning::RESTING_HINT, tuning::APPLY_NOTE);
+    let tallest = crate::constants::Field::ALL
         .iter()
         .map(|field| format!("{} - {}", field.name(), field.meaning()))
         .chain(crate::links::refusals())
-        .map(|line| rows(&line))
-        .max()
-        .unwrap_or(1);
-    let resting = rows(tuning::RESTING_HINT) + rows(tuning::APPLY_NOTE);
-    let prose_rows = longest_hint.max(resting);
+        .chain(std::iter::once(resting))
+        .map(|line| (rows(&line), line))
+        .max_by_key(|(count, _)| *count);
+    if let Some((count, line)) = tallest {
+        checks.require(
+            count <= layout::TUNER_HINT_ROWS,
+            "the tuning drawer's prose band runs into the stepper rows",
+            format!(
+                "{line:?} wraps to {count} rows at {:.0} wide and the band has {}; shorten it, \
+                 or give the band another row before the steppers start",
+                layout::TUNER_HINT_W,
+                layout::TUNER_HINT_ROWS
+            ),
+        );
+    }
+    let constants = crate::constants::Field::ALL.len();
     let stamp_rows = tuning::stamp_text(&Tuning::SHIPPED, 0).lines().count();
-    for extra in 0..=tuning::STAMP_HEADROOM {
-        let end =
-            tuning::prose_top(stamp_rows + extra) + prose_rows as f32 * (theme::SMALL + 2.0) + 4.0;
+    // **No authored line wraps** (wave 1.4's first photograph of the fourth
+    // column showed `forest 7` broken across two rows): the stamp is the
+    // readout's own lines plus the seed, and a wrap would put a value under
+    // the wrong name.
+    let authored = Tuning::SHIPPED.readout().lines().count() + 1;
+    checks.require(
+        stamp_rows == authored,
+        "the tuning drawer's stamp wraps a line the readout authored",
+        format!(
+            "the readout authors {authored} lines and the stamp column draws {stamp_rows}; \
+             a line is wider than the {:.0}-pixel column",
+            layout::tuner_prose_width()
+        ),
+    );
+    for (more, extra) in [(0usize, 0usize), (1, 1)] {
+        let end = tuning::stamp_end(constants + more, stamp_rows + extra);
         checks.require(
             !greater(end, layout::tuner_panel().max.y),
-            "the tuning drawer's right column runs off the drawer",
+            "the tuning drawer's stamp runs off the drawer",
             format!(
-                "at {stamp_rows} rows of stamp plus {extra} of headroom the prose band starts \
-                 at {:.0}, runs {prose_rows} rows and ends at {end:.0}; the drawer ends at \
-                 {:.0}. Re-lay the right column before adding the constant",
-                tuning::prose_top(stamp_rows + extra),
+                "at {} constants and {} rows of stamp the stamp ends at {end:.0}; the drawer \
+                 ends at {:.0}. Re-lay the fourth column before adding the constant",
+                constants + more,
+                stamp_rows + extra,
                 layout::tuner_panel().max.y
             ),
         );
@@ -806,19 +935,12 @@ pub fn tuner_right_column(checks: &mut Checks) {
 }
 
 /// **The tuning drawer has room for the constant after the ones it has**
-/// (`FINDINGS.md` G-034).
+/// (`FINDINGS.md` G-034 — closed by wave 1.4's fourth column).
 ///
-/// The stepper grid is three columns of [`layout::TUNER_ROWS`], and wave 1.3
-/// filled it exactly. So the floor is asked about the *next* index rather than
-/// about the last one: it fails while the drawer still draws, which is the
-/// same discipline `tuner_right_column` keeps for the stamp — the wave that
-/// adds the constant is told to re-lay the column instead of finding out from
-/// a screenshot.
-///
-/// Re-laying means **moving the right column**, not narrowing the stepper
-/// rows: a row is a name, two buttons and the value between them, and four
-/// columns of that plus a stamp column wide enough to read comes to more than
-/// 960 reference pixels.
+/// Asked about the *next* index rather than the last one, so it fails while
+/// the drawer still draws: the next constant's stepper must be inside the
+/// drawer, and (`tuner_right_column`) the stamp it pushes down must still fit.
+/// And every name must fit the name cell the fourth column made narrower.
 pub fn tuner_has_room(checks: &mut Checks) {
     let next = crate::constants::Field::ALL.len();
     let drawer = layout::tuner_panel();
@@ -832,9 +954,8 @@ pub fn tuner_has_room(checks: &mut Checks) {
             "the tuning drawer has no room for another constant",
             format!(
                 "constant {next} would put {what} at ({:.0}, {:.0})-({:.0}, {:.0}) and the \
-                 drawer is ({:.0}, {:.0})-({:.0}, {:.0}). Re-lay the right column before \
-                 adding it: a fourth stepper column and a readable stamp column do not both \
-                 fit across the screen",
+                 drawer is ({:.0}, {:.0})-({:.0}, {:.0}). Re-lay the stepper columns before \
+                 adding it",
                 rect.min.x,
                 rect.min.y,
                 rect.max.x,
@@ -843,6 +964,20 @@ pub fn tuner_has_room(checks: &mut Checks) {
                 drawer.min.y,
                 drawer.max.x,
                 drawer.max.y
+            ),
+        );
+    }
+    let style = theme::text(theme::SMALL, theme::INK);
+    for field in crate::constants::Field::ALL.iter().copied() {
+        let wide = style.width_of(field.name());
+        checks.require(
+            !greater(wide + 4.0, layout::TUNER_NAME_W),
+            "a constant's name does not fit its stepper row",
+            format!(
+                "{} is {wide:.0} wide and the name cell is {:.0} with a four-pixel gap before \
+                 the - button",
+                field.name(),
+                layout::TUNER_NAME_W
             ),
         );
     }

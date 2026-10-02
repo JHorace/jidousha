@@ -5,7 +5,7 @@
 //! under three speed schedules, transcripts identical to the world-minute.
 //! Around it: the pathfinding contracts (the documented tie-break, the road
 //! that beats the shorter overland line, the unreachable case), the
-//! seed-independence probe (no `Rng` read exists in S1), the one-grid
+//! seed probe (the seed reaches the resolution roll and nothing else), the one-grid
 //! two-readers assertion (every drawn tile against the sim's own grid), the
 //! token-position judge (the between-tile interpolation derived, never
 //! written back), the attention batteries (the class table, the feed as a
@@ -772,27 +772,54 @@ fn parse_grid(checks: &mut Checks, text: &str) -> Option<grid::Grid> {
     }
 }
 
-/// **No `Rng` read exists in S1**: the whole event transcript is identical
-/// under far-apart seeds — the plumbing and the stamps remain, and the dice
-/// decide nothing.
-fn seed_independence(checks: &mut Checks) {
+/// **The seed reaches the resolution roll, and nothing else** (wave 1.4).
+///
+/// Until wave 1.4 this asserted the seed reached nothing at all — S1 read no
+/// `Rng`. Now the roll draws on it, so the claim splits in two and both halves
+/// are run: at two far-apart seeds the transcripts **differ** (the roll is
+/// connected), and with the resolution module off they are **identical** (the
+/// roll is the only thing connected — the module's degrades-to sentence says
+/// the seed reaches nothing).
+fn seed_independence(checks: &mut Checks) -> String {
     let script = sweep::speed_scripts().remove(1).1; // all-4x: the fast one
-    let mut first_session = Session::plain(Tuning::SHIPPED, &script, 60_000);
-    first_session.seed = Some(7);
-    let first = conduct(&first_session);
-    let mut second_session = Session::plain(Tuning::SHIPPED, &script, 60_000);
-    second_session.seed = Some(7_777_777);
-    let second = conduct(&second_session);
+    use crate::modules::ModuleSet;
+    let run = |seed: u64, modules: ModuleSet| {
+        let mut session = Session::plain(Tuning::SHIPPED, &script, 60_000);
+        session.seed = Some(seed);
+        session.modules = modules;
+        transcript(&conduct(&session).events)
+    };
+    let (first, second) = (run(7, ModuleSet::ALL), run(7_777_777, ModuleSet::ALL));
     checks.require(
-        transcript(&first.events) == transcript(&second.events),
-        "the seed reached the simulation",
+        first != second,
+        "the seed does not reach the resolution roll",
         format!(
-            "at seed 7 the transcript is {:?} and at seed 7777777 it is {:?}; S1 has no \
-             randomness and no Rng read may exist",
-            transcript(&first.events),
-            transcript(&second.events)
+            "at seeds 7 and 7777777 the transcripts are identical ({} entries); the roll is \
+             addressed by seed, world-minute and job, so two far-apart seeds must resolve \
+             something differently inside the window",
+            first.len()
         ),
     );
+    let off = ModuleSet::ALL.without_id(crate::resolution::MODULE);
+    let (calm, still) = (run(7, off), run(7_777_777, off));
+    checks.require(
+        calm == still,
+        "the seed reached the simulation somewhere other than the resolution roll",
+        format!(
+            "with resolution off, the transcript at seed 7 is {calm:?} and at seed 7777777 it \
+             is {still:?}; the roll is the only reader of the seed there may be"
+        ),
+    );
+    let differing = first
+        .iter()
+        .zip(second.iter())
+        .position(|(a, b)| a != b)
+        .map_or(first.len().min(second.len()), |at| at);
+    format!(
+        "seed 0 stamped; seeds 7 and 7777777 part at entry {differing} with resolution on and \
+         are identical ({} entries) with it off - the roll is the seed's one reader",
+        calm.len()
+    )
 }
 
 /// **One grid, two readers**: every terrain tile on the frame carries exactly
@@ -2181,10 +2208,15 @@ fn the_board_is_the_ask(checks: &mut Checks) {
         &run_camera(HEADLESS_VIEWPORT),
     );
     let says = |text: &str| panel.runs.iter().any(|row| row.text.contains(text));
-    for quest in &staged.sites[1].quests {
+    for (slot, quest) in staged.sites[1].quests.iter().enumerate() {
         let fit = traits::competence_at(quest.task, &cast[ines].traits);
         checks.require(
-            says(&format!("fit {fit}")),
+            says(&crate::resolution::cell_for(
+                &staged,
+                &tuning,
+                ines,
+                crate::sim::JobId { site: 1, slot },
+            )),
             "a job row's fit is not the aptitude the sim reads",
             format!(
                 "{:?} is {} work, {} answers {fit} to traits::competence_at, and no row of                  the board says so",
@@ -2980,7 +3012,10 @@ fn the_work_list_navigates(checks: &mut Checks, baseline: &Conducted) -> String 
             let at = layout::worklist_row(row).min;
             for (cell, want) in [
                 (at + layout::work::NAME, quest.name.to_owned()),
-                (at + layout::work::FIT, format!("fit {fit}")),
+                (
+                    at + layout::work::FIT,
+                    crate::resolution::cell_for(sim, &tuning, who, opening.job),
+                ),
             ] {
                 checks.require(
                     panel
@@ -3265,7 +3300,16 @@ fn the_picker_names_a_person(checks: &mut Checks, baseline: &Conducted) -> Strin
                     ),
                 );
                 checks.require(
-                    cell(at + layout::cand::FIT).as_deref() == Some(format!("fit {fit}").as_str()),
+                    cell(at + layout::cand::FIT).as_deref()
+                        == Some(
+                            crate::resolution::cell_for(
+                                &played,
+                                &tuning,
+                                who,
+                                crate::sim::JobId { site, slot },
+                            )
+                            .as_str(),
+                        ),
                     "a candidate row's fit is not the aptitude the sim reads",
                     format!(
                         "{} answers {fit} to traits::competence_at for {} work and row {row} \
@@ -3798,7 +3842,7 @@ fn the_picker_names_a_person(checks: &mut Checks, baseline: &Conducted) -> Strin
         &explained, &open_lens, &grid, &tuning, 0, probe_site, probe_slot,
     );
     let voice = crate::ui::wrap(
-        &crate::asks::fit_means(),
+        &crate::resolution::fit_means(&tuning, open_lens.modules()),
         crate::ui::columns(layout::PICKER_HINT_W, theme::SMALL),
     );
     checks.require(
@@ -3807,9 +3851,9 @@ fn the_picker_names_a_person(checks: &mut Checks, baseline: &Conducted) -> Strin
             .all(|line| picker_panel.runs.iter().any(|run| run.text == line)),
         "the picker describes fit in a voice of its own",
         format!(
-            "asks::fit_means says {:?} and the picker's footer reads {:?}; two surfaces \
+            "resolution::fit_means says {:?} and the picker's footer reads {:?}; two surfaces \
              showing fit must not describe it in two voices",
-            crate::asks::fit_means(),
+            crate::resolution::fit_means(&tuning, open_lens.modules()),
             picker_panel
                 .runs
                 .iter()
@@ -3835,7 +3879,7 @@ pub fn run() -> ExitCode {
     // --- the pathfinder's documented rule ----------------------------------
     path_contracts(&mut checks);
     // --- no randomness -----------------------------------------------------
-    seed_independence(&mut checks);
+    let seeded = seed_independence(&mut checks);
 
     // --- the photographed session, and everything read off its frames -----
     let photographed_run = photographed(HEADLESS_VIEWPORT);
@@ -3880,6 +3924,7 @@ pub fn run() -> ExitCode {
     floors::drawer_floors(&mut checks);
     floors::tuner_right_column(&mut checks);
     floors::tuner_has_room(&mut checks);
+    floors::odds_words(&mut checks);
     let bites = floors::floors_bite(&mut checks);
     floors::content_floors(&mut checks, &baseline);
     let ui_report = floors::uimap_contract(&mut checks);
@@ -3982,11 +4027,15 @@ pub fn run() -> ExitCode {
     crate::needs::judge_at(&mut checks, &tuning);
     let needs = crate::needs::judge_module(&mut checks, &baseline);
     crate::economy::judge_at(&mut checks, &tuning);
+    crate::outcomes::judge_at(&mut checks, &tuning);
+    let odds_shown = crate::outcomes::judge_one_function(&mut checks);
     let wage_lever = crate::economy::judge_the_wage(&mut checks, &tuning);
     let economy = crate::economy::judge_sweeps(&mut checks, &tuning);
     let compliance = crate::compliance::judge_module(&mut checks, &baseline);
     let asked = crate::compliance::ask_run();
     crate::compliance::judge_shots(&mut checks, &asked);
+    let resolved = crate::outcomes::shot_run();
+    crate::outcomes::judge_shots(&mut checks, &resolved);
     crate::compliance::judge_at(&mut checks, &tuning);
 
     // --- the art library, every string, and the link grammar ---------------
@@ -4014,6 +4063,7 @@ pub fn run() -> ExitCode {
             asked: &asked,
             zoomed: &zoomed_run,
             settled: &settled_run,
+            resolved: &resolved,
         },
     );
 
@@ -4037,7 +4087,8 @@ pub fn run() -> ExitCode {
     println!("  {economy}");
     println!("  {wage_lever}");
     println!("  {settled_report}");
-    println!("  seed 0 stamped; transcripts identical at seeds 7 and 7777777 (no Rng read in S1)");
+    println!("  {seeded}");
+    println!("  {odds_shown}");
     println!("  ui mapping: {ui_report}");
     println!("  map text: {legibility}");
     println!("  {labels}");

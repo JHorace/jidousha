@@ -175,6 +175,32 @@ pub struct Tuning {
     /// with no per-industry reading belongs, and because two ways to move one
     /// number is the second way this repo's first convention refuses.
     pub industry_levy: i64,
+
+    // ── resolution: how a job turns out (GDD §5; wave 1.4) ────────────────
+    /// **The worker's share of a self-chosen job's pot**, in percent (GDD
+    /// §4.1's share MINT port; closes `FINDINGS.md` G-035). The remainder is
+    /// the treasury's. A posted job pays its wage instead, never both.
+    ///
+    /// **Three**, and the number is a finding rather than a taste
+    /// (`FINDINGS.md` G-048): Steve opens with 3g against a 7g first interval
+    /// and works two or three jobs on day one, so any share above about a
+    /// gold a job rescues him — and `CAST.md` §4.1's claim that he goes short
+    /// first, in every world, is content. At 4% he is rescued in six worlds of
+    /// sixty-four; at 30% in sixty-three.
+    pub share_pct: i64,
+    /// The chance, in percent, that a job worked at fit 0 **fails** — the
+    /// head of the fit-to-odds curve (`resolution::odds`).
+    pub fail_base: i64,
+    /// How many points of that failure chance each point of fit takes off.
+    pub fail_fit: i64,
+    /// The chance, in percent, that a job **goes well**, per point of fit.
+    /// Nothing goes well at fit 0 — a poor fit gets it done at best.
+    pub well_fit: i64,
+    /// The highest failure chance whose odds-word is `safe`.
+    pub odds_safe: i64,
+    /// The lowest failure chance whose odds-word is `risky`. Between the two
+    /// is `chancy`.
+    pub odds_risky: i64,
 }
 
 impl Resource for Tuning {}
@@ -233,34 +259,42 @@ impl Tuning {
         upkeep_coin: 5,
         upkeep_hours: 24,
         industry_levy: 0,
+        share_pct: 3,
+        fail_base: 35,
+        fail_fit: 12,
+        well_fit: 12,
+        odds_safe: 15,
+        odds_risky: 30,
     };
 
     /// The constants in effect, as the lines the drawer's stamp and every
     /// verify report print (a run is only reproducible if it says what it ran
     /// with).
     pub fn readout(&self) -> String {
-        // Two constants to a line and never wider than the drawer's stamp
-        // column, which is what is left of the screen beside three columns of
-        // steppers. `floors.rs` fails a line that outgrows it.
+        // Lines of at most twenty-three glyphs, the drawer's stamp column —
+        // the fourth stepper column's width since wave 1.4
+        // (`layout::tuner_stamp_for`). A pair is never split across lines, so
+        // a value cannot be read against the wrong name; `floors.rs` fails a
+        // stamp that runs off the drawer.
         format!(
             "road {} plains {}\n\
              forest {} rough {}\n\
              minute {} ticks\n\
              speeds {}/{}/{}\n\
-             marks -{}/+{}\n\
-             span {} floor {}\n\
-             ceil -{} after {}@{}\n\
-             drift {}/{}h\n\
+             marks -{}/+{} span {}\n\
+             floor {} ceil -{}\n\
+             after {}@{} drift {}/{}h\n\
              feed {} pulse {}\n\
              score {}h stag {}m\n\
-             rest {}h w{}\n\
-             need{} want{} apt{}\n\
-             pot{} regard{} idle{}\n\
+             rest {}h w{} need{}\n\
+             want{} apt{} pot{}\n\
+             regard{} idle{}\n\
              visit {}m +{} both{}\n\
              bonds {} alive {}d\n\
              ask +{} wage +/-{}\n\
-             upkeep {}g/{}h\n\
-             levy {}g",
+             upkeep {}g/{}h levy {}g\n\
+             share {}% fail {}-{}/fit\n\
+             well {} odds <={} >={}",
             self.road_cost,
             self.plains_cost,
             self.forest_cost,
@@ -300,6 +334,12 @@ impl Tuning {
             self.upkeep_coin,
             self.upkeep_hours,
             self.industry_levy,
+            self.share_pct,
+            self.fail_base,
+            self.fail_fit,
+            self.well_fit,
+            self.odds_safe,
+            self.odds_risky,
         )
     }
 
@@ -347,6 +387,12 @@ impl Tuning {
             Field::UpkeepCoin => &mut self.upkeep_coin,
             Field::UpkeepHours => &mut self.upkeep_hours,
             Field::IndustryLevy => &mut self.industry_levy,
+            Field::SharePct => &mut self.share_pct,
+            Field::FailBase => &mut self.fail_base,
+            Field::FailFit => &mut self.fail_fit,
+            Field::WellFit => &mut self.well_fit,
+            Field::OddsSafe => &mut self.odds_safe,
+            Field::OddsRisky => &mut self.odds_risky,
         }
     }
 
@@ -562,6 +608,18 @@ pub enum Field {
     UpkeepHours,
     /// What one worked industry shift pays the treasury.
     IndustryLevy,
+    /// A self-chooser's share of the pot, in percent.
+    SharePct,
+    /// The failure chance at fit 0, in percent.
+    FailBase,
+    /// What each point of fit takes off it.
+    FailFit,
+    /// The went-well chance per point of fit.
+    WellFit,
+    /// The highest failure chance that reads `safe`.
+    OddsSafe,
+    /// The lowest failure chance that reads `risky`.
+    OddsRisky,
 }
 
 impl Field {
@@ -606,6 +664,12 @@ impl Field {
         Field::UpkeepCoin,
         Field::UpkeepHours,
         Field::IndustryLevy,
+        Field::SharePct,
+        Field::FailBase,
+        Field::FailFit,
+        Field::WellFit,
+        Field::OddsSafe,
+        Field::OddsRisky,
     ];
 
     /// The name DESIGN gives this constant.
@@ -650,6 +714,12 @@ impl Field {
             Field::UpkeepCoin => "upkeep_coin",
             Field::UpkeepHours => "upkeep_hours",
             Field::IndustryLevy => "industry_levy",
+            Field::SharePct => "share_pct",
+            Field::FailBase => "fail_base",
+            Field::FailFit => "fail_fit",
+            Field::WellFit => "well_fit",
+            Field::OddsSafe => "odds_safe",
+            Field::OddsRisky => "odds_risky",
         }
     }
 
@@ -716,6 +786,12 @@ impl Field {
             Field::UpkeepCoin => "base upkeep, per interval, per person",
             Field::UpkeepHours => "world-hours between upkeep intervals",
             Field::IndustryLevy => "what a worked shift pays the treasury",
+            Field::SharePct => "% of a self-chosen pot the worker keeps",
+            Field::FailBase => "% chance a job fails at fit 0",
+            Field::FailFit => "% failure each point of fit takes off",
+            Field::WellFit => "% chance per point of fit it goes well",
+            Field::OddsSafe => "fail % at or under which odds read safe",
+            Field::OddsRisky => "fail % at or over which odds read risky",
         }
     }
 }

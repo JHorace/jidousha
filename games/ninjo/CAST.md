@@ -490,10 +490,19 @@ the answer is no; after that a rename costs prose.
   `proud` needs a field for refusing gifts (the row currently has no
   numeric hook for it); the per-character visited set for T4;
   `walks-out` uses autonomy's away-state.
-- **1.4 resolution**: resolution reads the aptitude whose id equals the
-  task's type; `craven` starts to matter once fight tasks carry danger. Fit
-  stops being only a term in whether somebody agrees, which is what the job
-  board's fit chip promises in words.
+- **1.4 resolution** (*done*): resolution reads the aptitude whose id equals
+  the task's type — `traits::competence_at`, the scorer's own term — through
+  `resolution::odds`, so a fit of 2 is `safe` (fails 11%, goes well 24%) and a
+  fit of 0 is `risky` (fails 35%, never goes well). Every aptitude row is 2, so
+  the cast has exactly two odds per job; a third would need a third aptitude
+  value, which is content. **Steve's pariah assertion survived, and it set
+  the share** (`FINDINGS.md` G-048): his 3g purse against a 7g first interval
+  is what holds the self-chosen share at three percent, and the economy sweep
+  asserts he goes short first in all sixty-four seeded worlds. **`craven` is
+  still dormant**: fight tasks carry no danger this wave (failure is economic
+  only), and whether a character should weigh their own odds is open
+  (G-049). Fit is no longer only a term in whether somebody agrees: the job
+  board's fit chip now says what it decides, derived from the curve.
 - **1.6 injector**: T1 as the director's loan-shark canned template; the
   no-dead-motivator check runs over the director's templates too.
 

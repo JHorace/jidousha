@@ -366,8 +366,9 @@ pub mod job {
     /// verdict's reason came out of the move twenty-eight pixels wider rather
     /// than fifty-two narrower.
     pub const FIT: Vec2 = Vec2::new(342.0, 3.0);
-    /// How wide that may run.
-    pub const FIT_W: f32 = 60.0;
+    /// How wide that may run — to the row's own end since wave 1.4, because
+    /// the cell carries the odds-word beside the fit (`fit 2 chancy`).
+    pub const FIT_W: f32 = 120.0;
     /// The task-type chip's icon.
     pub const TASK_ICON: Vec2 = Vec2::new(8.0, 14.0);
     /// And its word.
@@ -478,13 +479,16 @@ pub mod cand {
     pub const PORTRAIT: Vec2 = Vec2::new(0.0, 0.0);
     /// Where the name starts — clear of the portrait.
     pub const NAME: Vec2 = Vec2::new(38.0, 3.0);
-    /// How wide that may run.
-    pub const NAME_W: f32 = 96.0;
+    /// How wide that may run — the longest name in the cast is five glyphs,
+    /// and the forty pixels this gave up in wave 1.4 went to the odds-word.
+    pub const NAME_W: f32 = 56.0;
     /// Their fit for this job's kind of work — the column the list is sorted
     /// on.
-    pub const FIT: Vec2 = Vec2::new(140.0, 3.0);
-    /// How wide that may run.
-    pub const FIT_W: f32 = 56.0;
+    pub const FIT: Vec2 = Vec2::new(100.0, 3.0);
+    /// How wide that may run — wide enough for the odds-word beside the fit
+    /// since wave 1.4 (`fit 2 chancy`), which pushed the need and the
+    /// whereabouts twenty pixels right and took forty from the name.
+    pub const FIT_W: f32 = 116.0;
     /// **How badly they need it** — their desperation, and a mark when they
     /// cannot meet this interval's upkeep (wave 1.3).
     ///
@@ -493,15 +497,15 @@ pub mod cand {
     /// cells: what somebody brings to the work, what the work would cost
     /// them to reach, and **what they are up against** are three readings and
     /// a clip on any of them takes a different half.
-    pub const NEED: Vec2 = Vec2::new(200.0, 3.0);
+    pub const NEED: Vec2 = Vec2::new(220.0, 3.0);
     /// How wide that may run — four glyphs of the five-by-seven face, which
     /// is `d10!` and nothing longer.
     pub const NEED_W: f32 = 40.0;
     /// **Where they are** — at home, or out with where and when the work
     /// they are on is done.
-    pub const WHERE: Vec2 = Vec2::new(244.0, 3.0);
+    pub const WHERE: Vec2 = Vec2::new(264.0, 3.0);
     /// How wide that may run.
-    pub const WHERE_W: f32 = 306.0;
+    pub const WHERE_W: f32 = 286.0;
     /// **The journey from wherever they stand** — its own cell rather than
     /// the tail of the whereabouts, because a clip takes the tail and the
     /// journey is what a posting to somebody who is out costs.
@@ -608,13 +612,15 @@ pub mod work {
     pub const DURATION_W: f32 = 70.0;
     /// Their fit for this kind of work — the column the list is sorted on.
     pub const FIT: Vec2 = Vec2::new(326.0, 3.0);
-    /// How wide that may run.
-    pub const FIT_W: f32 = 56.0;
+    /// How wide that may run — wide enough for the odds-word beside the fit
+    /// since wave 1.4 (`fit 2 chancy`).
+    pub const FIT_W: f32 = 116.0;
     /// **Which site it stands at** — the thing a list across every board has
-    /// to say that a single board never did.
-    pub const WHERE: Vec2 = Vec2::new(388.0, 3.0);
+    /// to say that a single board never did. Printed without its article
+    /// since wave 1.4 (`sim::plain`), which is what the odds-word cost it.
+    pub const WHERE: Vec2 = Vec2::new(446.0, 3.0);
     /// How wide that may run.
-    pub const WHERE_W: f32 = 150.0;
+    pub const WHERE_W: f32 = 106.0;
     /// **The walk from wherever they stand**, at the head of the second line
     /// for the reason a candidate row puts it there: a fixed-width column
     /// before a ragged one reads as two columns.
@@ -1205,13 +1211,14 @@ pub fn modes_prose_width() -> f32 {
 
 /// How many config rows a column holds before the next one starts.
 ///
-/// **Nine since wave 1.3**: needs and settlement bring four classes, and
-/// seventeen rows over two columns of seven would leave three of them with
-/// nowhere to be configured. Nine rows of forty pixels ends the second column
-/// at 460, which is where the footer moved to make room for — and eighteen
-/// slots is one more than the table has, so the eighteenth class is a row and
-/// nothing else to remember.
-pub const MODES_ROWS: usize = 9;
+/// **Ten since wave 1.4**: resolution brings two classes, and nineteen rows
+/// over two columns of nine would leave one with nowhere to be configured.
+/// Ten rows at a pitch of thirty-six — a radio is thirty-two, so rows keep a
+/// four-pixel gap and never overlap — end the column at 464, still above the
+/// footer wave 1.3 moved to 470. Twenty slots is one more than the table has.
+/// Wave 1.3 had nine at a pitch of forty.
+pub const MODES_ROWS: usize = 10;
+const MODES_ROW_PITCH: f32 = 36.0;
 const MODES_COL_X: f32 = 20.0;
 const MODES_COL_PITCH: f32 = 468.0;
 const MODES_RADIO_W: f32 = 84.0;
@@ -1227,7 +1234,7 @@ fn modes_row_origin(index: usize) -> Vec2 {
     let row = index % MODES_ROWS;
     Vec2::new(
         MODES_COL_X + column as f32 * MODES_COL_PITCH,
-        108.0 + row as f32 * 40.0,
+        108.0 + row as f32 * MODES_ROW_PITCH,
     )
 }
 
@@ -1255,7 +1262,7 @@ pub fn modes_radio(index: usize, mode: usize) -> Rect {
 
 /// The drawer's footer: what a change to this panel is.
 ///
-/// **Under the ninth row**, which ends at 460 — it stood at 398 while a column
+/// **Under the tenth row**, which ends at 464 — it stood at 398 while a column
 /// held seven, and a footer that stayed there would have been a row of prose
 /// drawn through two rows of radios (UI.md §4's chrome-against-chrome floor).
 pub fn modes_footer() -> Vec2 {
@@ -1271,40 +1278,39 @@ pub fn tuner_panel() -> Rect {
 
 /// How many stepper rows a column holds before the next one starts.
 ///
-/// **Fourteen since wave 1.3**, where it was twelve at a pitch of thirty-four.
-/// Three constants took the drawer from thirty-six to thirty-nine, and the
-/// column was re-laid rather than stretched: the pitch drops to the target
-/// floor exactly — a stepper is thirty-two and two rows of thirty-two may
-/// touch but never overlap — and the head of the drawer gives up twenty
-/// pixels, with the title at 38 and the presets on the band under it. Fourteen
-/// rows is what that buys: `90 + 13 x 32 + 32` is 538 against a screen of 540,
-/// and a fifteenth would not fit at any lead.
+/// **Fourteen since wave 1.3**, where it was twelve at a pitch of thirty-four:
+/// the pitch is the target floor exactly — a stepper is thirty-two and two
+/// rows of thirty-two may touch but never overlap — and `90 + 13 x 32 + 32`
+/// is 538 against a screen of 540, so a fifteenth would not fit at any lead.
 ///
-/// **Three columns of fourteen is forty-two**, so the drawer has three rows of
-/// room after this wave's thirty-nine. `floors::tuner_has_room` is the floor
-/// that says when it does not: it asks whether the *next* constant's stepper
-/// would still be inside the drawer, so it fails while the drawer still draws.
-/// Re-laying past forty-two means **moving the right column**, not narrowing
-/// the rows — a row is a name, two buttons and the value between them, and
-/// four columns of that plus a stamp column wide enough to read comes to more
-/// than 960.
+/// **Four columns since wave 1.4** (`FINDINGS.md` G-034, closed). Wave 1.3
+/// filled three columns of fourteen to within three rows, and resolution
+/// brought six constants. The right column moved rather than the rows
+/// narrowing: the columns step 232 rather than 240 — exactly a row's width,
+/// so four of them end at 956 against a screen of 960 — the fourth column holds the overflow from the top,
+/// **the stamp follows it down that column** ([`tuner_stamp`] is measured from
+/// the last stepper row, not placed), and the prose band — a hovered
+/// constant's meaning, a refused link, the APPLY note — moved up into the
+/// header band beside the presets, where it has the width the stamp column
+/// never gave it ([`tuner_hint`]).
 ///
-/// The stamp keeps the last two hundred pixels of the screen and the prose band
-/// is measured down from it (`tuning::prose_top`): the stamp is the one thing
-/// in the drawer that has to stay legible while every other row is being
-/// moved, so it keeps the top of that column and the prose follows it.
+/// `floors::tuner_has_room` asserts the drawer still fits **one more**
+/// constant: its stepper row in the fourth column and the stamp pushed down
+/// under it.
 pub const TUNER_ROWS: usize = 14;
 const TUNER_COL_X: f32 = 28.0;
-const TUNER_COL_PITCH: f32 = 240.0;
+const TUNER_COL_PITCH: f32 = 232.0;
 const TUNER_ROW_Y: f32 = 90.0;
 const TUNER_ROW_PITCH: f32 = 32.0;
 /// The steppers' - and + size: the smallest target in the game, exactly the
 /// floor.
 const TUNER_STEP: f32 = 32.0;
 /// The width the longest constant name needs (`grudge_ceiling` and friends).
-const TUNER_NAME_W: f32 = 136.0;
+pub const TUNER_NAME_W: f32 = 136.0;
 /// The gap the value sits in, between the two buttons.
 const TUNER_VALUE_W: f32 = 32.0;
+/// How many stepper columns the drawer has.
+pub const TUNER_COLUMNS: usize = 4;
 
 fn tuner_row_origin(index: usize) -> Vec2 {
     let column = index / TUNER_ROWS;
@@ -1375,30 +1381,53 @@ pub fn tuner_title() -> Vec2 {
     Vec2::new(TUNER_COL_X, 38.0)
 }
 
-/// The gap between the stamp and the prose band that follows it down the
-/// right column.
+/// **The prose band** — a hovered constant's meaning, a refused link, an
+/// applied set, or the resting line and the APPLY note — in the header band,
+/// right of the presets and left of APPLY (wave 1.4).
 ///
-/// **There is no `tuner_hint()` any more, and that is the fix.** The band's
-/// top was a constant 350 while the stamp flowed down from 124 at one row per
-/// two constants, so the thirty-fifth constant put the stamp through the hint
-/// and nothing said so (`FINDINGS.md` G-028). The band's top is now measured
-/// from the stamp above it — `tuning::prose_top`, one function read by the
-/// drawer and by the floor — and this is the only number left in it.
-pub const TUNER_PROSE_GAP: f32 = 10.0;
+/// It stood under the stamp in the right column until the fourth stepper
+/// column took that column's top; up here it has three rows of the width
+/// between the last preset (which ends at 488) and APPLY (which starts at
+/// 824), and `floors::tuner_right_column` asserts every state the band takes
+/// fits in [`TUNER_HINT_ROWS`].
+pub fn tuner_hint() -> Vec2 {
+    Vec2::new(496.0, 40.0)
+}
 
-/// How wide the hint, the note and the stamp may run before they wrap.
+/// How wide the prose band may run before it wraps.
+pub const TUNER_HINT_W: f32 = 320.0;
+
+/// How many rows the prose band has before it would reach the stepper rows.
+pub const TUNER_HINT_ROWS: usize = 3;
+
+/// How wide the stamp may run before it wraps — the fourth column's width,
+/// to the drawer's edge less a margin.
 pub fn tuner_prose_width() -> f32 {
     DESIGN_W - TUNER_STAMP_X - 16.0
 }
 
-/// Where the stamp column starts — right of the third stepper column, which
-/// ends at 740.
-const TUNER_STAMP_X: f32 = 756.0;
+/// Where the stamp column starts — the fourth stepper column's own left.
+const TUNER_STAMP_X: f32 = TUNER_COL_X + 3.0 * TUNER_COL_PITCH;
 
-/// The stamp: the constants actually in effect, always visible while the
-/// drawer is open.
+/// **The stamp, for a drawer of `constants` steppers**: the constants actually
+/// in effect, under the last stepper row the fourth column holds.
+///
+/// Measured rather than placed, for the reason `tuning::prose_top` was (and
+/// `FINDINGS.md` G-028): a constant added is a stepper row added to this
+/// column, and the stamp has to move down with it rather than be drawn
+/// through it.
+pub fn tuner_stamp_for(constants: usize) -> Vec2 {
+    let spilled = constants.saturating_sub(TUNER_ROWS * (TUNER_COLUMNS - 1));
+    let rows = spilled.min(TUNER_ROWS);
+    Vec2::new(
+        TUNER_STAMP_X,
+        TUNER_ROW_Y + rows as f32 * TUNER_ROW_PITCH + 2.0,
+    )
+}
+
+/// The stamp at this build's constants.
 pub fn tuner_stamp() -> Vec2 {
-    Vec2::new(TUNER_STAMP_X, 92.0)
+    tuner_stamp_for(crate::constants::Field::ALL.len())
 }
 
 // ── the map's own geometry (world units, not UI units) ─────────────────────
