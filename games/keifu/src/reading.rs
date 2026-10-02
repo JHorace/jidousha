@@ -318,4 +318,35 @@ mod tests {
         assert_eq!(read_board(&content, &house.heroes, &quests, 0).ways, 15);
         assert_eq!(read_board(&content, &house.heroes, &quests, 1).ways, 21);
     }
+
+    #[test]
+    fn a_dreamer_could_go_only_if_the_party_they_lead_could_answer() {
+        let (content, house) = house();
+        let heroes = &house.heroes;
+        let (garrick, ysolde) = (id(heroes, "Garrick"), id(heroes, "Ysolde"));
+        // Grave goods calls both. Led by Garrick, Garrick and Brannoc bring 12 against
+        // 13: 42 in 100. Led by Ysolde, the party is Ysolde and Garrick, who bring less.
+        let grave = quest_titled(&content, "Grave goods", 13);
+        let led = likely_party(heroes, &adults(heroes), &grave, Some(ysolde));
+        assert_eq!(led, [ysolde, garrick]);
+        assert!(
+            success_ways(heroes, &led, &grave, 0) < 13,
+            "Ysolde's party is weaker"
+        );
+        assert!(could_go(&content, heroes, &grave, 0, garrick));
+        assert!(!could_go(&content, heroes, &grave, 0, ysolde));
+    }
+
+    #[test]
+    fn any_quest_on_the_board_can_be_the_one_that_calls_a_dreamer() {
+        let (content, house) = house();
+        let garrick = id(&house.heroes, "Garrick");
+        // Nobody could go on the first at 60; Garrick could on the second at 10.
+        let quests = [
+            quest_titled(&content, "The bell under the tide", 60),
+            quest_titled(&content, "Grave goods", 10),
+        ];
+        let reading = read_board(&content, &house.heroes, &quests, 0);
+        assert_eq!(reading.call, Some((1, garrick)));
+    }
 }
