@@ -676,3 +676,110 @@ was one sessions 1-4 had already read and used. The documents were asked nothing
   seated no call can be "stay behind": the only predicate an absent hero meets is a
   student faring alone (§9.1), which needs the student in the party, and the predicates
   that hold at any moment are excluded earlier, at step 2 of §9.6.
+
+---
+
+## Session 6 (W6)
+
+**Reading discipline, session 6.** Read: `CLAUDE.md`, the `make-game` skill,
+`docs/templates/DECISIONS.md`, the crate whole (`SPEC-GAPS.md`, `FINDINGS.md`, `mutants/`,
+`src/`), and from `spec/` MODULES.md, SPEC.md §0-§9, §14-§15 and §18-§23, CONSTANTS.md whole,
+OPEN-QUESTIONS.md whole, ENGINE-USAGE.md §1-§5, INVENTORY.md's telling rows, `content/README.md`,
+and the content W6 reads (`lines.json`'s summer, quest, fate, death, crown, fear, bond, ghost,
+destiny and deed keys; `ui-text.json`'s `telling`, `summer` and `ending`; `writing.json`;
+`quests.json`'s endings; `ghost.json`; `door.json`'s closed verdict; `lore.json`'s places,
+outcomes and `age_at_death`; `legacies.json`'s `ghost_tale_title`). From `docs/api/`: the API
+document's `Time`, `Seconds` and fixed-timestep passages, for the typewriter. The depot
+`jidousha-assets` (cloned sparse: `tools/`, Tiny Dungeon, Tiny Town, Tiny Battle, Tiny Farm,
+Micro Roguelike), its contact sheets rendered with its own `tools/contact_sheet.py`. **Engine
+source: not opened.** `games/ninjo/` and `attic/`: not opened; `grep -oh "^### G-0[0-9]*"
+games/*/FINDINGS.md` read the G-headings only (G-039's method). Two incidental touches, disclosed:
+`tools/test` and `tools/check-assets` print other games' file names in their reports (ninjo's
+captures, `games/ninjo/src/sprites.rs`), and `docs/templates/DECISIONS.md`'s worked row is
+ninjo's. No sibling game read.
+
+### G-050 — the W6 handoff's decision table has four of the template's six columns
+
+Class: process · Session: keifu 6 · Owner: the keifu handoff template, `make-game` §D.1
+
+**Doing:** closing out the handoff's decision-surface table (§D.1, §E).
+
+**Expected:** `docs/templates/DECISIONS.md`'s six columns: decision, must know, surface, action,
+one function, asserted by.
+
+**Happened:** the table has four — decision, surface, mechanics, asserted by. "Must know",
+"action" and "one function" are not there; "mechanics" names the rules instead. §D.1 stops a
+session only for a handoff with *neither* the table nor the "none new" line, so this one is not
+malformed, and its one row ("Set out") is clear enough to build from.
+
+**What I did:** built from it, and filled the three missing cells from the spec and the build in
+the PR's copy of the table: must know — every card's facts as W4 and W5 show them, and the
+control's own label ("Set out" / "Stay home"); action — a press on the control in the top bar;
+one function — `resolve::set_out`, whose dice go through the forecast's `margin` and `outcome`.
+
+**Fix:** the keifu handoffs copy `DECISIONS.md`'s header row as it stands.
+
+### G-051 — "rerun all five lists" where four exist
+
+Class: process (misled) · Session: keifu 6 · Owner: the keifu handoff
+
+**Doing:** the mutation bar: "rerun all five lists, then your own round".
+
+**Expected:** five committed lists under `mutants/`.
+
+**Happened:** there are four — `dock.txt`, `w3.txt`, `w4.txt`, `w5.txt` (sessions 1 and 2's lists
+were never committed, G-044). **What I did on its authority:** looked for a fifth before reading
+G-044 again; then reran the four, with W6's own as the fifth list of the round.
+
+**Fix:** count the lists in the handoff from `ls mutants/`, or name them.
+
+### docs/api: 0 findings
+
+The one new engine question W6 asked — how render-side pacing reads time without the sim
+seeing it — `Time` answers: `tick` and `fixed_dt` are on the resource every system and every
+`HeadlessSim` has, so the typewriter is ticks since its leaf opened times `fixed_dt`, read in the
+page projection and nowhere in the house. Everything else W6 touched (the page, its rows and
+targets, the per-session recorder of G-043, the scripted pointer of G-045) earlier sessions had
+read and used.
+
+### The game's own (session 6)
+
+- **The scene is a projection of the house.** The summer, the telling and the closed house are
+  not a state machine of their own: the page shows the telling while `House::telling` is set, the
+  closed verdict once `House::closed`, the summer otherwise (`screen::page`). So the screen can
+  never disagree with the house, and a replay of the same presses reaches the same screen.
+- **The typewriter is pacing only.** `UiState::typing_from` (the tick a leaf came on screen) and
+  `revealed` are presentation state; the house never reads them, and the sim is the same whether
+  a story typed for a second or a minute. Verify asserts the constant as a literal: nothing on
+  the tick the leaf opens, 45 letters 30 ticks later.
+- **W7/W8 SCAFFOLD.** Leaving the telling of an open house runs `season::pass_the_year`: winter
+  begins and ends, the year counts on, the next summer's board is generated and the household
+  reseated. Nobody ages, rests, learns, dies of age, is born or arrives, and `House::mourned`
+  keeps W6's dead for W8's death pages. W7 and W8 replace the function whole. A house played
+  this way only shrinks — the battery's houses close within six summers more often than not,
+  which is the scaffold's and not the rules'.
+- **W10 SCAFFOLD.** A house whose renown is spent closes when its telling is left; the closed
+  screen (`ending_view.rs`) shows `door.closed_title`, `door.closed_verdict`, "It was year Y,
+  with the Door still R years off." and "Begin another house", so a closed house is not a dead
+  end. W10 replaces it whole. The Door's summer still refuses to generate, loudly.
+- **The sheet dock reads the telling.** Pointing at a member's card, or at a line that names
+  someone, opens their sheet beside the page — the help line `ui.telling.help` promises both.
+  Which hero a line is "about" is the first of the house's heroes the line names
+  (`telling_view::about`), presentation only; the members' cards show them as they are *now*,
+  after the summer (a settled pip, a wound's tint), as "what they are now" says.
+- **The set-out control sits in the top bar,** left of "The family". The first draft crowded
+  the Door's countdown line; the floors now refuse type within 4 px of any control, and the
+  mutation round carries the crowding as a fault (L4).
+- **Heirloom sprites: imported, not from the blade's family.** Tiny Dungeon (the cast's pack) has
+  no book and no ring, and neither has Tiny Town, Tiny Battle or Tiny Farm. Both came from
+  Kenney's Micro Roguelike, 8 px, coloured: the road-book is its scroll (`tile_0077`), the
+  cradle-ring its gold ring with a pink stone (`tile_0089`). On the sheet they draw at 4x in the
+  blade's 32 px box, so their pixels are twice the blade's — the one visible seam in the art.
+  The import flow is G-040's (`art/import_sprites.py`); `CREDITS.md` has both rows;
+  `check-assets` names `art.rs` and is green. The sheet's panic for an unmapped heirloom stays as
+  a guard, and can no longer be reached from the content: the cast check now asks every heirloom
+  `legacies.json` can forge for an imported role. A road-book can only be forged at a winter's
+  hearth (W7), so no summer here draws one; the ring is pictured (`screens/w6-ring.png`).
+- **`lines.fear.steadied` is unreachable** [emergent]: facing's dread amount is 0 or less only
+  with a companion on a won quest, and that case takes the courage branch first. Written where
+  the spec puts it all the same; a fault on it would be equivalent.

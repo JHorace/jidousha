@@ -172,6 +172,7 @@ fn press(world: &mut World, ui: UiState, control: Target) -> UiState {
             with_house(world, set_out);
             fresh
         }
+        // SPEC-GAPS KG-37: a numbered button turns to a leaf and types its story again.
         Target::GoOn | Target::Leaf(_) | Target::Skip => {
             let Some(telling) = &house.telling else {
                 return ui;

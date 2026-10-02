@@ -62,6 +62,8 @@ pub fn set_out(content: &Content, house: &mut House, rng: &mut Rng) {
         ..Telling::default()
     };
     let mut cost = 0;
+    // SPEC-GAPS KG-35: each party is read off its seats as it resolves; nothing bounces
+    // a hero an earlier quest's grief broke, so they go, at their fear's cost.
     for slot in 0..house.board.len() {
         if house.party(slot).is_empty() {
             cost += unanswered(content, house, slot, &mut telling.meanwhile);
@@ -189,6 +191,7 @@ pub fn resolve_rolled(
     for &member in &members {
         let hero = &mut house.heroes[member];
         hero.quests_faced += 1;
+        // SPEC-GAPS KG-40: "the first time ever" is the count reaching 1.
         if hero.quests_faced == 1 {
             let telling = fmt(
                 &words[W::DeedFirstQuest],

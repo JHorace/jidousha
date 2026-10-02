@@ -83,6 +83,9 @@ pub struct Leaf {
 /// The Meanwhile page's lines (SPEC §8): what set out wrote there, then
 /// `ui.telling.house_closed` if the house has closed — at renown 0, which leaving
 /// will act on (SPEC §2.1).
+///
+/// SPEC-GAPS KG-36: the page exists when it has a line, the closing line counting, and
+/// "A quiet summer" only when there is no quest page and no Meanwhile line.
 pub fn meanwhile_lines(content: &Content, house: &House, telling: &Telling) -> Vec<String> {
     let mut lines = telling.meanwhile.clone();
     if house.renown <= 0 {

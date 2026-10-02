@@ -239,6 +239,7 @@ pub fn crown(f: &Afield<'_>, house: &mut House, id: HeroId, out: &mut Vec<String
         return;
     };
     let heir = nearest_kin(&house.heroes, id);
+    // SPEC-GAPS KG-38: the bequest is recorded, and decided, only for an heirloom.
     let hero = &mut house.heroes[id];
     hero.bequest_heirloom = Some(heirloom.name.clone());
     hero.bequest_heir = heir;
@@ -266,6 +267,8 @@ pub fn crown(f: &Afield<'_>, house: &mut House, id: HeroId, out: &mut Vec<String
 /// Where `other` ranks as `dead`'s heir (SPEC §15.1's table): children 0, other
 /// descendants 1, the spouse 2, siblings by a shared parent and the parents 3, those
 /// the dead taught 4, anyone the dead holds a steadying bond with 5, everyone else 6.
+/// SPEC-GAPS KG-39: a hero several rows fit takes the first (the lowest rank), and a
+/// parent is known by the bond or by the dead's own parents.
 fn heir_rank(heroes: &[Hero], dead: HeroId, other: HeroId) -> usize {
     let bond = heroes[dead].bond_to(other);
     let kind = bond.map(|b| b.kind);
