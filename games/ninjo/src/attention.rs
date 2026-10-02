@@ -151,6 +151,10 @@ pub enum EventClass {
     /// A petition's deadline came unmet, and the consequence its card declared
     /// fired.
     PetitionFailed,
+    /// **The director fired** (the events-director, wave 1.6): an event from
+    /// outside the camp reached somebody, or the world was quiet and it
+    /// passed. Bookkeeping — what the player sees is the petition it voices.
+    Event,
 }
 
 /// One row of the event-class table: what a class is called, how it is drawn,
@@ -378,6 +382,19 @@ pub const CLASSES: &[ClassSpec] = &[
         color: theme::EMBER,
         icon: Art::Skull,
         default_mode: Mode::PauseAndFocus,
+    },
+    // **The director's one** (wave 1.6), and it opens on `ignore`: the firing
+    // is bookkeeping, and what the player sees is the petition it voices,
+    // which stops the world as every voicing does. A firing that found nobody
+    // is the world being quiet, which is not an event either. Its id is the
+    // word the source table shows for the class — `event` — so the feed
+    // never says `director` to a player who is never told there is one.
+    ClassSpec {
+        class: EventClass::Event,
+        id: "event",
+        color: theme::DIM,
+        icon: Art::Restless,
+        default_mode: Mode::Ignore,
     },
 ];
 
@@ -652,6 +669,7 @@ pub fn vocabulary(checks: &mut crate::checks::Checks) {
         (EventClass::PetitionVoiced, Mode::PauseAndFocus),
         (EventClass::PetitionSatisfied, Mode::Log),
         (EventClass::PetitionFailed, Mode::PauseAndFocus),
+        (EventClass::Event, Mode::Ignore),
     ] {
         checks.require(
             opening.mode(class) == wanted,
@@ -691,7 +709,11 @@ pub fn judge_at(checks: &mut crate::checks::Checks, tuning: &Tuning) {
         ),
     );
     // A feed over more events than it may hold: the cap is what stops it.
-    let mut sim = crate::sim::Sim::opening(tuning, crate::modules::ModuleSet::ALL);
+    let mut sim = crate::sim::Sim::opening(
+        crate::scenario::freeplay(),
+        tuning,
+        crate::modules::ModuleSet::ALL,
+    );
     for minute in 0..25u64 {
         sim.events.push(Event {
             minute,

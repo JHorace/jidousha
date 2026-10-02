@@ -290,7 +290,7 @@ pub fn judge_at(checks: &mut crate::checks::Checks, tuning: &Tuning) {
     // multipliers, and the numbers are written down: the base is 5, Steve
     // carries `caring` at 3/2 and pays 7, Bob carries `indebted` at 5/4 and
     // pays 6, and Alex carries neither and pays the base.
-    let cast = crate::people::roster();
+    let cast = crate::scenario::freeplay().cast();
     for (id, wanted) in [("steve", 7i64), ("bob", 6), ("alex", 5), ("tim", 5)] {
         let Some(person) = cast.iter().find(|person| person.id == id) else {
             continue;
@@ -307,7 +307,11 @@ pub fn judge_at(checks: &mut crate::checks::Checks, tuning: &Tuning) {
     // **The burn, and the floor inside it**: what is in the purse is what is
     // taken, so a wallet is never overdrawn, and what could not be found is
     // what presses.
-    let mut sim = crate::sim::Sim::opening(tuning, crate::modules::ModuleSet::ALL);
+    let mut sim = crate::sim::Sim::opening(
+        crate::scenario::freeplay(),
+        tuning,
+        crate::modules::ModuleSet::ALL,
+    );
     sim.everybody_here();
     let opened: Vec<i64> = sim.people.iter().map(|person| person.wallet).collect();
     let desperation: Vec<i64> = sim.people.iter().map(|person| person.desperation).collect();
@@ -385,7 +389,11 @@ pub fn judge_at(checks: &mut crate::checks::Checks, tuning: &Tuning) {
     }
     // **Desperation is held inside its range** — pressed past the ceiling and
     // it stops, so the scorer's opening term stays a comparison.
-    let mut pressed = crate::sim::Sim::opening(tuning, crate::modules::ModuleSet::ALL);
+    let mut pressed = crate::sim::Sim::opening(
+        crate::scenario::freeplay(),
+        tuning,
+        crate::modules::ModuleSet::ALL,
+    );
     pressed.everybody_here();
     for person in &mut pressed.people {
         person.wallet = 0;
@@ -495,7 +503,8 @@ pub fn judge_module(
         .filter(|event| event.class == crate::attention::EventClass::Joined)
         .map(|event| (event.minute, event.party))
         .collect();
-    let wanted: Vec<(u64, usize)> = crate::people::roster()
+    let wanted: Vec<(u64, usize)> = crate::scenario::freeplay()
+        .cast()
         .iter()
         .enumerate()
         .filter(|(_, person)| !person.present && person.present_from <= crate::sweep::RUN_UNTIL)
@@ -593,7 +602,11 @@ pub fn judge_module(
     // `autonomy.rs` changed this wave; what changed is that somebody can now
     // be pressed. So the claim is that pressing them moves the sum.
     let tuning = Tuning::SHIPPED;
-    let mut easy = crate::sim::Sim::opening(&tuning, crate::modules::ModuleSet::ALL);
+    let mut easy = crate::sim::Sim::opening(
+        crate::scenario::freeplay(),
+        &tuning,
+        crate::modules::ModuleSet::ALL,
+    );
     easy.everybody_here();
     let mut pressed = easy.clone();
     let who = 3usize;
@@ -638,8 +651,11 @@ pub fn judge_module(
         .iter()
         .position(|spec| spec.id == MODULE)
         .unwrap_or(0);
-    let mut quiet =
-        crate::sim::Sim::opening(&tuning, crate::modules::ModuleSet::ALL.without(needs_off));
+    let mut quiet = crate::sim::Sim::opening(
+        crate::scenario::freeplay(),
+        &tuning,
+        crate::modules::ModuleSet::ALL.without(needs_off),
+    );
     quiet.everybody_here();
     let opened: Vec<i64> = quiet.people.iter().map(|person| person.wallet).collect();
     let grid = crate::grid::grid();
@@ -670,6 +686,7 @@ pub fn judge_module(
         .position(|spec| spec.id == crate::settlement::MODULE)
         .unwrap_or(0);
     let mut camp = crate::sim::Sim::opening(
+        crate::scenario::freeplay(),
         &tuning,
         crate::modules::ModuleSet::ALL.without(settlement_off),
     );

@@ -710,7 +710,11 @@ pub fn judge_at(checks: &mut crate::checks::Checks, tuning: &Tuning) {
         "three world-days of 1440 minutes",
     );
 
-    let mut sim = Sim::opening(tuning, crate::modules::ModuleSet::ALL);
+    let mut sim = Sim::opening(
+        crate::scenario::freeplay(),
+        tuning,
+        crate::modules::ModuleSet::ALL,
+    );
     sim.everybody_here();
     let index = |id: &str| {
         sim.people
@@ -1085,7 +1089,11 @@ fn judge_alive(checks: &mut crate::checks::Checks, tuning: &Tuning) -> String {
     // claim is about. What is claimed is what he *does with an offer*, and a
     // world where there is no offer cannot say.
     {
-        let mut staged = Sim::opening(tuning, crate::modules::ModuleSet::ALL);
+        let mut staged = Sim::opening(
+            crate::scenario::freeplay(),
+            tuning,
+            crate::modules::ModuleSet::ALL,
+        );
         staged.everybody_here();
         let ludo = staged
             .people
@@ -1268,7 +1276,11 @@ fn judge_alive(checks: &mut crate::checks::Checks, tuning: &Tuning) -> String {
 /// itself the right answer and not a difference worth asserting.
 fn judge_presets(checks: &mut crate::checks::Checks, tuning: &Tuning) {
     let spend = |tuning: &Tuning| {
-        let mut sim = Sim::opening(tuning, crate::modules::ModuleSet::ALL);
+        let mut sim = Sim::opening(
+            crate::scenario::freeplay(),
+            tuning,
+            crate::modules::ModuleSet::ALL,
+        );
         sim.everybody_here();
         for site in &mut sim.sites {
             site.states = vec![crate::sim::JobState::Done { by: 0 }; site.quests.len()];

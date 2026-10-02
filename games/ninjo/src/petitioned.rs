@@ -36,7 +36,7 @@ const LUDO: usize = 7;
 
 /// A staged world: everything on, the whole camp present, nothing run.
 fn staged(tuning: &Tuning) -> Sim {
-    let mut sim = Sim::opening(tuning, ModuleSet::ALL);
+    let mut sim = Sim::opening(crate::scenario::freeplay(), tuning, ModuleSet::ALL);
     sim.everybody_here();
     sim
 }
@@ -235,6 +235,7 @@ pub fn one_source(checks: &mut Checks) -> String {
     let tuning = Tuning::SHIPPED;
     // --- identity, over a world that lived -----------------------------------
     let lived = crate::economy::world(
+        crate::scenario::freeplay(),
         &tuning,
         ModuleSet::ALL,
         0,
@@ -408,6 +409,7 @@ fn records(sim: &Sim) -> Vec<Record> {
 pub fn replay(checks: &mut Checks) -> String {
     let tuning = Tuning::SHIPPED;
     let once = crate::economy::world(
+        crate::scenario::freeplay(),
         &tuning,
         ModuleSet::ALL,
         3,
@@ -415,6 +417,7 @@ pub fn replay(checks: &mut Checks) -> String {
         crate::economy::Player::Idle,
     );
     let twice = crate::economy::world(
+        crate::scenario::freeplay(),
         &tuning,
         ModuleSet::ALL,
         3,
@@ -519,6 +522,14 @@ pub fn invariance(checks: &mut Checks) -> String {
         .iter()
         .filter(|event| event.class == EventClass::Joined && event.note.starts_with("came back"))
         .count();
+    // **And the director's** (wave 1.6): its firings are a fourth source on
+    // the one scheduler, swept here with the other three.
+    let reached = first[0]
+        .1
+        .events
+        .iter()
+        .filter(|event| event.class == EventClass::Event && event.note.starts_with("is reached"))
+        .count();
     for (name, run) in rest {
         let theirs = whole(&run.events);
         let parted = base
@@ -546,17 +557,18 @@ pub fn invariance(checks: &mut Checks) -> String {
     // **A sweep over sources that never fire passes vacuously**, so all three
     // are asserted to have fired inside the window.
     checks.require(
-        voiced >= 1 && failed >= 1 && returned >= 1,
-        "the invariance window does not reach all three petition sources",
+        voiced >= 1 && failed >= 1 && returned >= 1 && reached >= 1,
+        "the invariance window does not reach all four petition sources",
         format!(
-            "{voiced} voicings, {failed} cliffs that fired and {returned} returns inside \
-             {INVARIANCE_UNTIL} minutes; every one of the three has to fire for the sweep to say \
-             anything"
+            "{voiced} voicings, {failed} cliffs that fired, {returned} returns and {reached} \
+             director firings that reached somebody inside {INVARIANCE_UNTIL} minutes; every one \
+             of the four has to fire for the sweep to say anything"
         ),
     );
     format!(
         "3 speed scripts over {INVARIANCE_UNTIL} world-minutes, {} events each, {voiced} \
-         voicings, {satisfied} met, {failed} failed and {returned} returns at identical minutes",
+         voicings, {satisfied} met, {failed} failed, {returned} returns and {reached} director \
+         firings at identical minutes",
         base.len()
     )
 }
@@ -572,7 +584,7 @@ pub fn pipe(checks: &mut Checks) -> String {
     let tuning = Tuning::SHIPPED;
     let grid = crate::grid::grid();
     let open = |tuning: &Tuning| {
-        let mut sim = Sim::opening(tuning, ModuleSet::ALL);
+        let mut sim = Sim::opening(crate::scenario::freeplay(), tuning, ModuleSet::ALL);
         sim.people[TIM].wallet = 0;
         sim
     };
@@ -749,24 +761,29 @@ fn span(values: impl Iterator<Item = usize>) -> (usize, usize) {
 }
 
 /// **The idle settlement's petitions, at the horizon** — `(lowest, highest)`
-/// over the sweep's worlds, shipped literals.
+/// over the sweep's worlds, shipped literals. **Re-judged with the director on**
+/// (wave 1.6, freeplay's default): the walk-outs' floor rose from five to six,
+/// a rival offer's `walks-out` failing in the quietest world; every other band
+/// held.
 pub const IDLE_VOICED: (usize, usize) = (13, 17);
 /// The failures' band.
 pub const IDLE_FAILED: (usize, usize) = (11, 13);
 /// The walk-outs' band.
-pub const IDLE_WALKED: (usize, usize) = (5, 10);
+pub const IDLE_WALKED: (usize, usize) = (6, 10);
 /// The grudges' band.
 pub const IDLE_GRUDGES: (usize, usize) = (2, 3);
 /// And what an idle player's camp meets: nothing — nobody's work answers a
 /// petition once the board is spent (`FINDINGS.md` G-050).
 pub const IDLE_MET: (usize, usize) = (0, 0);
-/// The attentive player's worst world, in failed petitions.
-pub const ATTENTIVE_WORST_FAILED: usize = 7;
+/// The attentive player's worst world, in failed petitions — seven before the
+/// director, five with it: an attended camp's petitions get met, which frees
+/// their carriers for the director's, and those are mostly met too.
+pub const ATTENTIVE_WORST_FAILED: usize = 5;
 /// **The differential's petition margin**: the attentive player's worst
 /// world fails at least this many fewer petitions than neglect's best.
-pub const PETITION_MARGIN: usize = 4;
+pub const PETITION_MARGIN: usize = 6;
 /// And walks this many fewer people out of the camp.
-pub const WALKOUT_MARGIN: usize = 3;
+pub const WALKOUT_MARGIN: usize = 4;
 /// The first minute anybody in idle world zero reaches the desperation
 /// ceiling — **with petitions on and with them off alike** (the diagnosis).
 pub const CEILING_MINUTE: u64 = 7200;
@@ -775,7 +792,7 @@ pub const CEILING_MINUTE: u64 = 7200;
 /// world day by day — `None` if nobody gets there.
 fn first_ceiling(tuning: &Tuning, modules: ModuleSet) -> Option<u64> {
     let grid = crate::grid::grid();
-    let mut sim = Sim::opening(tuning, modules);
+    let mut sim = Sim::opening(crate::scenario::freeplay(), tuning, modules);
     let mut minute = 0;
     while minute <= SWEEP_DAYS * DAY {
         crate::sim::advance_to(&mut sim, &grid, tuning, minute);
@@ -797,7 +814,16 @@ pub fn sweeps(checks: &mut Checks) -> String {
     let tuning = Tuning::SHIPPED;
     let live = |player: crate::economy::Player| -> Vec<Sim> {
         (0..SWEEP_WORLDS)
-            .map(|world| crate::economy::world(&tuning, ModuleSet::ALL, world, SWEEP_DAYS, player))
+            .map(|world| {
+                crate::economy::world(
+                    crate::scenario::freeplay(),
+                    &tuning,
+                    ModuleSet::ALL,
+                    world,
+                    SWEEP_DAYS,
+                    player,
+                )
+            })
             .collect()
     };
     let idle = live(crate::economy::Player::Idle);
@@ -843,7 +869,8 @@ pub fn sweeps(checks: &mut Checks) -> String {
                 tally.returned
             ),
         );
-        let opening: i64 = crate::people::roster()
+        let opening: i64 = crate::scenario::freeplay()
+            .cast()
             .iter()
             .map(|person| person.wallet)
             .sum();
@@ -906,13 +933,21 @@ pub fn module_off(checks: &mut Checks) -> String {
     let tuning = Tuning::SHIPPED;
     let off = ModuleSet::ALL.without_id(petitions::MODULE);
     let attended = crate::economy::world(
+        crate::scenario::freeplay(),
         &tuning,
         off,
         0,
         SWEEP_DAYS,
         crate::economy::Player::Attentive,
     );
-    let idle = crate::economy::world(&tuning, off, 0, SWEEP_DAYS, crate::economy::Player::Idle);
+    let idle = crate::economy::world(
+        crate::scenario::freeplay(),
+        &tuning,
+        off,
+        0,
+        SWEEP_DAYS,
+        crate::economy::Player::Idle,
+    );
     for (who, sim) in [("attentive", &attended), ("idle", &idle)] {
         let petition_events = sim
             .events
@@ -956,7 +991,7 @@ pub fn module_off(checks: &mut Checks) -> String {
     let fell = idle
         .people
         .iter()
-        .zip(crate::people::roster().iter())
+        .zip(crate::scenario::freeplay().cast().iter())
         .filter(|(now, was)| now.desperation < was.desperation)
         .count();
     checks.require(
@@ -1076,6 +1111,7 @@ pub fn conservation(checks: &mut Checks) -> String {
         Found {
             other: Some(STEVE),
             site: None,
+            n: None,
         },
     );
     give.people[STEVE].desperation = crate::needs::DESPERATE_AT;

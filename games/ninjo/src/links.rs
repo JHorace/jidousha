@@ -1,4 +1,5 @@
-//! `?constants=` and `?seed=` — the contracts a shareable link is held to.
+//! `?constants=`, `?seed=` and `?scenario=` — the contracts a shareable link
+//! is held to.
 //!
 //! A link is the compact form of a constants set, and the compact form is
 //! what a recording is stamped with, so the two halves owe each other a
@@ -77,6 +78,25 @@ pub fn link_contracts(checks: &mut Checks) {
             format!("{bad:?} parsed as {:?}", crate::web::parse_seed(bad)),
         );
     }
+
+    // `?scenario=` (wave 1.6): every file this build carries opens by its id;
+    // an id nobody carries is refused by name, never quietly read as freeplay.
+    for scenario in crate::scenario::all() {
+        let found = crate::web::parse_scenario(&scenario.id).map(|found| found.id.as_str());
+        checks.require(
+            found == Ok(scenario.id.as_str()),
+            "a ?scenario= naming a scenario this build carries did not open it",
+            format!("{:?} parsed as {found:?}", scenario.id),
+        );
+    }
+    for bad in ["tutorial", "", "FREEPLAY"] {
+        let got = crate::web::parse_scenario(bad).map(|found| found.id.as_str());
+        checks.require(
+            got.is_err(),
+            "a ?scenario= naming no scenario was not refused",
+            format!("{bad:?} parsed as {got:?}"),
+        );
+    }
 }
 
 /// Every refusal, as (the link that earns it, the refusal it earns).
@@ -123,6 +143,9 @@ pub fn refusals() -> Vec<String> {
         .map(|(_, error)| error.message())
         .collect();
     if let Err(message) = crate::web::parse_seed("seven") {
+        out.push(message);
+    }
+    if let Err(message) = crate::web::parse_scenario("tutorial") {
         out.push(message);
     }
     out

@@ -108,6 +108,7 @@ pub fn shot_run() -> Conducted {
         tuning: Tuning::SHIPPED,
         modules: crate::modules::ModuleSet::ALL,
         seed: Some(SHOT_SEED),
+        scenario: crate::scenario::freeplay(),
         directives: &script,
         photos: &photos,
         probe_ticks: &[],

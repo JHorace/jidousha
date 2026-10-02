@@ -141,6 +141,7 @@ pub fn drawer_run() -> DrawerRun {
         tuning: Tuning::SHIPPED,
         modules: crate::modules::ModuleSet::ALL,
         seed: None,
+        scenario: crate::scenario::freeplay(),
         directives: &script,
         photos: &photos,
         probe_ticks: &probe_ticks,

@@ -1410,53 +1410,59 @@ pub fn tuner_title() -> Vec2 {
     Vec2::new(TUNER_COL_X, 38.0)
 }
 
-/// **The prose band** — a hovered constant's meaning, a refused link, an
-/// applied set, or the resting line and the APPLY note — in the header band,
-/// right of the presets and left of APPLY (wave 1.4).
+/// **The stamp** — the constants actually in effect, with the seed and the
+/// scenario — in the header band, right of the presets and left of APPLY
+/// (wave 1.6).
 ///
-/// It stood under the stamp in the right column until the fourth stepper
-/// column took that column's top; up here it has three rows of the width
-/// between the last preset (which ends at 488) and APPLY (which starts at
-/// 824), and `floors::tuner_right_column` asserts every state the band takes
-/// fits in [`TUNER_HINT_ROWS`].
-pub fn tuner_hint() -> Vec2 {
+/// It stood under the fourth stepper column until that column filled: at
+/// fifty-three constants the column's foot has room for two rows and the
+/// stamp, at its tallest, is three (`FINDINGS.md` G-059). Up here it has
+/// three rows of the width between the last preset (which ends at 488) and
+/// APPLY (which starts at 824), and it **packs** — the moved constants run
+/// along a row, a pair never split across one — where the column's stamp
+/// gave each moved constant a row of its own.
+pub fn tuner_stamp() -> Vec2 {
     Vec2::new(496.0, 40.0)
 }
 
-/// How wide the prose band may run before it wraps.
-pub const TUNER_HINT_W: f32 = 320.0;
+/// How wide the stamp may run.
+pub const TUNER_STAMP_W: f32 = 320.0;
 
-/// How many rows the prose band has before it would reach the stepper rows.
-pub const TUNER_HINT_ROWS: usize = 3;
+/// How many rows the stamp has before it would reach the stepper rows.
+pub const TUNER_STAMP_ROWS: usize = 3;
 
-/// How wide the stamp may run before it wraps — the fourth column's width,
-/// to the drawer's edge less a margin.
-pub fn tuner_prose_width() -> f32 {
-    DESIGN_W - TUNER_STAMP_X - 16.0
-}
+/// Where the fourth stepper column starts — the prose band's own left.
+const TUNER_FOOT_X: f32 = TUNER_COL_X + 3.0 * TUNER_COL_PITCH;
 
-/// Where the stamp column starts — the fourth stepper column's own left.
-const TUNER_STAMP_X: f32 = TUNER_COL_X + 3.0 * TUNER_COL_PITCH;
+/// **How wide the prose band may run** — the fourth column's width, to the
+/// drawer's edge less a margin.
+pub const TUNER_HINT_W: f32 = DESIGN_W - TUNER_FOOT_X - 16.0;
 
-/// **The stamp, for a drawer of `constants` steppers**: the constants actually
-/// in effect, under the last stepper row the fourth column holds.
+/// **The foot of the fourth column, for a drawer of `constants` steppers** —
+/// under the last stepper row that column holds.
 ///
 /// Measured rather than placed, for the reason `tuning::prose_top` was (and
 /// `FINDINGS.md` G-028): a constant added is a stepper row added to this
-/// column, and the stamp has to move down with it rather than be drawn
-/// through it.
-pub fn tuner_stamp_for(constants: usize) -> Vec2 {
+/// column, and whatever stands under it has to move down with it rather than
+/// be drawn through it.
+pub fn tuner_foot_for(constants: usize) -> Vec2 {
     let spilled = constants.saturating_sub(TUNER_ROWS * (TUNER_COLUMNS - 1));
     let rows = spilled.min(TUNER_ROWS);
     Vec2::new(
-        TUNER_STAMP_X,
+        TUNER_FOOT_X,
         TUNER_ROW_Y + rows as f32 * TUNER_ROW_PITCH + 2.0,
     )
 }
 
-/// The stamp at this build's constants.
-pub fn tuner_stamp() -> Vec2 {
-    tuner_stamp_for(crate::constants::Field::ALL.len())
+/// **The prose band** — a hovered constant's meaning, a refused link, an
+/// applied set, or the resting line and the APPLY note — at the foot of the
+/// fourth column since wave 1.6, where the stamp stood: it swapped places
+/// with the stamp because the band is one state at a time and the stamp is
+/// everything in effect, so the band takes the room that shrinks as the
+/// column grows. `floors::tuner_right_column` asserts its tallest state fits
+/// under **one more** constant than the game has.
+pub fn tuner_hint() -> Vec2 {
+    tuner_foot_for(crate::constants::Field::ALL.len())
 }
 
 // ── the map's own geometry (world units, not UI units) ─────────────────────

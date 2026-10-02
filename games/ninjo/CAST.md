@@ -325,7 +325,7 @@ faces: the fighters who should team up hold a grudge, and the pair who
 would cover each other (Hana scouts, Goro fights) are the pair Hana
 will not be parted from.
 
-## 6. The petition templates (one per motivator, and the shortfall's)
+## 6. The petition templates (one per motivator, the shortfall's, and the director's three)
 
 Format per GDD s6: id, source class, trigger, body (text, deadline,
 reward, consequence), `next`. Text is a template with `{name}`,
@@ -357,8 +357,9 @@ failed voiced petition always costs regard (GDD s4.2).
 - next (on failure): `collectors-visit-again` - same text with "He
   came once already." prepended, deadline 3 days, consequence
   `walks-out` (dragged off, {n}=4 days). This is the quest chain in
-  miniature; the director's canned loan-shark template (1.5) *is* T1
-  fired with source class `director` on anyone indebted.
+  miniature; the director's canned loan-shark template *is* T1
+  fired with source class `director` on anyone indebted - D1 below
+  (wave 1.6).
 
 ### T2 `proving-job` (renown)
 
@@ -428,6 +429,55 @@ carries no motivator, included.
   or shift completed by `{name}` before the deadline.
 - consequence: `walks-out` ({n}=3 days).
 
+### D1-D3 - the director's (wave 1.6), source class `director`
+
+The capsule's own three examples, carried in from outside the camp by the
+minimal injector (GDD s5's events-director). They are petitions like any
+other - the same card, ledger, cliff and vocabulary of four - and the only
+difference the player sees is the source chip, which reads **`event`**:
+"from outside the camp - not their own want". None is raised by
+the petition check; the injector fires them after the calm window, at most
+`director_max` unresolved at once, on somebody eligible (present, carrying no
+petition, holding a trait the trigger names), drawn by the firing's own
+address. All three pay in regard.
+
+**D1 `the-collector-comes`** (eligible: `indebted`, wallet regardless)
+
+- The canned loan shark T1's note promised: T1's text, deadline (6 days),
+  condition (`{name}`'s wallet >= `{n}`, {n} = 30) and consequence (`broke`),
+  with T1's chain (`collectors-visit-again` on failure). What differs is who
+  it reaches: anyone indebted, purse regardless - the collector does not wait
+  for poverty, he arrives.
+
+**D2 `rival-offer`** (eligible: `renown` or `greedy`)
+
+- text: "{name}: The Grey Banners came through {site} offering {n} a week.
+  Show me what I am worth here before {deadline}, or I will go find out."
+- `{site}`: any authored site, drawn at the firing. `{n}`: 30 to 50 gold,
+  drawn at the firing (`spread` 20 on the row).
+- deadline: 5 world-days. condition: `{name}` is paid at least `{n}` - wages
+  and shares, summed since voicing - before the deadline.
+- consequence: `walks-out` ({n}=5 days - trying them out).
+
+**D3 `word-from-the-road`** (eligible: `restless` or `renown`)
+
+- text: "{name}: Travelers say {site} is worth somebody's time again - good
+  pots for whoever moves first. We should be first."
+- `{site}`: an authored site with open work on its board, drawn at the
+  firing; with none, D3 reaches nobody.
+- deadline: 4 world-days. condition: any job at `{site}` completed, by
+  anybody, before the deadline (the player's hand if that job was posted).
+- consequence: `sours`.
+
+*Implemented (w1.6):* all three, as rows of `petitions::TEMPLATES` with
+source `Director` and a `Carries` trigger, fired by `src/director.rs`.
+**What the build decided that this section left open:** D2 and D3's
+deadlines (5 and 4 days - the handoff named none); D2's `{n}` range; D3's
+text drops the article before `{site}` (the site names carry their own
+"the", so the handoff's "the {site}" read "the the Deep Cave"); and D1
+met at its voicing when the purse already holds 30g - the collector arrives,
+is paid, and goes (`FINDINGS.md` G-056).
+
 *Implemented (w1.5): all six, the chains, and the vocabulary.*
 `petitions::TEMPLATES` is this section as data — T1 to T6 in this format, every
 number on the row. **What the build decided that this section left open:**
@@ -461,9 +511,8 @@ number on the row. **What the build decided that this section left open:**
   rows would have filled the drawer, and a template is content. The drawer
   carries what *is* tuning: the regard step, the relief, the check's cadence and
   roll, and the thin-days window.
-- **The director's canned loan-shark (T1 fired with source class `director`)
-  is not built**: the class is in the data and fired by nothing; the injector
-  is 1.6.
+- **The director's canned loan-shark (T1 fired with source class `director`)**
+  was not built by 1.5; **wave 1.6 built it** as D1 above.
 
 ## 7. Coverage matrix and the deliberate gaps
 
@@ -567,8 +616,10 @@ the answer is no; after that a rename costs prose.
   only), and whether a character should weigh their own odds is open
   (G-049). Fit is no longer only a term in whether somebody agrees: the job
   board's fit chip now says what it decides, derived from the curve.
-- **1.6 injector**: T1 as the director's loan-shark canned template; the
-  no-dead-motivator check runs over the director's templates too.
+- **1.6 injector** (*done*): T1 as the director's loan-shark canned
+  template (D1), with D2 and D3 beside it; the no-dead check runs over the
+  director's templates too (`petitions::vocabulary`: every director row
+  reaches somebody in the cast, and requires the injector's registry row).
 
 ## 9. Art check - **landed 2026-09-02** (the cast-art session)
 

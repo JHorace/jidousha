@@ -422,7 +422,11 @@ pub fn layout_floors(checks: &mut Checks) {
     // measured against the authored names rather than eyeballed against the
     // ones that happened to be longest the day they were typed.
     {
-        let opening = crate::sim::Sim::opening(&Tuning::SHIPPED, crate::modules::ModuleSet::ALL);
+        let opening = crate::sim::Sim::opening(
+            crate::scenario::freeplay(),
+            &Tuning::SHIPPED,
+            crate::modules::ModuleSet::ALL,
+        );
         let width = |text: &str| theme::text(theme::SMALL, theme::INK).width_of(text);
         let mut cells: Vec<(String, String, f32)> = Vec::new();
         for site in &opening.sites {
@@ -472,7 +476,8 @@ pub fn layout_floors(checks: &mut Checks) {
         let header = [
             format!(
                 "the work open to {}",
-                crate::people::roster()
+                crate::scenario::freeplay()
+                    .cast()
                     .iter()
                     .map(|person| person.name)
                     .max_by_key(|name| name.len())
@@ -537,9 +542,13 @@ pub fn layout_floors(checks: &mut Checks) {
         );
     }
     {
-        let cast = Sim::opening(&Tuning::SHIPPED, crate::modules::ModuleSet::ALL)
-            .people
-            .len();
+        let cast = Sim::opening(
+            crate::scenario::freeplay(),
+            &Tuning::SHIPPED,
+            crate::modules::ModuleSet::ALL,
+        )
+        .people
+        .len();
         checks.require(
             cast <= layout::PICKER_ROWS,
             "the cast is larger than the candidate picker has rows",
@@ -556,7 +565,11 @@ pub fn layout_floors(checks: &mut Checks) {
     // picker is covering the board's footer.
     {
         let style = theme::text(theme::SMALL, theme::INK);
-        let sim = Sim::opening(&Tuning::SHIPPED, crate::modules::ModuleSet::ALL);
+        let sim = Sim::opening(
+            crate::scenario::freeplay(),
+            &Tuning::SHIPPED,
+            crate::modules::ModuleSet::ALL,
+        );
         let longest = sim
             .sites
             .iter()
@@ -595,13 +608,17 @@ pub fn layout_floors(checks: &mut Checks) {
             ),
             format!(
                 "sorted by fit - tap somebody to name them for {}, then tap its row to post it",
-                Sim::opening(&Tuning::SHIPPED, crate::modules::ModuleSet::ALL)
-                    .sites
-                    .iter()
-                    .flat_map(|site| site.quests.iter())
-                    .map(|quest| quest.name)
-                    .max_by_key(|name| name.len())
-                    .unwrap_or_default()
+                Sim::opening(
+                    crate::scenario::freeplay(),
+                    &Tuning::SHIPPED,
+                    crate::modules::ModuleSet::ALL
+                )
+                .sites
+                .iter()
+                .flat_map(|site| site.quests.iter())
+                .map(|quest| quest.name)
+                .max_by_key(|name| name.len())
+                .unwrap_or_default()
             ),
         ]
         .into_iter()
@@ -623,7 +640,13 @@ pub fn layout_floors(checks: &mut Checks) {
             ),
         );
     }
-    for site in Sim::opening(&Tuning::SHIPPED, crate::modules::ModuleSet::ALL).sites {
+    for site in Sim::opening(
+        crate::scenario::freeplay(),
+        &Tuning::SHIPPED,
+        crate::modules::ModuleSet::ALL,
+    )
+    .sites
+    {
         checks.require(
             site.quests.len() <= layout::BOARD_ROWS,
             "a site has more jobs than its board has rows",
@@ -698,7 +721,11 @@ pub fn layout_floors(checks: &mut Checks) {
     // (UI.md §3e): every term of an answered posting, its total, and the
     // candidate that beat it. Counted off the scorer rather than remembered.
     let widest = {
-        let sim = Sim::opening(&Tuning::SHIPPED, crate::modules::ModuleSet::ALL);
+        let sim = Sim::opening(
+            crate::scenario::freeplay(),
+            &Tuning::SHIPPED,
+            crate::modules::ModuleSet::ALL,
+        );
         let mut most = 0usize;
         for who in 0..sim.people.len() {
             for site in 0..sim.sites.len() {
@@ -729,7 +756,11 @@ pub fn layout_floors(checks: &mut Checks) {
     // clipped term is a term whose attribution is the half that goes.
     {
         let tuning = Tuning::SHIPPED;
-        let mut sim = Sim::opening(&tuning, crate::modules::ModuleSet::ALL);
+        let mut sim = Sim::opening(
+            crate::scenario::freeplay(),
+            &tuning,
+            crate::modules::ModuleSet::ALL,
+        );
         sim.everybody_here();
         let style = theme::text(theme::SMALL, theme::INK);
         let mut lines: Vec<String> = Vec::new();
@@ -918,7 +949,7 @@ pub fn odds_words(checks: &mut Checks) {
         .unwrap_or_default();
     // And the name cell the odds-word took forty pixels from still holds the
     // longest name in the cast.
-    for person in crate::people::roster() {
+    for person in crate::scenario::freeplay().cast() {
         checks.require(
             !greater(style.width_of(person.name), layout::cand::NAME_W),
             "a candidate row's name cell is narrower than a name in the cast",
@@ -948,16 +979,58 @@ pub fn odds_words(checks: &mut Checks) {
 
 /// **The tuning drawer's prose band and stamp both fit, with room to grow.**
 ///
-/// Two claims since wave 1.4 moved the band (`layout::tuner_hint`). The prose
-/// band — every state it takes: the longest hovered meaning, every refused
-/// link, and the resting line with the APPLY note — wraps into its three
-/// header rows. And the stamp, which follows the fourth stepper column down
-/// (`layout::tuner_stamp_for`), ends inside the drawer **at one more constant
-/// than the game has**, with a row of stamp more besides: the floor fails
-/// while there is still room, so the wave that adds the constant is told to
-/// re-lay the column instead of finding out from a screenshot the way the
-/// owner did (`FINDINGS.md` G-028).
+/// Two claims, since wave 1.6 swapped the two blocks (`FINDINGS.md` G-059).
+/// The stamp, in the header band, packs into its three rows at its tallest —
+/// every constant moved, the widest seed and the longest scenario id — with no
+/// row wider than the band. And the prose band, at the fourth column's foot
+/// (`layout::tuner_foot_for`), fits its tallest state — the longest hovered
+/// meaning, every refused link, the resting line with the APPLY note — **under
+/// one more constant than the game has**: the floor fails while there is still
+/// room, so the wave that adds the constant is told to re-lay the column
+/// instead of finding out from a screenshot the way the owner did
+/// (`FINDINGS.md` G-028).
 pub fn tuner_right_column(checks: &mut Checks) {
+    let style = theme::text(theme::SMALL, theme::INK);
+    let constants = crate::constants::Field::ALL.len();
+    // --- the stamp, at its tallest ------------------------------------------
+    let mut every = Tuning::SHIPPED;
+    for field in crate::constants::Field::ALL.iter().copied() {
+        every = every.with(field, Tuning::SHIPPED.field(field) + 1);
+    }
+    let longest = crate::scenario::all()
+        .iter()
+        .map(|scenario| scenario.id.as_str())
+        .max_by_key(|id| id.len())
+        .unwrap_or("");
+    let tallest = tuning::stamp_text(&every, u64::from(u32::MAX), longest);
+    let widest = tallest
+        .lines()
+        .map(|line| style.width_of(line))
+        .fold(0.0f32, f32::max);
+    let stamp_rows = tallest.lines().count();
+    checks.require(
+        stamp_rows <= layout::TUNER_STAMP_ROWS
+            && !greater(widest, layout::TUNER_STAMP_W)
+            && tallest.contains("more"),
+        "the tuning drawer's stamp does not pack into its band",
+        format!(
+            "a set that moves every constant stamps {stamp_rows} rows, the widest {widest:.0} \
+             wide, against a band of {} rows and {:.0} wide; it must count what it could not \
+             name: {tallest:?}",
+            layout::TUNER_STAMP_ROWS,
+            layout::TUNER_STAMP_W
+        ),
+    );
+    let stamp_end = layout::tuner_stamp().y + stamp_rows as f32 * (theme::SMALL + 2.0);
+    checks.require(
+        !greater(stamp_end, layout::tuner_name(0).y - 6.0),
+        "the tuning drawer's stamp runs into the stepper rows",
+        format!(
+            "the stamp ends at {stamp_end:.0} and the first stepper name is at {:.0}",
+            layout::tuner_name(0).y
+        ),
+    );
+    // --- the prose band, under one more constant ------------------------------
     let prose = crate::ui::columns(layout::TUNER_HINT_W, theme::SMALL);
     let rows = |text: &str| crate::ui::wrap(text, prose).lines().count();
     let resting = format!("{} {}", tuning::RESTING_HINT, tuning::APPLY_NOTE);
@@ -969,52 +1042,16 @@ pub fn tuner_right_column(checks: &mut Checks) {
         .map(|line| (rows(&line), line))
         .max_by_key(|(count, _)| *count);
     if let Some((count, line)) = tallest {
-        checks.require(
-            count <= layout::TUNER_HINT_ROWS,
-            "the tuning drawer's prose band runs into the stepper rows",
-            format!(
-                "{line:?} wraps to {count} rows at {:.0} wide and the band has {}; shorten it, \
-                 or give the band another row before the steppers start",
-                layout::TUNER_HINT_W,
-                layout::TUNER_HINT_ROWS
-            ),
-        );
-    }
-    let constants = crate::constants::Field::ALL.len();
-    // **No line of the stamp wraps**, at its tallest: a set that moves every
-    // constant names the first [`tuning::STAMP_MOVED_ROWS`] and counts the
-    // rest, and a wrap would put a value under the wrong name (wave 1.4's
-    // first photograph of the fourth column had `forest 7` broken in two).
-    let mut every = Tuning::SHIPPED;
-    for field in crate::constants::Field::ALL.iter().copied() {
-        every = every.with(field, Tuning::SHIPPED.field(field) + 1);
-    }
-    let tallest = tuning::stamp_text(&every, u64::from(u32::MAX));
-    let stamp_rows = tallest.lines().count();
-    checks.require(
-        stamp_rows == tuning::STAMP_MAX_ROWS,
-        "the tuning drawer's stamp wraps a line, or is taller than it says",
-        format!(
-            "a set that moves every constant stamps {stamp_rows} rows and the drawer budgets \
-             {}; a line is wider than the {:.0}-pixel column, or the count is wrong",
-            tuning::STAMP_MAX_ROWS,
-            layout::tuner_prose_width()
-        ),
-    );
-    // **And the tallest stamp fits under one more constant, with a row to
-    // spare** — the floor fails while there is still room, so the wave that
-    // adds the constant re-lays the column instead of finding out from a
-    // screenshot (`FINDINGS.md` G-028, G-034).
-    for (more, extra) in [(0usize, 0usize), (1, 1)] {
-        let end = tuning::stamp_end(constants + more, stamp_rows + extra);
+        let end = layout::tuner_foot_for(constants + 1).y + count as f32 * (theme::SMALL + 2.0);
         checks.require(
             !greater(end, layout::tuner_panel().max.y),
-            "the tuning drawer's stamp runs off the drawer",
+            "the tuning drawer's prose band runs off the drawer",
             format!(
-                "at {} constants and {} rows of stamp the stamp ends at {end:.0}; the drawer \
-                 ends at {:.0}. Re-lay the fourth column before adding the constant",
-                constants + more,
-                stamp_rows + extra,
+                "{line:?} wraps to {count} rows at {:.0} wide and, under {} constants, ends at \
+                 {end:.0}; the drawer ends at {:.0}. Re-lay the fourth column before adding \
+                 the constant",
+                layout::TUNER_HINT_W,
+                constants + 1,
                 layout::tuner_panel().max.y
             ),
         );
@@ -1083,7 +1120,11 @@ pub fn tuner_has_room(checks: &mut Checks) {
 /// The judge runs into a throwaway `Checks`, so a floor doing its job here
 /// does not fail the run.
 pub fn floors_bite(checks: &mut Checks) -> String {
-    let sim = Sim::opening(&Tuning::SHIPPED, crate::modules::ModuleSet::ALL);
+    let sim = Sim::opening(
+        crate::scenario::freeplay(),
+        &Tuning::SHIPPED,
+        crate::modules::ModuleSet::ALL,
+    );
     let lens = Lens::on(&sim);
     let flow = Flow {
         drawer: Some(Drawer::Tune),
@@ -1096,16 +1137,16 @@ pub fn floors_bite(checks: &mut Checks) -> String {
     // typed 350; at thirty-six constants the stamp's last rows reached 362,
     // and "seed 0" was drawn through "point at a constant for what it does".
     const PRE_FIX_HINT_Y: f32 = 350.0;
-    let prose = crate::ui::columns(layout::tuner_prose_width(), theme::SMALL);
+    let prose = crate::ui::columns(layout::TUNER_HINT_W, theme::SMALL);
     let mut before = Panel::default();
     before.block(
-        layout::tuner_stamp_for(36) + Vec2::new(0.0, 14.0),
+        layout::tuner_foot_for(36) + Vec2::new(0.0, 14.0),
         &format!("{}\nseed 0", Tuning::SHIPPED.readout()),
         theme::SMALL,
         theme::INK,
     );
     before.block(
-        Vec2::new(layout::tuner_stamp_for(36).x, PRE_FIX_HINT_Y),
+        Vec2::new(layout::tuner_foot_for(36).x, PRE_FIX_HINT_Y),
         &crate::ui::wrap(tuning::RESTING_HINT, prose),
         theme::SMALL,
         theme::FAINT,
@@ -1124,7 +1165,7 @@ pub fn floors_bite(checks: &mut Checks) -> String {
         format!(
             "the stamp laid out from {:?} and the prose band at y {PRE_FIX_HINT_Y} is the \
              owner's 2026-09-11 screenshot, and judging it reported {} problem(s)",
-            layout::tuner_stamp(),
+            layout::tuner_foot_for(36),
             staged.failures()
         ),
     );
@@ -1332,7 +1373,11 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
     let opening = (
         "the opening screen",
         Flow::default(),
-        Sim::opening(&Tuning::SHIPPED, crate::modules::ModuleSet::ALL),
+        Sim::opening(
+            crate::scenario::freeplay(),
+            &Tuning::SHIPPED,
+            crate::modules::ModuleSet::ALL,
+        ),
         Clock::opening(),
     );
     // The end of the conducted run: notices written, everything home.
@@ -1654,7 +1699,11 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
         (
             "the settlement one notch of zoom out, with somebody picked",
             picked,
-            Sim::opening(&Tuning::SHIPPED, crate::modules::ModuleSet::ALL),
+            Sim::opening(
+                crate::scenario::freeplay(),
+                &Tuning::SHIPPED,
+                crate::modules::ModuleSet::ALL,
+            ),
             Clock::opening(),
             out,
         ),
@@ -1699,7 +1748,11 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
 pub(crate) fn petitioned_world() -> (Sim, Sim, Clock, usize) {
     use crate::pleas::{self, Found};
     let tuning = Tuning::SHIPPED;
-    let mut sim = Sim::opening(&tuning, crate::modules::ModuleSet::ALL);
+    let mut sim = Sim::opening(
+        crate::scenario::freeplay(),
+        &tuning,
+        crate::modules::ModuleSet::ALL,
+    );
     sim.everybody_here();
     sim.treasury = 400;
     let raise = |sim: &mut Sim, who: usize, id: &str, found: Found| {
@@ -1709,6 +1762,7 @@ pub(crate) fn petitioned_world() -> (Sim, Sim, Clock, usize) {
     let site = |site| Found {
         other: None,
         site: Some(site),
+        n: None,
     };
     let given = raise(&mut sim, 0, "collectors-visit", Found::default());
     let failed = raise(&mut sim, 7, "collectors-visit", Found::default());
@@ -1720,6 +1774,7 @@ pub(crate) fn petitioned_world() -> (Sim, Sim, Clock, usize) {
         Found {
             other: Some(1),
             site: None,
+            n: None,
         },
     );
     raise(&mut sim, 9, "the-far-road", site(3));

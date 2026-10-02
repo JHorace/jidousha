@@ -179,6 +179,9 @@ pub struct Found {
     pub other: Option<usize>,
     /// The `{site}` slot.
     pub site: Option<usize>,
+    /// **The `{n}` slot, where the raiser drew one** (wave 1.6: the rival's
+    /// offer); `None` is the template's own number.
+    pub n: Option<i64>,
 }
 
 /// **Whether a template's trigger holds** for this person now, and what it
@@ -213,6 +216,7 @@ pub fn holds(
             (!recent && here_for(days) && buildable).then(|| Found {
                 other: None,
                 site: richest(sim, task),
+                n: None,
             })
         }
         Trigger::NotOutFor { days } => {
@@ -224,6 +228,7 @@ pub fn holds(
             (!recent && here_for(days)).then_some(Found {
                 other: None,
                 site: Some(new),
+                n: None,
             })
         }
         Trigger::SomeoneDesperate => {
@@ -235,7 +240,16 @@ pub fn holds(
                 .map(|other| Found {
                     other: Some(other),
                     site: None,
+                    n: None,
                 })
+        }
+        Trigger::Carries { any, site } => {
+            // **An event reaches whoever it is about**, purse regardless; the
+            // word from the road needs somewhere with work to send them.
+            let carries = any.iter().any(|id| person.traits.contains(id));
+            let somewhere = site != petitions::SiteSlot::OpenWork
+                || !crate::director::sites_for(sim, site).is_empty();
+            (carries && somewhere).then_some(Found::default())
         }
         Trigger::Shortfalls { count } => {
             // **A shortfall answered is a shortfall spent**: the window opens
@@ -342,7 +356,11 @@ pub fn raise(
     template: &'static Template,
     found: Found,
 ) -> Option<usize> {
-    if !on(sim) || template.source == Source::Director {
+    // **A director-sourced row needs the injector** (wave 1.6): with it off,
+    // nothing the director carries can be raised by anybody.
+    if !on(sim)
+        || (template.source == Source::Director && !sim.modules.enabled(crate::director::MODULE))
+    {
         return None;
     }
     let person = sim.people.get(who)?;
@@ -356,7 +374,7 @@ pub fn raise(
         who,
         other: found.other,
         site: found.site,
-        n: template.n,
+        n: found.n.unwrap_or(template.n),
         raised_at: now,
         voiced_at: None,
         deadline: 0,
@@ -389,7 +407,10 @@ fn voice(sim: &mut Sim, tuning: &Tuning, now: u64, id: usize) {
     }
     let days = petition.template.deadline_days;
     let deadline = now + days * DAY;
-    let (who, tid) = (petition.who, petition.template.id);
+    let (who, tid) = (
+        petition.who,
+        petition.template.source.tag(petition.template.id),
+    );
     if let Some(petition) = sim.petitions.get_mut(id) {
         petition.voiced_at = Some(now);
         petition.deadline = deadline;
@@ -536,7 +557,13 @@ fn players_hand(sim: &Sim, petition: &Petition) -> bool {
         .get(subject)
         .is_some_and(|person| person.memory.worked_since(since).any(|done| done.shift));
     let raised_work = built && (petition.template.condition == Condition::Bench || shifted);
-    worked || posted_now || raised_work
+    // **The word from the road is met by anybody's work at the site** (wave
+    // 1.6), so the hand that counts is whether that work was posted.
+    let posted_there = petition.template.condition == Condition::SiteWorked
+        && petition
+            .site
+            .is_some_and(|site| petitions::worked_at(sim, site, since).any(|record| record.posted));
+    worked || posted_now || raised_work || posted_there
 }
 
 /// **Met** — the escalation pipe's other end (`FINDINGS.md` G-033).
@@ -619,6 +646,7 @@ fn satisfy(sim: &mut Sim, tuning: &Tuning, now: u64, id: usize) {
             Found {
                 other: petition.other,
                 site: petition.site,
+                n: None,
             },
         );
     }
@@ -668,6 +696,7 @@ fn fail(sim: &mut Sim, tuning: &Tuning, now: u64, id: usize) {
             Found {
                 other: petition.other,
                 site: petition.site,
+                n: None,
             },
         );
     }

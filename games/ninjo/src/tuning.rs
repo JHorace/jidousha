@@ -75,50 +75,68 @@ pub const APPLY_NOTE: &str = "APPLY restarts the scenario; reports carry the set
 /// What the prose band says when the player is pointing at nothing.
 pub const RESTING_HINT: &str = "point at a constant to read it.";
 
-/// The gap between the "in effect:" label and the stamp under it.
-pub const STAMP_LEAD: f32 = 14.0;
-
 /// **The stamp** — what is actually in effect, as the drawer and the floor
 /// both measure it.
 ///
-/// **What differs from the shipped set, since wave 1.5** (`Tuning::moved`):
-/// the pair-by-pair readout was twenty lines at fifty constants and the column
-/// it follows down has room for twelve (`FINDINGS.md` G-034, reopened). The
-/// shipped set is in the build, so naming the difference loses nothing, and a
-/// set moved further than [`STAMP_MOVED_ROWS`] says how many more there are —
-/// the full set rides every verify report and every `?constants=` link.
-pub fn stamp_text(active: &Tuning, seed: u64) -> String {
+/// **What differs from the shipped set** (`Tuning::moved`, since wave 1.5):
+/// the shipped set is in the build, so naming the difference loses nothing,
+/// and the full set rides every verify report and every `?constants=` link.
+/// **Packed since wave 1.6**, when the stamp moved up into the header band's
+/// three rows ([`layout::TUNER_STAMP_ROWS`]): the first row is the seed and
+/// the scenario, and `in effect:` leads the moved constants along the rest —
+/// `name value`, a pair never split across a row — with a count of whatever
+/// did not fit.
+pub fn stamp_text(active: &Tuning, seed: u64, scenario: &str) -> String {
+    const LEAD: &str = "in effect:";
+    let width = columns(layout::TUNER_STAMP_W, theme::SMALL);
+    let head = format!("seed {seed} {scenario}");
     let moved = active.moved();
-    let mut lines: Vec<String> = Vec::new();
     if moved.is_empty() {
-        lines.push("the shipped set".to_owned());
-    } else {
-        lines.push("shipped, except".to_owned());
-        lines.extend(moved.iter().take(STAMP_MOVED_ROWS).cloned());
-        if moved.len() > STAMP_MOVED_ROWS {
-            lines.push(format!("and {} more moved", moved.len() - STAMP_MOVED_ROWS));
+        return format!("{head}\n{LEAD} the shipped set");
+    }
+    let budget = layout::TUNER_STAMP_ROWS.saturating_sub(1);
+    let mut rows: Vec<String> = vec![LEAD.to_owned()];
+    let mut shown = 0;
+    for pair in &moved {
+        let last = rows.len() - 1;
+        let joined = if rows[last] == LEAD {
+            format!("{LEAD} {pair}")
+        } else {
+            format!("{}, {pair}", rows[last])
+        };
+        if joined.len() <= width {
+            rows[last] = joined;
+        } else if rows.len() < budget {
+            rows.push(pair.clone());
+        } else {
+            break;
+        }
+        shown += 1;
+    }
+    // **The count of the rest**, on the last row — taking pairs back off it
+    // until the count fits, so it is never wrapped onto a row of its own.
+    while shown < moved.len() {
+        let rest = format!(" +{} more", moved.len() - shown);
+        let last = rows.len() - 1;
+        if rows[last].len() + rest.len() <= width {
+            rows[last].push_str(&rest);
+            break;
+        }
+        let cut = rows[last]
+            .rfind(", ")
+            .or_else(|| rows[last].starts_with(LEAD).then_some(LEAD.len()));
+        match cut {
+            Some(cut) if cut < rows[last].len() => {
+                rows[last].truncate(cut);
+                shown -= 1;
+            }
+            _ => {
+                rows[last] = rest.trim_start().to_owned();
+                break;
+            }
         }
     }
-    lines.push(format!("seed {seed}"));
-    wrap(
-        &lines.join("\n"),
-        columns(layout::tuner_prose_width(), theme::SMALL),
-    )
-}
-
-/// **How many moved constants the stamp names** before it counts the rest.
-pub const STAMP_MOVED_ROWS: usize = 6;
-
-/// **The tallest the stamp can be**, in rows: the heading, every named
-/// constant, the count of the rest, and the seed.
-pub const STAMP_MAX_ROWS: usize = STAMP_MOVED_ROWS + 3;
-
-/// **Where the stamp ends**, for a drawer of `constants` steppers and a stamp
-/// of `rows` rows — one function, read by the floor that asserts the column
-/// fits (wave 1.4: the stamp follows the fourth stepper column down, so a
-/// constant added moves it, and this is what says by how much).
-pub fn stamp_end(constants: usize, rows: usize) -> f32 {
-    layout::tuner_stamp_for(constants).y + STAMP_LEAD + rows as f32 * (theme::SMALL + 2.0)
+    format!("{head}\n{}", rows.join("\n"))
 }
 
 /// **What the prose band says right now**, its tone, and whether the APPLY
@@ -210,30 +228,20 @@ pub fn drawer(flow: &Flow, active: &Tuning) -> Panel {
         },
     ));
 
-    // --- the stamp, under the fourth column's last stepper ------------------
+    // --- the stamp, in the header band (wave 1.6) ---------------------------
     //
     // The stamp is the one thing in the drawer that has to stay legible while
-    // every other row is being moved, so it is placed by measurement
-    // (`layout::tuner_stamp`), never by hand.
-    panel.text(TextRun::over(
-        layout::tuner_stamp(),
-        "in effect:",
-        theme::SMALL,
-        theme::DIM,
-    ));
-    let stamp = stamp_text(active, flow.seed);
-    panel.block(
-        layout::tuner_stamp() + Vec2::new(0.0, STAMP_LEAD),
-        &stamp,
-        theme::SMALL,
-        theme::INK,
-    );
+    // every other row is being moved; it packs into the header's three rows
+    // (`stamp_text`), which no constant added can push into.
+    let stamp = stamp_text(active, flow.seed, flow.scenario);
+    panel.block(layout::tuner_stamp(), &stamp, theme::SMALL, theme::INK);
 
-    // **The prose band, in the header** (wave 1.4): the hint and the note
-    // are one band and only one state of it is up at a time — a hovered
-    // constant's meaning, a refused link, an applied set, or the resting line
-    // with the APPLY note after it. `floors::tuner_right_column` measures
-    // every one of those states against the band's three rows.
+    // **The prose band, at the fourth column's foot** (since wave 1.6; the
+    // header from 1.4): the hint and the note are one band and only one state
+    // of it is up at a time — a hovered constant's meaning, a refused link,
+    // an applied set, or the resting line with the APPLY note after it.
+    // `floors::tuner_right_column` measures every one of those states under
+    // one more constant than the drawer has.
     let (hint, tone) = prose(flow);
     panel.block(
         layout::tuner_hint(),

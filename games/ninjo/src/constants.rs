@@ -219,6 +219,21 @@ pub struct Tuning {
     /// **The thin-days window**, in world-days: how far back the
     /// shortfall-sourced template counts its three shortfalls.
     pub thin_window: i64,
+
+    // ── the events-director: the minimal injector (GDD §5; wave 1.6) ──────
+    /// **The calm window**, in world-days: the director fires nothing before
+    /// this world-day is over, so the staged start gets its opening clean.
+    /// Three, the span the arrival column sets — the last of the six who
+    /// came later walks in on the evening of day three.
+    pub calm_days: i64,
+    /// **World-hours between the director's firings, on average.** Each next
+    /// firing is drawn between half and one and a half times this, at the
+    /// firing's own address (`director::gap`) — never per frame, never by
+    /// call order.
+    pub director_hours: i64,
+    /// **How many director-sourced petitions may stand unresolved at once.**
+    /// A firing that finds this many already in play passes.
+    pub director_max: i64,
 }
 
 impl Resource for Tuning {}
@@ -288,6 +303,9 @@ impl Tuning {
         plea_hours: 6,
         plea_odds: 15,
         thin_window: 3,
+        calm_days: 3,
+        director_hours: 24,
+        director_max: 1,
     };
 
     /// The constants in effect, as the lines the drawer's stamp and every
@@ -319,7 +337,8 @@ impl Tuning {
              share {}% fail {}-{}/fit\n\
              well {} odds <={} >={}\n\
              plea +/-{} relief {}\n\
-             plea {}h {}% thin {}d",
+             plea {}h {}% thin {}d\n\
+             calm {}d dir {}h max {}",
             self.road_cost,
             self.plains_cost,
             self.forest_cost,
@@ -370,6 +389,9 @@ impl Tuning {
             self.plea_hours,
             self.plea_odds,
             self.thin_window,
+            self.calm_days,
+            self.director_hours,
+            self.director_max,
         )
     }
 
@@ -446,6 +468,9 @@ impl Tuning {
             Field::PleaHours => &mut self.plea_hours,
             Field::PleaOdds => &mut self.plea_odds,
             Field::ThinWindow => &mut self.thin_window,
+            Field::CalmDays => &mut self.calm_days,
+            Field::DirectorHours => &mut self.director_hours,
+            Field::DirectorMax => &mut self.director_max,
         }
     }
 
@@ -683,6 +708,12 @@ pub enum Field {
     PleaOdds,
     /// The thin-days window, in world-days.
     ThinWindow,
+    /// The director's calm window, in world-days.
+    CalmDays,
+    /// World-hours between the director's firings, on average.
+    DirectorHours,
+    /// How many director petitions may stand unresolved at once.
+    DirectorMax,
 }
 
 impl Field {
@@ -738,6 +769,9 @@ impl Field {
         Field::PleaHours,
         Field::PleaOdds,
         Field::ThinWindow,
+        Field::CalmDays,
+        Field::DirectorHours,
+        Field::DirectorMax,
     ];
 
     /// The name DESIGN gives this constant.
@@ -793,6 +827,9 @@ impl Field {
             Field::PleaHours => "plea_hours",
             Field::PleaOdds => "plea_odds",
             Field::ThinWindow => "thin_window",
+            Field::CalmDays => "calm_days",
+            Field::DirectorHours => "director_hours",
+            Field::DirectorMax => "director_max",
         }
     }
 
@@ -870,6 +907,9 @@ impl Field {
             Field::PleaHours => "world-hours between petition checks",
             Field::PleaOdds => "% chance a true want speaks up a check",
             Field::ThinWindow => "days thin-days counts 3 shortfalls in",
+            Field::CalmDays => "days before the director fires at all",
+            Field::DirectorHours => "mean world-hours between director firings",
+            Field::DirectorMax => "director petitions unresolved at once",
         }
     }
 }

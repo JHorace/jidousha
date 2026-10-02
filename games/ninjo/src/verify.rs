@@ -114,7 +114,8 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
     // close, clear of the orders at 48 and the board at 56 — the selection is
     // presentation and the transcript on the far side of it is the same
     // transcript.
-    let bob = people::roster()
+    let bob = crate::scenario::freeplay()
+        .cast()
         .iter()
         .position(|person| person.id == "bob")
         .unwrap_or(0);
@@ -156,7 +157,8 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
     // separates the one open scout job from everything else — and open the
     // Deep Cave, whose six rows carry three task types between them and
     // several rows other people already hold.
-    let alex = people::roster()
+    let alex = crate::scenario::freeplay()
+        .cast()
         .iter()
         .position(|person| person.id == "alex")
         .unwrap_or(0);
@@ -208,11 +210,12 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
     // Then somebody to look at: Steve is home from the Deep
     // Cave's second run at minute 512 and rests six world-hours, so his
     // doorstep is a figure to click from there on.
-    let steve = people::roster()
+    let steve = crate::scenario::freeplay()
+        .cast()
         .iter()
         .position(|person| person.id == "steve")
         .unwrap_or(0);
-    let doorstep = people::roster()[steve].home.center();
+    let doorstep = crate::scenario::freeplay().cast()[steve].home.center();
     script.push(Directive {
         when: When::Minute(556),
         what: Act::ClickWorld(doorstep),
@@ -430,6 +433,7 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
         tuning: Tuning::SHIPPED,
         modules: crate::modules::ModuleSet::ALL,
         seed: None,
+        scenario: crate::scenario::freeplay(),
         directives: &script,
         photos: &photos,
         probe_ticks: &[],
@@ -534,6 +538,7 @@ pub fn settled(viewport: PhysicalSize) -> Conducted {
         tuning: Tuning::SHIPPED,
         modules: crate::modules::ModuleSet::ALL,
         seed: None,
+        scenario: crate::scenario::freeplay(),
         directives: &script,
         photos: &photos,
         probe_ticks: &[],
@@ -924,7 +929,7 @@ pub fn run_camera(viewport: PhysicalSize) -> Camera {
 /// character's figure selects them, through the same hit-test a mouse uses,
 /// with no `PointerMoved` and no `ButtonPressed` in the snapshot.
 fn touch_selects(checks: &mut Checks) {
-    let cast = people::roster();
+    let cast = crate::scenario::freeplay().cast();
     let Some(steve) = cast.iter().position(|person| person.id == "steve") else {
         checks.require(
             false,
@@ -1251,7 +1256,7 @@ fn one_figure_each(checks: &mut Checks) -> String {
     const MIDSTEP: u64 = 4;
 
     let tuning = Tuning::SHIPPED;
-    let cast = people::roster();
+    let cast = crate::scenario::freeplay().cast();
     let grid = grid::grid();
     // Read at a minute a walking party is *between* tiles: at the minute it
     // steps off, the derivation puts it on the tile it left, and a road state
@@ -1283,7 +1288,11 @@ fn one_figure_each(checks: &mut Checks) -> String {
     };
 
     // --- the opening scenario: every character idle at their own door -------
-    let mut opening = crate::sim::Sim::opening(&tuning, modules::ModuleSet::ALL);
+    let mut opening = crate::sim::Sim::opening(
+        crate::scenario::freeplay(),
+        &tuning,
+        modules::ModuleSet::ALL,
+    );
     opening.everybody_here();
     let at_home = figures(&opening, &flow::Flow::default());
     checks.require(
@@ -1531,7 +1540,7 @@ fn road_click_selects(checks: &mut Checks) -> String {
     const LOOK_AT: [u64; 6] = [700, 800, 900, 1000, 1100, 1200];
 
     let tuning = Tuning::SHIPPED;
-    let cast = people::roster();
+    let cast = crate::scenario::freeplay().cast();
     let start = [Directive {
         when: When::Tick(4),
         what: Act::Tap(Key::Digit1),
@@ -1621,13 +1630,17 @@ fn road_click_selects(checks: &mut Checks) -> String {
 /// is in — rather than arithmetic over the field under test, so a second
 /// selection reappearing is a failure this run can see.
 fn one_selection(checks: &mut Checks) -> Option<Conducted> {
-    let cast = people::roster();
+    let cast = crate::scenario::freeplay().cast();
     let tuning = Tuning::SHIPPED;
     // The index identity the one selection stands on: a party is a one-person
     // band in registry order, so party `i` *is* person `i`. Asserted rather
     // than assumed, because the unified index is only meaningful while it
     // holds.
-    let opening = crate::sim::Sim::opening(&tuning, modules::ModuleSet::ALL);
+    let opening = crate::sim::Sim::opening(
+        crate::scenario::freeplay(),
+        &tuning,
+        modules::ModuleSet::ALL,
+    );
     let paired = opening.parties.len() == opening.people.len()
         && opening
             .parties
@@ -1882,7 +1895,7 @@ fn ordered_from(site: usize, slot: usize, pick: &[Directive]) -> Conducted {
 /// is addressed at minute zero, and nothing else in the world moves to muddy
 /// the comparison.
 fn posting_reads_the_selection(checks: &mut Checks) {
-    let cast = people::roster();
+    let cast = crate::scenario::freeplay().cast();
     let who = 0usize;
     let by_roster = ordered_from(0, 0, &sweep::pick_anywhere(When::Tick(6), who));
     let by_sprite = ordered_from(
@@ -2030,7 +2043,7 @@ fn posting_reads_the_selection(checks: &mut Checks) {
 fn the_board_is_the_ask(checks: &mut Checks) {
     let tuning = Tuning::SHIPPED;
     let grid = grid::grid();
-    let cast = people::roster();
+    let cast = crate::scenario::freeplay().cast();
     let who = 0usize;
     let marker =
         |site: usize| layout::marker_rect(LOCATIONS[crate::sim::site_location(site)].tile).center();
@@ -2214,7 +2227,11 @@ fn the_board_is_the_ask(checks: &mut Checks) {
         .iter()
         .position(|person| person.id == "ines")
         .unwrap_or(0);
-    let mut staged = crate::sim::Sim::opening(&tuning, modules::ModuleSet::ALL);
+    let mut staged = crate::sim::Sim::opening(
+        crate::scenario::freeplay(),
+        &tuning,
+        modules::ModuleSet::ALL,
+    );
     staged.everybody_here();
     let mut flow = crate::flow::Flow {
         selected: Some(ines),
@@ -2299,7 +2316,7 @@ fn the_board_is_the_ask(checks: &mut Checks) {
 /// world-minute. That is the whole claim that the one selection added no sim
 /// state, and it is what makes a replay of either run the same world.
 fn selection_moves_nothing(checks: &mut Checks) {
-    let cast = people::roster();
+    let cast = crate::scenario::freeplay().cast();
     let run_at_speed = |script: &[Directive]| {
         let mut session = Session::plain(Tuning::SHIPPED, script, 4_000);
         session.stop_at_minute = Some(240);
@@ -2560,7 +2577,11 @@ fn attribution_is_derived(checks: &mut Checks) {
     // And over the scorer's own terms, on a staged world: the rows a term
     // names are the rows whose fields moved it, and the words are theirs.
     let tuning = Tuning::SHIPPED;
-    let mut sim = crate::sim::Sim::opening(&tuning, modules::ModuleSet::ALL);
+    let mut sim = crate::sim::Sim::opening(
+        crate::scenario::freeplay(),
+        &tuning,
+        modules::ModuleSet::ALL,
+    );
     sim.everybody_here();
     for who in 0..sim.people.len() {
         let carried = sim.people[who].traits.clone();
@@ -2610,7 +2631,11 @@ fn attribution_is_derived(checks: &mut Checks) {
 /// happened to ask in.
 fn map_labels_are_governed(checks: &mut Checks) -> String {
     let tuning = Tuning::SHIPPED;
-    let mut sim = crate::sim::Sim::opening(&tuning, modules::ModuleSet::ALL);
+    let mut sim = crate::sim::Sim::opening(
+        crate::scenario::freeplay(),
+        &tuning,
+        modules::ModuleSet::ALL,
+    );
     sim.everybody_here();
     let clock = crate::clock::Clock::opening();
     let grid = grid::grid();
@@ -2955,7 +2980,7 @@ fn one_drawer_at_a_time(checks: &mut Checks) -> String {
 fn the_work_list_navigates(checks: &mut Checks, baseline: &Conducted) -> String {
     let tuning = Tuning::SHIPPED;
     let grid = grid::grid();
-    let cast = people::roster();
+    let cast = crate::scenario::freeplay().cast();
     let sim = &baseline.sim;
     let now = baseline.minutes;
     let lens = lens::Lens::on(sim);
@@ -3237,7 +3262,7 @@ fn the_work_list_navigates(checks: &mut Checks, baseline: &Conducted) -> String 
 fn the_picker_names_a_person(checks: &mut Checks, baseline: &Conducted) -> String {
     let tuning = Tuning::SHIPPED;
     let grid = grid::grid();
-    let cast = people::roster();
+    let cast = crate::scenario::freeplay().cast();
     let marker =
         |site: usize| layout::marker_rect(LOCATIONS[crate::sim::site_location(site)].tile).center();
 
@@ -3502,7 +3527,11 @@ fn the_picker_names_a_person(checks: &mut Checks, baseline: &Conducted) -> Strin
 
     // --- 3: choosing writes the one selection and nothing else --------------
     // Over the paused opening world, where nothing moves but the clicking.
-    let opening = crate::sim::Sim::opening(&tuning, modules::ModuleSet::ALL);
+    let opening = crate::sim::Sim::opening(
+        crate::scenario::freeplay(),
+        &tuning,
+        modules::ModuleSet::ALL,
+    );
     let open_lens = lens::Lens::on(&opening);
     let (probe_site, probe_slot) = (0usize, 0usize);
     let staged = flow::Flow {
@@ -4074,6 +4103,17 @@ pub fn run() -> ExitCode {
     let stop_said = crate::petitioned::a_stop_in_the_ledger_says_why(&mut checks);
     let pleaded = crate::pleashots::shot_run();
     let pleaded_report = crate::pleashots::judge_shots(&mut checks, &pleaded);
+    // --- the injector and the scenario file (wave 1.6): the world moves ------
+    crate::scenario::vocabulary(&mut checks);
+    let equality = crate::directed::scenario_equality(&mut checks);
+    crate::directed::judge_at(&mut checks, &tuning);
+    let rows_round = crate::directed::rows_round(&mut checks);
+    let pin = crate::pressed::pinned(&mut checks);
+    let directed_replay = crate::pressed::replay(&mut checks);
+    let directed_sweeps = crate::pressed::sweeps(&mut checks);
+    let directed_off = crate::pressed::module_off(&mut checks);
+    let evented = crate::eventshots::shot_run();
+    let evented_report = crate::eventshots::judge_shots(&mut checks, &evented);
 
     // --- the art library, every string, and the link grammar ---------------
     library::library(&mut checks);
@@ -4102,6 +4142,7 @@ pub fn run() -> ExitCode {
             settled: &settled_run,
             resolved: &resolved,
             pleaded: &pleaded,
+            evented: &evented,
         },
     );
 
@@ -4112,7 +4153,8 @@ pub fn run() -> ExitCode {
         baseline.minutes
     );
     println!(
-        "  stamp: seed 0, {}, {}",
+        "  stamp: seed 0, {}, {}, {}",
+        crate::scenario::freeplay().stamp(),
         tuning.stamp(),
         modules::ModuleSet::ALL.stamp()
     );
@@ -4138,7 +4180,7 @@ pub fn run() -> ExitCode {
     println!("  {figures}");
     println!(
         "  people: {} in the registry, {} traits over {} kinds, {} marks, {} reaction cells",
-        crate::people::roster().len(),
+        crate::scenario::freeplay().cast().len(),
         traits::TRAITS.len(),
         traits::TraitKind::ALL.len(),
         traits::MarkId::ALL.len(),
@@ -4161,6 +4203,12 @@ pub fn run() -> ExitCode {
     println!("  petitions: {pleas_off}; {conserved}");
     println!("  petitions: {stop_said}");
     println!("  petitions: {pleaded_report}");
+    println!("  injector: {equality}");
+    println!("  injector: {rows_round}");
+    println!("  injector: {pin}; {directed_replay}");
+    println!("  injector: {directed_sweeps}");
+    println!("  injector: {directed_off}");
+    println!("  injector: {evented_report}");
     println!(
         "  standing rates: {} - {} postings on the ledger at the end of the run",
         baseline.sim.rates.stamp(),

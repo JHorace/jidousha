@@ -130,18 +130,17 @@ not a queue — the import path (`art/`) rode along from giri.
   snapshot, none of it simulation state.
 - **Feed drawer**: §3a. It replaced wave 0b's log drawer, which was a copy
   of the event list; the feed is a view of it.
-- **Tuning drawer**: giri's §12 rules verbatim, at the game's fifty
-  constants since wave 1.5 — **four stepper columns of fourteen**, the fourth
-  holding the overflow from the top with the stamp following it down under its
-  last row, and the prose band (a hovered constant's meaning, a refused link,
-  the resting line and the APPLY note) up in the header beside the presets.
-  **The stamp names what differs from the shipped set since wave 1.5** —
-  `the shipped set` and the seed, or `shipped, except` and up to six
-  `name value` lines and a count of the rest — because the pair-by-pair
-  readout outgrew the column (`FINDINGS.md` G-034, reopened and closed); the
-  whole set still rides every report and link — and
-  APPLY restarts the **scenario** (this game's boundary). The stamp ends
-  `seed <n>`. The variant picker is gone with the variant machinery.
+- **Tuning drawer**: giri's §12 rules verbatim, at the game's fifty-three
+  constants since wave 1.6 — **four stepper columns of fourteen**, the fourth
+  holding the overflow from the top; **the in-effect stamp in the header band**
+  beside the presets — `seed <n> <scenario>` on its first row, then `in
+  effect: the shipped set` or the moved constants packed as `name value` pairs,
+  never split, with `+N more` for the rest — and **the prose band** (a hovered
+  constant's meaning, a refused link, the resting line and the APPLY note) at
+  the foot of the fourth column. The two swapped places in wave 1.6 when the
+  column filled (`FINDINGS.md` G-059); the whole set still rides every report
+  and link, and APPLY restarts the **scenario** (this game's boundary). The
+  variant picker is gone with the variant machinery.
 - **Trait chips are drawn on the character panel and on every roster row**,
   at the 16 units square the vocabulary specifies, in the icon each row
   carries. **A chip is a click target wherever it appears** (wave 1.1): the
@@ -275,7 +274,9 @@ the deadline is never a surprise.
 
 - **One card, two placements** (`card::card`). The anatomy is GDD §6's, as the
   mockup drew it: the petitioner's portrait and name; where the ask came from
-  (the motivator row's own name, the source class, the template id); the
+  — **the source chip**, `card::card` over `Source::chip` (the motivator row's
+  own name, the class's display word from `petitions::SOURCES`, the template
+  id: `indebted - motivator - collectors-visit`); the
   resolved words; a **timer bar** against the deadline, gold, ember inside its
   last day; `due d8 01:48 - 6d 0h left`; the reward, **"pays in regard" said
   honestly** where it pays no gold; the **"met when" line**, derived from the
@@ -324,6 +325,20 @@ the deadline is never a surprise.
   when it cannot. A gift is a recorded input at the clock's minute, like a
   posting; it debits exactly the `{n}` it shows, and the purse it fills meets
   the condition through the same predicate as ever.
+- **The `event` chip** (wave 1.6). A petition the director carried in is a
+  petition like any other — the same card, the same ledger, the same cliff —
+  and **the source chip is the only difference**: it leads with the class's
+  display word and its meaning, both off `petitions::SOURCES` and never
+  written at the surface — `event - from outside the camp - not their own
+  want`, drawn whole (`eventshots` asserts it is not clipped; the template's
+  id is on the feed line and the ledger row, where there is room). A
+  want or a shortfall leads with whose it is; an event does not, because what
+  came in from outside is not the petitioner's own. The feed says the same
+  word: the voicing reads `petitioned you (event: rival-offer)`, and the
+  director's own firing is the class `event`, at `ignore` — shown only with
+  the feed's ignored toggle on. **The player is never shown the word
+  `director`.** ARRANGE for D2's "paid at least" opens the petitioner's work
+  list; for D3's "a job at {site}" it opens that site's board.
 - **A resolved card says how it ended** in the gesture's place: `met d2 01:48 -
   your hand was in it`, `met by Alex's world, not you`, or `failed d8 00:24 -
   walks-out fired, as the card said`.
@@ -822,13 +837,14 @@ chips narrowed when the band went from two of them to four.
 whether the *next* constant's stepper would still be inside the drawer, so it
 fails while the drawer still draws, and that every name fits its cell; wave
 1.4 moved the right column for the six constants resolution brought
-(`FINDINGS.md` G-034, closed): four stepper columns at a pitch of 232, the
-stamp measured down the fourth column under its last stepper, and the prose
-band in the header. `floors::tuner_right_column` asserts every state of the
-band fits its three rows, that the stamp still ends inside the drawer **at one
-more constant and one more row**, and that **no line the readout authors is
-wrapped** — the first photograph of the fourth column had `forest 7` broken
-across two rows, which puts a value under the wrong name.
+(`FINDINGS.md` G-034, closed): four stepper columns at a pitch of 232. Wave
+1.6 swapped the stamp and the prose band when the fourth column filled
+(G-059): `floors::tuner_right_column` asserts the stamp packs into the
+header's three rows at its tallest with no row wider than its band — a pair
+split across rows puts a value under the wrong name, which the first
+photograph of the fourth column once did with `forest 7` — and that the prose
+band's tallest state ends inside the drawer **under one more constant** than
+the game has.
 
 **The odds-words bind like every other word on a row** (wave 1.4,
 `floors::odds_words`): each word and each tier name is lowercase ASCII and no
@@ -1037,6 +1053,15 @@ is spent (`FINDINGS.md` G-052); **the ledger mixed** — asking, met and failed
 rows and a card with GIVE lit; and **the feed open when `broke` fires** on
 Ludo's ignored `collectors-visit`. Each is asserted to be what it says
 (`pleashots::judge_shots`) and each carries the three frame judges.
+
+And, since wave 1.6, **three more, in the pinned test scenario**
+(`eventshots::shot_run`, `scenarios/pinned-collector.txt` at 1x): **its opening
+minute** with the feed open, so the notices band shows the scenario's own stamp;
+**the pin's card** at d1 01:30, the world stopped on its voicing and the source
+chip reading `event - from outside the camp - not their own want`, asserted drawn
+whole; and **the feed around the firing**, ignored classes shown, the director's
+`event` line under the voicing it caused. Each is asserted to be what it says
+(`eventshots::judge_shots`) and each carries the three frame judges.
 
 Committed copies live in `screens/`; the implementing agent opens and looks
 at every one before declaring done.

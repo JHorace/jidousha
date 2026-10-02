@@ -6,8 +6,8 @@
 //! GDD §6's petition/event template is real here: [`Template`] is its id,
 //! source class, trigger, body (text, deadline, reward, declared consequence)
 //! and `next` links, and [`TEMPLATES`] is `CAST.md` §6's table as data — T1 to
-//! T5 as written, their `next` links, and T6 `thin-days`, the shortfall-sourced
-//! template. The consequence a template declares is **a reference into
+//! T5 as written, their `next` links, T6 `thin-days`, the shortfall-sourced
+//! template, and D1 to D3, the three the director carries in (wave 1.6). The consequence a template declares is **a reference into
 //! [`DECLARED`]**, never a copy: the card prints that reference and the
 //! deadline fires that reference (`pleas::fire`), and the battery asserts the
 //! two are one pointer. A declared consequence names a row of [`KINDS`], the
@@ -47,9 +47,10 @@ pub enum Source {
     Motivator(TraitId),
     /// A shortfall, pressing: raised by what the needs module did to somebody.
     Shortfall,
-    /// **The director's**, and fired by nothing in this build: the injector
-    /// is wave 1.6. The shape exists so the table already has the column the
-    /// director will write into (`SOURCES` says so beside it).
+    /// **The director's** — carried in from outside the camp by the injector
+    /// (`director.rs`, wave 1.6), and only ever raised through it: the
+    /// petition check never raises one, and `pleas::raise` refuses one while
+    /// the injector is off.
     Director,
 }
 
@@ -63,33 +64,110 @@ impl Source {
         }
     }
 
+    /// **This class's row of [`SOURCES`]** — its display word and what that
+    /// word means. A class with no row is a fault the vocabulary check names;
+    /// here it reads as the first row rather than panicking in a draw.
+    pub fn row(self) -> &'static SourceRow {
+        SOURCES
+            .iter()
+            .find(|row| row.class == self.class())
+            .unwrap_or(&SOURCES[0])
+    }
+
+    /// **The word a card and a feed line show for the class** — off the
+    /// table, never written at a surface. `director` shows as `event`: the
+    /// player is never told a director exists, only that something came in
+    /// from outside the camp.
+    pub fn word(self) -> &'static str {
+        self.row().word
+    }
+
     /// What a card says about where the ask came from — the motivator row's
-    /// own display name, read off the vocabulary, never written here.
+    /// own display name, read off the vocabulary; and for the other two
+    /// classes, the table's own explanation of the class.
     pub fn phrase(self) -> String {
         match self {
             Source::Motivator(id) => id.def().name.to_owned(),
             Source::Shortfall => "short of upkeep".to_owned(),
-            Source::Director => "the director".to_owned(),
+            Source::Director => self.row().means.to_owned(),
+        }
+    }
+
+    /// **The card's source chip** — for a want or a shortfall, whose it is,
+    /// the class's display word and the template's id; for an event, the word
+    /// and what it means, whole. An event leads with the word, because what
+    /// came in from outside is not the petitioner's own and the chip must not
+    /// read as if it were — and its id is in the feed line and the ledger row,
+    /// where there is room for it, rather than clipping the meaning off the
+    /// card (`eventshots` asserts the chip is drawn unclipped).
+    pub fn chip(self, template: &str) -> String {
+        match self {
+            Source::Director => format!("{} - {}", self.word(), self.phrase()),
+            _ => format!("{} - {} - {template}", self.phrase(), self.word()),
+        }
+    }
+
+    /// **The tag a feed line puts before a template id**, where one is owed:
+    /// only an event's — a want or a shortfall is the petitioner's own and the
+    /// line already says whose, so their lines are 1.5's unchanged.
+    pub fn tag(self, template: &str) -> String {
+        match self {
+            Source::Director => format!("{}: {template}", self.word()),
+            _ => template.to_owned(),
         }
     }
 }
 
-/// **What fires each source class** — the table GDD §6's column is read
-/// against, with the shape this build leaves unexercised said where it lives.
-pub const SOURCES: &[(&str, &str)] = &[
-    (
-        "motivator",
-        "a petition check, on a carrier of the row the trigger names",
-    ),
-    (
-        "shortfall",
-        "a petition check, on somebody the needs module pressed",
-    ),
-    (
-        "director",
-        "nothing in this build - the injector that fires it is wave 1.6",
-    ),
+/// **One source class's row** — what fires it, the word the player sees for
+/// it, and what that word means.
+#[derive(Clone, Copy, Debug)]
+pub struct SourceRow {
+    /// The class, as GDD §6 spells it.
+    pub class: &'static str,
+    /// What raises a petition of this class.
+    pub fired_by: &'static str,
+    /// The word the card and the feed show.
+    pub word: &'static str,
+    /// What the word means — the chip's explanation, derived from here.
+    pub means: &'static str,
+}
+
+/// **What fires each source class, and what the player is shown for it** —
+/// the table GDD §6's column is read against.
+pub const SOURCES: &[SourceRow] = &[
+    SourceRow {
+        class: "motivator",
+        fired_by: "a petition check, on a carrier of the row the trigger names",
+        word: "motivator",
+        means: "their own want, spoken",
+    },
+    SourceRow {
+        class: "shortfall",
+        fired_by: "a petition check, on somebody the needs module pressed",
+        word: "shortfall",
+        means: "what going short did to them",
+    },
+    SourceRow {
+        class: "director",
+        fired_by: "the injector (events-director, wave 1.6) - its own seeded firings after the \
+                   calm window, and a scenario's pins; never the petition check",
+        word: "event",
+        means: "from outside the camp - not their own want",
+    },
 ];
+
+/// **Where a director template's `{site}` comes from** — the slot's fill,
+/// drawn by the injector at the firing's address (`director.rs`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SiteSlot {
+    /// The template names no site.
+    None,
+    /// Any authored site — somewhere the news passed through.
+    Any,
+    /// An authored site with open work on its board; with none, the template
+    /// reaches nobody.
+    OpenWork,
+}
 
 /// **When a template may be raised** — the state predicates of GDD §6's
 /// trigger. The world-time window is [`Template::opens_day`] and the seeded
@@ -123,6 +201,15 @@ pub enum Trigger {
     },
     /// **Never by a check**: only a `next` link raises it.
     Chained,
+    /// **They carry any of these traits** — the director's eligibility (wave
+    /// 1.6): an event reaches whoever it is about, purse regardless. The
+    /// `{site}` slot is filled by the injector, from `site`.
+    Carries {
+        /// Any of these.
+        any: &'static [TraitId],
+        /// Where the `{site}` comes from.
+        site: SiteSlot,
+    },
 }
 
 /// **What a template pays its satisfier.**
@@ -156,6 +243,12 @@ pub enum Condition {
     CraftDone,
     /// They finish paid work of any kind after they asked.
     PaidWork,
+    /// They are paid `{n}` or more — wages and shares, summed since voicing
+    /// (the rival offer, wave 1.6).
+    PaidAtLeast,
+    /// A job at `{site}` is finished — by anybody — after they asked (the word
+    /// from the road, wave 1.6).
+    SiteWorked,
 }
 
 impl Condition {
@@ -227,6 +320,10 @@ impl Condition {
                 .worked_since(since)
                 .any(|done| done.task == TaskType::Craft),
             Condition::PaidWork => person.memory.worked_since(since).next().is_some(),
+            Condition::PaidAtLeast => person.memory.earned_since(since) >= petition.n,
+            Condition::SiteWorked => petition
+                .site
+                .is_some_and(|site| worked_at(sim, site, since).next().is_some()),
         }
     }
 
@@ -262,8 +359,37 @@ impl Condition {
             ),
             Condition::CraftDone => format!("{name} finishes craft work, before {by}"),
             Condition::PaidWork => format!("{name} finishes a paid job or a shift, before {by}"),
+            Condition::PaidAtLeast => format!(
+                "{name} is paid {}g or more in wages and shares, before {by}",
+                petition.n
+            ),
+            Condition::SiteWorked => format!(
+                "a job at {} is finished by anybody, before {by}",
+                site_name(petition.site)
+            ),
         }
     }
+}
+
+/// **Every job finished at an authored site since a minute** — what the word
+/// from the road is met by, and whose hand was in it (`posted`).
+pub fn worked_at(
+    sim: &Sim,
+    site: usize,
+    since: u64,
+) -> impl Iterator<Item = &crate::resolution::Resolved> {
+    sim.resolved.iter().filter(move |record| {
+        record.job.site == site && record.minute >= since && record.tier.succeeded()
+    })
+}
+
+/// A site's name, for a line — "somewhere" when the slot was never filled.
+pub fn site_name(site: Option<usize>) -> String {
+    site.map_or("somewhere".to_owned(), |site| {
+        crate::grid::LOCATIONS[crate::sim::site_location(site)]
+            .name
+            .to_owned()
+    })
 }
 
 /// **One row of the consequence vocabulary** (`CAST.md` §6): what firing it
@@ -465,6 +591,11 @@ pub struct Template {
     pub consequence: &'static Declared,
     /// The `{n}` slot's number: a debt, a pot, a count of shifts.
     pub n: i64,
+    /// **How far a director firing may draw `{n}` above it** (wave 1.6): the
+    /// rival's offer is drawn between `n` and `n + spread` at the firing's
+    /// address. Zero everywhere a check raises the row — a want's number is
+    /// the row's.
+    pub spread: i64,
     /// What they did, said when it is met — the feed line and the rewritten
     /// source line both (`{other}` may appear).
     pub relieved: &'static str,
@@ -497,8 +628,9 @@ impl Template {
 }
 
 /// **The template table** — `CAST.md` §6, as data: T1 to T5 as written with
-/// their `next` links, and T6 `thin-days`, the shortfall exemplar.
-pub static TEMPLATES: [Template; 9] = [
+/// their `next` links, T6 `thin-days`, the shortfall exemplar, and D1 to D3,
+/// the director's (wave 1.6).
+pub static TEMPLATES: [Template; 12] = [
     // T1 — indebted.
     Template {
         id: "collectors-visit",
@@ -513,6 +645,7 @@ pub static TEMPLATES: [Template; 9] = [
         condition: Condition::PurseAtLeast,
         consequence: &DECLARED[2],
         n: 30,
+        spread: 0,
         relieved: "paid the collector off, for now",
         broken: "was cleaned out by the collector",
         next_on_fail: Some("collectors-visit-again"),
@@ -532,6 +665,7 @@ pub static TEMPLATES: [Template; 9] = [
         condition: Condition::PurseAtLeast,
         consequence: &DECLARED[4],
         n: 30,
+        spread: 0,
         relieved: "paid the collector off at the second time of asking",
         broken: "was dragged off by the collector's men",
         next_on_fail: None,
@@ -554,6 +688,7 @@ pub static TEMPLATES: [Template; 9] = [
         condition: Condition::SentToFight,
         consequence: &DECLARED[0],
         n: 55,
+        spread: 0,
         relieved: "was sent somewhere that matters",
         broken: "was sent nowhere that mattered",
         next_on_fail: Some("proving-job-again"),
@@ -573,6 +708,7 @@ pub static TEMPLATES: [Template; 9] = [
         condition: Condition::SentToFight,
         consequence: &DECLARED[5],
         n: 55,
+        spread: 0,
         relieved: "was sent somewhere that matters at last",
         broken: "went looking for a name somewhere else",
         next_on_fail: None,
@@ -592,6 +728,7 @@ pub static TEMPLATES: [Template; 9] = [
         condition: Condition::OtherSettled,
         consequence: &DECLARED[6],
         n: 0,
+        spread: 0,
         relieved: "saw {other} fed",
         broken: "fed {other} out of their own pocket",
         next_on_fail: None,
@@ -611,6 +748,7 @@ pub static TEMPLATES: [Template; 9] = [
         condition: Condition::SentSomewhereNew,
         consequence: &DECLARED[3],
         n: 0,
+        spread: 0,
         relieved: "went somewhere new, finally",
         broken: "wandered off",
         next_on_fail: None,
@@ -633,6 +771,7 @@ pub static TEMPLATES: [Template; 9] = [
         condition: Condition::Bench,
         consequence: &DECLARED[1],
         n: 2,
+        spread: 0,
         relieved: "got a bench to make things on",
         broken: "has nowhere to make anything",
         next_on_fail: None,
@@ -651,6 +790,7 @@ pub static TEMPLATES: [Template; 9] = [
         condition: Condition::CraftDone,
         consequence: &DECLARED[0],
         n: 0,
+        spread: 0,
         relieved: "made the first thing on the new bench",
         broken: "has a bench and nothing to make on it",
         next_on_fail: None,
@@ -670,8 +810,84 @@ pub static TEMPLATES: [Template; 9] = [
         condition: Condition::PaidWork,
         consequence: &DECLARED[3],
         n: 3,
+        spread: 0,
         relieved: "found paying work",
         broken: "walked out, done waiting for paying work",
+        next_on_fail: None,
+        next_on_met: None,
+    },
+    // **The director's three** (wave 1.6, `CAST.md` §6 D1-D3) — the capsule's
+    // own examples, petition-flavoured, raised only by the injector. All
+    // three pay in regard and declare a kind from the vocabulary of four.
+    //
+    // D1 — the canned loan shark T1's note promised: T1's words and its
+    // consequence, `broke`, with T1's chain; but an event reaches anyone
+    // indebted, purse regardless — the collector does not wait for poverty.
+    Template {
+        id: "the-collector-comes",
+        source: Source::Director,
+        trigger: Trigger::Carries {
+            any: &[TraitId::Indebted],
+            site: SiteSlot::None,
+        },
+        opens_day: 0,
+        rolled: false,
+        text: "{name}: I owe {n} gold to a man who counts days. Find me work that pays \
+               before {deadline}, or he takes it out of me.",
+        deadline_days: 6,
+        reward: Reward::InRegard,
+        condition: Condition::PurseAtLeast,
+        consequence: &DECLARED[2],
+        n: 30,
+        spread: 0,
+        relieved: "paid the collector off, for now",
+        broken: "was cleaned out by the collector",
+        next_on_fail: Some("collectors-visit-again"),
+        next_on_met: None,
+    },
+    // D2 — a rival company's offer, to the proud of their name and the greedy.
+    Template {
+        id: "rival-offer",
+        source: Source::Director,
+        trigger: Trigger::Carries {
+            any: &[TraitId::Renown, TraitId::Greedy],
+            site: SiteSlot::Any,
+        },
+        opens_day: 0,
+        rolled: false,
+        text: "{name}: The Grey Banners came through {site} offering {n} a week. Show me \
+               what I am worth here before {deadline}, or I will go find out.",
+        deadline_days: 5,
+        reward: Reward::InRegard,
+        condition: Condition::PaidAtLeast,
+        consequence: &DECLARED[5],
+        n: 30,
+        spread: 20,
+        relieved: "was shown what they are worth here",
+        broken: "went to find out what the Grey Banners pay",
+        next_on_fail: None,
+        next_on_met: None,
+    },
+    // D3 — word from the road, to the restless and the ambitious.
+    Template {
+        id: "word-from-the-road",
+        source: Source::Director,
+        trigger: Trigger::Carries {
+            any: &[TraitId::Restless, TraitId::Renown],
+            site: SiteSlot::OpenWork,
+        },
+        opens_day: 0,
+        rolled: false,
+        text: "{name}: Travelers say {site} is worth somebody's time again - good pots for \
+               whoever moves first. We should be first.",
+        deadline_days: 4,
+        reward: Reward::InRegard,
+        condition: Condition::SiteWorked,
+        consequence: &DECLARED[0],
+        n: 0,
+        spread: 0,
+        relieved: "saw the camp move first on the word from the road",
+        broken: "watched the word from the road go cold",
         next_on_fail: None,
         next_on_met: None,
     },
@@ -728,11 +944,7 @@ pub fn roll(seed: u64, minute: u64, who: usize, template: usize) -> i64 {
 /// number it was raised with, the deadline it was voiced against, and the
 /// settlement's own content for the two the bench speaks of.
 pub fn resolve(text: &str, lens: &Lens<'_>, petition: &Petition) -> String {
-    let site = petition.site.map_or("somewhere".to_owned(), |site| {
-        crate::grid::LOCATIONS[crate::sim::site_location(site)]
-            .name
-            .to_owned()
-    });
+    let site = site_name(petition.site);
     let industry = crate::settlement::INDUSTRIES
         .first()
         .map_or("works", |spec| spec.name);
@@ -773,8 +985,8 @@ fn capitalised_after_stop(text: &str, site: &str) -> String {
 /// declared consequence is a kind of the vocabulary of four, and the four are
 /// `CAST.md` §6's; every template's words are printable ASCII and use only
 /// the slots `resolve` fills; a chained row is reachable from a `next`; the
-/// source-class table names every class; and the director's class is fired
-/// by nothing this build has.
+/// source-class table names every class with its display word; and every
+/// director-sourced row has the injector to fire it.
 pub fn vocabulary(checks: &mut crate::checks::Checks) {
     const SLOTS: [&str; 7] = [
         "{name}",
@@ -847,15 +1059,64 @@ pub fn vocabulary(checks: &mut crate::checks::Checks) {
                 ),
             );
         }
-        checks.require(
-            template.source != Source::Director,
-            "a director-sourced template is in the table, and nothing fires the director",
-            format!(
-                "{:?} is director-sourced; the injector is wave 1.6 and this build fires none",
-                template.id
-            ),
-        );
+        // **A director-sourced row requires the injector** (wave 1.6, flipped
+        // from 1.5's refusal): the registry must carry the module that fires
+        // it, the petition check must never raise it, and its trigger must be
+        // the director's eligibility — otherwise the row is a template that
+        // silently never fires, and never-lies applies to data too.
+        if template.source == Source::Director {
+            checks.require(
+                crate::modules::MODULES
+                    .iter()
+                    .any(|spec| spec.id == crate::director::MODULE)
+                    && !template.checked()
+                    && matches!(template.trigger, Trigger::Carries { .. }),
+                "a director-sourced template has nothing to fire it",
+                format!(
+                    "{:?} is director-sourced; it needs the {} row in the registry, a \
+                     Carries trigger, and no petition check raising it",
+                    template.id,
+                    crate::director::MODULE
+                ),
+            );
+            // **No dead director template** (`CAST.md` §8's 1.6 note: the
+            // no-dead-motivator rule runs over the director's rows too):
+            // somebody in the cast carries a trait it reaches.
+            if let Trigger::Carries { any, .. } = template.trigger {
+                checks.require(
+                    crate::people::cast()
+                        .iter()
+                        .any(|person| any.iter().any(|id| person.traits.contains(id))),
+                    "a director template reaches nobody in the cast",
+                    format!(
+                        "{:?} reaches carriers of {any:?} and nobody carries one",
+                        template.id
+                    ),
+                );
+            }
+        } else {
+            checks.require(
+                !matches!(template.trigger, Trigger::Carries { .. }) && template.spread == 0,
+                "a want's or a shortfall's template is shaped like the director's",
+                format!(
+                    "{:?} carries a Carries trigger or an {{n}} spread; those are the \
+                     injector's to fill, and a petition check would never fill them",
+                    template.id
+                ),
+            );
+        }
     }
+    // **The director's three are in the table** (`CAST.md` §6 D1-D3).
+    let directed: Vec<&str> = TEMPLATES
+        .iter()
+        .filter(|template| template.source == Source::Director)
+        .map(|template| template.id)
+        .collect();
+    checks.require(
+        directed == ["the-collector-comes", "rival-offer", "word-from-the-road"],
+        "the director's templates are not CAST.md s6's D1-D3",
+        format!("the director-sourced rows are {directed:?}"),
+    );
     let ids: Vec<&str> = KINDS.iter().map(|kind| kind.id).collect();
     checks.require(
         ids == ["sours", "broke", "walks-out", "gives-away"],
@@ -868,9 +1129,18 @@ pub fn vocabulary(checks: &mut crate::checks::Checks) {
         Source::Director.class(),
     ] {
         checks.require(
-            SOURCES.iter().filter(|(name, _)| *name == class).count() == 1,
-            "a source class has no row saying what fires it",
-            format!("{class:?} is not in SOURCES once"),
+            SOURCES
+                .iter()
+                .filter(|row| {
+                    row.class == class
+                        && !row.word.is_empty()
+                        && !row.means.is_empty()
+                        && !row.fired_by.is_empty()
+                })
+                .count()
+                == 1,
+            "a source class has no row saying what fires it and what the player sees",
+            format!("{class:?} is not in SOURCES once, with a word and a meaning"),
         );
     }
     // **The shortfall exemplar is a shortfall's**, and T6 is in the table.

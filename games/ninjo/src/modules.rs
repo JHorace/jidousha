@@ -5,12 +5,13 @@
 //! individually off, and green is the claim (GDD §9's module-off matrix).
 //! That matrix is built here and iterated by `verify::module_matrix`.
 //!
-//! **The table has five rows** since wave 1.4: `autonomy`, the scorer;
-//! `asks`, the postings the player rules by; `needs`, the upkeep that presses;
-//! `settlement`, the industry that answers it; and `resolution`, how a job
-//! turns out. The matrix is therefore
-//! six passes — the everything-on baseline and one world per module switched
-//! off — and each off-pass is what makes that row's `degrades_to` sentence a
+//! **The table has seven rows** since wave 1.6, which closes wave 1:
+//! `autonomy`, the scorer; `asks`, the postings the player rules by; `needs`,
+//! the upkeep that presses; `settlement`, the industry that answers it;
+//! `resolution`, how a job turns out; `petitions`, the cast asking; and
+//! `events-director`, the minimal injector. The matrix is therefore eight
+//! passes — the everything-on baseline and one world per module switched off
+//! — and each off-pass is what makes that row's `degrades_to` sentence a
 //! fact.
 //!
 //! Adding a module is adding a row to [`MODULES`] and reading
@@ -59,9 +60,8 @@ pub struct ModuleSpec {
 
 /// Every module this build has.
 ///
-/// **Five rows, since wave 1.4.** GDD §5's table is the schedule — petitions
-/// and the events-director are the rest of wave 1 — and each arrives as one
-/// row here.
+/// **Seven rows, since wave 1.6** — GDD §5's wave-1 column, whole. Each
+/// arrived as one row here.
 ///
 /// `autonomy`'s degrades-to sentence changed with this wave and the change is
 /// the wave: with the scorer off, nobody answers anything either, and there
@@ -117,6 +117,15 @@ pub const MODULES: &[ModuleSpec] = &[
         degrades_to: "nobody asks the player for anything: no petition is raised or voiced, \
                       no deadline falls and no consequence fires, regard moves only through \
                       asks, wages, visits and drift, and nothing lowers desperation",
+    },
+    ModuleSpec {
+        id: crate::director::MODULE,
+        tier: Tier::Mvp,
+        wave: "1.6",
+        degrades_to: "the quiet world: nothing comes in from outside the camp - no event \
+                      fires, no pin fires, and no director-sourced petition is raised - and \
+                      the cast's own petitions, T1 to T6, run exactly as they did before the \
+                      injector landed",
     },
 ];
 

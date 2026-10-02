@@ -629,7 +629,7 @@ detail. All modules disableable; "degrades to" per capsule.
 | petitions | mvp | 1 | traits | regard, wealth | regard, wealth |
 | resolution | mvp | 1 | grid, clock, traits | wealth | wealth |
 | settlement | mvp | 1 | grid | wealth | wealth |
-| events-director | mvp | 1 (minimal) | clock | — | — |
+| events-director | mvp | 1 (minimal) | clock, petitions | — | — |
 | asks | mvp | **1** | autonomy, grid | regard, wealth | regard, wealth |
 | aspirations | post | 3 | petitions | — | marks |
 | threats | post | 3 | grid, events-director | — | — |
@@ -860,13 +860,54 @@ card, its two placements and their taps; `src/petitioned.rs` and
 - **A shortfall answered is a shortfall spent**: `thin-days` counts only the
   shortfalls since its last petition for that person was met or failed, or the
   same three would voice it again six hours after it was met.
-- **The director's source class is data and fired by nothing**: the column is
-  in `petitions::SOURCES`, the vocabulary check refuses a director-sourced row,
-  and the injector is 1.6.
+- **The director's source class** was data and fired by nothing at 1.5; the
+  injector fires it since 1.6 (below), and the vocabulary check that refused a
+  director-sourced row now requires the injector's registry row for one.
 - **Degrades to**: nobody asks the player for anything — no petition, no
   deadline, no consequence; regard moves only through asks, wages, visits and
   drift; and nothing lowers desperation. `petitioned::module_off` asserts it
   over twelve attentive and idle days.
+
+*Implemented (w1.6): events-director — the minimal injector.* `src/director.rs`
+is the module; D1-D3 are rows of `petitions::TEMPLATES` (`CAST.md` §6);
+`src/scenario.rs` and `games/ninjo/scenarios/` are the scenario file (§6);
+`src/directed.rs`, `src/pressed.rs` and `src/eventshots.rs` are the battery. Its registry row
+is the seventh in `modules.rs` and the matrix is eight passes. **Wave 1 is
+whole.**
+
+- **It speaks only through petitions.** A firing raises a petition through
+  `pleas::raise`, the one door, and from there it is a petition like any other
+  — the same card, ledger, cliff and vocabulary of four. The registry row's
+  `requires` gained `petitions` (the handoff's: "it requires petitions"), and
+  `director::runs` reads both flags, so with petitions off the injector is
+  silent too and the queue holds nothing of it.
+- **Every firing is an occurrence**: `Occ::Director` on the one scheduler. The
+  calm window ends with an unarmed occurrence at `calm_days`; each firing then
+  draws the next gap at its own address — seed, world-minute, salt — between
+  half and one and a half `director_hours`, so the mean is the drawer row and
+  nothing is per frame or in call order. The target, the template, `{site}`
+  and `{n}` are drawn the same way. A scenario's **pins** are `Occ::Pin`, at
+  exactly their minute, past the calm window and the cap.
+- **A firing reaches somebody or passes.** The eligible set is (person,
+  template) in roster then table order — present, carrying no petition,
+  holding a trait the row's `Carries` trigger names; a firing with nobody
+  eligible, or with `director_max` already unresolved, passes with a feed line
+  at `ignore`.
+- **One class, `event`** (`ignore`): the firing is bookkeeping and the voicing
+  it causes is what stops the world. Its id is the source table's display word
+  for the class, so the player is never shown the word `director`; the card's
+  source chip reads `event - from outside the camp - not their own want`,
+  derived from `petitions::SOURCES` and asserted drawn whole.
+- **Where the build bent the handoff**: the pressure params ship as
+  `calm_days` / `director_hours` / `director_max`, because the drawer's name
+  cell holds fourteen glyphs (`FINDINGS.md` G-058); D2 and D3's deadlines (5
+  and 4 days) and D2's `{n}` range (30 to 50) are this wave's, the handoff
+  named none; and D3's text drops the article the site names already carry.
+  **What it measured**: the director is throttled by the cast's own petition
+  density (G-057), and D1 is often met on the doorstep (G-056).
+- **Degrades to** the quiet world: no event fires, no pin fires, no
+  director-sourced petition is raised, and T1-T6 run exactly as before —
+  asserted byte for byte by the scenario equality, which is the same claim.
 
 *Implemented (w0b): the registry as machinery, empty of rows.*
 `src/modules.rs` holds the table above's shape (`ModuleSpec`: id, tier, wave,
@@ -889,10 +930,10 @@ all walk the table, so nothing else changes.
   petition body (text template, deadline, reward spec, declared
   consequence — itself a template reference), optional `next` links
   (this is quest chaining: a quest is a template arc).
-- **Scenario file**: seed, map, roster, starting balances, pinned
-  template firings (world-time or predicate), director on/off +
-  pressure params. The tutorial is the most-pinned scenario;
-  freeplay is the least.
+- **Scenario file** (**real, w1.6** — below): seed, map, roster, starting
+  balances, pinned template firings (world-time or predicate), director on/off
+  + pressure params. The tutorial is the most-pinned scenario; freeplay is the
+  least.
 - **Needs list**: kind, interval, base cost (v1: one row — coin).
 
 *Implemented (w1.3): the needs list, whole.* `needs::NEEDS` is one row —
@@ -962,7 +1003,32 @@ competence value for an aptitude — with the reaction rows in their own table
 keyed by trait id. The description is validated as one stranger-facing ASCII
 line. The other three formats arrive with the modules that read them; the
 roster and starting balances are authored in code until the scenario file
-lands (§8, wave 1.5).
+lands (§8, wave 1.5). *(Retired by wave 1.6: the roster's balances and
+arrival minutes are the scenario file's — below.)*
+
+*Implemented (w1.6): the scenario file, real.* ASCII files under
+`games/ninjo/scenarios/`, one statement a line, compiled in with
+`include_str!` and read by `scenario::parse`, which refuses a file it cannot
+read whole with the file, the line, what was wrong and the fix. **Freeplay is
+the first file and it is the authored start moved, not redesigned** — the same
+ten, the same purses, desperations and arrival minutes, the treasury empty and
+the seed zero — and the proof is a transcript identity: the freeplay file with
+the director off reproduces the pre-refactor build's opening and twelve
+twelve-day worlds (three seeds, both players, the injector switched out and
+the file's own `director off`) **to the byte** (`directed::scenario_equality`,
+FNV-1a over every event, every person, every petition and every port). The
+second file, `pinned-collector.txt`, is a **test scenario**: freeplay's camp,
+the director off, and one pin — D1 for Bob at minute 90 — which fires exactly
+then under every speed script (`pressed::pinned`). The scenario id rides the
+opening log line, the tuning drawer's stamp, and the verify report's stamp;
+`?scenario=<id>` opens one on the page, refused loudly when no file has that
+id. **Where it bent the format**: the pressure params and the relationship
+preset stay drawer rows — the scenario says whether the director speaks and
+the drawer says how hard, because a number with two homes is two ways to move
+it; who the cast *are* stays `people::cast` (`CAST.md`'s content), and a
+scenario must open all ten in registry order (the party list and the roster
+are one list); and a **predicate pin** is recorded in the format and refused
+by the parser by name — the tutorial that needs one is post-MVP.
 
 ## 7. The MVP
 
@@ -994,8 +1060,9 @@ session per handoff stands)
   resolution** (fit matters — **done**: three tiers, the odds shown, the share)
 → **1.5 petitions** (**done** — the cast asking, obligation as voicing, the
   pipe's other end) →
-  **1.6 injector** (wave close: sanitation whose first pass is the UI exemplar
-  audit; the vocabulary question) → MVP gate. Each lands into a running world;
+  **1.6 injector** (**done** — the minimal injector, D1-D3 and the scenario
+  file; **wave 1 is closed**; wave close: sanitation whose first pass is the
+  UI exemplar audit; the vocabulary question) → MVP gate. Each lands into a running world;
   owner sanity-plays between sessions but fun is not judged. **Reordered
   2026-09-03** on the wave-1.1 playtest: the control verb is fixed before the
   economy is built on it — the MVP loop in the order it is played (ask, feed,
@@ -1011,7 +1078,10 @@ session per handoff stands)
     tune down; a world that interrupts you twice as often as the drawing
     board expected was the one that felt alive. It is a starting point for
     the drawer, not a finding about the design.
-- **MVP gate playtest** after 1.6.
+- **Wave 1 — done** (2026-10-02): autonomy, asks, needs and settlement,
+  resolution, petitions and the minimal injector, all seven rows of §5's
+  wave-1 column, each disableable and each off-pass green.
+- **MVP gate playtest** after 1.6 and the wave-1 sanitation pass.
 - **3+** aspirations / threats / arrival (any order) → **4 parties**
   → knowledge when the experiment is wanted. Re-derive waves at each
   GDD refresh; the registry is the source.
@@ -1287,70 +1357,113 @@ The mutation round grew to fifty constants and notices all of them, through an
 eleventh instrument — the petitions battery, every expectation a shipped
 literal.
 
+*Implemented (w1.6): the injector battery, and the scenario equality.*
+`src/directed.rs` (staged), `src/pressed.rs` (played) and `src/eventshots.rs`, every
+expectation a shipped literal.
+
+- **Scenario equality** (`directed::scenario_equality`): the freeplay file's
+  opening, and twelve worlds of twelve days (seeds 0, 7, 42; idle and
+  attentive; the injector switched out *and* the file's own `director off`),
+  fingerprint byte-identical to the pre-refactor build's — the literals were
+  taken from the tree before the file landed. Behaviour-free, asserted.
+- **Determinism**: the same seed replays the director's firings and the
+  petitions they raise word for word, and another seed parts them
+  (`pressed::replay`); **speed-invariance** over the new source rides the
+  petitions sweep (`petitioned::invariance`, three scripts to minute 16000,
+  now also requiring a director firing inside the window).
+- **The pinned firing** (`pressed::pinned`): the test scenario's D1 for Bob
+  fires at minute 90 exactly — its feed line, its raise and its voicing all
+  at 90 — under all three speed scripts, with identical transcripts.
+- **The idle sweep re-judged, director on** (sixteen worlds, both players,
+  twelve days): no firing and no director petition before `calm_days` in
+  **every** world; never more than `director_max` director petitions standing
+  at once (`most_standing`, over the record); director petitions **idle 1-2,
+  attentive 3-8**, pinned; the limp floor stands; **Steve still goes short
+  first** in every idle world. The petitions bands moved by one: idle walk-outs
+  5-10 → 6-10.
+- **The attention differential, re-passed with the policy unchanged**: the
+  attentive worst world fails **5** petitions (was 7) against neglect's best
+  11, and walks 2 out against 6 — margins re-pinned at **6 and 4** (were 4
+  and 3). Read against the same worlds with the injector off, the petition
+  margin is 4 with it off and 6 with it on: **external pressure widened the
+  margin**, and `pressed::sweeps` asserts it does not narrow.
+- **Module-off**: the matrix is **eight passes**; and `pressed::module_off`
+  asserts the injector off *and* petitions off each silence it — no firing, no
+  pin, no director petition, in freeplay and in the pinned scenario, under
+  both players.
+- **Mutation**: the three pressure params are seen by `directed::judge_at`
+  (the calm window's end, the drawn gaps, idle world zero's first firing at
+  5885, the cap), and **D1-D3's literals** by `directed::rows_round` — each row
+  raised staged against its literal, then deadline, `{n}`, spread,
+  consequence, traits, site slot, condition and words each moved once:
+  **24 of 24 noticed**. The constants round is **53 of 53**.
+- **Three photographs** (`eventshots`), in the pinned scenario: its opening
+  minute with the scenario's stamp in the notices, the pin's card with the
+  `event` chip drawn whole, and the feed with ignored classes shown — the
+  director's own line under the voicing it caused.
+
 ## 10. Confidence & open ledger
 
-**The economy is built and swept, and not yet played** (wave 1.3): the bands
-hold, the limp floor is asserted and competence beats neglect by a stated
-margin at the shipped constants, but whether the pressure *reads* — whether a
-player can feel the settlement needing them, and see what looking away cost —
-is the owner's next playtest and nothing here can answer it.
+*Rewritten at the wave-1 close (w1.6) as what is open now; the trail of what
+each wave opened and closed is in git and in `FINDINGS.md`.*
 
-Foundation: grid/clock/pathfinding **played**; people substrate
-**played** (in giri; ported and green here); attention **built and
-owner-playable** — the mockup raised it to mocked and wave 0a landed it, and
-the played verdict is the owner's next playtest (does the world interrupt
-you at the right moments, and only those?). All modules **speculative** —
-correct and expected; wave gates convert speculation to played evidence one
-wave at a time.
+**Wave 1 is built and swept, and not yet played as a whole.** Every module of
+§5's wave-1 column is in, each is disableable and green with itself off, and
+the sweeps say the economy holds its bands, the limp floor holds, competence
+beats neglect by a stated margin, and the director widens that margin rather
+than narrowing it. Whether any of it *reads* — whether a player feels the camp
+needing them, sees what looking away cost, and finds being asked things a loop
+worth keeping — is the MVP gate's question (§7), and nothing here can answer
+it.
 
-Open, and **new with wave 1.3** (the three the economy raised, all in
-`FINDINGS.md`): **the camp runs out of work before the band is whole** — the
-authored board is claimed by the middle of day two and the last four arrivals
-find nothing, which the industry answers and an idle player never builds
-(G-032); **nothing lowers desperation** (G-033) — **closed with wave 1.5**: a met
-petition is the pipe's other end; and G-035 (a self-chosen job paid nothing while the scorer weighed its pot) **closed
-with wave 1.4** — the share, and one money term.
+Foundation: grid/clock/pathfinding **played**; the people substrate
+**played** (in giri; ported and green here); attention **owner-playable**.
+The wave-1 modules are **speculative until the MVP gate** — correct and
+expected; the gate converts speculation to played evidence.
 
-Open, and **new with wave 1.4**: **the share Steve's claim allows is three
-percent** (G-048) — the share is honest and small, and making it matter is a
-choice between Steve's purse, the upkeep cadence and the claim's scope; **the
-scorer does not price risk** (G-049) — a character weighs what a job pays if it
-is done, never its odds, which is what keeps desperate people taking poor-fit
-work and is a scorer decision; **the difficulty seam** — odds are a function of
-fit alone this wave, and a per-job difficulty would be one more input to
-`resolution::odds` (a field on `Quest`, read by the curve; the surfaces already
-print whatever the function returns), deliberately not built; **should fit
-matter at an industry?** — a shift is never rolled (`resolution::rolls_at`) and
-the settlement panel says so; whether camp work should have odds is open; and
-**the attention config holds twenty classes** (G-047) — **closed with wave
-1.5**, re-laid to twenty-four.
+**The director, beyond the minimum.** Wave 1.6 is the *minimal* injector —
+three canned templates at a fixed mean cadence, capped, after a calm window.
+**The full director is post-MVP**: pressure curves, storyteller pacing, threats
+(§5's `threats` row, wave 3) and templates beyond D1-D3 are deliberately not
+built, and the MVP gate is meant to measure the character loop under mild
+pressure, not a storyteller. The tutorial — the most-pinned scenario — is
+post-MVP too; the scenario file carries world-time pins and records predicate
+pins without building them.
 
-Open, and **new with wave 1.5**: **an idle camp is at the desperation ceiling
-before any cliff falls** (G-050) — the limp floor holds three days, not twelve;
-**T3 asks for paying work and is judged on desperation** (G-051), which only
-the other's own petition lowers; **ARRANGE on `thin-days` opens an empty work
-list** once the board is spent (G-052); **nearly everybody carries a petition
-by day four** (G-053), past the mockup's density before 1.6 adds the
-director's; and two shapes recorded, not built: **decline and promise** stay
-variants of the card (obligation is voicing — owner, 2026-10-02), and
-**knowledge-gated credit** (must the petitioner *know* who met it?) waits on
-the knowledge lens. The **director source class** is data only until 1.6.
-`proud`'s refusal of a gift has no field yet: no proud character carries a
-money-shaped petition, so no surface reaches it.
+Open, from the economy and resolution (all in `FINDINGS.md`): **the camp runs
+out of work before the band is whole** (G-032; the industry answers it and an
+idle player never builds one); **the share Steve's claim allows is three
+percent** (G-048); **the scorer does not price risk** (G-049); **the difficulty
+seam** — odds are a function of fit alone, and a per-job difficulty would be
+one more input to `resolution::odds`, deliberately not built; and **should fit
+matter at an industry?** — a shift is never rolled.
+
+Open, from the petitions and the director: **an idle camp is at the
+desperation ceiling before any cliff falls** (G-050); **T3 asks for paying
+work and is judged on desperation** (G-051); **ARRANGE on `thin-days` opens an
+empty work list** once the board is spent (G-052); **nearly everybody carries
+a petition by day four** (G-053), which is also why **the director is
+throttled by the cast's own petitions** (G-057) — one or two director
+petitions in an idle camp's twelve days, three to eight in an attended one;
+and **D1 is often paid on the doorstep** (G-056), a pressure event that
+relieves pressure when the purse already holds the debt. Recorded, not built:
+**decline and promise** stay variants of the card (obligation is voicing —
+owner, 2026-10-02); **knowledge-gated credit** waits on the knowledge lens;
+`proud`'s refusal of a gift has no field, because no proud character carries a
+money-shaped petition.
 
 Open (deliberately): **the expectation model beyond the standing rate**
-(fit-adjusted? regard-adjusted?) · **open postings travelling** (this wave:
-heard at camp only) · **standing-posting fatigue** · **the ask-spam question**
-(does asking spend regard?) · **whispers' rumor vocabulary and spread model**
-(capsule) · **a surface for site-shaped postings**, and a messenger anybody
-can see · the wave-1 class registrations and whether the mockup's
-defaults survive a real petition load (wave 0a shipped them; nothing this
-build has opens on pause) · **the trait vocabulary is locked** (owner,
-2026-10-02): petition copy is written against the shipped words, and a change
-now is a rename, not a data edit — §7 of `CAST.md` carries the question the
-wave-1.5 playtest asks of them ·
-aptitude-change mechanism (two candidates recorded) · bond/grudge
-erasure rules · quest authoring surface beyond template `next` links ·
-settlement stock list beyond gold-only (bound to a famine/siege design
-need) · map generation (post-GDD session; requirements now stateable:
-one town, sites, terrain variety, readable at 8–12 characters' scale).
+(fit-adjusted? regard-adjusted?) · **open postings travelling** (heard at camp
+only) · **standing-posting fatigue** · **the ask-spam question** (does asking
+spend regard?) · **whispers' rumor vocabulary and spread model** (capsule) ·
+**a surface for site-shaped postings**, and a messenger anybody can see ·
+whether the wave-1 class defaults survive a real petition load (the MVP
+playtest) · **the trait vocabulary is locked** (owner, 2026-10-02): petition
+copy is written against the shipped words, and a change now is a rename, not
+a data edit — `CAST.md` §7 carries the question the playtest asks of them ·
+aptitude-change mechanism (two candidates recorded) · bond/grudge erasure
+rules · quest authoring surface beyond template `next` links · settlement
+stock list beyond gold-only (bound to a famine/siege design need) · **a
+scenario with fewer than the ten** (the party list and the roster are one
+list) · map generation (post-GDD session; requirements now stateable: one
+town, sites, terrain variety, readable at 8–12 characters' scale).

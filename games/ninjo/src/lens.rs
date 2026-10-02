@@ -492,7 +492,11 @@ impl<'a> Lens<'a> {
 /// over a `Sim` is not quietly a copy of one: it is asserted against the same
 /// `Sim` it was built from, after that `Sim` has been mutated.
 pub fn identity(checks: &mut crate::checks::Checks, tuning: &Tuning) {
-    let mut sim = Sim::opening(tuning, crate::modules::ModuleSet::ALL);
+    let mut sim = Sim::opening(
+        crate::scenario::freeplay(),
+        tuning,
+        crate::modules::ModuleSet::ALL,
+    );
     sim.everybody_here();
     // Write something into every store, through the write API, so the
     // accessors have more than zeroes to agree about.
@@ -652,7 +656,11 @@ pub fn identity(checks: &mut crate::checks::Checks, tuning: &Tuning) {
          home tile"
             .to_owned(),
     );
-    let mut moved = Sim::opening(tuning, crate::modules::ModuleSet::ALL);
+    let mut moved = Sim::opening(
+        crate::scenario::freeplay(),
+        tuning,
+        crate::modules::ModuleSet::ALL,
+    );
     moved.everybody_here();
     let out = moved.parties[0].member;
     moved.parties[0].activity = Activity::Working { until: 99 };

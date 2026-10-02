@@ -96,6 +96,25 @@ about *this game*: what it closes (G-033, G-047, and G-034 a second time) and
 what the petitions exposed (G-050 to G-053), plus one about its own harness
 (G-054).
 
+**Wave 1.6 (the injector and the scenario file, 2026-10-02) read**
+`CLAUDE.md`, the `make-game` skill, this game's own `GDD.md`, `CAST.md`,
+`UI.md` and `FINDINGS.md`, and the `src/` files the injector lands on — the
+petitions and their record, the scheduler, the people, the flow and its
+scenario load, the module registry, the constants and the drawer, the
+attention table, the card, the economy and petitions batteries, the
+conductor, the capture and the harness. It opened no `docs/internal/` and no
+ADR. **It asked `docs/api/` one thing** — `Rng::below`'s signature, for the
+director's draws (`jidousha-api.md`'s reference answered it, `u32` in and
+out) — and its addressing is G-045's mix, already written. **A reading-fence
+slip, recorded because the fence is the exercise** (`make-game` §0.1): looking
+for how wide a clipped card line may run, the session ran a `grep` for
+`fn columns_in` across `crates/*/src/` before `docs/api/`, which printed two
+signature lines of `crates/jidousha-render-core/src/font/style.rs`. Nothing
+came of them — the answer it used is the game's own `panels::clipped`, and
+`jidousha-api.md` carries the same two signatures — so it is not a document
+finding, but "looked in the engine first" is what the fence measures. Its
+entries below are all about *this game* (G-056 to G-059).
+
 ### G-050 — the game's own: an idle camp reaches the desperation ceiling on its fifth night, petitions or not
 
 Class: **the game's own** (a design fact the petition horizon exposed; the
@@ -221,6 +240,84 @@ stopped, and `petitioned::a_stop_in_the_ledger_says_why` asserts it over the
 staged camp stopped by its failure, which the content floors judge as a fifth
 petitions state. The other drawers (ROSTER, LEDGER, TUNE) still stop silently
 under a pause; that predates this wave and is the next surface's to decide.
+
+### G-056 — the game's own: the collector D1 brings is often paid on the doorstep
+
+Class: **the game's own** (a template's shape, as the handoff specified it) ·
+Game: ninjo · Files: `games/ninjo/src/petitions.rs` (D1
+`the-collector-comes`) · Open
+
+D1 is "T1's body and consequence ... eligible: anyone `indebted` - wallet
+regardless". T1's condition is the purse holding `{n}` (30g) at any point
+before the deadline, and T1 was only ever raised on somebody whose purse was
+*under* 30g. D1 reaches the indebted whatever they hold, so when Bob is
+carrying 30g or more the petition is **met in the minute it is voiced** —
+"Bob paid the collector off, for now ... nobody's doing but the world's" —
+and, being met, it takes a step off his desperation (`plea_relief`). In the
+attentive sweep at seed 0 this happens twice to Bob in two days. The collector
+arriving and being paid is a coherent story, but a pressure event that relieves
+pressure is the opposite of what an injector is for. Built as specified; the
+choices are the owner's: D1's condition could be *paying* 30g (the purse
+falling by `{n}` — a burn, which would make it a wallet event rather than a
+regard one), its eligibility could keep T1's purse clause, or a met-on-voicing
+petition could relieve nothing. No new consequence kind is needed for any of
+them.
+
+### G-057 — the game's own: the director is throttled by the cast's own petitions
+
+Class: **the game's own** (a density, measured; the playtest's to judge) ·
+Game: ninjo · Files: `games/ninjo/src/director.rs` (`reach`, the cap) · Open
+
+The one-active-petition rule holds for the director as it does for everybody,
+and G-053 is still true: by day four eight or nine of ten carry a petition of
+their own. So an idle camp gives the director almost nobody to reach — over
+sixteen idle worlds of twelve days it voices **one or two** director petitions
+a world, and most of its firings pass ("nobody an event could reach", or one
+already in play at `director_max` 1). An attentive camp, whose petitions get
+met and so free their carriers, gets **three to eight**. The pressure is mild
+by construction rather than by tuning — which is what the MVP gate asked for,
+and is also why the attention differential *widened* (four petitions to six:
+the director presses hardest on the camp that is being looked after). Whether
+that reads as "the world moves without you" or as "the world moves mostly when
+you move it" is the playtest's question. The levers are the three drawer rows;
+the cast's own density (G-053) is the larger one.
+
+### G-058 — the game's own: the pressure params are named for the drawer's cell
+
+Class: **the game's own** (a deviation from the handoff's names) · Game:
+ninjo · Files: `games/ninjo/src/constants.rs` · Closed in this wave
+
+The handoff names the rows `director_calm_days`, `director_period_hours` and
+`director_max_active`. The drawer's name cell is 136 units — fourteen glyphs at
+the small size (`floors::tuner_has_room` asserts every name fits it), and the
+longest of the three is twenty-one. They ship as **`calm_days`**,
+**`director_hours`** and **`director_max`**: the same three numbers, the same
+meanings (`Field::meaning` says each in words), names that fit. The drawer
+holds fifty-three constants now (G-059 is what that cost).
+
+### G-059 — the game's own: the tuning drawer's fourth column filled, and the stamp swapped places with the prose band
+
+Class: **the game's own** (a layout ceiling, the third: G-028, G-034) · Game:
+ninjo · Files: `games/ninjo/src/layout.rs` (`tuner_stamp`, `tuner_foot_for`,
+`tuner_hint`), `src/tuning.rs` (`stamp_text`), `src/floors.rs`
+(`tuner_right_column`) · Closed in this wave
+
+The three pressure params took the fourth stepper column to eleven rows, and
+the in-effect stamp under it — a heading, six named moved constants, a count
+and the seed, now with the scenario beside it — no longer fit: at fifty-three
+constants the column's foot holds two rows and the floor asks for the tallest
+stamp under one more constant. Found by `floors::tuner_right_column`, as it
+was written to be ("the floor fails while there is still room"), before any
+screenshot did. **The re-lay**: the stamp went up into the header band (three
+rows, 320 wide, between the presets and APPLY) and **packs** — the seed and
+the scenario on its first row, the moved constants run along the other two as
+`name value` pairs, never split, with `+N more` for the rest — and the prose
+band, which is one short state at a time, came down to the column's foot,
+where the room shrinks as the column grows. The floor asserts both: the stamp
+packs at its tallest with no row wider than its band, and the prose band's
+tallest state fits under one more constant. The column has room for three
+more rows of stepper before this happens again; the next ceiling is the
+drawer itself (fifty-six slots), and a fifth column does not fit the screen.
 
  does not say whether nearby seeds give independent streams
 
