@@ -70,6 +70,7 @@ mod fear;
 mod floors;
 mod floors_w5;
 mod floors_w6;
+mod floors_w7;
 mod forecast;
 mod foundations;
 mod generation;
@@ -135,6 +136,7 @@ mod w6;
 mod w6_battery;
 mod w6_stages;
 mod w7;
+mod w7_battery;
 mod winter;
 #[cfg(test)]
 mod winter_tests;

@@ -182,6 +182,7 @@ impl House {
             | Target::Leaf(_)
             | Target::Skip
             | Target::BeginAgain
+            // SPEC-GAPS KG-41: a group of winter seats is not a drop target; only its seats.
             | Target::Group(_)
             | Target::LetWinterPass => None,
         }

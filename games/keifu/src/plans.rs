@@ -291,7 +291,8 @@ pub fn courtship(heroes: &[Hero], a: Option<HeroId>, b: Option<HeroId>) -> Court
     Courtship::WillWed
 }
 
-/// A living spouse: widowed heroes may remarry (SPEC §11.6).
+/// A living spouse: widowed heroes may remarry (SPEC §11.6). SPEC-GAPS KG-45: living is
+/// fate LIVING, so a crowned spouse does not bar a new one.
 fn has_living_spouse(heroes: &[Hero], hero: HeroId) -> bool {
     heroes[hero]
         .bonds

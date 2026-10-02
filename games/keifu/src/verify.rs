@@ -340,6 +340,7 @@ pub fn run() -> ExitCode {
     summary.extend(w7_vector);
     summary.push(crate::w7::check_played(&mut checks));
     summary.push(crate::w7::check_controls(&mut checks));
+    summary.extend(crate::w7_battery::check_agreement(&mut checks, &content));
     summary.push(crate::sessions::check_family(&mut checks, &mut recorder));
     summary.push(crate::sessions::check_seeds(&mut checks, &content));
     summary.push(crate::sessions::check_staged_sheets(&mut checks));

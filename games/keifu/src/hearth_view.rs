@@ -27,18 +27,23 @@ use crate::hearth::{Group, Seat};
 use crate::house::House;
 use crate::screen::{MIN_TEXT, Page, Target, UiState, ink, layers, wrap};
 use crate::summer::{
-    BOARD, FAMILY_BUTTON, LEFT_X, ROSTER_TOP, button, card_rect, hero_card, lay_out_top_bar,
-    screen_rect, yard_top,
+    BOARD, LEFT_X, ROSTER_TOP, button, card_rect, hero_card, lay_out_top_bar, screen_rect, yard_top,
 };
 use crate::text::fmt;
 use crate::winter::{WinterPlan, plan};
 use crate::words::W;
 
-/// "Let the winter pass", in the bar left of "The family" — wider than "Set out" for
-/// its longer label.
+/// "Let the winter pass": under the benches, the right column's width. The top bar
+/// has no room for its label beside the Door's countdown and "The family".
 pub const PASS_BUTTON: Rect = Rect {
-    min: Vec2::new(FAMILY_BUTTON.min.x - 184.0, 12.0),
-    max: Vec2::new(FAMILY_BUTTON.min.x - 12.0, 46.0),
+    min: Vec2::new(
+        BOARD.min.x + (BOARD.max.x - BOARD.min.x - GAP) * 0.5 + GAP,
+        BOARD.min.y + (PAIR_H + GAP) + BENCHES_H + 2.0 * GAP,
+    ),
+    max: Vec2::new(
+        BOARD.max.x,
+        BOARD.min.y + (PAIR_H + GAP) + BENCHES_H + 2.0 * GAP + 44.0,
+    ),
 };
 /// The gap between the groups' panels.
 const GAP: f32 = 8.0;
@@ -152,7 +157,9 @@ pub struct Notes {
     pub benches: [Option<String>; BENCHES],
 }
 
-/// The notes a plan shows, given who sits in the hearth `house` holds.
+/// The notes a plan shows, given who sits in the hearth `house` holds. SPEC-GAPS KG-44:
+/// a pair's lesson when its learner's seat is filled, "no learner" / "no child" when
+/// only its teacher sits.
 pub fn notes(content: &Content, house: &House, plan: &WinterPlan) -> Notes {
     let words = &content.words;
     let sat = |seat| house.hearth.at(seat).is_some();
@@ -175,7 +182,7 @@ pub fn notes(content: &Content, house: &House, plan: &WinterPlan) -> Notes {
     }
 }
 
-/// The house as the release would leave it (SPEC-GAPS KG-41): the hand at its landing,
+/// SPEC-GAPS KG-41: the house as the release would leave it: the hand at its landing,
 /// or lifted out of its seat if it would land nowhere. Without a drag, the house.
 pub fn previewed<'h>(house: &'h House, ui: &UiState) -> Cow<'h, House> {
     let Some(drag) = ui.drag else {
@@ -474,6 +481,13 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_pass_control_sits_under_the_benches_inside_the_board() {
+        let benches = group_rect(Group::Benches);
+        assert!(PASS_BUTTON.min.y > benches.max.y && PASS_BUTTON.min.x == benches.min.x);
+        assert!(BOARD.contains_rect(PASS_BUTTON));
+    }
+
+    #[test]
     fn every_winter_seat_has_a_tile_inside_its_group_and_no_two_tiles_overlap() {
         let seats: Vec<Seat> = crate::hearth::Seat::all()
             .into_iter()
@@ -483,10 +497,9 @@ mod tests {
         for (i, a) in seats.iter().enumerate() {
             let rect = seat_rect(*a);
             assert!(
-                GROUPS.iter().any(|g| {
-                    let panel = group_rect(*g);
-                    panel.contains(rect.min) && panel.contains(rect.max)
-                }),
+                GROUPS
+                    .iter()
+                    .any(|g| { group_rect(*g).contains_rect(rect) }),
                 "{a:?}"
             );
             for b in &seats[i + 1..] {
@@ -500,10 +513,7 @@ mod tests {
         }
         for group in GROUPS {
             let panel = group_rect(group);
-            assert!(
-                BOARD.contains(panel.min) && BOARD.contains(panel.max),
-                "{group:?}"
-            );
+            assert!(BOARD.contains_rect(panel), "{group:?}");
         }
     }
 }

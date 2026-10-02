@@ -12,7 +12,10 @@
 //! holding the help over year 1's full board, and Garrick's sheet scrolled to its end;
 //! and W5's staged ghost: "Lay Garrick's ghost" on a year-2 board. Then W6's telling:
 //! the stay-home Meanwhile, a story half typed, the played page whole, a forging (the
-//! cradle-ring, with Garrick's sheet in the dock), and the closed house's verdict.
+//! cradle-ring, with Garrick's sheet in the dock), and the closed house's verdict. Then
+//! W7's: Odo held over Pip's bench with the "+1 Spirit" preview, the played winter's
+//! hearth seated with every preview, the winter page, Pip's and Odo's sheets after it,
+//! and Ysolde's road-book on her sheet beside the played winter's page.
 
 use std::path::{Path, PathBuf};
 
@@ -67,6 +70,12 @@ pub fn capture_all(checks: &mut Checks) -> Vec<String> {
         (&["w6-page"][..], "keifu-w6-page.png"),
         (&["w6-ring"][..], "keifu-w6-ring.png"),
         (&["w6-closed"][..], "keifu-w6-closed.png"),
+        (&["w7-drag"][..], "keifu-w7-drag.png"),
+        (&["w7-seated"][..], "keifu-w7-hearth.png"),
+        (&["w7-winter"][..], "keifu-w7-winter.png"),
+        (&["w7-winter", "Pip"][..], "keifu-w7-pip.png"),
+        (&["w7-winter", "Odo"][..], "keifu-w7-odo.png"),
+        (&["w7-played", "Ysolde"][..], "keifu-w7-road-book.png"),
     ]
     .into_iter()
     .enumerate()
@@ -94,6 +103,15 @@ pub fn capture_all(checks: &mut Checks) -> Vec<String> {
                 crate::w6_stages::stage_ring(&mut sim);
             } else if *name == "w6-closed" {
                 crate::w6_stages::stage_closed(&mut sim);
+            } else if *name == "w7-drag" {
+                let _held = crate::w7::stage_mid_drag(&mut sim);
+            } else if *name == "w7-seated" {
+                crate::w7::stage_played_seating(&mut sim);
+            } else if *name == "w7-winter" {
+                crate::w7::stage_oracle_winter(&mut sim);
+            } else if *name == "w7-played" {
+                let _ = crate::w7::stage_played_winter(&mut sim);
+                point_at(&mut sim, Target::Leaf(0), true);
             } else if *name == "w5-ghost" {
                 crate::w5::stage_ghost_board(&mut sim);
             } else if *name == "q0" {

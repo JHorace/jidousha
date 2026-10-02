@@ -226,6 +226,23 @@ pub fn check_oracle(checks: &mut Checks) -> (String, Vec<String>) {
 /// garden, Ysolde at the table at her road's last stage, Pip and Odo on the first bench,
 /// Wren alone on the second. Returns the turning's lines.
 pub fn stage_played_winter(sim: &mut HeadlessSim) -> Vec<String> {
+    stage_played_seating(sim);
+    point_at(sim, Target::LetWinterPass, true);
+    let mut read = Vec::new();
+    let mut guard = 0;
+    while guard < 10 {
+        read.extend(turning_lines(sim));
+        guard += 1;
+        if crate::verify::target_rect(sim, Target::Leaf(guard)).is_none() {
+            break;
+        }
+        point_at(sim, Target::Leaf(guard), true);
+    }
+    read
+}
+
+/// The played winter's seating, by the scripted pointer, not yet let pass.
+pub fn stage_played_seating(sim: &mut HeadlessSim) {
     stay_home_into_winter(sim);
     let ysolde = hero_named(sim, "Ysolde");
     if let Some(dream) = sim.world_mut().resource_mut::<House>().heroes[ysolde]
@@ -245,18 +262,7 @@ pub fn stage_played_winter(sim: &mut HeadlessSim) -> Vec<String> {
     ] {
         seat_at(sim, name, seat);
     }
-    point_at(sim, Target::LetWinterPass, true);
-    let mut read = Vec::new();
-    let mut guard = 0;
-    while guard < 10 {
-        read.extend(turning_lines(sim));
-        guard += 1;
-        if crate::verify::target_rect(sim, Target::Leaf(guard)).is_none() {
-            break;
-        }
-        point_at(sim, Target::Leaf(guard), true);
-    }
-    read
+    crate::w4::away(sim);
 }
 
 /// The played winter, read. Returns its summary.
@@ -352,11 +358,72 @@ pub fn check_played(checks: &mut Checks) -> String {
     "W7 played winter: Garrick rested (dread 2 to 1), Pip learned under Odo, Wren waited for a teacher, Maren and Brannoc wed, Ysolde told the tale and her road-book was forged at the table, Odo's dream counted — the winter page in resolution order".to_owned()
 }
 
+/// Each group's help as the dock shows it when its heading is pointed at: `ui.winter`'s
+/// `*_help` with CONSTANTS §9-§10's numbers, as shipped.
+pub const GROUP_HELP: [(Group, &str, &str); 6] = [
+    (
+        Group::Hall,
+        "THE HALL",
+        "There are more hands than seats. Whoever is left in the hall keeps the house through the winter and gains nothing by it.",
+    ),
+    (
+        Group::Fire,
+        "BY THE FIRE",
+        "Only the fire heals. A wounded hero left in the hall goes into summer wounded.",
+    ),
+    (
+        Group::Training,
+        "THE TRAINING YARD",
+        "Alone, a hero trains their own calling, up to 6. A teacher passes on their best aptitude, up to their own. Veterans and elders teach well. The young learn fast.",
+    ),
+    (
+        Group::Garden,
+        "THE GARDEN",
+        "Two may wed when both are 18 or older and no more than 15 years apart. Kin cannot wed. From the year after they wed, a pair may have a child, 60 times in a hundred each winter, while both are 18 to 45. Rivals who walk here a winter make peace.",
+    ),
+    (
+        Group::Table,
+        "THE LONG TABLE",
+        "Tell the tale: +1 renown to the teller, and +1 to the house, once a winter however many tell it. It is also the last step of many dreams.",
+    ),
+    (
+        Group::Benches,
+        "THE BENCHES IN THE YARD",
+        "From the age of 6, a child learns 1 a winter from whoever sits beside them, up to 4. Their first teacher decides their calling. Drag the child from the yard, and an adult beside them.",
+    ),
+];
+
+/// Point at a group's heading.
+pub fn point_at_group(sim: &mut HeadlessSim, group: Group) {
+    let r = if group == Group::Hall {
+        crate::hearth_view::hall_rect()
+    } else {
+        group_rect(group)
+    };
+    let heading = Rect::from_min_size(r.min, Vec2::new(r.size().x, 14.0));
+    crate::verify::point(sim, heading.center(), false);
+}
+
 /// The quiet winter, the turning's controls, a child carried to the hall, a hand
-/// released over nothing. Returns the summary.
+/// released over nothing, each group's help. Returns the summary.
 pub fn check_controls(checks: &mut Checks) -> String {
     let mut sim = session(SEEDS[0]);
     stay_home_into_winter(&mut sim);
+    for (group, heading, help) in GROUP_HELP {
+        point_at_group(&mut sim, group);
+        let dock = lines_in(&page_of(&sim), SHEET);
+        checks.require(
+            dock == [heading, help],
+            "a group's help in the dock is not its shipped heading and help",
+            format!("{group:?}: {dock:?}"),
+        );
+    }
+    let fire = group_lines(&sim, Group::Fire);
+    checks.require(
+        fire.contains(&"Rest. A wound heals, 1 dread is shed.".to_owned()),
+        "the fire's text does not say one dread is shed",
+        format!("{fire:?}"),
+    );
     // A child can be carried anywhere in winter: Wren from the yard to the hall.
     let wren = hero_named(&sim, "Wren");
     let free = sim

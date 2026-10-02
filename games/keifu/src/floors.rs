@@ -10,7 +10,8 @@
 //! Surfaces: the summer screen with nobody pointed at and with each hero's sheet,
 //! and the family screen with nobody pointed at and with each node's remembrance;
 //! then W3's settled and blessed sheets, staged; then W4's board — the hand
-//! mid-drag, seated cards, quest sheets and history panels, and a staged worst case.
+//! mid-drag, seated cards, quest sheets and history panels, and a staged worst case;
+//! then W5's, W6's and W7's own (the hearth and the turning's winter page).
 //! All of it at the window the game opens at and at two web canvases (`SIZES`).
 
 use jidousha::prelude::{Camera, PhysicalSize, Rect};
@@ -235,6 +236,21 @@ fn judge(
     );
 }
 
+/// Judge the surface `sim` shows now, its first page only: for a hand held mid-drag,
+/// which the wheel cannot page (the wheel turns over the dock, and the hand is over a
+/// seat). The held hero's whole sheet is judged where it is pointed at.
+pub fn look_held(
+    checks: &mut Checks,
+    tally: &mut Tally,
+    recorder: &mut FrameRecorder,
+    sim: &mut jidousha::prelude::HeadlessSim,
+    name: &str,
+) {
+    let frame = frame_at(recorder, sim, tally.size);
+    let page = page_of(sim);
+    judge(checks, tally, name, &page, &frame, false);
+}
+
 /// Judge the surface `sim` shows now; if its sheet is longer than the dock, page
 /// through it with the wheel and judge every page, then require that every line of
 /// the sheet was on a page. Leaves the dock scrolled back to the top.
@@ -412,8 +428,9 @@ fn battery(checks: &mut Checks, tally: &mut Tally, recorder: &mut FrameRecorder,
     let w4 = w4_surfaces(checks, tally, recorder);
     let w5 = crate::floors_w5::w5_surfaces(checks, tally, recorder, label);
     let w6 = crate::floors_w6::w6_surfaces(checks, tally, recorder, label);
+    let w7 = crate::floors_w7::w7_surfaces(checks, tally, recorder, label);
     checks.require(
-        tally.surfaces == 2 + seated.len() + everyone + staged.len() + 1 + w4 + w5 + w6,
+        tally.surfaces == 2 + seated.len() + everyone + staged.len() + 1 + w4 + w5 + w6 + w7,
         "a surface was not judged",
         format!("{label}: {} surfaces", tally.surfaces),
     );
