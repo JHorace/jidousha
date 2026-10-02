@@ -105,10 +105,13 @@ fn judge(
     }
     // The dock: its lines inside its margin and clear of the scrollbar's lane;
     // nothing else's target under it; a scrollbar whenever its sheet is longer.
+    // The lane is measured from the dock's edge, not from `text_rect`, so a text
+    // rect widened under the bar is caught rather than agreed with.
     let dock_text = crate::dock::text_rect();
+    let lane = crate::dock::lane();
     for row in rows.iter().filter(|r| SHEET.contains_rect(r.panel)) {
         checks.require(
-            dock_text.contains_rect(row.bounds()),
+            dock_text.contains_rect(row.bounds()) && row.bounds().max.x < lane.min.x,
             "a line in the sheet dock runs into its margin or under its scrollbar",
             format!(
                 "{name}: {:?} measures {:?}, the dock sets type in {dock_text:?}",
