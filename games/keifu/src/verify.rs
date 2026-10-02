@@ -320,6 +320,12 @@ pub fn run() -> ExitCode {
     summary.extend(crate::w5::check_invariant(&mut checks, &content));
     summary.extend(crate::w5_shape::check_shape(&mut checks, &content));
     summary.push(crate::w5::check_ghost_slot(&mut checks, &content));
+    summary.push(crate::w6::check_stay_home(&mut checks));
+    let (played, played_vector) = crate::w6::check_played(&mut checks);
+    summary.push(played);
+    summary.extend(played_vector);
+    summary.push(crate::w6::check_controls(&mut checks));
+    summary.push(crate::w6::check_forging(&mut checks));
     summary.push(crate::sessions::check_family(&mut checks, &mut recorder));
     summary.push(crate::sessions::check_seeds(&mut checks, &content));
     summary.push(crate::sessions::check_staged_sheets(&mut checks));

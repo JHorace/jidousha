@@ -129,16 +129,9 @@ pub enum DeedKind {
 /// W8 decides the rest on the death page.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DreamFate {
-    /// Not decided yet.
+    /// Not decided yet. W8 adds NEVER_DREAMT, FULFILLED, PASSED_ON and LEFT_TO_NO_ONE,
+    /// which only the death page decides.
     Undecided,
-    /// There was no dream.
-    NeverDreamt,
-    /// It was done.
-    Fulfilled,
-    /// An heir took it up.
-    PassedOn,
-    /// No one took it up; it walks as a ghost.
-    LeftToNoOne,
     /// Its ghost was laid, in `Hero::laid_year`.
     LaidToRest,
 }

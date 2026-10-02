@@ -10,7 +10,9 @@
 //! previewing them both with his sheet in the dock; the quest sheet once both are
 //! seated; the staged worst case and its sheet. Then the sheet dock's own: idle,
 //! holding the help over year 1's full board, and Garrick's sheet scrolled to its end;
-//! and W5's staged ghost: "Lay Garrick's ghost" on a year-2 board.
+//! and W5's staged ghost: "Lay Garrick's ghost" on a year-2 board. Then W6's telling:
+//! the stay-home Meanwhile, a story half typed, the played page whole, a forging (the
+//! cradle-ring, with Garrick's sheet in the dock), and the closed house's verdict.
 
 use std::path::{Path, PathBuf};
 
@@ -60,6 +62,11 @@ pub fn capture_all(checks: &mut Checks) -> Vec<String> {
         (&[][..], "keifu-dock-idle.png"),
         (&["Garrick", "end"][..], "keifu-dock-scrolled.png"),
         (&["w5-ghost"][..], "keifu-w5-ghost.png"),
+        (&["w6-stay"][..], "keifu-w6-stay-home.png"),
+        (&["w6-typing"][..], "keifu-w6-typing.png"),
+        (&["w6-page"][..], "keifu-w6-page.png"),
+        (&["w6-ring"][..], "keifu-w6-ring.png"),
+        (&["w6-closed"][..], "keifu-w6-closed.png"),
     ]
     .into_iter()
     .enumerate()
@@ -77,6 +84,16 @@ pub fn capture_all(checks: &mut Checks) -> Vec<String> {
                 crate::w4::stage_worst(&mut sim);
             } else if *name == "end" {
                 crate::verify::scroll_dock(&mut sim, -100.0);
+            } else if *name == "w6-stay" {
+                crate::w6::stage_stay_home(&mut sim);
+            } else if *name == "w6-typing" {
+                crate::w6::stage_typing(&mut sim);
+            } else if *name == "w6-page" {
+                crate::w6::stage_page(&mut sim);
+            } else if *name == "w6-ring" {
+                crate::w6::stage_ring(&mut sim);
+            } else if *name == "w6-closed" {
+                crate::w6::stage_closed(&mut sim);
             } else if *name == "w5-ghost" {
                 crate::w5::stage_ghost_board(&mut sim);
             } else if *name == "q0" {

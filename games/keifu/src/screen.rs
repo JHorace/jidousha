@@ -112,6 +112,16 @@ pub enum Target {
     CloseFamily,
     /// The sheet dock: resting on it keeps its sheet open, pressing in it grabs it to scroll.
     Dock,
+    /// "Set out" / "Stay home" (SPEC §5.3).
+    SetOut,
+    /// The telling's "Go on": complete the story, else the next leaf, else leave (SPEC §8).
+    GoOn,
+    /// One of the telling's numbered leaf buttons.
+    Leaf(usize),
+    /// "Skip ahead": leave the telling now.
+    Skip,
+    /// "Begin another house", once the house has closed (W10 SCAFFOLD).
+    BeginAgain,
 }
 
 /// A hero in hand: picked up from a seat and not yet released.
@@ -144,6 +154,22 @@ pub struct UiState {
     pub dock_wheel: f32,
     /// The dock held by the pointer to scroll it, if it is.
     pub dock_grab: Option<DockGrab>,
+    /// The telling's leaf on screen.
+    pub leaf: usize,
+    /// The tick that leaf's story began typing on (the typewriter, render-side only).
+    pub typing_from: u64,
+    /// "Go on" has completed this leaf's story.
+    pub revealed: bool,
+}
+
+/// The frame clock the typewriter reads: the tick and its length. Nothing in the
+/// house reads it, so the simulation never sees the typewriter.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Clock {
+    /// `Time::tick`.
+    pub tick: u64,
+    /// `Time::fixed_dt`, in seconds.
+    pub dt: f32,
 }
 
 /// The dock held to scroll it: where the press was, and the line shown first then.
@@ -365,10 +391,20 @@ pub fn wrap(text: &str, width: f32, size: f32) -> Vec<String> {
     lines
 }
 
-/// The page for the screen that is up.
-pub fn page(content: &Content, house: &House, ui: &UiState) -> Page {
+/// The page for the screen that is up: the house closed (W10 SCAFFOLD), the telling,
+/// or the summer — each a projection of the house, so the scene cannot disagree with it.
+pub fn page(content: &Content, house: &House, ui: &UiState, clock: Clock) -> Page {
     let mut page = Page::default();
-    crate::summer::lay_out(&mut page, content, house, ui);
+    if house.closed {
+        crate::ending_view::lay_out(&mut page, content, house);
+        return page;
+    }
+    match &house.telling {
+        Some(telling) => {
+            crate::telling_view::lay_out(&mut page, content, house, telling, ui, clock)
+        }
+        None => crate::summer::lay_out(&mut page, content, house, ui),
+    }
     if ui.family_open {
         // The overlay covers the summer screen, so only its targets are live.
         let mut overlay = Page::default();

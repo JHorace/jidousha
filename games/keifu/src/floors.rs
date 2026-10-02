@@ -103,6 +103,36 @@ fn judge(
             format!("{name}: {:?}", row.text),
         );
     }
+    // A control keeps its own room: no row but its label within 4 px of a button.
+    let controls = page.targets.iter().filter(|(_, t)| {
+        matches!(
+            t,
+            Target::OpenFamily
+                | Target::CloseFamily
+                | Target::SetOut
+                | Target::GoOn
+                | Target::Leaf(_)
+                | Target::Skip
+                | Target::BeginAgain
+        )
+    });
+    for (rect, target) in controls {
+        let room = Rect {
+            min: rect.min - jidousha::prelude::Vec2::splat(4.0),
+            max: rect.max + jidousha::prelude::Vec2::splat(4.0),
+        };
+        for row in rows.iter().filter(|r| r.panel != *rect) {
+            checks.require(
+                !row.bounds().overlaps(room),
+                "a row of type crowds a control",
+                format!(
+                    "{name}: {:?} at {:?} against {target:?} at {rect:?}",
+                    row.text,
+                    row.bounds()
+                ),
+            );
+        }
+    }
     // The dock: its lines inside its margin and clear of the scrollbar's lane;
     // nothing else's target under it; a scrollbar whenever its sheet is longer.
     // The lane is measured from the dock's edge, not from `text_rect`, so a text

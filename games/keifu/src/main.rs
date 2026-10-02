@@ -56,6 +56,7 @@ mod dock_lines;
 mod dream;
 mod dream_lore;
 mod easing;
+mod ending_view;
 mod facing;
 mod family;
 mod fear;
@@ -97,6 +98,7 @@ mod sessions;
 mod sheet;
 mod summer;
 mod telling;
+mod telling_view;
 #[cfg(test)]
 mod testkit;
 mod text;
@@ -108,6 +110,7 @@ mod w4;
 mod w4_rules;
 mod w5;
 mod w5_shape;
+mod w6;
 mod witness;
 mod words;
 
@@ -223,12 +226,18 @@ fn fit_the_camera(world: &mut World) {
     *camera = screen::fitted(camera.viewport);
 }
 
-/// The one reader both phases use: the page for the current state.
+/// The one reader both phases use: the page for the current state, at the frame clock.
 pub fn read_the_page(world: &WorldView<'_>) -> Page {
+    let time = world.resource::<Time>();
+    let clock = screen::Clock {
+        tick: time.tick,
+        dt: time.fixed_dt.0,
+    };
     page(
         world.resource::<Content>(),
         world.resource::<House>(),
         world.resource::<UiState>(),
+        clock,
     )
 }
 

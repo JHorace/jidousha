@@ -182,10 +182,11 @@ impl House {
 
 /// Begin another house: draw a new seed from the current generator, reseed it,
 /// and found the household again (SPEC §2.1, §22.1). Nothing reads a clock.
-pub fn begin_another_house(world: &mut World, content: &Content) -> Result<u64, String> {
+pub fn begin_another_house(world: &mut World) -> Result<u64, String> {
     let seed = draw_seed(world.resource_mut::<Rng>());
-    world.insert_resource(Rng::from_seed(seed));
-    let house = House::found(content, seed, world.resource_mut::<Rng>())?;
+    let mut rng = Rng::from_seed(seed);
+    let house = House::found(world.resource::<Content>(), seed, &mut rng)?;
+    world.insert_resource(rng);
     world.insert_resource(house);
     Ok(seed)
 }

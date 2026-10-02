@@ -23,14 +23,14 @@ const HEIRLOOM_FIGURE: f32 = 32.0;
 /// The history panel's inset.
 const HISTORY_PAD: f32 = 10.0;
 
-/// The help, with nothing open.
-pub fn help_lines(content: &Content, width: f32) -> Vec<Line> {
-    vec![paragraph(
-        &content.words[W::SummerHelp],
-        width,
-        MIN_TEXT,
-        ink::NOTE,
-    )]
+/// The help, with nothing open: the summer's, or the telling's (`ui.telling.help`).
+pub fn help_lines(content: &Content, house: &House, width: f32) -> Vec<Line> {
+    let help = if house.telling.is_some() {
+        W::TellingHelp
+    } else {
+        W::SummerHelp
+    };
+    vec![paragraph(&content.words[help], width, MIN_TEXT, ink::NOTE)]
 }
 
 /// `text` wrapped to `width` as one line of the dock.

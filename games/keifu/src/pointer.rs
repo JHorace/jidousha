@@ -17,9 +17,13 @@
 
 use jidousha::prelude::*;
 
+use crate::content::Content;
 use crate::dock::{PITCH, subject};
-use crate::house::House;
-use crate::screen::{DockGrab, Drag, Target, UiState};
+use crate::house::{House, begin_another_house};
+use crate::resolve::set_out;
+use crate::screen::{Clock, DockGrab, Drag, Target, UiState};
+use crate::season::leave_the_telling;
+use crate::telling_view::{leaves, story_complete};
 
 /// What a pointer resting on `target` points at. Resting on the dock points at what
 /// it already did, so the sheet stays open to be read and scrolled.
@@ -81,7 +85,17 @@ pub fn follow_the_pointer(world: &mut World) {
         None if pressed => match target {
             Some(Target::OpenFamily) => UiState::family(),
             Some(Target::CloseFamily) => UiState::default(),
-            Some(Target::Hero(hero)) if !ui.family_open && held && !released => {
+            Some(
+                control @ (Target::SetOut
+                | Target::GoOn
+                | Target::Leaf(_)
+                | Target::Skip
+                | Target::BeginAgain),
+            ) if !ui.family_open => press(world, ui, control),
+            // Only the summer seats heroes: on the telling a card is read, never lifted.
+            Some(Target::Hero(hero))
+                if !ui.family_open && held && !released && in_summer(world.resource::<House>()) =>
+            {
                 match world.resource::<House>().slot_of(hero) {
                     Some(from) => UiState {
                         drag: Some(Drag {
@@ -113,6 +127,82 @@ pub fn follow_the_pointer(world: &mut World) {
         target,
     );
     *world.resource_mut::<UiState>() = next;
+}
+
+/// Whether the summer screen is up: no telling open and the house not closed.
+fn in_summer(house: &House) -> bool {
+    house.telling.is_none() && !house.closed
+}
+
+/// Run a rule on the house with the run's generator: the house and the generator are
+/// cloned out, changed, and put back, so the content can be read beside them.
+fn with_house(world: &mut World, rule: impl FnOnce(&Content, &mut House, &mut Rng)) {
+    let mut house = world.resource::<House>().clone();
+    let mut rng = world.resource::<Rng>().clone();
+    rule(world.resource::<Content>(), &mut house, &mut rng);
+    world.insert_resource(house);
+    world.insert_resource(rng);
+}
+
+/// A control pressed (SPEC §5.3, §8): set out; on the telling, "Go on" — the story
+/// whole first, then the next leaf, then leaving — a numbered leaf, or "Skip ahead";
+/// and, once the house has closed, "Begin another house" (W10 SCAFFOLD). Returns the
+/// UI state after it: a new screen opens at its top, typing from this tick.
+fn press(world: &mut World, ui: UiState, control: Target) -> UiState {
+    let tick = world.resource::<Time>().tick;
+    let fresh = UiState {
+        typing_from: tick,
+        ..UiState::default()
+    };
+    let clock = Clock {
+        tick,
+        dt: world.resource::<Time>().fixed_dt.0,
+    };
+    let turn_to = |leaf: usize| UiState {
+        leaf,
+        typing_from: tick,
+        revealed: false,
+        pointing: None,
+        dock_first: 0,
+        ..ui
+    };
+    let house = world.resource::<House>();
+    match control {
+        Target::SetOut if in_summer(house) => {
+            with_house(world, set_out);
+            fresh
+        }
+        Target::GoOn | Target::Leaf(_) | Target::Skip => {
+            let Some(telling) = &house.telling else {
+                return ui;
+            };
+            let leaves = leaves(world.resource::<Content>(), house, telling);
+            let current = ui.leaf.min(leaves.len() - 1);
+            let leave = match control {
+                Target::Leaf(leaf) => return turn_to(leaf.min(leaves.len() - 1)),
+                Target::Skip => true,
+                _ if !story_complete(telling, &leaves[current], &ui, clock) => {
+                    return UiState {
+                        revealed: true,
+                        ..ui
+                    };
+                }
+                _ if current + 1 < leaves.len() => return turn_to(current + 1),
+                _ => true,
+            };
+            if leave {
+                with_house(world, leave_the_telling);
+            }
+            fresh
+        }
+        Target::BeginAgain if house.closed => {
+            if let Err(error) = begin_another_house(world) {
+                panic!("[keifu] another house could not be founded\n  {error}");
+            }
+            fresh
+        }
+        _ => ui,
+    }
 }
 
 /// The dock's scroll after this tick: back to the top for a new subject; else moved
