@@ -909,3 +909,28 @@ was one earlier sessions had read and used. The documents were asked nothing new
 - **The W6 battery's numbers moved, by the rules.** Its houses now winter between summers with the hearth
   as it opens — the wounded rest by the fire and heal — so the battery's deaths and closings are not
   session 6's. The death roll read 24/130, 280/975, 359/800 and 44/62 at danger 1-4, inside its bounds.
+- **The mutation rounds.** `mutants/w7.txt` is 115 faults: every W7 constant (the seat counts, the
+  self-taught and child limits, the teachable age, the gain cap, the lesson and its three bonuses, the
+  greater teacher's 9, the tale's renown, the marrying age and gap, the yard, the shed, the garden help's
+  two W8 numbers); every excuse and their order; every amount and cap; the wasted lines; teacher credit
+  (both seats' rules, OQ-20 and OQ-21), the rank-limited mentor bond and `taught`, the first TAUGHT deed,
+  "new student"; every courtship step and its order; the fire's three outcomes and its note; §11.3's
+  order; the wedding, the peace, the failed courting; the tellers and the house's once; the hearth's
+  opening; the preview/resolve agreement from both sides; the notes; the seat targets, the drag and the
+  pairs' layout; the controls and the winter page. Round one (`2dc8257`): **104 of 113 noticed, two not
+  built** (Y1 and B2 cut as match guards that left the match non-exhaustive; re-cut as the wrong line).
+  Eight escapes were loose checks: the garden judged only with the older or the younger first (K2, K3),
+  no child holding a dream a winter moment could move (T4), nothing asking which side of a pair a seat is
+  drawn (S4), nothing lifting a hero from a hearth seat (S1), nothing asking the bench's note beside its
+  own bench (V2), no teacher alone in the yard (V1); O1 was cut wrong — it moved a binding, not the fire —
+  and is re-cut to resolve the fire after the yard. Each now has a test that fails under it
+  (`plans_tests.rs`, `winter_tests.rs`, `hearth_view.rs`, `w7_controls.rs`). Round two, all six lists
+  (`w7.txt` against `1d13583`'s tightened checks, the five earlier against `c880b51`, the same code):
+  **544 of 548 noticed**, none unbuilt — `w7.txt` **114 of 115** (tests alone 95, verify alone 67),
+  `dock.txt` 22 of 22, `w3.txt` 117 of 118, `w4.txt` 133 of 134, `w5.txt` 58 of 59, `w6.txt` 100 of
+  100. **The four escapes are equivalent:** W3's K7, W4's K8 and W5's R12, as before, and W7's E21 — the
+  cap "at most 9 - known" can never bind, because what a teacher counts as knowing is at most 9 (a base,
+  or TEACH_A_GREATER's 9), so "at most taught - known" is always the smaller. Three earlier faults named
+  code W7 moved and were re-cut to the same fault at the new site, marked "(re-cut s7)": dock K12 (the
+  dock's subject now matches a fourth field) and w4 U1 and w6 T11 (the drag now begins on any seating
+  screen, `seating`, not only the summer's).
