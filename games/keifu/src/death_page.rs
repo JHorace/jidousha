@@ -137,6 +137,7 @@ pub fn death_page(content: &Content, house: &mut House, dead: HeroId) -> TurnPag
         lines,
         bequest: Some(Bequest {
             dead,
+            leaves,
             heirs,
             chosen: None,
             bequest_end,

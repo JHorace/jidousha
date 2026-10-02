@@ -33,8 +33,10 @@ pub enum PageKind {
 pub struct Bequest {
     /// The dead.
     pub dead: HeroId,
-    /// The heirs offered, in rank order, fixed when the page was made; empty when the
-    /// page had nothing to leave and was decided at once.
+    /// Whether there is anything to leave — an heirloom or an undone dream — and so a
+    /// choice to wait for; a page with nothing to leave is decided when it is made.
+    pub leaves: bool,
+    /// The heirs offered, in rank order, fixed when the page was made (SPEC §15.1).
     pub heirs: Vec<HeroId>,
     /// The choice, once made: an heir, or no one. `None` while undecided.
     pub chosen: Option<Option<HeroId>>,
@@ -45,7 +47,7 @@ pub struct Bequest {
 impl Bequest {
     /// Whether the page still waits for its choice.
     pub fn undecided(&self) -> bool {
-        !self.heirs.is_empty() && self.chosen.is_none()
+        self.leaves && self.chosen.is_none()
     }
 }
 

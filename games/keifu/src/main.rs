@@ -102,6 +102,8 @@ mod legacy;
 mod legacy_lore;
 mod lore;
 mod moment;
+#[cfg(test)]
+mod newcomer_tests;
 mod newcomers;
 mod oracles;
 mod passage;
@@ -140,6 +142,8 @@ mod text;
 mod tree;
 mod turning;
 mod turning_lore;
+#[cfg(test)]
+mod turning_tests;
 mod turning_view;
 mod verify;
 mod w2;
