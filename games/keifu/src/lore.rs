@@ -2,7 +2,7 @@
 //! vocations, pronouns, seasons, and the words the text conventions assemble.
 
 use crate::constants::{PHASE_ADJUSTMENT, PHASE_FROM_AGE};
-use crate::content::{strings, table, text, text_at};
+use crate::content::{id_at, strings, table, text, text_at};
 use crate::ids::{Aptitude, Phase, Place, Tag};
 use crate::json::{At, SchemaError};
 
@@ -60,6 +60,8 @@ pub struct Lore {
     pub vocations: Vec<String>,
     /// The original's sprite names per vocation (its own, its elder's), by `Vocation`.
     pub vocation_sprites: Vec<[String; 2]>,
+    /// The aptitude each vocation trains alone (SPEC §11.4), by `Vocation`.
+    pub vocation_aptitudes: Vec<crate::ids::Aptitude>,
     /// The original's sprite name for every child.
     pub child_sprite: String,
     /// By `Pronoun`.
@@ -163,6 +165,15 @@ pub fn read_lore(at: &At<'_>) -> Result<Lore, SchemaError> {
         )?
         .iter()
         .map(|v| Ok([text(v, "sprite")?, text(v, "elder_sprite")?]))
+        .collect::<Result<_, SchemaError>>()?,
+        vocation_aptitudes: table(
+            at,
+            "vocations",
+            crate::ids::Vocation::ALL,
+            crate::ids::Vocation::id,
+        )?
+        .iter()
+        .map(|v| id_at(v, "aptitude", Aptitude::find))
         .collect::<Result<_, SchemaError>>()?,
         child_sprite: text_at(at, "child_sprite")?,
         pronouns: crate::ids::Pronoun::ALL

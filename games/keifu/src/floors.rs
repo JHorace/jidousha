@@ -114,6 +114,7 @@ fn judge(
                 | Target::Leaf(_)
                 | Target::Skip
                 | Target::BeginAgain
+                | Target::LetWinterPass
         )
     });
     for (rect, target) in controls {

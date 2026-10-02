@@ -13,6 +13,7 @@ use crate::constants::{HOUSE_RENOWN_AT_START, ROSTER_SEATS, YARD_SPOTS};
 use crate::content::Content;
 use crate::generation::BoardReport;
 use crate::ghost::Ghost;
+use crate::hearth::Hearth;
 use crate::hero::{Fate, Hero, HeroId};
 use crate::household::found;
 use crate::ids::Place;
@@ -44,6 +45,11 @@ pub struct House {
     pub blades_named: usize,
     /// This summer's posted quests, in place order (board slots 0..).
     pub board: Vec<Posted>,
+    /// The winter's seats (SPEC §3.1 `hearth`); empty all summer.
+    pub hearth: Hearth,
+    /// This turning's pages, from the winter's passing until summer comes (SPEC §3.1
+    /// `passage`). W8 SCAFFOLD: only the winter page.
+    pub passage: Option<crate::passage::Passage>,
     /// Per place: visits, triumphs, disasters, trouble.
     pub places: Vec<PlaceRecord>,
     /// Ghosts of dreams left to no one, in list order (SPEC §14.4).
@@ -102,6 +108,8 @@ impl House {
             tales: Vec::new(),
             blades_named: 0,
             board: Vec::new(),
+            hearth: Hearth::default(),
+            passage: None,
             places: vec![PlaceRecord::default(); Place::ALL.len()],
             ghosts: Vec::new(),
             templates_last: vec![None; Place::ALL.len()],
@@ -120,10 +128,11 @@ impl House {
         self.reseat();
     }
 
-    /// Reseat: clear the roster and every quest seat, push every living adult into
-    /// the first free roster seat in creation order (SPEC §5.1).
+    /// Reseat: clear the roster, every quest seat and every hearth seat, push every
+    /// living adult into the first free roster seat in creation order (SPEC §5.1).
     pub fn reseat(&mut self) {
         self.roster = [None; ROSTER_SEATS];
+        self.hearth.clear();
         for posted in &mut self.board {
             posted.seats.iter_mut().for_each(|seat| *seat = None);
         }
@@ -161,9 +170,12 @@ impl House {
         self.renown = (self.renown + delta).max(0);
     }
 
-    /// Take `hero` out of every seat: the roster and every quest's (SPEC §7.4, the
-    /// dead and the crowned are "removed from every seat").
+    /// Take `hero` out of every seat: the roster, every quest's and the hearth's
+    /// (SPEC §7.4, the dead and the crowned are "removed from every seat").
     pub fn unseat(&mut self, hero: HeroId) {
+        if let Some(seat) = self.hearth.seat_of(hero) {
+            self.hearth.put(seat, None);
+        }
         for seat in self.roster.iter_mut().filter(|seat| **seat == Some(hero)) {
             *seat = None;
         }

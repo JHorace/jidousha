@@ -7,7 +7,7 @@
 //! place shows one seat fewer (never below one), +1 danger, "Renown +" one higher and
 //! "unanswered -2". **The played summer**: Garrick and Brannoc dragged onto "Grave
 //! goods" (W4's drag), set out, the telling typed and paged, the Meanwhile read, the
-//! year moved on. **Witnessing's live path**: the real resolution feeding W3's machinery
+//! year moved on through the winter. **Witnessing's live path**: the real resolution feeding W3's machinery
 //! — every played triumph settles Garrick and lays his rest, and no other outcome does.
 //! Then the controls' other paths: a leaf button, "Skip ahead", the house closing.
 //!
@@ -114,6 +114,8 @@ pub fn check_stay_home(checks: &mut Checks) -> String {
             format!("seed {seed:#x}: {:?}", label(&sim, Target::GoOn)),
         );
         point_at(&mut sim, Target::GoOn, true);
+        crate::w7::require_the_hearth(checks, &sim, seed);
+        crate::w7::through_the_winter(&mut sim);
         let house = sim.world().resource::<House>();
         let bar = lines_in(&page_of(&sim), TOP_BAR);
         checks.require(
@@ -313,6 +315,8 @@ pub fn check_played(checks: &mut Checks) -> (String, Vec<String>) {
             format!("seed {seed:#x}: {meanwhile:?}"),
         );
         point_at(&mut sim, Target::GoOn, true);
+        crate::w7::require_the_hearth(checks, &sim, seed);
+        crate::w7::through_the_winter(&mut sim);
         let house = sim.world().resource::<House>();
         checks.require(
             house.telling.is_none() && house.calendar.current_year() == 2 && house.board.len() == 4,
@@ -371,6 +375,8 @@ pub fn check_controls(checks: &mut Checks) -> String {
         format!("{held:?}"),
     );
     point_at(&mut sim, Target::Skip, true);
+    crate::w7::require_the_hearth(checks, &sim, SEEDS[0]);
+    crate::w7::through_the_winter(&mut sim);
     let house = sim.world().resource::<House>();
     checks.require(
         house.telling.is_none() && house.calendar.current_year() == 2,

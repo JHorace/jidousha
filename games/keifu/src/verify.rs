@@ -335,6 +335,11 @@ pub fn run() -> ExitCode {
     summary.push(crate::w6::check_controls(&mut checks));
     summary.push(crate::w6_stages::check_forging(&mut checks));
     summary.extend(crate::w6_battery::check_battery(&mut checks, &content));
+    let (w7_line, w7_vector) = crate::w7::check_oracle(&mut checks);
+    summary.push(w7_line);
+    summary.extend(w7_vector);
+    summary.push(crate::w7::check_played(&mut checks));
+    summary.push(crate::w7::check_controls(&mut checks));
     summary.push(crate::sessions::check_family(&mut checks, &mut recorder));
     summary.push(crate::sessions::check_seeds(&mut checks, &content));
     summary.push(crate::sessions::check_staged_sheets(&mut checks));
@@ -349,7 +354,7 @@ pub fn run() -> ExitCode {
     let (passed, failed) = checks.counts();
     if failed == 0 {
         println!(
-            "verified keifu: W0, W1, W2, W3, W4, W5 and W6 oracles hold on {} seeds, {passed} checks",
+            "verified keifu: W0, W1, W2, W3, W4, W5, W6 and W7 oracles hold on {} seeds, {passed} checks",
             SEEDS.len()
         );
     } else {

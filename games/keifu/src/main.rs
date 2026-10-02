@@ -78,6 +78,8 @@ mod grief;
 mod harm;
 #[cfg(test)]
 mod harm_tests;
+mod hearth;
+mod hearth_view;
 mod hero;
 mod house;
 mod household;
@@ -88,6 +90,10 @@ mod legacy_lore;
 mod lore;
 mod moment;
 mod oracles;
+mod passage;
+mod plans;
+#[cfg(test)]
+mod plans_tests;
 mod pointer;
 mod power;
 mod power_lines;
@@ -117,6 +123,7 @@ mod telling_view;
 mod testkit;
 mod text;
 mod tree;
+mod turning_view;
 mod verify;
 mod w2;
 mod w3;
@@ -127,6 +134,10 @@ mod w5_shape;
 mod w6;
 mod w6_battery;
 mod w6_stages;
+mod w7;
+mod winter;
+#[cfg(test)]
+mod winter_tests;
 mod witness;
 mod words;
 

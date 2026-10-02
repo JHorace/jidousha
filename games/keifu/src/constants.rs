@@ -182,6 +182,44 @@ pub const HEIRS_OFFERED: usize = 8;
 
 /// `YARD_SPOTS`: children shown in the yard (CONSTANTS §9).
 pub const YARD_SPOTS: usize = 6;
+/// `FIRE_SEATS` (CONSTANTS §9).
+pub const FIRE_SEATS: usize = 2;
+/// Garden seats (CONSTANTS §9).
+pub const GARDEN_SEATS: usize = 2;
+/// `TALE_SEATS`: the long table (CONSTANTS §9).
+pub const TALE_SEATS: usize = 2;
+/// `BENCHES`: each a child seat and a teacher seat (CONSTANTS §9).
+pub const BENCHES: usize = 2;
+/// `SELF_TAUGHT_LIMIT`: training alone stops at this base in the vocation aptitude (CONSTANTS §9).
+pub const SELF_TAUGHT_LIMIT: i32 = 6;
+/// `CHILD_TAUGHT_LIMIT`: bench lessons stop at this base (CONSTANTS §9).
+pub const CHILD_TAUGHT_LIMIT: i32 = 4;
+/// `TEACHABLE_AGE`: children younger learn nothing on a bench (CONSTANTS §9).
+pub const TEACHABLE_AGE: i32 = 6;
+/// `WINTER_GAIN_LIMIT`: an adult lesson's cap before the TEACH_A_GREATER bonus (CONSTANTS §9).
+pub const WINTER_GAIN_LIMIT: i32 = 2;
+/// A lesson's base amount, alone or taught, and a bench lesson whole (CONSTANTS §9).
+pub const WINTER_LESSON: i32 = 1;
+/// Added to an adult lesson for a Youth learner, alone or taught (CONSTANTS §9).
+pub const YOUNG_LEARNER_BONUS: i32 = 1;
+/// Added to an adult lesson for a Veteran or Elder teacher (CONSTANTS §9).
+pub const SEASONED_TEACHER_BONUS: i32 = 1;
+/// `GREATER_LESSON`: from a TEACH_A_GREATER teacher, adult learners only (CONSTANTS §8).
+pub const GREATER_LESSON: i32 = 1;
+/// What a TEACH_A_GREATER teacher counts as knowing (CONSTANTS §9: `taught` counts as 9).
+pub const GREATER_TAUGHT: i32 = APTITUDE_LIMIT;
+/// `TALE_RENOWN`: per adult teller, and to the house once a winter (CONSTANTS §9).
+pub const TALE_RENOWN: i32 = 1;
+/// `MARRYING_AGE`: both must be this old to wed (CONSTANTS §9).
+pub const MARRYING_AGE: i32 = 18;
+/// `COURTING_AGE_GAP`: the most years apart two may be and wed (CONSTANTS §9).
+pub const COURTING_AGE_GAP: i32 = 15;
+/// `BIRTH_CHANCE`, in a hundred: per wed pair per turning (CONSTANTS §10). W8's rule;
+/// the garden's help quotes it.
+pub const BIRTH_CHANCE_PERCENT: i32 = 60;
+/// `PARENT_AGE_HIGH`: both parents at most this old (CONSTANTS §10). W8's rule; the
+/// garden's help quotes it, with `PARENT_AGE_LOW` = `MARRYING_AGE`.
+pub const PARENT_AGE_HIGH: i32 = 45;
 /// `HOUSEHOLD_LIMIT`: also the roster size (CONSTANTS §10).
 pub const ROSTER_SEATS: usize = 12;
 

@@ -1,6 +1,7 @@
 //! The sheet dock: a panel reserved down the right edge of the summer screen, which
 //! holds whatever sheet is open — the hero pointed at or in hand (SPEC §19.1), the
-//! quest pointed at with its place's history (§5.4) — and, with none open, the help.
+//! quest pointed at with its place's history (§5.4), a group of winter seats' help
+//! (§11.2) — and, with none open, the help.
 //!
 //! Nothing else is ever laid out in the dock and the dock is never laid over
 //! anything, so a sheet can be open while the household, the yard, every quest card
@@ -16,7 +17,7 @@ use jidousha::prelude::*;
 
 use crate::art::Figure;
 use crate::content::Content;
-use crate::dock_lines::{help_lines, hero_lines, quest_lines};
+use crate::dock_lines::{group_lines, help_lines, hero_lines, quest_lines};
 use crate::hero::HeroId;
 use crate::house::House;
 use crate::screen::{DockView, PAD, Page, Target, UiState, ink, layers};
@@ -39,6 +40,8 @@ pub enum Subject {
     Hero(HeroId),
     /// A quest's sheet, by board slot.
     Quest(usize),
+    /// A group of winter seats' help.
+    Group(crate::hearth::Group),
 }
 
 /// What the dock shows for `ui`: the hero in hand, else the hero or quest pointed at.
@@ -46,11 +49,12 @@ pub fn subject(ui: &UiState) -> Subject {
     if ui.family_open {
         return Subject::Help;
     }
-    match (ui.drag, ui.pointing, ui.pointing_quest) {
-        (Some(drag), _, _) => Subject::Hero(drag.hero),
-        (None, Some(id), _) => Subject::Hero(id),
-        (None, None, Some(quest)) => Subject::Quest(quest),
-        (None, None, None) => Subject::Help,
+    match (ui.drag, ui.pointing, ui.pointing_quest, ui.pointing_group) {
+        (Some(drag), _, _, _) => Subject::Hero(drag.hero),
+        (None, Some(id), _, _) => Subject::Hero(id),
+        (None, None, Some(quest), _) => Subject::Quest(quest),
+        (None, None, None, Some(group)) => Subject::Group(group),
+        (None, None, None, None) => Subject::Help,
     }
 }
 
@@ -120,6 +124,7 @@ pub fn lay_out(page: &mut Page, content: &Content, house: &House, ui: &UiState) 
         Subject::Help => help_lines(content, house, width),
         Subject::Hero(id) => hero_lines(content, &house.heroes, id, width),
         Subject::Quest(quest) => quest_lines(content, house, quest, width),
+        Subject::Group(group) => group_lines(content, group, width),
     };
     let max_first = max_first(&lines, area.size().y);
     let first = ui.dock_first.min(max_first);
