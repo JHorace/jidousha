@@ -783,3 +783,38 @@ read and used.
 - **`lines.fear.steadied` is unreachable** [emergent]: facing's dread amount is 0 or less only
   with a companion on a won quest, and that case takes the courage branch first. Written where
   the spec puts it all the same; a fault on it would be equivalent.
+- **The resolution battery's death roll, read once and checked.** On the 400-house battery
+  the roll killed 14/107 at danger 1, 171/702 at 2, 262/548 at 3 and 40/69 at 4, against
+  CONSTANTS §3's 15/30/45/60%. Danger 2 sits 3.3 standard deviations low, inside the 4σ bound
+  but not comfortably, so I checked it before trusting it. The rule alone, 4,000 staged
+  disasters at danger 2, killed 30.4%. The engine's generator showed no lean after low dice
+  (30.0/30.0/31.4% for a 0.3 chance after low, middle and high sums). The other 1,200 houses
+  of a 1,600-house run read 29.7%. It is a draw, and a fixed one: the battery's seeds are
+  recorded, so the number cannot flake. A later change that moves it past 4σ moved the rule.
+- **The mutation rounds.** `mutants/w6.txt` is 100 faults: the ten new constants; set out,
+  the unanswered and healing; every step of §7.1 (the dice, the margin, the patrons, history,
+  quests faced, the first quest, the win, trouble easing both ways, disaster renown, facing,
+  the unlucky pick, the fire on others and on the unlucky one, each member's disaster, the
+  road among the living, witnessing and its party, roads, the crown's place, the ghost, the
+  story); the reward and both lessons; §7.4 (shields, wounds, the fire before the roll,
+  mending, the roll's chance, the dead's deeds, mending's cap, seats, mourning, the fallen,
+  the carrier, grief, the death's tag, patrons); the heir ranks and nearest kin; facing;
+  the road; the ghost laid; the telling's typing, order, closing line, margin telling and
+  roll; "Go on", the leaf buttons, "Skip ahead", lifting a card on the telling, the control's
+  label; leaving, the year and the board; and the control crowding the bar. Round one
+  (`025d9e5`): **71 of 100**, none unbuilt. All 29 escapes were loose checks, mostly a staged
+  hero who masked the rule. Garrick is both the lowest base and unable to learn, so neither
+  the lowest-base rule nor "may still learn" was ever the deciding one. Every founding child
+  is also a descendant, so a parent ranking as a child changed no list. A one-member party
+  makes "the unlucky one" and "each member" the same hero. No test had patrons, carriers, a
+  base of 9, a lost ghost, a crowned member on a ghost's quest, a rival who only succeeded,
+  a settled or conquered hero facing a loss, a steadied loss, a prime adult below 5, a disaster
+  on a Fire quest, a two-tag death, or a wounded hero the roll spared. Each now has a test that
+  fails under its fault (`resolve_tests.rs`, `harm_tests.rs`, `road_tests.rs`, `telling_tests.rs`,
+  `w6.rs`, the battery's death roll). The battery's death-roll rate was added for H5, the roll
+  made a coin; the staged death test noticed H5 anyway. Round two, all five lists against
+  `2da9faf`: **430 of 433 noticed**, none unbuilt — `w6.txt` **100 of 100** (tests alone 84,
+  verify alone 30), `dock.txt` 22 of 22, `w3.txt` 117 of 118, `w4.txt` 133 of 134, `w5.txt`
+  58 of 59. **The three escapes are the known equivalents** of sessions 3-5: K7, K8 and R12.
+  Five earlier faults named code W6 moved and were re-cut to the same fault at the new site,
+  marked "(re-cut s6)": dock K14 and K15, w4 Q11, Q12 and U1.
