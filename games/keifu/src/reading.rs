@@ -225,6 +225,8 @@ mod tests {
         house.heroes[garrick].wounded = false;
         house.heroes[brannoc].fear.tag = crate::ids::Tag::Dark;
         house.heroes[brannoc].fear.broken = true;
+        // Strongest even under the fear's -2 (9 - 2 = 7): only the refusal keeps him out.
+        house.heroes[brannoc].aptitudes[crate::ids::Aptitude::Might.index()] = 9;
         let party = likely_party(&house.heroes, &everyone, &grave, None);
         assert!(!party.contains(&brannoc), "{party:?}");
     }
