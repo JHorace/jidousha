@@ -24,8 +24,7 @@ const HEIRLOOM_FIGURE: f32 = 32.0;
 const HISTORY_PAD: f32 = 10.0;
 
 /// The help, with nothing open: the summer's, the telling's (`ui.telling.help`), the
-/// turning's (`ui.turning.help`) or the hearth's (`ui.winter.help`). W8 SCAFFOLD: the
-/// turning's help says everyone is a year older, which W8's ageing makes true.
+/// turning's (`ui.turning.help`) or the hearth's (`ui.winter.help`).
 pub fn help_lines(content: &Content, house: &House, width: f32) -> Vec<Line> {
     let help = if house.telling.is_some() {
         W::TellingHelp

@@ -6,8 +6,9 @@
 //! the page draws on the recorded seeds and off the card reading on a sweep of fresh
 //! ones. **The shape** — "most summers at least one quest carries a fair-chance
 //! Dream: mark" — and the loop's stated rules are asked over a fixed battery of
-//! seeds, each run through its summers (`w5_shape.rs`). The ghost slot has no live
-//! source before W8, so it is asked on staged ghost lists (`check_ghost_slot`).
+//! seeds, each run through its summers (`w5_shape.rs`). The ghost slot is asked on
+//! staged ghost lists (`check_ghost_slot`); since W8 its live source is the death page,
+//! and the whole-year battery (`w8_battery.rs`) raises, lays and takes up ghosts in play.
 //!
 //! INVARIANT: every expectation is a shipped literal — the titles, the place order,
 //! the stakes — copied by hand from MODULES.md, SPEC.md and the content.

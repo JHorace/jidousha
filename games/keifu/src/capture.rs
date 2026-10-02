@@ -76,13 +76,70 @@ pub fn capture_all(checks: &mut Checks) -> Vec<String> {
         (&["w7-winter", "Pip"][..], "keifu-w7-pip.png"),
         (&["w7-winter", "Odo"][..], "keifu-w7-odo.png"),
         (&["w7-played", "Ysolde"][..], "keifu-w7-road-book.png"),
+        (&["w8-stirred", "heir:Maren"][..], "keifu-w8-death.png"),
+        (&["w8-oracle", "choose:Maren"][..], "keifu-w8-chosen.png"),
+        (&["w8-turned"][..], "keifu-w8-winter.png"),
+        (
+            &["w8-turned", "kind:Death"][..],
+            "keifu-w8-death-decided.png",
+        ),
+        (&["w8-turned", "kind:Birth"][..], "keifu-w8-birth.png"),
+        (
+            &["w8-turned", "kind:ComingOfAge"][..],
+            "keifu-w8-coming-of-age.png",
+        ),
+        (&["w8-turned", "kind:Arrival"][..], "keifu-w8-arrival.png"),
+        (&["w8-turned", "kind:Year"][..], "keifu-w8-year.png"),
+        (&["w8-grown"][..], "keifu-w8-grown.png"),
+        (&["w8-grown", ""][..], "keifu-w8-grown-family.png"),
     ]
     .into_iter()
     .enumerate()
     {
         let mut recorder = FrameRecorder::new(WINDOW);
-        let mut sim = session(crate::verify::SEEDS[0]);
+        let mut sim = if stage.first() == Some(&"w8-grown") {
+            crate::floors_w8::grown(crate::verify::SEEDS[0], 15)
+        } else {
+            session(crate::verify::SEEDS[0])
+        };
         for name in stage {
+            if *name == "w8-grown" {
+                continue;
+            } else if let Some(kind) = name.strip_prefix("kind:") {
+                use crate::passage::PageKind;
+                let kind = match kind {
+                    "Death" => PageKind::Death,
+                    "Birth" => PageKind::Birth,
+                    "ComingOfAge" => PageKind::ComingOfAge,
+                    "Arrival" => PageKind::Arrival,
+                    _ => PageKind::Year,
+                };
+                crate::w8::turn_to_kind(&mut sim, kind);
+                // A frame for the page to settle under the pointer at rest.
+                crate::verify::point(&mut sim, jidousha::prelude::Vec2::new(4.0, 700.0), false);
+                continue;
+            } else if let Some(heir) = name.strip_prefix("heir:").or(name.strip_prefix("choose:")) {
+                let id = hero_named(&sim, heir);
+                let target = crate::w8::heir_labels(&crate::verify::page_of(&sim))
+                    .into_iter()
+                    .map(|(t, _)| t)
+                    .find(|t| matches!(t, Target::Heir(_, Some(h)) if *h == id));
+                if let Some(target) = target {
+                    point_at(&mut sim, target, name.starts_with("choose:"));
+                }
+                continue;
+            } else if *name == "w8-stirred" || *name == "w8-oracle" {
+                crate::w8::stage_garricks_winter(&mut sim);
+                if *name == "w8-stirred" {
+                    let _ = crate::w8::stir(&mut sim, true);
+                }
+                point_at(&mut sim, Target::LetWinterPass, true);
+                crate::w8::go_to_the_choice(&mut sim);
+                continue;
+            } else if *name == "w8-turned" {
+                crate::w8::stage_turned_year(&mut sim);
+                continue;
+            }
             if name.is_empty() {
                 point_at(&mut sim, Target::OpenFamily, true);
             } else if *name == "w3" {

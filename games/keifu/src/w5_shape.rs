@@ -59,7 +59,7 @@ struct Tally {
 
 /// One summer's card-level answer: the first quest, by slot, whose card names a
 /// dreamer with a fair chance — read off the card's own "Dream:" line.
-fn fair_mark(content: &Content, house: &House) -> Option<(usize, HeroId)> {
+pub fn fair_mark(content: &Content, house: &House) -> Option<(usize, HeroId)> {
     (0..house.board.len()).find_map(|slot| {
         let card = read_card(content, house, slot, &[], None);
         let names = card.dream.as_deref()?.strip_prefix("Dream: ")?.to_owned();

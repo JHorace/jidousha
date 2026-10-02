@@ -43,7 +43,6 @@ impl Checks {
 
 /// Stop the run, for a reading that leaves nothing after it to measure.
 pub fn fail(what: &str, specifics: &str) -> ! {
-    eprintln!("{}", std::backtrace::Backtrace::force_capture());
     eprintln!("{}", complaint(what, specifics));
     std::process::exit(1);
 }

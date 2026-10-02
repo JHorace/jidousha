@@ -1,4 +1,4 @@
-//! The rule numbers W0 to W6 read, each copied from `spec/CONSTANTS.md`.
+//! The rule numbers W0 to W8 read, each copied from `spec/CONSTANTS.md`.
 //!
 //! Numbers are rules, not hand-authored words, so they live in source. Where a
 //! number also appears in a content file, `content::load` checks the two agree

@@ -75,7 +75,7 @@ pub fn wanderer(content: &Content, house: &mut House, rng: &mut Rng) -> Option<T
 /// age; the standing by house renown; the gift aptitude; the three aptitudes in the
 /// standing's other range, then the gift's overwritten in its own; a calling of the
 /// gift's two; a fear; a dream (§17.4); personal renown; the Seer.
-fn arrive(content: &Content, house: &mut House, rng: &mut Rng) -> TurnPage {
+pub fn arrive(content: &Content, house: &mut House, rng: &mut Rng) -> TurnPage {
     let words = &content.words;
     let next = house.calendar.current_year() + 1;
     let pronoun = roll_pronoun(rng);

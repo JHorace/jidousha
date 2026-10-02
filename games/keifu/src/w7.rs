@@ -228,7 +228,7 @@ pub fn stage_played_winter(sim: &mut HeadlessSim) -> Vec<String> {
     let mut read = Vec::new();
     let mut guard = 0;
     while guard < 10 {
-        // The winter's page only: the turning's pages after it are W8's.
+        // The winter's page only: the turning's pages after it are the W8 checks'.
         let lines = turning_lines(sim);
         if !lines
             .first()
