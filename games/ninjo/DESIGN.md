@@ -343,7 +343,10 @@ addresses S1 already carried.
 - Screenshots recaptured and personally viewed, as established:
   the map with parties mid-travel, the log after a completed quest.
 - Determinism hygiene: world clock integer-only; no `Rng` reads in S1
-  (the plumbing stays; the seed still stamps everything); rendered
+  (the plumbing stays; the seed still stamps everything — *and since wave
+  1.4 there is exactly one reader, the resolution roll, addressed by the
+  seed, the occurrence's world-minute and the job, never by call order:
+  GDD §5's resolution mark*); rendered
   between-tile progress derived at draw time and never written back;
   no second copy of the grid anywhere (one grid, two readers).
 - Mutation round over the new constants: a perturbed terrain cost or

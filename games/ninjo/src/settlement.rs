@@ -319,33 +319,23 @@ pub fn step_wage(sim: &mut Sim, index: usize, delta: i64) -> i64 {
     held
 }
 
-/// **A shift is finished: pay it** (GDD §4.1's industry ports).
+/// **What a shift pays** (GDD §4.1's industry ports): `(to the worker, levied)`.
 ///
 /// The wage is *minted* into the worker's wallet — an industry makes what it
 /// pays, which is what separates this port from a posting's wage coming out of
-/// the treasury — and the levy is minted into the treasury beside it. The
-/// regard the paying moves is `answers::wage_regard`, the same
-/// wage-vs-expectation rule the standing rates use (GDD §4.2), read against
-/// the standing rate for the shift's own kind of work.
+/// the treasury — and the levy is minted into the treasury beside it.
 ///
-/// Returns `(paid, levied)` for the completion's own sentence.
-pub fn settle_shift(sim: &mut Sim, tuning: &Tuning, who: usize, site: usize) -> (i64, i64) {
+/// **Pure since wave 1.4**: `resolution::payout` reads it for the money a
+/// completion moves *and* for the money the scorer weighs, and
+/// `resolution::settle` moves it — one figure, two readers, where wave 1.3's
+/// `settle_shift` both decided and moved.
+pub fn shift_pay(sim: &Sim, tuning: &Tuning, site: usize) -> (i64, i64) {
     let Some(index) = industry_at(sim, site) else {
-        return (0, 0);
-    };
-    let Some(spec) = INDUSTRIES.get(index) else {
         return (0, 0);
     };
     let wage = sim.settlement.wage(index);
     let levy = tuning.industry_levy.clamp(0, wage);
-    let paid = wage - levy;
-    if let Some(person) = sim.people.get_mut(who) {
-        person.wallet += paid;
-    }
-    sim.treasury += levy;
-    let expectation = sim.rates.of(spec.task);
-    crate::answers::wage_regard(sim, tuning, who, wage, expectation);
-    (paid, levy)
+    (wage - levy, levy)
 }
 
 /// **A standing slot is standing again.**

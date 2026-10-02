@@ -228,18 +228,13 @@ pub fn terms(
             because: format!("good at {} work", quest.task.id()),
         });
     }
-    // The wage: a pot the player fills, felt by affinity and by need.
-    let pull = crate::traits::pot_pull_of(&person.traits) + person.desperation;
-    if pull != 0 && posting.wage != 0 {
-        out.push(autonomy::Term {
-            what: "wage",
-            value: pull * posting.wage * tuning.pot_weight / 10,
-            // The wage's pull is an affinity **and** a need, and a character
-            // with neither row feels it through desperation alone - so the
-            // wage is the fact and not the vocabulary.
-            cause: autonomy::Cause::fact(&format!("wage {}g", posting.wage)),
-            because: format!("the wage is {}g", posting.wage),
-        });
+    // The wage: a pot the player fills, felt by affinity and by need — the
+    // payout function's own figure for a posted job, through the same money
+    // arithmetic the scorer weighs a share or a shift with (wave 1.4).
+    let pay = autonomy::pay_for(sim, tuning, job, Some(posting.wage));
+    if let Some(term) = autonomy::money(person, tuning, pay, "wage", format!("the wage is {pay}g"))
+    {
+        out.push(term);
     }
     // What they think of the player. The loyal comply for less and the cold
     // need paying, and both of those are the carrier's own multipliers.
@@ -426,34 +421,6 @@ pub fn record_refusals(
     for id in refused {
         decline(sim, now, who, id, reason, instead);
     }
-}
-
-/// **The wage is paid on completion** (GDD §4.1's TRANSFER port), and the
-/// paying moves regard by what it was measured against (GDD §4.2).
-///
-/// Treasury to wallet, in full: the promise was the posting's, and a
-/// settlement that paid what was left rather than what was owed would be a
-/// silent failure with a debtor's face. Expectation is the standing rate the
-/// posting recorded — paying above it earns a little regard, below it costs a
-/// little, whether or not they took it for less.
-pub fn settle_wage(sim: &mut Sim, tuning: &Tuning, who: usize) -> i64 {
-    let Some(id) = sim.parties.get(who).and_then(|party| party.posting) else {
-        return 0;
-    };
-    let Some(posting) = sim.postings.get(id) else {
-        return 0;
-    };
-    let (wage, expectation) = (posting.wage, posting.rate_at_posting);
-    sim.treasury -= wage;
-    sim.ports.transferred += wage;
-    if let Some(person) = sim.people.get_mut(who) {
-        person.wallet += wage;
-    }
-    wage_regard(sim, tuning, who, wage, expectation);
-    if let Some(party) = sim.parties.get_mut(who) {
-        party.posting = None;
-    }
-    wage
 }
 
 /// **The wage-vs-expectation rule** (GDD §4.2's third operation), on its own.

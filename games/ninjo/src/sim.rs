@@ -85,6 +85,10 @@ pub struct Event {
     /// never opens a breakdown is byte-identical to one that opens every one.
     /// `None` for every occurrence that is not somebody deciding something.
     pub judged: Option<crate::autonomy::Reckoning>,
+    /// **How the job turned out**, on the occurrence that closes one (wave
+    /// 1.4): a completion carries *went well* or *done*, a `task-failed`
+    /// carries *failed*. `None` on everything else.
+    pub tier: Option<crate::resolution::Tier>,
 }
 
 impl Event {
@@ -508,8 +512,12 @@ enum Occ {
 /// arithmetic depends on it, exactly as `Event::judged` is a record.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Ports {
-    /// MINT: site pots, into the treasury on resolution.
+    /// MINT: site pots, into the treasury on resolution — the remainder after
+    /// a self-chooser's share, the whole pot on a posted job.
     pub minted_pots: i64,
+    /// MINT: **a self-chosen job's share**, into the worker's wallet on a
+    /// success (wave 1.4; GDD §4.1's MINT line, amended).
+    pub minted_shares: i64,
     /// MINT: industry wages, into worker wallets (and the levy beside them).
     pub minted_wages: i64,
     /// BURN: upkeep, out of wallets, trait-modulated.
@@ -524,7 +532,7 @@ pub struct Ports {
 impl Ports {
     /// What the holders should add up to, given what the wallets opened with.
     pub fn expected(&self, opening_wallets: i64) -> i64 {
-        opening_wallets + self.minted_pots + self.minted_wages
+        opening_wallets + self.minted_pots + self.minted_shares + self.minted_wages
             - self.burned_upkeep
             - self.burned_building
     }
@@ -532,9 +540,10 @@ impl Ports {
     /// The ledger on one line, for a report.
     pub fn line(&self) -> String {
         format!(
-            "minted {}g in pots and {}g in wages, burned {}g in upkeep and {}g in building, \
-             transferred {}g in posted wages",
+            "minted {}g in pots, {}g in shares and {}g in wages, burned {}g in upkeep and \
+             {}g in building, transferred {}g in posted wages",
             self.minted_pots,
+            self.minted_shares,
             self.minted_wages,
             self.burned_upkeep,
             self.burned_building,
@@ -600,6 +609,14 @@ pub struct Sim {
     /// a check can say "this run auto-paused four times" rather than "it
     /// paused at some point".
     pub pauses: u64,
+    /// **The scenario seed** — the one input the resolution roll draws on,
+    /// beside the occurrence's world-minute and the job (wave 1.4). Planted
+    /// by `flow::load_scenario` from the session's seed; zero, the authored
+    /// seed, everywhere else.
+    pub seed: u64,
+    /// **Every job that has resolved, and how** (wave 1.4) — the record GDD
+    /// §4.3's bonds will read. Nothing in the simulation reads it yet.
+    pub resolved: Vec<crate::resolution::Resolved>,
     queue: Vec<Occurrence>,
     next_seq: u64,
 }
@@ -976,6 +993,8 @@ impl Sim {
             modules,
             paused_by: None,
             pauses: 0,
+            seed: 0,
+            resolved: Vec::new(),
             queue: Vec::new(),
             next_seq: 0,
         };
@@ -1039,10 +1058,11 @@ impl Sim {
     /// **Re-deal when each person first looks up** — the economy sweep's whole
     /// population (GDD §9, wave 1.3).
     ///
-    /// An instrument, not a game path: this build reads no `Rng`, so an
-    /// "idle-player seed" has nothing to draw an economy from. What a seed
-    /// would have varied is the order in which ten people meet a finite
-    /// board — who reaches the mushroom haul first and who finds it taken —
+    /// An instrument, not a game path. Until wave 1.4 the build read no
+    /// `Rng`, so an "idle-player seed" had nothing to draw an economy from;
+    /// the economy sweep now varies the seed too (`Sim::seed`, which the roll
+    /// reads), and this beside it. What it varies is the order in which ten
+    /// people meet a finite board — who reaches the mushroom haul first and who finds it taken —
     /// so the sweep varies exactly that and nothing the player controls, by
     /// rotating every scheduled first rescore by `by` minutes. Every constant,
     /// rate and authored pot is the shipped one in all of them.
@@ -1128,6 +1148,7 @@ impl Sim {
             gold,
             note,
             judged: None,
+            tier: None,
         });
         if self.attention.mode(class) == Mode::PauseAndFocus && self.paused_by.is_none() {
             self.paused_by = Some(Pause {
@@ -1711,6 +1732,110 @@ pub fn settle_visit(sim: &mut Sim, tuning: &Tuning, visitor: usize, host: usize)
     }
 }
 
+/// **A job's work is over: how did it go, and what does it pay** (wave 1.4).
+///
+/// The roll is `resolution::resolve`, the money is `resolution::settle` over
+/// `resolution::payout`, and this is only the board and the feed: a job that
+/// was done is spent (a shift opens again), and a job that failed goes back
+/// on its board, open, under the same identity — no retry limit, and the line
+/// says it is back.
+fn resolve_job(sim: &mut Sim, tuning: &Tuning, at: u64, index: usize, tile: Tile, job: JobId) {
+    let JobId { site, slot } = job;
+    let Some(quest) = sim
+        .sites
+        .get(site)
+        .and_then(|site| site.quest(slot))
+        .copied()
+    else {
+        return;
+    };
+    let shift = crate::settlement::industry_at(sim, site).is_some();
+    let posted = sim
+        .parties
+        .get(index)
+        .is_some_and(|party| party.posting.is_some());
+    let tier = crate::resolution::resolve(sim, tuning, at, index, job);
+    // **What has become of the row**, moved here where the money moves, so
+    // no second pass has to work out which claimed rows are over (UI.md §3c).
+    // A failure puts it back: the work was not done, and the pot is intact.
+    if let Some(state) = sim.sites[site].states.get_mut(slot) {
+        *state = if tier.succeeded() {
+            JobState::Done { by: index }
+        } else {
+            JobState::Open
+        };
+    }
+    if shift {
+        crate::settlement::reopen(sim, job);
+    }
+    let paid = crate::resolution::settle(sim, tuning, index, job, tier);
+    if !shift {
+        sim.resolved.push(crate::resolution::Resolved {
+            minute: at,
+            who: index,
+            job,
+            tier,
+            posted,
+        });
+    }
+    // The rest term's whole state: work weighs less on somebody who just
+    // finished some (`autonomy.rs`) — failed work included, it was still a
+    // day's work.
+    sim.parties[index].rested_until = at + crate::autonomy::rest_minutes(tuning);
+    let treasury = sim.treasury;
+    // **The line**, in the mechanical-narration voice: the tier, the money
+    // moved and where the job went. No "turning for home" since wave 1.4: the
+    // tier made the line longer than a feed row, and `returned` says it.
+    let (class, into_treasury, note) = if shift {
+        (
+            EventClass::QuestComplete,
+            paid.levy,
+            format!(
+                "worked {} - {}g earned, {}g levied ({treasury}g held)",
+                quest.name, paid.shift, paid.levy
+            ),
+        )
+    } else if !tier.succeeded() {
+        let money = if paid.wage > 0 {
+            format!("paid {}g anyway, no pot", paid.wage)
+        } else {
+            "no pay".to_owned()
+        };
+        (
+            if posted {
+                EventClass::TaskFailed
+            } else {
+                EventClass::TaskFailedOwn
+            },
+            0,
+            format!(
+                "botched {} - {money}; the job is back on the board",
+                quest.name
+            ),
+        )
+    } else {
+        let how = if tier == crate::resolution::Tier::WentWell {
+            " and it went well"
+        } else {
+            ""
+        };
+        let money = if paid.wage > 0 {
+            format!("{}g in, {}g paid out", quest.pot, paid.wage)
+        } else {
+            format!("{}g in, {}g theirs", quest.pot, paid.share)
+        };
+        (
+            EventClass::QuestComplete,
+            paid.pot + paid.share,
+            format!("completed {}{how} - {money} ({treasury}g held)", quest.name),
+        )
+    };
+    sim.emit_paying(at, class, index, tile, into_treasury, note);
+    if !shift && let Some(event) = sim.events.last_mut() {
+        event.tier = Some(tier);
+    }
+}
+
 /// A party's stay ends: the pot pays on a job, the warmth lands on a visit,
 /// and either way the party turns for home on the route stored at the start.
 fn work_done(sim: &mut Sim, grid: &Grid, tuning: &Tuning, at: u64, index: usize) {
@@ -1734,84 +1859,7 @@ fn work_done(sim: &mut Sim, grid: &Grid, tuning: &Tuning, at: u64, index: usize)
         next_at,
     };
     match errand {
-        Errand::Job(JobId { site, slot }) => {
-            let Some(quest) = sim
-                .sites
-                .get(site)
-                .and_then(|site| site.quest(slot))
-                .copied()
-            else {
-                return;
-            };
-            // **The row is finished, and the board says so.** A job whose pot
-            // has paid is neither open nor still somebody's; the state moves
-            // here, where the money moves, so no second pass has to work out
-            // which claimed rows are over (UI.md §3c).
-            if let Some(state) = sim.sites[site].states.get_mut(slot) {
-                *state = JobState::Done { by: index };
-            }
-            // **Which port this job's gold moves through** (GDD §4.1), read
-            // off the site rather than branched on a name: a quest site's pot
-            // is minted into the treasury, and an industry's shift is minted
-            // into the worker's wallet with the levy beside it. A shift's slot
-            // then opens again, which is the whole of what makes it standing.
-            let shift = crate::settlement::industry_at(sim, site).is_some();
-            let (paid, levied) = if shift {
-                let moved = crate::settlement::settle_shift(sim, tuning, index, site);
-                sim.ports.minted_wages += moved.0 + moved.1;
-                crate::settlement::reopen(sim, JobId { site, slot });
-                moved
-            } else {
-                sim.treasury += quest.pot;
-                sim.ports.minted_pots += quest.pot;
-                (0, 0)
-            };
-            // **The wage, paid on completion** (GDD §4.1's TRANSFER port):
-            // treasury to wallet, and the regard the paying moves. Nothing is
-            // paid for work nobody posted, which is why this reads the
-            // party's own posting rather than the board.
-            let wage = crate::answers::settle_wage(sim, tuning, index);
-            let treasury = sim.treasury;
-            // The rest term's whole state: work weighs less on somebody who
-            // just finished some (`autonomy.rs`).
-            sim.parties[index].rested_until = at + crate::autonomy::rest_minutes(tuning);
-            let (into_treasury, note) = if shift {
-                (
-                    levied,
-                    format!(
-                        "worked {} - {paid}g earned, {levied}g levied ({treasury}g held) - \
-                         turning for home",
-                        quest.name
-                    ),
-                )
-            } else if wage > 0 {
-                (
-                    quest.pot,
-                    format!(
-                        "completed {} - {}g in, {wage}g paid out ({treasury}g held) - turning \
-                         for home",
-                        quest.name, quest.pot
-                    ),
-                )
-            } else {
-                (
-                    quest.pot,
-                    format!(
-                        "completed {} - {}g into the treasury ({treasury}g held) - turning for \
-                         home",
-                        quest.name, quest.pot
-                    ),
-                )
-            };
-            sim.emit_paying(
-                at,
-                EventClass::QuestComplete,
-                index,
-                tile,
-                into_treasury,
-                note,
-            );
-        }
+        Errand::Job(job) => resolve_job(sim, tuning, at, index, tile, job),
         Errand::Visit { toward } => settle_visit(sim, tuning, member, toward),
     }
     sim.schedule(next_at, Occ::TileEntry { party: index });

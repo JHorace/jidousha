@@ -67,6 +67,143 @@ rectangles `layout.rs` already knew how to state, and its three new
 occurrences ride the one scheduler S1 landed. Its four entries below are all
 about *this game*.
 
+**Wave 1.4 (resolution, 2026-10-02) read** `CLAUDE.md`, the `make-game`
+skill, this game's own `GDD.md`, `DESIGN.md`, `UI.md`, `CAST.md` and
+`FINDINGS.md`, and its whole `src/`. It opened no file under `crates/*/src/`,
+no `docs/internal/`, and no ADR. **It asked `docs/api/` one question** — what
+`Rng` offers, for a roll that has to be addressed by the occurrence rather than
+drawn in call order — and the reference answered the signatures and not the
+one property that mattered (G-045). Its other entries are about *this game*:
+the finding it closes (G-035), the drawer ceiling it re-laid (G-034, closed),
+a sentence that should have been derived and was not (G-046), the second
+ceiling the same wave met (G-047), the number Steve's claim allows the share
+to be (G-048), and the question it leaves open about risk (G-049).
+
+### G-045 — `docs/api/`: `Rng::from_seed` does not say whether nearby seeds give independent streams
+
+Class: **a document that was silent on the one thing asked** · Game: ninjo ·
+Files: `games/ninjo/src/resolution.rs` (`address`, `roll`) · Owner:
+`docs/api/jidousha-api.md`'s `Rng` entry · Open
+
+Doing: the resolution roll has to be **addressed by the occurrence** — the
+seed, the world-minute the work completes and the job — and never drawn from
+the world's `Rng` in call order (G-016's rule; a draw in order would make the
+roll depend on which occurrence fired first in a tick, and the speed-invariance
+sweep would catch it). The natural spelling is a fresh generator per
+occurrence: `Rng::from_seed(address).below(100)`.
+
+Expected: the reference to say whether `from_seed` scrambles its argument — so
+that seeds 41, 42 and 43 (the same job a minute apart) give unrelated first
+draws — or that callers should hash first. Happened: the entry gives the
+signature, "create a generator from a seed", and an example showing the same
+seed replays; nothing about nearby seeds. Many small generators return a
+first value that is a near-linear function of the seed.
+
+**What was done on its authority**: nothing was assumed. The game mixes the
+address itself with a splitmix-style finalizer before seeding
+(`resolution::address`), and the staged distribution sweep (6144 rolls a fit,
+`outcomes::tally`) is what shows the result is flat enough: 11% failure at a
+strong fit against the curve's 11, 35% at a poor one against 35. If
+`from_seed` already scrambles, the mix is redundant and harmless; if it does
+not, the mix is load-bearing. The document should say which.
+
+### G-046 — the game's own: the fit chip's honesty sentence was hand-written, so it could not retire itself
+
+Class: **the game's own** (against the legibility session's derivation) ·
+Game: ninjo · Files: `games/ninjo/src/asks.rs` (`fit_means`, removed),
+`src/resolution.rs` (`fit_means`) · Closed in this wave
+
+The handoff for this wave said: the fit chip's explanation ("every job succeeds
+until resolution lands") must retire itself **because the data changed**, and if
+it had to be hand-edited, that is a finding against the legibility session's
+derivation. It had to be. The trait chips' dormancy clause *is* derived —
+`traits::explain` reads `Consumer::Resolution.live(modules)` and the clause
+vanished the moment `resolution` entered `modules::MODULES`, with nobody
+touching a sentence (`traits::vocabulary` now asserts the flip both ways). But
+`asks::fit_means` was a literal written by wave 1.2's clarity rider, carrying a
+wave number in prose, and the legibility session that made the trait lines
+derived did not reach it.
+
+It is now `resolution::fit_means(tuning, modules)`: with the module off it says
+the trait chips' own absence clause; with it on it walks every fit the
+vocabulary can produce and prints the odds-word and the numbers off
+`resolution::odds` — so moving `fail_base` moves the sentence, and the
+went-well clause is `resolution::went_well_means`, read off the registry the
+same way. Expected: one derivation for every honesty line. Happened: two
+patterns, one of them a literal. Owner: this game (UI.md §3c).
+
+### G-047 — the game's own: the attention config met the same ceiling the tuning drawer did
+
+Class: **the game's own** (a layout ceiling, the G-034 class) · Game: ninjo ·
+Files: `games/ninjo/src/layout.rs` (`MODES_ROWS`) · Open
+
+Two new event classes took the table from seventeen to nineteen, and the config
+drawer held two columns of nine. Nothing warned in advance — G-034 built a
+"room for the next one" floor for the tuning drawer and not for this one — so
+the first verify run after the classes landed failed with three radios off the
+right edge of the screen. Re-laid at ten rows of thirty-six pixels (a radio is
+thirty-two, so rows keep a gap), which ends the column at 464 above the footer
+at 470: **twenty slots for nineteen classes**. The twenty-first class needs a
+third column or narrower radios, and petitions (1.5) register a family of
+classes. Expected: a floor that fails one class early. Happened: none; the
+wave that adds the twenty-first class should add it (or this session's
+successor should) before anything else.
+
+### G-048 — the game's own: Steve's claim allows a share of three percent
+
+Class: **the game's own** (a design fact the share exposed; the owner's to
+price) · Game: ninjo · Files: `games/ninjo/src/constants.rs` (`share_pct`),
+`src/economy.rs` · Open
+
+The handoff fixed two things at once: a self-chosen job pays its worker a
+share of the pot, and **Steve still goes short first in every idle world** —
+"if the share rescues Steve, the constants are wrong, not the assertion: his
+multiplier and purse are CAST content". Both hold only at a very small share,
+and the arithmetic is short: Steve opens with **3g** against a first interval
+of **7g** at minute 1440, and on day one he works two or three jobs back to
+back (need opens his sum past the rest term, as it did before this wave). So
+any share above about a gold a job rescues him.
+
+The sweep, over sixty-four seeded worlds (`--probe` was a temporary tuning
+mode this session used and removed):
+
+| share | idle shortfalls | Steve first | attentive worst | margin |
+|---|---|---|---|---|
+| 0% | 14 | 64/64 | 3 | 11 |
+| 3% (shipped) | 9..12 | **64/64** | 5 | 4 |
+| 4% | 8..11 | 58/64 | 4 | 4 |
+| 10% | 2..5 | 1/64 | 2 | 0 |
+| 30% (first guess) | 1..3 | 1/64 | 2 | — |
+
+Raising `upkeep_coin` alongside the share does not rescue the claim — every
+cost scales and Bob, index 0, goes short at the same burn — and moving
+`upkeep_hours` to six puts the first burn before anybody's first completion
+and keeps Steve first at a 30% share, but presses somebody to the desperation
+ceiling, which the limp floor forbids. **So the share ships at 3%**, every
+assertion holds, and the share is honest but small: a gold or two a job. The
+consequence the handoff asked to be said aloud — *the standing rate now
+competes with the share* — is true in the arithmetic and weak in practice at
+this number. What would make the share matter is one of: Steve's purse, the
+upkeep cadence, or the claim scoped to day one. All three are owner
+decisions; this session did not make any of them.
+
+### G-049 — the game's own: the scorer does not price risk
+
+Class: **the game's own** (an open design question) · Game: ninjo · Files:
+`games/ninjo/src/autonomy.rs` (`pay_for`, `money`) · Open
+
+The money term weighs what the job pays **if it is done** — the payout
+function at `Tier::Done` — and no term weighs the odds. So a desperate
+labourer weighs a fight job's share exactly as a fighter does, though it fails
+him one time in three. That is what the handoff specified (the money term
+reads the payout; the non-money terms were fenced), and it is what keeps
+desperate people taking poor-fit work: 765 poor-fit jobs were taken across the
+economy sweep's worlds, failing 35% of the time against a strong fit's 10%. Whether characters should *know* their
+own odds — an expected-pay money term, or a risk term carried by a trait like
+`craven` (`CAST.md` §3.3 parks it on "danger terms once fight tasks carry
+danger") — is a scorer decision for the owner, and it would change who agrees
+to a posting the board says is `risky`.
+
 ### G-032 — the game's own: the camp runs out of work before the band is whole
 
 Class: **the game's own** (a design fact the staged start exposed) · Game:
@@ -129,7 +266,17 @@ unspecified. Owner: the owner (GDD §5's needs row, and wave 1.5).
 ### G-034 — the game's own: the tuning drawer is full
 
 Class: **the game's own** (a layout ceiling) · Game: ninjo · Files:
-`games/ninjo/src/layout.rs`, `src/tuning.rs`, `src/floors.rs` · Open
+`games/ninjo/src/layout.rs`, `src/tuning.rs`, `src/floors.rs` · **Closed (wave
+1.4)**
+
+*Closed by wave 1.4, which brought six constants:* the drawer has a **fourth
+stepper column** (columns step 232, a row's own width, so four end at 956), the
+stamp follows that column down under its last stepper
+(`layout::tuner_stamp_for`), and the prose band moved up into the header beside
+the presets (`layout::tuner_hint`). `floors::tuner_has_room` still asks about
+the *next* constant — its stepper and the stamp it pushes down — and
+`floors::tuner_right_column` asserts every state of the prose band fits its
+three rows. The entry below is the record of the ceiling.
 
 Three constants took the drawer from thirty-six to thirty-nine. Twelve stepper
 rows at a pitch of thirty-four did not hold them, so the pitch dropped to
@@ -154,7 +301,22 @@ finding out. Owner: this game's UI.
 
 Class: **the game's own** (a scorer/economy seam the needs wave exposed) ·
 Game: ninjo · Files: `games/ninjo/src/autonomy.rs` (the pot term),
-`src/sim.rs` (`work_done`) · Open
+`src/sim.rs` (`work_done`) · **Closed (wave 1.4)**
+
+*Closed by wave 1.4, both halves, through one function.* A self-chosen job now
+pays its worker **a share of the pot** (`resolution::share_of`, the
+`share_pct` drawer row; GDD §4.1's MINT line amended), and the scorer's money
+term for any job reads **`resolution::payout`** — the function the completion
+pays through — via `autonomy::pay_for`: a posting pulls by its wage, a
+self-chosen job by its share, a shift by its wage, and never by a pot the
+worker will not receive. The second half — two arithmetics — is one now:
+`autonomy::money` feels any pay by pot affinity **and** desperation, and
+`answers::terms` calls it for the wage. `economy::judge_the_wage` keeps its
+unpressed ladder (still empty: with nobody pressed, money is affinity alone)
+and gains a second over the camp at its authored desperation, which moves
+people at 8g and 20g — a pinned literal, so the day it empties this entry
+reopens. The share ships small for a reason of its own (G-048). The entry
+below is the record of the seam.
 
 GDD §4.1 is exact: a site's pot mints **into the treasury**, and what a worker
 gets is a wage — a posting's (§3b) or an industry shift's. So a character who

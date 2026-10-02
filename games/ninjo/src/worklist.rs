@@ -40,6 +40,9 @@ pub struct Opening {
     pub job: JobId,
     /// Their fit for this job's kind of work. **The sort key.**
     pub fit: i64,
+    /// **Their odds at it** (wave 1.4) — `Lens::odds`, the roll's own
+    /// function; `None` where nothing is rolled.
+    pub odds: Option<crate::resolution::Odds>,
     /// What the scorer says they would do about it at the standing rate, and
     /// why. `None` with the asks module off, which is the module's whole
     /// degrades-to sentence: there is nobody to ask.
@@ -94,6 +97,7 @@ pub fn openings(
             out.push(Opening {
                 job,
                 fit: lens.competence(who, quest.task),
+                odds: lens.odds(tuning, who, job),
                 reading: lens.asks_on().then(|| {
                     board::reading_at(
                         lens,
@@ -173,7 +177,7 @@ pub fn work_list(
         theme::INK,
     ));
     // **The board's own fit chip, in the board's own place** — one chip, one
-    // flag, one sentence (`asks::fit_means`), because fit described in a
+    // flag, one sentence (`resolution::fit_means`), because fit described in a
     // third voice is three surfaces somebody has to keep in step.
     let chip = layout::board_fit_chip();
     panel.text(TextRun::new(
@@ -221,7 +225,10 @@ pub fn work_list(
         ));
         panel.text(TextRun::new(
             at + layout::work::FIT,
-            clipped(&format!("fit {}", opening.fit), layout::work::FIT_W),
+            clipped(
+                &crate::resolution::fit_cell(opening.fit, opening.odds, tuning),
+                layout::work::FIT_W,
+            ),
             theme::SMALL,
             if opening.fit > 0 {
                 theme::GOLD
@@ -232,7 +239,9 @@ pub fn work_list(
         panel.text(TextRun::new(
             at + layout::work::WHERE,
             clipped(
-                crate::grid::LOCATIONS[crate::sim::site_location(opening.job.site)].name,
+                crate::sim::plain(
+                    crate::grid::LOCATIONS[crate::sim::site_location(opening.job.site)].name,
+                ),
                 layout::work::WHERE_W,
             ),
             theme::SMALL,
@@ -280,7 +289,7 @@ pub fn work_list(
     // The gesture that posts is a board row's, and a list of work that posted
     // would be a second way to do the one thing this game has one way to do.
     let hint = if flow.fit_explained {
-        crate::asks::fit_means()
+        crate::resolution::fit_means(tuning, lens.modules())
     } else if openings.is_empty() {
         "nothing stands open anywhere - the settlement's work is all claimed or done".to_owned()
     } else {

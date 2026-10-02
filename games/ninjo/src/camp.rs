@@ -34,6 +34,27 @@ pub fn standing_as(lens: &Lens<'_>) -> &'static str {
     }
 }
 
+/// **Whether a shift can go wrong, in words — derived, never written** (wave
+/// 1.4's honest dormancy).
+///
+/// A shift is not rolled: `resolution::rolls_at` says no for an industry's
+/// site, and that predicate is what this reads, so the day a shift gains
+/// odds the line changes because the rule did. With the module off nothing is
+/// rolled anywhere, and the line says so in the trait chips' own words.
+pub fn shift_odds(lens: &Lens<'_>) -> String {
+    let rolled = INDUSTRIES
+        .iter()
+        .filter_map(|spec| lens.site(spec.site))
+        .any(crate::resolution::rolls_at);
+    if !lens.modules().enabled(crate::resolution::MODULE) {
+        crate::traits::Consumer::Resolution.absence().to_owned()
+    } else if rolled {
+        "a shift can go wrong, as a job can".to_owned()
+    } else {
+        "a shift always pays, whatever the fit - only a job at a site is rolled".to_owned()
+    }
+}
+
 /// **The settlement panel.**
 pub fn settlement_panel(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning) -> Panel {
     let mut panel = Panel::default();
@@ -205,9 +226,11 @@ pub fn settlement_panel(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning) -> Panel 
          the work the sites authored"
             .to_owned()
     } else if lens.settlement().any_standing() {
-        "a shift is standing work: nobody is posted to it and nobody is ordered onto it, and \
-         a finished shift opens again. the wage is what it is worth to whoever takes it"
-            .to_owned()
+        format!(
+            "a shift is standing work: nobody is posted to it, a finished shift opens again, \
+             and {}",
+            shift_odds(lens)
+        )
     } else {
         format!(
             "building is the treasury's first real sink, and the first building is the beat \

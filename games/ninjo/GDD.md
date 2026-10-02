@@ -386,8 +386,10 @@ section left open.
 Holders: player treasury, character wallets. **Mint at sources, burn
 at sinks, conserved between holders**; the ports, exhaustively:
 
-- MINT: site pots (→ treasury, on task resolution) **[built, S1/w1.2]**;
-  industry wages (→ worker wallets) **[built, w1.3]**.
+- MINT: site pots (→ treasury, on task resolution) **[built, S1/w1.2]**,
+  *and a self-chosen job's share* (→ the worker's wallet, on a success)
+  **[built, w1.4]**; industry wages (→ worker wallets) **[built, w1.3]**.
+  A failed job mints nothing.
 - TRANSFER: shares/wages (treasury → wallets, per the dispatch
   offer) **[built, w1.2]**; petition rewards (petitioner wallet → satisfier)
   *[w1.5]*; petition gifts (treasury → wallet) *[w1.5]*.
@@ -448,6 +450,36 @@ rather than branched on a name.
   records no *window* to derive one over; the handoff's instruction was to omit
   it rather than estimate it, and `needs::judge_at` asserts the line says
   neither word.
+
+*Implemented (w1.4): the share, the failure path, and one payout function.*
+`resolution::payout` is the one answer to "what does this job pay, by port, if
+it resolves at this tier", and `resolution::settle` moves exactly that onto the
+ledger; `answers::settle_wage` and `settlement::settle_shift` are gone into it.
+
+- **A job pays one way**: the **wage** if it was posted (TRANSFER, treasury →
+  wallet, in full — *even on a failure*: wave 1.2's rule stands, the promise was
+  the posting's and the player ate the risk of sending a bad fit), the
+  **share** if it was their own idea (MINT → wallet, `share_pct` of the pot, on
+  a success), and a shift pays the industry's wage as before. The pot's
+  remainder mints into the treasury on a success; **a failure mints nothing**.
+- **`Sim::ports` gains `minted_shares`**, and the conservation identity
+  extends over it: treasury + purses − opening purses = pots + shares + wages −
+  upkeep − building. A failed self-chosen job moves nothing at all and a failed
+  posted job moves the wage and nothing else — `outcomes::judge_at` settles
+  both on a staged world and asserts it, and the economy sweep's identity holds
+  over every world that has failures in it.
+- **The scorer weighs what the payout function says** (`autonomy::pay_for`):
+  a posting by its wage, a self-chosen job by its share, a shift by its wage —
+  never the pot. That closes `FINDINGS.md` G-035's first half; the second half
+  (two arithmetics) closed with it, because `autonomy::money` is now the one
+  money term and feels any pay by pot affinity **and** desperation.
+- **The share ships at three percent**, and that number is a finding rather
+  than a taste (`FINDINGS.md` G-048): Steve's first-interval claim, which is
+  `CAST.md` content, holds in every world only up to about a gold a job. **The
+  standing rate now competes with the share** — a stingy posting can lose to a
+  fat pot somebody would rather take on their own terms — and at three percent
+  that competition is real in the arithmetic and small in practice. The owner
+  prices it.
 
 ### 4.2 Regard (the master currency)
 
@@ -714,6 +746,52 @@ five passes.
   all follow it, and a person who has not arrived has no party, no token, no
   chip and no row.
 
+*Implemented (w1.4): resolution.* `src/resolution.rs` is the curve, the roll
+and the payout; `src/outcomes.rs` is the battery (the distribution sweep, the
+one-function claims and the photographed session). Its registry row is the
+fifth in `modules.rs` and the matrix is six passes.
+
+- **Three tiers** — *went well*, *done*, *failed* — and **the outcome is a
+  seeded roll with the odds shown**. `resolution::odds(tuning, fit)` is the
+  fit-to-odds curve, a function of fit alone (`fail_base`, `fail_fit`,
+  `well_fit`: at the shipped set a strong fit fails 11% and goes well 24%, a
+  poor fit fails 35% and never goes well), and `resolution::resolve` is the
+  roll that reads it. **No difficulty stat**: the seam is named in §10.
+- **The roll is addressed by the occurrence** — the scenario seed (`Sim::seed`,
+  planted by `flow::load_scenario`), the world-minute the work completes and
+  the job's `(site, slot)` — mixed into one number and drawn once
+  (`resolution::roll`). Never by call order and never by frame, so the
+  speed-invariance sweep stays green over it with nothing added
+  (`FINDINGS.md` G-016's rule; G-045 for why the game mixes before seeding).
+- **Every surface that shows fit shows the odds in a word** — `safe`,
+  `chancy`, `risky`, at the `odds_safe`/`odds_risky` thresholds —
+  `fit 2 safe` on the board row, the candidate picker and the work list, through
+  one formatter (`resolution::fit_cell`) over `Lens::odds`, which is
+  `resolution::odds_for`, the roll's own function. The fit chip's explanation
+  is derived from the same curve and the registry (`resolution::fit_means`,
+  `FINDINGS.md` G-046), and the trait chips' "every job succeeds" clause
+  retired because the registry gained the row.
+- **"Went well" pays as done, honestly.** Its effect is the record —
+  `Sim::resolved`, every resolution with who, which job, the tier and whether it
+  was posted — which §4.3's bonds will read; until something that reads it is
+  registered, `resolution::went_well_means` says so, derived from the registry.
+- **Failure is economic only**: no pot, no share, the posted wage paid anyway,
+  no desperation write and nobody hurt. **The job goes back on its board** —
+  open, pot intact, same identity, no retry limit — and the worker walks home
+  as any returner does. The line says it is back: *Steve botched the second
+  seal - paid 24g anyway, no pot; the job is back on the board*.
+- **Two classes**: `task-failed` (a posted job; **pause-and-focus**, on the
+  targeted decline's precedent — a contract you wrote going wrong is yours to
+  see) and `task-failed-own` (a self-chosen job; `log`). A completion stays
+  `quest-complete` and carries its tier on the note and on `Event::tier`.
+- **What is never rolled**: an industry's shift (`resolution::rolls_at` reads
+  `Site::industry`, as wave 1.3 read its port), and the settlement panel says so
+  in a derived line — *a shift always pays, whatever the fit* (`camp::shift_odds`).
+- **Degrades to** the landed stub: with the module off nothing is rolled,
+  nothing fails or goes well, the seed reaches nothing (`verify::seed_independence`
+  asserts that half), and the pay is unchanged — the share is a wealth port,
+  not a roll.
+
 *Implemented (w0b): the registry as machinery, empty of rows.*
 `src/modules.rs` holds the table above's shape (`ModuleSpec`: id, tier, wave,
 degrades-to), the per-module disable flags (`ModuleSet`, a bitmask planted as
@@ -805,7 +883,8 @@ session per handoff stands)
 - **1.1 autonomy** → **1.2 asks** → **1.3 needs + settlement** (**done** — one
   session, as planned; it also landed the staged start and the pressure
   surface, and it is the wave that made the world push back) → **1.4
-  resolution** (fit matters) → **1.5 petitions** →
+  resolution** (fit matters — **done**: three tiers, the odds shown, the share)
+→ **1.5 petitions** →
   **1.6 injector** (wave close: sanitation whose first pass is the UI exemplar
   audit; the vocabulary question) → MVP gate. Each lands into a running world;
   owner sanity-plays between sessions but fun is not judged. **Reordered
@@ -1010,6 +1089,57 @@ The mutation round grew to thirty-six constants and notices all of them,
 through an eighth instrument — the asks battery, every expectation a shipped
 literal.
 
+*Implemented (w1.4): the distribution sweep over outcomes, the economy
+re-judged, and the one-function claims.*
+
+- **The distribution sweep** (`outcomes::judge_at`, the P2 precedent): staged,
+  every authored site job rolled at sixty-four seeds and four occurrence minutes
+  — 6144 rolls a fit — with the tallies pinned as literals (`STRONG_TALLY`,
+  `POOR_TALLY`) and three bands: a strong fit fails under 15%, a poor fit over
+  28%, a strong fit goes well at least 18% of the time, and went-well is rarer
+  than done everywhere. **Played** (`outcomes::judge_played`, over every world
+  of the economy sweep): the same bands, and at least one poor-fit job taken —
+  desperate people must still rationally take work they are not fit for, and
+  across both players' worlds 765 were, failing 35% of the time against a
+  strong fit's 10%. The mutation round sees every curve constant and
+  both thresholds through these literals.
+- **The economy sweeps re-judged.** Every world now rolls its jobs at its own
+  seed (world *k*, seed *k*, beside the first-look rotation), so the idle
+  settlement is **no longer order-invariant** and its numbers became bands:
+  the treasury 1233g, shortfalls 9 to 12, the median purse nothing — and the
+  limp floor holds in all of them (nobody overdrawn, nobody past desperation
+  8, all twenty-four jobs done eventually, the slide uneven). **Steve still
+  goes short first in every world**, which is what fixed the share at three
+  percent (`FINDINGS.md` G-048). **The attention differential still passes**,
+  worst against every, same three-rule policy: the attentive player's worst
+  world goes short five times against neglect's *best* nine — the margin
+  narrowed from eight to four because neglect got slightly better (Bob no longer
+  chases a pot he was never paid), and the purse margin is unchanged at 17g.
+- **The wage lever moves people now** (`economy::judge_the_wage`): over the
+  camp at its authored desperation the panel's ladder changes who takes a shift
+  at 8g and 20g. The unpressed ladder stays empty on purpose.
+- **One function, shown and paid**: `outcomes::judge_one_function` draws the
+  Watchtower's board for Alex and asserts every row's odds-word is the sim's
+  odds for that pair, and that moving `fail_base` moves the row from `safe` to
+  `risky` *and* moves `resolve` at a fixed address from going well to failing;
+  every row battery (board, picker, work list) compares the drawn cell against
+  `resolution::cell_for`, built from the roll's own functions. And the pay the
+  scorer weighs for a self-chosen job equals what `settle` pays into the purse,
+  checked at the shipped share and seen by the mutation round at another.
+- **The seed reaches the roll, and nothing else**: at seeds 7 and 7777777 the
+  transcripts part; with resolution off they are identical.
+- **Module-off**: six passes, the sixth with resolution off, green.
+- **The standing-rate walk, re-pinned**: fight pay changes somebody's work at
+  16g, 36g and 56g (it was 12, 16, 36, 56): Bob's 12g step is gone, because his
+  own idea no longer carries a vault pot that was never his, and the people who
+  drift are Tim, Hana, Rin and Ines. Three steps from the shipped rate to the
+  first drift, unchanged. The compliance bands moved with it — greedy 22 → 28,
+  desperate 76 → 82.
+
+The mutation round grew to forty-five constants and notices all of them,
+through a tenth instrument — the resolution battery, every expectation a
+shipped literal.
+
 ## 10. Confidence & open ledger
 
 **The economy is built and swept, and not yet played** (wave 1.3): the bands
@@ -1032,12 +1162,22 @@ authored board is claimed by the middle of day two and the last four arrivals
 find nothing, which the industry answers and an idle player never builds
 (G-032); **nothing lowers desperation**, so the escalation pipe has one end and
 wave 1.5's petitions are the natural place to decide the other (G-033); and
-**a self-chosen job pays the worker nothing while the scorer weighs its pot
-anyway** (G-035) — GDD §4.1 is exact that a site's pot is the treasury's, so
-whether the pot should pull a self-chooser at all, pull them less, or imply a
-default share is the decision that sets how brutal an unattended settlement is.
-Beside them: **the tuning drawer is three rows from full** (G-034), and the
-fortieth constant needs its right column moved.
+G-035 (a self-chosen job paid nothing while the scorer weighed its pot) **closed
+with wave 1.4** — the share, and one money term.
+
+Open, and **new with wave 1.4**: **the share Steve's claim allows is three
+percent** (G-048) — the share is honest and small, and making it matter is a
+choice between Steve's purse, the upkeep cadence and the claim's scope; **the
+scorer does not price risk** (G-049) — a character weighs what a job pays if it
+is done, never its odds, which is what keeps desperate people taking poor-fit
+work and is a scorer decision; **the difficulty seam** — odds are a function of
+fit alone this wave, and a per-job difficulty would be one more input to
+`resolution::odds` (a field on `Quest`, read by the curve; the surfaces already
+print whatever the function returns), deliberately not built; **should fit
+matter at an industry?** — a shift is never rolled (`resolution::rolls_at`) and
+the settlement panel says so; whether camp work should have odds is open; and
+**the attention config holds twenty classes** (G-047), so the petitions wave's
+family needs a third column first.
 
 Open (deliberately): **the expectation model beyond the standing rate**
 (fit-adjusted? regard-adjusted?) · **open postings travelling** (this wave:

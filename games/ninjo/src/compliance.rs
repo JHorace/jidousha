@@ -25,10 +25,11 @@ use crate::traits::{TaskType, TraitId};
 /// The wages the distribution sweep walks, in gold — from nothing to well
 /// over every standing rate.
 ///
-/// The ladder the compliance shares are a distribution *over*: this build
-/// reads no `Rng` at all (`verify::seed_independence`), so two hundred seeds
-/// are two hundred copies of one run and the population that actually varies
-/// is the offer. Seven rungs and the four kinds of work under them is 280
+/// The ladder the compliance shares are a distribution *over*: an answer is
+/// decided by the scorer and never rolled — the seed reaches only the
+/// resolution roll, which is how a job *turns out* (`verify::seed_independence`)
+/// — so two hundred seeds are two hundred copies of one answer and the
+/// population that actually varies is the offer. Seven rungs and the four kinds of work under them is 280
 /// answers per pass, which is cheap enough for the mutation round to run
 /// thirty-six times.
 pub const LADDER: [i64; 7] = [0, 8, 16, 24, 32, 40, 48];
@@ -63,18 +64,23 @@ pub const BANDS: [Band; 4] = [
         name: "cold",
         takes: 16,
     },
-    // Bob, of twenty-eight: the wage's own pull is his, and it is what moves
-    // him up the ladder.
+    // Bob, of twenty-eight: the wage's own pull is his. **All twenty-eight
+    // since wave 1.4** (it was 22): what a posting competes with is what Bob
+    // would do instead, and his own idea used to carry the whole of a
+    // vault-sized pot in its money term — a pot that was never his. It now
+    // carries his share (`FINDINGS.md` G-035, closed), and nothing he could
+    // choose for himself outbids even the bottom rung.
     Band {
         name: "greedy",
-        takes: 22,
+        takes: 28,
     },
     // Bob, Steve and Ludo, of eighty-four: need opens every sum, so the
     // desperate take nearly everything — the band the wage lever has least
-    // work to do on, and the one a settlement leans on.
+    // work to do on, and the one a settlement leans on. **82 since wave 1.4**
+    // (it was 76): the six Bob gained above.
     Band {
         name: "desperate",
-        takes: 76,
+        takes: 82,
     },
 ];
 
@@ -230,7 +236,17 @@ pub fn judge_at(checks: &mut Checks, tuning: &Tuning) {
         let ludo = index("ludo");
         staged.parties[ludo].posting = Some(0);
         let before = staged.shared.regard(ludo, Regarded::Player);
-        let paid = answers::settle_wage(&mut staged, tuning, ludo);
+        // Settled as a **failure**, which is the case wave 1.4 made sharp:
+        // the posted wage is paid in full and nothing else moves — no pot is
+        // minted, so the treasury's whole change is the wage.
+        let paid = crate::resolution::settle(
+            &mut staged,
+            tuning,
+            ludo,
+            haul,
+            crate::resolution::Tier::Failed,
+        )
+        .wage;
         judge(
             checks,
             "a wage paid off the standing rate does not move regard by the shipped step",
@@ -694,22 +710,23 @@ fn policy(checks: &mut Checks, tuning: &Tuning) -> String {
     // who changes it. Pinned rather than derived, so a moved weight moves
     // them and the round notices.
     checks.require(
-        turning == vec![12, 16, 36, 56],
+        turning == vec![16, 36, 56],
         "raising the standing rate for fight work does not move the camp where it did",
         format!(
             "walking fight pay from 0 to {}g in steps of {}g changes somebody's work at \
-             {turning:?}, and the shipped set says [12, 16, 36, 56]; the rates are the policy \
+             {turning:?}, and the shipped set says [16, 36, 56]; the rates are the policy \
              the mass moves by, and a lever that moves nobody is a label",
             asks::RATE_MAX,
             asks::RATE_STEP
         ),
     );
     checks.require(
-        drifted == vec!["Bob", "Tim", "Hana", "Rin"] || drifted.len() == 5,
+        drifted == vec!["Tim", "Hana", "Rin", "Ines"],
         "the drift into fight work is not the band the shipped set says it is",
         format!(
-            "the people whose work changes as fight pay rises are {drifted:?}; five of the \
-             ten drift across the range, in the order their own trades are worth leaving"
+            "the people whose work changes as fight pay rises are {drifted:?}; the shipped \
+             set says Tim, Hana, Rin and Ines, four of the ten, in the order their own trades \
+             are worth leaving"
         ),
     );
     // **How coarse the lever is at the shipped rate**, in steps: the first

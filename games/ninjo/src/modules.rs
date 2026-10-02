@@ -5,10 +5,11 @@
 //! individually off, and green is the claim (GDD §9's module-off matrix).
 //! That matrix is built here and iterated by `verify::module_matrix`.
 //!
-//! **The table has four rows** since wave 1.3: `autonomy`, the scorer;
+//! **The table has five rows** since wave 1.4: `autonomy`, the scorer;
 //! `asks`, the postings the player rules by; `needs`, the upkeep that presses;
-//! and `settlement`, the industry that answers it. The matrix is therefore
-//! five passes — the everything-on baseline and one world per module switched
+//! `settlement`, the industry that answers it; and `resolution`, how a job
+//! turns out. The matrix is therefore
+//! six passes — the everything-on baseline and one world per module switched
 //! off — and each off-pass is what makes that row's `degrades_to` sentence a
 //! fact.
 //!
@@ -58,9 +59,9 @@ pub struct ModuleSpec {
 
 /// Every module this build has.
 ///
-/// **Four rows, since wave 1.3.** GDD §5's table is the schedule — petitions,
-/// resolution and the events-director are the rest of wave 1 — and each
-/// arrives as one row here.
+/// **Five rows, since wave 1.4.** GDD §5's table is the schedule — petitions
+/// and the events-director are the rest of wave 1 — and each arrives as one
+/// row here.
 ///
 /// `autonomy`'s degrades-to sentence changed with this wave and the change is
 /// the wave: with the scorer off, nobody answers anything either, and there
@@ -100,6 +101,15 @@ pub const MODULES: &[ModuleSpec] = &[
                       buildable, and needs rest entirely on the party work the sites \
                       authored",
     },
+    ModuleSpec {
+        id: crate::resolution::MODULE,
+        tier: Tier::Mvp,
+        wave: "1.4",
+        degrades_to: "every job that is worked succeeds - the landed stub, headcount and \
+                      duration: nothing is rolled, nothing fails, nothing goes well and the \
+                      seed reaches nothing; what a job pays is unchanged, the wage if it \
+                      was posted and the share if it was their own idea",
+    },
 ];
 
 /// Which modules are on.
@@ -138,6 +148,17 @@ impl ModuleSet {
         }
         Self {
             off: self.off | (1u64 << index),
+        }
+    }
+
+    /// The same set with the module of this id switched off — the matrix's
+    /// `without`, addressed by the id a battery has rather than an index it
+    /// would have to look up. An id the registry does not have is the
+    /// identity, as `without` treats an index past the table.
+    pub fn without_id(self, id: &str) -> Self {
+        match MODULES.iter().position(|spec| spec.id == id) {
+            Some(index) => self.without(index),
+            None => self,
         }
     }
 

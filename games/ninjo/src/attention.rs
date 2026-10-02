@@ -133,6 +133,13 @@ pub enum EventClass {
     Built,
     /// And the standing job slots that building opened.
     IndustryOpened,
+    /// **A posted job was botched** (the resolution module, wave 1.4): the
+    /// wage was paid anyway, nothing was minted, and the job is back on its
+    /// board. A contract the player wrote going wrong is the player's to see.
+    TaskFailed,
+    /// **A job somebody chose for themselves was botched**: no pay, nothing
+    /// minted, and the job is back on its board.
+    TaskFailedOwn,
 }
 
 /// One row of the event-class table: what a class is called, how it is drawn,
@@ -307,6 +314,30 @@ pub const CLASSES: &[ClassSpec] = &[
         id: "industry-opened",
         color: theme::INK,
         icon: Art::Labor,
+        default_mode: Mode::Log,
+    },
+    // **Resolution's two** (wave 1.4). A completion still lands as
+    // `quest-complete`, now carrying its tier (*went well* or *done*), at the
+    // same `log` — a job that went well is worth knowing and pays as done. A
+    // failure is two classes because it is two different things to the
+    // player: a **posted** job going wrong is a contract they wrote, and it
+    // stops the world on the targeted decline's precedent; one somebody chose
+    // for themselves is their own bad day, and it lands in the feed. The
+    // second id is `own-job-failed` rather than `task-failed-own` because the
+    // feed's class column holds fourteen glyphs and the photograph showed the
+    // fifteenth running into the place.
+    ClassSpec {
+        class: EventClass::TaskFailed,
+        id: "task-failed",
+        color: theme::EMBER,
+        icon: Art::Skull,
+        default_mode: Mode::PauseAndFocus,
+    },
+    ClassSpec {
+        class: EventClass::TaskFailedOwn,
+        id: "own-job-failed",
+        color: theme::EMBER,
+        icon: Art::Flame,
         default_mode: Mode::Log,
     },
 ];
@@ -629,6 +660,7 @@ pub fn judge_at(checks: &mut crate::checks::Checks, tuning: &Tuning) {
             gold: 0,
             note: format!("a probe event at minute {minute}"),
             judged: None,
+            tier: None,
         });
     }
     let lens = Lens::on(&sim);

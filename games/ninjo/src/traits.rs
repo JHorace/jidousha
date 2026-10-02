@@ -788,16 +788,6 @@ pub fn wanting(task: TaskType, traits: &[TraitId]) -> Vec<TraitId> {
         .collect()
 }
 
-/// The rows a pot pulls on — what produced a `pot` term, and half of what
-/// produced a `wage` one.
-pub fn drawn_by_a_pot(traits: &[TraitId]) -> Vec<TraitId> {
-    traits
-        .iter()
-        .copied()
-        .filter(|id| id.def().pot_affinity != NEUTRAL.pot_affinity)
-        .collect()
-}
-
 /// The rows that moved a regard term — the bond multipliers where the regard
 /// is positive, the grudge multipliers where it is not.
 ///
@@ -1327,13 +1317,24 @@ fn dormancy(checks: &mut Checks) {
         ),
     );
     // An aptitude row, with everything this build has switched on: the scorer
-    // weighs it, and resolution — which the registry does not carry — is what
-    // it is waiting for.
+    // weighs it **and resolution turns it into an outcome** — wave 1.4 put
+    // resolution in the registry, and the clause that said nothing yet did
+    // retired itself because the registry changed, not because anybody edited
+    // the sentence. With resolution switched off it comes back.
     let apt = explain(TaskType::Craft.aptitude(), ModuleSet::ALL);
+    let apt_off = explain(
+        TaskType::Craft.aptitude(),
+        ModuleSet::ALL.without_id(Consumer::Resolution.module()),
+    );
     checks.require(
-        apt.contains(Consumer::Resolution.absence()),
-        "an aptitude row does not say that nothing yet turns competence into an outcome",
-        format!("the crafter explains as {apt:?}"),
+        !apt.contains(Consumer::Resolution.absence())
+            && apt_off.contains(Consumer::Resolution.absence()),
+        "an aptitude row's resolution clause does not follow the registry",
+        format!(
+            "the crafter explains as {apt:?} with everything on and {apt_off:?} with \
+             resolution off; the clause saying nothing turns competence into an outcome must \
+             be absent while resolution runs and present while it does not"
+        ),
     );
     // **The flip.** The same row, with the module that weighs it switched off,
     // gains that consumer's clause; with it on, it does not carry it. Nothing

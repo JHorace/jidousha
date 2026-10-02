@@ -4,20 +4,19 @@
 //!
 //! # Two hundred worlds, and what varies across them
 //!
-//! GDD §9 asks for "~200 idle-player seeds". **This build reads no `Rng`** —
-//! `verify::seed_independence` asserts the whole transcript identical at
-//! far-apart seeds — so there is no seed to draw an economy from, and the
-//! honest thing is to say so and sweep the population that actually exists
-//! (`compliance.rs` met the same fact and answered it the same way).
+//! GDD §9 asks for "~200 idle-player seeds". Until wave 1.4 this build read
+//! no `Rng`, so there was no seed to draw an economy from and the sweep varied
+//! the population that existed: **the order in which ten people meet a finite
+//! board** — world *k* opens with every first rescore rotated by *k* minutes
+//! (`Sim::stagger_first_looks`).
 //!
-//! What a seed *would* have varied in an economy sweep is **the order in which
-//! ten people meet a finite board**: who reaches the mushroom haul first, and
-//! who arrives to find it taken. So that is what varies, and nothing else:
-//! world *k* opens with every scheduled first rescore rotated by *k* minutes
-//! (`Sim::stagger_first_looks`). Every constant, every standing rate and every
-//! authored pot is the shipped one in all two hundred — which is what makes a
-//! mutated upkeep or wage constant move all two hundred at once and break a
-//! band, as GDD §9 requires.
+//! **Since wave 1.4 world *k* also rolls its jobs at seed *k*** (`Sim::seed`,
+//! the resolution roll's one input beside the occurrence's address), so the
+//! population finally varies the thing a seed exists to vary: which jobs went
+//! well and which went wrong. Every constant, every standing rate and every
+//! authored pot is the shipped one in all of them — which is what makes a
+//! mutated upkeep, share or odds constant move the whole population at once
+//! and break a band, as GDD §9 requires.
 //!
 //! # A world without an app around it
 //!
@@ -100,6 +99,9 @@ pub struct Outcome {
     pub completed: usize,
     /// Whether anything was built by the end.
     pub built: bool,
+    /// **Every job that resolved, with the worker's fit for it** (wave 1.4) —
+    /// the played half of the distribution sweep.
+    pub tiers: Vec<(i64, crate::resolution::Tier)>,
 }
 
 impl Outcome {
@@ -136,6 +138,9 @@ pub fn live(
     let grid = crate::grid::grid();
     let mut sim = Sim::opening(tuning, modules);
     sim.stagger_first_looks(tuning, offset);
+    // **And its own seed** (wave 1.4): world *k* rolls its jobs at seed *k*,
+    // so the population finally varies the one thing a seed exists to vary.
+    sim.seed = offset;
     let opening_wallets: i64 = sim.people.iter().map(|person| person.wallet).sum();
     let mut answered = (0usize, 0usize);
     for day in 1..=days {
@@ -177,6 +182,18 @@ pub fn live(
             .filter(|event| event.class == crate::attention::EventClass::QuestComplete)
             .count(),
         built: sim.settlement.any_standing(),
+        tiers: sim
+            .resolved
+            .iter()
+            .filter_map(|record| {
+                let quest = sim.sites.get(record.job.site)?.quest(record.job.slot)?;
+                let person = sim.people.get(record.who)?;
+                Some((
+                    crate::traits::competence_at(quest.task, &person.traits),
+                    record.tier,
+                ))
+            })
+            .collect(),
     }
 }
 
@@ -323,25 +340,44 @@ pub fn sweep(tuning: &Tuning, player: Player) -> Vec<Outcome> {
 // this is an instrument (`mutation.rs`, and §A.6 of the game-session
 // workflow).
 
-/// What the treasury holds after two idle world-days — every pot on the
-/// board, because an idle settlement works its whole board and spends
-/// nothing.
-pub const IDLE_TREASURY: i64 = 1260;
+/// What the treasury holds after two idle world-days at seed 0 — the pots of
+/// the twenty-two jobs that were done, less the shares their workers kept
+/// (wave 1.4; it was 1260, the whole board, before anything could fail or be
+/// shared). Two jobs botched and went back on the board inside the two days.
+pub const IDLE_TREASURY: i64 = 1110;
 
-/// And how many jobs it finished doing it: the settlement's whole authored
-/// board, taken by people nobody told to take it.
-pub const IDLE_COMPLETED: usize = 24;
+/// And how many jobs it finished doing it — twenty-two of the board's
+/// twenty-four, taken by people nobody told to take it; the other two failed
+/// and stood open again when the two days ran out.
+pub const IDLE_COMPLETED: usize = 22;
 
-/// How many intervals were gone short over two idle world-days.
-pub const IDLE_SHORTFALLS_TWO_DAYS: u64 = 7;
+/// **The bands the sixty-four seeded idle worlds land in** (wave 1.4): the
+/// treasury, the shortfall count and the median purse, each `(lowest,
+/// highest)` over the population — shipped literals, so a mutated share, odds
+/// or upkeep constant moves an edge.
+pub const IDLE_TREASURY_BAND: (i64, i64) = (1233, 1233);
+/// The shortfall count's band.
+pub const IDLE_SHORTFALL_BAND: (i64, i64) = (9, 12);
+/// The median purse's band.
+pub const IDLE_WALLET_BAND: (i64, i64) = (0, 0);
+/// The fewest jobs any idle world finishes in three days — the limp floor's
+/// "the settlement keeps working", since a failed job goes back on the board
+/// and a world may end with work it has not yet got right.
+pub const IDLE_COMPLETED_FLOOR: usize = 24;
+
+/// How many intervals were gone short over two idle world-days at seed 0 — four
+/// since wave 1.4 (it was seven): the shares are small, but Bob no longer
+/// chases a vault pot that was never his, and a world rolls its own luck.
+pub const IDLE_SHORTFALLS_TWO_DAYS: u64 = 4;
 
 /// The purse the middle of the camp is left holding after two idle days.
 ///
-/// **Nothing**, and that is the wave's whole argument: a self-chosen job pays
-/// its pot into the *treasury* (GDD §4.1), so a settlement whose player never
-/// posts anything and never builds anything works hard, banks well and leaves
-/// its own people with empty hands.
-pub const IDLE_MEDIAN_WALLET: i64 = 0;
+/// **A gold**, since wave 1.4 (it was nothing): a self-chosen job now pays its
+/// worker a share of the pot (`resolution::share_of`, three percent), so the
+/// middle of an idle camp holds the crumbs of the work it did — and it is
+/// still the wave-1.3 argument, that a settlement whose player never posts and
+/// never builds leaves its own people with nearly empty hands.
+pub const IDLE_MEDIAN_WALLET: i64 = 1;
 
 /// **Who goes short first** — Steve, `CAST.md` §4.1's pariah-candidate, by
 /// registry index.
@@ -360,23 +396,22 @@ pub const ATTENTIVE_WORST_WALLET: i64 = 17;
 
 /// The most shortfalls the attentive player's worst world produced, over
 /// three world-days.
-pub const ATTENTIVE_WORST_SHORTFALLS: u64 = 6;
-
-/// And the idle player's, over the same three days — the number the
-/// differential is against.
-pub const IDLE_SHORTFALLS: u64 = 14;
+pub const ATTENTIVE_WORST_SHORTFALLS: u64 = 5;
 
 /// **The attention differential's margin, on its named measure.**
 ///
 /// The measure is **the count of upkeep shortfalls over three world-days**,
 /// and the margin is that the attentive player's *worst* world produces at
-/// least this many fewer of them than the idle player's. Eight of fourteen:
-/// competence more than halves the number of times somebody in Kawaza cannot
-/// pay for themselves.
+/// least this many fewer of them than the idle player's **best**. Four since
+/// wave 1.4 (it was eight of fourteen): the idle worlds now vary by seed and
+/// run nine to twelve, and the attentive worst is five — competence still
+/// more than halves the count against neglect's luckiest world. The margin
+/// narrowed because neglect got slightly better (Bob stopped chasing a pot he
+/// was never paid), not because attention got worse.
 ///
 /// A shipped literal the mutation round can move, and the thing the handoff
 /// says must hold at the shipped constants or the constants are wrong.
-pub const ATTENTION_MARGIN_SHORTFALLS: u64 = 8;
+pub const ATTENTION_MARGIN_SHORTFALLS: u64 = 4;
 
 /// And on the second measure, the median purse: the attentive player's worst
 /// world leaves the middle of the camp at least this much better off than the
@@ -400,7 +435,7 @@ pub const IDLE_WORST_DESPERATION: i64 = 8;
 /// **The cheap battery**, at a stated constants set — one idle world and one
 /// staged shift, both with shipped literals.
 ///
-/// Run by the mutation round thirty-nine times, so it is a single world of two
+/// Run by the mutation round forty-five times, so it is a single world of two
 /// days rather than the population: what it is for is seeing the economy's own
 /// constants move, and one settlement sees `upkeep_coin` and `upkeep_hours`
 /// exactly as two hundred do. The levy is staged rather than played, because
@@ -464,7 +499,7 @@ pub fn judge_at(checks: &mut crate::checks::Checks, tuning: &Tuning) {
 /// the levy the drawer's knob sets.
 ///
 /// Staged because an idle player never builds and a conducted one is too dear
-/// to run thirty-nine times: what is being asked is what `settle_shift` moves,
+/// to run forty-five times: what is being asked is what `resolution::settle` moves for a shift,
 /// which is a question about one completion.
 fn judge_a_shift(checks: &mut crate::checks::Checks, tuning: &Tuning) {
     let Some(spec) = crate::settlement::INDUSTRIES.first() else {
@@ -496,7 +531,18 @@ fn judge_a_shift(checks: &mut crate::checks::Checks, tuning: &Tuning) {
     // the levy into the treasury, and nothing else moves.
     let worker = 4usize;
     let (before_wallet, before_treasury) = (sim.people[worker].wallet, sim.treasury);
-    let (paid, levied) = crate::settlement::settle_shift(&mut sim, tuning, worker, spec.site);
+    let shift = sim::JobId {
+        site: spec.site,
+        slot: 0,
+    };
+    let moved = crate::resolution::settle(
+        &mut sim,
+        tuning,
+        worker,
+        shift,
+        crate::resolution::Tier::Done,
+    );
+    let (paid, levied) = (moved.shift, moved.levy);
     checks.require(
         paid + levied == sim.settlement.wage(0)
             && sim.people[worker].wallet == before_wallet + paid
@@ -658,11 +704,46 @@ pub fn judge_the_wage(checks: &mut crate::checks::Checks, tuning: &Tuning) -> St
             crate::settlement::WAGE_STEP
         ),
     );
+    // --- 3: and the same ladder over the camp as it is (wave 1.4) ---------
+    //
+    // **The half G-035 was about.** Since wave 1.4 a shift's wage is felt by
+    // pot affinity *and* desperation through the one money term
+    // (`autonomy::money`), so over the cast at its authored desperation — the
+    // camp the player actually has — the lever moves people. The unpressed
+    // ladder above stays empty on purpose: with nobody pressed, money is felt
+    // by affinity alone, and that is still one personality in ten.
+    let mut pressed = sim.clone();
+    for (person, authored) in pressed.people.iter_mut().zip(crate::people::roster()) {
+        person.desperation = authored.desperation;
+    }
+    crate::settlement::step_wage(&mut pressed, 0, -crate::settlement::WAGE_MAX);
+    let mut felt: Vec<(i64, usize)> = Vec::new();
+    loop {
+        felt.push((pressed.settlement.wage(0), on_shift(&pressed)));
+        if pressed.settlement.wage(0) >= crate::settlement::WAGE_MAX {
+            break;
+        }
+        crate::settlement::step_wage(&mut pressed, 0, crate::settlement::WAGE_STEP);
+    }
+    let moves_pressed: Vec<i64> = felt
+        .windows(2)
+        .filter(|pair| pair[0].1 != pair[1].1)
+        .map(|pair| pair[1].0)
+        .collect();
+    checks.require(
+        moves_pressed == WAGE_LADDER_MOVES_PRESSED && !moves_pressed.is_empty(),
+        "the wage lever does not move the camp as it is",
+        format!(
+            "over the cast at its authored desperation, walking the stepper changes who takes a \
+             shift at {moves_pressed:?} ({felt:?}); the shipped settlement moves them at \
+             {WAGE_LADDER_MOVES_PRESSED:?}. Empty would reopen FINDINGS G-035"
+        ),
+    );
     format!(
         "the wage lever: it reaches the scorer ({at_opening} at {opening}g, {at_ceiling} at \
-         {}g for the one carrier of a pot affinity) and over the panel's whole range it moves \
-         the camp's answer at {moves:?} - {seated} take a shift at any wage, which is \
-         FINDINGS G-035",
+         {}g for the one carrier of a pot affinity); unpressed it moves nobody (affinity \
+         alone, {seated} seated at any wage), and over the camp as it is it moves people at \
+         {moves_pressed:?} - G-035 closed",
         crate::settlement::WAGE_MAX
     )
 }
@@ -686,6 +767,12 @@ pub const GREEDY_AT_THE_CEILING: i64 = 12;
 /// scorer's money term changes, this check fails and says so.
 pub const WAGE_LADDER_MOVES: &[i64] = &[];
 
+/// **Every wage the camp's answer changes at over the cast as it is** — the
+/// same walk at the authored desperation, which since wave 1.4 the money term
+/// feels (`FINDINGS.md` G-035, closed). A shipped literal; empty would reopen
+/// the finding.
+pub const WAGE_LADDER_MOVES_PRESSED: &[i64] = &[8, 20];
+
 /// And how many of the camp take a shift, at any wage the panel can reach: the
 /// two makers, whose trade it is, and the two indebted, whose want covers any
 /// paid work.
@@ -700,26 +787,32 @@ pub fn judge_sweeps(checks: &mut crate::checks::Checks, tuning: &Tuning) -> Stri
     let treasuries: Vec<i64> = idle.iter().map(|run| run.treasury).collect();
     let shortfalls: Vec<u64> = idle.iter().map(|run| run.shortfalls).collect();
     let wallets: Vec<i64> = idle.iter().map(Outcome::median_wallet).collect();
-    // **The idle settlement is order-invariant**, which is the sweep's own
-    // finding and the reason two hundred worlds would say what sixty-four do:
-    // who takes which job varies with who looks up first, and what the
-    // settlement comes to does not.
-    let same = treasuries.iter().all(|held| *held == IDLE_TREASURY)
-        && shortfalls.iter().all(|count| *count == IDLE_SHORTFALLS)
-        && wallets.iter().all(|held| *held == IDLE_MEDIAN_WALLET);
+    let span = |values: &[i64]| {
+        (
+            values.iter().copied().min().unwrap_or(0),
+            values.iter().copied().max().unwrap_or(0),
+        )
+    };
+    let counts: Vec<i64> = shortfalls
+        .iter()
+        .map(|count| i64::try_from(*count).unwrap_or(i64::MAX))
+        .collect();
+    let (treasury_span, shortfall_span, wallet_span) =
+        (span(&treasuries), span(&counts), span(&wallets));
+    // **The idle settlement is no longer order-invariant, and that is the
+    // wave**: since 1.4 every world rolls its own jobs at its own seed, so a
+    // failure here and a went-well there move the treasury and the purses.
+    // What is asserted is the band the population lands in, every edge a
+    // shipped literal.
     checks.require(
-        same,
-        "the idle settlement's outcome depends on who looked up first",
+        treasury_span == IDLE_TREASURY_BAND
+            && shortfall_span == IDLE_SHORTFALL_BAND
+            && wallet_span == IDLE_WALLET_BAND,
+        "the idle settlement does not land in the bands the shipped economy states",
         format!(
-            "over {WORLDS} orders of thinking the treasury ran {:?}..{:?}, the shortfalls \
-             {:?}..{:?} and the median purse {:?}..{:?}; the shipped economy comes to \
-             {IDLE_TREASURY}g, {IDLE_SHORTFALLS} shortfalls and {IDLE_MEDIAN_WALLET}g",
-            treasuries.iter().min(),
-            treasuries.iter().max(),
-            shortfalls.iter().min(),
-            shortfalls.iter().max(),
-            wallets.iter().min(),
-            wallets.iter().max(),
+            "over {WORLDS} seeded worlds the treasury ran {treasury_span:?}, the shortfalls \
+             {shortfall_span:?} and the median purse {wallet_span:?}; the shipped economy \
+             states {IDLE_TREASURY_BAND:?}, {IDLE_SHORTFALL_BAND:?} and {IDLE_WALLET_BAND:?}"
         ),
     );
     // --- the limp floor ----------------------------------------------------
@@ -733,12 +826,12 @@ pub fn judge_sweeps(checks: &mut crate::checks::Checks, tuning: &Tuning) -> Stri
         checks.require(
             run.wallets.iter().all(|held| *held >= 0)
                 && worst <= IDLE_WORST_DESPERATION
-                && run.completed == IDLE_COMPLETED,
+                && run.completed >= IDLE_COMPLETED_FLOOR,
             "an idle settlement did not limp",
             format!(
                 "the purses read {:?}, the worst desperation is {worst} against a ceiling of \
-                 {} and {} of the board's {IDLE_COMPLETED} jobs were finished; the settlement \
-                 must limp without the player (GDD §1)",
+                 {} and {} jobs were finished against a floor of {IDLE_COMPLETED_FLOOR}; the \
+                 settlement must limp without the player (GDD §1)",
                 run.wallets,
                 crate::people::DESPERATION_MAX,
                 run.completed
@@ -790,25 +883,30 @@ pub fn judge_sweeps(checks: &mut crate::checks::Checks, tuning: &Tuning) -> Stri
         .map(Outcome::median_wallet)
         .min()
         .unwrap_or(0);
+    // **Worst against every**, which since the idle worlds vary means the
+    // attentive player's worst world against the idle player's *best*.
+    let idle_fewest = shortfalls.iter().copied().min().unwrap_or(0);
+    let idle_richest = wallet_span.1;
     checks.require(
         worst_shortfalls == ATTENTIVE_WORST_SHORTFALLS
-            && worst_shortfalls + ATTENTION_MARGIN_SHORTFALLS <= IDLE_SHORTFALLS,
+            && worst_shortfalls + ATTENTION_MARGIN_SHORTFALLS <= idle_fewest,
         "attention does not beat neglect by the margin the wave ships",
         format!(
             "the attentive player's worst world produced {worst_shortfalls} shortfalls \
-             against the idle player's {IDLE_SHORTFALLS}, and the shipped margin is \
-             {ATTENTION_MARGIN_SHORTFALLS}. If competence cannot beat neglect at the \
-             shipped constants, the constants are wrong"
+             against the idle player's best {idle_fewest}, and the shipped margin is \
+             {ATTENTION_MARGIN_SHORTFALLS} (the shipped worst is \
+             {ATTENTIVE_WORST_SHORTFALLS}). If competence cannot beat neglect at the shipped \
+             constants, the constants are wrong"
         ),
     );
     checks.require(
         worst_wallet == ATTENTIVE_WORST_WALLET
-            && worst_wallet >= IDLE_MEDIAN_WALLET + ATTENTION_MARGIN_WALLET,
+            && worst_wallet >= idle_richest + ATTENTION_MARGIN_WALLET,
         "attention does not leave the camp better off by the margin the wave ships",
         format!(
             "the attentive player's worst median purse is {worst_wallet}g against the idle \
-             player's {IDLE_MEDIAN_WALLET}g, and the shipped margin is \
-             {ATTENTION_MARGIN_WALLET}g"
+             player's best {idle_richest}g, and the shipped margin is \
+             {ATTENTION_MARGIN_WALLET}g (the shipped worst is {ATTENTIVE_WORST_WALLET}g)"
         ),
     );
     // **And the industry is what the attention bought**: every attentive world
@@ -817,15 +915,24 @@ pub fn judge_sweeps(checks: &mut crate::checks::Checks, tuning: &Tuning) -> Stri
     // for, said as a fact about the sweep.
     checks.require(
         attentive.iter().all(|run| run.built)
-            && attentive.iter().all(|run| run.completed > IDLE_COMPLETED),
+            && attentive
+                .iter()
+                .all(|run| run.completed > IDLE_COMPLETED_FLOOR),
         "the attentive player did not build the settlement out of its own board",
         format!(
             "{} of {WORLDS} attentive worlds stood an industry up, and the busiest finished \
-             {:?} jobs against the idle {IDLE_COMPLETED}",
+             {:?} jobs against the idle floor of {IDLE_COMPLETED_FLOOR}",
             attentive.iter().filter(|run| run.built).count(),
             attentive.iter().map(|run| run.completed).max()
         ),
     );
+    // --- the played distribution (GDD §9, wave 1.4) ------------------------
+    let played: Vec<(i64, crate::resolution::Tier)> = idle
+        .iter()
+        .chain(attentive.iter())
+        .flat_map(|run| run.tiers.iter().copied())
+        .collect();
+    let distribution = crate::outcomes::judge_played(checks, &played);
     // --- conservation, over both ------------------------------------------
     for (player, runs) in [("idle", &idle), ("attentive", &attentive)] {
         for run in runs.iter() {
@@ -859,13 +966,25 @@ pub fn judge_sweeps(checks: &mut crate::checks::Checks, tuning: &Tuning) -> Stri
             .map(Outcome::median_desperation)
             .collect::<Vec<_>>(),
     );
+    let completed = span(
+        &idle
+            .iter()
+            .map(|run| i64::try_from(run.completed).unwrap_or(0))
+            .collect::<Vec<_>>(),
+    );
+    let shares = span(
+        &idle
+            .iter()
+            .map(|run| run.ports.minted_shares)
+            .collect::<Vec<_>>(),
+    );
     format!(
-        "economy sweeps: {WORLDS} orders of thinking x 2 players x {DAYS} world-days; idle \
-         banks {IDLE_TREASURY}g, leaves a median purse of {IDLE_MEDIAN_WALLET}g and goes \
-         short {IDLE_SHORTFALLS} times, the same in every world; attentive's worst world \
-         goes short {worst_shortfalls} and holds {worst_wallet}g, a margin of \
-         {ATTENTION_MARGIN_SHORTFALLS} shortfalls and {ATTENTION_MARGIN_WALLET}g; median \
-         desperation {idle_pressed} against {kept}, which separates nothing and is why the \
-         margin is not stated on it; Steve first every time"
+        "economy sweeps: {WORLDS} seeded worlds x 2 players x {DAYS} world-days; idle banks \
+         {treasury_span:?}g, pays {shares:?}g in shares, finishes {completed:?} jobs, leaves \
+         a median purse of {wallet_span:?}g and goes short {shortfall_span:?} times; \
+         attentive's worst world goes short {worst_shortfalls} and holds {worst_wallet}g, a \
+         margin of {ATTENTION_MARGIN_SHORTFALLS} shortfalls and {ATTENTION_MARGIN_WALLET}g \
+         against idle's best; median desperation {idle_pressed} against {kept}; Steve first \
+         every time; {distribution}"
     )
 }

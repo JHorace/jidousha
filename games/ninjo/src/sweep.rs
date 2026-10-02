@@ -943,13 +943,27 @@ pub fn judge_orders(checks: &mut Checks, run: &Conducted, label: &str) {
             run.sim.treasury
         ),
     );
-    let paid_out = wallets - opening;
+    // **What reached the purses is the wages plus the shares** (wave 1.4): a
+    // self-chosen job pays its worker a share of the pot, which is a mint into
+    // the wallet rather than a transfer, so the wage claim reads the transfer
+    // port and the purses are asserted to be exactly the two together.
+    let paid_out = run.sim.ports.transferred;
+    checks.require(
+        wallets - opening == paid_out + run.sim.ports.minted_shares,
+        "the purses gained something that was neither a wage nor a share",
+        format!(
+            "{label}: the wallets gained {}g against {paid_out}g of posted wages and {}g of \
+             shares",
+            wallets - opening,
+            run.sim.ports.minted_shares
+        ),
+    );
     checks.require(
         paid_out == EXPECTED_WAGES,
         "the wages paid are not what the postings promised",
         format!(
-            "{label}: {paid_out}g reached the wallets and the four postings at the standing \
-             rates promise {EXPECTED_WAGES}g inside the run"
+            "{label}: {paid_out}g of posted wages was paid and the four postings at the \
+             standing rates promise {EXPECTED_WAGES}g inside the run"
         ),
     );
     checks.require(

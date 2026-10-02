@@ -4,7 +4,7 @@
 //! A script that passes under a mutated constant is a vacuous assertion, and
 //! this is the only thing that says which of the two a check is. **Every**
 //! constant is moved to a value nothing plausibly authors, and one of the
-//! eight instruments must complain: the exact-time order script (terrain
+//! ten instruments must complain: the exact-time order script (terrain
 //! costs move arrival minutes), the pacing probes (the clock constants move
 //! the tick-for-minute arithmetic), the path battery (a cost that only a
 //! route's literal sees), the trait arithmetic (the mark constants), the
@@ -12,8 +12,10 @@
 //! attention battery (the feed's cap and the focus pulse), the scorer
 //! battery (every weight, every cadence, and the relationship preset), the
 //! asks battery (the targeted bonus, the wage's regard, and the compliance
-//! bands the ladder is swept over), or the economy battery (what upkeep costs,
-//! how often it falls due, and what a worked shift pays the settlement).
+//! bands the ladder is swept over), the economy battery (what upkeep costs,
+//! how often it falls due, and what a worked shift pays the settlement), or the
+//! resolution battery (the share, the fit-to-odds curve and the odds-words'
+//! thresholds, through staged payouts and the staged distribution sweep).
 //!
 //! The round grows with the drawer by construction: it walks `Field::ALL`, so
 //! a constant added to `constants.rs` arrives here needing only a
@@ -47,6 +49,7 @@ pub fn mutation_round(checks: &mut Checks) -> String {
         autonomy::judge_at(&mut probe, &mutated);
         crate::compliance::judge_at(&mut probe, &mutated);
         crate::economy::judge_at(&mut probe, &mutated);
+        crate::outcomes::judge_at(&mut probe, &mutated);
         let shipped = Tuning::SHIPPED.field(field);
         if probe.failures() > 0 {
             noticed += 1;
@@ -65,7 +68,8 @@ pub fn mutation_round(checks: &mut Checks) -> String {
             format!(
                 "{} moved from {shipped} to {} and the order script, the pacing probes, the \
                  path battery, the trait arithmetic, the store battery, the attention battery, \
-                 the scorer battery and the economy battery all still passed; a check that \
+                 the scorer battery, the asks battery, the economy battery and the resolution \
+                 battery all still passed; a check that \
                  survives its own constant moving is not measuring it",
                 field.name(),
                 perturbation(field),
@@ -164,5 +168,18 @@ fn perturbation(field: Field) -> i64 {
         // And the levy takes the whole of a shift, which moves the treasury
         // band and the worker's take with it.
         Field::IndustryLevy => 60,
+        // **A self-chooser keeps the whole pot**: the idle treasury and the
+        // staged payout literal both move (the resolution battery and the
+        // economy battery).
+        Field::SharePct => 60,
+        // Nothing fails at fit 0 any more, and nothing goes well at any fit:
+        // the resolution battery's staged roll counts all move.
+        Field::FailBase => 0,
+        Field::FailFit => 0,
+        Field::WellFit => 0,
+        // And the odds-words' thresholds move: nothing reads safe, and a poor
+        // fit stops reading risky — the battery's word literals see both.
+        Field::OddsSafe => 0,
+        Field::OddsRisky => 60,
     }
 }

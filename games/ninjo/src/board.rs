@@ -180,9 +180,15 @@ pub fn site_board(
         // recomputed.
         if let Some(who) = flow.selected {
             let fit = lens.competence(who, quest.task);
+            // **And the odds, in a word** (wave 1.4) — `resolution::odds_for`
+            // through the lens, the function the roll reads.
+            let odds = lens.odds(tuning, who, crate::sim::JobId { site, slot });
             panel.text(TextRun::new(
                 at + layout::job::FIT,
-                clipped(&format!("fit {fit}"), layout::job::FIT_W),
+                clipped(
+                    &crate::resolution::fit_cell(fit, odds, tuning),
+                    layout::job::FIT_W,
+                ),
                 theme::SMALL,
                 if fit > 0 { theme::GOLD } else { theme::FAINT },
             ));
@@ -300,7 +306,7 @@ pub fn site_board(
     let hint = if !lens.asks_on() {
         "asks are off - this board is a read of the work, and nobody can be asked".to_owned()
     } else if flow.fit_explained {
-        crate::asks::fit_means()
+        crate::resolution::fit_means(tuning, lens.modules())
     } else {
         match (flow.post_open, flow.selected) {
             (true, _) => "tap a job to post it to anyone at the wage shown".to_owned(),
@@ -421,6 +427,9 @@ pub struct Candidate {
     pub who: usize,
     /// Their fit for this job's kind of work. **The sort key.**
     pub fit: i64,
+    /// **Their odds at it** (wave 1.4) — `Lens::odds`, the roll's own
+    /// function; `None` where nothing is rolled.
+    pub odds: Option<crate::resolution::Odds>,
     /// What the scorer says they would do about this offer, and why.
     pub reading: crate::answers::Reading,
     /// The journey from where they stand to this site, if one reaches.
@@ -472,6 +481,7 @@ pub fn candidates(
         .map(|who| Candidate {
             who,
             fit: lens.competence(who, task),
+            odds: lens.odds(tuning, who, job),
             reading: reading_for(flow, lens, tuning, now, who, job, task),
             route: lens.travel(grid, tuning, who, site),
         })
@@ -542,7 +552,7 @@ pub fn candidate_picker(
         theme::INK,
     ));
     // **The board's own fit chip, in the board's own place** — one chip, one
-    // flag, one sentence (`asks::fit_means`). Two surfaces showing fit must
+    // flag, one sentence (`resolution::fit_means`). Two surfaces showing fit must
     // not describe it in two voices, and the way to make that structural is
     // for there to be one chip rather than two that agree.
     let chip = layout::board_fit_chip();
@@ -579,7 +589,10 @@ pub fn candidate_picker(
         ));
         panel.text(TextRun::new(
             at + layout::cand::FIT,
-            clipped(&format!("fit {}", candidate.fit), layout::cand::FIT_W),
+            clipped(
+                &crate::resolution::fit_cell(candidate.fit, candidate.odds, tuning),
+                layout::cand::FIT_W,
+            ),
             theme::SMALL,
             if candidate.fit > 0 {
                 theme::GOLD
@@ -654,7 +667,7 @@ pub fn candidate_picker(
     // one.** The verdict is shown and not ranked on, so nothing here labels
     // anybody best or recommended: the list is ordered by fit and says so.
     let hint = if flow.fit_explained {
-        crate::asks::fit_means()
+        crate::resolution::fit_means(tuning, lens.modules())
     } else {
         format!(
             "sorted by fit - tap somebody to name them for {}, then tap its row to post it",
