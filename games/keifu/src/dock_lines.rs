@@ -41,7 +41,7 @@ pub fn help_lines(content: &Content, house: &House, width: f32) -> Vec<Line> {
 
 /// A group of winter seats' help: its heading, then what its seats do.
 pub fn group_lines(content: &Content, group: crate::hearth::Group, width: f32) -> Vec<Line> {
-    let (heading, help) = crate::hearth_view::group_help(content, group);
+    let (heading, help) = crate::hearth_help::group_help(content, group);
     let mut help = paragraph(&help, width, MIN_TEXT, ink::NOTE);
     help.space = 6.0;
     vec![paragraph(&heading, width, MIN_TEXT, ink::HEADING), help]

@@ -299,10 +299,10 @@
 -         (false, false) => None,
 +         (false, false) => Some(W::WinterRestCalmed),
 
-### O1 the fire resolves after the training yard
+### O1 the fire resolves after the training yard (re-cut s7, round 2)
 @ src/winter.rs
--     // 1. The fire, in seat order.⏎    for i in 0..FIRE_SEATS {⏎        if let Some(hero) = at(house, Seat::Fire(i)) {⏎            done.rests[i] = Some(rest_by_the_fire(content, house, hero, rng, &mut lines));⏎        }⏎    }⏎    // 2. The training yard.⏎    let (learner, teacher) = (at(house, Seat::Learner), at(house, Seat::Teacher));
-+     let (learner, teacher) = (at(house, Seat::Learner), at(house, Seat::Teacher));⏎    for i in 0..FIRE_SEATS {⏎        if let Some(hero) = at(house, Seat::Fire(i)) {⏎            done.rests[i] = Some(rest_by_the_fire(content, house, hero, rng, &mut lines));⏎        }⏎    }
+-     // 1. The fire, in seat order.⏎    for i in 0..FIRE_SEATS {⏎        if let Some(hero) = at(house, Seat::Fire(i)) {⏎            done.rests[i] = Some(rest_by_the_fire(content, house, hero, rng, &mut lines));⏎        }⏎    }⏎    // 2. The training yard.⏎    let (learner, teacher) = (at(house, Seat::Learner), at(house, Seat::Teacher));⏎    match (learner, teacher) {⏎        (Some(l), _) => {⏎            let lesson = yard_lesson(content, &house.heroes, l, teacher);⏎            done.yard = Some(lesson);⏎            train(content, house, l, teacher, lesson, &mut lines);⏎            // OQ-21 [emergent]: an adult teacher is credited even for a wasted lesson.⏎            if let Some(t) = teacher.filter(|&t| house.heroes[t].is_adult()) {⏎                credit(content, house, t, l, WinterAction::Teach, &mut lines);⏎            }⏎        }⏎        (None, Some(t)) => lines.push(fmt(⏎            &content.words[W::WinterWaitsForLearner],⏎            &[&house.heroes[t].name],⏎        )),⏎        (None, None) => {}⏎    }
++     // 2. The training yard.⏎    let (learner, teacher) = (at(house, Seat::Learner), at(house, Seat::Teacher));⏎    match (learner, teacher) {⏎        (Some(l), _) => {⏎            let lesson = yard_lesson(content, &house.heroes, l, teacher);⏎            done.yard = Some(lesson);⏎            train(content, house, l, teacher, lesson, &mut lines);⏎            // OQ-21 [emergent]: an adult teacher is credited even for a wasted lesson.⏎            if let Some(t) = teacher.filter(|&t| house.heroes[t].is_adult()) {⏎                credit(content, house, t, l, WinterAction::Teach, &mut lines);⏎            }⏎        }⏎        (None, Some(t)) => lines.push(fmt(⏎            &content.words[W::WinterWaitsForLearner],⏎            &[&house.heroes[t].name],⏎        )),⏎        (None, None) => {}⏎    }⏎    // 1. The fire, in seat order.⏎    for i in 0..FIRE_SEATS {⏎        if let Some(hero) = at(house, Seat::Fire(i)) {⏎            done.rests[i] = Some(rest_by_the_fire(content, house, hero, rng, &mut lines));⏎        }⏎    }
 
 ### O2 the table resolves before the garden
 @ src/winter.rs
@@ -314,10 +314,10 @@
 -     for b in 0..BENCHES {
 +     for b in (0..BENCHES).rev() {
 
-### Y1 a yard teacher alone writes nothing
+### Y1 a yard teacher alone is told as a bench's minder (re-cut s7, round 2)
 @ src/winter.rs
--         (None, Some(t)) => lines.push(fmt(⏎            &content.words[W::WinterWaitsForLearner],
-+         (None, Some(t)) if t > 99 => lines.push(fmt(⏎            &content.words[W::WinterWaitsForLearner],
+-             &content.words[W::WinterWaitsForLearner],
++             &content.words[W::WinterBenchNoChild],
 
 ### Y2 a yard teacher is credited only for a lesson that teaches (OQ-21 lost)
 @ src/winter.rs
@@ -334,10 +334,10 @@
 -                 if let Some(m) = minder.filter(|_| lesson.amount() > 0) {
 +                 if let Some(m) = minder {
 
-### B2 a bench minder alone writes nothing
+### B2 a bench minder alone is told as a yard teacher (re-cut s7, round 2)
 @ src/winter.rs
--             (None, Some(m)) => lines.push(fmt(⏎                &content.words[W::WinterBenchNoChild],
-+             (None, Some(m)) if m > 99 => lines.push(fmt(⏎                &content.words[W::WinterBenchNoChild],
+-                 &content.words[W::WinterBenchNoChild],
++                 &content.words[W::WinterWaitsForLearner],
 
 ### B3 a bench minder's moment is TEACH
 @ src/winter.rs

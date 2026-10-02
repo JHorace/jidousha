@@ -818,3 +818,43 @@ read and used.
   58 of 59. **The three escapes are the known equivalents** of sessions 3-5: K7, K8 and R12.
   Five earlier faults named code W6 moved and were re-cut to the same fault at the new site,
   marked "(re-cut s6)": dock K14 and K15, w4 Q11, Q12 and U1.
+
+---
+
+## Session 7 (W7)
+
+**Reading discipline, session 7.** Read: `CLAUDE.md`, the `make-game` skill, the crate whole
+(`SPEC-GAPS.md`, `FINDINGS.md`, `mutants/` — the harness whole and each list's sites, `src/`), and
+from `spec/` MODULES.md, SPEC.md whole, CONSTANTS.md §6-§10 and §14, and the content W7 reads
+(`ui-text.json`'s `winter` and `turning`, `lines.json`'s winter, deed, dream, legacy and turning keys,
+`writing.json`'s RESTS, WEDDINGS and TALES_TOLD, `dreams.json`, `legacies.json`'s heirlooms,
+`household.json`, `lore.json`'s vocations and seasons, `bonds.json`'s MENTOR and STUDENT). `docs/api/`:
+nothing new opened — W7 used only engine surfaces earlier sessions had read. **Engine source: not
+opened.** `games/ninjo/` and `attic/`: not opened; `grep -oh "^### G-0[0-9]*" games/*/FINDINGS.md`
+read the G-headings only (G-039's method). Incidental, disclosed: `tools/test`'s report prints ninjo's
+verify lines. No sibling game read.
+
+### G-056 — the handoff's "SPEC-GAPS (to KG-37)" where the file runs to KG-40
+
+Class: process (misled) · Session: keifu 7 · Owner: the keifu handoff
+
+**Doing:** reading `SPEC-GAPS.md` in full before starting, as the handoff asks, and numbering this
+session's entries.
+
+**Expected:** the last entry to be KG-37, as the handoff says.
+
+**Happened:** the file runs to KG-40 — session 6 filed seven, KG-34 to KG-40, and its PR says so.
+**What I did on its authority:** nothing beyond a second look: the file is the record, so I read it to
+its end and numbered this session's from KG-41.
+
+**Fix:** count the entries in the handoff from the file (`grep -c "^## KG-"`), as G-051 asked for the
+mutation lists.
+
+### docs/api: 0 findings
+
+W7 is rules over the game's own state — the hearth, its plans, the winter — plus one more seating
+screen and a scaffold page. Every engine surface it touched (the scripted pointer's drag of G-045, the
+page's rows and targets, the per-session recorder of G-043, the floors' measurement, `Rect::contains_rect`)
+was one earlier sessions had read and used. The documents were asked nothing new.
+
+### The game's own (session 7)

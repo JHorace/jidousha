@@ -462,3 +462,20 @@ fn a_teller_whose_renown_reaches_four_is_known_at_court_at_the_tale_moment() {
         "Odo is a step nearer his dream. What is left: succeed at the King's Court."
     );
 }
+
+#[test]
+fn a_child_at_the_hearth_witnesses_no_winter_moment() {
+    // Pip carries a blade dream at "Train a winter at the forge" (as an heir's choice
+    // could hand him one): his lesson on the bench moves nothing, being a child's.
+    let (content, mut house) = winter(&[
+        (Seat::BenchChild(0), "Pip"),
+        (Seat::BenchTeacher(0), "Maren"),
+    ]);
+    let pip = who(&house, "Pip");
+    let mut dream = Dream::build(&content, DreamKind::ForgeABlade, None, None).expect("builds");
+    dream.advance_to_stage(1);
+    house.heroes[pip].dream = Some(dream);
+    let lines = pass(&content, &mut house);
+    assert_eq!(lines, ["Pip trained under Maren. Wits rises to 3."]);
+    assert_eq!(house.heroes[pip].dream.as_ref().map(|d| d.current), Some(1));
+}

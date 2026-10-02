@@ -1,11 +1,12 @@
 //! The hearth (SPEC §3.1 `hearth`, §11.1-§11.2): the winter's seats, and opening them.
 //!
-//! Twelve winter seats (the content's help calls them ten) — the fire's two, the
+//! Twelve winter seats (SPEC-GAPS KG-46: the help calls them ten) — the fire's two, the
 //! training yard's learner and teacher, the garden's two, the long table's two, and two
-//! benches of a child and a teacher — and the yard's six, where the children wait. With the roster (the hall, in winter) they
-//! are every slot a hero can be dragged between in winter. **Any hero can be put in
-//! any seat** (§11.2); eligibility is judged only when the winter resolves, by the
-//! plans in `plans.rs`, which the seat previews read too.
+//! benches of a child and a teacher — and the yard's six, where the children wait.
+//! With the roster (the hall, in winter) they are every slot a hero can be dragged
+//! between in winter. **Any hero can be put in any seat** (§11.2); eligibility is
+//! judged only when the winter resolves, by the plans in `plans.rs`, which the seat
+//! previews read too.
 
 use crate::constants::{BENCHES, FIRE_SEATS, GARDEN_SEATS, TALE_SEATS, YARD_SPOTS};
 use crate::hero::HeroId;

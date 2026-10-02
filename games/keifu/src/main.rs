@@ -1,6 +1,6 @@
 //! Keifu (系譜): a port of Lineage to Jidousha. Session 1 built modules W0 and W1;
 //! session 2 built W2 and gave the cast its sprites; session 3 built W3; session 4
-//! built W4; session 5 built W5; session 6 builds W6.
+//! built W4; session 5 built W5; session 6 built W6; session 7 builds W7.
 //!
 //! W0 is the foundation: the content in `spec/content/` loaded and validated, the
 //! lore tables, the calendar and the Door countdown, the randomness primitives
@@ -25,15 +25,22 @@
 //! sharing the road (`road`), witnessing live, the ghost laid — the unanswered
 //! costs and healing at home; the telling as data (`telling`) and as a screen with
 //! its typewriter (`telling_view`); and leaving it (`season`), where the house can
-//! close (`ending_view`, a W10 SCAFFOLD) or the year moves on (a W7/W8 SCAFFOLD:
-//! nothing turns the year until W8).
+//! close (`ending_view`, a W10 SCAFFOLD) or winter begins. W7 is the winter: the
+//! hearth opened and seated (`hearth`), every seat's plan — the lesson with every
+//! excuse, the courtship verdict, the rest, the teller's part (`plans`) — previewed on
+//! the hearth screen (`hearth_view`) from the same plan the winter's resolution carries
+//! out in §11.3's order, with the teacher's credit and the rank-limited mentor bond
+//! (`winter`), and the winter's dream moments witnessed live. The turning after it is a
+//! W8 SCAFFOLD (`season`, `passage`, `turning_view`): the winter page, then summer.
 //!
 //! What the player can do in this build: point at a hero to read their sheet,
 //! point at a quest to read its sheet and its place's history — both open in the
 //! sheet dock down the right edge (`dock`), which scrolls a long sheet and covers
 //! nothing — drag heroes onto quests and watch the card's odds move while they are
 //! held, set out (or stay home) and read the telling page by page, and open the
-//! family. Leaving the telling brings the next summer.
+//! family. Leaving the telling opens the hearth: drag anyone to any winter seat and
+//! read its preview, point at a group for its help, let the winter pass and read what
+//! it did, and summer comes.
 //!
 //! The spec (`spec/SPEC.md`, `spec/CONSTANTS.md`, `spec/content/`) is the only
 //! source of game behaviour; `SPEC-GAPS.md` lists every place it fell silent.
@@ -80,6 +87,7 @@ mod harm;
 #[cfg(test)]
 mod harm_tests;
 mod hearth;
+mod hearth_help;
 mod hearth_view;
 mod hero;
 mod house;
@@ -137,6 +145,7 @@ mod w6_battery;
 mod w6_stages;
 mod w7;
 mod w7_battery;
+mod w7_controls;
 mod winter;
 #[cfg(test)]
 mod winter_tests;

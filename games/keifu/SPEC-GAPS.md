@@ -8,8 +8,8 @@ adjudicated one gets a **Resolved:** line.
 
 Session 1 (W0 + W1): 6 entries. Session 2 (W2): 6 entries, KG-7 to KG-12. Session 3 (W3):
 12 entries, KG-13 to KG-24. Session 4 (W4): 5 entries, KG-25 to KG-29. Session 5 (W5): 4
-entries, KG-30 to KG-33. Session 6 (W6): 7 entries, KG-34 to KG-40. Session 7 (W7): 5 entries,
-KG-41 to KG-45.
+entries, KG-30 to KG-33. Session 6 (W6): 7 entries, KG-34 to KG-40. Session 7 (W7): 6 entries,
+KG-41 to KG-46.
 
 ---
 
@@ -591,3 +591,14 @@ KG-41 to KG-45.
 - **Port's choice:** "living" is fate LIVING (`Hero::is_living`), as everywhere else the spec says living,
   so a hero whose spouse departed to Court may wed again (`src/plans.rs` `has_living_spouse`).
 - **Question:** `lineage/hearth.jai:166` — the spouse test.
+
+## KG-46 — "ten winter seats" and the twelve the hearth lists
+
+- **Spec says:** §1 "a **winter** in which the player seats heroes at ten winter seats";
+  `ui.winter.help` "There are ten seats and one winter." §3.1 `hearth` lists fire[2], training[2],
+  courting[2], tellers[2], benches[4] — twelve — and CONSTANTS §9 gives the same counts.
+- **Underdetermined:** whether the original has ten seats (and §3.1's list overcounts), or twelve
+  (and "ten" counts something else — a bench as one seat, say).
+- **Port's choice:** twelve, as §3.1 and CONSTANTS §9 list them and §11.3 resolves them; the help is
+  shown as shipped, "ten" and all (`src/hearth.rs` `Seat::all`).
+- **Question:** `lineage/hearth.jai:1-21` — the hearth's arrays, and what the help's "ten" counts.

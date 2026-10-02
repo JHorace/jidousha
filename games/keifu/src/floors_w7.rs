@@ -78,7 +78,7 @@ pub fn w7_surfaces(
         Group::Table,
         Group::Benches,
     ] {
-        crate::w7::point_at_group(&mut sim, group);
+        crate::w7_controls::point_at_group(&mut sim, group);
         let ui = *sim.world().resource::<UiState>();
         let dock = lines_in(&page_of(&sim), SHEET);
         checks.require(

@@ -34,13 +34,20 @@
 //!    witnessing's live path; the telling's controls and the house closing; a staged
 //!    forging; and the resolution battery, the dice against CONSTANTS §3 at every
 //!    margin, printed (`w6.rs`, `w6_battery.rs`).
-//! 8. **The W0 machinery**: calendar, text conventions, pools, bags (`foundations.rs`).
-//! 9. **Readability floors** over every surface this build has, every page of a
-//!    sheet longer than the dock, at the native window and two web canvases (`floors.rs`).
-//! 10. **The sheet dock** as the player works it: resting, scrolling, a new subject,
+//! 8. **W7's oracle**, played — year 1 left at home, Pip dragged onto a bench and Odo
+//!    held over its teacher seat: "+1 Spirit" previewed mid-drag and seated; after the
+//!    winter, Pip's Spirit 3, "Odo has taken Pip as a student." and Odo's dream at
+//!    (1/2) on his sheet, on every recorded seed; the played winter (a rest, lessons, a
+//!    wedding, the tale and Ysolde's road-book); the controls and each group's help;
+//!    and the agreement battery — the previews against the resolution over 3000 stirred
+//!    hearths (`w7.rs`, `w7_controls.rs`, `w7_battery.rs`).
+//! 9. **The W0 machinery**: calendar, text conventions, pools, bags (`foundations.rs`).
+//! 10. **Readability floors** over every surface this build has, every page of a
+//!     sheet longer than the dock, at the native window and two web canvases (`floors.rs`).
+//! 11. **The sheet dock** as the player works it: resting, scrolling, a new subject,
 //!     the hero in hand, a drop on it (`dock_checks.rs`).
-//! 11. **The cast's sprites**: every role imported, every card its role's texture (`cast.rs`).
-//! 12. **A picture** of each oracle's screen (`capture.rs`).
+//! 12. **The cast's sprites**: every role imported, every card its role's texture (`cast.rs`).
+//! 13. **A picture** of each oracle's screen (`capture.rs`).
 
 use std::process::ExitCode;
 
@@ -339,7 +346,7 @@ pub fn run() -> ExitCode {
     summary.push(w7_line);
     summary.extend(w7_vector);
     summary.push(crate::w7::check_played(&mut checks));
-    summary.push(crate::w7::check_controls(&mut checks));
+    summary.push(crate::w7_controls::check_controls(&mut checks));
     summary.extend(crate::w7_battery::check_agreement(&mut checks, &content));
     summary.push(crate::sessions::check_family(&mut checks, &mut recorder));
     summary.push(crate::sessions::check_seeds(&mut checks, &content));

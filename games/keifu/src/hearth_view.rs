@@ -17,19 +17,15 @@ use jidousha::prelude::*;
 
 use crate::board::Slot;
 use crate::board_view::{TILE, draw_hand, tile};
-use crate::constants::{
-    BENCHES, BIRTH_CHANCE_PERCENT, CHILD_TAUGHT_LIMIT, COURTING_AGE_GAP, FIRE_SEATS, MARRYING_AGE,
-    PARENT_AGE_HIGH, REST_DREAD_SHED, ROSTER_SEATS, SELF_TAUGHT_LIMIT, TALE_RENOWN, TALE_SEATS,
-    TEACHABLE_AGE, YARD_SPOTS,
-};
+use crate::constants::{BENCHES, FIRE_SEATS, ROSTER_SEATS, TALE_SEATS, YARD_SPOTS};
 use crate::content::Content;
 use crate::hearth::{Group, Seat};
+use crate::hearth_help::group_words;
 use crate::house::House;
 use crate::screen::{MIN_TEXT, Page, Target, UiState, ink, layers, wrap};
 use crate::summer::{
     BOARD, LEFT_X, ROSTER_TOP, button, card_rect, hero_card, lay_out_top_bar, screen_rect, yard_top,
 };
-use crate::text::fmt;
 use crate::winter::{WinterPlan, plan};
 use crate::words::W;
 
@@ -202,65 +198,6 @@ pub fn previewed<'h>(house: &'h House, ui: &UiState) -> Cow<'h, House> {
 pub fn notes_now(content: &Content, house: &House, ui: &UiState) -> Notes {
     let shown = previewed(house, ui);
     notes(content, &shown, &plan(content, &shown))
-}
-
-/// The heading, text and help of each group (`ui.winter`).
-fn group_words(content: &Content, group: Group) -> (String, String, String) {
-    let words = &content.words;
-    let n = |v: i32| v.to_string();
-    match group {
-        Group::Hall => (
-            words[W::WinterHall].to_owned(),
-            String::new(),
-            words[W::WinterHallHelp].to_owned(),
-        ),
-        Group::Fire => (
-            words[W::WinterFire].to_owned(),
-            fmt(&words[W::WinterFireText], &[&n(REST_DREAD_SHED)]),
-            words[W::WinterFireHelp].to_owned(),
-        ),
-        Group::Training => (
-            words[W::WinterTraining].to_owned(),
-            words[W::WinterTrainingText].to_owned(),
-            fmt(&words[W::WinterTrainingHelp], &[&n(SELF_TAUGHT_LIMIT)]),
-        ),
-        Group::Garden => (
-            words[W::WinterGarden].to_owned(),
-            words[W::WinterGardenText].to_owned(),
-            fmt(
-                &words[W::WinterGardenHelp],
-                &[
-                    &n(MARRYING_AGE),
-                    &n(COURTING_AGE_GAP),
-                    &n(BIRTH_CHANCE_PERCENT),
-                    &n(MARRYING_AGE),
-                    &n(PARENT_AGE_HIGH),
-                ],
-            ),
-        ),
-        Group::Table => (
-            words[W::WinterTable].to_owned(),
-            words[W::WinterTableText].to_owned(),
-            fmt(
-                &words[W::WinterTableHelp],
-                &[&n(TALE_RENOWN), &n(TALE_RENOWN)],
-            ),
-        ),
-        Group::Benches => (
-            words[W::WinterBenches].to_owned(),
-            words[W::WinterBenchesText].to_owned(),
-            fmt(
-                &words[W::WinterBenchesHelp],
-                &[&n(TEACHABLE_AGE), &n(CHILD_TAUGHT_LIMIT)],
-            ),
-        ),
-    }
-}
-
-/// A group's heading and its help, for the dock.
-pub fn group_help(content: &Content, group: Group) -> (String, String) {
-    let (heading, _, help) = group_words(content, group);
-    (heading, help)
 }
 
 /// `text` wrapped into `width` from `at`, one logical line; returns the y below it.
@@ -479,6 +416,26 @@ fn note_under(page: &mut Page, note: &str, tile: Rect, panel: Rect) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn each_pair_reads_left_to_right_learner_before_teacher_and_child_before_teacher() {
+        let pairs = [
+            (Seat::Fire(0), Seat::Fire(1)),
+            (Seat::Learner, Seat::Teacher),
+            (Seat::Garden(0), Seat::Garden(1)),
+            (Seat::Table(0), Seat::Table(1)),
+            (Seat::BenchChild(0), Seat::BenchTeacher(0)),
+            (Seat::BenchChild(1), Seat::BenchTeacher(1)),
+        ];
+        for (left, right) in pairs {
+            let (a, b) = (seat_rect(left), seat_rect(right));
+            assert!(
+                a.max.x < b.min.x && a.min.y == b.min.y,
+                "{left:?} {right:?}"
+            );
+        }
+        assert!(seat_rect(Seat::BenchChild(0)).max.y < seat_rect(Seat::BenchChild(1)).min.y);
+    }
 
     #[test]
     fn the_pass_control_sits_under_the_benches_inside_the_board() {

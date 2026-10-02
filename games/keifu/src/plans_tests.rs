@@ -351,6 +351,11 @@ fn the_garden_judges_empty_seats_kin_age_distance_rivalry_and_marriage_in_that_o
         courtship(&heroes, Some(garrick), Some(ysolde)),
         Courtship::TooFarApart
     );
+    // The younger first is as far apart.
+    assert_eq!(
+        courtship(&heroes, Some(ysolde), Some(garrick)),
+        Courtship::TooFarApart
+    );
     heroes[ysolde].age = 47;
     heroes[garrick].age = 62;
     assert_eq!(
@@ -362,6 +367,11 @@ fn the_garden_judges_empty_seats_kin_age_distance_rivalry_and_marriage_in_that_o
     heroes[pip].age = 17;
     assert_eq!(
         courtship(&heroes, Some(pip), Some(odo)),
+        Courtship::TooYoung
+    );
+    // Either seat: the young one second is too young as well.
+    assert_eq!(
+        courtship(&heroes, Some(odo), Some(pip)),
         Courtship::TooYoung
     );
     heroes[pip].age = 18;
