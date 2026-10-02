@@ -351,4 +351,18 @@ mod tests {
         let reading = read_board(&content, &house.heroes, &quests, 0);
         assert_eq!(reading.call, Some((1, garrick)));
     }
+
+    #[test]
+    fn the_second_of_a_pair_chooses_only_from_those_the_first_left() {
+        let (content, house) = house();
+        let heroes = &house.heroes;
+        let (garrick, brannoc) = (id(heroes, "Garrick"), id(heroes, "Brannoc"));
+        // Two Might quests: both would take Garrick and Brannoc first.
+        let grave = quest_titled(&content, "Grave goods", 10);
+        let bridge = quest_titled(&content, "The rope bridge", 10);
+        let (a, b) = pair_parties(heroes, &grave, &bridge);
+        assert_eq!(a, [garrick, brannoc]);
+        assert!(!b.contains(&garrick) && !b.contains(&brannoc), "{b:?}");
+        assert_eq!(b.len(), 2);
+    }
 }
