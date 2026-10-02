@@ -572,3 +572,81 @@ DOM that measured it (640x329 in the check's 640x480 window). **Engine source: n
   lane, which is set from the dock's edge; K19 rerun: noticed — **22 of 22**. W4's pointer
   and board-view entries (U1-U5, V1-V5; V4 and V5 now in `dock_lines.rs`) rerun against
   the new code: 10 of 10.
+
+---
+
+## Session 5 (W5)
+
+**Reading discipline, session 5.** Read: `CLAUDE.md`, the `make-game` skill, the crate whole
+(`SPEC-GAPS.md`, `FINDINGS.md`, `mutants/`, `src/`), and from `spec/` MODULES.md, SPEC.md
+§0, §5-§6, §9.6, §14.4 and §22, CONSTANTS.md whole, OPEN-QUESTIONS.md's OQ-29 and OQ-33,
+`content/README.md`'s brace placeholders, and the content W5 reads (`quests.json`,
+`ghost.json`, `lore.json`'s places, `ui-text.json`'s `quest_card.ghost` and `summer.help`).
+`docs/api/`: nothing new opened — W5 used only engine surfaces earlier sessions had read.
+**Engine source: not opened.** `games/ninjo/` and `attic/`: not opened, and not grepped
+either — this session files no G-number, so the heading grep (G-039's method) was not needed.
+No sibling game read.
+
+### docs/api: 0 findings
+
+W5 is rules over the game's own state — planning, reading, easing, memory — plus one more
+card line and one more picture. Every engine surface it touched (a `HeadlessSim`'s world,
+the page's rows and targets, the per-session recorder of G-043, the floors' measurement)
+was one sessions 1-4 had already read and used. The documents were asked nothing new.
+
+### The game's own (session 5)
+
+- **The scaffold is gone; every summer has a board.** `House::post_board` is now board
+  generation (`generation.rs` — plan, choose, finish; `reading.rs` — likely parties, the
+  pair reading, the dreamer who could go; `easing.rs`). A quest now carries its source
+  (template or ghost), title and premise, so a ghost's quest reads on the card and sheet
+  like any other (`quest.rs` `Source`, `stakes`, which the template and the ghost share).
+  What generation decided is kept as `House::board_report` for the checks; nothing in play
+  reads it. The Door's summer refuses to generate a board, loudly — it is W10's.
+- **The recorded seed, re-recorded.** The founding now generates year 1's board — up to
+  sixteen planned boards, each drawing place, template, seats and wobble per drawn quest,
+  seats and wobble per forced one — so the draw "another house" makes after a house founded
+  on seed 7 moved again: `SEED_AFTER_SEVEN` 0x5504_a624_1e60_5676 → 0x52ec_97b2_4d27_2e97
+  (`sessions.rs`). It is the only recorded draw in the crate.
+- **"Its summers", before W6 and W8.** Nothing resolves a quest or turns the year yet, so
+  the shape battery runs years 1-25 on the founding household *as founded*: each summer
+  advances the calendar and prepares the board from the run's own generator, the template
+  memory carried. Demand creeps with the year as in play; the household does not grow, age
+  or die. That is a harder house than the original's (whose heroes learn), and the numbers
+  should be read that way.
+- **The shape, and its bound.** The spec gives no rate for "most", so verify asserts the
+  conservative reading — strictly more than half of the battery's summers — fixed before
+  the battery first ran. It measured 568 of 600 (94.7%): every summer of years 1-14 carries a
+  fair-chance Dream: mark on a card, and the rate falls to 71-92% in years 19-25, where the
+  founded household meets demand +3 and +4 per seat. The mark is read off the card's own
+  "Dream:" line and each named dreamer asked the board reader's could-go test, so it is the
+  card the player reads, after easing. The reader's own call on the kept board, before
+  easing, is printed beside it (516 of 600).
+- **The loop's rules, asserted over the battery** and printed: sort violations 0, template
+  repeats 0 (of 2,256 drawn places with a remembered template), memory mismatches 0,
+  welcome-rule breaks 0 (the loop stops at its first score-3 plan, else runs 16; the kept
+  plan is the first at the best score; the score matches the formula written as literals),
+  easing out of rule 0 (it engages exactly when the kept answerability is under 18 of 36,
+  touches only the remembered pair, and stops for the reason it says). Easing engaged in
+  253 summers and always stopped with both answerable; the floor and the limit never
+  occur on a founded household, so a staged all-wounded house in year 25 floors on every
+  board in verify, and the limit is asserted on crafted boards in `easing.rs`'s tests.
+- **The W4 oracle now reads "lower only if the board was eased".** It asserts the demand
+  plus what easing took off Grave goods is 9, 10 or 11. Across its 27 seeds easing never
+  touched Grave goods: the founding household answers year 1 easily.
+- **The ghost slot, staged.** Two dead heroes' ghosts at Emberfall and the Deepwood, year 2:
+  the first is offered on every board as "Lay Garrick's ghost" (Spirit, two seats, danger 2,
+  demand 10, the card's "The ghost of Garrick" in place of a Dream: line), the second never;
+  a ghost at a place a forced quest holds waits; a ghost's quest writes no template memory.
+  Pictured: `screens/w5-ghost.png`.
+- **The help stays in the dock.** A full board left no room for session 4's empty-slot help
+  and the dock fix had already moved it; the floors now assert, on every board they judge,
+  that the idle dock reads the help alone, all four cards are drawn, and no row outside the
+  dock carries the help. `screens/dock-idle.png` is year 1's full board.
+- **Floors over the full board, at the three sizes** (native 1280x720, the web check's
+  640x329, 4:3 1024x768): four cards seated and every quest sheet; every one of the 24
+  templates on a card, as eight staged boards of four, with each sheet; the ghost's card
+  and sheet. 77 surfaces per size.
+- **Picking a template "excluding the remembered one" is `fresh_index`.** SPEC §22.1's
+  primitive is exactly that distribution (uniform over the others); the spec asks the port
+  for matching distributions, not sequences.

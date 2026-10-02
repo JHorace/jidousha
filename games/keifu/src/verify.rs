@@ -20,13 +20,19 @@
 //!    demand's band and CONSTANTS §3's mapping over a sweep of seeds, the quest
 //!    sheet's §6 lines — then the drags that do not seat, W4's rules, and W2's
 //!    and W3's oracles graduated onto the real card (`w4.rs`, `w4_rules.rs`).
-//! 6. **The W0 machinery**: calendar, text conventions, pools, bags (`foundations.rs`).
-//! 7. **Readability floors** over every surface this build has, every page of a
+//! 6. **W5's oracle**, the first distributional one — year 1's invariant off the
+//!    drawn cards on the recorded seeds and off the card reading on a fresh sweep;
+//!    the shape ("most summers carry a fair-chance Dream: mark") and the loop's
+//!    rules over a fixed battery of seeds run through their summers, with the
+//!    distribution printed; and the ghost slot on staged ghost lists (`w5.rs`,
+//!    `w5_shape.rs`).
+//! 7. **The W0 machinery**: calendar, text conventions, pools, bags (`foundations.rs`).
+//! 8. **Readability floors** over every surface this build has, every page of a
 //!    sheet longer than the dock, at the native window and two web canvases (`floors.rs`).
-//! 8. **The sheet dock** as the player works it: resting, scrolling, a new subject,
+//! 9. **The sheet dock** as the player works it: resting, scrolling, a new subject,
 //!    the hero in hand, a drop on it (`dock_checks.rs`).
-//! 9. **The cast's sprites**: every role imported, every card its role's texture (`cast.rs`).
-//! 10. **A picture** of each oracle's screen (`capture.rs`).
+//! 10. **The cast's sprites**: every role imported, every card its role's texture (`cast.rs`).
+//! 11. **A picture** of each oracle's screen (`capture.rs`).
 
 use std::process::ExitCode;
 
@@ -303,6 +309,9 @@ pub fn run() -> ExitCode {
     let (inherited, inherited_vector) = crate::w4_rules::check_inherited(&mut checks);
     summary.push(inherited);
     summary.extend(inherited_vector);
+    summary.extend(crate::w5::check_invariant(&mut checks, &content));
+    summary.extend(crate::w5_shape::check_shape(&mut checks, &content));
+    summary.push(crate::w5::check_ghost_slot(&mut checks, &content));
     summary.push(crate::sessions::check_family(&mut checks, &mut recorder));
     summary.push(crate::sessions::check_seeds(&mut checks, &content));
     summary.push(crate::sessions::check_staged_sheets(&mut checks));
@@ -317,7 +326,7 @@ pub fn run() -> ExitCode {
     let (passed, failed) = checks.counts();
     if failed == 0 {
         println!(
-            "verified keifu: W0, W1, W2, W3 and W4 oracles hold on {} seeds, {passed} checks",
+            "verified keifu: W0, W1, W2, W3, W4 and W5 oracles hold on {} seeds, {passed} checks",
             SEEDS.len()
         );
     } else {

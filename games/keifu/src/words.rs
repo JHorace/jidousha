@@ -112,6 +112,7 @@ words! {
     GriefBorneSharedKinship = Lines "grief.borne_shared_kinship",
     GriefBorneMany = Lines "grief.borne_many",
     QuestCardDreamers = Ui "quest_card.dreamers",
+    QuestCardGhost = Ui "quest_card.ghost",
     QuestSheetDreamCall = Ui "quest_sheet.dream_call",
     DreamCounted = Lines "dream.counted",
     DreamStageDone = Lines "dream.stage_done",

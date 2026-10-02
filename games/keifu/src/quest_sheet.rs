@@ -62,13 +62,12 @@ fn line(ink: Ink, text: impl Into<String>, value: Option<String>) -> SheetLine {
 pub fn quest_sheet(content: &Content, house: &House, quest: usize, party: &[HeroId]) -> QuestSheet {
     let words = &content.words;
     let q = &house.board[quest].quest;
-    let template = &content.quest_templates[q.template];
     let place = &content.lore.places[q.place.index()];
     let heroes = &house.heroes;
     let mut out = vec![
         line(Ink::Note, place.title.clone(), None),
-        line(Ink::Title, template.title.clone(), None),
-        line(Ink::Body, template.premise.clone(), None),
+        line(Ink::Title, q.title.clone(), None),
+        line(Ink::Body, q.premise.clone(), None),
     ];
     if q.trouble > 0 {
         let fewer = if q.seats < q.calm_seats {

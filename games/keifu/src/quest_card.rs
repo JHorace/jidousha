@@ -14,6 +14,7 @@ use crate::forecast::{Forecast, card_percentages, forecast};
 use crate::hero::HeroId;
 use crate::house::House;
 use crate::power::{fear_line, party_power, you_bring};
+use crate::quest::Source;
 use crate::text::fmt;
 use crate::words::W;
 
@@ -44,7 +45,7 @@ pub struct CardReading {
     pub renown: String,
     /// "unanswered -1", at the house's renown now.
     pub unanswered: String,
-    /// "Dream: Garrick, Ysolde".
+    /// "Dream: Garrick, Ysolde", or on a ghost's quest "The ghost of Garrick".
     pub dream: Option<String>,
     /// "Ysolde will not go." for a watched hero who refuses, else the fear line.
     pub warning: Option<String>,
@@ -88,7 +89,6 @@ pub fn read_card(
 ) -> CardReading {
     let words = &content.words;
     let q = &house.board[quest].quest;
-    let template = &content.quest_templates[q.template];
     let place = &content.lore.places[q.place.index()];
     let heroes = &house.heroes;
     let power = party_power(heroes, party, q.facts(), house.patrons);
@@ -137,7 +137,7 @@ pub fn read_card(
     };
     CardReading {
         place: place.title.clone(),
-        title: template.title.clone(),
+        title: q.title.clone(),
         tags,
         danger_word: words[W::QuestCardDanger].to_owned(),
         danger: q.danger,
@@ -157,7 +157,12 @@ pub fn read_card(
             &words[W::QuestCardUnanswered],
             &[&q.unanswered_cost(house.renown).to_string()],
         ),
-        dream: dreamers_line(content, heroes, q.facts(), party),
+        // SPEC §5.4: "either 'The ghost of <name>' or 'Dream: <names>'"; a ghost's
+        // quest shows the ghost line (SPEC-GAPS KG-33).
+        dream: match q.source {
+            Source::Ghost(dead) => Some(fmt(&words[W::QuestCardGhost], &[&heroes[dead].name])),
+            Source::Template(_) => dreamers_line(content, heroes, q.facts(), party),
+        },
         warning,
     }
 }

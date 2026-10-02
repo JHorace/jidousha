@@ -10,12 +10,12 @@
 
 use jidousha::prelude::Rng;
 
-use crate::constants::QUEST_COUNT;
 use crate::content::Content;
 use crate::fear::refuses;
+use crate::generation::generate;
 use crate::hero::HeroId;
 use crate::house::House;
-use crate::quest::{Quest, post};
+use crate::quest::Quest;
 use crate::screen::Target;
 
 /// A posted quest and who sits on it.
@@ -55,36 +55,20 @@ pub struct PlaceRecord {
 }
 
 impl House {
-    /// Post the summer's board.
-    ///
-    /// W5 SCAFFOLD — replaced by W5's board generation (SPEC §5.2: planning,
-    /// reading, the welcome rule, easing). Until then the board is year 1's two
-    /// forced opening quests (`quests.json` `opening_quests`), each posted from its
-    /// own template by the real stakes formula at its place's trouble, in place
-    /// order. No other year has a board yet.
+    /// Post the summer's board (SPEC §5.2, `generation.rs`): the kept, eased board
+    /// in place order, each quest with its seats empty; the per-place template memory
+    /// and what generation decided are kept on the house.
     pub fn post_board(&mut self, content: &Content, rng: &mut Rng) {
-        self.board.clear();
-        if self.calendar.current_year() != 1 {
-            return;
-        }
-        let year = self.calendar.current_year();
-        for &template in &content.opening_quests {
-            let place = content.quest_templates[template].place;
-            let trouble = self.places[place.index()].trouble;
-            let quest = post(content, template, trouble, year, rng);
-            self.board.push(Posted {
+        let (quests, memory, report) = generate(content, self, rng);
+        self.templates_last = memory;
+        self.board = quests
+            .into_iter()
+            .map(|quest| Posted {
                 seats: vec![None; quest.seats as usize],
                 quest,
-            });
-        }
-        self.board.sort_by_key(|posted| posted.quest.place.index());
-        assert!(
-            self.board.len() <= QUEST_COUNT,
-            "[keifu] {} quests posted; a board holds {QUEST_COUNT}\n  likely cause: \
-             quests.json names more opening quests than a board has slots\n  fix: \
-             compare opening_quests with CONSTANTS.md §3 QUEST_COUNT",
-            self.board.len()
-        );
+            })
+            .collect();
+        self.board_report = Some(report);
     }
 
     /// Who sits in `slot`.
@@ -196,15 +180,14 @@ mod tests {
     }
 
     #[test]
-    fn year_one_posts_grave_goods_then_the_bell_in_place_order_with_empty_seats() {
-        let (content, house) = house();
-        let titles: Vec<&str> = house
-            .board
-            .iter()
-            .map(|p| content.quest_templates[p.quest.template].title.as_str())
-            .collect();
-        assert_eq!(titles, ["Grave goods", "The bell under the tide"]);
-        assert!(house.board.iter().all(|p| p.seats == [None, None]));
+    fn year_one_posts_grave_goods_and_the_bell_first_of_four_with_empty_seats() {
+        let (_, house) = house();
+        let titles: Vec<&str> = house.board.iter().map(|p| p.quest.title.as_str()).collect();
+        assert_eq!(titles.len(), 4);
+        assert_eq!(titles[..2], ["Grave goods", "The bell under the tide"]);
+        assert!(house.board.iter().all(
+            |p| p.seats.len() == p.quest.seats as usize && p.seats.iter().all(Option::is_none)
+        ));
     }
 
     #[test]

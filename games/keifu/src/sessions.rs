@@ -120,8 +120,11 @@ pub fn check_family(checks: &mut Checks, recorder: &mut FrameRecorder) -> String
 /// The seed another house draws after a house founded on seed 7: the engine `Rng`'s
 /// sequence, recorded the first time it ran, so a change to how it is drawn shows.
 /// Re-recorded in session 4: year 1's board now draws four numbers at founding
-/// (two quests, seats then wobble each), so the draw comes four later.
-const SEED_AFTER_SEVEN: u64 = 0x5504_a624_1e60_5676;
+/// (two quests, seats then wobble each), so the draw comes four later. Re-recorded
+/// in session 5: the founding now generates the board (SPEC §5.2) — up to sixteen
+/// planned boards, each drawing place, template, seats and wobble per drawn quest —
+/// so the draw comes a seed-dependent number later.
+const SEED_AFTER_SEVEN: u64 = 0x52ec_97b2_4d27_2e97;
 
 /// Seeds are recorded state; the household does not depend on them; a new house reseeds.
 pub fn check_seeds(checks: &mut Checks, content: &Content) -> String {

@@ -11,6 +11,8 @@ use crate::board::{PlaceRecord, Posted};
 use crate::calendar::Calendar;
 use crate::constants::{HOUSE_RENOWN_AT_START, ROSTER_SEATS, YARD_SPOTS};
 use crate::content::Content;
+use crate::generation::BoardReport;
+use crate::ghost::Ghost;
 use crate::hero::{Fate, Hero, HeroId};
 use crate::household::found;
 use crate::ids::Place;
@@ -43,6 +45,12 @@ pub struct House {
     pub board: Vec<Posted>,
     /// Per place: visits, triumphs, disasters, trouble.
     pub places: Vec<PlaceRecord>,
+    /// Ghosts of dreams left to no one, in list order (SPEC §14.4).
+    pub ghosts: Vec<Ghost>,
+    /// Per place, the template its quest had on the last board (SPEC §5.2).
+    pub templates_last: Vec<Option<usize>>,
+    /// What this summer's board generation decided, for the checks.
+    pub board_report: Option<BoardReport>,
 }
 
 /// A house tale (SPEC §3.1): its title, whom it is about, and the year it was first told.
@@ -88,6 +96,9 @@ impl House {
             blades_named: 0,
             board: Vec::new(),
             places: vec![PlaceRecord::default(); Place::ALL.len()],
+            ghosts: Vec::new(),
+            templates_last: vec![None; Place::ALL.len()],
+            board_report: None,
         };
         house.prepare_summer(content, rng);
         Ok(house)

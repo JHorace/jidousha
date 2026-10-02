@@ -33,9 +33,9 @@ pub const SIZES: [(&str, PhysicalSize); 3] = [
 ];
 
 /// The surfaces judged at one size, and the smallest clearance seen.
-struct Tally {
+pub struct Tally {
     size: PhysicalSize,
-    surfaces: usize,
+    pub surfaces: usize,
     pages: usize,
     rows: usize,
     smallest: f32,
@@ -200,7 +200,7 @@ fn judge(
 /// Judge the surface `sim` shows now; if its sheet is longer than the dock, page
 /// through it with the wheel and judge every page, then require that every line of
 /// the sheet was on a page. Leaves the dock scrolled back to the top.
-fn look(
+pub fn look(
     checks: &mut Checks,
     tally: &mut Tally,
     recorder: &mut FrameRecorder,
@@ -372,8 +372,9 @@ fn battery(checks: &mut Checks, tally: &mut Tally, recorder: &mut FrameRecorder,
         true,
     );
     let w4 = w4_surfaces(checks, tally, recorder);
+    let w5 = crate::floors_w5::w5_surfaces(checks, tally, recorder, label);
     checks.require(
-        tally.surfaces == 2 + seated.len() + everyone + staged.len() + 1 + w4,
+        tally.surfaces == 2 + seated.len() + everyone + staged.len() + 1 + w4 + w5,
         "a surface was not judged",
         format!("{label}: {} surfaces", tally.surfaces),
     );
@@ -412,7 +413,7 @@ fn w4_surfaces(checks: &mut Checks, tally: &mut Tally, recorder: &mut FrameRecor
         "W4, both cards seated",
         false,
     );
-    for quest in 0..2 {
+    for quest in 0..4 {
         point_at(&mut sim, Target::Quest(quest), false);
         let name = format!("W4, quest sheet {quest}, seated");
         look(checks, tally, recorder, &mut sim, &name, false);
@@ -438,7 +439,7 @@ fn w4_surfaces(checks: &mut Checks, tally: &mut Tally, recorder: &mut FrameRecor
         "W4 staged, three on a troubled quest",
         false,
     );
-    for quest in 0..2 {
+    for quest in 0..4 {
         point_at(&mut sim, Target::Quest(quest), false);
         let name = format!("W4 staged, quest sheet {quest}");
         look(checks, tally, recorder, &mut sim, &name, false);
