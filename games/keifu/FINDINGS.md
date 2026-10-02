@@ -650,3 +650,29 @@ was one sessions 1-4 had already read and used. The documents were asked nothing
 - **Picking a template "excluding the remembered one" is `fresh_index`.** SPEC §22.1's
   primitive is exactly that distribution (uniform over the others); the spec asks the port
   for matching distributions, not sequences.
+- **The mutation rounds.** Round one ran all four lists against W5's first commit
+  (`b4191e4`) in one pass, 333 faults: **325 noticed** (tests alone 249, verify alone 233),
+  none unbuilt. `w3.txt` 117 of 118 and `w4.txt` 133 of 134 — the escapes are their
+  sessions' known equivalents, W3's K7 and W4's K8 — and `dock.txt` 22 of 22. Ten `w4.txt`
+  entries named code W5 moved (the stakes formula now in `quest::stakes`, the scaffold's
+  board in `generation.rs`, the card's dream line, the sheet's premise); each was re-cut to
+  the same fault at its new site and is marked "(re-cut s5)" — B1, which posted the
+  scaffold's board in year 2, is now "the opening quests are forced in year 2", the
+  nearest fault that survives every year having a board. `w5.txt` is 59 faults: every W5
+  constant (both thresholds, the attempts, the easing limit, the score's two weights, the
+  ghost's seats, danger and aptitude), the score's cap and scale, every planning step
+  (forced quests, the ghost's slot, place and template draws, the memory), the keep rule,
+  the welcome stop and the welcome rule, the memory's writing, the sort, every line of the
+  likely party, the pair reading, the dreamer who could go, every easing step, the ghost
+  quest and its card line, and the Door's refusal. Round one: 53 of 59. Five escapes were
+  loose checks, all in `reading.rs`, all found by the round and not by drafting: a
+  refuser the fear's own penalty already kept out of the party (R2), nothing asking that a
+  pair's second party excludes the first's (R8), no refusing dreamer (R14), no dreamer
+  whose own party is weaker than the house's best (R15), and no board whose calling quest
+  is not the first (R17); each now has a test that fails under its fault. Round two, the
+  whole `w5.txt` against the tightened checks: **58 of 59 noticed** (tests alone 51,
+  verify alone 38). **The escape left is equivalent:** R12, a "stay behind" call counted
+  as one who could go. The board reader asks a call with an empty party, and with nobody
+  seated no call can be "stay behind": the only predicate an absent hero meets is a
+  student faring alone (§9.1), which needs the student in the party, and the predicates
+  that hold at any moment are excluded earlier, at step 2 of §9.6.
