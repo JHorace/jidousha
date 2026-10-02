@@ -167,6 +167,13 @@ pub struct Flow {
     /// happens to be selected would be somebody else's work under their name.
     /// [`Flow::put_the_list_away`] asserts the pair agrees on every tick.
     pub listing: Option<usize>,
+    /// **Which petition the ledger's card shows**, where the player tapped a
+    /// row (UI.md §3h). Presentation: `card::focused` falls back to the first
+    /// row, so a stale id is never a card about nothing.
+    pub plea: Option<usize>,
+    /// **Whether the card's consequence chip is showing what it does** — the
+    /// one card on screen, the ledger's or the overlay's.
+    pub consequence_open: bool,
     /// **The selected character** — the one selection this game has.
     ///
     /// One index over the ten people, which is the same index over the ten
@@ -225,7 +232,7 @@ impl Flow {
     /// there is no second one to forget. The selection goes because the
     /// character panel *is* the selection (UI.md §3b): there is no way to
     /// shut that panel and leave somebody picked.
-    fn close_everything(&mut self) {
+    pub(crate) fn close_everything(&mut self) {
         self.drawer = None;
         self.drilled = None;
         self.works = false;
@@ -237,6 +244,8 @@ impl Flow {
         self.post_open = false;
         self.fit_explained = false;
         self.breakdown = None;
+        self.plea = None;
+        self.consequence_open = false;
     }
 
     /// Whether `drawer` is the one that is open.
@@ -321,6 +330,17 @@ impl Flow {
     /// One rule in one place for the reason the picker's and the band's are:
     /// there are a dozen ways to open a board or drill a chip and the list
     /// cannot be the thing every one of them remembers.
+    /// **Put down a selection whose person has left the camp** (wave 1.5): a
+    /// `walks-out` drops presence exactly as the staged start holds it before
+    /// an arrival, and a panel open on somebody the map no longer draws would
+    /// be a sheet about nobody standing anywhere.
+    fn put_the_absent_down(&mut self, lens: &Lens<'_>) {
+        if self.selected.is_some_and(|who| !lens.present(who)) {
+            self.selected = None;
+            self.listing = None;
+        }
+    }
+
     fn put_the_list_away(&mut self) {
         if self.listing != self.selected
             || self.board.is_some()
@@ -343,6 +363,12 @@ impl Flow {
         self.picking = None;
         self.listing = None;
         self.drilled = None;
+    }
+
+    /// **Open the petition ledger on one petition** — LATER's whole act.
+    pub fn open_pleas_on(&mut self, id: usize) {
+        self.open_drawer(Drawer::Pleas);
+        self.plea = Some(id);
     }
 
     /// Raise a toast, and log the same sentence — nothing appears only in a
@@ -439,6 +465,10 @@ pub fn load_scenario(world: &mut World) {
 /// Every input of a tick: speed, pan/zoom, and the pointer.
 pub fn handle_input(world: &mut World) {
     read_input(world);
+    let sim = world.resource::<Sim>().clone();
+    world
+        .resource_mut::<Flow>()
+        .put_the_absent_down(&Lens::on(&sim));
     // **The band belongs to the surface that opened it** (UI.md §3e). Every
     // path out of a board, a drawer or a selection is a path the band can be
     // orphaned by, so it is checked once here rather than remembered at each
@@ -529,6 +559,15 @@ fn read_input(world: &mut World) {
         return;
     }
 
+    // **The voicing overlay, before everything** (UI.md §3h). While the world
+    // is stopped for a petition the card is the screen: LATER and the chip
+    // answer, the speed chips resume, and anything else says what is waiting
+    // rather than doing nothing.
+    if crate::card::voicing(&Lens::on(world.resource::<Sim>())).is_some() {
+        crate::plead::overlay_click(world, at, tick);
+        return;
+    }
+
     // **The handles, before anything a drawer covers.** The top bar stands
     // above every drawer, so a handle is live from inside another one and
     // opening displaces what was open — which is one write to one field
@@ -563,6 +602,7 @@ fn read_input(world: &mut World) {
             Drawer::Tune => tuning::click(world, at, tick),
             Drawer::Roster => roster_click(world, at),
             Drawer::Ledger => ledger_click(world, at, tick),
+            Drawer::Pleas => crate::plead::ledger_click(world, at, tick),
             Drawer::Feed => feed_click(world, at, tick),
             Drawer::Modes => modes_click(world, at),
         }
@@ -1079,6 +1119,8 @@ pub enum Drawer {
     Roster,
     /// The postings ledger, and the standing rates beside it.
     Ledger,
+    /// **The petition ledger** (wave 1.5): what the camp has asked of you.
+    Pleas,
     /// The feed: what happened, newest first.
     Feed,
     /// The auto-pause config.
@@ -1088,10 +1130,11 @@ pub enum Drawer {
 impl Drawer {
     /// Every drawer there is, **in handle order** — which is the order the
     /// top bar draws them in and the order the floors walk.
-    pub const ALL: [Drawer; 5] = [
+    pub const ALL: [Drawer; 6] = [
         Drawer::Tune,
         Drawer::Roster,
         Drawer::Ledger,
+        Drawer::Pleas,
         Drawer::Feed,
         Drawer::Modes,
     ];
@@ -1102,6 +1145,7 @@ impl Drawer {
             Drawer::Tune => "TUNE",
             Drawer::Roster => "ROSTER",
             Drawer::Ledger => "LEDGER",
+            Drawer::Pleas => "PLEAS",
             Drawer::Feed => "FEED",
             Drawer::Modes => "MODES",
         }
@@ -1113,6 +1157,7 @@ impl Drawer {
             Drawer::Tune => layout::tune_button(),
             Drawer::Roster => layout::roster_button(),
             Drawer::Ledger => layout::ledger_button(),
+            Drawer::Pleas => layout::pleas_button(),
             Drawer::Feed => layout::feed_button(),
             Drawer::Modes => layout::modes_button(),
         }
@@ -1131,6 +1176,7 @@ impl Drawer {
                 "ROSTER - everyone, what they carry, and what they are doing about it"
             }
             Drawer::Ledger => "LEDGER - every posting you have made, newest first",
+            Drawer::Pleas => "PETITIONS - the camp asking you, soonest deadline first",
             Drawer::Feed => "FEED - what happened, newest first - click an entry to look at it",
             Drawer::Modes => "AUTO-PAUSE - what each kind of event does to the world",
         }
@@ -1260,7 +1306,7 @@ fn modes_click(world: &mut World, at: Vec2) {
 /// so the reason is cleared here and the next pause-class event can record a
 /// new one. A speed input that changes nothing says nothing: a player holding
 /// down `1` should not fill the notices with a rate it is already at.
-fn apply_speed(world: &mut World, tick: u64, change: Option<Rate>) {
+pub(crate) fn apply_speed(world: &mut World, tick: u64, change: Option<Rate>) {
     let clock = world.resource_mut::<Clock>();
     let (said, moved) = match change {
         None => {

@@ -807,12 +807,14 @@ pub fn ask_run() -> crate::sweep::Conducted {
             minute: 700,
             tick: 0,
             paused: true,
+            step: 0,
         },
         Photo {
             name: "ledger",
             minute: 768,
             tick: 0,
             paused: false,
+            step: 0,
         },
     ];
     crate::sweep::conduct(&crate::sweep::Session {

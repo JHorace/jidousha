@@ -989,23 +989,6 @@ pub fn explain(id: TraitId, modules: ModuleSet) -> String {
     format!("{} - {}", def.line, parts.join(" / "))
 }
 
-/// The motivators `CAST.md` §6 writes a petition template for.
-///
-/// **The no-dead-motivator rule, as far as this build can assert it**
-/// (`CAST.md` §3.2): every motivator row has at least one template whose
-/// source class is `motivator` and whose trigger names it. The template table
-/// is wave 1.5's; until it exists the rule is asserted against this declared
-/// list, which is `CAST.md` §6's five templates read off the document.
-/// **Wave 1.5 replaces this constant with a walk over the real table** and the
-/// assertion in [`vocabulary`] does not change.
-pub const TEMPLATED_MOTIVATORS: &[TraitId] = &[
-    TraitId::Indebted,
-    TraitId::Renown,
-    TraitId::Caring,
-    TraitId::Restless,
-    TraitId::Maker,
-];
-
 /// The vocabulary's own validation — the data-shape claims prose cannot hold.
 ///
 /// The kind discipline is enforced here rather than trusted: every row holds
@@ -1225,11 +1208,14 @@ pub fn vocabulary(checks: &mut Checks) {
         );
     }
     // **The no-dead-motivator rule** (`CAST.md` §3.2): every want has a
-    // petition that voices it. Asserted against the declared list until wave
-    // 1.3's template table exists.
+    // petition that voices it — a template whose source class is `motivator`
+    // and whose trigger names the row. Since wave 1.5 this walks the real
+    // template table (`petitions::templated_motivators`), where it walked a
+    // declared list before; the assertion did not change.
+    let templated = crate::petitions::templated_motivators();
     for def in TRAITS.iter().filter(|def| def.kind == TraitKind::Motivator) {
         checks.require(
-            TEMPLATED_MOTIVATORS.contains(&def.id),
+            templated.contains(&def.id),
             "a motivator has no petition template to voice it",
             format!(
                 "{:?} is a want nothing in CAST.md §6 ever asks for out loud; a motivator with \
@@ -1246,7 +1232,7 @@ pub fn vocabulary(checks: &mut Checks) {
             ),
         );
     }
-    for id in TEMPLATED_MOTIVATORS.iter().copied() {
+    for id in templated.iter().copied() {
         checks.require(
             id.kind() == TraitKind::Motivator,
             "the template list names something that is not a motivator",

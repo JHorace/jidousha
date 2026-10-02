@@ -419,24 +419,28 @@ pub fn shot_run() -> crate::sweep::Conducted {
             minute: 100,
             tick: 0,
             paused: true,
+            step: 0,
         },
         Photo {
             name: "reopened",
             minute: 216,
             tick: 0,
             paused: false,
+            step: 0,
         },
         Photo {
             name: "wentwell",
             minute: 496,
             tick: 0,
             paused: false,
+            step: 0,
         },
         Photo {
             name: "aftermath",
             minute: AFTERMATH_MINUTE,
             tick: 0,
             paused: false,
+            step: 0,
         },
     ];
     crate::sweep::conduct(&crate::sweep::Session {

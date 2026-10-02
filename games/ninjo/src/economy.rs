@@ -127,21 +127,15 @@ pub fn median(values: &[i64]) -> i64 {
     sorted[(sorted.len() - 1) / 2]
 }
 
-/// **Run one world.**
-pub fn live(
-    tuning: &Tuning,
-    modules: ModuleSet,
-    offset: u64,
-    days: u64,
-    player: Player,
-) -> Outcome {
+/// **Run one world, and keep it** — what [`live`] reports on, and what the
+/// petitions sweep reads its record off (wave 1.5). One loop, two readers.
+pub fn world(tuning: &Tuning, modules: ModuleSet, offset: u64, days: u64, player: Player) -> Sim {
     let grid = crate::grid::grid();
     let mut sim = Sim::opening(tuning, modules);
     sim.stagger_first_looks(tuning, offset);
     // **And its own seed** (wave 1.4): world *k* rolls its jobs at seed *k*,
     // so the population finally varies the one thing a seed exists to vary.
     sim.seed = offset;
-    let opening_wallets: i64 = sim.people.iter().map(|person| person.wallet).sum();
     let mut answered = (0usize, 0usize);
     for day in 1..=days {
         sim::advance_to(&mut sim, &grid, tuning, day * crate::autonomy::DAY);
@@ -155,6 +149,22 @@ pub fn live(
             );
         }
     }
+    sim
+}
+
+/// **Run one world.**
+pub fn live(
+    tuning: &Tuning,
+    modules: ModuleSet,
+    offset: u64,
+    days: u64,
+    player: Player,
+) -> Outcome {
+    let sim = world(tuning, modules, offset, days, player);
+    let opening_wallets: i64 = crate::people::roster()
+        .iter()
+        .map(|person| person.wallet)
+        .sum();
     let first_short = sim
         .events
         .iter()

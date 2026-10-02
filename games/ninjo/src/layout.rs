@@ -72,9 +72,13 @@ pub fn treasury_text_at() -> Vec2 {
 /// five do not: the ledger is the fifth drawer, and the row of them still has
 /// to start right of the treasury. Seventy-two holds `ROSTER`, the longest
 /// label, with room, and it is twice the target floor.
-const HANDLE_W: f32 = 72.0;
-const HANDLE_PITCH: f32 = 80.0;
-const HANDLE_X: f32 = 528.0;
+///
+/// **Sixty-six at a pitch of seventy since wave 1.5**, where the petition
+/// ledger is the sixth drawer: six of seventy from 526 end at 942, inside the
+/// bar, and sixty-six still holds `ROSTER` with room and is twice the floor.
+const HANDLE_W: f32 = 66.0;
+const HANDLE_PITCH: f32 = 70.0;
+const HANDLE_X: f32 = 526.0;
 
 /// Drawer handle `index` in the status bar's row of them.
 fn handle(index: usize) -> Rect {
@@ -101,14 +105,20 @@ pub fn ledger_button() -> Rect {
     handle(2)
 }
 
+/// **The petition ledger's handle** (wave 1.5): what the camp has asked
+/// of you, beside what you have asked of it.
+pub fn pleas_button() -> Rect {
+    handle(3)
+}
+
 /// The feed drawer's handle.
 pub fn feed_button() -> Rect {
-    handle(3)
+    handle(4)
 }
 
 /// The auto-pause config drawer's handle, at the end of the row.
 pub fn modes_button() -> Rect {
-    handle(4)
+    handle(5)
 }
 
 // ── the meters band: the aggregates for the glance (GDD §3) ────────────────
@@ -1049,8 +1059,10 @@ pub mod entry {
     pub const CHIP_ICON: Vec2 = Vec2::new(90.0, 2.0);
     /// The class chip's name.
     pub const CHIP_NAME: Vec2 = Vec2::new(112.0, 4.0);
-    /// The place tag.
-    pub const PLACE: Vec2 = Vec2::new(252.0, 4.0);
+    /// The place tag — **forty pixels further right since wave 1.5**, where
+    /// the class column met its first eighteen-glyph id (`petition-satisfied`)
+    /// and wave 1.4 had shortened `own-job-failed` to fit the old fourteen.
+    pub const PLACE: Vec2 = Vec2::new(292.0, 4.0);
     /// The event's own sentence, on the second line.
     pub const TEXT: Vec2 = Vec2::new(8.0, 18.0);
     /// How wide that sentence may run.
@@ -1209,6 +1221,15 @@ pub fn modes_prose_width() -> f32 {
     DESIGN_W - 56.0
 }
 
+/// **The config drawer's own rectangle** — from under the bar to the foot of
+/// the screen, since wave 1.5. It shared the feed's until the class table
+/// outgrew the feed's height (`FINDINGS.md` G-047): twenty-two classes in
+/// two columns is eleven rows and the next class a twelfth, and twelve rows of thirty-two need the extra
+/// fifty-six pixels the tuning drawer already takes.
+pub fn modes_panel() -> Rect {
+    Rect::from_min_size(Vec2::new(0.0, 36.0), Vec2::new(DESIGN_W, DESIGN_H - 36.0))
+}
+
 /// How many config rows a column holds before the next one starts.
 ///
 /// **Ten since wave 1.4**: resolution brings two classes, and nineteen rows
@@ -1217,8 +1238,15 @@ pub fn modes_prose_width() -> f32 {
 /// four-pixel gap and never overlap — end the column at 464, still above the
 /// footer wave 1.3 moved to 470. Twenty slots is one more than the table has.
 /// Wave 1.3 had nine at a pitch of forty.
-pub const MODES_ROWS: usize = 10;
-const MODES_ROW_PITCH: f32 = 36.0;
+///
+/// **Twelve at a pitch of thirty-two since wave 1.5** (`FINDINGS.md` G-047,
+/// closed): the petitions brought three classes and the twenty-first had
+/// nowhere to be configured. The pitch is the target floor exactly, as the
+/// tuning drawer's is — two radios of thirty-two may touch and never overlap —
+/// and twenty-four slots hold twenty-two classes, room for the next one too —
+/// the one-early room `floors::modes_have_room` asserts.
+pub const MODES_ROWS: usize = 12;
+const MODES_ROW_PITCH: f32 = 32.0;
 const MODES_COL_X: f32 = 20.0;
 const MODES_COL_PITCH: f32 = 468.0;
 const MODES_RADIO_W: f32 = 84.0;
@@ -1262,11 +1290,12 @@ pub fn modes_radio(index: usize, mode: usize) -> Rect {
 
 /// The drawer's footer: what a change to this panel is.
 ///
-/// **Under the tenth row**, which ends at 464 — it stood at 398 while a column
-/// held seven, and a footer that stayed there would have been a row of prose
-/// drawn through two rows of radios (UI.md §4's chrome-against-chrome floor).
+/// **Under the twelfth row**, which ends at 492 — it stood at 398 while a
+/// column held seven and at 470 while it held ten, and a footer that stayed
+/// put would have been a row of prose drawn through two rows of radios (UI.md
+/// §4's chrome-against-chrome floor).
 pub fn modes_footer() -> Vec2 {
-    Vec2::new(28.0, 470.0)
+    Vec2::new(28.0, 500.0)
 }
 
 // ── the tuning drawer (giri's geometry, at the module's constants) ────────
@@ -1477,4 +1506,173 @@ pub fn home_rect(tile: crate::grid::Tile) -> Rect {
 /// belongs to, so a name cannot be left behind by a figure that moved.
 pub fn figure_label(figure: Rect, width: f32) -> Vec2 {
     Vec2::new(figure.center().x - width * 0.5, figure.max.y + 2.0)
+}
+
+// ── the petition ledger (wave 1.5): a list, and the card it opens ──────────
+
+/// Its title row.
+pub fn pleas_title() -> Vec2 {
+    Vec2::new(28.0, 46.0)
+}
+
+/// The count-and-rule line under it.
+pub fn pleas_note() -> Vec2 {
+    Vec2::new(28.0, 64.0)
+}
+
+/// How wide that may run.
+pub const PLEAS_NOTE_W: f32 = 904.0;
+
+/// How many petitions the list shows at once — active first, by deadline,
+/// then the resolved, newest first. The note says when it stops short.
+pub const PLEA_ROWS: usize = 10;
+
+/// Ledger row `index` — tap it and the card beside the list is that one.
+pub fn plea_row(index: usize) -> Rect {
+    Rect::from_min_size(
+        Vec2::new(20.0, 88.0 + index as f32 * 38.0),
+        Vec2::new(380.0, 32.0),
+    )
+}
+
+/// The rows inside a ledger row, from its top-left.
+pub mod plea {
+    use jidousha::prelude::Vec2;
+
+    /// Who, and where it stands.
+    pub const HEAD: Vec2 = Vec2::new(8.0, 3.0);
+    /// How wide that may run — up to the timer bar.
+    pub const HEAD_W: f32 = 286.0;
+    /// The request itself, cut at the row's edge.
+    pub const TEXT: Vec2 = Vec2::new(8.0, 17.0);
+    /// How wide that may run.
+    pub const TEXT_W: f32 = 364.0;
+    /// The row's timer bar: its track, from the row's top-left.
+    pub const BAR: Vec2 = Vec2::new(300.0, 6.0);
+    /// And its size.
+    pub const BAR_SIZE: Vec2 = Vec2::new(72.0, 6.0);
+}
+
+/// A ledger row's timer track.
+pub fn plea_bar(index: usize) -> Rect {
+    Rect::from_min_size(plea_row(index).min + plea::BAR, plea::BAR_SIZE)
+}
+
+/// **Where the ledger's card stands** — beside the list, the width of a card.
+pub fn plea_card() -> Vec2 {
+    Vec2::new(420.0, 88.0)
+}
+
+/// **The width every card is drawn at**, in the ledger and over the map —
+/// one anatomy, two placements.
+pub const CARD_W: f32 = 520.0;
+
+/// **The card's anatomy**, from its top-left (GDD §6, as the approved mockup
+/// drew it): who and why, the words, the timer bar against the deadline, the
+/// reward, what meets it, the declared consequence as a chip, and the card's
+/// gesture.
+pub mod card {
+    use jidousha::prelude::Vec2;
+
+    /// The petitioner's portrait.
+    pub const PORTRAIT: Vec2 = Vec2::new(0.0, 0.0);
+    /// Their name.
+    pub const NAME: Vec2 = Vec2::new(40.0, 2.0);
+    /// Where the ask came from, and the template's id.
+    pub const SOURCE: Vec2 = Vec2::new(40.0, 18.0);
+    /// The resolved words.
+    pub const TEXT: Vec2 = Vec2::new(0.0, 40.0);
+    /// How many rows the words may take.
+    pub const TEXT_ROWS: usize = 4;
+    /// The timer bar's track.
+    pub const BAR: Vec2 = Vec2::new(0.0, 104.0);
+    /// Its height.
+    pub const BAR_H: f32 = 8.0;
+    /// The deadline, and how long is left.
+    pub const DUE: Vec2 = Vec2::new(0.0, 118.0);
+    /// What it pays.
+    pub const REWARD: Vec2 = Vec2::new(0.0, 134.0);
+    /// What meets it — the predicate's own line.
+    pub const MET: Vec2 = Vec2::new(0.0, 150.0);
+    /// How many rows that may take.
+    pub const MET_ROWS: usize = 2;
+    /// The declared consequence's chip: a target, tapped for what it does.
+    pub const CHIP: Vec2 = Vec2::new(0.0, 184.0);
+    /// Its size.
+    pub const CHIP_SIZE: Vec2 = Vec2::new(240.0, 32.0);
+    /// What the chip says when tapped, derived from the vocabulary.
+    pub const EXPLAIN: Vec2 = Vec2::new(0.0, 222.0);
+    /// How many rows that may take.
+    pub const EXPLAIN_ROWS: usize = 4;
+    /// The card's gesture: ARRANGE (or LATER, over the map).
+    pub const ACT: Vec2 = Vec2::new(0.0, 286.0);
+    /// Its size.
+    pub const ACT_SIZE: Vec2 = Vec2::new(256.0, 32.0);
+    /// GIVE, where the condition is money-shaped.
+    pub const GIVE: Vec2 = Vec2::new(272.0, 286.0);
+    /// Its size.
+    pub const GIVE_SIZE: Vec2 = Vec2::new(176.0, 32.0);
+    /// The line under the gesture: why GIVE cannot, or how it ended.
+    pub const AFTER: Vec2 = Vec2::new(0.0, 324.0);
+    /// How tall the whole card is.
+    pub const HEIGHT: f32 = 340.0;
+}
+
+/// The whole card standing at `at` — what a tap that only reads lands in.
+pub fn card_rect(at: Vec2) -> Rect {
+    Rect::from_min_size(at, Vec2::new(CARD_W, card::HEIGHT))
+}
+
+/// A card's timer track, for a card standing at `at`.
+pub fn card_bar(at: Vec2) -> Rect {
+    Rect::from_min_size(at + card::BAR, Vec2::new(CARD_W, card::BAR_H))
+}
+
+/// A card's consequence chip.
+pub fn card_chip(at: Vec2) -> Rect {
+    Rect::from_min_size(at + card::CHIP, card::CHIP_SIZE)
+}
+
+/// A card's gesture — ARRANGE in the ledger, LATER over the map.
+pub fn card_act(at: Vec2) -> Rect {
+    Rect::from_min_size(at + card::ACT, card::ACT_SIZE)
+}
+
+/// A card's GIVE.
+pub fn card_give(at: Vec2) -> Rect {
+    Rect::from_min_size(at + card::GIVE, card::GIVE_SIZE)
+}
+
+// ── the voicing overlay (wave 1.5): the card, front and centre ─────────────
+
+/// **The overlay's box** — the card centred over a scrimmed map while the
+/// world is stopped for a voicing.
+pub fn voicing_panel() -> Rect {
+    Rect::from_min_size(Vec2::new(204.0, 64.0), Vec2::new(552.0, 404.0))
+}
+
+/// The stamp over the card: what stopped the world.
+pub fn voicing_stamp() -> Vec2 {
+    Vec2::new(220.0, 74.0)
+}
+
+/// Where the overlay's card stands.
+pub fn voicing_card() -> Vec2 {
+    Vec2::new(220.0, 96.0)
+}
+
+/// The hint beside LATER: the other way out.
+pub fn voicing_hint() -> Vec2 {
+    voicing_card() + card::GIVE + Vec2::new(0.0, 10.0)
+}
+
+/// Where a bounced tap's toast is said while the overlay is up — inside the
+/// box, under the card, because the map's own toast row is under the scrim.
+pub fn voicing_toast() -> Vec2 {
+    Vec2::new(220.0, 448.0)
+}
+
+/// The scrim the overlay lays over everything under the bar.
+pub fn voicing_scrim() -> Rect {
+    Rect::from_min_size(Vec2::new(0.0, 36.0), Vec2::new(DESIGN_W, DESIGN_H - 36.0))
 }

@@ -140,6 +140,17 @@ pub enum EventClass {
     /// **A job somebody chose for themselves was botched**: no pay, nothing
     /// minted, and the job is back on its board.
     TaskFailedOwn,
+    /// **Somebody put a petition to the player** (the petitions module, wave
+    /// 1.5): an ask, a deadline and a declared consequence, binding from this
+    /// minute. The event carries the record, and the voicing overlay draws its
+    /// card.
+    PetitionVoiced,
+    /// A petition was met — by the player's hand or by the world's — and the
+    /// petitioner's circumstances are better for it.
+    PetitionSatisfied,
+    /// A petition's deadline came unmet, and the consequence its card declared
+    /// fired.
+    PetitionFailed,
 }
 
 /// One row of the event-class table: what a class is called, how it is drawn,
@@ -339,6 +350,34 @@ pub const CLASSES: &[ClassSpec] = &[
         color: theme::EMBER,
         icon: Art::Flame,
         default_mode: Mode::Log,
+    },
+    // **The petitions' three** (wave 1.5), at the approved mockup's defaults
+    // (2026-10-02). A voicing **stops the world**: the capsule's primary
+    // screen, where the card is the warning and the deadline starts. A
+    // satisfaction is `log` — the camp got better and the feed says so. A
+    // failure stops the world too, on the posted-failure precedent: a
+    // consequence the card declared, firing, is the player's to see. All three
+    // are the config panel's to override.
+    ClassSpec {
+        class: EventClass::PetitionVoiced,
+        id: "petition-voiced",
+        color: theme::GOLD,
+        icon: Art::Eye,
+        default_mode: Mode::PauseAndFocus,
+    },
+    ClassSpec {
+        class: EventClass::PetitionSatisfied,
+        id: "petition-satisfied",
+        color: theme::REGARD,
+        icon: Art::Heart,
+        default_mode: Mode::Log,
+    },
+    ClassSpec {
+        class: EventClass::PetitionFailed,
+        id: "petition-failed",
+        color: theme::EMBER,
+        icon: Art::Skull,
+        default_mode: Mode::PauseAndFocus,
     },
 ];
 
@@ -610,6 +649,9 @@ pub fn vocabulary(checks: &mut crate::checks::Checks) {
         (EventClass::AskDeclined, Mode::PauseAndFocus),
         (EventClass::AskDropped, Mode::Log),
         (EventClass::PostingWithdrawn, Mode::Ignore),
+        (EventClass::PetitionVoiced, Mode::PauseAndFocus),
+        (EventClass::PetitionSatisfied, Mode::Log),
+        (EventClass::PetitionFailed, Mode::PauseAndFocus),
     ] {
         checks.require(
             opening.mode(class) == wanted,
@@ -661,6 +703,7 @@ pub fn judge_at(checks: &mut crate::checks::Checks, tuning: &Tuning) {
             note: format!("a probe event at minute {minute}"),
             judged: None,
             tier: None,
+            petition: None,
         });
     }
     let lens = Lens::on(&sim);

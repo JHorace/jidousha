@@ -152,6 +152,39 @@ pub fn ledger_targets() -> Vec<(String, Rect)> {
     out
 }
 
+/// **Every rectangle the petition ledger answers a click in** (wave 1.5): a
+/// row per petition it can show, and the card's chip, ARRANGE and GIVE.
+pub fn pleas_targets() -> Vec<(String, Rect)> {
+    let mut out = Vec::new();
+    for row in 0..layout::PLEA_ROWS {
+        out.push((format!("petition row {row}"), layout::plea_row(row)));
+    }
+    let card = layout::plea_card();
+    out.push((
+        "the card's consequence chip".to_owned(),
+        layout::card_chip(card),
+    ));
+    out.push(("the card's ARRANGE".to_owned(), layout::card_act(card)));
+    out.push(("the card's GIVE".to_owned(), layout::card_give(card)));
+    out
+}
+
+/// **Every rectangle a click does something in while the world is stopped for
+/// a voicing**: the card's chip, LATER, and the speed chips that resume.
+pub fn voicing_targets() -> Vec<(String, Rect)> {
+    let mut out = Vec::new();
+    for (index, label) in screens::chip_labels().into_iter().enumerate() {
+        out.push((format!("the {label} chip"), layout::speed_chip(index)));
+    }
+    let card = layout::voicing_card();
+    out.push((
+        "the overlay's consequence chip".to_owned(),
+        layout::card_chip(card),
+    ));
+    out.push(("the overlay's LATER".to_owned(), layout::card_act(card)));
+    out
+}
+
 /// Every rectangle a click does something in on the base screen, with the
 /// name a message uses.
 ///
@@ -254,7 +287,13 @@ pub fn roster_targets() -> Vec<(String, Rect)> {
 /// One function, because "a row of text may not lie across a control it is not
 /// the label of" is a question about *what is on screen together*, and a
 /// drawer covers everything under it.
-pub fn controls_for(flow: &Flow) -> Vec<(String, Rect)> {
+pub fn controls_for(flow: &Flow, lens: &Lens<'_>) -> Vec<(String, Rect)> {
+    // **The voicing overlay is the screen while it is up** (UI.md §3h), and
+    // it is the sim's own pause that says so — the controls on screen are
+    // the card's and the speed chips, whatever the flow holds under it.
+    if crate::card::voicing(lens).is_some() {
+        return voicing_targets();
+    }
     // **A match over the one drawer**, the same value `screens::content`
     // draws from and `flow::read_input` routes clicks with: three readers,
     // one field, so the controls this floor judges are the controls that are
@@ -264,6 +303,7 @@ pub fn controls_for(flow: &Flow) -> Vec<(String, Rect)> {
             Drawer::Tune => tuner_targets(),
             Drawer::Roster => roster_targets(),
             Drawer::Ledger => ledger_targets(),
+            Drawer::Pleas => pleas_targets(),
             Drawer::Feed => feed_targets(),
             Drawer::Modes => modes_targets(),
         };
@@ -304,6 +344,31 @@ pub fn tuner_targets() -> Vec<(String, Rect)> {
     }
     out.push(("the APPLY verb".to_owned(), layout::tuner_apply()));
     out
+}
+
+/// **The config drawer has room for the class after the ones it has**
+/// (`FINDINGS.md` G-047, closed by wave 1.5's re-lay).
+///
+/// Asked about the *next* class rather than the last, so it fails one class
+/// early — while the drawer still draws — which is the floor G-047 asked for:
+/// the twenty-first class arrived with nowhere to be configured and nothing
+/// said so in advance.
+pub fn modes_have_room(checks: &mut Checks) {
+    let next = crate::attention::CLASSES.len();
+    let drawer = layout::modes_panel();
+    for slot in 0..crate::attention::Mode::ALL.len() {
+        let radio = layout::modes_radio(next, slot);
+        checks.require(
+            inside(drawer, radio) && !greater(radio.max.y, layout::modes_footer().y),
+            "the auto-pause config has no room for another class",
+            format!(
+                "class {next} would put its radio {slot} at {radio:?}, outside the drawer \
+                 {drawer:?} or under the footer at {:.0}. Re-lay the config before adding the \
+                 class",
+                layout::modes_footer().y
+            ),
+        );
+    }
 }
 
 /// The floors that are questions about the layout alone.
@@ -746,9 +811,22 @@ pub fn drawer_floors(checks: &mut Checks) {
         ),
         (layout::feed_panel(), feed_targets(), layout::feed_button()),
         (
-            layout::feed_panel(),
+            layout::modes_panel(),
             modes_targets(),
             layout::modes_button(),
+        ),
+        (
+            layout::feed_panel(),
+            pleas_targets(),
+            layout::pleas_button(),
+        ),
+        (
+            layout::voicing_panel(),
+            voicing_targets()
+                .into_iter()
+                .filter(|(what, _)| what.starts_with("the overlay"))
+                .collect(),
+            layout::pleas_button(),
         ),
         (
             layout::roster_panel(),
@@ -903,21 +981,30 @@ pub fn tuner_right_column(checks: &mut Checks) {
         );
     }
     let constants = crate::constants::Field::ALL.len();
-    let stamp_rows = tuning::stamp_text(&Tuning::SHIPPED, 0).lines().count();
-    // **No authored line wraps** (wave 1.4's first photograph of the fourth
-    // column showed `forest 7` broken across two rows): the stamp is the
-    // readout's own lines plus the seed, and a wrap would put a value under
-    // the wrong name.
-    let authored = Tuning::SHIPPED.readout().lines().count() + 1;
+    // **No line of the stamp wraps**, at its tallest: a set that moves every
+    // constant names the first [`tuning::STAMP_MOVED_ROWS`] and counts the
+    // rest, and a wrap would put a value under the wrong name (wave 1.4's
+    // first photograph of the fourth column had `forest 7` broken in two).
+    let mut every = Tuning::SHIPPED;
+    for field in crate::constants::Field::ALL.iter().copied() {
+        every = every.with(field, Tuning::SHIPPED.field(field) + 1);
+    }
+    let tallest = tuning::stamp_text(&every, u64::from(u32::MAX));
+    let stamp_rows = tallest.lines().count();
     checks.require(
-        stamp_rows == authored,
-        "the tuning drawer's stamp wraps a line the readout authored",
+        stamp_rows == tuning::STAMP_MAX_ROWS,
+        "the tuning drawer's stamp wraps a line, or is taller than it says",
         format!(
-            "the readout authors {authored} lines and the stamp column draws {stamp_rows}; \
-             a line is wider than the {:.0}-pixel column",
+            "a set that moves every constant stamps {stamp_rows} rows and the drawer budgets \
+             {}; a line is wider than the {:.0}-pixel column, or the count is wrong",
+            tuning::STAMP_MAX_ROWS,
             layout::tuner_prose_width()
         ),
     );
+    // **And the tallest stamp fits under one more constant, with a row to
+    // spare** — the floor fails while there is still room, so the wave that
+    // adds the constant re-lays the column instead of finding out from a
+    // screenshot (`FINDINGS.md` G-028, G-034).
     for (more, extra) in [(0usize, 0usize), (1, 1)] {
         let end = tuning::stamp_end(constants + more, stamp_rows + extra);
         checks.require(
@@ -1012,13 +1099,13 @@ pub fn floors_bite(checks: &mut Checks) -> String {
     let prose = crate::ui::columns(layout::tuner_prose_width(), theme::SMALL);
     let mut before = Panel::default();
     before.block(
-        layout::tuner_stamp() + Vec2::new(0.0, 14.0),
-        &tuning::stamp_text(&Tuning::SHIPPED, 0),
+        layout::tuner_stamp_for(36) + Vec2::new(0.0, 14.0),
+        &format!("{}\nseed 0", Tuning::SHIPPED.readout()),
         theme::SMALL,
         theme::INK,
     );
     before.block(
-        Vec2::new(layout::tuner_stamp().x, PRE_FIX_HINT_Y),
+        Vec2::new(layout::tuner_stamp_for(36).x, PRE_FIX_HINT_Y),
         &crate::ui::wrap(tuning::RESTING_HINT, prose),
         theme::SMALL,
         theme::FAINT,
@@ -1418,6 +1505,31 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
     {
         *state = crate::sim::JobState::Claimed { by: 0 };
     }
+    // **The petitions' surfaces at their loudest** (wave 1.5): the overlay
+    // with the chip's explanation open, the ledger with every kind of row and
+    // its card explained, and the ledger on the card whose explanation is
+    // longest — a gives-away naming the one it speaks for.
+    let (pleaded, voiced, pleaded_clock, _) = petitioned_world();
+    let voicing_flow = Flow {
+        consequence_open: true,
+        ..Flow::default()
+    };
+    let pleas_flow = Flow {
+        drawer: Some(Drawer::Pleas),
+        consequence_open: true,
+        ..Flow::default()
+    };
+    let widest_flow = Flow {
+        drawer: Some(Drawer::Pleas),
+        consequence_open: true,
+        plea: pleaded
+            .petitions
+            .all()
+            .iter()
+            .find(|petition| petition.template.id == "look-after-them")
+            .map(|petition| petition.id),
+        ..Flow::default()
+    };
     vec![
         (opening.0, opening.1, opening.2, opening.3, at),
         (
@@ -1546,7 +1658,115 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
             Clock::opening(),
             out,
         ),
+        (
+            "the voicing overlay, its chip explained",
+            voicing_flow,
+            voiced,
+            pleaded_clock,
+            at,
+        ),
+        (
+            "the petition ledger, mixed, its card's chip explained",
+            pleas_flow,
+            pleaded.clone(),
+            pleaded_clock,
+            at,
+        ),
+        (
+            "the petition ledger on its widest card",
+            widest_flow,
+            pleaded.clone(),
+            pleaded_clock,
+            at,
+        ),
+        (
+            "the petition ledger, the world stopped by a failure",
+            Flow {
+                drawer: Some(Drawer::Pleas),
+                ..Flow::default()
+            },
+            stopped_by_failure(pleaded),
+            pleaded_clock,
+            at,
+        ),
     ]
+}
+
+/// **A camp that has petitioned**, staged for the floors (wave 1.5): six
+/// petitions running from six templates, one met by a gift and one failed at
+/// its cliff — every shape a ledger row and a card can take — and a world
+/// stopped for the last voicing, for the overlay.
+pub(crate) fn petitioned_world() -> (Sim, Sim, Clock, usize) {
+    use crate::pleas::{self, Found};
+    let tuning = Tuning::SHIPPED;
+    let mut sim = Sim::opening(&tuning, crate::modules::ModuleSet::ALL);
+    sim.everybody_here();
+    sim.treasury = 400;
+    let raise = |sim: &mut Sim, who: usize, id: &str, found: Found| {
+        crate::petitions::find(id)
+            .and_then(|template| pleas::raise(sim, &tuning, 1500, who, template, found))
+    };
+    let site = |site| Found {
+        other: None,
+        site: Some(site),
+    };
+    let given = raise(&mut sim, 0, "collectors-visit", Found::default());
+    let failed = raise(&mut sim, 7, "collectors-visit", Found::default());
+    raise(&mut sim, 1, "thin-days", Found::default());
+    raise(
+        &mut sim,
+        6,
+        "look-after-them",
+        Found {
+            other: Some(1),
+            site: None,
+        },
+    );
+    raise(&mut sim, 9, "the-far-road", site(3));
+    raise(&mut sim, 5, "proving-job", site(3));
+    raise(&mut sim, 4, "a-proper-bench", Found::default());
+    if let Some(id) = given {
+        let _ = pleas::give(&mut sim, &tuning, 1600, id);
+    }
+    if let Some(id) = failed {
+        pleas::deadline(&mut sim, &tuning, 1500 + 6 * crate::petitions::DAY, id);
+    }
+    // The chain's next is the last voicing: stop the world for it.
+    let mut voiced = sim.clone();
+    let event = voiced
+        .events
+        .iter()
+        .rposition(|event| event.class == crate::attention::EventClass::PetitionVoiced);
+    let last = event
+        .and_then(|index| voiced.events[index].petition)
+        .unwrap_or(0);
+    if let Some(index) = event {
+        voiced.paused_by = Some(crate::attention::Pause {
+            event: index,
+            class: crate::attention::EventClass::PetitionVoiced,
+            minute: voiced.events[index].minute,
+        });
+    }
+    let mut clock = Clock::opening();
+    clock.minutes = 1500 + 2 * crate::petitions::DAY;
+    (sim, voiced, clock, last)
+}
+
+/// **The staged camp, stopped by its failed petition** — the pause a player
+/// sitting in the ledger meets when a cliff falls.
+pub(crate) fn stopped_by_failure(mut sim: Sim) -> Sim {
+    let failed = sim
+        .events
+        .iter()
+        .rposition(|event| event.class == crate::attention::EventClass::PetitionFailed);
+    if let Some(index) = failed {
+        sim.paused_by = Some(crate::attention::Pause {
+            event: index,
+            class: crate::attention::EventClass::PetitionFailed,
+            minute: sim.events[index].minute,
+        });
+    }
+    sim
 }
 
 /// The content floors: every row of every screen state at or above the text
@@ -1565,7 +1785,7 @@ pub fn content_floors(checks: &mut Checks, baseline: &Conducted) {
             screens::reading(&clock, &tuning, screens::TICK),
             &camera,
         );
-        judge_panel(checks, &panel, what, &controls_for(&flow));
+        judge_panel(checks, &panel, what, &controls_for(&flow, &Lens::on(&sim)));
         judge_cast(checks, &panel, &Lens::on(&sim), &clock, what);
         // **The character panel's flowed rows land inside it** (UI.md §3a).
         // `layout_floors` budgets the flow at `sheet::LEAD_ROWS`; this is
@@ -1787,7 +2007,12 @@ pub fn judge_tuner_screen(checks: &mut Checks, drawer: &crate::restart::DrawerRu
             screens::reading(&Clock::opening(), &drawer.applied_active, screens::TICK),
             &verify::run_camera(verify::HEADLESS_VIEWPORT),
         );
-        judge_panel(checks, &panel, what, &controls_for(flow));
+        judge_panel(
+            checks,
+            &panel,
+            what,
+            &controls_for(flow, &Lens::on(&drawer.applied_sim)),
+        );
     }
     // The refused-link state, staged: the longest refusal in the hint row.
     let mut refused = drawer.pending_flow.clone();
@@ -1805,7 +2030,7 @@ pub fn judge_tuner_screen(checks: &mut Checks, drawer: &crate::restart::DrawerRu
         checks,
         &panel,
         "the drawer with a refused link",
-        &controls_for(&refused),
+        &controls_for(&refused, &Lens::on(&drawer.applied_sim)),
     );
     if let Some(shot) = &drawer.shot {
         judge_frame_floor(checks, drawer.font, &shot.frame, "the tuning drawer");

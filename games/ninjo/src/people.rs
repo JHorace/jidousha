@@ -78,13 +78,71 @@ pub struct Character {
     /// 1.3) — what the rewritten source line counts, and what the economy
     /// sweep's differential measure is over.
     pub shortfalls: u64,
-    /// The petition this character is currently carrying, if any.
+    /// The petition this character is currently carrying, if any — raised and
+    /// not yet met or failed.
     ///
-    /// The slot GDD §3 asks foundation for; the ledger that fills it is the
-    /// petitions module (wave 1.5). Wave 0b opens every character with it
-    /// empty and asserts so — an occupied slot before petitions exist would
-    /// mean something wrote through a door nobody has built yet.
+    /// The slot GDD §3 asks foundation for, filled by the petitions module
+    /// (wave 1.5) and **the whole of "one active petition per character"**:
+    /// `pleas::raise` refuses anybody whose slot is taken, so the rule is the
+    /// data path's rather than a check's.
     pub active_petition: Option<usize>,
+    /// **What they have done lately** — the record a petition's trigger and
+    /// condition read (wave 1.5): where they have been, when they last set
+    /// out, and every piece of paid work they finished.
+    ///
+    /// Written by the substrate at the moments those things happen (the one
+    /// journey, the one completion), never by the petitions module, so a
+    /// trigger reads a fact about the world rather than a tally the module
+    /// keeps of its own.
+    pub memory: Memory,
+}
+
+/// **What a character remembers doing** (wave 1.5) — small sim state,
+/// replay-carried, written only by `sim.rs`.
+///
+/// `CAST.md` §6 asks for "a per-character visited set - the scout's memory"
+/// for the far-road petition; the other two fields are the same kind of fact
+/// for the other templates, kept here rather than recounted from the event log
+/// so a trigger is a lookup and not a walk over every event since the opening.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Memory {
+    /// Every site they have arrived at, by `Sim::sites` index, in the order
+    /// they first reached it.
+    pub visited: Vec<usize>,
+    /// The world-minute they last set out on any errand.
+    pub last_out: Option<u64>,
+    /// Every piece of paid work they finished, oldest first.
+    pub worked: Vec<Worked>,
+}
+
+/// One piece of paid work somebody finished — a job that succeeded, or a
+/// shift.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Worked {
+    /// The world-minute it finished.
+    pub minute: u64,
+    /// What kind of work it was.
+    pub task: crate::traits::TaskType,
+    /// Whether it was an industry's shift rather than a site's job.
+    pub shift: bool,
+    /// Whether it answered a posting — the player's hand in it.
+    pub posted: bool,
+}
+
+impl Memory {
+    /// The last world-minute they finished paid work of this kind, if ever.
+    pub fn last_worked(&self, task: crate::traits::TaskType) -> Option<u64> {
+        self.worked
+            .iter()
+            .rev()
+            .find(|done| done.task == task)
+            .map(|done| done.minute)
+    }
+
+    /// Every piece of paid work they finished at or after `since`.
+    pub fn worked_since(&self, since: u64) -> impl Iterator<Item = &Worked> {
+        self.worked.iter().filter(move |done| done.minute >= since)
+    }
 }
 
 /// The founding band (`CAST.md` §4): ten, the number GDD §7's MVP scenario
@@ -109,6 +167,7 @@ pub fn roster() -> Vec<Character> {
             source: String::new(),
             shortfalls: 0,
             active_petition: None,
+            memory: Memory::default(),
             present_from: 0,
             present: true,
         },
@@ -124,6 +183,7 @@ pub fn roster() -> Vec<Character> {
             source: String::new(),
             shortfalls: 0,
             active_petition: None,
+            memory: Memory::default(),
             present_from: 0,
             present: true,
         },
@@ -139,6 +199,7 @@ pub fn roster() -> Vec<Character> {
             source: String::new(),
             shortfalls: 0,
             active_petition: None,
+            memory: Memory::default(),
             present_from: 0,
             present: true,
         },
@@ -154,6 +215,7 @@ pub fn roster() -> Vec<Character> {
             source: String::new(),
             shortfalls: 0,
             active_petition: None,
+            memory: Memory::default(),
             present_from: 0,
             present: true,
         },
@@ -169,6 +231,7 @@ pub fn roster() -> Vec<Character> {
             source: String::new(),
             shortfalls: 0,
             active_petition: None,
+            memory: Memory::default(),
             present_from: 600,
             present: false,
         },
@@ -184,6 +247,7 @@ pub fn roster() -> Vec<Character> {
             source: String::new(),
             shortfalls: 0,
             active_petition: None,
+            memory: Memory::default(),
             present_from: 1080,
             present: false,
         },
@@ -199,6 +263,7 @@ pub fn roster() -> Vec<Character> {
             source: String::new(),
             shortfalls: 0,
             active_petition: None,
+            memory: Memory::default(),
             present_from: 1920,
             present: false,
         },
@@ -214,6 +279,7 @@ pub fn roster() -> Vec<Character> {
             source: String::new(),
             shortfalls: 0,
             active_petition: None,
+            memory: Memory::default(),
             present_from: 2400,
             present: false,
         },
@@ -229,6 +295,7 @@ pub fn roster() -> Vec<Character> {
             source: String::new(),
             shortfalls: 0,
             active_petition: None,
+            memory: Memory::default(),
             present_from: 3300,
             present: false,
         },
@@ -244,6 +311,7 @@ pub fn roster() -> Vec<Character> {
             source: String::new(),
             shortfalls: 0,
             active_petition: None,
+            memory: Memory::default(),
             present_from: 3960,
             present: false,
         },
@@ -406,8 +474,8 @@ pub fn registry(checks: &mut crate::checks::Checks, tuning: &crate::constants::T
             person.active_petition.is_none(),
             "a character opens the scenario already carrying a petition",
             format!(
-                "{:?} opens with petition {:?}, and the petitions module is wave 1.5 - \
-                 something wrote through a door nobody has built",
+                "{:?} opens with petition {:?}; a petition is raised by a check on the one \
+                 scheduler (`pleas::raise`), and nothing has been checked at the opening",
                 person.id, person.active_petition
             ),
         );

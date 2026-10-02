@@ -15,7 +15,7 @@ no-dead-motivator rule are assertions the registry runs. What 1.1 did *not*
 build is s6's template table — petitions are **wave 1.5** — so the no-dead
 rule is asserted against a declared list of the five motivators s6 covers
 (`traits::TEMPLATED_MOTIVATORS`), and 1.5 repoints that constant at the real
-table without the assertion changing. The `*Implemented*` notes below are
+table without the assertion changing. *(Wave 1.5 built s6 and did exactly that.)* The `*Implemented*` notes below are
 per-section.
 
 **Landed early, on 2026-09-02, by the cast-art session** rather than
@@ -29,7 +29,9 @@ verbatim, unbuilt, and wave 1.1 writes their `*Implemented (w1.1):*`
 marks. This is the one deviation that session made from its fences,
 and its reason.
 
-**Vocabulary status: PROVISIONAL through the wave-1 close.** The
+**Vocabulary status: LOCKED** (owner, 2026-10-02). Petition copy is
+written against the shipped words, so a change from here is a rename, not a
+data edit. What follows is the record of how they were chosen. The
 aptitude and motivator words below are the owner's leaned choice made
 before the context that would test them exists (party building is
 wave 4; traits become consequential across waves 1.1-1.4). They are
@@ -153,6 +155,10 @@ names it. Checkable as data validation - add the check.
 for, and asserts besides that no motivator has zero pressure. Wave **1.5**
 replaces the constant with a walk over the real table — the templates are
 petitions' and petitions moved (GDD s8).
+
+*Implemented (w1.5):* the constant is gone; the rule walks
+`petitions::templated_motivators()`, the motivator rows the checked templates
+name, and the assertion did not change.
 
 ### 3.3 Personalities (giri's nine, audited)
 
@@ -319,7 +325,7 @@ faces: the fighters who should team up hold a grudge, and the pair who
 would cover each other (Hana scouts, Goro fights) are the pair Hana
 will not be parted from.
 
-## 6. The first five petition templates (one per motivator)
+## 6. The petition templates (one per motivator, and the shortfall's)
 
 Format per GDD s6: id, source class, trigger, body (text, deadline,
 reward, consequence), `next`. Text is a template with `{name}`,
@@ -405,6 +411,60 @@ failed voiced petition always costs regard (GDD s4.2).
 Before industries exist (1.1), T5 cannot be satisfied and is not fired;
 the trigger's "industry shift" clause is what the 1.2 session turns on.
 
+### T6 `thin-days` (shortfall) — the shortfall exemplar (wave 1.5)
+
+The escalation pipe's second rung: the first template whose source class is
+`shortfall` rather than a motivator, so it can speak for anybody — Tim, who
+carries no motivator, included.
+
+- trigger: three `upkeep-shortfall` events on `{name}` inside the thin-days
+  window (`thin_window`, a drawer row: three world-days); one active petition
+  per character, as ever. A shortfall answered is a shortfall spent: the window
+  opens no earlier than this template's last petition for them was met or
+  failed.
+- text: "{name}: Three intervals short now. I need paying work by {deadline}
+  or I am done waiting for it."
+- deadline: 4 world-days. reward: none (pays in regard). condition: a paid job
+  or shift completed by `{name}` before the deadline.
+- consequence: `walks-out` ({n}=3 days).
+
+*Implemented (w1.5): all six, the chains, and the vocabulary.*
+`petitions::TEMPLATES` is this section as data — T1 to T6 in this format, every
+number on the row. **What the build decided that this section left open:**
+
+- **The `{n}`s**: T1's debt is **30g**; T2's "the drawer threshold" is a pot of
+  **55g** or more, on the row (55 is the richest fight pot on three of the four
+  boards, so "not the safe one" means something); T5 asks for **2** shifts;
+  T2, T4 and T5's lookbacks are **2** world-days and the person has to have
+  been in the camp that long.
+- **The chains, all three:** T1's `collectors-visit-again` on failure, as
+  written; T2's "next (on repeat failure): walks-out" as `proving-job-again`
+  — the same ask a second time, declaring `walks-out` 5 days ("gone looking
+  for a name somewhere else") — so the repeat's consequence is the one its own
+  card printed, never a different one than the first card showed; and T5's
+  `first-order` on satisfaction ("{name}: It is up. Give me something to
+  make.", 3 days, met by any craft work, `sours`). **The treasury-paid craft
+  task the note asks for is not built**: the note says build it when
+  aspirations arrive, and the link is recorded and exercised.
+- **The `{site}`s**: T2 names the authored site with the richest fight job;
+  T4 the first site in registry order its petitioner has never reached (the
+  visited set is `Character::memory`, written on arrival, replay-carried).
+  T5's `{building}` and `{industry}` are the settlement's own content.
+- **T3's threshold is the `desperate` chip's**, `needs::DESPERATE_AT` (6) —
+  one predicate, so a person the chip names is a person T3 can speak for. Its
+  condition is built as written and is hard to meet (`FINDINGS.md` G-051).
+- **T5's "sours, desperation +1"** is `sours` with one more step on the
+  declared consequence — not a fifth kind: the vocabulary is four.
+- **No template pays gold**, as written; the reward port's first exerciser is
+  a staged row in the battery.
+- **Deadlines are on the row, not in the drawer** (deviation): seven deadline
+  rows would have filled the drawer, and a template is content. The drawer
+  carries what *is* tuning: the regard step, the relief, the check's cadence and
+  roll, and the thin-days window.
+- **The director's canned loan-shark (T1 fired with source class `director`)
+  is not built**: the class is in the data and fired by nothing; the injector
+  is 1.6.
+
 ## 7. Coverage matrix and the deliberate gaps
 
 Counts over the ten sheets:
@@ -485,11 +545,15 @@ the answer is no; after that a rename costs prose.
   a camp wage that opened off the rate would be a correction of the authoring
   rather than a decision the player made.
   **The arrival column is §4's**, and the order is the backstory's.
-- **1.5 petitions**: the template table in this format (and
-  `traits::TEMPLATED_MOTIVATORS` repoints at it); consequence vocabulary;
-  `proud` needs a field for refusing gifts (the row currently has no
-  numeric hook for it); the per-character visited set for T4;
-  `walks-out` uses autonomy's away-state.
+- **1.5 petitions** (*done*): the template table in this format, and the
+  no-dead-motivator rule walks it; the consequence vocabulary as data
+  (`petitions::KINDS`, the four, asserted); the per-character visited set for
+  T4 (`Character::memory`); `walks-out` is presence — the staged start's own
+  away-state, through the lens. **`proud`'s field for refusing gifts is not
+  built**: the gift is GIVE, it exists only on a money-shaped condition, and
+  the only one is T1's — carried by Bob and Ludo, neither of them proud — so
+  no surface could reach the field. It waits for a proud character with a
+  money-shaped petition.
 - **1.4 resolution** (*done*): resolution reads the aptitude whose id equals
   the task's type — `traits::competence_at`, the scorer's own term — through
   `resolution::odds`, so a fit of 2 is `safe` (fails 11%, goes well 24%) and a

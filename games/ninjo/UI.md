@@ -74,10 +74,10 @@ not a queue — the import path (`art/`) rode along from giri.
 - **Top bar** (always visible): title, the clock readout `d1 06:40`
   (integer world-minutes, days from one), the four speed chips
   `PAUSE 1x 2x 4x` (active in gold; they do exactly what space and 1/2/3
-  do), the treasury with its coin, and the five drawer handles — TUNE, ROSTER,
-  LEDGER, FEED, MODES. **Seventy-two reference pixels wide since wave 1.2**,
-  where four of eighty fitted and five did not; the row still starts right of
-  the treasury.
+  do), the treasury with its coin, and the six drawer handles — TUNE, ROSTER,
+  LEDGER, PLEAS, FEED, MODES. **Sixty-six reference pixels wide at a pitch of
+  seventy since wave 1.5**, where the petition ledger is the sixth; the row
+  still starts right of the treasury and ends at 942.
 - **The map**: terrain tiles culled to the camera; markers + labels + an
   open-job count per site (`2 quests` / `1 quest` / `dry`) — **the glance the
   board is read through**, and clicking the marker is how the board is
@@ -130,12 +130,16 @@ not a queue — the import path (`art/`) rode along from giri.
   snapshot, none of it simulation state.
 - **Feed drawer**: §3a. It replaced wave 0b's log drawer, which was a copy
   of the event list; the feed is a view of it.
-- **Tuning drawer**: giri's §12 rules verbatim, at the game's forty-five
-  constants since wave 1.4 — **four stepper columns of fourteen**, the fourth
+- **Tuning drawer**: giri's §12 rules verbatim, at the game's fifty
+  constants since wave 1.5 — **four stepper columns of fourteen**, the fourth
   holding the overflow from the top with the stamp following it down under its
   last row, and the prose band (a hovered constant's meaning, a refused link,
-  the resting line and the APPLY note) up in the header beside the presets —
-  and
+  the resting line and the APPLY note) up in the header beside the presets.
+  **The stamp names what differs from the shipped set since wave 1.5** —
+  `the shipped set` and the seed, or `shipped, except` and up to six
+  `name value` lines and a count of the rest — because the pair-by-pair
+  readout outgrew the column (`FINDINGS.md` G-034, reopened and closed); the
+  whole set still rides every report and link — and
   APPLY restarts the **scenario** (this game's boundary). The stamp ends
   `seed <n>`. The variant picker is gone with the variant machinery.
 - **Trait chips are drawn on the character panel and on every roster row**,
@@ -214,7 +218,14 @@ laid out in `layout.rs` and asserted in `floors.rs` like every other row.
   none of them happened in the world.
 - **The auto-pause config drawer** (`MODES`): one row per registered class,
   each with its chip and three radios — `ignore` / `log` / `pause`. The write
-  goes into the simulation, and the footer says so.
+  goes into the simulation, and the footer says so. **Twelve rows of two
+  columns since wave 1.5**, at a pitch of thirty-two, in a rectangle of its own
+  that runs to the foot of the screen (`FINDINGS.md` G-047, closed): twenty-four
+  slots for twenty-two classes. The petitions' three open on the approved
+  mockup's defaults — `petition-voiced` and `petition-failed` on **pause**,
+  `petition-satisfied` on **log** — and are the config's to override.
+- **The feed's class column is eighteen glyphs since wave 1.5**: the place tag
+  moved forty pixels right for `petition-satisfied`.
 - **The character panel**: portrait, name, trait chips, wallet, desperation
   and its source line, what they are doing, and where they live — every field
   read through `lens.rs`. **It is the selection's own surface**: it is open
@@ -254,6 +265,68 @@ laid out in `layout.rs` and asserted in `floors.rs` like every other row.
   map's own chrome — the banner, the toast, the meters — draws nothing at
   all: a row nobody can read lying across a control somebody can click is
   exactly what the floors forbid.
+
+## 3h. The petitions — the voicing overlay, the ledger, and one card (wave 1.5)
+
+**Obligation is voicing, and the card is the warning** (owner, 2026-10-02,
+from the approved architecture mockup). A petition binds the player the minute
+it is put to them; the surfaces exist so that minute cannot be missed and so
+the deadline is never a surprise.
+
+- **One card, two placements** (`card::card`). The anatomy is GDD §6's, as the
+  mockup drew it: the petitioner's portrait and name; where the ask came from
+  (the motivator row's own name, the source class, the template id); the
+  resolved words; a **timer bar** against the deadline, gold, ember inside its
+  last day; `due d8 01:48 - 6d 0h left`; the reward, **"pays in regard" said
+  honestly** where it pays no gold; the **"met when" line**, derived from the
+  same variant the deadline's predicate matches (`Condition::met_when` beside
+  `Condition::met`); and the **declared consequence as a chip** —
+  `on failure: broke` — whose explanation, tapped, is `petitions::explain` over
+  the vocabulary row's fields and the drawer's regard step, never a sentence
+  written per card. **No need-state on the card**: the faces list, the roster
+  and the character panel carry desperation and the source line.
+- **The voicing overlay** (`card::voicing_overlay`) is the screen while the
+  world is stopped for a `petition-voiced` — a state the sim's own pause says
+  (`card::voicing`), never a flag kept beside it. A scrim over everything under
+  the bar, the card front and centre with `PETITION VOICED` over it, and one
+  gesture: **LATER — to the ledger**, which acknowledges the pause and opens
+  the ledger on that card, and leaves the clock where it is. Space (or any
+  speed chip) is the other way out: it resumes, as from any auto-pause. The
+  map's pictures stay under the scrim and every word under it says nothing,
+  as under a drawer; a tap anywhere else bounces with what is waiting.
+- **The petition ledger** is the sixth drawer (`Drawer::Pleas`, the PLEAS
+  handle) — a variant of the one `Option<Drawer>`, so "the ledger and another
+  drawer are open" is as unrepresentable as any other pair. A list on the
+  left, ten rows of two lines — **the running petitions by deadline, soonest
+  first, then the resolved, most recent first** — each with its timer bar; the
+  head line says who and `due`, `met` or `failed`, and the second is the
+  request without the name the head already said. The note says how many are
+  asking and resolved, and `10 of 14 shown` when the list stops short — **and,
+  while the world is stopped, the pause's own sentence in gold instead**
+  (`attention::reason_line`, the feed header's function): an open drawer
+  silences the map's banner, and LATER is what puts the player here, so a
+  cliff falling while the ledger is open stopped the world and said nothing
+  until the wave 1.5 browser playtest met it (`FINDINGS.md` G-055). A row
+  puts its card beside the list; the first row's card is up until one is
+  tapped. A petition still on its messenger is not on the ledger: it binds
+  nobody yet.
+- **ARRANGE navigates; it never posts** (`card::arrange`, derived from the
+  condition): `ARRANGE - Ludo's work` opens the condition's subject's work list
+  with them selected (a purse, paid work, craft work, and T3's `{other}`);
+  `ARRANGE - Old Crypt` opens the board the card names with the petitioner
+  selected (sent to fight work, sent somewhere new); `ARRANGE - the
+  settlement` opens the settlement panel (the bench). The drawer goes down and
+  the surface that acts comes up — the work list's navigate-don't-act
+  precedent (§3f). Nobody absent can be arranged for, and the tap says so.
+- **GIVE `{n}`g is the one exception**, and only on a money-shaped condition
+  (T1 and its chain). Gold when the treasury can pay it; faint, with the
+  reason under it — `no gift: the treasury holds 12g and the gift is 30g` —
+  when it cannot. A gift is a recorded input at the clock's minute, like a
+  posting; it debits exactly the `{n}` it shows, and the purse it fills meets
+  the condition through the same predicate as ever.
+- **A resolved card says how it ended** in the gesture's place: `met d2 01:48 -
+  your hand was in it`, `met by Alex's world, not you`, or `failed d8 00:24 -
+  walks-out fired, as the card said`.
 
 ## 3b. Selection, and the dispatch that reads it
 
@@ -708,6 +781,16 @@ world unit is one reference pixel); no interactive overlap; no text across
 a control it does not label; stat numbers carry their icon (the treasury's
 coin); ASCII everywhere.
 
+**The petitions' surfaces bind like every other** (wave 1.5): a ledger row,
+the card's chip, ARRANGE and GIVE, and the overlay's chip and LATER are all at
+or above the target floor and overlap nothing that shares their screen
+(`floors::pleas_targets`, `floors::voicing_targets`, and `controls_for` reads
+the sim's own pause to know the overlay is up); the content floors judge the
+overlay with its chip explained and the ledger on every kind of row and on its
+widest card (a `gives-away` naming the one it speaks for); and
+`floors::modes_have_room` asks whether the *next* class still has radios
+inside the config drawer, so it fails one class early (G-047's floor).
+
 The floors bind **every** surface §3a, §3b, §3c, §3d, §3e, §3f and §3g add: a
 feed
 row, a
@@ -862,7 +945,7 @@ frame judges hold all three.
 
 ## 5. Screenshot process
 
-Thirty-two PNGs per verify run. Reference-only, because they are pictures of what
+Thirty-eight PNGs per verify run. Reference-only, because they are pictures of what
 is on screen rather than of how the chrome scales: **the settlement** at
 world-minute 0 (the whole cast standing at their homes, named, before
 anything is dispatched, which is wave 0b's own exit question), **the
@@ -943,6 +1026,18 @@ visibly different routes) and **the feed mid-pause** (the reason line
 showing, and the entry that stopped the world ringed in gold). Plus the
 tuning drawer (reference only, pending state showing gold).
 
+And, since wave 1.5, **six more, taken on a session of their own at seed 10**
+(`pleashots::shot_run`), played the way the playtest asks: **a petition voiced
+mid-pause** (Bob's `collectors-visit`, the overlay up, the world stopped);
+**Bob's own panel before and after** the player put the card in the ledger and
+gave him the thirty gold — desperation down a step, the purse up thirty, the
+source line rewritten to *paid the collector off, for now*; **where ARRANGE
+went** on Steve's `thin-days` — his work list, with nothing on it once the board
+is spent (`FINDINGS.md` G-052); **the ledger mixed** — asking, met and failed
+rows and a card with GIVE lit; and **the feed open when `broke` fires** on
+Ludo's ignored `collectors-visit`. Each is asserted to be what it says
+(`pleashots::judge_shots`) and each carries the three frame judges.
+
 Committed copies live in `screens/`; the implementing agent opens and looks
 at every one before declaring done.
 
@@ -1000,6 +1095,14 @@ verb, the stepper glyphs and the wage between them, the footer — is a
 `TextRun` in the `Panel`, and its task chips are `Panel` icons. So
 `floors::judge_panel` judges what it says and `frames::judge_chrome` finds each
 row on the frame.
+
+**The petitions add no exemption** (§3h). Every row of a card, the ledger's
+rows and the overlay's stamp and LATER are `TextRun`s in the `Panel`, and the
+portrait is a `Panel` icon. **The timer bars are fills**, like a panel's
+ground and a button's ghost: they carry no string and no position of their own
+— the track is `layout::card_bar` and its length is `card::left_share` of the
+petition the card is drawing — and the words beside them (`due d8 01:48 - 6d 0h
+left`) are what the floors read.
 
 **The breakdown band adds no exemption** (§3e). Its fill and its border are
 chrome fills, like the character panel's; every row of text on it — the
