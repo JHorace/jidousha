@@ -195,7 +195,8 @@ fn press(world: &mut World, ui: UiState, control: Target) -> UiState {
         }
         // The turning (SPEC §18.1): it will not go past an undecided death page — "Go on"
         // there does nothing, a leaf beyond it does nothing, "Skip ahead" goes to it —
-        // and summer comes only once every page is decided.
+        // and summer comes only once every page is decided. SPEC-GAPS KG-51: "past" is
+        // past the first undecided page's last leaf, where its choice is drawn.
         Target::GoOn | Target::Leaf(_) | Target::Skip if house.passage.is_some() => {
             let Some(passage) = &house.passage else {
                 return ui;

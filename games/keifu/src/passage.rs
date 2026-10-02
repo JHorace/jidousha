@@ -35,6 +35,7 @@ pub struct Bequest {
     pub dead: HeroId,
     /// Whether there is anything to leave — an heirloom or an undone dream — and so a
     /// choice to wait for; a page with nothing to leave is decided when it is made.
+    /// SPEC-GAPS KG-55: with no one living to offer, it waits on "No one" alone.
     pub leaves: bool,
     /// The heirs offered, in rank order, fixed when the page was made (SPEC §15.1).
     pub heirs: Vec<HeroId>,

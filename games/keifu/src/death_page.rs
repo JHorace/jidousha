@@ -157,6 +157,8 @@ pub fn door_promise(content: &Content, heroes: &mut [Hero], dead: HeroId) -> Vec
     if hero.destiny.kind != Destiny::OpenTheSealedDoor || hero.destiny.fulfilled {
         return Vec::new();
     }
+    // SPEC-GAPS KG-54: the earliest born of the living children, not the firstborn only
+    // if they live.
     let mut firstborn: Option<HeroId> = None;
     for bond in hero.bonds.iter().filter(|b| b.kind == BondKind::Child) {
         let child = &heroes[bond.other];

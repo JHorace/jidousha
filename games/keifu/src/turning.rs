@@ -79,6 +79,7 @@ pub fn turn_the_year(
         }
         let hero = &house.heroes[id];
         let now = hero.phase();
+        // SPEC-GAPS KG-56: a hero new this turning (born, or arrived) has no phase before it.
         let before = phases_before.get(id).copied().flatten();
         if before.is_some_and(|b| b != now) && now != Phase::Youth {
             year_lines.push(fmt(

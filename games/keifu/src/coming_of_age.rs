@@ -84,7 +84,8 @@ fn come_of_age(content: &Content, house: &mut House, id: HeroId, rng: &mut Rng) 
             ));
         }
     }
-    // 3. The dream (§9.5), then dream rivals.
+    // 3. The dream (§9.5), then dream rivals — SPEC-GAPS KG-53: whichever priority gave
+    // it, a dream held already included.
     lines.push(take_a_dream(content, house, id, rng));
     if let Some(dream) = house.heroes[id].dream.clone() {
         lines.extend(dream_rivals(content, &mut house.heroes, id, &dream, year));
@@ -180,6 +181,8 @@ fn take_a_dream(content: &Content, house: &mut House, id: HeroId, rng: &mut Rng)
             Ok(dream) => dream,
             Err(error) => panic!("[keifu] a vengeance did not build: {error}"),
         };
+        // SPEC-GAPS KG-52: the line's arguments as listed, though every questing fate
+        // telling already names the place ("fell at Emberfall at Emberfall").
         let line = fmt(
             &words[W::AgeAvengeDream],
             &[

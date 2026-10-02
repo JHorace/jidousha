@@ -9,7 +9,7 @@ adjudicated one gets a **Resolved:** line.
 Session 1 (W0 + W1): 6 entries. Session 2 (W2): 6 entries, KG-7 to KG-12. Session 3 (W3):
 12 entries, KG-13 to KG-24. Session 4 (W4): 5 entries, KG-25 to KG-29. Session 5 (W5): 4
 entries, KG-30 to KG-33. Session 6 (W6): 7 entries, KG-34 to KG-40. Session 7 (W7): 6 entries,
-KG-41 to KG-46.
+KG-41 to KG-46. Session 8 (W8): 10 entries, KG-47 to KG-56.
 
 ---
 
@@ -602,3 +602,116 @@ KG-41 to KG-46.
 - **Port's choice:** twelve, as §3.1 and CONSTANTS §9 list them and §11.3 resolves them; the help is
   shown as shipped, "ten" and all (`src/hearth.rs` `Seat::all`).
 - **Question:** `lineage/hearth.jai:1-21` — the hearth's arrays, and what the help's "ten" counts.
+
+---
+
+## KG-47 — the heir list fixed, its marks read when shown
+
+- **Spec says:** §15.1 "The heir list is fixed when the page is made (before this turning's births,
+  comings of age and arrivals). Each heir button reads `lines.heir.prospect` ... plus '(not the dream)'
+  if the dead leaves a dream the candidate cannot take, else '(lays one aside)' if both hold heirlooms."
+- **Underdetermined:** whether the marks are fixed with the list or read when the buttons are drawn. They
+  differ when one turning has two death pages: the heir chosen on the first page takes a dream as a burden
+  (or an heirloom), and on the second page can then no longer take one — a mark fixed earlier would say
+  they can, and the choice would raise a ghost instead.
+- **Port's choice:** the list (who, in what order) is fixed when the page is made; the kinship words and the
+  marks are read each time the page is drawn, from the same `can_take_dream` the choice obeys, so a button
+  never promises what pressing it will not do (`src/heirs.rs` `heir_buttons`).
+- **Question:** `scene/scenes/turning.jai:120-146` and `lineage/passage.jai:229-240` — are the button
+  labels built once with the page, or every frame?
+
+## KG-48 — the turning's deeds' fields
+
+- **Spec says:** §15.2 an INHERITED deed and a TOOK_UP_DREAM deed; §17.3 CHILD_BORN deeds for both parents;
+  §17.5 a CAME_OF_AGE deed; §17.2 "ARRIVED deed dated next year". A deed is (kind, year, age, place,
+  weight, other, telling); the `lines.deed.*` tellings name the giver, the dream's owner and the child.
+- **Underdetermined:** each deed's place, weight and other; the year of all but ARRIVED.
+- **Port's choice:** dated the turning's year (ARRIVED the next, as stated) at the hero's age, no place,
+  weight 0; `other` is the hero the telling names — the dead for INHERITED, the dream's owner for
+  TOOK_UP_DREAM, the child for CHILD_BORN — and none for CAME_OF_AGE and ARRIVED, as KG-43 chose for the
+  winter's (`src/heirs.rs` `deed`). The epitaph (W9) reads ARRIVED's year and age, which the spec fixes.
+- **Question:** the `record_deed` calls at `lineage/passage.jai:267,308,377,436,471`.
+
+## KG-49 — which dreams a rolled dream counts as claimed
+
+- **Spec says:** §17.4 "claimed = kinds dreamt by any other living hero; WORTHY_STUDENT also counts as
+  claimed if the hero is younger than 35."
+- **Underdetermined:** whether "dreamt by" reads a hero's own dream only or a carried burden too, and
+  whether a fulfilled dream still claims its kind (a dream is "dreamt" iff its title is non-empty, §3.2,
+  which a fulfilled dream's still is).
+- **Port's choice:** the own dream, fulfilled or not (`src/newcomers.rs` `rolled_dream`) — the field the
+  model calls "dream", as KG-20 read §12.3, and "dreamt" as §3.2 defines it.
+- **Question:** `generation/hero-context/hero-context.jai:46-59` — does the claimed loop read `hero.dream`
+  only, and test `is_dreamt` or `!is_fulfilled`?
+
+## KG-50 — the count in "born under N blessings"
+
+- **Spec says:** `lines.birth.blessing_many` = "% is born under % blessings: %." with argument "blessing count".
+- **Underdetermined:** numeral or count word ("2" or "two").
+- **Port's choice:** the numeral, as `lines.tales.many`'s "tale count" (`src/births.rs` `born`). The count
+  words of §21 are "never", "once", "twice" — times, not quantities.
+- **Question:** `lineage/passage.jai:398`.
+
+## KG-51 — how far the turning lets the reader go while a page waits
+
+- **Spec says:** §18.1 "While a page is undecided: 'Go on' is disabled, page buttons beyond it do nothing,
+  and 'Skip ahead' jumps to the first undecided page instead of leaving."
+- **Underdetermined:** (a) whether "Go on" is disabled on every leaf while any page waits (which would leave
+  a reader on the winter's page unable to reach the death page but by "Skip ahead") or only where going on
+  would pass the waiting page; (b) "beyond it" for a death page of several leaves; (c) which leaf of the page
+  "Skip ahead" lands on.
+- **Port's choice:** the reader may go anywhere up to the first undecided page's last leaf — where its choice
+  is drawn — and no further: "Go on" is greyed and does nothing there, a leaf button past it does nothing,
+  "Skip ahead" lands on it (`src/pointer.rs` `press`, `src/turning_view.rs` `furthest`).
+- **Question:** `scene/scenes/turning.jai:45-74,150-170`.
+
+## KG-52 — the vengeance line names the place twice
+
+- **Spec says:** `lines.age.avenge_dream` = "% has a dream, and the whole house knows why: %. % % at %. It was
+  %." — the lost parent's full name, fate telling, the place's name, the tag's noun.
+- **Underdetermined:** every questing fate telling already names the place (`fate.fell` "fell at %",
+  `fate.died_of_wounds`, `fate.burned`), so the line reads "Brannoc Hale fell at Emberfall at Emberfall."
+- **Port's choice:** the arguments as listed, the repetition and all (`src/coming_of_age.rs`
+  `take_a_dream`); content is identical by contract.
+- **Question:** `generation/hero-context/hero-context.jai:196` — is the second argument the fate telling, or
+  something shorter (a verb alone)?
+
+## KG-53 — dream rivals at a coming of age for a dream already held
+
+- **Spec says:** §9.5 lists the coming of age's dream by priority, "1. already has a dream ... keep it; ...
+  Then dream rivalry is checked (§12.3)." §12.3 is checked "when a hero gains a dream".
+- **Underdetermined:** whether a kept dream is checked for rivals again — a child handed a dream by a death
+  page is checked when it is passed (§15.2), and a child's own dream may meet a new rival since.
+- **Port's choice:** checked whichever priority gave the dream, as §9.5's "then" reads (`src/coming_of_age.rs`
+  `come_of_age`); a rival already made is not made twice (§12.3 needs no bond but a companion's).
+- **Question:** `generation/hero-context/hero-context.jai:179-223` — is the rival check inside each branch
+  or after them all?
+
+## KG-54 — the Door's "firstborn living child"
+
+- **Spec says:** §15.4 "the firstborn **living** child (CHILD bonds, earliest born_year) gets
+  OPEN_THE_SEALED_DOOR".
+- **Underdetermined:** the earliest born of the living children, or the firstborn child only if living
+  (falling to "no child" when the firstborn is dead and a younger child lives).
+- **Port's choice:** the earliest born among the living, first found on ties (`src/death_page.rs`
+  `door_promise`), as the emphasis on "living" reads and KG-19 breaks ties.
+- **Question:** `lineage/passage.jai:313-334` — is `is_living` inside the earliest-born loop?
+
+## KG-55 — a death page with something to leave and no one living
+
+- **Spec says:** §15.1 step 7 "If holding an heirloom or leaving a dream: gather heirs and leave the page
+  undecided"; "There is always 'No one. Let it lie.'"
+- **Underdetermined:** a page whose heir list is empty (the last of the house).
+- **Port's choice:** it waits all the same, on "No one. Let it lie." alone, which buries the heirloom and
+  raises the ghost (`src/passage.rs` `Bequest::leaves`). Reachable only when the house has no one living.
+- **Question:** none needed unless the original decides such a page itself.
+
+## KG-56 — a phase line for a hero new this turning
+
+- **Spec says:** §18 step 9 "For each living hero: if their phase changed this turning and the new phase is
+  not Youth, `lines.phase.changed`".
+- **Underdetermined:** a newborn or a wanderer had no phase before the turning.
+- **Port's choice:** no phase before, no change (`src/turning.rs` `turn_the_year`); a newborn is a Child at 0
+  and a wanderer arrives into whatever phase their age is, told on their own page.
+- **Question:** `lineage/passage.jai:90-98` — where the previous phase is read from (a saved age, or
+  `age - 1`, which would tell a wanderer of 20 that they are "in the prime of life now").
