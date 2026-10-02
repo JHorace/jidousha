@@ -350,3 +350,23 @@ fn a_rival_ranks_with_everyone_else_and_those_taught_above_a_friend() {
         ["Ysolde", "Garrick", "Maren", "Pip", "Brannoc", "Wren"]
     );
 }
+
+#[test]
+fn a_wounded_hero_the_death_roll_spares_dies_of_the_wound_and_did_not_survive() {
+    let (content, mut house) = house();
+    let odo = id(&house.heroes, "Odo");
+    house.heroes[odo].wounded = true;
+    seat(&mut house, 0, &[odo]);
+    house.board[0].quest.danger = 0; // min(0 * 0.15, 1): the roll never hits.
+    aim(&mut house, 0, [1, 1], -9);
+    let page = resolve_rolled(&content, &mut house, &mut Rng::from_seed(33), 0, [1, 1]);
+    assert!(page.lines.contains(
+        &"Odo Fenn was already hurt, and went anyway. The second wound was the last. He was 47.".to_owned()
+    ));
+    let o = &house.heroes[odo];
+    assert_eq!(
+        o.fate_telling,
+        "died of wounds on the road home from the Barrow"
+    );
+    assert!(!o.deeds.iter().any(|d| d.kind == DeedKind::SurvivedDisaster));
+}
