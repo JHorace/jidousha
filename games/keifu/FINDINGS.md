@@ -858,3 +858,54 @@ page's rows and targets, the per-session recorder of G-043, the floors' measurem
 was one earlier sessions had read and used. The documents were asked nothing new.
 
 ### The game's own (session 7)
+
+- **The scaffold's winter half is retired; its turning half stands.** Leaving the telling of an open
+  house begins winter and opens the hearth (§11.1: the hall, the yard's children, the first two wounded
+  by the fire). "Let the winter pass" resolves the winter (§11.3, `winter.rs`) and then turns the year
+  — still a **W8 SCAFFOLD** (`season.rs` `turn_the_year`, `passage.rs`, `turning_view.rs`): the turning
+  is the winter page alone ("What the winter did", "The winter of year N", its lines or "A quiet
+  winter."), then "Summer comes" advances the calendar and prepares the board. Nobody ages, dies of age,
+  is born, comes of age or arrives; `House::mourned` still carries the summer's dead for W8. The scaffold
+  shows `ui.turning.help` in the dock, whose "Everyone is a year older" W8's ageing makes true — the one
+  sentence on screen the scaffold does not keep. W6's played checks now walk through the hearth to year 2.
+- **One source for the preview and the winter.** `plans.rs` holds every seat's plan — the yard's and a
+  bench's lesson with every excuse in §11.4's order, the courtship verdict (§11.6), the rest, the
+  teller's part — and nothing else decides them. `winter::plan` reads the hearth into a `WinterPlan`;
+  the hearth screen draws every note from it (`hearth_view::notes`); the resolution asks the same
+  functions at each step's moment and records the plan it carried out on the turning's `Passage`, so a
+  check holds one against the other — the oracle's mid-drag and seated previews, the unit tests' `pass`
+  helper (every staged winter), and the agreement battery: 3000 founded houses stirred (wounds, dread,
+  broken fears, ages 4-70, aptitudes, callings, TEACH_A_GREATER, spouses, rivals), every living hero in
+  a random hall or hearth seat, the previewed plan required equal to the plan carried out and each plan's
+  effect read off the house. It met every excuse but the general plan's "needs a teacher", which no seat
+  reaches (a child in the yard belongs on a bench; a bench has its own "needs a teacher"), every verdict,
+  every rest and every teller.
+- **The rank-limited mentor bond is `bonds::form`**, W2's Form under the rank rule, called with the
+  learner first (L→T MENTOR): it replaces companion, friend and rival and never spouse, parent or child,
+  and `taught` is set on the teacher's side whatever the bond's kind. Teaching a rival turns the rivalry to
+  mentorship and says no "new student"; a parent teaching their child sets `taught` and forms nothing
+  (OQ-10) — both unit-tested.
+- **The road-book's forging path is live.** Ysolde's last stage, "Tell the tale at the hearth", is met by
+  the TELL_THE_TALE moment at the long table, and the road-book is forged and given at the hearth. No
+  first winter reaches it by the rules (her first two stages want three new roads and every road), so
+  verify stages her dream at its last stage and seats her by the scripted pointer; the sprite imported in
+  session 6 draws on her sheet (`screens/w7-road-book.png`).
+- **"Let the winter pass" sits under the benches**, the right column's width. The top bar has no room for
+  its label: at 14 px it measures 207 px, and between the Door's countdown and "The family" there are 142.
+- **Mid-drag the hearth shows the seating the release would make** (SPEC-GAPS KG-41): the hand at its
+  landing, a swap's displaced hero where the hand came from — and every note is that seating's plan. A
+  group's panel is not a drop target; only seats and seated heroes are.
+- **Twelve seats, "ten" in the help** (SPEC-GAPS KG-46). The help is shipped as written.
+- **Pictures** (`screens/`): `w7-drag.png` — Odo in hand over Pip's bench, "+1 Spirit" beside it, Odo's
+  sheet in the dock; `w7-hearth.png` — the played winter seated, every preview showing (calms, house +,
+  +1 Spirit, needs a teacher, will wed); `w7-winter.png` — the oracle's winter page; `w7-pip.png` and
+  `w7-odo.png` — the sheets pointed at from it (Spirit 3; "[>] Teach the young two winters (1/2)",
+  "Student Pip +1"); `w7-road-book.png` — the played winter's page with Ysolde's road-book on her sheet.
+- **Floors over the hearth and the turning at the three sizes** (native 1280x720, web 640x329, 4:3
+  1024x768): the hearth idle and each group's help, every hero's sheet beside it, the oracle mid-drag
+  (judged on its first page: the wheel cannot page a sheet while the hand is over a seat — the held hero's
+  sheet is paged where it is pointed at), six stirred hearths with every seat filled, the winter pages, a
+  quiet winter and a winter long enough to continue: 117 surfaces per size in all.
+- **The W6 battery's numbers moved, by the rules.** Its houses now winter between summers with the hearth
+  as it opens — the wounded rest by the fire and heal — so the battery's deaths and closings are not
+  session 6's. The death roll read 24/130, 280/975, 359/800 and 44/62 at danger 1-4, inside its bounds.
