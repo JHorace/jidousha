@@ -78,18 +78,40 @@ pub const RESTING_HINT: &str = "point at a constant to read it.";
 /// The gap between the "in effect:" label and the stamp under it.
 pub const STAMP_LEAD: f32 = 14.0;
 
-/// **The stamp, wrapped to the column it stands in** — what is actually in
-/// effect, and the text both the drawer and the floor measure.
+/// **The stamp** — what is actually in effect, as the drawer and the floor
+/// both measure it.
 ///
-/// `readout` authors its own line breaks and `ui::wrap` keeps them, so this
-/// is that shape with any over-long line cut to the column rather than run
-/// off the drawer.
+/// **What differs from the shipped set, since wave 1.5** (`Tuning::moved`):
+/// the pair-by-pair readout was twenty lines at fifty constants and the column
+/// it follows down has room for twelve (`FINDINGS.md` G-034, reopened). The
+/// shipped set is in the build, so naming the difference loses nothing, and a
+/// set moved further than [`STAMP_MOVED_ROWS`] says how many more there are —
+/// the full set rides every verify report and every `?constants=` link.
 pub fn stamp_text(active: &Tuning, seed: u64) -> String {
+    let moved = active.moved();
+    let mut lines: Vec<String> = Vec::new();
+    if moved.is_empty() {
+        lines.push("the shipped set".to_owned());
+    } else {
+        lines.push("shipped, except".to_owned());
+        lines.extend(moved.iter().take(STAMP_MOVED_ROWS).cloned());
+        if moved.len() > STAMP_MOVED_ROWS {
+            lines.push(format!("and {} more moved", moved.len() - STAMP_MOVED_ROWS));
+        }
+    }
+    lines.push(format!("seed {seed}"));
     wrap(
-        &format!("{}\nseed {seed}", active.readout()),
+        &lines.join("\n"),
         columns(layout::tuner_prose_width(), theme::SMALL),
     )
 }
+
+/// **How many moved constants the stamp names** before it counts the rest.
+pub const STAMP_MOVED_ROWS: usize = 6;
+
+/// **The tallest the stamp can be**, in rows: the heading, every named
+/// constant, the count of the rest, and the seed.
+pub const STAMP_MAX_ROWS: usize = STAMP_MOVED_ROWS + 3;
 
 /// **Where the stamp ends**, for a drawer of `constants` steppers and a stamp
 /// of `rows` rows — one function, read by the floor that asserts the column

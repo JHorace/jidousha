@@ -89,6 +89,11 @@ pub struct Event {
     /// 1.4): a completion carries *went well* or *done*, a `task-failed`
     /// carries *failed*. `None` on everything else.
     pub tier: Option<crate::resolution::Tier>,
+    /// **Which petition this occurrence is about** (wave 1.5): a voicing, a
+    /// satisfaction or a failure carries its record's id, so the voicing
+    /// overlay draws *that* card and a feed line can name it. `None` on
+    /// everything else.
+    pub petition: Option<usize>,
 }
 
 impl Event {
@@ -498,6 +503,24 @@ enum Occ {
         /// Who has arrived.
         who: usize,
     },
+    /// **One character's petition check** (GDD §5's petitions module, wave
+    /// 1.5), and it reschedules itself: the occurrence every template's
+    /// trigger is evaluated on, never a frame. Ambient in the sense drift is —
+    /// only a petition raised reaches the feed.
+    Plea {
+        /// Whose check.
+        who: usize,
+    },
+    /// **A petition's cliff** — its deadline, addressed at voicing.
+    Deadline {
+        /// Which petition.
+        petition: usize,
+    },
+    /// **Somebody who walked out comes back** — `walks-out`'s end.
+    Return {
+        /// Who.
+        who: usize,
+    },
 }
 
 /// **Every port gold moves through, totalled** (GDD §4.1's exhaustive list).
@@ -527,6 +550,15 @@ pub struct Ports {
     /// TRANSFER: a posting's wage, treasury to wallet. Between holders, so it
     /// cancels in the identity.
     pub transferred: i64,
+    /// TRANSFER: **petition gifts**, treasury to a petitioner's purse (wave
+    /// 1.5).
+    pub transferred_gifts: i64,
+    /// TRANSFER: **petition rewards**, a petitioner's purse to whoever met it.
+    pub transferred_rewards: i64,
+    /// TRANSFER: **`gives-away`**, half a purse to the one they spoke for.
+    pub transferred_given: i64,
+    /// BURN: **declared consequences** where they say so — `broke`'s purse.
+    pub burned_consequences: i64,
 }
 
 impl Ports {
@@ -535,19 +567,25 @@ impl Ports {
         opening_wallets + self.minted_pots + self.minted_shares + self.minted_wages
             - self.burned_upkeep
             - self.burned_building
+            - self.burned_consequences
     }
 
     /// The ledger on one line, for a report.
     pub fn line(&self) -> String {
         format!(
-            "minted {}g in pots, {}g in shares and {}g in wages, burned {}g in upkeep and \
-             {}g in building, transferred {}g in posted wages",
+            "minted {}g in pots, {}g in shares and {}g in wages, burned {}g in upkeep, {}g in \
+             building and {}g in consequences, transferred {}g in posted wages, {}g in gifts, \
+             {}g in rewards and {}g given away",
             self.minted_pots,
             self.minted_shares,
             self.minted_wages,
             self.burned_upkeep,
             self.burned_building,
-            self.transferred
+            self.burned_consequences,
+            self.transferred,
+            self.transferred_gifts,
+            self.transferred_rewards,
+            self.transferred_given
         )
     }
 }
@@ -617,6 +655,10 @@ pub struct Sim {
     /// **Every job that has resolved, and how** (wave 1.4) — the record GDD
     /// §4.3's bonds will read. Nothing in the simulation reads it yet.
     pub resolved: Vec<crate::resolution::Resolved>,
+    /// **The petition ledger** (wave 1.5) — every petition the cast has
+    /// raised, and what became of it. Sim state; the ledger drawer and the
+    /// voicing overlay are views of it.
+    pub petitions: crate::pleas::Petitions,
     queue: Vec<Occurrence>,
     next_seq: u64,
 }
@@ -995,6 +1037,7 @@ impl Sim {
             pauses: 0,
             seed: 0,
             resolved: Vec::new(),
+            petitions: crate::pleas::Petitions::default(),
             queue: Vec::new(),
             next_seq: 0,
         };
@@ -1035,6 +1078,16 @@ impl Sim {
                         Occ::Upkeep { need: row },
                     );
                 }
+            }
+        }
+        // **And the petition checks**, one per character from the first
+        // template window, staggered as the scorer is. Scheduled for the whole
+        // registry: a check that finds somebody not yet in the camp checks
+        // nobody and reschedules, which is how the staged start already
+        // treats a rescore. With the module off nothing is scheduled.
+        if modules.enabled(crate::petitions::MODULE) {
+            for who in 0..sim.people.len() {
+                sim.schedule(crate::pleas::first_check(tuning, who), Occ::Plea { who });
             }
         }
         sim
@@ -1095,7 +1148,13 @@ impl Sim {
         self.queue.iter().all(|occurrence| {
             matches!(
                 occurrence.kind,
-                Occ::Drift | Occ::Rescore { .. } | Occ::Upkeep { .. } | Occ::Arrival { .. }
+                Occ::Drift
+                    | Occ::Rescore { .. }
+                    | Occ::Upkeep { .. }
+                    | Occ::Arrival { .. }
+                    | Occ::Plea { .. }
+                    | Occ::Deadline { .. }
+                    | Occ::Return { .. }
             )
         }) && self
             .parties
@@ -1149,6 +1208,7 @@ impl Sim {
             note,
             judged: None,
             tier: None,
+            petition: None,
         });
         if self.attention.mode(class) == Mode::PauseAndFocus && self.paused_by.is_none() {
             self.paused_by = Some(Pause {
@@ -1193,6 +1253,36 @@ impl Sim {
     /// which is what makes the feed read it as *you*.
     pub fn emit_settlement(&mut self, minute: u64, class: EventClass, tile: Tile, note: String) {
         self.emit(minute, class, PLAYER, tile, note);
+    }
+
+    /// **Record a petition occurrence** (wave 1.5) — a voicing, a satisfaction
+    /// or a failure — carrying the record's id, so the overlay draws that
+    /// card. Public for the reason [`Sim::emit_ask`] is: this is the one door
+    /// past which an event can stop the world.
+    pub fn emit_petition(
+        &mut self,
+        minute: u64,
+        class: EventClass,
+        who: usize,
+        tile: Tile,
+        note: String,
+        petition: usize,
+    ) {
+        self.emit(minute, class, who, tile, note);
+        if let Some(event) = self.events.last_mut() {
+            event.petition = Some(petition);
+        }
+    }
+
+    /// **Schedule a petition's cliff** — the deadline is an occurrence with a
+    /// world-time address like every other.
+    pub fn schedule_deadline(&mut self, at: u64, petition: usize) {
+        self.schedule(at, Occ::Deadline { petition });
+    }
+
+    /// **Schedule a walk-out's end.**
+    pub fn schedule_return(&mut self, at: u64, who: usize) {
+        self.schedule(at, Occ::Return { who });
     }
 
     /// Record somebody arriving in the camp (`CAST.md` §4's arrival column).
@@ -1312,6 +1402,10 @@ fn begin_journey(
     };
     let first_cost = grid.get(first).cost(tuning).unwrap_or(0);
     let next_at = now + u64::try_from(first_cost).unwrap_or(0);
+    // **The memory a petition reads** (wave 1.5): when they last set out.
+    if let Some(person) = sim.people.get_mut(party_index) {
+        person.memory.last_out = Some(now);
+    }
     {
         let party = &mut sim.parties[party_index];
         party.errand = Some(setting_out.errand);
@@ -1539,7 +1633,22 @@ pub fn advance_to(sim: &mut Sim, grid: &Grid, tuning: &Tuning, now: u64) {
                 crate::needs::burn(sim, tuning, occurrence.at, need);
             }
             Occ::Arrival { who } => arrive(sim, tuning, occurrence.at, who),
+            Occ::Plea { who } => {
+                sim.schedule(
+                    occurrence.at + crate::pleas::interval(tuning),
+                    Occ::Plea { who },
+                );
+                crate::pleas::check(sim, tuning, occurrence.at, who);
+            }
+            Occ::Deadline { petition } => {
+                crate::pleas::deadline(sim, tuning, occurrence.at, petition);
+            }
+            Occ::Return { who } => crate::pleas::come_back(sim, occurrence.at, who),
         }
+        // **Every running petition is judged against the world each
+        // occurrence leaves** (wave 1.5) — never a frame — so "met at any
+        // point before the deadline" is a world-time fact.
+        crate::pleas::settle_met(sim, tuning, occurrence.at);
     }
 }
 
@@ -1647,6 +1756,10 @@ fn tile_entry(sim: &mut Sim, grid: &Grid, tuning: &Tuning, at: u64, index: usize
             party.chosen = false;
         }
         sim.emit(at, EventClass::Returned, index, tile, "is home".to_owned());
+        // **The messenger at their own door** (wave 1.5): a petition raised
+        // while they were out is put to the player now, and a walk-out
+        // declared while they were on the road takes effect.
+        crate::pleas::came_home(sim, tuning, at, index);
         // **The decision's own end** (wave 1.1): only what the scorer began
         // closes here, because a player's order was never a question anybody
         // asked themselves.
@@ -1685,6 +1798,14 @@ fn tile_entry(sim: &mut Sim, grid: &Grid, tuning: &Tuning, at: u64, index: usize
             // every ask addressed to somebody who was already out is heard
             // here, at this world-minute, and answered at their next rescore.
             crate::asks::deliver_on_arrival(sim, at, index);
+            // **The scout's memory** (`CAST.md` §6's per-character visited
+            // set), and the petition messenger on the same arrival.
+            if let Some(person) = sim.people.get_mut(index)
+                && !person.memory.visited.contains(&site)
+            {
+                person.memory.visited.push(site);
+            }
+            crate::pleas::deliver(sim, tuning, at, index);
             sim.emit(
                 at,
                 EventClass::WorkBegan,
@@ -1711,6 +1832,7 @@ fn tile_entry(sim: &mut Sim, grid: &Grid, tuning: &Tuning, at: u64, index: usize
                 format!("arrived at {host}'s"),
             );
             crate::asks::deliver_on_arrival(sim, at, index);
+            crate::pleas::deliver(sim, tuning, at, index);
             sim.schedule(until, Occ::WorkDone { party: index });
         }
         None => {}
@@ -1769,6 +1891,18 @@ fn resolve_job(sim: &mut Sim, tuning: &Tuning, at: u64, index: usize, tile: Tile
         crate::settlement::reopen(sim, job);
     }
     let paid = crate::resolution::settle(sim, tuning, index, job, tier);
+    // **What they did, remembered** (wave 1.5): a petition's trigger and
+    // condition read finished paid work off the person, not off the board.
+    if (tier.succeeded() || shift)
+        && let Some(person) = sim.people.get_mut(index)
+    {
+        person.memory.worked.push(crate::people::Worked {
+            minute: at,
+            task: quest.task,
+            shift,
+            posted,
+        });
+    }
     if !shift {
         sim.resolved.push(crate::resolution::Resolved {
             minute: at,

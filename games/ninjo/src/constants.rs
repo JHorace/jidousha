@@ -201,6 +201,24 @@ pub struct Tuning {
     /// The lowest failure chance whose odds-word is `risky`. Between the two
     /// is `chancy`.
     pub odds_risky: i64,
+
+    // ── petitions: the cast asking (GDD §5; wave 1.5) ─────────────────────
+    /// **The large regard step** a petition moves (GDD §4.2): satisfied, up
+    /// toward whoever satisfied it — the player, when the player's hand was
+    /// in it; voiced and failed, down toward the player and nobody else.
+    pub plea_regard: i64,
+    /// **What a satisfied petition takes off the petitioner's desperation** —
+    /// the escalation pipe's other end (`FINDINGS.md` G-033, closed).
+    pub plea_relief: i64,
+    /// World-hours between one character's petition checks — the occurrence
+    /// a template's trigger is evaluated on. Never per frame.
+    pub plea_hours: i64,
+    /// The seeded roll a motivator's trigger has to pass at a check, in
+    /// percent: a want that is true does not speak up at the first chance.
+    pub plea_odds: i64,
+    /// **The thin-days window**, in world-days: how far back the
+    /// shortfall-sourced template counts its three shortfalls.
+    pub thin_window: i64,
 }
 
 impl Resource for Tuning {}
@@ -265,6 +283,11 @@ impl Tuning {
         well_fit: 12,
         odds_safe: 15,
         odds_risky: 30,
+        plea_regard: 4,
+        plea_relief: 1,
+        plea_hours: 6,
+        plea_odds: 15,
+        thin_window: 3,
     };
 
     /// The constants in effect, as the lines the drawer's stamp and every
@@ -294,7 +317,9 @@ impl Tuning {
              ask +{} wage +/-{}\n\
              upkeep {}g/{}h levy {}g\n\
              share {}% fail {}-{}/fit\n\
-             well {} odds <={} >={}",
+             well {} odds <={} >={}\n\
+             plea +/-{} relief {}\n\
+             plea {}h {}% thin {}d",
             self.road_cost,
             self.plains_cost,
             self.forest_cost,
@@ -340,7 +365,30 @@ impl Tuning {
             self.well_fit,
             self.odds_safe,
             self.odds_risky,
+            self.plea_regard,
+            self.plea_relief,
+            self.plea_hours,
+            self.plea_odds,
+            self.thin_window,
         )
+    }
+
+    /// **What this set moves off the shipped one**, one `name value` line per
+    /// constant, in declaration order — the tuning drawer's stamp since wave
+    /// 1.5 (`tuning::stamp_text`).
+    ///
+    /// The whole set, pair by pair, outgrew the column it stood in at fifty
+    /// constants (`FINDINGS.md` G-034, reopened and closed again): a stamp
+    /// that names the *difference* from the shipped set says exactly the same
+    /// thing in a handful of lines — the shipped set is in the build — and the
+    /// full set still rides every report and every link (`stamp`).
+    pub fn moved(&self) -> Vec<String> {
+        Field::ALL
+            .iter()
+            .copied()
+            .filter(|field| self.field(*field) != Tuning::SHIPPED.field(*field))
+            .map(|field| format!("{} {}", field.name(), self.field(field)))
+            .collect()
     }
 
     /// One field, by the name DESIGN gives it — so a sweep, a mutation round
@@ -393,6 +441,11 @@ impl Tuning {
             Field::WellFit => &mut self.well_fit,
             Field::OddsSafe => &mut self.odds_safe,
             Field::OddsRisky => &mut self.odds_risky,
+            Field::PleaRegard => &mut self.plea_regard,
+            Field::PleaRelief => &mut self.plea_relief,
+            Field::PleaHours => &mut self.plea_hours,
+            Field::PleaOdds => &mut self.plea_odds,
+            Field::ThinWindow => &mut self.thin_window,
         }
     }
 
@@ -620,6 +673,16 @@ pub enum Field {
     OddsSafe,
     /// The lowest failure chance that reads `risky`.
     OddsRisky,
+    /// The large regard step a petition moves.
+    PleaRegard,
+    /// What a satisfied petition takes off desperation.
+    PleaRelief,
+    /// World-hours between petition checks.
+    PleaHours,
+    /// The roll a motivator's trigger has to pass, in percent.
+    PleaOdds,
+    /// The thin-days window, in world-days.
+    ThinWindow,
 }
 
 impl Field {
@@ -670,6 +733,11 @@ impl Field {
         Field::WellFit,
         Field::OddsSafe,
         Field::OddsRisky,
+        Field::PleaRegard,
+        Field::PleaRelief,
+        Field::PleaHours,
+        Field::PleaOdds,
+        Field::ThinWindow,
     ];
 
     /// The name DESIGN gives this constant.
@@ -720,6 +788,11 @@ impl Field {
             Field::WellFit => "well_fit",
             Field::OddsSafe => "odds_safe",
             Field::OddsRisky => "odds_risky",
+            Field::PleaRegard => "plea_regard",
+            Field::PleaRelief => "plea_relief",
+            Field::PleaHours => "plea_hours",
+            Field::PleaOdds => "plea_odds",
+            Field::ThinWindow => "thin_window",
         }
     }
 
@@ -792,6 +865,11 @@ impl Field {
             Field::WellFit => "% chance per point of fit it goes well",
             Field::OddsSafe => "fail % at or under which odds read safe",
             Field::OddsRisky => "fail % at or over which odds read risky",
+            Field::PleaRegard => "regard a petition met or failed moves",
+            Field::PleaRelief => "desperation a met petition takes off",
+            Field::PleaHours => "world-hours between petition checks",
+            Field::PleaOdds => "% chance a true want speaks up a check",
+            Field::ThinWindow => "days thin-days counts 3 shortfalls in",
         }
     }
 }

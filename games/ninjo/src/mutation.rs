@@ -15,7 +15,9 @@
 //! bands the ladder is swept over), the economy battery (what upkeep costs,
 //! how often it falls due, and what a worked shift pays the settlement), or the
 //! resolution battery (the share, the fit-to-odds curve and the odds-words'
-//! thresholds, through staged payouts and the staged distribution sweep).
+//! thresholds, through staged payouts and the staged distribution sweep), or
+//! the petitions battery (the regard and relief a petition moves, the check's
+//! cadence and roll, and the thin-days window, through staged petitions).
 //!
 //! The round grows with the drawer by construction: it walks `Field::ALL`, so
 //! a constant added to `constants.rs` arrives here needing only a
@@ -50,6 +52,7 @@ pub fn mutation_round(checks: &mut Checks) -> String {
         crate::compliance::judge_at(&mut probe, &mutated);
         crate::economy::judge_at(&mut probe, &mutated);
         crate::outcomes::judge_at(&mut probe, &mutated);
+        crate::petitioned::judge_at(&mut probe, &mutated);
         let shipped = Tuning::SHIPPED.field(field);
         if probe.failures() > 0 {
             noticed += 1;
@@ -68,8 +71,8 @@ pub fn mutation_round(checks: &mut Checks) -> String {
             format!(
                 "{} moved from {shipped} to {} and the order script, the pacing probes, the \
                  path battery, the trait arithmetic, the store battery, the attention battery, \
-                 the scorer battery, the asks battery, the economy battery and the resolution \
-                 battery all still passed; a check that \
+                 the scorer battery, the asks battery, the economy battery, the resolution \
+                 battery and the petitions battery all still passed; a check that \
                  survives its own constant moving is not measuring it",
                 field.name(),
                 perturbation(field),
@@ -181,5 +184,17 @@ fn perturbation(field: Field) -> i64 {
         // fit stops reading risky — the battery's word literals see both.
         Field::OddsSafe => 0,
         Field::OddsRisky => 60,
+        // **A petition stops mattering**: met or failed, nobody's regard
+        // moves, and a satisfaction relieves nobody — the petitions battery's
+        // staged regard and desperation literals both move.
+        Field::PleaRegard => 0,
+        Field::PleaRelief => 0,
+        // The checks come every hour instead of every six, and every true
+        // want speaks up at once: the staged check schedule and the roll's
+        // pass count both move.
+        Field::PleaHours => 1,
+        Field::PleaOdds => 60,
+        // And the thin-days window closes: three shortfalls never fit in it.
+        Field::ThinWindow => 0,
     }
 }

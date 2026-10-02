@@ -328,12 +328,29 @@ pub fn content(
             },
         ));
     }
+    // **The voicing overlay is the screen while it is up** (UI.md §3h): the
+    // world is stopped for a petition and the card is the warning. The map's
+    // pictures stay under its scrim — a figure is never dropped — and every
+    // word and every panel under it says nothing, exactly as under a drawer:
+    // a row nobody can read lying across a control somebody can click is
+    // what the floors refuse. The bar stays, because the clock it shows is
+    // the thing that stopped.
+    let voicing = crate::card::voicing(lens).is_some();
+    if voicing && let Some(toast) = &flow.toast {
+        panel.text(TextRun::over(
+            layout::voicing_toast(),
+            crate::panels::clipped(&toast.text, layout::CARD_W),
+            theme::SMALL,
+            theme::GOLD,
+        ));
+    }
+
     // **Under an open drawer, the map's own chrome says nothing.** A drawer
     // covers the screen, so a banner or a toast drawn beneath it is a row
     // nobody can read lying across a control somebody can click — and the
     // floors judge exactly that. The tuning drawer carries the toast in its
     // own prose band, so nothing is lost by keeping quiet here.
-    let bare = flow.drawer.is_none();
+    let bare = flow.drawer.is_none() && !voicing;
     if bare && let Some(toast) = &flow.toast {
         panel.text(TextRun::new(
             layout::toast_at(),
@@ -517,7 +534,7 @@ pub fn content(
     {
         let name = lens.name(who);
         let width = style.width_of(name);
-        let controls = crate::floors::controls_for(flow);
+        let controls = crate::floors::controls_for(flow, lens);
         let under = ui.ui_of(Vec2::new(figure.center().x, figure.max.y)) + Vec2::new(0.0, 2.0);
         let over = ui.ui_of(Vec2::new(figure.center().x, figure.min.y))
             - Vec2::new(0.0, theme::SMALL + 2.0);
@@ -586,6 +603,17 @@ pub fn content(
         }
     }
 
+    // --- the voicing overlay, over everything (UI.md §3h) -----------------
+    if voicing {
+        panel.absorb(crate::card::voicing_overlay(
+            flow,
+            lens,
+            tuning,
+            clock.minutes,
+        ));
+        return panel;
+    }
+
     // --- the breakdown band, whichever surface asked for it (UI.md §3e) ----
     // Drawn after the surfaces that open it and before the drawers, because
     // the feed's own entries are one of the two askers and the band lies over
@@ -604,6 +632,7 @@ pub fn content(
             Drawer::Tune => tuning::drawer(flow, tuning),
             Drawer::Roster => panels::roster_drawer(flow, lens),
             Drawer::Ledger => crate::ledger::ledger_drawer(flow, lens),
+            Drawer::Pleas => crate::card::pleas_drawer(flow, lens, tuning, clock.minutes),
             Drawer::Feed => panels::feed_drawer(flow, lens, tuning),
             Drawer::Modes => panels::modes_drawer(lens),
         });
@@ -900,10 +929,48 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
         border(ctx, band, theme::GOLD, layer + 1);
     }
 
+    // **The voicing overlay's ground**, over everything under the bar — and
+    // nothing of a drawer's, because the overlay is the screen while it is
+    // up (UI.md §3h).
+    let sim = ctx.world.resource::<Sim>().clone();
+    let lens = Lens::on(&sim);
+    if let Some(id) = crate::card::voicing(&lens)
+        && let Some(petition) = lens.petition(id)
+    {
+        fill(
+            ctx,
+            layout::voicing_scrim(),
+            theme::SCRIM,
+            theme::layers::OVERLAY,
+        );
+        fill(
+            ctx,
+            layout::voicing_panel(),
+            theme::PANEL,
+            theme::layers::OVERLAY,
+        );
+        border(
+            ctx,
+            layout::voicing_panel(),
+            theme::GOLD,
+            theme::layers::OVERLAY,
+        );
+        crate::card::draw_card_ground(
+            ctx,
+            &map,
+            &lens,
+            petition,
+            layout::voicing_card(),
+            clock.minutes,
+            false,
+        );
+        return;
+    }
+
     // Drawers.
     if matches!(
         flow.drawer,
-        Some(Drawer::Feed | Drawer::Modes | Drawer::Roster | Drawer::Ledger)
+        Some(Drawer::Feed | Drawer::Roster | Drawer::Ledger | Drawer::Pleas)
     ) {
         fill(
             ctx,
@@ -917,6 +984,67 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
             theme::BORDER,
             theme::layers::OVERLAY,
         );
+    }
+    // **The config drawer's own rectangle** (wave 1.5): taller than the
+    // feed's, because twenty-three classes in two columns is twelve rows.
+    if flow.showing(Drawer::Modes) {
+        fill(
+            ctx,
+            layout::modes_panel(),
+            theme::SCRIM,
+            theme::layers::OVERLAY,
+        );
+        border(
+            ctx,
+            layout::modes_panel(),
+            theme::BORDER,
+            theme::layers::OVERLAY,
+        );
+    }
+    // **The petition ledger's rows and its card** (UI.md §3h): a ghost per
+    // row that has a petition on it, the focused row in gold, a timer bar on
+    // every row still running, and the card's own ground beside them.
+    if flow.showing(Drawer::Pleas) {
+        let order = crate::card::ledger_order(&lens);
+        let focus = crate::card::focused(&flow, &lens);
+        for (row, id) in order.iter().take(layout::PLEA_ROWS).enumerate() {
+            let rect = layout::plea_row(row);
+            fill(ctx, rect, theme::GHOST, theme::layers::OVERLAY);
+            if Some(*id) == focus {
+                border(ctx, rect, theme::GOLD, theme::layers::OVERLAY + 1);
+            }
+            if let Some(petition) = lens.petition(*id)
+                && petition.active()
+            {
+                let track = layout::plea_bar(row);
+                fill(ctx, track, theme::BORDER, theme::layers::OVERLAY + 1);
+                let share = crate::card::left_share(petition, clock.minutes);
+                fill(
+                    ctx,
+                    Rect::from_min_size(
+                        track.min,
+                        Vec2::new(track.size().x * share, track.size().y),
+                    ),
+                    if petition.left(clock.minutes) < crate::petitions::DAY {
+                        theme::EMBER
+                    } else {
+                        theme::GOLD
+                    },
+                    theme::layers::OVERLAY + 1,
+                );
+            }
+        }
+        if let Some(petition) = focus.and_then(|id| lens.petition(id)) {
+            crate::card::draw_card_ground(
+                ctx,
+                &map,
+                &lens,
+                petition,
+                layout::plea_card(),
+                clock.minutes,
+                true,
+            );
+        }
     }
     if flow.showing(Drawer::Roster) {
         // Every row's own ground, and the chips over it: a chip is a target,

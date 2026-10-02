@@ -110,6 +110,14 @@ pub const MODULES: &[ModuleSpec] = &[
                       seed reaches nothing; what a job pays is unchanged, the wage if it \
                       was posted and the share if it was their own idea",
     },
+    ModuleSpec {
+        id: crate::petitions::MODULE,
+        tier: Tier::Mvp,
+        wave: "1.5",
+        degrades_to: "nobody asks the player for anything: no petition is raised or voiced, \
+                      no deadline falls and no consequence fires, regard moves only through \
+                      asks, wages, visits and drift, and nothing lowers desperation",
+    },
 ];
 
 /// Which modules are on.

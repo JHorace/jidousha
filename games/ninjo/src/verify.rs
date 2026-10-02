@@ -271,6 +271,7 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
             minute: 0,
             tick: 10,
             paused: false,
+            step: 0,
         },
         // The config panel, with the class the session will be stopped by
         // set to pause.
@@ -279,12 +280,14 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
             minute: 0,
             tick: 20,
             paused: false,
+            step: 0,
         },
         Photo {
             name: "map",
             minute: 44,
             tick: 0,
             paused: false,
+            step: 0,
         },
         // The feed, at the world-minute the world stopped itself.
         Photo {
@@ -292,6 +295,7 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
             minute: sweep::COMPLETIONS[0],
             tick: 0,
             paused: true,
+            step: 0,
         },
         // **The world living on its own**: the map at a minute when nobody
         // was told to go anywhere and people are on the road anyway.
@@ -300,6 +304,7 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
             minute: 330,
             tick: 0,
             paused: false,
+            step: 0,
         },
         // A character looked at, with a chip's explanation open on their
         // sheet and the selection ring on their figure.
@@ -308,6 +313,7 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
             minute: 590,
             tick: 0,
             paused: false,
+            step: 0,
         },
         // The roster: everyone, and what they are doing about it.
         Photo {
@@ -315,6 +321,7 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
             minute: 462,
             tick: 0,
             paused: false,
+            step: 0,
         },
         // **The job board**, open on a mixed-type site with the fit column
         // and the travel line up for the selected character: the surface the
@@ -324,6 +331,7 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
             minute: 500,
             tick: 0,
             paused: false,
+            step: 0,
         },
         // **The ring on a token**: the selected character on the road, marked
         // where they are rather than at the door they are not at (UI.md §3b).
@@ -335,6 +343,7 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
             minute: 52,
             tick: 0,
             paused: false,
+            step: 0,
         },
         // The same board a few minutes after a row was ordered from: the row
         // now reads as somebody's, and that somebody is on the road.
@@ -343,6 +352,7 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
             minute: 64,
             tick: 0,
             paused: false,
+            step: 0,
         },
         // And the bounce: a row somebody already has, tapped, with the toast
         // under the bar saying so.
@@ -351,6 +361,7 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
             minute: 520,
             tick: 0,
             paused: false,
+            step: 0,
         },
         // **A verdict's arithmetic, on a refusal**: the band under the board,
         // every term with what produced it, the total, and the job that beat
@@ -360,6 +371,7 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
             minute: 536,
             tick: 0,
             paused: false,
+            step: 0,
         },
         // **And the same sum for a decision already made**, opened from the
         // feed entry that reports it — "why did they go there", answered
@@ -369,6 +381,7 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
             minute: 548,
             tick: 0,
             paused: false,
+            step: 0,
         },
         // **The candidate picker, open with nobody selected** (UI.md §3c):
         // the cast for one job, best fit first, with each of them named, fitted,
@@ -379,6 +392,7 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
             minute: 612,
             tick: 0,
             paused: false,
+            step: 0,
         },
         // **And the board after choosing**: the footer reading `TO <name>`,
         // the character panel up on that person, and the row still the thing
@@ -388,6 +402,7 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
             minute: 622,
             tick: 0,
             paused: false,
+            step: 0,
         },
         // **The work list**: every job standing open anywhere, read for the
         // selected character, best fit first — the person-side mirror of the
@@ -397,6 +412,7 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
             minute: 640,
             tick: 0,
             paused: false,
+            step: 0,
         },
         // **TUNE opened over an open ROSTER**: the owner's path, and one
         // drawer on the screen at the end of it — with the right column's
@@ -407,6 +423,7 @@ pub fn photographed(viewport: PhysicalSize) -> Conducted {
             minute: 662,
             tick: 0,
             paused: false,
+            step: 0,
         },
     ];
     conduct(&Session {
@@ -489,24 +506,28 @@ pub fn settled(viewport: PhysicalSize) -> Conducted {
             minute: SHORT_MINUTE,
             tick: 0,
             paused: false,
+            step: 0,
         },
         Photo {
             name: "works",
             minute: BUILD_MINUTE,
             tick: 0,
             paused: false,
+            step: 0,
         },
         Photo {
             name: "built",
             minute: BUILD_MINUTE + 24,
             tick: 0,
             paused: false,
+            step: 0,
         },
         Photo {
             name: "tenfold",
             minute: WHOLE_MINUTE,
             tick: 0,
             paused: false,
+            step: 0,
         },
     ];
     conduct(&Session {
@@ -564,6 +585,7 @@ pub fn zoomed(viewport: PhysicalSize) -> Conducted {
         minute: 0,
         tick: 20,
         paused: false,
+        step: 0,
     }];
     let mut session = Session::plain(Tuning::SHIPPED, &script, 24);
     session.photos = &photos;
@@ -1167,6 +1189,7 @@ fn selection_run(script: &[Directive]) -> (Conducted, Selected) {
         minute: 0,
         tick: 24,
         paused: false,
+        step: 0,
     }];
     let mut session = Session::plain(Tuning::SHIPPED, script, 26);
     session.probe_ticks = &[24];
@@ -3924,6 +3947,7 @@ pub fn run() -> ExitCode {
     floors::drawer_floors(&mut checks);
     floors::tuner_right_column(&mut checks);
     floors::tuner_has_room(&mut checks);
+    floors::modes_have_room(&mut checks);
     floors::odds_words(&mut checks);
     let bites = floors::floors_bite(&mut checks);
     floors::content_floors(&mut checks, &baseline);
@@ -4037,6 +4061,18 @@ pub fn run() -> ExitCode {
     let resolved = crate::outcomes::shot_run();
     crate::outcomes::judge_shots(&mut checks, &resolved);
     crate::compliance::judge_at(&mut checks, &tuning);
+    // --- the petitions (wave 1.5): the cast asking, and what it costs --------
+    crate::petitions::vocabulary(&mut checks);
+    crate::petitioned::judge_at(&mut checks, &tuning);
+    let one_source = crate::petitioned::one_source(&mut checks);
+    let replayed = crate::petitioned::replay(&mut checks);
+    let invariant = crate::petitioned::invariance(&mut checks);
+    let piped = crate::petitioned::pipe(&mut checks);
+    let swept = crate::petitioned::sweeps(&mut checks);
+    let pleas_off = crate::petitioned::module_off(&mut checks);
+    let conserved = crate::petitioned::conservation(&mut checks);
+    let pleaded = crate::pleashots::shot_run();
+    let pleaded_report = crate::pleashots::judge_shots(&mut checks, &pleaded);
 
     // --- the art library, every string, and the link grammar ---------------
     library::library(&mut checks);
@@ -4064,6 +4100,7 @@ pub fn run() -> ExitCode {
             zoomed: &zoomed_run,
             settled: &settled_run,
             resolved: &resolved,
+            pleaded: &pleaded,
         },
     );
 
@@ -4116,6 +4153,12 @@ pub fn run() -> ExitCode {
     println!("  module-off matrix: {matrix}");
     println!("  scorer: {scorer}");
     println!("  asks: {compliance}");
+    println!("  petitions: {one_source}");
+    println!("  petitions: {replayed}; {invariant}");
+    println!("  petitions: {piped}");
+    println!("  petitions: {swept}");
+    println!("  petitions: {pleas_off}; {conserved}");
+    println!("  petitions: {pleaded_report}");
     println!(
         "  standing rates: {} - {} postings on the ledger at the end of the run",
         baseline.sim.rates.stamp(),

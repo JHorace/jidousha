@@ -79,6 +79,123 @@ a sentence that should have been derived and was not (G-046), the second
 ceiling the same wave met (G-047), the number Steve's claim allows the share
 to be (G-048), and the question it leaves open about risk (G-049).
 
+**Wave 1.5 (petitions, 2026-10-02) read** `CLAUDE.md`, the `make-game` skill,
+this game's own `GDD.md`, `UI.md`, `CAST.md` and `FINDINGS.md`, the sections of
+`DESIGN.md` the clock and the scheduler live in, and the `src/` files the
+petitions land on — the scheduler, the people, the needs, the asks and their
+messenger, the scorer, the lens, the attention table, the flow, the layout, the
+floors, the sweeps and the harness. It opened no file under `crates/*/src/`, no
+`docs/internal/`, and no ADR. **It asked `docs/api/` nothing**: the module is
+arithmetic over the game's own data on the one scheduler S1 landed, its two
+surfaces are `Panel`s like every other, and its roll is G-045's mix, already
+written. It also read the approved architecture mockup (the claude.ai artifact
+"ninjo petitions mockup", via the artifact tool) and photographed it with the
+headless browser `tools/serve-web` names, through Node's Playwright, because its
+interesting states are behind a clock and two taps. Its entries below are all
+about *this game*: what it closes (G-033, G-047, and G-034 a second time) and
+what the petitions exposed (G-050 to G-053), plus one about its own harness
+(G-054).
+
+### G-050 — the game's own: an idle camp reaches the desperation ceiling on its fifth night, petitions or not
+
+Class: **the game's own** (a design fact the petition horizon exposed; the
+owner's) · Game: ninjo · Files: `games/ninjo/src/petitioned.rs` (`sweeps`,
+`CEILING_MINUTE`) · Open
+
+The handoff asked the idle sweep re-judged at the petition horizon with the limp
+floor standing — and named `broke` the floor's hard case: "assert nobody is at
+the ceiling after it". **That cannot be asserted at this horizon, and petitions
+are not why.** A voicing on day two reaches its cliff on day six to eight; by
+then an idle camp has been short every night since its board ran dry on day two
+(G-032), and with nothing in an idle world to lower desperation (G-033's other
+end is a *met* petition, and an idle player's camp meets none — `IDLE_MET` is
+`(0, 0)` over sixteen worlds), Steve reads the ceiling at minute **7200**, the
+fifth night. The sweep asserts the diagnosis instead of the wish:
+`first_ceiling` finds the same minute **with the petitions module switched off**
+(`CEILING_MINUTE`, a shipped literal both ways), so the ceiling is the
+shortfalls' and the floor's three-day form (`economy::judge_sweeps`, unchanged
+and green with petitions on) is the horizon it holds over. What *is* asserted
+at the petition horizon: no purse overdrawn by any consequence, every walk-out
+home again when its days are up, and the conservation identity over the new
+ports.
+
+Expected: a limp floor that holds while consequences land. Happened: the floor
+is gone before the first cliff falls, in every idle world. The levers are all
+owner decisions and none of them is the petitions': an idle settlement that
+can find work after day two (G-032), a relief rule that is not a petition (the
+G-033 alternative this wave was asked *not* to invent), or a floor scoped to
+the days before the board runs dry, which is what it is in practice.
+
+### G-051 — the game's own: `look-after-them` asks for paying work and is judged on desperation, which work never lowers
+
+Class: **the game's own** (content against the economy; the owner's) · Game:
+ninjo · Files: `games/ninjo/src/petitions.rs` (T3's `Condition::OtherSettled`)
+· Open
+
+`CAST.md` §6's T3 says *"Get {other} paying work before {deadline}"* and is met
+when `{other}`'s **desperation** is under the threshold at the deadline. Built
+as written. But the only thing in this game that lowers desperation is a met
+petition of the person's *own* — wages raise a purse and leave desperation
+where it is. So the player can do exactly what Hana asks — Steve on steady
+posted work, a full purse — and the card still fails at its cliff, and fires
+`gives-away`, and (because Steve is still desperate) Hana raises it again at
+her next check and gives away half her purse every four days. The attentive
+sweep shows it: in its world zero Steve is paid all twelve days and Hana's T3
+fails twice, handing him 50g and then 98g.
+
+Expected: a condition the words describe. Happened: a condition only Steve's
+own petition can meet. The two one-line fixes are both content decisions:
+judge T3 on `{other}` finishing paid work (what the words say), or let a wage
+that clears a person's upkeep relieve a step (a second relief rule — G-033's
+alternative again). The wave did neither: implementing CAST as written was the
+instruction.
+
+### G-052 — the game's own: ARRANGE on `thin-days` opens an empty work list once the board is spent
+
+Class: **the game's own** (G-032 met from the petition's side) · Game: ninjo
+· Files: `games/ninjo/src/card.rs` (`arrange`) · Open
+
+The decision-surface row holds — ARRANGE goes where the condition is acted on,
+derived from the condition, and posts nothing — and where it goes is empty.
+`thin-days` is raised by a third shortfall, which an idle-ish camp reaches on
+day four; the authored board ran dry on day two, a shift is not postable, and
+the works' three slots are filled by whoever's rescore lands first. The
+photograph `ninjo-arranged-reference.png` is that state: Steve's work list,
+`0 of 0 open`, with his `thin-days` running. The pipe's arranged twin
+(`petitioned::pipe`) had to put a job back on the board to have something to
+post. The fix is G-032's (work that outlasts the board), not the card's.
+
+### G-053 — the game's own: eight or nine of ten carry a petition by day four
+
+Class: **the game's own** (a density the mockup did not have; 1.6's to
+calibrate) · Game: ninjo · Files: `games/ninjo/src/constants.rs`
+(`plea_odds`, `plea_hours`), `src/petitions.rs` (deadlines) · Open
+
+The mockup voiced five petitions over twelve days, one per motivator, and said
+"a ten-person camp voices a few per week". The build voices **thirteen to
+seventeen** over twelve idle days, and because a deadline runs four to eight
+days and most triggers stay true (everybody is short, somebody is always
+desperate), the steady state is nearly one per person: at seed 10 nine are
+asking at once by day eight. The ten-row ledger then shows only the running
+ones (the photographed run had to open it before the ninth was voiced so the met
+row was still on it). The rate is `plea_odds` at 15% a six-hour check; the
+concurrency is the deadlines, which are content. GDD §8 says 1.6 lands its
+density at twice the first guess — this is already past that, and the owner
+should play it before 1.6 adds the director's.
+
+### G-054 — the game's own: a picture of what a tap did inside a pause had no gate
+
+Class: **the game's own** (the harness) · Game: ninjo · Files:
+`games/ninjo/src/sweep.rs` (`Photo::step`) · Closed in this wave
+
+A world stopped for a voicing holds its minute through every tap the player
+makes inside it — LATER, the roster, a GIVE — so a photograph of "Bob's panel
+after the gift" could be addressed by neither the minute, the tick (unknown in
+advance) nor the pause (it was taken on the first paused tick, before any tap).
+`Photo` gained a fourth gate, `step`: photograph once that many scripted
+directives have been taken up and carried out. Every existing photo carries
+`step: 0`, which is "any", so nothing else moved.
+
 ### G-045 — `docs/api/`: `Rng::from_seed` does not say whether nearby seeds give independent streams
 
 Class: **a document that was silent on the one thing asked** · Game: ninjo ·
@@ -135,7 +252,16 @@ patterns, one of them a literal. Owner: this game (UI.md §3c).
 ### G-047 — the game's own: the attention config met the same ceiling the tuning drawer did
 
 Class: **the game's own** (a layout ceiling, the G-034 class) · Game: ninjo ·
-Files: `games/ninjo/src/layout.rs` (`MODES_ROWS`) · Open
+Files: `games/ninjo/src/layout.rs` (`MODES_ROWS`) · **Closed (wave 1.5)**
+
+*Closed by wave 1.5, which brought the twenty-first, twenty-second and
+twenty-third classes:* the config drawer has its own rectangle now
+(`layout::modes_panel`, to the foot of the screen, as the tuning drawer's is),
+**twelve rows at a pitch of thirty-two** — the target floor exactly, rows that
+touch and never overlap — so two columns hold twenty-four, and
+`floors::modes_have_room` asks about the **next** class's radios and fails one
+class early, which is the floor this entry asked for. The entry below is the
+record of the ceiling.
 
 Two new event classes took the table from seventeen to nineteen, and the config
 drawer held two columns of nine. Nothing warned in advance — G-034 built a
@@ -242,7 +368,20 @@ the module that fixes it is behind a player decision. Owner: the owner's
 ### G-033 — the game's own: nothing lowers desperation, so the escalation pipe has no other end
 
 Class: **the game's own** (a design gap) · Game: ninjo · Files:
-`games/ninjo/src/needs.rs`, `src/people.rs` · Open
+`games/ninjo/src/needs.rs`, `src/people.rs` · **Closed (wave 1.5)**
+
+*Closed by wave 1.5, with the owner's answer (2026-10-02 mockup verdicts):*
+**a met petition is the pipe's other end.** `petition-satisfied` lowers the
+petitioner's desperation by `plea_relief` (a drawer step) and rewrites their
+source line to the event — *"works off a debt that was his father's before it
+was his - paid the collector off, for now (day 4)"* — and a declared
+consequence raises it and rewrites it the other way (`broke` +2 and a rewrite,
+`gives-away` +1, T5's `sours` +1). `petitioned::pipe` drives Tim from an empty
+purse to `thin-days` both ways and asserts both transcripts; the photographed
+run shows Bob's panel before and after (`ninjo-face-before/after-reference.png`).
+What the closing does **not** do is reach an idle camp — an idle player meets
+no petitions, so G-033's ratchet still runs there (G-050) — and it does not let
+a wage relieve anybody (G-051). The entry below is the record of the gap.
 
 GDD §5's needs row says "shortfall raises desperation (escalation pipe)" and
 says nothing about what lowers it. Wave 1.3 built exactly that: a shortfall
@@ -267,7 +406,20 @@ unspecified. Owner: the owner (GDD §5's needs row, and wave 1.5).
 
 Class: **the game's own** (a layout ceiling) · Game: ninjo · Files:
 `games/ninjo/src/layout.rs`, `src/tuning.rs`, `src/floors.rs` · **Closed (wave
-1.4)**
+1.4); reopened and closed again (wave 1.5)**
+
+*Reopened by wave 1.5's five constants and closed by the stamp:* fifty stepper
+rows push the fourth column to eight, and the pair-by-pair stamp under it was
+twenty lines — 656 against a drawer that ends at 540. The floor said so the
+first run, as it was built to. The stamp now names **what differs from the
+shipped set** (`Tuning::moved`, `tuning::stamp_text`): `the shipped set` and
+the seed when nothing is moved, `shipped, except` and up to six `name value`
+lines otherwise, then a count of the rest. The shipped set is in the build, so
+nothing is lost, and the whole set still rides every report and every link.
+`floors::tuner_right_column` measures the tallest stamp (every constant moved)
+at one more constant and one more row. The four constants' drawer names are
+`plea_*` because `petition_regard` is fifteen glyphs and the name cell holds
+fourteen.
 
 *Closed by wave 1.4, which brought six constants:* the drawer has a **fourth
 stepper column** (columns step 232, a row's own width, so four end at 956), the

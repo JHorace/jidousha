@@ -201,6 +201,31 @@ impl<'a> Lens<'a> {
         self.sim.modules.enabled(crate::asks::MODULE)
     }
 
+    // ── the petitions module (wave 1.5) ──────────────────────────────────
+
+    /// **Every petition the cast has raised**, oldest first — the ledger
+    /// drawer and the voicing overlay are views of exactly this.
+    pub fn petitions(&self) -> &'a [crate::pleas::Petition] {
+        self.sim.petitions.all()
+    }
+
+    /// One petition, by id.
+    pub fn petition(&self, id: usize) -> Option<&'a crate::pleas::Petition> {
+        self.sim.petitions.get(id)
+    }
+
+    /// Whether the petitions module is on.
+    pub fn petitions_on(&self) -> bool {
+        self.sim.modules.enabled(crate::petitions::MODULE)
+    }
+
+    /// **What a gift to this petition would be, or why there is none** — the
+    /// GIVE control's whole reading (`pleas::gift`, the function the gift
+    /// itself calls).
+    pub fn gift(&self, id: usize) -> Result<i64, crate::pleas::GiftRefusal> {
+        crate::pleas::gift(self.sim, id)
+    }
+
     // ── the attention architecture (GDD §3) ──────────────────────────────
 
     /// What each class of event currently does to the world.

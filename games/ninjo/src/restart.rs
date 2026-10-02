@@ -134,6 +134,7 @@ pub fn drawer_run() -> DrawerRun {
         minute: 0,
         tick: PENDING_AT,
         paused: false,
+        step: 0,
     }];
     let probe_ticks = [OPENED_AT, PENDING_AT, APPLIED_AT];
     let conducted = conduct(&Session {

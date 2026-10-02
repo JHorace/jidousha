@@ -60,8 +60,8 @@ fn capture_size(surface: PhysicalSize) -> PhysicalSize {
 
 /// Render every wanted frame and write the PNGs.
 pub struct Sessions<'a> {
-    // **One argument, eight sessions.** The run photographs eight scripted
-    // worlds and this writes the pictures from all of them; eight parameters
+    // **One argument, nine sessions.** The run photographs nine scripted
+    // worlds and this writes the pictures from all of them; nine parameters
     // in a row is a call nobody can read and a lint the workspace turns into
     // an error.
     /// The photographed session at the reference surface.
@@ -81,6 +81,10 @@ pub struct Sessions<'a> {
     /// The wave-1.4 session: a posted job failing, its board, a job that went
     /// well, and the camp a day after a string of failures.
     pub resolved: &'a Conducted,
+    /// **The wave-1.5 session**: a voicing mid-pause, a face before and after
+    /// its petition was met, ARRANGE's arrival, the ledger mixed, and the feed
+    /// on a `broke`.
+    pub pleaded: &'a Conducted,
 }
 
 /// Write every picture this run took.
@@ -94,6 +98,7 @@ pub fn capture_screens(checks: &mut Checks, sessions: &Sessions<'_>) -> String {
         zoomed,
         settled,
         resolved,
+        pleaded,
     } = *sessions;
     let mut wanted: Vec<Wanted> = Vec::new();
     // The reference-only set: pictures of *what is on screen* rather than of
@@ -215,6 +220,30 @@ pub fn capture_screens(checks: &mut Checks, sessions: &Sessions<'_>) -> String {
                 false,
                 "a resolution capture was never photographed",
                 format!("the {name} photo is missing from the resolution run"),
+            );
+        }
+    }
+    // **The wave-1.5 six**: the petitions' own surfaces, and what they did.
+    for name in [
+        "voicing",
+        "face-before",
+        "face-after",
+        "arranged",
+        "pleas",
+        "broke",
+    ] {
+        if let Some(shot) = pleaded.photo(name) {
+            wanted.push(Wanted {
+                name: format!("{name}-reference"),
+                surface: verify::HEADLESS_VIEWPORT,
+                frame: shot.frame.clone(),
+                font: pleaded.font,
+            });
+        } else {
+            checks.require(
+                false,
+                "a petitions capture was never photographed",
+                format!("the {name} photo is missing from the petitions run"),
             );
         }
     }

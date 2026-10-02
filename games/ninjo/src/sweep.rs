@@ -290,6 +290,12 @@ pub struct Photo {
     /// resume is a few ticks behind. The pause is a sim fact, so the gate is
     /// the fact.
     pub paused: bool,
+    /// **Wait until this many directives have been taken up and carried out**
+    /// (0 for "any") — wave 1.5's gate, for a picture of what a scripted tap
+    /// did while the clock was holding: a world stopped for a voicing reads
+    /// the same minute through every tap the player makes inside it, so
+    /// neither the minute nor the pause can say "after the third click".
+    pub step: usize,
 }
 
 /// What one conducted session produced.
@@ -598,6 +604,7 @@ pub fn conduct(session: &Session<'_>) -> Conducted {
                     now >= photo.minute
                         && tick >= photo.tick
                         && (!photo.paused || held)
+                        && (photo.step == 0 || (next_directive >= photo.step && steps.is_empty()))
                         && !photos.iter().any(|shot| shot.name == photo.name)
                 })
                 .copied()
