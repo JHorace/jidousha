@@ -511,3 +511,64 @@ camera, the per-session recorder of G-043, the floors' text measurement) they ha
   Round two, the whole list again: **133 of 134 noticed** (tests alone 85, verify alone
   120). **The escape left is equivalent:** K8, "Room for N" told with the calm seats —
   that line shows only on an untroubled quest, where the seats are the calm seats.
+
+---
+
+## W4 review feedback: the sheet dock (owner, 2026-10-01)
+
+Presentation only, outside the spec's jurisdiction: no rule, constant, content string or
+spec file moved, no SPEC-GAPS entry and no new G-number. **Reading discipline:** `CLAUDE.md`,
+the `make-game` skill, the crate whole; from `docs/api/` the `Camera` reference, the
+"layout in constants" passage, `PointerState::scroll` and `InputEvent::Scrolled`. Outside
+the fence, disclosed: `tools/serve-web` and `tools/web-template/index.html`, read to learn
+what canvas the web check gives the page, and a headless Chromium dump of the built page's
+DOM that measured it (640x329 in the check's 640x480 window). **Engine source: not opened.**
+
+### The game's own
+
+- **The sheets have a dock; nothing is raised over anything.** This supersedes session 4's
+  "the board fills the right panel and the sheets are raised over it". The summer screen is
+  four regions that never overlap: the household and yard (cards 84x84, the figure over the
+  name over the dread pips), the board (2x2 cards of 314x319), the top bar over those two
+  (58 px), and the dock — the screen's full height at its right edge, 344 px wide
+  (`summer::SHEET`, `dock.rs`). The dock holds the sheet of the hero pointed at, of the
+  hero *in hand* mid-drag, or of the quest pointed at with its history; with none, the help
+  (which had been squeezed into the board's empty slots and had no home in a full board).
+- **Right, not bottom, and why.** Mid-drag is the critical state, and the card being held
+  over grows during a drag (the live preview adds "you bring", fear and refusal lines) — a
+  bottom dock takes its room from exactly those cards. Both sheets are also a single column
+  of lines, so a tall narrow dock reads and scrolls as a document; a short wide one would
+  have had to flow the sheet into columns that then scroll. Measured before choosing: the
+  longest founding sheet (Garrick) is 50 wrapped rows at 314 px and 42 at 408, so a wider
+  dock buys little.
+- **A long sheet scrolls by whole lines.** `UiState::dock_first` is the first sheet line
+  drawn; a line is drawn whole or not at all, a scrollbar shows above and below, and the
+  wheel, a mouse grab or a finger moves it. Resting on the dock keeps its sheet open; a new
+  subject opens at its top; a hero dropped on the dock returns. A sheet line taller than the
+  dock panics rather than vanish. **The wheel's sign is assumed** (positive lines = wheel
+  away from the player = toward the top); the API document does not say which way
+  `PointerState::scroll` runs. Owner: please confirm in the playtest.
+- **The W1 oracle was layout-coupled.** It read Garrick's whole sheet off one screen, which
+  only held while the sheet fitted its panel. It now pages through the dock with the wheel
+  (`verify::dock_pages`, `dock_read`: each sheet line once, on the page that drew it) and
+  asserts the same twenty lines, the same order, the same bonds and pips, each drawn. No
+  other oracle changed.
+- **Floors at three sizes.** Native 1280x720, the web check's 640x329 canvas, and a 4:3
+  window (1024x768), each with every long sheet paged through and judged per page. The
+  camera now fits the page to the window's shape (`screen::fitted`), so a window narrower
+  than 16:9 shows the whole page instead of cutting the household and dock off its sides.
+  **The floor is in world units.** At 640x329 the 14-unit type is 6.4 device px — session
+  1's "Small windows" finding, unchanged by this work and still a later session's.
+- **Pictures** (`screens/`): `dock-idle.png` (the help in the dock), `w0-w1-garrick.png`
+  (a hero sheet open, scrollbar showing), `w4-quest-sheet.png` (a quest sheet with its
+  history), `w4-drag.png` (Brannoc in hand over "Grave goods": the card's "you bring 12" and
+  his previewed tile, the hand, and his sheet in the dock), `dock-scrolled.png` (Garrick's
+  sheet scrolled to its end); the other W1-W4 screens re-taken on the new layout.
+- **The mutation round.** `mutants/dock.txt`, 22 faults over the dock, its scroll, the
+  pointer's new paths, the layout regions, the camera fit and the redrawn cards. Round one:
+  21 of 22 noticed. The escape, K19 (the dock's text rect widened under the scrollbar), was
+  a loose check of the very kind §A.6 warns of: the floor judged rows against
+  `dock::text_rect()`, the rect the fault moved. It now measures against the scrollbar's
+  lane, which is set from the dock's edge; K19 rerun: noticed — **22 of 22**. W4's pointer
+  and board-view entries (U1-U5, V1-V5; V4 and V5 now in `dock_lines.rs`) rerun against
+  the new code: 10 of 10.

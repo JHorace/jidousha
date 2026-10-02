@@ -112,14 +112,23 @@ pub fn check_w0_and_w1(
 
     let garrick = hero_named(&sim, "Garrick");
     point_at(&mut sim, Target::Hero(garrick), false);
-    let frame = crate::verify::frame(recorder, &mut sim);
-    let page = page_of(&sim);
+    // Garrick's sheet is longer than the dock, so it is read the way a player reads
+    // it: paged through by the wheel, each line once, in order, on the page that
+    // shows it (`verify::dock_pages`).
+    let pages = crate::verify::dock_pages(&mut sim, recorder);
+    let read = crate::verify::dock_read(&pages);
+    let sheet: Vec<String> = read.iter().map(|line| line.text.clone()).collect();
     let mut at = 0;
     for want in W1_GARRICK_IN_ORDER {
-        match find_from(&page, at, want) {
+        match sheet.iter().skip(at).position(|line| line == want) {
             Some(found) => {
+                let found = at + found;
+                let line = &read[found];
+                let (page, frame) = &pages[line.page];
                 checks.require(
-                    line_drawn(&page, &frame, font, found),
+                    line.rows
+                        .iter()
+                        .all(|&row| row_drawn(frame, font, &page.rows[row])),
                     "W1 oracle: a sheet line is on the page but not drawn",
                     format!("seed {seed:#x}: {want:?} has no glyphs in its box"),
                 );
@@ -129,16 +138,16 @@ pub fn check_w0_and_w1(
                 false,
                 "W1 oracle: Garrick's sheet is missing a line, or shows it out of order",
                 format!(
-                    "seed {seed:#x}: {want:?} not found after row {at}; the sheet reads {:?}",
-                    lines_of(&page)
+                    "seed {seed:#x}: {want:?} not found after line {at}; the sheet reads {sheet:?}"
                 ),
             ),
         }
     }
-    let bonds = find_from(&page, 0, "BONDS");
-    let gone = find_from(&page, 0, "Wife Elsbeth, gone");
+    let position = |want: &str| sheet.iter().position(|line| line == want);
+    let bonds = position("BONDS");
+    let gone = position("Wife Elsbeth, gone");
     for want in W1_GARRICK_LIVING_BONDS {
-        let found = find_from(&page, 0, want);
+        let found = position(want);
         checks.require(
             matches!((bonds, found, gone), (Some(b), Some(f), Some(g)) if b < f && f < g),
             "W1 oracle: a living bond is missing or not between BONDS and the bond to the dead",
@@ -147,7 +156,12 @@ pub fn check_w0_and_w1(
             ),
         );
     }
-    check_dread_pips(checks, &page, seed);
+    let read_pages: Vec<Page> = pages.iter().map(|(page, _)| page.clone()).collect();
+    let (page, frame) = match pages.into_iter().next() {
+        Some(first) => first,
+        None => crate::checks::fail("the dock showed no page", "dock_pages returned none"),
+    };
+    check_dread_pips(checks, &read_pages, seed);
     check_cards(checks, &sim, &page, seed);
     (
         format!(
@@ -160,10 +174,15 @@ pub fn check_w0_and_w1(
 }
 
 /// "fear Water with 2 dread": two filled pips of five beside Dread, none of three
-/// beside Courage.
-fn check_dread_pips(checks: &mut Checks, page: &Page, seed: u64) {
+/// beside Courage — on whichever page of the dock shows each row.
+fn check_dread_pips(checks: &mut Checks, pages: &[Page], seed: u64) {
     for (label, want_filled, want_of) in [("Dread", 2, 5), ("Courage", 0, 3)] {
-        let Some(row) = page.rows.iter().find(|row| row.text == label) else {
+        let Some((page, row)) = pages.iter().find_map(|page| {
+            page.rows
+                .iter()
+                .find(|row| row.text == label)
+                .map(|row| (page, row))
+        }) else {
             checks.require(
                 false,
                 "W1 oracle: a fear row is missing",

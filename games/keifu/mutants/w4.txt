@@ -519,12 +519,12 @@
 + for (text, color) in [(&card.warning, ink::GOLD), (&card.warning, ink::WARN)] {
 
 ### V4 the history panel is empty
-@ src/board_view.rs
-- .map(|text| wrap(text, column - 2.0 * PAD, MIN_TEXT))
-+ .map(|text| wrap(text, column - 2.0 * PAD, MIN_TEXT)).take(0)
+@ src/dock_lines.rs
+- .map(|text| wrap(text, width - 2.0 * HISTORY_PAD, MIN_TEXT))
++ .map(|text| wrap(text, width - 2.0 * HISTORY_PAD, MIN_TEXT)).take(0)
 
 ### V5 the sheet draws no values
-@ src/board_view.rs
+@ src/dock_lines.rs
 - if let Some(value) = &line.value {
 + if let Some(value) = &None::<String> {
 

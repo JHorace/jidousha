@@ -20,9 +20,10 @@
 //! Nothing resolves a quest until W6.
 //!
 //! What the player can do in this build: point at a hero to read their sheet,
-//! point at a quest to read its sheet and its place's history, drag heroes onto
-//! quests and watch the card's odds move while they are held, and open the family.
-//! Nothing advances the year yet.
+//! point at a quest to read its sheet and its place's history — both open in the
+//! sheet dock down the right edge (`dock`), which scrolls a long sheet and covers
+//! nothing — drag heroes onto quests and watch the card's odds move while they are
+//! held, and open the family. Nothing advances the year yet.
 //!
 //! The spec (`spec/SPEC.md`, `spec/CONSTANTS.md`, `spec/content/`) is the only
 //! source of game behaviour; `SPEC-GAPS.md` lists every place it fell silent.
@@ -46,6 +47,9 @@ mod checks;
 mod constants;
 mod content;
 mod destiny;
+mod dock;
+mod dock_checks;
+mod dock_lines;
 mod dream;
 mod dream_lore;
 mod family;
@@ -118,6 +122,7 @@ pub fn config(seed: u64) -> GameConfig {
 /// Every system, in order. The windowed run and every verify session build this.
 pub fn register(app: &mut App) {
     app.add_system(Startup, found_the_house);
+    app.add_system(Update, fit_the_camera);
     app.add_system(Update, pointer::follow_the_pointer);
     app.add_system(Draw, draw_the_page);
 }
@@ -189,6 +194,14 @@ fn found_the_house(world: &mut World) {
     world.insert_resource(art);
     world.insert_resource(UiState::default());
     world.insert_resource(camera());
+}
+
+/// Keep the whole page in view at the window's shape (`screen::fitted`). The
+/// viewport is the one the driver stamped last frame, so a resize is followed from
+/// the frame after it arrives.
+fn fit_the_camera(world: &mut World) {
+    let camera = world.resource_mut::<Camera>();
+    *camera = screen::fitted(camera.viewport);
 }
 
 /// The one reader both phases use: the page for the current state.
