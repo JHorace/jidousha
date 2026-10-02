@@ -16,7 +16,9 @@ use jidousha::prelude::Rng;
 use crate::board::Posted;
 use crate::checks::Checks;
 use crate::content::Content;
+use crate::destiny::{fire_claims, mends, shields_on_quests};
 use crate::house::House;
+use crate::ids::Outcome;
 use crate::reading::{adults, likely_party};
 use crate::resolve::set_out;
 use crate::season::leave_the_telling;
@@ -88,6 +90,7 @@ fn seat_parties(house: &mut House, seed: u64, year: i32) {
 pub fn check_battery(checks: &mut Checks, content: &Content) -> Vec<String> {
     let mut tally: Vec<[u32; 4]> = vec![[0; 4]; TABLE.len()];
     let mut faces = [0u32; 6];
+    let mut rolls = [[0u32; 2]; 4];
     let (mut pages, mut summers, mut closed, mut deaths) = (0u32, 0u32, 0u32, 0usize);
     for seed in BATTERY {
         let mut rng = Rng::from_seed(seed);
@@ -98,6 +101,7 @@ pub fn check_battery(checks: &mut Checks, content: &Content) -> Vec<String> {
         for _ in 0..SUMMERS {
             let year = house.calendar.current_year();
             seat_parties(&mut house, seed, year);
+            let before = house.heroes.clone();
             set_out(content, &mut house, &mut rng);
             summers += 1;
             let telling = house.telling.clone().unwrap_or_default();
@@ -113,6 +117,24 @@ pub fn check_battery(checks: &mut Checks, content: &Content) -> Vec<String> {
                 for die in page.dice {
                     if let Some(face) = faces.get_mut((die - 1).clamp(0, 5) as usize) {
                         *face += 1;
+                    }
+                }
+                // The death roll: every member a disaster's roll reached (not claimed by
+                // the fire, not mended, not shielded), and whether it killed them.
+                if page.outcome == Outcome::Disaster {
+                    let place = &content.lore.places[page.quest.place.index()].name;
+                    for &m in &page.members {
+                        let was = &before[m];
+                        if fire_claims(was, &page.quest.tags, Outcome::Disaster)
+                            || mends(was)
+                            || shields_on_quests(was)
+                        {
+                            continue;
+                        }
+                        let danger = page.quest.danger.clamp(1, 4) as usize - 1;
+                        rolls[danger][0] += 1;
+                        rolls[danger][1] +=
+                            u32::from(house.heroes[m].fate_telling == format!("fell at {place}"));
                     }
                 }
                 let gap = (page.power - page.quest.demand).clamp(-10, 9);
@@ -155,6 +177,27 @@ pub fn check_battery(checks: &mut Checks, content: &Content) -> Vec<String> {
             cell(0), cell(1), cell(2), cell(3)
         ));
     }
+    // CONSTANTS §3 DEATH_PER_DANGER: 15, 30, 45, 60 in 100 at danger 1-4.
+    let mut deaths_line = Vec::new();
+    for (danger, [n, hit]) in rolls.iter().enumerate() {
+        let want = [15.0, 30.0, 45.0, 60.0][danger] / 100.0;
+        let n_f = f64::from(*n);
+        checks.require(
+            (f64::from(*hit) - n_f * want).abs() <= 4.0 * (n_f * want * (1.0 - want)).sqrt() + 0.5,
+            "a disaster's death roll does not kill at CONSTANTS §3's rate",
+            format!(
+                "danger {}: {hit} of {n} killed, want {:.0}%",
+                danger + 1,
+                want * 100.0
+            ),
+        );
+        deaths_line.push(format!("danger {}: {hit}/{n}", danger + 1));
+    }
+    checks.require(
+        rolls.iter().map(|[n, _]| n).sum::<u32>() > 400,
+        "the battery's disasters rolled too few deaths to say anything",
+        format!("{rolls:?}"),
+    );
     let dice: u32 = faces.iter().sum();
     checks.require(
         faces.iter().all(|&f| within(f, dice, 6)),
@@ -170,6 +213,10 @@ pub fn check_battery(checks: &mut Checks, content: &Content) -> Vec<String> {
         "W6 battery: {} houses x up to {SUMMERS} summers = {summers} summers, {pages} quests resolved, {closed} houses closed, {deaths} died questing; every page's margin and band exact; faces {faces:?}; each margin's outcomes within 4 sigma of CONSTANTS §3",
         BATTERY.end - BATTERY.start
     )];
+    out.push(format!(
+        "W6 battery, the death roll (rolled/killed, CONSTANTS §3 15/30/45/60%): {}",
+        deaths_line.join(", ")
+    ));
     out.extend(lines);
     out
 }

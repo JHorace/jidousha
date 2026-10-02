@@ -14,9 +14,8 @@ use crate::house::House;
 use crate::screen::Target;
 use crate::telling::Telling;
 use crate::verify::{SEEDS, hero_named, point_at, session};
-use crate::w6::{
-    stage_closed, stage_page, stage_ring, stage_stay_home, stage_typing, telling_lines,
-};
+use crate::w6::telling_lines;
+use crate::w6_stages::{stage_closed, stage_page, stage_ring, stage_stay_home, stage_typing};
 
 /// Every leaf of the open telling, from the first, each judged once its story is typed.
 fn every_leaf(

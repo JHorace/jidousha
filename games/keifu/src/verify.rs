@@ -333,7 +333,7 @@ pub fn run() -> ExitCode {
     summary.push(played);
     summary.extend(played_vector);
     summary.push(crate::w6::check_controls(&mut checks));
-    summary.push(crate::w6::check_forging(&mut checks));
+    summary.push(crate::w6_stages::check_forging(&mut checks));
     summary.extend(crate::w6_battery::check_battery(&mut checks, &content));
     summary.push(crate::sessions::check_family(&mut checks, &mut recorder));
     summary.push(crate::sessions::check_seeds(&mut checks, &content));

@@ -85,15 +85,15 @@ pub fn capture_all(checks: &mut Checks) -> Vec<String> {
             } else if *name == "end" {
                 crate::verify::scroll_dock(&mut sim, -100.0);
             } else if *name == "w6-stay" {
-                crate::w6::stage_stay_home(&mut sim);
+                crate::w6_stages::stage_stay_home(&mut sim);
             } else if *name == "w6-typing" {
-                crate::w6::stage_typing(&mut sim);
+                crate::w6_stages::stage_typing(&mut sim);
             } else if *name == "w6-page" {
-                crate::w6::stage_page(&mut sim);
+                crate::w6_stages::stage_page(&mut sim);
             } else if *name == "w6-ring" {
-                crate::w6::stage_ring(&mut sim);
+                crate::w6_stages::stage_ring(&mut sim);
             } else if *name == "w6-closed" {
-                crate::w6::stage_closed(&mut sim);
+                crate::w6_stages::stage_closed(&mut sim);
             } else if *name == "w5-ghost" {
                 crate::w5::stage_ghost_board(&mut sim);
             } else if *name == "q0" {

@@ -76,6 +76,8 @@ mod generation;
 mod ghost;
 mod grief;
 mod harm;
+#[cfg(test)]
+mod harm_tests;
 mod hero;
 mod house;
 mod household;
@@ -99,6 +101,8 @@ mod resolve_tests;
 mod reward;
 mod rivals;
 mod road;
+#[cfg(test)]
+mod road_tests;
 mod screen;
 mod scripted;
 mod season;
@@ -106,6 +110,8 @@ mod sessions;
 mod sheet;
 mod summer;
 mod telling;
+#[cfg(test)]
+mod telling_tests;
 mod telling_view;
 #[cfg(test)]
 mod testkit;
@@ -120,6 +126,7 @@ mod w5;
 mod w5_shape;
 mod w6;
 mod w6_battery;
+mod w6_stages;
 mod witness;
 mod words;
 
