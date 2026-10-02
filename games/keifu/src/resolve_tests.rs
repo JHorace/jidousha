@@ -430,3 +430,20 @@ fn a_hero_who_may_not_learn_takes_no_lesson_from_a_triumph() {
     );
     assert_eq!(house.heroes[garrick].aptitudes[0], 7);
 }
+
+#[test]
+fn only_a_youth_takes_the_youth_lesson() {
+    // Ysolde is 24, in her prime, with Might 2: a success teaches her nothing.
+    let (content, mut house) = house();
+    let ysolde = id(&house.heroes, "Ysolde");
+    seat(&mut house, 0, &[ysolde]);
+    aim(&mut house, 0, [3, 3], 1);
+    let page = resolve_rolled(&content, &mut house, &mut Rng::from_seed(29), 0, [3, 3]);
+    assert_eq!(page.outcome, Outcome::Success);
+    assert!(
+        !page.lines.iter().any(|l| l.contains(" rises to ")),
+        "{:?}",
+        page.lines
+    );
+    assert_eq!(house.heroes[ysolde].aptitudes[0], 2);
+}
