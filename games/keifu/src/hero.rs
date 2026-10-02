@@ -94,7 +94,7 @@ pub struct Blessing {
 }
 
 /// What a deed was. W2 writes the two fear deeds, W3 the three dream deeds, W6 the
-/// summer's; later waves add their kinds.
+/// summer's, W7 the winter's; later waves add their kinds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DeedKind {
     /// Dread reached 5 (SPEC §10.4).
@@ -123,6 +123,12 @@ pub enum DeedKind {
     Befriended,
     /// Laid a ghost (SPEC §14.4).
     LaidGhost,
+    /// Taught for the first time (SPEC §11.5); `other` is the learner.
+    Taught,
+    /// Wed in the garden (SPEC §11.3); `other` is the spouse.
+    Wed,
+    /// Told the tale at the long table (SPEC §11.3).
+    ToldTheTale,
 }
 
 /// What became of a dead hero's own dream (SPEC §3.2 `bequest`). W6 lays ghosts;

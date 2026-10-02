@@ -22,8 +22,9 @@ use crate::dock::{PITCH, subject};
 use crate::house::{House, begin_another_house};
 use crate::resolve::set_out;
 use crate::screen::{Clock, DockGrab, Drag, Target, UiState};
-use crate::season::leave_the_telling;
+use crate::season::{at_the_hearth, leave_the_telling, let_the_winter_pass, summer_comes};
 use crate::telling_view::{leaves, story_complete};
+use crate::turning_view::leaves as turning_leaves;
 
 /// What a pointer resting on `target` points at. Resting on the dock points at what
 /// it already did, so the sheet stays open to be read and scrolled.
@@ -38,6 +39,10 @@ fn resting(ui: UiState, target: Option<Target>) -> UiState {
         },
         pointing_quest: match target {
             Some(Target::Quest(quest)) if !ui.family_open => Some(quest),
+            _ => None,
+        },
+        pointing_group: match target {
+            Some(Target::Group(group)) if !ui.family_open => Some(group),
             _ => None,
         },
         drag: None,
@@ -80,6 +85,7 @@ pub fn follow_the_pointer(world: &mut World) {
             }),
             pointing: None,
             pointing_quest: None,
+            pointing_group: None,
             ..ui
         },
         None if pressed => match target {
@@ -90,11 +96,13 @@ pub fn follow_the_pointer(world: &mut World) {
                 | Target::GoOn
                 | Target::Leaf(_)
                 | Target::Skip
-                | Target::BeginAgain),
+                | Target::BeginAgain
+                | Target::LetWinterPass),
             ) if !ui.family_open => press(world, ui, control),
-            // Only the summer seats heroes: on the telling a card is read, never lifted.
+            // Only the summer and the hearth seat heroes: on the telling and the turning a
+            // card is read, never lifted.
             Some(Target::Hero(hero))
-                if !ui.family_open && held && !released && in_summer(world.resource::<House>()) =>
+                if !ui.family_open && held && !released && seating(world.resource::<House>()) =>
             {
                 match world.resource::<House>().slot_of(hero) {
                     Some(from) => UiState {
@@ -106,6 +114,7 @@ pub fn follow_the_pointer(world: &mut World) {
                         }),
                         pointing: None,
                         pointing_quest: None,
+                        pointing_group: None,
                         ..ui
                     },
                     // A child in the yard is not seated in summer and cannot be dragged.
@@ -129,9 +138,14 @@ pub fn follow_the_pointer(world: &mut World) {
     *world.resource_mut::<UiState>() = next;
 }
 
-/// Whether the summer screen is up: no telling open and the house not closed.
+/// Whether the summer screen is up: summer, no telling open, the house not closed.
 fn in_summer(house: &House) -> bool {
-    house.telling.is_none() && !house.closed
+    house.telling.is_none() && !house.closed && !house.calendar.is_winter()
+}
+
+/// Whether a screen that seats heroes is up: the summer's, or the hearth's.
+fn seating(house: &House) -> bool {
+    in_summer(house) || at_the_hearth(house)
 }
 
 /// Run a rule on the house with the run's generator: the house and the generator are
@@ -172,6 +186,24 @@ fn press(world: &mut World, ui: UiState, control: Target) -> UiState {
             with_house(world, set_out);
             fresh
         }
+        Target::LetWinterPass if at_the_hearth(house) => {
+            with_house(world, let_the_winter_pass);
+            fresh
+        }
+        // W8 SCAFFOLD: the turning's winter page — a leaf, the next, or summer.
+        Target::GoOn | Target::Leaf(_) | Target::Skip if house.passage.is_some() => {
+            let Some(passage) = &house.passage else {
+                return ui;
+            };
+            let count = turning_leaves(world.resource::<Content>(), passage).len();
+            let current = ui.leaf.min(count - 1);
+            match control {
+                Target::Leaf(leaf) => return turn_to(leaf.min(count - 1)),
+                Target::GoOn if current + 1 < count => return turn_to(current + 1),
+                _ => with_house(world, summer_comes),
+            }
+            fresh
+        }
         // SPEC-GAPS KG-37: a numbered button turns to a leaf and types its story again.
         Target::GoOn | Target::Leaf(_) | Target::Skip => {
             let Some(telling) = &house.telling else {
@@ -192,7 +224,7 @@ fn press(world: &mut World, ui: UiState, control: Target) -> UiState {
                 _ => true,
             };
             if leave {
-                with_house(world, leave_the_telling);
+                with_house(world, |_, house, _| leave_the_telling(house));
             }
             fresh
         }

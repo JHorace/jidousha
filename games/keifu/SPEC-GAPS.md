@@ -8,7 +8,8 @@ adjudicated one gets a **Resolved:** line.
 
 Session 1 (W0 + W1): 6 entries. Session 2 (W2): 6 entries, KG-7 to KG-12. Session 3 (W3):
 12 entries, KG-13 to KG-24. Session 4 (W4): 5 entries, KG-25 to KG-29. Session 5 (W5): 4
-entries, KG-30 to KG-33. Session 6 (W6): 7 entries, KG-34 to KG-40.
+entries, KG-30 to KG-33. Session 6 (W6): 7 entries, KG-34 to KG-40. Session 7 (W7): 6 entries,
+KG-41 to KG-46.
 
 ---
 
@@ -532,3 +533,72 @@ entries, KG-30 to KG-33. Session 6 (W6): 7 entries, KG-34 to KG-40.
   quests behind them never does; the epitaph's no-deed branch is then theirs
   (`src/resolve.rs` `resolve_rolled`).
 - **Question:** `lineage/tale.jai:163-169` — the condition on the deed.
+
+---
+
+## KG-41 — the hearth's preview mid-drag, and what a release lands on
+
+- **Spec says:** §11.2 "Every winter seat ... is a drag-and-drop slot with the swap rules of §5.3"; "The
+  winter screen previews each seat's result". §5.3: releasing anywhere else returns the hero. KG-28
+  settled the summer's card preview.
+- **Underdetermined:** (a) what the previews read while a hero is in hand — the seating as it is, or as
+  the release would make it; (b) whether a group of seats (the panel round a pair) is a drop target, as a
+  quest card's body is (KG-28 b).
+- **Port's choice:** (a) the seating the release would make: the hand at its landing, a swap's displaced
+  hero where the hand came from, or — landing nowhere — the hand lifted out of its seat, as KG-28 (a) has
+  it; every note on the screen is read off that seating's plan (`src/hearth_view.rs` `previewed`); (b) no:
+  only a seat or a seated hero is a target, so a release on a panel returns the hero (`House::landing`).
+- **Question:** `scene/scenes/winter.jai:16-138` — what the seat notes read during a drag, and whether
+  the groups take drops.
+
+## KG-42 — a fire seat that would both heal and calm
+
+- **Spec says:** §11.2 the fire previews "heals"/"calms"/"rests"; §11.3 step 1 a rest heals the wound and
+  sheds dread, with three lines for healed, calmed, both.
+- **Underdetermined:** which word a wounded hero with dread to shed previews.
+- **Port's choice:** "heals" — the wound first, then "calms", else "rests" (`src/plans.rs` `Rest::note`).
+  The resolution is unaffected: both happen, and `winter.rest_both` is written.
+- **Question:** `lineage/hearth.jai:183-188` — the order of the three notes' conditions.
+
+## KG-43 — the winter's deeds' fields
+
+- **Spec says:** §11.5 step 4 "the first time, a TAUGHT deed"; §11.3 step 4 "WED deeds"; step 5
+  "records TOLD_THE_TALE". A deed is (kind, year, age, place, weight, other, telling); `lines.deed.taught`
+  names the learner, `lines.deed.wed` the spouse.
+- **Underdetermined:** each deed's place, weight and other; and "the first time" for a teacher.
+- **Port's choice:** dated now at the hero's age, no place, weight 0; TAUGHT's other is the learner and
+  WED's the spouse (their tellings name them, as BEFRIENDED's names the friend, KG-34), TOLD_THE_TALE's
+  none. "The first time" is `winters_taught` reaching 1, as KG-40 reads "the first time ever"
+  (`src/winter.rs` `credit`, `court`, `tell_the_tale`).
+- **Question:** the `record_deed` calls at `lineage/hearth.jai:251,284,318`.
+
+## KG-44 — the training yard's and a bench's note with no learner
+
+- **Spec says:** §11.2 "training — the planned lesson ('+N Aptitude' or the excuse) ... benches — the
+  planned lesson or excuse"; `ui.winter.no_learner` ("no learner") and `ui.winter.no_child` ("no child")
+  exist; §11.3 writes `winter.waits_for_learner` / `bench_no_child` for a teacher alone.
+- **Underdetermined:** when the two "no ..." notes show, and where a pair's one note is drawn.
+- **Port's choice:** a pair's note is drawn beside its two seats: the lesson when the learner's (child's)
+  seat is filled, "no learner" ("no child") when only the teacher sits, nothing when both are empty — the
+  same cases §11.3 tells (`src/hearth_view.rs` `notes`).
+- **Question:** `scene/scenes/winter.jai:68-106`.
+
+## KG-45 — a crowned spouse, in the garden
+
+- **Spec says:** §11.6 "either already has a **living** spouse → WED_ALREADY ... Widowed heroes may
+  remarry." §3.2 fate is LIVING, DEAD or DEPARTED (crowned, gone to Court).
+- **Underdetermined:** whether a hero whose spouse was crowned is wed already.
+- **Port's choice:** "living" is fate LIVING (`Hero::is_living`), as everywhere else the spec says living,
+  so a hero whose spouse departed to Court may wed again (`src/plans.rs` `has_living_spouse`).
+- **Question:** `lineage/hearth.jai:166` — the spouse test.
+
+## KG-46 — "ten winter seats" and the twelve the hearth lists
+
+- **Spec says:** §1 "a **winter** in which the player seats heroes at ten winter seats";
+  `ui.winter.help` "There are ten seats and one winter." §3.1 `hearth` lists fire[2], training[2],
+  courting[2], tellers[2], benches[4] — twelve — and CONSTANTS §9 gives the same counts.
+- **Underdetermined:** whether the original has ten seats (and §3.1's list overcounts), or twelve
+  (and "ten" counts something else — a bench as one seat, say).
+- **Port's choice:** twelve, as §3.1 and CONSTANTS §9 list them and §11.3 resolves them; the help is
+  shown as shipped, "ten" and all (`src/hearth.rs` `Seat::all`).
+- **Question:** `lineage/hearth.jai:1-21` — the hearth's arrays, and what the help's "ten" counts.

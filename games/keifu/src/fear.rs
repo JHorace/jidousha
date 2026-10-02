@@ -173,11 +173,16 @@ pub fn conquer(
     )]
 }
 
+/// Whether resting by the fire would shed dread: not broken, and some to shed
+/// (SPEC-GAPS KG-11: nothing is shed at 0). The fire's preview asks this (`plans::rest`).
+pub fn can_shed(hero: &Hero) -> bool {
+    !hero.fear.broken && hero.fear.dread > 0
+}
+
 /// Shedding by the fire (SPEC §10.2): 1 dread, never below 0, not if broken.
 /// Returns whether any was shed (the rest line says so, W7).
 pub fn shed_dread(hero: &mut Hero) -> bool {
-    // SPEC-GAPS KG-11: nothing is shed at 0.
-    if hero.fear.broken || hero.fear.dread <= 0 {
+    if !can_shed(hero) {
         return false;
     }
     hero.fear.dread = (hero.fear.dread - REST_DREAD_SHED).max(0);

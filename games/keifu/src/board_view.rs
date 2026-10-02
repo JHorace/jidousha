@@ -94,7 +94,7 @@ pub fn lay_out_board(page: &mut Page, content: &Content, house: &House, ui: &UiS
 }
 
 /// A seat tile: the hero's figure over their name.
-fn tile(page: &mut Page, content: &Content, house: &House, id: HeroId, rect: Rect) {
+pub fn tile(page: &mut Page, content: &Content, house: &House, id: HeroId, rect: Rect) {
     let hero = &house.heroes[id];
     page.shape(rect, ink::HOT, layers::MARK);
     let figure = Rect::from_min_size(

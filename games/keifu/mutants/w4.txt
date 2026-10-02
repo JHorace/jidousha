@@ -478,10 +478,10 @@
 -         aptitude,⏎        true,⏎
 +         aptitude,⏎        false,⏎
 
-### U1 a tap picks up (re-cut s6)
+### U1 a tap picks up (re-cut s6, re-cut s7)
 @ src/pointer.rs
-- if !ui.family_open && held && !released && in_summer
-+ if !ui.family_open && held && in_summer
+- if !ui.family_open && held && !released && seating
++ if !ui.family_open && held && seating
 
 ### U2 nothing is ever lost
 @ src/pointer.rs

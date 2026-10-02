@@ -23,14 +23,28 @@ const HEIRLOOM_FIGURE: f32 = 32.0;
 /// The history panel's inset.
 const HISTORY_PAD: f32 = 10.0;
 
-/// The help, with nothing open: the summer's, or the telling's (`ui.telling.help`).
+/// The help, with nothing open: the summer's, the telling's (`ui.telling.help`), the
+/// turning's (`ui.turning.help`) or the hearth's (`ui.winter.help`). W8 SCAFFOLD: the
+/// turning's help says everyone is a year older, which W8's ageing makes true.
 pub fn help_lines(content: &Content, house: &House, width: f32) -> Vec<Line> {
     let help = if house.telling.is_some() {
         W::TellingHelp
+    } else if house.passage.is_some() {
+        W::TurningHelp
+    } else if house.calendar.is_winter() {
+        W::WinterHelp
     } else {
         W::SummerHelp
     };
     vec![paragraph(&content.words[help], width, MIN_TEXT, ink::NOTE)]
+}
+
+/// A group of winter seats' help: its heading, then what its seats do.
+pub fn group_lines(content: &Content, group: crate::hearth::Group, width: f32) -> Vec<Line> {
+    let (heading, help) = crate::hearth_help::group_help(content, group);
+    let mut help = paragraph(&help, width, MIN_TEXT, ink::NOTE);
+    help.space = 6.0;
+    vec![paragraph(&heading, width, MIN_TEXT, ink::HEADING), help]
 }
 
 /// `text` wrapped to `width` as one line of the dock.

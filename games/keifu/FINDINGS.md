@@ -818,3 +818,119 @@ read and used.
   58 of 59. **The three escapes are the known equivalents** of sessions 3-5: K7, K8 and R12.
   Five earlier faults named code W6 moved and were re-cut to the same fault at the new site,
   marked "(re-cut s6)": dock K14 and K15, w4 Q11, Q12 and U1.
+
+---
+
+## Session 7 (W7)
+
+**Reading discipline, session 7.** Read: `CLAUDE.md`, the `make-game` skill, the crate whole
+(`SPEC-GAPS.md`, `FINDINGS.md`, `mutants/` — the harness whole and each list's sites, `src/`), and
+from `spec/` MODULES.md, SPEC.md whole, CONSTANTS.md §6-§10 and §14, and the content W7 reads
+(`ui-text.json`'s `winter` and `turning`, `lines.json`'s winter, deed, dream, legacy and turning keys,
+`writing.json`'s RESTS, WEDDINGS and TALES_TOLD, `dreams.json`, `legacies.json`'s heirlooms,
+`household.json`, `lore.json`'s vocations and seasons, `bonds.json`'s MENTOR and STUDENT). `docs/api/`:
+nothing new opened — W7 used only engine surfaces earlier sessions had read. **Engine source: not
+opened.** `games/ninjo/` and `attic/`: not opened; `grep -oh "^### G-0[0-9]*" games/*/FINDINGS.md`
+read the G-headings only (G-039's method). Incidental, disclosed: `tools/test`'s report prints ninjo's
+verify lines. No sibling game read.
+
+### G-056 — the handoff's "SPEC-GAPS (to KG-37)" where the file runs to KG-40
+
+Class: process (misled) · Session: keifu 7 · Owner: the keifu handoff
+
+**Doing:** reading `SPEC-GAPS.md` in full before starting, as the handoff asks, and numbering this
+session's entries.
+
+**Expected:** the last entry to be KG-37, as the handoff says.
+
+**Happened:** the file runs to KG-40 — session 6 filed seven, KG-34 to KG-40, and its PR says so.
+**What I did on its authority:** nothing beyond a second look: the file is the record, so I read it to
+its end and numbered this session's from KG-41.
+
+**Fix:** count the entries in the handoff from the file (`grep -c "^## KG-"`), as G-051 asked for the
+mutation lists.
+
+### docs/api: 0 findings
+
+W7 is rules over the game's own state — the hearth, its plans, the winter — plus one more seating
+screen and a scaffold page. Every engine surface it touched (the scripted pointer's drag of G-045, the
+page's rows and targets, the per-session recorder of G-043, the floors' measurement, `Rect::contains_rect`)
+was one earlier sessions had read and used. The documents were asked nothing new.
+
+### The game's own (session 7)
+
+- **The scaffold's winter half is retired; its turning half stands.** Leaving the telling of an open
+  house begins winter and opens the hearth (§11.1: the hall, the yard's children, the first two wounded
+  by the fire). "Let the winter pass" resolves the winter (§11.3, `winter.rs`) and then turns the year
+  — still a **W8 SCAFFOLD** (`season.rs` `turn_the_year`, `passage.rs`, `turning_view.rs`): the turning
+  is the winter page alone ("What the winter did", "The winter of year N", its lines or "A quiet
+  winter."), then "Summer comes" advances the calendar and prepares the board. Nobody ages, dies of age,
+  is born, comes of age or arrives; `House::mourned` still carries the summer's dead for W8. The scaffold
+  shows `ui.turning.help` in the dock, whose "Everyone is a year older" W8's ageing makes true — the one
+  sentence on screen the scaffold does not keep. W6's played checks now walk through the hearth to year 2.
+- **One source for the preview and the winter.** `plans.rs` holds every seat's plan — the yard's and a
+  bench's lesson with every excuse in §11.4's order, the courtship verdict (§11.6), the rest, the
+  teller's part — and nothing else decides them. `winter::plan` reads the hearth into a `WinterPlan`;
+  the hearth screen draws every note from it (`hearth_view::notes`); the resolution asks the same
+  functions at each step's moment and records the plan it carried out on the turning's `Passage`, so a
+  check holds one against the other — the oracle's mid-drag and seated previews, the unit tests' `pass`
+  helper (every staged winter), and the agreement battery: 3000 founded houses stirred (wounds, dread,
+  broken fears, ages 4-70, aptitudes, callings, TEACH_A_GREATER, spouses, rivals), every living hero in
+  a random hall or hearth seat, the previewed plan required equal to the plan carried out and each plan's
+  effect read off the house. It met every excuse but the general plan's "needs a teacher", which no seat
+  reaches (a child in the yard belongs on a bench; a bench has its own "needs a teacher"), every verdict,
+  every rest and every teller.
+- **The rank-limited mentor bond is `bonds::form`**, W2's Form under the rank rule, called with the
+  learner first (L→T MENTOR): it replaces companion, friend and rival and never spouse, parent or child,
+  and `taught` is set on the teacher's side whatever the bond's kind. Teaching a rival turns the rivalry to
+  mentorship and says no "new student"; a parent teaching their child sets `taught` and forms nothing
+  (OQ-10) — both unit-tested.
+- **The road-book's forging path is live.** Ysolde's last stage, "Tell the tale at the hearth", is met by
+  the TELL_THE_TALE moment at the long table, and the road-book is forged and given at the hearth. No
+  first winter reaches it by the rules (her first two stages want three new roads and every road), so
+  verify stages her dream at its last stage and seats her by the scripted pointer; the sprite imported in
+  session 6 draws on her sheet (`screens/w7-road-book.png`).
+- **"Let the winter pass" sits under the benches**, the right column's width. The top bar has no room for
+  its label: at 14 px it measures 207 px, and between the Door's countdown and "The family" there are 142.
+- **Mid-drag the hearth shows the seating the release would make** (SPEC-GAPS KG-41): the hand at its
+  landing, a swap's displaced hero where the hand came from — and every note is that seating's plan. A
+  group's panel is not a drop target; only seats and seated heroes are.
+- **Twelve seats, "ten" in the help** (SPEC-GAPS KG-46). The help is shipped as written.
+- **Pictures** (`screens/`): `w7-drag.png` — Odo in hand over Pip's bench, "+1 Spirit" beside it, Odo's
+  sheet in the dock; `w7-hearth.png` — the played winter seated, every preview showing (calms, house +,
+  +1 Spirit, needs a teacher, will wed); `w7-winter.png` — the oracle's winter page; `w7-pip.png` and
+  `w7-odo.png` — the sheets pointed at from it (Spirit 3; "[>] Teach the young two winters (1/2)",
+  "Student Pip +1"); `w7-road-book.png` — the played winter's page with Ysolde's road-book on her sheet.
+- **Floors over the hearth and the turning at the three sizes** (native 1280x720, web 640x329, 4:3
+  1024x768): the hearth idle and each group's help, every hero's sheet beside it, the oracle mid-drag
+  (judged on its first page: the wheel cannot page a sheet while the hand is over a seat — the held hero's
+  sheet is paged where it is pointed at), six stirred hearths with every seat filled, the winter pages, a
+  quiet winter and a winter long enough to continue: 117 surfaces per size in all.
+- **The W6 battery's numbers moved, by the rules.** Its houses now winter between summers with the hearth
+  as it opens — the wounded rest by the fire and heal — so the battery's deaths and closings are not
+  session 6's. The death roll read 24/130, 280/975, 359/800 and 44/62 at danger 1-4, inside its bounds.
+- **The mutation rounds.** `mutants/w7.txt` is 115 faults: every W7 constant (the seat counts, the
+  self-taught and child limits, the teachable age, the gain cap, the lesson and its three bonuses, the
+  greater teacher's 9, the tale's renown, the marrying age and gap, the yard, the shed, the garden help's
+  two W8 numbers); every excuse and their order; every amount and cap; the wasted lines; teacher credit
+  (both seats' rules, OQ-20 and OQ-21), the rank-limited mentor bond and `taught`, the first TAUGHT deed,
+  "new student"; every courtship step and its order; the fire's three outcomes and its note; §11.3's
+  order; the wedding, the peace, the failed courting; the tellers and the house's once; the hearth's
+  opening; the preview/resolve agreement from both sides; the notes; the seat targets, the drag and the
+  pairs' layout; the controls and the winter page. Round one (`2dc8257`): **104 of 113 noticed, two not
+  built** (Y1 and B2 cut as match guards that left the match non-exhaustive; re-cut as the wrong line).
+  Eight escapes were loose checks: the garden judged only with the older or the younger first (K2, K3),
+  no child holding a dream a winter moment could move (T4), nothing asking which side of a pair a seat is
+  drawn (S4), nothing lifting a hero from a hearth seat (S1), nothing asking the bench's note beside its
+  own bench (V2), no teacher alone in the yard (V1); O1 was cut wrong — it moved a binding, not the fire —
+  and is re-cut to resolve the fire after the yard. Each now has a test that fails under it
+  (`plans_tests.rs`, `winter_tests.rs`, `hearth_view.rs`, `w7_controls.rs`). Round two, all six lists
+  (`w7.txt` against `1d13583`'s tightened checks, the five earlier against `c880b51`, the same code):
+  **544 of 548 noticed**, none unbuilt — `w7.txt` **114 of 115** (tests alone 95, verify alone 67),
+  `dock.txt` 22 of 22, `w3.txt` 117 of 118, `w4.txt` 133 of 134, `w5.txt` 58 of 59, `w6.txt` 100 of
+  100. **The four escapes are equivalent:** W3's K7, W4's K8 and W5's R12, as before, and W7's E21 — the
+  cap "at most 9 - known" can never bind, because what a teacher counts as knowing is at most 9 (a base,
+  or TEACH_A_GREATER's 9), so "at most taught - known" is always the smaller. Three earlier faults named
+  code W7 moved and were re-cut to the same fault at the new site, marked "(re-cut s7)": dock K12 (the
+  dock's subject now matches a fourth field) and w4 U1 and w6 T11 (the drag now begins on any seating
+  screen, `seating`, not only the summer's).

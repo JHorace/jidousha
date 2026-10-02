@@ -44,6 +44,11 @@ impl Calendar {
         self.month == SUMMER && self.door_stands_open()
     }
 
+    /// Whether it is winter: the hearth, and the turning that follows it.
+    pub fn is_winter(self) -> bool {
+        self.month == WINTER
+    }
+
     /// Begin winter: same year, month WINTER.
     pub fn begin_winter(&mut self) {
         self.month = WINTER;

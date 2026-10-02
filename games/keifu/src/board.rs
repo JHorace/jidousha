@@ -13,6 +13,7 @@ use jidousha::prelude::Rng;
 use crate::content::Content;
 use crate::fear::refuses;
 use crate::generation::generate;
+use crate::hearth::Seat;
 use crate::hero::HeroId;
 use crate::house::House;
 use crate::quest::Quest;
@@ -27,11 +28,14 @@ pub struct Posted {
     pub seats: Vec<Option<HeroId>>,
 }
 
-/// Where a hero can sit in summer.
+/// Where a hero can sit: in summer the roster and the quests, in winter the roster
+/// (the hall) and the hearth.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Slot {
-    /// One of the household's twelve seats.
+    /// One of the household's twelve seats (the hall, in winter).
     Roster(usize),
+    /// A hearth seat, the yard's among them (SPEC §11.2).
+    Hearth(Seat),
     /// Seat `seat` of board slot `quest`.
     Quest {
         /// The board slot.
@@ -75,14 +79,18 @@ impl House {
     pub fn hero_in(&self, slot: Slot) -> Option<HeroId> {
         match slot {
             Slot::Roster(seat) => self.roster[seat],
+            Slot::Hearth(seat) => self.hearth.at(seat),
             Slot::Quest { quest, seat } => self.board[quest].seats[seat],
         }
     }
 
-    /// Where `hero` sits, if anywhere (the yard is not a slot).
+    /// Where `hero` sits, if anywhere (in summer the yard is not a slot).
     pub fn slot_of(&self, hero: HeroId) -> Option<Slot> {
         if let Some(seat) = self.roster.iter().position(|s| *s == Some(hero)) {
             return Some(Slot::Roster(seat));
+        }
+        if let Some(seat) = self.hearth.seat_of(hero) {
+            return Some(Slot::Hearth(seat));
         }
         self.board.iter().enumerate().find_map(|(quest, posted)| {
             posted
@@ -101,6 +109,7 @@ impl House {
     fn put(&mut self, slot: Slot, hero: Option<HeroId>) {
         match slot {
             Slot::Roster(seat) => self.roster[seat] = hero,
+            Slot::Hearth(seat) => self.hearth.put(seat, hero),
             Slot::Quest { quest, seat } => self.board[quest].seats[seat] = hero,
         }
     }
@@ -172,7 +181,10 @@ impl House {
             | Target::GoOn
             | Target::Leaf(_)
             | Target::Skip
-            | Target::BeginAgain => None,
+            | Target::BeginAgain
+            // SPEC-GAPS KG-41: a group of winter seats is not a drop target; only its seats.
+            | Target::Group(_)
+            | Target::LetWinterPass => None,
         }
     }
 }

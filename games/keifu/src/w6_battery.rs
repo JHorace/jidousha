@@ -21,7 +21,7 @@ use crate::house::House;
 use crate::ids::Outcome;
 use crate::reading::{adults, likely_party};
 use crate::resolve::set_out;
-use crate::season::leave_the_telling;
+use crate::season::{leave_the_telling, let_the_winter_pass, summer_comes};
 use crate::w6::band;
 
 /// CONSTANTS §3, "Outcome odds by power minus demand": disaster, setback, success,
@@ -140,11 +140,14 @@ pub fn check_battery(checks: &mut Checks, content: &Content) -> Vec<String> {
                 let gap = (page.power - page.quest.demand).clamp(-10, 9);
                 tally[(gap + 10) as usize][page.outcome.index()] += 1;
             }
-            leave_the_telling(content, &mut house, &mut rng);
+            leave_the_telling(&mut house);
             if house.closed {
                 closed += 1;
                 break;
             }
+            // The winter as the hearth opens it (the wounded by the fire), then summer.
+            let_the_winter_pass(content, &mut house, &mut rng);
+            summer_comes(content, &mut house, &mut rng);
         }
         deaths += house
             .heroes

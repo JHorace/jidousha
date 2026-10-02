@@ -122,6 +122,10 @@ pub enum Target {
     Skip,
     /// "Begin another house", once the house has closed (W10 SCAFFOLD).
     BeginAgain,
+    /// A group of winter seats, or the hall: pointing at it opens its help in the dock.
+    Group(crate::hearth::Group),
+    /// "Let the winter pass" (SPEC §2.1).
+    LetWinterPass,
 }
 
 /// A hero in hand: picked up from a seat and not yet released.
@@ -146,6 +150,8 @@ pub struct UiState {
     pub pointing: Option<HeroId>,
     /// The quest card under the pointer, by board slot.
     pub pointing_quest: Option<usize>,
+    /// The group of winter seats under the pointer.
+    pub pointing_group: Option<crate::hearth::Group>,
     /// The hero in hand, if a drag is under way.
     pub drag: Option<Drag>,
     /// The first line the sheet dock shows: how far its sheet is scrolled.
@@ -392,18 +398,25 @@ pub fn wrap(text: &str, width: f32, size: f32) -> Vec<String> {
 }
 
 /// The page for the screen that is up: the house closed (W10 SCAFFOLD), the telling,
-/// or the summer — each a projection of the house, so the scene cannot disagree with it.
+/// the turning (W8 SCAFFOLD), the hearth, or the summer — each a projection of the
+/// house, so the scene cannot disagree with it.
 pub fn page(content: &Content, house: &House, ui: &UiState, clock: Clock) -> Page {
     let mut page = Page::default();
     if house.closed {
         crate::ending_view::lay_out(&mut page, content, house);
         return page;
     }
-    match &house.telling {
-        Some(telling) => {
+    match (&house.telling, &house.passage) {
+        (Some(telling), _) => {
             crate::telling_view::lay_out(&mut page, content, house, telling, ui, clock)
         }
-        None => crate::summer::lay_out(&mut page, content, house, ui),
+        (None, Some(passage)) => {
+            crate::turning_view::lay_out(&mut page, content, house, passage, ui)
+        }
+        (None, None) if house.calendar.is_winter() => {
+            crate::hearth_view::lay_out(&mut page, content, house, ui)
+        }
+        (None, None) => crate::summer::lay_out(&mut page, content, house, ui),
     }
     if ui.family_open {
         // The overlay covers the summer screen, so only its targets are live.
