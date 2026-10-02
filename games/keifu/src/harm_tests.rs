@@ -339,6 +339,12 @@ fn a_rival_ranks_with_everyone_else_and_those_taught_above_a_friend() {
         names(&heroes, brannoc),
         ["Wren", "Garrick", "Maren", "Pip", "Ysolde", "Odo"]
     );
+    // Maren: her son, then her father (kin, rank 3), then the rest.
+    let maren = id(&heroes, "Maren");
+    assert_eq!(
+        names(&heroes, maren),
+        ["Pip", "Garrick", "Ysolde", "Brannoc", "Odo", "Wren"]
+    );
     // Odo taught Ysolde: she ranks above Garrick, his friend.
     let (odo, ysolde) = (id(&heroes, "Odo"), id(&heroes, "Ysolde"));
     crate::bonds::form(&mut heroes, ysolde, odo, crate::ids::BondKind::Mentor, 1);
