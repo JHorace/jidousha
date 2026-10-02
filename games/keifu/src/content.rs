@@ -54,10 +54,7 @@ pub const FILES: [(&str, &str); 15] = [
 /// Typed reading of these lands with the wave that uses them; until then their
 /// shape is held at the top level so a renamed or missing table fails now.
 const LATER_WAVES: [(&str, &[&str]); 3] = [
-    (
-        "ghost.json",
-        &["title", "aptitude", "seats", "danger", "premise", "endings"],
-    ),
+    ("ghost.json", &["endings"]),
     (
         "epitaph.json",
         &[
@@ -158,6 +155,8 @@ pub struct Content {
     pub names: Names,
     /// `household.json`.
     pub founding: Founding,
+    /// `ghost.json`: a ghost quest's title and premise.
+    pub ghost: crate::ghost::GhostLore,
     /// `door.json`: the Door's tags come from lore; its lock demands from here.
     pub door_locks: Vec<i32>,
     /// `ui-text.json` and `lines.json`, the keys this build reads.
@@ -206,6 +205,7 @@ pub fn load() -> Result<Content, SchemaError> {
         },
         founding: read_household(&at("household.json")?)?,
         door_locks: read_door(&at("door.json")?)?,
+        ghost: crate::ghost::read_ghost(&at("ghost.json")?)?,
         words: read_words(at("ui-text.json")?, at("lines.json")?)?,
         lore,
     })

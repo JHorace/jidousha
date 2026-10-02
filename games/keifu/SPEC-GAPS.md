@@ -7,7 +7,8 @@ pass, which has the original and adjudicates every entry. Entries are never dele
 adjudicated one gets a **Resolved:** line.
 
 Session 1 (W0 + W1): 6 entries. Session 2 (W2): 6 entries, KG-7 to KG-12. Session 3 (W3):
-12 entries, KG-13 to KG-24. Session 4 (W4): 5 entries, KG-25 to KG-29.
+12 entries, KG-13 to KG-24. Session 4 (W4): 5 entries, KG-25 to KG-29. Session 5 (W5): 4
+entries, KG-30 to KG-33.
 
 ---
 
@@ -384,3 +385,57 @@ Session 1 (W0 + W1): 6 entries. Session 2 (W2): 6 entries, KG-7 to KG-12. Sessio
 - **Underdetermined:** whether they share a line, and with what between them.
 - **Port's choice:** one line, joined by a space, as §5.4 quotes it (`src/quest_card.rs`).
 - **Question:** `lineage/quest-card.jai:120-121`.
+
+---
+
+## KG-30 — the remembered pair when no pair can be answered, and the order pairs are read in
+
+- **Spec says:** §5.2 "for every ordered pair of distinct quests (i, j) ... *Answerability* =
+  the maximum over pairs; the pair that first attains it is remembered (first, second)";
+  easing then works on "the remembered pair". OQ-33: comparisons are strict, ties resolve to
+  the first candidate. Sorting by place happens at "Finishing", after reading and easing.
+- **Underdetermined:** (a) whether a pair is remembered when every pair reads 0 — "first
+  attains" a maximum of 0 is (0, 1) if the running best starts below 0, and no pair at all if
+  it starts at 0, which would leave easing nothing to ease; (b) which order "first" walks:
+  the quests as planned, or as they will be sorted.
+- **Port's choice:** (a) the first pair is remembered even at 0, so an unanswerable board is
+  eased (`src/reading.rs` `read_board`: the running best starts empty, and the first pair
+  takes it); (b) planning order — forced quests, then the ghost's, then drawn places in
+  draw order — with i outer and j inner, since the board is sorted only when it is finished.
+  The W5 checks' staged all-wounded house (every pair 0) is eased on (0, 1).
+- **Question:** `generation/quest-context/quest-context.jai:93-116` — the running best's
+  initial value, and the loop order.
+
+## KG-31 — whom a ghost premise's task is told about
+
+- **Spec says:** `content/README.md` "`{task}` = the told current stage task of the ghost's
+  dream (SPEC §9.2)"; §9.2's told task turns a trailing " you" into " him"/" her" "of the hero
+  it is told about"; `{He}`, `{he}`, `{him}` are the dead hero's.
+- **Underdetermined:** the hero the task is told about — the dead hero, or the dream's owner
+  when the ghost carried someone else's dream (KG-14's question, for a ghost).
+- **Port's choice:** the dead hero, whose pronouns the rest of the premise uses (`src/ghost.rs`
+  `ghost_text`). Only WORTHY_STUDENT's "See a student succeed without you" ends in " you".
+- **Question:** `lineage/ghost.jai:55-76` — which hero the told-task call is given.
+
+## KG-32 — whether "a dreamer who could go" counts the house's patrons
+
+- **Spec says:** §5.2 reading: "success is P(SUCCESS or TRIUMPH) of the forecast (§6) with the
+  house's patrons"; §9.6 the board reader's call: "the likely party built with d as leader ...
+  has P(SUCCESS or better) >= 0.35", with no word on patrons. A likely party is chosen by solo
+  power with patrons 0.
+- **Underdetermined:** whether the 0.35 test adds the patrons the answerability test does.
+- **Port's choice:** yes — the same success function as the reading, patrons included
+  (`src/reading.rs` `could_go`), since the paragraph defines "success" once and the card the
+  player reads counts the patrons. No house has a patron before W6 crowns one.
+- **Question:** `generation/quest-context/quest-context.jai:118-132` — the patrons argument.
+
+## KG-33 — a ghost's quest that also calls a dreamer
+
+- **Spec says:** §5.4 the card shows "then either 'The ghost of <name>' or 'Dream: <names>'".
+- **Underdetermined:** which a ghost's quest shows when it also calls a living dreamer (a
+  ghost's quest at the Barrow calls Garrick's "triumph at the Barrow" like any Barrow quest).
+- **Port's choice:** a ghost's quest shows the ghost line and no Dream: line; any other quest
+  the Dream: line (`src/quest_card.rs` `read_card`). The quest sheet's call lines are not
+  affected: it lists every call either way. The board reader still counts a ghost's quest's
+  callers (§9.6 makes no exception).
+- **Question:** `lineage/quest-card.jai:130-139` — the condition between the two lines.

@@ -1,4 +1,4 @@
-//! The rule numbers W0 to W4 read, each copied from `spec/CONSTANTS.md`.
+//! The rule numbers W0 to W5 read, each copied from `spec/CONSTANTS.md`.
 //!
 //! Numbers are rules, not hand-authored words, so they live in source. Where a
 //! number also appears in a content file, `content::load` checks the two agree
@@ -73,6 +73,29 @@ pub const UNANSWERED_RENOWN: i32 = 1;
 pub const TROUBLED_RENOWN: i32 = 1;
 /// `RENOWN_PER_EXPECTATION`: + house renown / 20 (CONSTANTS §4).
 pub const RENOWN_PER_EXPECTATION: i32 = 20;
+
+/// `ANSWERABLE_CHANCE`: a board is answerable when its best pair's weaker chance of
+/// success or better reaches this (CONSTANTS §4).
+pub const ANSWERABLE_CHANCE: f64 = 0.5;
+/// `DREAM_CALL_CHANCE`: a quest calls a dreamer who could go when their likely party's
+/// chance of success or better reaches this (CONSTANTS §4).
+pub const DREAM_CALL_CHANCE: f64 = 0.35;
+/// `BOARD_ATTEMPTS`: the most boards planned in one summer (CONSTANTS §4).
+pub const BOARD_ATTEMPTS: usize = 16;
+/// `EASING_LIMIT`: the most single-point demand reductions when easing (CONSTANTS §4).
+pub const EASING_LIMIT: usize = 30;
+/// The board score's weight on answerability; a call adds `CALL_SCORE` (CONSTANTS §4,
+/// "board score": `min(answerability / 0.5, 1) * 2 + (1 if calls a dreamer)`).
+pub const ANSWERABLE_SCORE: f64 = 2.0;
+/// The board score's term for calling a dreamer who could go (CONSTANTS §4).
+pub const CALL_SCORE: f64 = 1.0;
+
+/// `GHOST_SEATS`: a ghost quest's calm seats (CONSTANTS §5).
+pub const GHOST_SEATS: i32 = 2;
+/// `GHOST_DANGER`: a ghost quest's calm danger (CONSTANTS §5).
+pub const GHOST_DANGER: i32 = 2;
+/// A ghost quest needs Spirit (CONSTANTS §5).
+pub const GHOST_APTITUDE: Aptitude = Aptitude::Spirit;
 
 /// `DREAD_LIMIT` (CONSTANTS §6).
 pub const DREAD_LIMIT: i32 = 5;

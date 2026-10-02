@@ -1,9 +1,10 @@
 //! The quest model and its stakes (SPEC §5.2, the quest part; CONSTANTS §4).
 //!
-//! A quest is a template posted with stakes: seats, danger, renown and demand,
-//! raised by its place's trouble and by the year. `post` is the formula and the
-//! order of its two rolls (seats first, then the wobble). Which templates are
-//! posted, and in what order, is board generation — W5's.
+//! A quest is a template — or a ghost (§14.4, `ghost.rs`) — posted with stakes:
+//! seats, danger, renown and demand, raised by its place's trouble and by the year.
+//! `stakes` is the formula both share; `post` adds a template's two rolls (seats
+//! first, then the wobble). Which quests are posted, and in what order, is board
+//! generation (`generation.rs`).
 
 use jidousha::prelude::Rng;
 
@@ -14,14 +15,28 @@ use crate::constants::{
     YEARS_PER_DEMAND_STEP,
 };
 use crate::content::{Content, QuestTemplate};
+use crate::hero::HeroId;
 use crate::ids::{Aptitude, Place, Tag};
 use crate::power::QuestFacts;
+
+/// What a quest was made from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Source {
+    /// A template, an index into `Content::quest_templates`.
+    Template(usize),
+    /// The ghost of this hero (SPEC §14.4).
+    Ghost(HeroId),
+}
 
 /// One posted quest (SPEC §5.2).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Quest {
-    /// The template it was made from, an index into `Content::quest_templates`.
-    pub template: usize,
+    /// What it was made from.
+    pub source: Source,
+    /// "Grave goods", or "Lay Garrick's ghost".
+    pub title: String,
+    /// The premise the quest sheet opens with.
+    pub premise: String,
     /// Where.
     pub place: Place,
     /// What it needs.
@@ -53,35 +68,77 @@ pub fn base_demand(seats: i32, calm_danger: i32, trouble: i32, year: i32) -> i32
             + (year - 1) / YEARS_PER_DEMAND_STEP)
 }
 
-/// Post `template` at its place's `trouble` in `year`: roll the calm seats, then
-/// the wobble (SPEC §5.2, "Generating a quest from a template").
-pub fn post(content: &Content, template: usize, trouble: i32, year: i32, rng: &mut Rng) -> Quest {
+/// What a quest is before its stakes: where, what it needs and carries, and its words.
+pub struct Making {
+    /// What it is made from.
+    pub source: Source,
+    /// Its title.
+    pub title: String,
+    /// Its premise.
+    pub premise: String,
+    /// Where.
+    pub place: Place,
+    /// What it needs.
+    pub aptitude: Aptitude,
+    /// What it carries.
+    pub tags: Vec<Tag>,
+}
+
+/// The stakes formula (SPEC §5.2, `lineage/quest.jai:45-53`), shared by a template
+/// and a ghost: seats lose one per trouble (never below one), danger rises by trouble
+/// to at most 4, renown is calm danger plus trouble, and demand is `base_demand` on
+/// the troubled seats. A template adds its wobble to the demand; a ghost does not.
+pub fn stakes(making: Making, calm_seats: i32, calm_danger: i32, trouble: i32, year: i32) -> Quest {
     assert!(
         (0..=TROUBLE_LIMIT).contains(&trouble),
         "[keifu] a quest posted at trouble {trouble}\n  likely cause: trouble was raised \
          past TROUBLE_LIMIT\n  fix: CONSTANTS.md §4 caps it at {TROUBLE_LIMIT}"
     );
-    let t: &QuestTemplate = &content.quest_templates[template];
-    let calm_seats = between(rng, t.seats_low, t.seats_high);
     let seats = (calm_seats - trouble * TROUBLE_SEATS).max(1);
-    let demand =
-        base_demand(seats, t.danger, trouble, year) + between(rng, -DEMAND_WOBBLE, DEMAND_WOBBLE);
     Quest {
-        template,
-        place: t.place,
-        aptitude: t.aptitude,
-        tags: t.tags.clone(),
+        source: making.source,
+        title: making.title,
+        premise: making.premise,
+        place: making.place,
+        aptitude: making.aptitude,
+        tags: making.tags,
         calm_seats,
         seats,
-        calm_danger: t.danger,
-        danger: (t.danger + trouble).min(DANGER_LIMIT),
-        renown: t.danger + trouble,
-        demand,
+        calm_danger,
+        danger: (calm_danger + trouble).min(DANGER_LIMIT),
+        renown: calm_danger + trouble,
+        demand: base_demand(seats, calm_danger, trouble, year),
         trouble,
     }
 }
 
+/// Post `template` at its place's `trouble` in `year`: roll the calm seats, then
+/// the wobble (SPEC §5.2, "Generating a quest from a template").
+pub fn post(content: &Content, template: usize, trouble: i32, year: i32, rng: &mut Rng) -> Quest {
+    let t: &QuestTemplate = &content.quest_templates[template];
+    let making = Making {
+        source: Source::Template(template),
+        title: t.title.clone(),
+        premise: t.premise.clone(),
+        place: t.place,
+        aptitude: t.aptitude,
+        tags: t.tags.clone(),
+    };
+    let calm_seats = between(rng, t.seats_low, t.seats_high);
+    let mut quest = stakes(making, calm_seats, t.danger, trouble, year);
+    quest.demand += between(rng, -DEMAND_WOBBLE, DEMAND_WOBBLE);
+    quest
+}
+
 impl Quest {
+    /// The template it was made from; `None` for a ghost's quest.
+    pub fn template(&self) -> Option<usize> {
+        match self.source {
+            Source::Template(template) => Some(template),
+            Source::Ghost(_) => None,
+        }
+    }
+
     /// What a power sum and a dream call need to know about it.
     pub fn facts(&self) -> QuestFacts<'_> {
         QuestFacts {

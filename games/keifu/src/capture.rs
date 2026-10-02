@@ -9,7 +9,8 @@
 //! to — and W4's: Brannoc held over "Grave goods" beside Garrick, the card
 //! previewing them both with his sheet in the dock; the quest sheet once both are
 //! seated; the staged worst case and its sheet. Then the sheet dock's own: idle,
-//! holding the help, and Garrick's sheet scrolled to its end.
+//! holding the help over year 1's full board, and Garrick's sheet scrolled to its end;
+//! and W5's staged ghost: "Lay Garrick's ghost" on a year-2 board.
 
 use std::path::{Path, PathBuf};
 
@@ -58,6 +59,7 @@ pub fn capture_all(checks: &mut Checks) -> Vec<String> {
         (&["w4-worst", "q0"][..], "keifu-w4-worst-sheet.png"),
         (&[][..], "keifu-dock-idle.png"),
         (&["Garrick", "end"][..], "keifu-dock-scrolled.png"),
+        (&["w5-ghost"][..], "keifu-w5-ghost.png"),
     ]
     .into_iter()
     .enumerate()
@@ -75,6 +77,8 @@ pub fn capture_all(checks: &mut Checks) -> Vec<String> {
                 crate::w4::stage_worst(&mut sim);
             } else if *name == "end" {
                 crate::verify::scroll_dock(&mut sim, -100.0);
+            } else if *name == "w5-ghost" {
+                crate::w5::stage_ghost_board(&mut sim);
             } else if *name == "q0" {
                 point_at(&mut sim, Target::Quest(0), false);
             } else if *name == "w4-sheet" {

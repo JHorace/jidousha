@@ -111,11 +111,7 @@ pub fn check_oracle(checks: &mut Checks) -> (String, Vec<String>) {
         let (garrick, brannoc) = (hero_named(&sim, "Garrick"), hero_named(&sim, "Brannoc"));
         let title = {
             let house = sim.world().resource::<House>();
-            let content = crate::verify::content_of(&sim);
-            house
-                .board
-                .first()
-                .map(|p| content.quest_templates[p.quest.template].title.clone())
+            house.board.first().map(|p| p.quest.title.clone())
         };
         checks.require(
             title.as_deref() == Some("Grave goods"),
@@ -141,10 +137,19 @@ pub fn check_oracle(checks: &mut Checks) -> (String, Vec<String>) {
             .and_then(|l| l.strip_prefix("Needs Might "))
             .and_then(|n| n.parse::<i32>().ok());
         let stored = sim.world().resource::<House>().board[0].quest.demand;
+        // MODULES.md W4: "9, 10 or 11 (lower only if the board was eased)" — so the
+        // demand plus whatever easing took off this card is 9, 10 or 11.
+        let eased = sim
+            .world()
+            .resource::<House>()
+            .board_report
+            .as_ref()
+            .map_or(0, |r| r.eased[0]);
         checks.require(
-            demand.is_some_and(|d| (9..=11).contains(&d)) && demand == Some(stored),
-            "W4 oracle: the card says \"Needs Might\" with a demand of 9, 10 or 11",
-            format!("seed {seed:#x}: {needs:?}, quest demand {stored}"),
+            demand.is_some_and(|d| (9..=11).contains(&(d + eased))) && demand == Some(stored),
+            "W4 oracle: the card says \"Needs Might\" with a demand of 9, 10 or 11, lower only \
+             if the board was eased",
+            format!("seed {seed:#x}: {needs:?}, quest demand {stored}, eased {eased}"),
         );
         checks.require(
             lines.iter().any(|l| l == W4_YOU_BRING),

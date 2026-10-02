@@ -168,35 +168,35 @@
 - between(rng, -DEMAND_WOBBLE, DEMAND_WOBBLE)
 + between(rng, -DEMAND_WOBBLE, 0)
 
-### Q4 demand from the calm seats
+### Q4 demand from the calm seats (re-cut s5: the formula moved into stakes)
 @ src/quest.rs
-- base_demand(seats, t.danger, trouble, year) + between
-+ base_demand(calm_seats, t.danger, trouble, year) + between
+- demand: base_demand(seats, calm_danger, trouble, year),
++ demand: base_demand(calm_seats, calm_danger, trouble, year),
 
-### Q5 demand from the raised danger
+### Q5 demand from the raised danger (re-cut s5)
 @ src/quest.rs
-- base_demand(seats, t.danger, trouble, year) + between
-+ base_demand(seats, (t.danger + trouble).min(DANGER_LIMIT), trouble, year) + between
+- demand: base_demand(seats, calm_danger, trouble, year),
++ demand: base_demand(seats, (calm_danger + trouble).min(DANGER_LIMIT), trouble, year),
 
 ### Q6 the year steps from year 0
 @ src/quest.rs
 - + (year - 1) / YEARS_PER_DEMAND_STEP)
 + + year / YEARS_PER_DEMAND_STEP)
 
-### Q7 danger uncapped
+### Q7 danger uncapped (re-cut s5)
 @ src/quest.rs
-- danger: (t.danger + trouble).min(DANGER_LIMIT),
-+ danger: t.danger + trouble,
+- danger: (calm_danger + trouble).min(DANGER_LIMIT),
++ danger: calm_danger + trouble,
 
-### Q8 renown capped
+### Q8 renown capped (re-cut s5)
 @ src/quest.rs
-- renown: t.danger + trouble,
-+ renown: (t.danger + trouble).min(DANGER_LIMIT),
+- renown: calm_danger + trouble,
++ renown: (calm_danger + trouble).min(DANGER_LIMIT),
 
-### Q9 the trouble is not recorded
+### Q9 the trouble is not recorded (re-cut s5)
 @ src/quest.rs
--         demand,⏎        trouble,⏎
-+         demand,⏎        trouble: 0,⏎
+- demand: base_demand(seats, calm_danger, trouble, year),⏎        trouble,⏎
++ demand: base_demand(seats, calm_danger, trouble, year),⏎        trouble: 0,⏎
 
 ### Q10 trouble 1 costs nothing more
 @ src/quest.rs
@@ -223,20 +223,20 @@
 -         tags: t.tags.clone(),⏎
 +         tags: Vec::new(),⏎
 
-### B1 the board is posted in year 2
-@ src/board.rs
-- if self.calendar.current_year() != 1 {
-+ if self.calendar.current_year() != 2 {
+### B1 the opening quests are forced in year 2 (re-cut s5: every year has a board now)
+@ src/generation.rs
+- if year == 1 {
++ if year == 2 {
 
-### B2 the board in reverse place order
-@ src/board.rs
-- self.board.sort_by_key(|posted| posted.quest.place.index());
-+ self.board.sort_by_key(|posted| std::cmp::Reverse(posted.quest.place.index()));
+### B2 the board in reverse place order (re-cut s5)
+@ src/generation.rs
+- order.sort_by_key(|&at| quests[at].place.index());
++ order.sort_by_key(|&at| std::cmp::Reverse(quests[at].place.index()));
 
-### B3 the board ignores its places trouble
-@ src/board.rs
-- let trouble = self.places[place.index()].trouble;
-+ let trouble = 0;
+### B3 the board ignores its places trouble (re-cut s5)
+@ src/generation.rs
+- let trouble = |place: Place| house.places[place.index()].trouble;
++ let trouble = |_: Place| 0;
 
 ### B4 every quest has two seats
 @ src/board.rs
@@ -348,14 +348,14 @@
 - fmt(&words[W::QuestCardRenown], &[&q.renown.to_string()])
 + fmt(&words[W::QuestCardRenown], &[&q.danger.to_string()])
 
-### K12 the dream line ignores the party
+### K12 the dream line ignores the party (re-cut s5)
 @ src/quest_card.rs
-- dream: dreamers_line(content, heroes, q.facts(), party),
-+ dream: dreamers_line(content, heroes, q.facts(), &[]),
+- Source::Template(_) => dreamers_line(content, heroes, q.facts(), party),
++ Source::Template(_) => dreamers_line(content, heroes, q.facts(), &[]),
 
-### S1 no premise
+### S1 no premise (re-cut s5)
 @ src/quest_sheet.rs
-- line(Ink::Body, template.premise.clone(), None),
+- line(Ink::Body, q.premise.clone(), None),
 + line(Ink::Body, String::from("-"), None),
 
 ### S2 never fewer seats

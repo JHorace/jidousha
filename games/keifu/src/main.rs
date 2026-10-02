@@ -1,6 +1,6 @@
 //! Keifu (系譜): a port of Lineage to Jidousha. Session 1 built modules W0 and W1;
 //! session 2 built W2 and gave the cast its sprites; session 3 built W3; session 4
-//! builds W4.
+//! built W4; session 5 builds W5.
 //!
 //! W0 is the foundation: the content in `spec/content/` loaded and validated, the
 //! lore tables, the calendar and the Door countdown, the randomness primitives
@@ -16,8 +16,11 @@
 //! rules a drop obeys (`board`), the 36-pair forecast (`forecast`), the power
 //! breakdown line by line (`power_lines`), the quest card and sheet as information
 //! (`quest_card`, `quest_sheet`, drawn by `board_view`), and the drag (`pointer`).
-//! Year 1's board is a scaffold W5's generation replaces (`House::post_board`).
-//! Nothing resolves a quest until W6.
+//! W5 is board generation: planning, the reading of likely parties over ordered
+//! pairs, the score and the sixteen-attempt loop with its welcome rule, easing,
+//! template memory and place order (`generation`, `reading`, `easing`), and the
+//! first ghost's quest (`ghost`). Every summer's board is generated; nothing
+//! resolves a quest until W6, and nothing turns the year until W8.
 //!
 //! What the player can do in this build: point at a hero to read their sheet,
 //! point at a quest to read its sheet and its place's history — both open in the
@@ -52,11 +55,15 @@ mod dock_checks;
 mod dock_lines;
 mod dream;
 mod dream_lore;
+mod easing;
 mod family;
 mod fear;
 mod floors;
+mod floors_w5;
 mod forecast;
 mod foundations;
+mod generation;
+mod ghost;
 mod grief;
 mod hero;
 mod house;
@@ -74,6 +81,7 @@ mod power_lines;
 mod quest;
 mod quest_card;
 mod quest_sheet;
+mod reading;
 mod rivals;
 mod screen;
 mod scripted;
@@ -89,6 +97,8 @@ mod w2;
 mod w3;
 mod w4;
 mod w4_rules;
+mod w5;
+mod w5_shape;
 mod witness;
 mod words;
 
