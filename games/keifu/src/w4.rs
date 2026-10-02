@@ -83,7 +83,9 @@ pub fn away(sim: &mut jidousha::prelude::HeadlessSim) {
 }
 
 /// Hold Brannoc over "Grave goods" with Garrick seated, and stop there: the
-/// mid-drag picture's stage.
+/// mid-drag picture's stage. He is held over the card's blank corner beside its
+/// seats, so the hand covers neither the tile that previews him nor any of the
+/// card's type; a card's body lands him on its first free seat.
 pub fn stage_mid_drag(sim: &mut jidousha::prelude::HeadlessSim) {
     let (garrick, brannoc) = (hero_named(sim, "Garrick"), hero_named(sim, "Brannoc"));
     let mut mouse = Pointer::mouse();
@@ -91,10 +93,12 @@ pub fn stage_mid_drag(sim: &mut jidousha::prelude::HeadlessSim) {
     let seat = center_of(sim, Target::Seat(Slot::Quest { quest: 0, seat: 0 }));
     drag(sim, &mut mouse, from, seat);
     let from = center_of(sim, Target::Hero(brannoc));
+    let card = crate::board_view::quest_rect(0);
+    let seats = center_of(sim, Target::Seat(Slot::Quest { quest: 0, seat: 1 }));
     mouse.press(sim, from);
     mouse.hold_at(
         sim,
-        crate::board_view::quest_rect(0).center() + jidousha::prelude::Vec2::new(40.0, 10.0),
+        jidousha::prelude::Vec2::new(card.max.x - 44.0, seats.y),
     );
 }
 

@@ -24,13 +24,26 @@ pub const MIN_TEXT: f32 = 14.0;
 /// The gap kept between text and the edge of its panel.
 pub const PAD: f32 = 12.0;
 
-/// The camera every frame is drawn with.
+/// The camera every frame is drawn with, at the window the game opens at.
 pub fn camera() -> Camera {
     Camera {
         center: Vec2::new(PAGE_W * 0.5, PAGE_H * 0.5),
         height: PAGE_H,
         clear_color: ink::PAGE,
         ..Camera::default()
+    }
+}
+
+/// The camera for a surface of `viewport`: the whole page in view, centred, at the
+/// largest scale that fits. A surface wider than the page's shape shows it at full
+/// height with the page colour beside it; a narrower one (a 4:3 browser) shows it
+/// at full width with the page colour above and below, where a fixed height would
+/// cut the household and the sheet dock off its two sides.
+pub fn fitted(viewport: PhysicalSize) -> Camera {
+    Camera {
+        height: PAGE_H.max(PAGE_W / viewport.aspect()),
+        viewport,
+        ..camera()
     }
 }
 
@@ -97,6 +110,8 @@ pub enum Target {
     OpenFamily,
     /// "Back to the house".
     CloseFamily,
+    /// The sheet dock: resting on it keeps its sheet open, pressing in it grabs it to scroll.
+    Dock,
 }
 
 /// A hero in hand: picked up from a seat and not yet released.
@@ -123,6 +138,34 @@ pub struct UiState {
     pub pointing_quest: Option<usize>,
     /// The hero in hand, if a drag is under way.
     pub drag: Option<Drag>,
+    /// The first line the sheet dock shows: how far its sheet is scrolled.
+    pub dock_first: usize,
+    /// Wheel travel not yet a whole line, carried to the next tick.
+    pub dock_wheel: f32,
+    /// The dock held by the pointer to scroll it, if it is.
+    pub dock_grab: Option<DockGrab>,
+}
+
+/// The dock held to scroll it: where the press was, and the line shown first then.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DockGrab {
+    /// The press, in world units.
+    pub y: f32,
+    /// `UiState::dock_first` at the press.
+    pub first: usize,
+}
+
+/// How far the sheet in the dock is scrolled, as the page drew it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DockView {
+    /// The first line drawn.
+    pub first: usize,
+    /// How many lines, from `first`, were drawn whole.
+    pub shown: usize,
+    /// The lines the sheet has.
+    pub total: usize,
+    /// The largest `first` there is: past it the dock would show empty space.
+    pub max_first: usize,
 }
 
 impl UiState {
@@ -150,6 +193,8 @@ pub struct Row {
     pub panel: Rect,
     /// Which logical line it is part of: the rows one wrapped line became share it.
     pub logical: usize,
+    /// For a row in the sheet dock, which line of the open sheet it sets.
+    pub dock_line: Option<usize>,
 }
 
 impl Row {
@@ -196,6 +241,8 @@ pub struct Page {
     pub figures: Vec<FigureMark>,
     /// Hit targets, front first.
     pub targets: Vec<(Rect, Target)>,
+    /// The sheet dock's scroll, as drawn.
+    pub dock: DockView,
     /// Logical lines begun so far.
     lines_begun: usize,
 }
@@ -227,6 +274,7 @@ impl Page {
     ) {
         self.rows.push(Row {
             logical: self.lines_begun,
+            dock_line: None,
             at,
             text: text.into(),
             style: TextStyle {

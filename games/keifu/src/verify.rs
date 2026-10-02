@@ -21,9 +21,12 @@
 //!    sheet's §6 lines — then the drags that do not seat, W4's rules, and W2's
 //!    and W3's oracles graduated onto the real card (`w4.rs`, `w4_rules.rs`).
 //! 6. **The W0 machinery**: calendar, text conventions, pools, bags (`foundations.rs`).
-//! 7. **Readability floors** over every surface this build has (`floors.rs`).
-//! 8. **The cast's sprites**: every role imported, every card its role's texture (`cast.rs`).
-//! 9. **A picture** of each oracle's screen (`capture.rs`).
+//! 7. **Readability floors** over every surface this build has, every page of a
+//!    sheet longer than the dock, at the native window and two web canvases (`floors.rs`).
+//! 8. **The sheet dock** as the player works it: resting, scrolling, a new subject,
+//!    the hero in hand, a drop on it (`dock_checks.rs`).
+//! 9. **The cast's sprites**: every role imported, every card its role's texture (`cast.rs`).
+//! 10. **A picture** of each oracle's screen (`capture.rs`).
 
 use std::process::ExitCode;
 
@@ -155,6 +158,82 @@ pub fn point_at(sim: &mut HeadlessSim, target: Target, click: bool) {
     point(sim, rect.center(), click);
 }
 
+/// Turn the wheel `lines` with the pointer resting on the sheet dock, for one tick:
+/// negative is toward the player, down the sheet.
+pub fn scroll_dock(sim: &mut HeadlessSim, lines: f32) {
+    use jidousha::testing::{InputEvent, SnapshotBuilder};
+    let mut events = SnapshotBuilder::new();
+    events.record(InputEvent::PointerMoved {
+        id: PointerId::PRIMARY,
+        screen: camera().world_to_screen(crate::summer::SHEET.center()),
+    });
+    events.record(InputEvent::Scrolled {
+        id: PointerId::PRIMARY,
+        lines,
+    });
+    sim.world_mut()
+        .insert_resource(Input::new(events.first_tick_snapshot()));
+    sim.tick();
+    sim.world_mut()
+        .insert_resource(Input::new(InputSnapshot::new()));
+}
+
+/// The open sheet, paged through the dock from where it is to its end by the wheel,
+/// a dock's worth of lines a turn: each page as the game reads it, and its frame.
+/// A page shows whole lines only; the last page can repeat lines from the one
+/// before it, where the scroll stops at the sheet's end (`dock_read` takes each line
+/// once).
+pub fn dock_pages(sim: &mut HeadlessSim, recorder: &mut FrameRecorder) -> Vec<(Page, FrameRecord)> {
+    let mut pages = Vec::new();
+    loop {
+        let record = frame(recorder, sim);
+        let page = page_of(sim);
+        let view = page.dock;
+        pages.push((page, record));
+        if view.first + view.shown >= view.total || pages.len() > view.total {
+            return pages;
+        }
+        scroll_dock(sim, -(view.shown as f32));
+    }
+}
+
+/// One line of the dock's sheet, as paged through: what it says, the page it was
+/// drawn on, and its rows there.
+pub struct DockLine {
+    /// The logical line.
+    pub text: String,
+    /// Which page of `dock_pages`.
+    pub page: usize,
+    /// Its rows on that page.
+    pub rows: Vec<usize>,
+}
+
+/// The sheet's lines across the pages, in order, each once: on each page, the
+/// logical lines set in the dock for sheet lines no earlier page showed.
+pub fn dock_read(pages: &[(Page, FrameRecord)]) -> Vec<DockLine> {
+    let mut read = Vec::new();
+    let mut unseen = 0;
+    for (index, (page, _)) in pages.iter().enumerate() {
+        let mut next = unseen;
+        for (text, rows) in page.logical_lines() {
+            let Some(line) = page.rows[rows[0]].dock_line else {
+                continue;
+            };
+            if line < unseen {
+                continue;
+            }
+            next = next.max(line + 1);
+            read.push(DockLine {
+                text,
+                page: index,
+                rows,
+            });
+        }
+        unseen = next;
+    }
+    read
+}
+
 /// The id of the founding hero named `name`.
 pub fn hero_named(sim: &HeadlessSim, name: &str) -> usize {
     let house = sim.world().resource::<House>();
@@ -228,7 +307,8 @@ pub fn run() -> ExitCode {
     summary.push(crate::sessions::check_seeds(&mut checks, &content));
     summary.push(crate::sessions::check_staged_sheets(&mut checks));
     summary.push(crate::cast::check_art(&mut checks, &mut recorder));
-    summary.push(crate::floors::check(&mut checks, &mut recorder));
+    summary.push(crate::dock_checks::check(&mut checks));
+    summary.extend(crate::floors::check(&mut checks));
     let Some(garrick_frame) = garrick_frame else {
         fail("no frame of Garrick's sheet was recorded", "SEEDS is empty");
     };

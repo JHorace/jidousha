@@ -1,28 +1,67 @@
-//! Readability floors over every surface this build has.
+//! Readability floors over every surface this build has, at every size it is shown at.
 //!
 //! The floors are the ones `crates/jidousha/examples/text` asserts: nothing set
 //! below the minimum size, no row outside its panel, no two rows across each
 //! other, nothing the built-in face cannot draw — all against measured extents.
-//! Plus the camera floor: nothing drawn off screen, with the margin printed.
+//! Plus the camera floor: nothing drawn off screen, with the margin printed. Plus
+//! the sheet dock's: nothing laid under it, its lines inside its margin and clear of
+//! its scrollbar, a scrollbar whenever a sheet is longer than the dock, and every
+//! line of such a sheet reached by scrolling — each page judged like a surface.
 //! Surfaces: the summer screen with nobody pointed at and with each hero's sheet,
 //! and the family screen with nobody pointed at and with each node's remembrance;
 //! then W3's settled and blessed sheets, staged; then W4's board — the hand
 //! mid-drag, seated cards, quest sheets and history panels, and a staged worst case.
+//! All of it at the window the game opens at and at two web canvases (`SIZES`).
 
+use jidousha::prelude::{Camera, PhysicalSize, Rect};
 use jidousha::testing::{BackendTextureId, FrameRecord, FrameRecorder};
 
 use crate::checks::Checks;
 use crate::house::House;
-use crate::screen::{MIN_TEXT, Page, Target, UiState, camera, ink, layers};
-use crate::verify::{page_of, point_at, session, set_ui};
+use crate::screen::{MIN_TEXT, Page, Target, UiState, WINDOW, camera, fitted, ink, layers};
+use crate::summer::SHEET;
+use crate::verify::{page_of, point_at, scroll_dock, session, set_ui};
 
-/// The surfaces judged, and the smallest clearance seen.
+/// The sizes every surface is judged at: the window the game opens at; the canvas
+/// `tools/serve-web keifu --check`'s 640x480 browser gives the page (measured from
+/// the page's DOM, 2026-10-02: the header and the control strip take the rest); and
+/// a 4:3 window, narrower than the page, where the camera fits the width.
+pub const SIZES: [(&str, PhysicalSize); 3] = [
+    ("native 1280x720", WINDOW),
+    ("web 640x329", PhysicalSize::new(640, 329)),
+    ("web 1024x768", PhysicalSize::new(1024, 768)),
+];
+
+/// The surfaces judged at one size, and the smallest clearance seen.
 struct Tally {
+    size: PhysicalSize,
     surfaces: usize,
+    pages: usize,
     rows: usize,
     smallest: f32,
     clearance: f32,
     font: BackendTextureId,
+}
+
+impl Tally {
+    /// The camera this size is drawn with.
+    fn camera(&self) -> Camera {
+        fitted(self.size)
+    }
+}
+
+/// Record a frame at the tally's size: the camera fitted to it for the draw, and
+/// the game's own camera back after, so the scripted pointer keeps meaning what it
+/// says.
+fn frame_at(
+    recorder: &mut FrameRecorder,
+    sim: &mut jidousha::prelude::HeadlessSim,
+    size: PhysicalSize,
+) -> FrameRecord {
+    *sim.world_mut().resource_mut::<Camera>() = fitted(size);
+    let record = crate::verify::frame(recorder, sim);
+    *sim.world_mut().resource_mut::<Camera>() = camera();
+    record
 }
 
 fn judge(
@@ -64,35 +103,42 @@ fn judge(
             format!("{name}: {:?}", row.text),
         );
     }
-    // The sheet's two columns keep a gutter: nothing in the left column reaches
-    // within half a pad of the panel's midline.
-    let sheet = crate::summer::SHEET;
-    let midline = sheet.center().x;
-    let two_columns = rows.iter().any(|r| r.panel == sheet && r.at.x >= midline);
-    for row in rows.iter().filter(|r| two_columns && r.panel == sheet) {
+    // The dock: its lines inside its margin and clear of the scrollbar's lane;
+    // nothing else's target under it; a scrollbar whenever its sheet is longer.
+    let dock_text = crate::dock::text_rect();
+    for row in rows.iter().filter(|r| SHEET.contains_rect(r.panel)) {
         checks.require(
-            row.bounds().max.x <= sheet.max.x - crate::screen::PAD * 0.5,
-            "the sheet's right column runs into the panel's edge",
+            dock_text.contains_rect(row.bounds()),
+            "a line in the sheet dock runs into its margin or under its scrollbar",
             format!(
-                "{name}: {:?} ends at {:.1}, panel edge {:.1}",
+                "{name}: {:?} measures {:?}, the dock sets type in {dock_text:?}",
                 row.text,
-                row.bounds().max.x,
-                sheet.max.x
+                row.bounds()
             ),
         );
     }
-    for row in rows
-        .iter()
-        .filter(|r| two_columns && r.panel == sheet && r.at.x < midline)
-    {
+    if !overlay {
+        for (rect, target) in page.targets.iter().filter(|(_, t)| *t != Target::Dock) {
+            checks.require(
+                !rect.overlaps(SHEET),
+                "something the pointer can reach lies under the sheet dock",
+                format!("{name}: {target:?} at {rect:?}, the dock {SHEET:?}"),
+            );
+        }
+        let lane = crate::dock::lane();
+        let thumb = page
+            .shapes
+            .iter()
+            .any(|s| s.color == ink::NOTE && lane.contains_rect(s.rect));
         checks.require(
-            row.bounds().max.x <= midline - crate::screen::PAD * 0.5,
-            "the sheet's left column runs into its gutter",
-            format!(
-                "{name}: {:?} ends at {:.1}, midline {midline:.1}",
-                row.text,
-                row.bounds().max.x
-            ),
+            thumb == (page.dock.max_first > 0),
+            "a sheet longer than the dock shows no scrollbar, or one that fits shows one",
+            format!("{name}: thumb drawn {thumb}, dock {:?}", page.dock),
+        );
+        checks.require(
+            page.dock.shown > 0 && page.dock.first <= page.dock.max_first,
+            "the dock draws none of its sheet, or is scrolled past its end",
+            format!("{name}: {:?}", page.dock),
         );
     }
     for (index, row) in rows.iter().enumerate() {
@@ -124,7 +170,7 @@ fn judge(
             page.links.len()
         ),
     );
-    let view = camera().visible_bounds();
+    let view = tally.camera().visible_bounds();
     for quad in frame.quads() {
         let bounds = quad.bounds();
         checks.require(
@@ -148,24 +194,116 @@ fn judge(
     );
 }
 
-/// Judge every surface.
-pub fn check(checks: &mut Checks, recorder: &mut FrameRecorder) -> String {
-    let mut tally = Tally {
-        surfaces: 0,
-        rows: 0,
-        smallest: f32::MAX,
-        clearance: f32::MAX,
-        font: recorder.font_texture(),
+/// Judge the surface `sim` shows now; if its sheet is longer than the dock, page
+/// through it with the wheel and judge every page, then require that every line of
+/// the sheet was on a page. Leaves the dock scrolled back to the top.
+fn look(
+    checks: &mut Checks,
+    tally: &mut Tally,
+    recorder: &mut FrameRecorder,
+    sim: &mut jidousha::prelude::HeadlessSim,
+    name: &str,
+    overlay: bool,
+) {
+    let frame = frame_at(recorder, sim, tally.size);
+    let page = page_of(sim);
+    judge(checks, tally, name, &page, &frame, overlay);
+    if overlay || page.dock.max_first == 0 {
+        return;
+    }
+    let total = page.dock.total;
+    let mut seen = vec![false; total];
+    let mut mark = |page: &Page| {
+        for line in page.rows.iter().filter_map(|row| row.dock_line) {
+            if let Some(seen) = seen.get_mut(line) {
+                *seen = true;
+            }
+        }
     };
+    mark(&page);
+    let mut view = page.dock;
+    let mut turns = 0;
+    while view.first + view.shown < total && turns < total {
+        turns += 1;
+        scroll_dock(sim, -(view.shown as f32));
+        let frame = frame_at(recorder, sim, tally.size);
+        let page = page_of(sim);
+        judge(
+            checks,
+            tally,
+            &format!("{name}, scrolled {turns}"),
+            &page,
+            &frame,
+            false,
+        );
+        tally.surfaces -= 1;
+        tally.pages += 1;
+        mark(&page);
+        checks.require(
+            page.dock.first > view.first,
+            "the wheel does not move a sheet longer than the dock",
+            format!("{name}: {:?} after {view:?}", page.dock),
+        );
+        view = page.dock;
+    }
+    let missed: Vec<usize> = (0..total).filter(|&line| !seen[line]).collect();
+    checks.require(
+        missed.is_empty() && view.first == view.max_first,
+        "scrolling the dock does not reach every line of its sheet",
+        format!("{name}: lines {missed:?} of {total} never shown; ended at {view:?}"),
+    );
+    scroll_dock(sim, total as f32);
+    checks.require(
+        page_of(sim).dock.first == 0,
+        "the wheel does not bring a scrolled sheet back to its top",
+        format!("{name}: {:?}", page_of(sim).dock),
+    );
+}
+
+/// Judge every surface at every size; a summary line per size.
+pub fn check(checks: &mut Checks) -> Vec<String> {
+    SIZES
+        .iter()
+        .map(|(label, size)| {
+            let mut recorder = FrameRecorder::new(*size);
+            let mut tally = Tally {
+                size: *size,
+                surfaces: 0,
+                pages: 0,
+                rows: 0,
+                smallest: f32::MAX,
+                clearance: f32::MAX,
+                font: recorder.font_texture(),
+            };
+            battery(checks, &mut tally, &mut recorder, label);
+            let camera = tally.camera();
+            let pixels = tally.smallest * size.height as f32 / camera.height;
+            format!(
+                "floors, {label}: {} surfaces and {} scrolled pages, {} rows, smallest type {:.0} (floor {MIN_TEXT:.0}; {pixels:.1} px on this surface), closest type to the edge {:.2}",
+                tally.surfaces, tally.pages, tally.rows, tally.smallest, tally.clearance
+            )
+        })
+        .collect()
+}
+
+/// Every surface, at the tally's size.
+fn battery(checks: &mut Checks, tally: &mut Tally, recorder: &mut FrameRecorder, label: &str) {
     let mut sim = session(crate::verify::SEEDS[0]);
-    let frame = crate::verify::frame(recorder, &mut sim);
-    judge(
+    look(
         checks,
-        &mut tally,
+        tally,
+        recorder,
+        &mut sim,
         "summer, nobody pointed at",
-        &page_of(&sim),
-        &frame,
         false,
+    );
+    // The idle dock holds the help, and nothing else.
+    let help = crate::verify::content_of(&sim).words[crate::words::W::SummerHelp].to_owned();
+    let idle = crate::scripted::lines_in(&page_of(&sim), SHEET);
+    checks.require(
+        idle == [help],
+        "the idle dock does not hold the help",
+        format!("{label}: the dock reads {idle:?}"),
     );
     let seated: Vec<usize> = {
         let house = sim.world().resource::<House>();
@@ -179,32 +317,29 @@ pub fn check(checks: &mut Checks, recorder: &mut FrameRecorder) -> String {
     };
     for id in &seated {
         point_at(&mut sim, Target::Hero(*id), false);
-        let frame = crate::verify::frame(recorder, &mut sim);
         let name = format!(
             "summer, {}'s sheet",
             sim.world().resource::<House>().heroes[*id].name
         );
-        judge(checks, &mut tally, &name, &page_of(&sim), &frame, false);
+        look(checks, tally, recorder, &mut sim, &name, false);
     }
     set_ui(&mut sim, UiState::family());
-    let frame = crate::verify::frame(recorder, &mut sim);
-    judge(
+    look(
         checks,
-        &mut tally,
+        tally,
+        recorder,
+        &mut sim,
         "family, nobody pointed at",
-        &page_of(&sim),
-        &frame,
         true,
     );
     let everyone = sim.world().resource::<House>().heroes.len();
     for id in 0..everyone {
         point_at(&mut sim, Target::Hero(id), false);
-        let frame = crate::verify::frame(recorder, &mut sim);
         let name = format!(
             "family, {}",
             sim.world().resource::<House>().heroes[id].name
         );
-        judge(checks, &mut tally, &name, &page_of(&sim), &frame, true);
+        look(checks, tally, recorder, &mut sim, &name, true);
     }
     // W3's sheets: Garrick settled, blessed and holding a forged blade; Maren with
     // Thornfall and the blessing; Pip blessed; and the family's word for Garrick.
@@ -217,34 +352,28 @@ pub fn check(checks: &mut Checks, recorder: &mut FrameRecorder) -> String {
     let staged = ["Garrick", "Maren", "Pip"].map(|name| crate::verify::hero_named(&sim, name));
     for id in staged {
         point_at(&mut sim, Target::Hero(id), false);
-        let frame = crate::verify::frame(recorder, &mut sim);
         let name = format!(
             "W3, {}'s sheet",
             sim.world().resource::<House>().heroes[id].name
         );
-        judge(checks, &mut tally, &name, &page_of(&sim), &frame, false);
+        look(checks, tally, recorder, &mut sim, &name, false);
     }
     set_ui(&mut sim, UiState::family());
     point_at(&mut sim, Target::Hero(staged[0]), false);
-    let frame = crate::verify::frame(recorder, &mut sim);
-    judge(
+    look(
         checks,
-        &mut tally,
+        tally,
+        recorder,
+        &mut sim,
         "W3, the family on Garrick",
-        &page_of(&sim),
-        &frame,
         true,
     );
-    let w4 = w4_surfaces(checks, &mut tally, recorder);
+    let w4 = w4_surfaces(checks, tally, recorder);
     checks.require(
         tally.surfaces == 2 + seated.len() + everyone + staged.len() + 1 + w4,
         "a surface was not judged",
-        format!("{} surfaces", tally.surfaces),
+        format!("{label}: {} surfaces", tally.surfaces),
     );
-    format!(
-        "floors: {} surfaces, {} rows, smallest type {:.0} (floor {MIN_TEXT:.0}), closest type to the edge {:.2} px",
-        tally.surfaces, tally.rows, tally.smallest, tally.clearance
-    )
 }
 
 /// W4's surfaces: the hand mid-drag; both cards seated; both quest sheets and their
@@ -255,62 +384,99 @@ fn w4_surfaces(checks: &mut Checks, tally: &mut Tally, recorder: &mut FrameRecor
     use crate::board::Slot;
     use crate::w4::{away, seat, stage_mid_drag};
     let before = tally.surfaces;
-    let mut judge_now = |checks: &mut Checks,
-                         tally: &mut Tally,
-                         sim: &mut jidousha::prelude::HeadlessSim,
-                         name: &str| {
-        let frame = crate::verify::frame(recorder, sim);
-        judge(checks, tally, name, &page_of(sim), &frame, false);
-    };
     let mut sim = session(crate::verify::SEEDS[0]);
     stage_mid_drag(&mut sim);
-    judge_now(
+    look(
         checks,
         tally,
+        recorder,
         &mut sim,
         "W4, Brannoc in hand over Grave goods",
+        false,
     );
+    mid_drag(checks, &sim);
     let mut sim = session(crate::verify::SEEDS[0]);
     seat(&mut sim, "Garrick", Slot::Quest { quest: 0, seat: 0 });
     seat(&mut sim, "Brannoc", Slot::Quest { quest: 0, seat: 1 });
     seat(&mut sim, "Maren", Slot::Quest { quest: 1, seat: 0 });
     seat(&mut sim, "Odo", Slot::Quest { quest: 1, seat: 1 });
     away(&mut sim);
-    judge_now(checks, tally, &mut sim, "W4, both cards seated");
+    look(
+        checks,
+        tally,
+        recorder,
+        &mut sim,
+        "W4, both cards seated",
+        false,
+    );
     for quest in 0..2 {
         point_at(&mut sim, Target::Quest(quest), false);
-        judge_now(
-            checks,
-            tally,
-            &mut sim,
-            &format!("W4, quest sheet {quest}, seated"),
-        );
+        let name = format!("W4, quest sheet {quest}, seated");
+        look(checks, tally, recorder, &mut sim, &name, false);
     }
     let mut sim = session(crate::verify::SEEDS[0]);
     point_at(&mut sim, Target::Quest(1), false);
-    judge_now(
+    look(
         checks,
         tally,
+        recorder,
         &mut sim,
         "W4, the bell's sheet, nobody going",
+        false,
     );
     // The worst case, staged on the session's own house.
     let mut sim = session(crate::verify::SEEDS[0]);
     crate::w4::stage_worst(&mut sim);
-    judge_now(
+    look(
         checks,
         tally,
+        recorder,
         &mut sim,
         "W4 staged, three on a troubled quest",
+        false,
     );
     for quest in 0..2 {
         point_at(&mut sim, Target::Quest(quest), false);
-        judge_now(
-            checks,
-            tally,
-            &mut sim,
-            &format!("W4 staged, quest sheet {quest}"),
-        );
+        let name = format!("W4 staged, quest sheet {quest}");
+        look(checks, tally, recorder, &mut sim, &name, false);
     }
     tally.surfaces - before
+}
+
+/// Mid-drag, the critical state: the hand, the card it is held over with its live
+/// "you bring", and the roster it was lifted from all show, and none is under the
+/// dock — which holds the held hero's sheet.
+fn mid_drag(checks: &mut Checks, sim: &jidousha::prelude::HeadlessSim) {
+    let page = page_of(sim);
+    let Some(drag) = sim.world().resource::<UiState>().drag else {
+        checks.require(false, "the mid-drag stage holds no one", String::new());
+        return;
+    };
+    let card = crate::board_view::quest_rect(0);
+    let hand = page
+        .shapes
+        .iter()
+        .find(|s| s.layer == layers::HAND)
+        .map(|s| s.rect);
+    let bring = page
+        .rows
+        .iter()
+        .find(|r| r.panel == card && r.text.starts_with("you bring"))
+        .map(|r| r.bounds());
+    let roster = crate::summer::card_rect(crate::summer::ROSTER_TOP, 0);
+    let clear = |rect: Option<Rect>| rect.is_some_and(|r| !r.overlaps(SHEET));
+    checks.require(
+        clear(hand) && clear(bring) && clear(Some(card)) && clear(Some(roster)),
+        "mid-drag, the hand, the card's live \"you bring\" or the roster is missing or under the dock",
+        format!("hand {hand:?}, \"you bring\" {bring:?}, card {card:?}, roster {roster:?}"),
+    );
+    let sheet = crate::scripted::lines_in(&page, SHEET);
+    let name = sim.world().resource::<House>().heroes[drag.hero]
+        .name
+        .clone();
+    checks.require(
+        sheet.first().is_some_and(|l| l.starts_with(&name)),
+        "mid-drag, the dock does not hold the sheet of the hero in hand",
+        format!("in hand {name}; the dock reads {:?}", sheet.first()),
+    );
 }

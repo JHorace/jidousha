@@ -1,0 +1,109 @@
+### K1 resting on the dock closes the sheet
+@ src/pointer.rs
+- if target == Some(Target::Dock) {
++ if false && target == Some(Target::Dock) {
+
+### K2 the wheel never scrolls
+@ src/pointer.rs
+- let travel = ui.dock_wheel + wheel;
++ let travel = ui.dock_wheel;
+
+### K3 the wheel scrolls the wrong way
+@ src/pointer.rs
+- ui.dock_first as f32 - whole
++ ui.dock_first as f32 + whole
+
+### K4 a grab never starts
+@ src/pointer.rs
+- _ if pressed && held && target == Some(Target::Dock) && next.drag.is_none() => {
++ _ if false && pressed && held && target == Some(Target::Dock) && next.drag.is_none() => {
+
+### K5 a new subject keeps the old scroll
+@ src/pointer.rs
+- next.dock_first = 0;
++ next.dock_first = ui.dock_first;
+
+### K6 the scroll runs past the sheet's end
+@ src/pointer.rs
+- next.dock_first = first.clamp(0.0, max_first as f32) as usize;
++ next.dock_first = first.max(0.0) as usize;
+
+### K7 the grab drags the wrong way
+@ src/pointer.rs
+- Some(grab) => grab.first as f32 + ((grab.y - at.y) / PITCH).round(),
++ Some(grab) => grab.first as f32 + ((at.y - grab.y) / PITCH).round(),
+
+### K8 the dock may scroll until only the last line shows
+@ src/dock.rs
+- let need = lines[index].height + below;
++ let need = lines[index].height;
+
+### K9 a line is drawn in part at the dock's foot
+@ src/dock.rs
+- if y + space + line.height > area.max.y {
++ if y + space > area.max.y {
+
+### K10 a long sheet shows no scrollbar
+@ src/dock.rs
+- if max_first > 0 {
++ if max_first > 1000 {
+
+### K11 the dock's rows do not say which sheet line they set
+@ src/dock.rs
+- row.dock_line = Some(index);
++ row.dock_line = None;
+
+### K12 mid-drag the dock shows the help, not the hero in hand
+@ src/dock.rs
+- (Some(drag), _, _) => Subject::Hero(drag.hero),
++ (Some(_), _, _) => Subject::Help,
+
+### K13 the board runs under the dock
+@ src/summer.rs
+- max: Vec2::new(SHEET.min.x - GUTTER, PAGE_H - 8.0),
++ max: Vec2::new(SHEET.min.x + 40.0, PAGE_H - 8.0),
+
+### K14 the idle dock holds the wrong words
+@ src/dock_lines.rs
+- &content.words[W::SummerHelp],
++ &content.words[W::SummerHousehold],
+
+### K15 a hero dropped on the dock is seated
+@ src/board.rs
+- Target::OpenFamily | Target::CloseFamily | Target::Dock => None,
++ Target::OpenFamily | Target::CloseFamily => None, Target::Dock => Some(Slot::Quest { quest: 0, seat: 0 }),
+
+### K16 the camera is not fitted to a narrow window
+@ src/screen.rs
+- height: PAGE_H.max(PAGE_W / viewport.aspect()),
++ height: PAGE_H,
+
+### K17 a card draws one dread pip at most
+@ src/summer.rs
+- for pip in 0..hero.fear.dread.min(DREAD_LIMIT) {
++ for pip in 0..hero.fear.dread.min(1) {
+
+### K18 the heirloom's heading row is a text row tall
+@ src/dock_lines.rs
+- height = HEIRLOOM_FIGURE;
++ height = PITCH;
+
+### K19 the dock's lines run under the scrollbar
+@ src/dock.rs
+- max: Vec2::new(SHEET.max.x - PAD - LANE, SHEET.max.y - PAD),
++ max: Vec2::new(SHEET.max.x - PAD, SHEET.max.y - PAD),
+
+### K20 the history panel is drawn over the sheet's last lines
+@ src/dock_lines.rs
+- space: if index == 0 { PAD } else { 0.0 },
++ space: if index == 0 { -40.0 } else { 0.0 },
+
+### K21 the quest card's odds sit on one row
+@ src/board_view.rs
+- let row = y + 18.0 + (index / 2) as f32 * PITCH;
++ let row = y + 18.0;
+
+### K22 the top bar's door lines share a row
+@ src/summer.rs
+- Vec2::new(LEFT_X, 41.0),
++ Vec2::new(LEFT_X, 25.0),
