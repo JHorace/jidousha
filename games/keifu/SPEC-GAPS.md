@@ -7,7 +7,7 @@ pass, which has the original and adjudicates every entry. Entries are never dele
 adjudicated one gets a **Resolved:** line.
 
 Session 1 (W0 + W1): 6 entries. Session 2 (W2): 6 entries, KG-7 to KG-12. Session 3 (W3):
-12 entries, KG-13 to KG-24.
+12 entries, KG-13 to KG-24. Session 4 (W4): 5 entries, KG-25 to KG-29.
 
 ---
 
@@ -296,3 +296,91 @@ Session 1 (W0 + W1): 6 entries. Session 2 (W2): 6 entries, KG-7 to KG-12. Sessio
 - **Port's choice:** the dreamer, as the title names them; since = the year it was left
   (`src/legacy.rs` `leave_legacy`).
 - **Question:** `lineage/legacy.jai:150-155`.
+
+---
+
+## KG-25 — which odds the card's four percentages are
+
+- **Spec says:** §5.4 the card shows "an odds bar and the four outcome percentages";
+  `ui.quest_card` has "Succeed %\%", "triumph %\%", "Setback %\%", "disaster %\%".
+  CONSTANTS §3's table ends in a column "Success or better (as shown)". §5.4's quest sheet
+  shows "each outcome with its percentage and consequence".
+- **Underdetermined:** whether the card's "Setback" is setback alone or setback or worse
+  (the table pins only "Succeed" as success or better), and whether the sheet's four are
+  each band alone. Rounding each band separately and rounding a sum differ (+1: success
+  alone 56%, triumph 17%, success or better 72%).
+- **Port's choice:** the card reads as two halves, each a sum over its side and then its
+  extreme alone: "Succeed" = percent(success + triumph), the table's "as shown" column;
+  "triumph" = percent(triumph); "Setback" = percent(setback + disaster); "disaster" =
+  percent(disaster) (`src/forecast.rs` `card_percentages`). The sheet prints each band
+  alone beside its consequence, and 0% for all four with nobody going (SPEC §6: an empty
+  party has all chances 0) (`src/quest_sheet.rs`). W4's oracle asserts the card against
+  the table at the card's margin; the "Setback" figure is the one this choice decides.
+- **Question:** what `lineage/quest-card.jai:107-112` passes to the four strings, and what
+  `:218-226` prints beside each consequence.
+
+## KG-26 — the power breakdown's arguments and numbers
+
+- **Spec says:** §6 lists the seven member lines, the floor, the bonds and the patrons; §5.4
+  "the full power breakdown (§6)". `ui.quest_sheet.power_line_*` give the strings:
+  `power_line_member` "%, % %" (name, aptitude title, value) has its arguments; "  carries %",
+  "  fears %", "  has conquered %", "  blessed: %" do not say what fills them; nothing says
+  how a line's number is shown, and `quest_sheet.you_bring` ("You bring") takes no argument.
+- **Underdetermined:** the four arguments, and where each line's number and the total go.
+- **Port's choice:** the heirloom's name ("  carries Thornfall"), the tag's `noun` ("  fears
+  deep water", "  has conquered the dark" — `content/README.md` calls `noun` "the lower-case
+  phrase used in sentences"), the blessing's title ("  blessed: Garrick's rest"). The member
+  line carries its number in its own text; every other line has its signed number in a
+  right-hand column, and "You bring" has the total there (`src/power_lines.rs`,
+  `src/board_view.rs`). The power is unchanged by any of this: `party_lines` asserts its
+  lines add up to `party_power`.
+- **Question:** `lineage/quest.jai:159-210` — the arguments of `:163,167,171,183` and how
+  the number of each line is printed.
+
+## KG-27 — a place's history before the house has quested there
+
+- **Spec says:** §5.4 the sheet ends with "the place's history (visits, triumphs, disasters,
+  and every hero who fell there with their fate telling)"; `quest_sheet.not_quested` is "The
+  house has not quested here yet." and `quest_sheet.history` "Quested here %: % in triumph, %
+  in disaster." (args: count words of visits, triumphs, disasters).
+- **Underdetermined:** whether the fallen are listed when there have been no visits — the
+  Drowned Coast took Elsbeth before the first year and has never been quested — and whether
+  triumphs and disasters are count words too.
+- **Port's choice:** "not quested here yet" when visits are 0, then the fallen whatever the
+  visits (the Coast reads "The house has not quested here yet." then "Elsbeth Thorne was lost
+  at the Drowned Coast."); triumphs and disasters as numerals, since only the visits'
+  argument says "count words" (`src/quest_sheet.rs` `place_history`).
+- **Question:** `lineage/quest-card.jai:230-240` — is the fallen loop inside the visits branch?
+
+## KG-28 — the drag: the hand's own seat, the card's body, and what the preview covers
+
+- **Spec says:** §5.3 a drop onto an empty slot moves, onto an occupied slot swaps,
+  "releasing anywhere else returns the hero to where they came from". §5.4 "while a hero is
+  being dragged over a quest card that has room and they would not refuse, the card's
+  forecast includes them".
+- **Underdetermined:** (a) whether the hero in hand still counts on the quest they were
+  lifted from; (b) what a release over a card with room, but not over one of its seats,
+  does — §5.4 previews them there and §5.3 would return them; (c) which seat the preview puts
+  them in, which orders the fear line; (d) whether "the forecast" means only "you bring" and
+  the odds, or the card's other party-derived lines too (the Dream: and Fear: lines, the
+  highlighted tags).
+- **Port's choice:** (a) the hand has left its seat: the quest it came from forecasts without
+  it until it is released (and over its own card it lands back in its own seat); (b) one
+  answer for the preview and the release, `House::landing`: a seat lands on that seat, a
+  seated hero's tile on their seat (a swap), a card's body on its first free seat — so a
+  card never previews a hero the release would send back (`src/board.rs`); (c) the hovered
+  empty seat, else the first free one; (d) the whole card reads the previewed party, so the
+  Fear: line and the tags light up for the hero in hand (`src/quest_card.rs`
+  `preview_seats`). A full card previews nothing, per "has room", though a release on a
+  seated hero there still swaps.
+- **Question:** `source/core/ui/slot-group.jai:13-59` and `lineage/quest-card.jai:31-46` —
+  is the card's body a drop target, and does the preview add the hero to the party the whole
+  card reads?
+
+## KG-29 — the glue between "No one is going." and "Room for N."
+
+- **Spec says:** §5.4 "No one is going. Room for N."; `quest_card.no_one` and
+  `quest_card.room_for` are two strings.
+- **Underdetermined:** whether they share a line, and with what between them.
+- **Port's choice:** one line, joined by a space, as §5.4 quotes it (`src/quest_card.rs`).
+- **Question:** `lineage/quest-card.jai:120-121`.

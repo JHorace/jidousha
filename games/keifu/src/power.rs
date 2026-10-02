@@ -1,9 +1,8 @@
 //! A party's power on a quest (SPEC §6), and the quest card's fear line (§5.4) —
 //! the two readings W2's oracle asks of the bonds and fears.
 //!
-//! W4 owns the quest model, the line-by-line breakdown and the forecast; it
-//! extends these functions rather than writing a second sum, so the card, the
-//! sheet and the roll keep reading one number.
+//! W4 extends them into the line-by-line breakdown the quest sheet prints
+//! (`power_lines.rs`), which asserts its lines add up to `party_power`.
 
 use crate::blessing::blessing_power;
 use crate::bonds::steadying_companion;

@@ -1,5 +1,6 @@
 //! Keifu (系譜): a port of Lineage to Jidousha. Session 1 built modules W0 and W1;
-//! session 2 built W2 and gave the cast its sprites; session 3 builds W3.
+//! session 2 built W2 and gave the cast its sprites; session 3 built W3; session 4
+//! builds W4.
 //!
 //! W0 is the foundation: the content in `spec/content/` loaded and validated, the
 //! lore tables, the calendar and the Door countdown, the randomness primitives
@@ -10,11 +11,18 @@
 //! the power sum and fear line its oracle reads (`power`). W3 is dreams and
 //! legacies: moments and their predicates (`moment`), witnessing and fulfilment
 //! (`witness`), dream calls (`calls`), legacies and the heir of the blood
-//! (`legacy`, `blessing`), and dream rivals (`rivals`). Nothing triggers W2's or
-//! W3's rules until quests, the hearth and the turning arrive (W4-W8).
+//! (`legacy`, `blessing`), and dream rivals (`rivals`). W4 is quests and the
+//! forecast: the quest model and its stakes (`quest`), the board's seats and the
+//! rules a drop obeys (`board`), the 36-pair forecast (`forecast`), the power
+//! breakdown line by line (`power_lines`), the quest card and sheet as information
+//! (`quest_card`, `quest_sheet`, drawn by `board_view`), and the drag (`pointer`).
+//! Year 1's board is a scaffold W5's generation replaces (`House::post_board`).
+//! Nothing resolves a quest until W6.
 //!
-//! What the player can do in this build: point at a hero to read their sheet, and
-//! open the family to see everyone who has lived. Nothing advances the year yet.
+//! What the player can do in this build: point at a hero to read their sheet,
+//! point at a quest to read its sheet and its place's history, drag heroes onto
+//! quests and watch the card's odds move while they are held, and open the family.
+//! Nothing advances the year yet.
 //!
 //! The spec (`spec/SPEC.md`, `spec/CONSTANTS.md`, `spec/content/`) is the only
 //! source of game behaviour; `SPEC-GAPS.md` lists every place it fell silent.
@@ -26,6 +34,8 @@
 
 mod art;
 mod blessing;
+mod board;
+mod board_view;
 mod bonds;
 mod calendar;
 mod calls;
@@ -41,6 +51,7 @@ mod dream_lore;
 mod family;
 mod fear;
 mod floors;
+mod forecast;
 mod foundations;
 mod grief;
 mod hero;
@@ -53,9 +64,15 @@ mod legacy_lore;
 mod lore;
 mod moment;
 mod oracles;
+mod pointer;
 mod power;
+mod power_lines;
+mod quest;
+mod quest_card;
+mod quest_sheet;
 mod rivals;
 mod screen;
+mod scripted;
 mod sessions;
 mod sheet;
 mod summer;
@@ -66,6 +83,8 @@ mod tree;
 mod verify;
 mod w2;
 mod w3;
+mod w4;
+mod w4_rules;
 mod witness;
 mod words;
 
@@ -75,7 +94,7 @@ use jidousha::prelude::*;
 
 use crate::content::Content;
 use crate::house::{House, RunSeed, draw_seed};
-use crate::screen::{Page, Target, UiState, camera, page};
+use crate::screen::{Page, UiState, camera, page};
 
 /// The engine seed a windowed run starts from when no `--seed` is given.
 ///
@@ -99,7 +118,7 @@ pub fn config(seed: u64) -> GameConfig {
 /// Every system, in order. The windowed run and every verify session build this.
 pub fn register(app: &mut App) {
     app.add_system(Startup, found_the_house);
-    app.add_system(Update, follow_the_pointer);
+    app.add_system(Update, pointer::follow_the_pointer);
     app.add_system(Draw, draw_the_page);
 }
 
@@ -151,7 +170,7 @@ fn found_the_house(world: &mut World) {
         None => draw_seed(world.resource_mut::<Rng>()),
     };
     world.insert_resource(Rng::from_seed(seed));
-    let house = match House::found(&content, seed) {
+    let house = match House::found(&content, seed, world.resource_mut::<Rng>()) {
         Ok(house) => house,
         Err(error) => panic!(
             "[keifu] the founding household could not be built\n  {error}\n  likely cause: \
@@ -179,34 +198,6 @@ pub fn read_the_page(world: &WorldView<'_>) -> Page {
         world.resource::<House>(),
         world.resource::<UiState>(),
     )
-}
-
-/// Point at a hero to read them; click a button to open or close the family.
-fn follow_the_pointer(world: &mut World) {
-    let Some(input) = world.find_resource::<Input>() else {
-        return;
-    };
-    let pointer = input.pointer();
-    let clicked = pointer.just_pressed(PointerButton::Primary);
-    let at = world.resource::<Camera>().screen_to_world(pointer.screen);
-    let target = read_the_page(&world.view()).target_at(at);
-    let ui = world.resource_mut::<UiState>();
-    ui.pointing = match target {
-        Some(Target::Hero(id)) => Some(id),
-        _ => None,
-    };
-    if clicked {
-        match target {
-            Some(Target::OpenFamily) => {
-                *ui = UiState {
-                    family_open: true,
-                    pointing: None,
-                }
-            }
-            Some(Target::CloseFamily) => *ui = UiState::default(),
-            _ => {}
-        }
-    }
 }
 
 /// Submit the page.

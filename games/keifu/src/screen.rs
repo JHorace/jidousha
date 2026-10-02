@@ -8,6 +8,7 @@
 
 use jidousha::prelude::*;
 
+use crate::board::Slot;
 use crate::content::Content;
 use crate::hero::HeroId;
 use crate::house::House;
@@ -47,6 +48,10 @@ pub mod layers {
     pub const OVERLAY_MARK: i16 = 4;
     /// The overlay's type.
     pub const OVERLAY_TEXT: i16 = 5;
+    /// A hero in hand, over everything on the summer screen.
+    pub const HAND: i16 = 6;
+    /// The figure in hand.
+    pub const HAND_MARK: i16 = 7;
 }
 
 /// The palette.
@@ -84,19 +89,50 @@ pub mod ink {
 pub enum Target {
     /// A hero's card (summer) or node (family).
     Hero(HeroId),
+    /// An empty seat: in the household, or on a quest.
+    Seat(Slot),
+    /// A quest card, by board slot.
+    Quest(usize),
     /// "The family".
     OpenFamily,
     /// "Back to the house".
     CloseFamily,
 }
 
+/// A hero in hand: picked up from a seat and not yet released.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Drag {
+    /// Who.
+    pub hero: HeroId,
+    /// The seat they were lifted from; a release over nothing returns them there.
+    pub from: Slot,
+    /// Where the pointer holds them, in world units.
+    pub at: Vec2,
+    /// What the pointer is over.
+    pub over: Option<Target>,
+}
+
 /// Which screen is up and what the pointer is on.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct UiState {
     /// The family overlay is open.
     pub family_open: bool,
     /// The hero under the pointer, on whichever screen is up.
     pub pointing: Option<HeroId>,
+    /// The quest card under the pointer, by board slot.
+    pub pointing_quest: Option<usize>,
+    /// The hero in hand, if a drag is under way.
+    pub drag: Option<Drag>,
+}
+
+impl UiState {
+    /// The family overlay open, nothing pointed at.
+    pub fn family() -> Self {
+        Self {
+            family_open: true,
+            ..Self::default()
+        }
+    }
 }
 
 impl Resource for UiState {}
@@ -246,12 +282,21 @@ impl Page {
     }
 }
 
-/// Break `text` into lines that fit `width` at `size`, at spaces.
+/// Break `text` into lines that fit `width` at `size`, at spaces. A leading
+/// indent (the power lines' "  carries %") is kept, on every line it wraps to.
 pub fn wrap(text: &str, width: f32, size: f32) -> Vec<String> {
     let style = TextStyle {
         size,
         ..TextStyle::default()
     };
+    let body = text.trim_start_matches(' ');
+    let indent = &text[..text.len() - body.len()];
+    if !indent.is_empty() {
+        return wrap(body, width - style.width_of(indent), size)
+            .into_iter()
+            .map(|line| format!("{indent}{line}"))
+            .collect();
+    }
     let mut lines = Vec::new();
     let mut current = String::new();
     for word in text.split(' ') {

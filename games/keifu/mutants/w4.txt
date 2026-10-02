@@ -1,0 +1,669 @@
+### C1 DICE_SIDES 6 -> 5
+@ src/constants.rs
+- pub const DICE_SIDES: i32 = 6;
++ pub const DICE_SIDES: i32 = 5;
+
+### C2 DICE_MIDPOINT 7 -> 6
+@ src/constants.rs
+- pub const DICE_MIDPOINT: i32 = 7;
++ pub const DICE_MIDPOINT: i32 = 6;
+
+### C3 TRIUMPH_MARGIN 4 -> 3
+@ src/constants.rs
+- pub const TRIUMPH_MARGIN: i32 = 4;
++ pub const TRIUMPH_MARGIN: i32 = 3;
+
+### C4 SETBACK_MARGIN 4 -> 5
+@ src/constants.rs
+- pub const SETBACK_MARGIN: i32 = 4;
++ pub const SETBACK_MARGIN: i32 = 5;
+
+### C6 TRIUMPH_RENOWN 1 -> 2
+@ src/constants.rs
+- pub const TRIUMPH_RENOWN: i32 = 1;
++ pub const TRIUMPH_RENOWN: i32 = 2;
+
+### C9 DEMAND_PER_SEAT 3 -> 4
+@ src/constants.rs
+- pub const DEMAND_PER_SEAT: i32 = 3;
++ pub const DEMAND_PER_SEAT: i32 = 4;
+
+### C10 YEARS_PER_DEMAND_STEP 6 -> 5
+@ src/constants.rs
+- pub const YEARS_PER_DEMAND_STEP: i32 = 6;
++ pub const YEARS_PER_DEMAND_STEP: i32 = 5;
+
+### C11 DEMAND_WOBBLE 1 -> 2
+@ src/constants.rs
+- pub const DEMAND_WOBBLE: i32 = 1;
++ pub const DEMAND_WOBBLE: i32 = 2;
+
+### C12 TROUBLE_SEATS 1 -> 2
+@ src/constants.rs
+- pub const TROUBLE_SEATS: i32 = 1;
++ pub const TROUBLE_SEATS: i32 = 2;
+
+### C13 TROUBLE_DEMAND 1 -> 2
+@ src/constants.rs
+- pub const TROUBLE_DEMAND: i32 = 1;
++ pub const TROUBLE_DEMAND: i32 = 2;
+
+### C14 DANGER_LIMIT 4 -> 5
+@ src/constants.rs
+- pub const DANGER_LIMIT: i32 = 4;
++ pub const DANGER_LIMIT: i32 = 5;
+
+### C15 TROUBLE_LIMIT 2 -> 1
+@ src/constants.rs
+- pub const TROUBLE_LIMIT: i32 = 2;
++ pub const TROUBLE_LIMIT: i32 = 1;
+
+### C16 UNANSWERED_RENOWN 1 -> 2
+@ src/constants.rs
+- pub const UNANSWERED_RENOWN: i32 = 1;
++ pub const UNANSWERED_RENOWN: i32 = 2;
+
+### C17 TROUBLED_RENOWN 1 -> 2
+@ src/constants.rs
+- pub const TROUBLED_RENOWN: i32 = 1;
++ pub const TROUBLED_RENOWN: i32 = 2;
+
+### C18 RENOWN_PER_EXPECTATION 20 -> 10
+@ src/constants.rs
+- pub const RENOWN_PER_EXPECTATION: i32 = 20;
++ pub const RENOWN_PER_EXPECTATION: i32 = 10;
+
+### C5 DEATH_PER_DANGER 0.15 -> 0.2
+@ src/constants.rs
+- pub const DEATH_PER_DANGER: f64 = 0.15;
++ pub const DEATH_PER_DANGER: f64 = 0.2;
+
+### C7 MAXIMUM_SEATS 4 -> 2
+@ src/constants.rs
+- pub const MAXIMUM_SEATS: usize = 4;
++ pub const MAXIMUM_SEATS: usize = 2;
+
+### C8 QUEST_COUNT 4 -> 1
+@ src/constants.rs
+- pub const QUEST_COUNT: usize = 4;
++ pub const QUEST_COUNT: usize = 1;
+
+### F1 triumph needs more than 4
+@ src/forecast.rs
+-     if margin >= TRIUMPH_MARGIN {
++     if margin > TRIUMPH_MARGIN {
+
+### F2 success needs more than 0
+@ src/forecast.rs
+-     } else if margin >= 0 {
++     } else if margin > 0 {
+
+### F3 setback stops at -3
+@ src/forecast.rs
+-     } else if margin >= -SETBACK_MARGIN {
++     } else if margin > -SETBACK_MARGIN {
+
+### F4 the margin is one high
+@ src/forecast.rs
+-     power + d1 + d2 - DICE_MIDPOINT - demand⏎
++     power + d1 + d2 - DICE_MIDPOINT - demand + 1⏎
+
+### F5 the first die never shows six
+@ src/forecast.rs
+-     for d1 in 1..=DICE_SIDES {
++     for d1 in 1..DICE_SIDES {
+
+### F6 the second die runs 0..5
+@ src/forecast.rs
+-         for d2 in 1..=DICE_SIDES {
++         for d2 in 0..DICE_SIDES {
+
+### F7 an empty party is forecast
+@ src/forecast.rs
+-     if !anyone {
++     if false {
+
+### F8 percent truncates
+@ src/forecast.rs
+- (ways * 100 + DICE_OUTCOMES / 2) / DICE_OUTCOMES
++ (ways * 100) / DICE_OUTCOMES
+
+### F9 the card succeed is success alone
+@ src/forecast.rs
+-         percent(success + triumph),
++         percent(success),
+
+### F10 the card setback is setback alone
+@ src/forecast.rs
+-         percent(setback + disaster),
++         percent(setback),
+
+### F11 the card triumph is success
+@ src/forecast.rs
+-         percent(triumph),⏎
++         percent(success),⏎
+
+### F12 the card disaster is setback
+@ src/forecast.rs
+-         percent(disaster),⏎
++         percent(setback),⏎
+
+### F13 thirty-five dice outcomes
+@ src/forecast.rs
+- pub const DICE_OUTCOMES: i32 = DICE_SIDES * DICE_SIDES;
++ pub const DICE_OUTCOMES: i32 = 35;
+
+### Q1 calm seats always the most
+@ src/quest.rs
+- let calm_seats = between(rng, t.seats_low, t.seats_high);
++ let calm_seats = between(rng, t.seats_high, t.seats_high);
+
+### Q2 trouble can take the last seat
+@ src/quest.rs
+- let seats = (calm_seats - trouble * TROUBLE_SEATS).max(1);
++ let seats = (calm_seats - trouble * TROUBLE_SEATS).max(0);
+
+### Q3 the wobble never rises
+@ src/quest.rs
+- between(rng, -DEMAND_WOBBLE, DEMAND_WOBBLE)
++ between(rng, -DEMAND_WOBBLE, 0)
+
+### Q4 demand from the calm seats
+@ src/quest.rs
+- base_demand(seats, t.danger, trouble, year) + between
++ base_demand(calm_seats, t.danger, trouble, year) + between
+
+### Q5 demand from the raised danger
+@ src/quest.rs
+- base_demand(seats, t.danger, trouble, year) + between
++ base_demand(seats, (t.danger + trouble).min(DANGER_LIMIT), trouble, year) + between
+
+### Q6 the year steps from year 0
+@ src/quest.rs
+- + (year - 1) / YEARS_PER_DEMAND_STEP)
++ + year / YEARS_PER_DEMAND_STEP)
+
+### Q7 danger uncapped
+@ src/quest.rs
+- danger: (t.danger + trouble).min(DANGER_LIMIT),
++ danger: t.danger + trouble,
+
+### Q8 renown capped
+@ src/quest.rs
+- renown: t.danger + trouble,
++ renown: (t.danger + trouble).min(DANGER_LIMIT),
+
+### Q9 the trouble is not recorded
+@ src/quest.rs
+-         demand,⏎        trouble,⏎
++         demand,⏎        trouble: 0,⏎
+
+### Q10 trouble 1 costs nothing more
+@ src/quest.rs
+- if self.trouble > 0 { TROUBLED_RENOWN } else { 0 }
++ if self.trouble > 1 { TROUBLED_RENOWN } else { 0 }
+
+### Q11 death above certain
+@ src/quest.rs
+- .min(1.0);
++ .min(2.0);
+
+### Q12 death percent truncates
+@ src/quest.rs
+- (chance * 100.0 + 0.5) as i32
++ (chance * 100.0) as i32
+
+### Q13 every quest needs might
+@ src/quest.rs
+-         aptitude: t.aptitude,⏎
++         aptitude: Aptitude::Might,⏎
+
+### Q14 a quest carries no tags
+@ src/quest.rs
+-         tags: t.tags.clone(),⏎
++         tags: Vec::new(),⏎
+
+### B1 the board is posted in year 2
+@ src/board.rs
+- if self.calendar.current_year() != 1 {
++ if self.calendar.current_year() != 2 {
+
+### B2 the board in reverse place order
+@ src/board.rs
+- self.board.sort_by_key(|posted| posted.quest.place.index());
++ self.board.sort_by_key(|posted| std::cmp::Reverse(posted.quest.place.index()));
+
+### B3 the board ignores its places trouble
+@ src/board.rs
+- let trouble = self.places[place.index()].trouble;
++ let trouble = 0;
+
+### B4 every quest has two seats
+@ src/board.rs
+- seats: vec![None; quest.seats as usize],
++ seats: vec![None; 2],
+
+### B5 a swap loses the displaced
+@ src/board.rs
+-             self.put(from, displaced);
++             self.put(from, None);
+
+### B6 a drop only lands where it began
+@ src/board.rs
+- if let Some(onto) = onto.filter(|onto| *onto != from) {
++ if let Some(onto) = onto.filter(|onto| *onto == from) {
+
+### B7 nobody refuses
+@ src/board.rs
+- if !refuses(&self.heroes[hero], &self.board[quest].quest.tags) {
++ if true {
+
+### B8 a refuser goes to the last free seat
+@ src/board.rs
+- let Some(free) = self.roster.iter().position(Option::is_none) else {
++ let Some(free) = self.roster.iter().rposition(Option::is_none) else {
+
+### B9 a drop sends nobody back
+@ src/board.rs
+-         self.send_back_refusers()⏎
++         Vec::new()⏎
+
+### B10 the hand does not count its own seat free
+@ src/board.rs
+- .position(|seat| seat.is_none() || *seat == Some(hero))
++ .position(|seat| seat.is_none())
+
+### B11 a hero card is not a landing
+@ src/board.rs
+- Target::Hero(id) => self.slot_of(id),
++ Target::Hero(_) => None,
+
+### B12 a card body is not a landing
+@ src/board.rs
+- .map(|seat| Slot::Quest { quest, seat }),
++ .and(None),
+
+### B13 reseating leaves the quest seats
+@ src/house.rs
+- posted.seats.iter_mut().for_each(|seat| *seat = None);
++ let _ = posted;
+
+### B14 the party in reverse seat order
+@ src/board.rs
+- self.board[quest].seats.iter().flatten().copied().collect()
++ self.board[quest].seats.iter().rev().flatten().copied().collect()
+
+### K1 the hand stays in its seat
+@ src/quest_card.rs
+- for seat in seats.iter_mut().filter(|s| **s == Some(hero)) {
++ for seat in seats.iter_mut().filter(|_| false) {
+
+### K2 the preview needs no room
+@ src/quest_card.rs
+-         && seats[seat].is_none()⏎
++         && true⏎
+
+### K3 a refuser is previewed
+@ src/quest_card.rs
+-         && !refuses(&house.heroes[hero], &house.board[quest].quest.tags)⏎
++         && true⏎
+
+### K4 the card forgets the patrons
+@ src/quest_card.rs
+- let power = party_power(heroes, party, q.facts(), house.patrons);
++ let power = party_power(heroes, party, q.facts(), 0);
+
+### K5 the card forecasts against ten
+@ src/quest_card.rs
+- let odds_of = forecast(power, q.demand, anyone);
++ let odds_of = forecast(power, 10, anyone);
+
+### K6 the watched fear no tag
+@ src/quest_card.rs
+- .chain(watched.iter())
++ .chain(watched.iter().take(0))
+
+### K7 trouble 1 has no trouble line
+@ src/quest_card.rs
+-         if q.trouble > 0 {⏎
++         if q.trouble > 1 {⏎
+
+### K8 room for the calm seats
+@ src/quest_card.rs
+- fmt(&words[W::QuestCardRoomFor], &[&q.seats.to_string()])
++ fmt(&words[W::QuestCardRoomFor], &[&q.calm_seats.to_string()])
+
+### K9 nobody will not go
+@ src/quest_card.rs
+- let refusing = watched.filter(|&h| refuses(&heroes[h], &q.tags));
++ let refusing = watched.filter(|_| false);
+
+### K10 the card prices at no renown
+@ src/quest_card.rs
+- &q.unanswered_cost(house.renown).to_string()
++ &q.unanswered_cost(0).to_string()
+
+### K11 the card shows danger for renown
+@ src/quest_card.rs
+- fmt(&words[W::QuestCardRenown], &[&q.renown.to_string()])
++ fmt(&words[W::QuestCardRenown], &[&q.danger.to_string()])
+
+### K12 the dream line ignores the party
+@ src/quest_card.rs
+- dream: dreamers_line(content, heroes, q.facts(), party),
++ dream: dreamers_line(content, heroes, q.facts(), &[]),
+
+### S1 no premise
+@ src/quest_sheet.rs
+- line(Ink::Body, template.premise.clone(), None),
++ line(Ink::Body, String::from("-"), None),
+
+### S2 never fewer seats
+@ src/quest_sheet.rs
+- let fewer = if q.seats < q.calm_seats {
++ let fewer = if false {
+
+### S3 stakes: twice the trouble
+@ src/quest_sheet.rs
+- &q.trouble.to_string(),
++ &(q.trouble * 2).to_string(),
+
+### S4 stakes: the whole danger
+@ src/quest_sheet.rs
+- &(q.danger - q.calm_danger).to_string(),
++ &q.danger.to_string(),
+
+### S5 stakes: the whole renown
+@ src/quest_sheet.rs
+- &(q.renown - q.calm_danger).to_string(),
++ &q.renown.to_string(),
+
+### S6 NEEDS not upper-cased
+@ src/quest_sheet.rs
+- .to_uppercase();
++ .clone();
+
+### S7 a triumph pays no more
+@ src/quest_sheet.rs
+- &(q.renown + TRIUMPH_RENOWN).to_string(),
++ &q.renown.to_string(),
+
+### S8 the triumph line shows success odds
+@ src/quest_sheet.rs
+-         shown(Outcome::Triumph),⏎
++         shown(Outcome::Success),⏎
+
+### S9 death shown as danger
+@ src/quest_sheet.rs
+- &q.death_percent().to_string()
++ &q.danger.to_string()
+
+### S10 never quested, always
+@ src/quest_sheet.rs
+- if record.visits == 0 {
++ if record.visits >= 0 {
+
+### S11 visits as a number
+@ src/quest_sheet.rs
+- &count_words(content, record.visits as usize),
++ &record.visits.to_string(),
+
+### S12 no fallen
+@ src/quest_sheet.rs
+- for &id in house.fallen_at(place) {
++ for &id in house.fallen_at(place).iter().take(0) {
+
+### S13 triumphs and disasters swapped
+@ src/quest_sheet.rs
+-                 &record.triumphs.to_string(),⏎                &record.disasters.to_string(),⏎
++                 &record.disasters.to_string(),⏎                &record.triumphs.to_string(),⏎
+
+### S14 the breakdown forgets the patrons
+@ src/quest_sheet.rs
+- party_lines(content, heroes, party, q.facts(), house.patrons)
++ party_lines(content, heroes, party, q.facts(), 0)
+
+### S15 only the first call is told
+@ src/quest_sheet.rs
+- for (id, call) in called(content, heroes, q.facts(), party) {
++ for (id, call) in called(content, heroes, q.facts(), party).into_iter().take(1) {
+
+### P1 lines of nothing are shown
+@ src/power_lines.rs
+-         if value != 0 {⏎            out.push(PowerLine { text, value, head });
++         if true {⏎            out.push(PowerLine { text, value, head });
+
+### P2 any heirloom counts
+@ src/power_lines.rs
+-         && heirloom.aptitude == quest.aptitude⏎
++         && true⏎
+
+### P3 a conquered fear told as feared
+@ src/power_lines.rs
+- let which = if hero.fear.conquered {
++ let which = if false {
+
+### P4 the tag by its title
+@ src/power_lines.rs
+- let noun = &content.lore.tags[hero.fear.tag.index()].noun;
++ let noun = &content.lore.tags[hero.fear.tag.index()].title;
+
+### P5 the floor at nothing too
+@ src/power_lines.rs
+-     if sum < 0 {
++     if sum <= 0 {
+
+### P6 a pair named the wrong way round
+@ src/power_lines.rs
+-                             &heroes[a].name,⏎                            &heroes[b].name,⏎
++                             &heroes[b].name,⏎                            &heroes[a].name,⏎
+
+### P7 a pair by its title
+@ src/power_lines.rs
+- &content.bonds.pairs[bond.kind.index()],
++ &content.bonds.titles[bond.kind.index()],
+
+### P8 a companion pair has a line
+@ src/power_lines.rs
+-             if value != 0 {⏎                out.push(PowerLine {
++             if true {⏎                out.push(PowerLine {
+
+### P9 a patron line with no patrons
+@ src/power_lines.rs
+-     if patrons > 0 {
++     if patrons >= 0 {
+
+### P10 a member line is not a head
+@ src/power_lines.rs
+-         aptitude,⏎        true,⏎
++         aptitude,⏎        false,⏎
+
+### U1 a tap picks up
+@ src/pointer.rs
+- if !ui.family_open && held && !released =>
++ if !ui.family_open && held =>
+
+### U2 nothing is ever lost
+@ src/pointer.rs
+- let lost = !input.window_focused()
++ let lost = false && !input.window_focused()
+
+### U3 a release lands nowhere
+@ src/pointer.rs
+- let onto = house.landing(drag.hero, target);
++ let onto = house.landing(drag.hero, None);
+
+### U4 the hand never updates what it is over
+@ src/pointer.rs
+-                 over: target,⏎                ..drag
++                 over: drag.over,⏎                ..drag
+
+### U5 a quest is never pointed at
+@ src/pointer.rs
+- Some(Target::Quest(quest)) if !ui.family_open => Some(quest),
++ Some(Target::Quest(_)) if !ui.family_open => None,
+
+### V1 the hand previews nowhere
+@ src/board_view.rs
+- Some((drag.hero, house.landing(drag.hero, drag.over)))
++ Some((drag.hero, None))
+
+### V2 the card draws the idle line for you bring
+@ src/board_view.rs
+- if let Some(bring) = &card.you_bring {
++ if let Some(bring) = &card.idle {
+
+### V3 the dream line is not drawn
+@ src/board_view.rs
+- for (text, color) in [(&card.dream, ink::GOLD), (&card.warning, ink::WARN)] {
++ for (text, color) in [(&card.warning, ink::GOLD), (&card.warning, ink::WARN)] {
+
+### V4 the history panel is empty
+@ src/board_view.rs
+- .map(|text| wrap(text, column - 2.0 * PAD, MIN_TEXT))
++ .map(|text| wrap(text, column - 2.0 * PAD, MIN_TEXT)).take(0)
+
+### V5 the sheet draws no values
+@ src/board_view.rs
+- if let Some(value) = &line.value {
++ if let Some(value) = &None::<String> {
+
+### D1 no opening quests
+@ src/content.rs
+- opening_quests: read_opening_quests(&at("quests.json")?)?,
++ opening_quests: Vec::new(),
+
+### D2 pairs read as titles
+@ src/content.rs
+- lore.pairs.push(text(item, "pair")?);
++ lore.pairs.push(text(item, "title")?);
+
+### D3 year counts read as count words
+@ src/lore.rs
+- year_counts: strings(at, "year_counts")?,
++ year_counts: strings(at, "count_words")?,
+
+### D4 a trouble line read as the name
+@ src/lore.rs
+- trouble_line: text(p, "trouble_line")?,
++ trouble_line: text(p, "name")?,
+
+### T-10 CONSTANTS 3 row -10 as verify ships it
+@ src/w4_rules.rs
+-     (-10, [36, 0, 0, 0], 0),
++     (-10, [35, 1, 0, 0], 0),
+
+### T-9 CONSTANTS 3 row -9 as verify ships it
+@ src/w4_rules.rs
+-     (-9, [35, 1, 0, 0], 0),
++     (-9, [34, 2, 0, 0], 0),
+
+### T-8 CONSTANTS 3 row -8 as verify ships it
+@ src/w4_rules.rs
+-     (-8, [33, 3, 0, 0], 0),
++     (-8, [32, 4, 0, 0], 0),
+
+### T-7 CONSTANTS 3 row -7 as verify ships it
+@ src/w4_rules.rs
+-     (-7, [30, 6, 0, 0], 0),
++     (-7, [29, 7, 0, 0], 0),
+
+### T-6 CONSTANTS 3 row -6 as verify ships it
+@ src/w4_rules.rs
+-     (-6, [26, 10, 0, 0], 0),
++     (-6, [25, 11, 0, 0], 0),
+
+### T-5 CONSTANTS 3 row -5 as verify ships it
+@ src/w4_rules.rs
+-     (-5, [21, 14, 1, 0], 3),
++     (-5, [20, 15, 1, 0], 3),
+
+### T-4 CONSTANTS 3 row -4 as verify ships it
+@ src/w4_rules.rs
+-     (-4, [15, 18, 3, 0], 8),
++     (-4, [14, 19, 3, 0], 8),
+
+### T-3 CONSTANTS 3 row -3 as verify ships it
+@ src/w4_rules.rs
+-     (-3, [10, 20, 6, 0], 17),
++     (-3, [9, 21, 6, 0], 17),
+
+### T-2 CONSTANTS 3 row -2 as verify ships it
+@ src/w4_rules.rs
+-     (-2, [6, 20, 10, 0], 28),
++     (-2, [5, 21, 10, 0], 28),
+
+### T-1 CONSTANTS 3 row -1 as verify ships it
+@ src/w4_rules.rs
+-     (-1, [3, 18, 14, 1], 42),
++     (-1, [2, 19, 14, 1], 42),
+
+### T0 CONSTANTS 3 row 0 as verify ships it
+@ src/w4_rules.rs
+-     (0, [1, 14, 18, 3], 58),
++     (0, [0, 15, 18, 3], 58),
+
+### T1 CONSTANTS 3 row 1 as verify ships it
+@ src/w4_rules.rs
+-     (1, [0, 10, 20, 6], 72),
++     (1, [0, 9, 21, 6], 72),
+
+### T2 CONSTANTS 3 row 2 as verify ships it
+@ src/w4_rules.rs
+-     (2, [0, 6, 20, 10], 83),
++     (2, [0, 5, 21, 10], 83),
+
+### T3 CONSTANTS 3 row 3 as verify ships it
+@ src/w4_rules.rs
+-     (3, [0, 3, 18, 15], 92),
++     (3, [0, 2, 19, 15], 92),
+
+### T4 CONSTANTS 3 row 4 as verify ships it
+@ src/w4_rules.rs
+-     (4, [0, 1, 14, 21], 97),
++     (4, [0, 0, 15, 21], 97),
+
+### T5 CONSTANTS 3 row 5 as verify ships it
+@ src/w4_rules.rs
+-     (5, [0, 0, 10, 26], 100),
++     (5, [0, 0, 9, 27], 100),
+
+### T6 CONSTANTS 3 row 6 as verify ships it
+@ src/w4_rules.rs
+-     (6, [0, 0, 6, 30], 100),
++     (6, [0, 0, 5, 31], 100),
+
+### T7 CONSTANTS 3 row 7 as verify ships it
+@ src/w4_rules.rs
+-     (7, [0, 0, 3, 33], 100),
++     (7, [0, 0, 2, 34], 100),
+
+### T8 CONSTANTS 3 row 8 as verify ships it
+@ src/w4_rules.rs
+-     (8, [0, 0, 1, 35], 100),
++     (8, [0, 0, 0, 36], 100),
+
+### T9 CONSTANTS 3 row 9 as verify ships it
+@ src/w4_rules.rs
+-     (9, [0, 0, 0, 36], 100),
++     (9, [0, 0, 1, 35], 100),
+
+### T10 CONSTANTS 3 row 10 as verify ships it
+@ src/w4_rules.rs
+-     (10, [0, 0, 0, 36], 100),
++     (10, [0, 0, 1, 35], 100),
+
+### TO1 the oracle row 1 as verify ships it
+@ src/w4.rs
+-         ["Succeed 72%",
++         ["Succeed 1%",
+
+### TO2 the oracle row 2 as verify ships it
+@ src/w4.rs
+-         ["Succeed 83%",
++         ["Succeed 1%",
+
+### TO3 the oracle row 3 as verify ships it
+@ src/w4.rs
+-         ["Succeed 92%",
++         ["Succeed 1%",

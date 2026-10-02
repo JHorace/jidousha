@@ -1,12 +1,14 @@
-//! The summer screen as W1 builds it: the top bar, the household, the yard, and
-//! the hero sheet of whoever is pointed at (SPEC §5.4, §19.1).
+//! The summer screen: the top bar, the household, the yard, the board (W4,
+//! `board_view.rs`), and the sheet of whatever is pointed at (SPEC §5.4, §19.1).
 //!
-//! No board yet — quests are W4/W5 — so the right half of the screen is the
-//! sheet, and the help line stands in it while nobody is pointed at.
+//! The board fills the right half; the hero sheet and the quest sheet are raised
+//! over it, and the help line stands in whatever the board leaves empty.
 
 use jidousha::prelude::*;
 
 use crate::art::{Figure, figure_named, hero_figure};
+use crate::board::Slot;
+use crate::board_view::{draw_hand, draw_quest_sheet, lay_out_board, sheet_raised};
 use crate::constants::{DREAD_LIMIT, ROSTER_SEATS, YARD_SPOTS};
 use crate::content::Content;
 use crate::family::top_bar;
@@ -122,10 +124,12 @@ pub fn lay_out(page: &mut Page, content: &Content, house: &House, ui: &UiState) 
         ink::HEADING,
         screen,
     );
+    let in_hand = ui.drag.map(|drag| drag.hero);
     for slot in 0..ROSTER_SEATS {
         let rect = card_rect(ROSTER_TOP, slot);
         match house.roster[slot] {
-            Some(id) => hero_card(
+            // The hero in hand has left their seat until they are released.
+            Some(id) if in_hand != Some(id) => hero_card(
                 page,
                 content,
                 &house.heroes,
@@ -133,7 +137,10 @@ pub fn lay_out(page: &mut Page, content: &Content, house: &House, ui: &UiState) 
                 rect,
                 ui.pointing == Some(id),
             ),
-            None => page.shape(rect, ink::PANEL, layers::PANEL),
+            _ => {
+                page.shape(rect, ink::PANEL, layers::PANEL);
+                page.targets.push((rect, Target::Seat(Slot::Roster(slot))));
+            }
         }
     }
     let yard = yard_top();
@@ -168,26 +175,18 @@ pub fn lay_out(page: &mut Page, content: &Content, house: &House, ui: &UiState) 
         );
     }
 
-    page.shape(SHEET, ink::PANEL, layers::PANEL);
-    match ui.pointing.filter(|_| !ui.family_open) {
-        Some(id) => sheet(page, content, &house.heroes, id),
-        None => {
-            let width = SHEET.size().x - 2.0 * PAD;
-            let mut y = SHEET.min.y + PAD;
-            for (index, line) in wrap(&words[W::SummerHelp], width, MIN_TEXT)
-                .into_iter()
-                .enumerate()
-            {
-                let at = Vec2::new(SHEET.min.x + PAD, y);
-                if index == 0 {
-                    page.text(layers::TEXT, at, line, MIN_TEXT, ink::NOTE, SHEET);
-                } else {
-                    page.continue_text(layers::TEXT, at, line, MIN_TEXT, ink::NOTE, SHEET);
-                }
-                y += SHEET_PITCH;
-            }
+    // The board fills the right panel; a sheet is raised over it while a hero or a
+    // quest is pointed at and nothing is in hand.
+    if !ui.family_open && sheet_raised(ui) {
+        page.shape(SHEET, ink::PANEL, layers::PANEL);
+        match (ui.pointing, ui.pointing_quest) {
+            (Some(id), _) => sheet(page, content, &house.heroes, id),
+            (None, Some(quest)) => draw_quest_sheet(page, content, house, quest),
+            (None, None) => {}
         }
     }
+    lay_out_board(page, content, house, ui);
+    draw_hand(page, content, house, ui);
 }
 
 /// Renown is drawn red at 4 or below (CONSTANTS §14).

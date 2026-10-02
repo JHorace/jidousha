@@ -231,7 +231,11 @@ fn check_draws(checks: &mut Checks, content: &Content, memory: &mut WritingMemor
 pub fn check(checks: &mut Checks, content: &Content) -> String {
     check_tables(checks, content);
     check_text(checks, content);
-    match House::found(content, crate::verify::SEEDS[0]) {
+    match House::found(
+        content,
+        crate::verify::SEEDS[0],
+        &mut Rng::from_seed(crate::verify::SEEDS[0]),
+    ) {
         Ok(mut walked) => {
             check_draws(checks, content, &mut walked.writing);
             check_calendar(checks, content, &mut walked);
