@@ -986,7 +986,8 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
         );
     }
     // **The config drawer's own rectangle** (wave 1.5): taller than the
-    // feed's, because twenty-three classes in two columns is twelve rows.
+    // feed's, because twenty-two classes in two columns, and room for the next, is
+    // twelve rows.
     if flow.showing(Drawer::Modes) {
         fill(
             ctx,

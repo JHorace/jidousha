@@ -970,6 +970,41 @@ pub fn module_off(checks: &mut Checks) -> String {
     )
 }
 
+/// **A stop that lands while the ledger is open says why, in the ledger** —
+/// the line an open drawer otherwise silences, and the one the wave 1.5
+/// browser playtest found missing: LATER puts the player in the ledger, and a
+/// cliff falling there stopped the world with nothing on screen saying so.
+pub fn a_stop_in_the_ledger_says_why(checks: &mut Checks) -> String {
+    let (pleaded, _, clock, _) = crate::floors::petitioned_world();
+    let stopped = crate::floors::stopped_by_failure(pleaded);
+    let lens = crate::lens::Lens::on(&stopped);
+    let flow = crate::flow::Flow {
+        drawer: Some(crate::flow::Drawer::Pleas),
+        ..crate::flow::Flow::default()
+    };
+    let panel = crate::card::pleas_drawer(&flow, &lens, &Tuning::SHIPPED, clock.minutes);
+    let said = panel
+        .runs
+        .iter()
+        .find(|run| run.text.starts_with("paused: "))
+        .map(|run| run.text.clone());
+    checks.require(
+        stopped.paused_by.is_some()
+            && said
+                .as_deref()
+                .is_some_and(|line| line.starts_with("paused: petition-failed at ")),
+        "a stop that lands while the ledger is open does not say why in the ledger",
+        format!(
+            "the world is stopped by {:?} and the ledger's lines say {said:?}",
+            stopped.paused_by.map(|pause| pause.class.name())
+        ),
+    );
+    format!(
+        "a failure's stop is named in the open ledger: {}",
+        said.unwrap_or_default()
+    )
+}
+
 /// **Conservation over the three new ports and `gives-away`**: a gift, a
 /// reward, a burn and a giving-away, each staged, and the identity after each.
 pub fn conservation(checks: &mut Checks) -> String {

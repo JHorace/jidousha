@@ -1675,7 +1675,17 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
         (
             "the petition ledger on its widest card",
             widest_flow,
-            pleaded,
+            pleaded.clone(),
+            pleaded_clock,
+            at,
+        ),
+        (
+            "the petition ledger, the world stopped by a failure",
+            Flow {
+                drawer: Some(Drawer::Pleas),
+                ..Flow::default()
+            },
+            stopped_by_failure(pleaded),
             pleaded_clock,
             at,
         ),
@@ -1686,7 +1696,7 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
 /// petitions running from six templates, one met by a gift and one failed at
 /// its cliff — every shape a ledger row and a card can take — and a world
 /// stopped for the last voicing, for the overlay.
-fn petitioned_world() -> (Sim, Sim, Clock, usize) {
+pub(crate) fn petitioned_world() -> (Sim, Sim, Clock, usize) {
     use crate::pleas::{self, Found};
     let tuning = Tuning::SHIPPED;
     let mut sim = Sim::opening(&tuning, crate::modules::ModuleSet::ALL);
@@ -1740,6 +1750,23 @@ fn petitioned_world() -> (Sim, Sim, Clock, usize) {
     let mut clock = Clock::opening();
     clock.minutes = 1500 + 2 * crate::petitions::DAY;
     (sim, voiced, clock, last)
+}
+
+/// **The staged camp, stopped by its failed petition** — the pause a player
+/// sitting in the ledger meets when a cliff falls.
+pub(crate) fn stopped_by_failure(mut sim: Sim) -> Sim {
+    let failed = sim
+        .events
+        .iter()
+        .rposition(|event| event.class == crate::attention::EventClass::PetitionFailed);
+    if let Some(index) = failed {
+        sim.paused_by = Some(crate::attention::Pause {
+            event: index,
+            class: crate::attention::EventClass::PetitionFailed,
+            minute: sim.events[index].minute,
+        });
+    }
+    sim
 }
 
 /// The content floors: every row of every screen state at or above the text

@@ -221,7 +221,7 @@ laid out in `layout.rs` and asserted in `floors.rs` like every other row.
   goes into the simulation, and the footer says so. **Twelve rows of two
   columns since wave 1.5**, at a pitch of thirty-two, in a rectangle of its own
   that runs to the foot of the screen (`FINDINGS.md` G-047, closed): twenty-four
-  slots for twenty-three classes. The petitions' three open on the approved
+  slots for twenty-two classes. The petitions' three open on the approved
   mockup's defaults — `petition-voiced` and `petition-failed` on **pause**,
   `petition-satisfied` on **log** — and are the config's to override.
 - **The feed's class column is eighteen glyphs since wave 1.5**: the place tag
@@ -301,7 +301,12 @@ the deadline is never a surprise.
   first, then the resolved, most recent first** — each with its timer bar; the
   head line says who and `due`, `met` or `failed`, and the second is the
   request without the name the head already said. The note says how many are
-  asking and resolved, and `10 of 14 shown` when the list stops short. A row
+  asking and resolved, and `10 of 14 shown` when the list stops short — **and,
+  while the world is stopped, the pause's own sentence in gold instead**
+  (`attention::reason_line`, the feed header's function): an open drawer
+  silences the map's banner, and LATER is what puts the player here, so a
+  cliff falling while the ledger is open stopped the world and said nothing
+  until the wave 1.5 browser playtest met it (`FINDINGS.md` G-055). A row
   puts its card beside the list; the first row's card is up until one is
   tapped. A petition still on its messenger is not on the ledger: it binds
   nobody yet.

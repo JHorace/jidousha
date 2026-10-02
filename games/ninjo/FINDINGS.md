@@ -165,6 +165,14 @@ photograph `ninjo-arranged-reference.png` is that state: Steve's work list,
 (`petitioned::pipe`) had to put a job back on the board to have something to
 post. The fix is G-032's (work that outlasts the board), not the card's.
 
+*Seen in the browser too, and earlier:* the web playtest at `?seed=10` pressed
+ARRANGE on Ludo's `collectors-visit` at **d2 20:48** and got the same empty
+list — `nothing stands open anywhere - the settlement's work is all claimed or
+done` — with 1203g in the treasury. So on this seed, from day two, GIVE is the
+only answer a money-shaped petition has; the owner's playtest question about
+obligation is being asked of a player whose one non-money gesture leads
+nowhere. Not `thin-days`-only: every ARRANGE whose destination is a work list.
+
 ### G-053 — the game's own: eight or nine of ten carry a petition by day four
 
 Class: **the game's own** (a density the mockup did not have; 1.6's to
@@ -196,7 +204,25 @@ advance) nor the pause (it was taken on the first paused tick, before any tap).
 directives have been taken up and carried out. Every existing photo carries
 `step: 0`, which is "any", so nothing else moved.
 
-### G-045 — `docs/api/`: `Rng::from_seed` does not say whether nearby seeds give independent streams
+### G-055 — the game's own: a stop that landed while the ledger was open said nothing
+
+Class: **the game's own** (a surface owing its pause line) · Game: ninjo ·
+Files: `games/ninjo/src/card.rs` (`pleas_drawer`) · Closed in this wave
+
+Found by playing the web build, not by the battery. LATER opens the ledger,
+and a player who stays in it and resumes is there when the next cliff falls.
+`petition-failed` pauses; an open drawer silences the map's banner (UI.md §3,
+by design — a banner under a scrim is a row nobody can read); the feed has a
+reason line and the ledger had none. So the world stopped with only the gold
+PAUSE chip to say so, and nothing on screen said whose petition had failed.
+The ledger's note line now carries `attention::reason_line` — the feed
+header's sentence, from the same function — in gold while the world is
+stopped, and `petitioned::a_stop_in_the_ledger_says_why` asserts it over the
+staged camp stopped by its failure, which the content floors judge as a fifth
+petitions state. The other drawers (ROSTER, LEDGER, TUNE) still stop silently
+under a pause; that predates this wave and is the next surface's to decide.
+
+ does not say whether nearby seeds give independent streams
 
 Class: **a document that was silent on the one thing asked** · Game: ninjo ·
 Files: `games/ninjo/src/resolution.rs` (`address`, `roll`) · Owner:
@@ -254,8 +280,8 @@ patterns, one of them a literal. Owner: this game (UI.md §3c).
 Class: **the game's own** (a layout ceiling, the G-034 class) · Game: ninjo ·
 Files: `games/ninjo/src/layout.rs` (`MODES_ROWS`) · **Closed (wave 1.5)**
 
-*Closed by wave 1.5, which brought the twenty-first, twenty-second and
-twenty-third classes:* the config drawer has its own rectangle now
+*Closed by wave 1.5, which brought the twentieth, twenty-first and
+twenty-second classes:* the config drawer has its own rectangle now
 (`layout::modes_panel`, to the foot of the screen, as the tuning drawer's is),
 **twelve rows at a pitch of thirty-two** — the target floor exactly, rows that
 touch and never overlap — so two columns hold twenty-four, and

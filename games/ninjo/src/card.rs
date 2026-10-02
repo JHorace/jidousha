@@ -382,14 +382,23 @@ pub fn pleas_drawer(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning, now: u64) -> 
     } else {
         format!("{asking} asking, {} resolved", order.len() - asking)
     };
+    // **A stop that lands while the ledger is open says why here.** An open
+    // drawer silences the map's banner, and LATER is what puts the player in
+    // this one - so without this line a failure's pause stopped the world
+    // and said nothing (found in the wave 1.5 browser playtest). The feed's
+    // header says the same sentence from the same function.
+    let (note, tone) = match crate::attention::reason_line(lens) {
+        Some(reason) => (reason, theme::GOLD),
+        None => (
+            format!("{count} - no accept, no decline: ARRANGE goes where it is answered"),
+            theme::DIM,
+        ),
+    };
     panel.text(TextRun::over(
         layout::pleas_note(),
-        clipped(
-            &format!("{count} - no accept, no decline: ARRANGE goes where it is answered"),
-            layout::PLEAS_NOTE_W,
-        ),
+        clipped(&note, layout::PLEAS_NOTE_W),
         theme::SMALL,
-        theme::DIM,
+        tone,
     ));
     if !lens.petitions_on() {
         panel.text(TextRun::over(

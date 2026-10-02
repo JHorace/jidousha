@@ -4071,6 +4071,7 @@ pub fn run() -> ExitCode {
     let swept = crate::petitioned::sweeps(&mut checks);
     let pleas_off = crate::petitioned::module_off(&mut checks);
     let conserved = crate::petitioned::conservation(&mut checks);
+    let stop_said = crate::petitioned::a_stop_in_the_ledger_says_why(&mut checks);
     let pleaded = crate::pleashots::shot_run();
     let pleaded_report = crate::pleashots::judge_shots(&mut checks, &pleaded);
 
@@ -4158,6 +4159,7 @@ pub fn run() -> ExitCode {
     println!("  petitions: {piped}");
     println!("  petitions: {swept}");
     println!("  petitions: {pleas_off}; {conserved}");
+    println!("  petitions: {stop_said}");
     println!("  petitions: {pleaded_report}");
     println!(
         "  standing rates: {} - {} postings on the ledger at the end of the run",

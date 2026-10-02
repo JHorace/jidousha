@@ -1223,8 +1223,8 @@ pub fn modes_prose_width() -> f32 {
 
 /// **The config drawer's own rectangle** — from under the bar to the foot of
 /// the screen, since wave 1.5. It shared the feed's until the class table
-/// outgrew the feed's height (`FINDINGS.md` G-047): twenty-three classes in
-/// two columns is twelve rows, and twelve rows of thirty-two need the extra
+/// outgrew the feed's height (`FINDINGS.md` G-047): twenty-two classes in
+/// two columns is eleven rows and the next class a twelfth, and twelve rows of thirty-two need the extra
 /// fifty-six pixels the tuning drawer already takes.
 pub fn modes_panel() -> Rect {
     Rect::from_min_size(Vec2::new(0.0, 36.0), Vec2::new(DESIGN_W, DESIGN_H - 36.0))
@@ -1243,8 +1243,8 @@ pub fn modes_panel() -> Rect {
 /// closed): the petitions brought three classes and the twenty-first had
 /// nowhere to be configured. The pitch is the target floor exactly, as the
 /// tuning drawer's is — two radios of thirty-two may touch and never overlap —
-/// and twenty-four slots hold twenty-three classes, which is the one-early
-/// room `floors::modes_have_room` asserts.
+/// and twenty-four slots hold twenty-two classes, room for the next one too —
+/// the one-early room `floors::modes_have_room` asserts.
 pub const MODES_ROWS: usize = 12;
 const MODES_ROW_PITCH: f32 = 32.0;
 const MODES_COL_X: f32 = 20.0;
