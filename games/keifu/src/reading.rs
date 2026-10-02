@@ -365,4 +365,15 @@ mod tests {
         assert!(!b.contains(&garrick) && !b.contains(&brannoc), "{b:?}");
         assert_eq!(b.len(), 2);
     }
+
+    #[test]
+    fn a_dreamer_who_refuses_the_quest_cannot_go_however_easy_it_is() {
+        let (content, mut house) = house();
+        let garrick = id(&house.heroes, "Garrick");
+        let grave = quest_titled(&content, "Grave goods", 2);
+        assert!(could_go(&content, &house.heroes, &grave, 0, garrick));
+        house.heroes[garrick].fear.tag = crate::ids::Tag::Dark;
+        house.heroes[garrick].fear.broken = true;
+        assert!(!could_go(&content, &house.heroes, &grave, 0, garrick));
+    }
 }
