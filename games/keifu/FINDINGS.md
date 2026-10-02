@@ -564,3 +564,11 @@ DOM that measured it (640x329 in the check's 640x480 window). **Engine source: n
   history), `w4-drag.png` (Brannoc in hand over "Grave goods": the card's "you bring 12" and
   his previewed tile, the hand, and his sheet in the dock), `dock-scrolled.png` (Garrick's
   sheet scrolled to its end); the other W1-W4 screens re-taken on the new layout.
+- **The mutation round.** `mutants/dock.txt`, 22 faults over the dock, its scroll, the
+  pointer's new paths, the layout regions, the camera fit and the redrawn cards. Round one:
+  21 of 22 noticed. The escape, K19 (the dock's text rect widened under the scrollbar), was
+  a loose check of the very kind §A.6 warns of: the floor judged rows against
+  `dock::text_rect()`, the rect the fault moved. It now measures against the scrollbar's
+  lane, which is set from the dock's edge; K19 rerun: noticed — **22 of 22**. W4's pointer
+  and board-view entries (U1-U5, V1-V5; V4 and V5 now in `dock_lines.rs`) rerun against
+  the new code: 10 of 10.
