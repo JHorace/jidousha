@@ -413,3 +413,20 @@ fn the_road_is_shared_only_by_the_living() {
         "no bond formed with the dead"
     );
 }
+
+#[test]
+fn a_hero_who_may_not_learn_takes_no_lesson_from_a_triumph() {
+    // Garrick: CHILD_WILL_SURPASS_YOU, and his firstborn, Maren, is grown.
+    let (content, mut house) = house();
+    let garrick = id(&house.heroes, "Garrick");
+    seat(&mut house, 0, &[garrick]);
+    aim(&mut house, 0, [6, 6], 5);
+    let page = resolve_rolled(&content, &mut house, &mut Rng::from_seed(28), 0, [6, 6]);
+    assert_eq!(page.outcome, Outcome::Triumph);
+    assert!(
+        !page.lines.iter().any(|l| l.contains(" rises to ")),
+        "{:?}",
+        page.lines
+    );
+    assert_eq!(house.heroes[garrick].aptitudes[0], 7);
+}
