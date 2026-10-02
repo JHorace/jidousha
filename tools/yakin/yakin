@@ -1,0 +1,346 @@
+#!/usr/bin/env python3
+"""tools/yakin/yakin — the three questions a yakin tick answers mechanically.
+
+A yakin tick is a scheduled, stateless Claude Code run (tools/yakin/README.md).
+Everything it knows comes from git, so the decisions that must be the same for
+every tick — is the queue well-formed, are we inside the burn-down window, which
+task do I take — are computed here rather than re-reasoned in prose each time.
+WORKER.md states the rules; this file is their only implementation.
+
+Usage:  tools/yakin/yakin check     validate tools/yakin/queue.json (README schema)
+        tools/yakin/yakin window    IN or OUT of the window, America/Los_Angeles
+        tools/yakin/yakin next      the task this tick takes, from queue + branches
+
+`next` reads the queue from the default branch (`origin/HEAD`, else
+`origin/main`) and claim state from `origin/claude/yakin-*` — run
+`git fetch --prune origin main '+refs/heads/claude/yakin-*:refs/remotes/origin/claude/yakin-*'`
+first, or it judges stale refs.
+
+Exit codes: 0 valid / IN / PICK · 1 invalid / OUT / NONE · 2 tooling fault.
+
+Key functions: `validate_queue`, `in_window`, `parse_checkpoint`, `classify`,
+`pick`, `main`.
+Depends on: the Python 3.9+ standard library (zoneinfo), and `git`.
+INVARIANT: claim state is read from branches only, never from queue.json. A
+tick cannot write to the default branch, so a claim recorded there would be a
+claim nobody can make or release.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import subprocess
+import sys
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+QUEUE_PATH = "tools/yakin/queue.json"
+TASKS_DIR = "tools/yakin/tasks"
+RUNS_DIR = "tools/yakin/runs"
+BRANCH_PREFIX = "claude/yakin-"
+REMOTE_PREFIX = "origin/" + BRANCH_PREFIX
+
+TIMEZONE = "America/Los_Angeles"
+# The window opens Wednesday 01:00 and work stops Thursday 04:30, local time —
+# half an hour before the usage week resets at 05:00, so a tick mid-push does
+# not spill into the fresh week's quota. (weekday(): Monday == 0.)
+WINDOW_OPEN = (2, 1, 0)
+WINDOW_CLOSE = (3, 4, 30)
+
+# A branch whose last commit is younger than this may have a live tick on it.
+# Ticks push at least every 60 minutes (WORKER.md), so 90 leaves 30 of margin.
+LEASE_MINUTES = 90
+MAX_RESUMES = 2
+
+ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+ID_MAX = 40
+TITLE_MAX = 72
+TASK_KEYS_REQUIRED = {"id", "title", "kind", "variant", "size", "spec", "status"}
+TASK_KEYS_OPTIONAL = {"window"}
+ENUMS = {
+    "kind": {"game", "system"},
+    "variant": {"V1", "V2", "V3"},
+    "size": {"S", "M", "L"},
+    "status": {"queued"},
+    "window": {"burn-down", "any"},
+}
+SPEC_SECTIONS = ("## Goal", "## Fence", "## Done when")
+CHECKPOINT_STAGES = {"design", "implement", "done", "blocked"}
+CHECKPOINT_TICKS = {"live", "released"}
+
+
+# ---------------------------------------------------------------- check
+
+
+def validate_queue(queue: object, spec_text: "dict[str, str | None]") -> "list[str]":
+    """Every way `queue` breaks the README schema, as fix-it lines; empty if valid.
+
+    `spec_text` maps each spec path named in the queue to its contents, or None
+    when the file does not exist.
+    """
+    errors: "list[str]" = []
+    if not isinstance(queue, dict) or set(queue) != {"schema", "tasks"}:
+        return ["top level must be an object with exactly the keys `schema` and `tasks`"]
+    if queue["schema"] != 1:
+        errors.append(f"`schema` is {queue['schema']!r}; this tool reads schema 1")
+    if not isinstance(queue["tasks"], list):
+        return errors + ["`tasks` must be a list"]
+    seen: "set[str]" = set()
+    for index, task in enumerate(queue["tasks"]):
+        where = f"tasks[{index}]"
+        if not isinstance(task, dict):
+            errors.append(f"{where} is not an object")
+            continue
+        missing = TASK_KEYS_REQUIRED - set(task)
+        unknown = set(task) - TASK_KEYS_REQUIRED - TASK_KEYS_OPTIONAL
+        if missing:
+            errors.append(f"{where} lacks {sorted(missing)}")
+        if unknown:
+            errors.append(
+                f"{where} has unknown keys {sorted(unknown)} — claim state lives on "
+                f"branches, never in the queue"
+            )
+        if missing:
+            continue
+        task_id = task["id"]
+        where = f"task `{task_id}`"
+        if not isinstance(task_id, str) or not ID_RE.match(task_id) or len(task_id) > ID_MAX:
+            errors.append(f"{where}: id must be lowercase words joined by `-`, ≤{ID_MAX} chars")
+        if task_id in seen:
+            errors.append(f"{where}: id is not unique")
+        seen.add(task_id)
+        title = task["title"]
+        if not isinstance(title, str) or not title.strip() or len(title) > TITLE_MAX:
+            errors.append(f"{where}: title must be a non-empty string ≤{TITLE_MAX} chars")
+        for key, allowed in ENUMS.items():
+            if key in task and task[key] not in allowed:
+                errors.append(f"{where}: {key} is {task[key]!r}; allowed {sorted(allowed)}")
+        if task.get("window") == "any" and task["size"] != "S":
+            errors.append(f"{where}: window `any` is for size S only — it runs outside the week")
+        spec = task["spec"]
+        expected = f"{TASKS_DIR}/{task_id}.md"
+        if spec != expected:
+            errors.append(f"{where}: spec is {spec!r}; it must be {expected!r}")
+            continue
+        text = spec_text.get(spec)
+        if text is None:
+            errors.append(f"{where}: spec file {spec} does not exist")
+            continue
+        for heading in SPEC_SECTIONS:
+            if not any(line.strip() == heading for line in text.splitlines()):
+                errors.append(f"{where}: spec {spec} lacks a `{heading}` section")
+    return errors
+
+
+def command_check(root: Path) -> int:
+    path = root / QUEUE_PATH
+    try:
+        queue = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        print(f"[yakin check] cannot read {QUEUE_PATH}: {error}")
+        print("  fix: the file must exist and be valid JSON (schema in tools/yakin/README.md)")
+        return 1
+    specs: "dict[str, str | None]" = {}
+    for task in queue.get("tasks", []) if isinstance(queue, dict) else []:
+        if isinstance(task, dict) and isinstance(task.get("spec"), str):
+            spec_path = root / task["spec"]
+            specs[task["spec"]] = spec_path.read_text(encoding="utf-8") if spec_path.is_file() else None
+    errors = validate_queue(queue, specs)
+    for error in errors:
+        print(f"[yakin check] {error}")
+    if errors:
+        print("  fix: edit tools/yakin/queue.json to the schema in tools/yakin/README.md")
+        return 1
+    print(f"[yakin check] {QUEUE_PATH} is valid — {len(queue['tasks'])} task(s) queued")
+    return 0
+
+
+# ---------------------------------------------------------------- window
+
+
+def in_window(local: datetime) -> bool:
+    """Whether `local` (a wall-clock time in TIMEZONE) is inside the burn-down window."""
+    stamp = (local.weekday(), local.hour, local.minute)
+    return WINDOW_OPEN <= stamp < WINDOW_CLOSE
+
+
+def local_now() -> datetime:
+    from zoneinfo import ZoneInfo
+
+    return datetime.now(ZoneInfo(TIMEZONE))
+
+
+def command_window() -> int:
+    now = local_now()
+    inside = in_window(now)
+    print(f"{'IN' if inside else 'OUT'} {now:%a %Y-%m-%d %H:%M %Z} (window Wed 01:00 → Thu 04:30 {TIMEZONE})")
+    return 0 if inside else 1
+
+
+# ---------------------------------------------------------------- next
+
+
+@dataclass
+class Branch:
+    """What the remote says about one claim branch."""
+
+    age_minutes: float
+    checkpoint: "str | None"
+    has_blocked: bool
+
+
+def parse_checkpoint(text: str) -> "dict[str, str]":
+    """The `key: value` header of a CHECKPOINT.md — every line before the first `## `."""
+    fields: "dict[str, str]" = {}
+    for line in text.splitlines():
+        if line.startswith("## "):
+            break
+        match = re.match(r"^([a-z-]+):\s*(.*?)\s*$", line)
+        if match:
+            fields[match.group(1)] = match.group(2)
+    return fields
+
+
+def classify(branch: "Branch | None", merged: bool) -> "tuple[str, dict[str, str]]":
+    """The claim state of one task, and its checkpoint fields.
+
+    merged · done · blocked · broken are never taken. live is someone else's.
+    free → start · ready → continue · stale → resume · exhausted → block.
+    """
+    if merged:
+        return "merged", {}
+    if branch is None:
+        return "free", {}
+    fields = parse_checkpoint(branch.checkpoint) if branch.checkpoint is not None else {}
+    stage, tick, resumes = fields.get("stage"), fields.get("tick"), fields.get("resumes", "")
+    if branch.has_blocked or stage == "blocked":
+        return "blocked", fields
+    if stage == "done":
+        return "done", fields
+    malformed = stage not in CHECKPOINT_STAGES or tick not in CHECKPOINT_TICKS or not resumes.isdigit()
+    if branch.age_minutes < LEASE_MINUTES and (malformed or tick == "live"):
+        return "live", fields
+    if malformed:
+        return "broken", fields
+    if tick == "released":
+        return "ready", fields
+    if int(resumes) >= MAX_RESUMES:
+        return "exhausted", fields
+    return "stale", fields
+
+
+MODES = {"free": "start", "ready": "continue", "stale": "resume", "exhausted": "block"}
+
+
+def pick(rows: "list[dict]", inside: bool) -> "tuple[dict | None, str]":
+    """The row this tick takes, or None and why.
+
+    Order: an exhausted task first (writing its BLOCKED.md is cheap and unblocks
+    nothing else), then started work oldest-commit first, then fresh work in queue
+    order. Outside the window only `window: any` tasks are eligible.
+    """
+    eligible = [row for row in rows if row["state"] in MODES and (inside or row["window"] == "any")]
+    if not eligible:
+        live = [row["id"] for row in rows if row["state"] == "live"]
+        if not inside and any(row["state"] in MODES for row in rows):
+            return None, "outside the window and no queued task is `window: any`"
+        if live:
+            return None, f"every claimable task is held by a live tick ({', '.join(live)})"
+        return None, "no claimable or queued work"
+    rank = {"exhausted": 0, "ready": 1, "stale": 1, "free": 2}
+
+    def key(row: dict) -> tuple:
+        started = -row["age_minutes"] if row["state"] in ("ready", "stale") else 0.0
+        return (rank[row["state"]], started, row["index"])
+
+    return min(eligible, key=key), ""
+
+
+def git(root: Path, *args: str) -> "subprocess.CompletedProcess[str]":
+    return subprocess.run(["git", *args], cwd=root, capture_output=True, text=True, timeout=60)
+
+
+def default_ref(root: Path) -> str:
+    head = git(root, "rev-parse", "--abbrev-ref", "origin/HEAD")
+    return head.stdout.strip() if head.returncode == 0 and head.stdout.strip() else "origin/main"
+
+
+def remote_branches(root: Path, now: float) -> "dict[str, Branch]":
+    listing = git(
+        root, "for-each-ref", "--format=%(refname:short) %(committerdate:unix)",
+        f"refs/remotes/{REMOTE_PREFIX}*",
+    )
+    if listing.returncode != 0:
+        raise RuntimeError(f"git for-each-ref failed: {listing.stderr.strip()}")
+    branches: "dict[str, Branch]" = {}
+    for line in listing.stdout.splitlines():
+        ref, stamp = line.rsplit(" ", 1)
+        task_id = ref[len(REMOTE_PREFIX):]
+        shown = git(root, "show", f"{ref}:{RUNS_DIR}/{task_id}/CHECKPOINT.md")
+        blocked = git(root, "cat-file", "-e", f"{ref}:BLOCKED.md")
+        branches[task_id] = Branch(
+            age_minutes=(now - int(stamp)) / 60.0,
+            checkpoint=shown.stdout if shown.returncode == 0 else None,
+            has_blocked=blocked.returncode == 0,
+        )
+    return branches
+
+
+def command_next(root: Path) -> int:
+    ref = default_ref(root)
+    shown = git(root, "show", f"{ref}:{QUEUE_PATH}")
+    if shown.returncode != 0:
+        print(f"[yakin next] cannot read {QUEUE_PATH} from {ref}: {shown.stderr.strip()}")
+        print("  likely cause: the clone has no origin default branch ref; fix: `git fetch origin`")
+        return 2
+    try:
+        queue = json.loads(shown.stdout)
+        tasks = queue["tasks"]
+    except (ValueError, KeyError, TypeError) as error:
+        print(f"[yakin next] {QUEUE_PATH} on {ref} is not a valid queue: {error}")
+        print("  fix: none from a tick — the owner fixes the queue; exit")
+        return 2
+    now = datetime.now(timezone.utc).timestamp()
+    try:
+        branches = remote_branches(root, now)
+    except (RuntimeError, ValueError) as error:
+        print(f"[yakin next] {error}")
+        return 2
+    inside = in_window(local_now())
+    rows = []
+    for index, task in enumerate(tasks):
+        task_id = task["id"]
+        merged = git(root, "cat-file", "-e", f"{ref}:{RUNS_DIR}/{task_id}/CHECKPOINT.md").returncode == 0
+        branch = branches.get(task_id)
+        state, fields = classify(branch, merged)
+        rows.append({
+            "id": task_id, "index": index, "state": state,
+            "window": task.get("window", "burn-down"),
+            "age_minutes": branch.age_minutes if branch else 0.0,
+            "stage": fields.get("stage", "-"), "resumes": fields.get("resumes", "-"),
+        })
+        age = f"{branch.age_minutes:.0f}m" if branch else "-"
+        print(f"  {task_id:<{ID_MAX}} {state:<9} age={age:<6} stage={rows[-1]['stage']:<9} resumes={rows[-1]['resumes']}")
+    print(f"  window: {'IN' if inside else 'OUT'}")
+    chosen, reason = pick(rows, inside)
+    if chosen is None:
+        print(f"NONE {reason}")
+        return 1
+    print(f"PICK {chosen['id']} {MODES[chosen['state']]} {BRANCH_PREFIX}{chosen['id']}")
+    return 0
+
+
+def main(argv: "list[str]") -> int:
+    commands = {"check": lambda: command_check(REPO_ROOT), "window": command_window,
+                "next": lambda: command_next(REPO_ROOT)}
+    if len(argv) != 2 or argv[1] not in commands:
+        print(f"usage: tools/yakin/yakin {{{'|'.join(commands)}}}")
+        return 2
+    return commands[argv[1]]()
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "tasks": [
+    {
+      "id": "m0-canary",
+      "title": "M0 canary: record toolchain and a full tools/test timing",
+      "kind": "system",
+      "variant": "V1",
+      "size": "S",
+      "spec": "tools/yakin/tasks/m0-canary.md",
+      "status": "queued",
+      "window": "any"
+    }
+  ]
+}
