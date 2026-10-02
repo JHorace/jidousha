@@ -473,9 +473,9 @@
 - Target::Skip => true,
 + Target::Skip => false,
 
-### T11 a member's card can be lifted on the telling
+### T11 a member's card can be lifted on the telling (re-cut s7)
 @ src/pointer.rs
-- if !ui.family_open && held && !released && in_summer(world.resource::<House>()) =>
+- if !ui.family_open && held && !released && seating(world.resource::<House>()) =>
 + if !ui.family_open && held && !released =>
 
 ### T12 the set-out control reads "Stay home" with a party seated

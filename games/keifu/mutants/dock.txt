@@ -53,10 +53,10 @@
 - row.dock_line = Some(index);
 + row.dock_line = None;
 
-### K12 mid-drag the dock shows the help, not the hero in hand
+### K12 mid-drag the dock shows the help, not the hero in hand (re-cut s7)
 @ src/dock.rs
-- (Some(drag), _, _) => Subject::Hero(drag.hero),
-+ (Some(_), _, _) => Subject::Help,
+- (Some(drag), _, _, _) => Subject::Hero(drag.hero),
++ (Some(_), _, _, _) => Subject::Help,
 
 ### K13 the board runs under the dock
 @ src/summer.rs
