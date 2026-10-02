@@ -3,19 +3,14 @@
 //!
 //! Leaving the telling of an open house begins winter and opens the hearth (§11.1).
 //! "Let the winter pass" resolves the winter (§11.3, `winter.rs`) and then turns the
-//! year; "Summer comes" advances the calendar and prepares the next summer.
-//!
-//! W8 SCAFFOLD: the turning of the year (§18) is W8's. Its winter half is real —
-//! `let_the_winter_pass` resolves the hearth and writes the winter page — and its
-//! turning half is still the calendar alone: nobody ages, dies of age, is born, comes of
-//! age or arrives, and `House::mourned` keeps its dead for W8's death pages. Trouble's
-//! changes are W6's own (§7.2) and stand. W8 replaces `turn_the_year` whole.
+//! year (§18, `turning.rs`); "Summer comes" advances the calendar and prepares the next
+//! summer — and refuses while a death page still waits for its heir (§15.2, §18.1).
 
 use jidousha::prelude::Rng;
 
 use crate::content::Content;
 use crate::house::House;
-use crate::passage::Passage;
+use crate::turning::turn_the_year;
 use crate::winter::resolve_winter;
 
 /// Leave the telling (SPEC §2.1, `scene/scenes/telling.jai:184-196`): at renown 0 the
@@ -53,25 +48,32 @@ pub fn let_the_winter_pass(content: &Content, house: &mut House, rng: &mut Rng) 
          control was offered off the winter screen\n  fix: offer it only at the hearth"
     );
     let (winter, done) = resolve_winter(content, house, rng);
-    turn_the_year(house, winter, done);
+    turn_the_year(content, house, winter, done, rng);
 }
 
-/// W8 SCAFFOLD: the turning (SPEC §18) as its winter page alone (step 1).
-fn turn_the_year(house: &mut House, winter: Vec<String>, done: crate::winter::WinterPlan) {
-    house.passage = Some(Passage {
-        year: house.calendar.current_year(),
-        winter,
-        done,
-    });
+/// Whether the year may turn: a turning is open and no death page waits for its heir
+/// (SPEC §15.2: "The turning cannot proceed past an undecided page").
+pub fn may_turn(house: &House) -> bool {
+    house
+        .passage
+        .as_ref()
+        .is_some_and(|passage| passage.first_undecided().is_none())
 }
 
 /// "Summer comes" (SPEC §2.1, `scene/scenes/turning.jai:45-74`): the turning closes,
-/// the calendar moves to next summer, and the board is prepared (§5.1).
+/// the calendar moves to next summer, and the board is prepared (§5.1). Refused —
+/// loudly, since the screen never offers it — while a death page is undecided.
 pub fn summer_comes(content: &Content, house: &mut House, rng: &mut Rng) {
     assert!(
         house.passage.is_some(),
         "[keifu] summer was brought with no turning open\n  likely cause: the control \
          was offered off the turning screen\n  fix: offer it only on its last leaf"
+    );
+    assert!(
+        may_turn(house),
+        "[keifu] summer was brought with a death page undecided\n  likely cause: the \
+         control was offered before every heir was chosen\n  fix: SPEC §18.1 — the year \
+         does not turn until each death page has its choice"
     );
     house.passage = None;
     house.calendar.begin_summer();

@@ -351,6 +351,20 @@ fn fear_section(content: &Content, hero: &Hero, out: &mut Vec<Line>) {
     }
 }
 
+/// The prophecy as it is read out: "Blood of X: you will ..." for an inherited Door
+/// destiny, else the destiny's own (SPEC §19.1; the Seer's lines at a coming of age and an
+/// arrival read the same, §17.2, §17.5).
+pub fn prophecy(content: &Content, hero: &Hero) -> String {
+    let lore = &content.destinies[hero.destiny.kind.index()];
+    match &hero.destiny.blood_of {
+        Some(blood) => fmt(
+            &content.blood_of_prophecy,
+            &[blood, &lowered(&lore.prophecy)],
+        ),
+        None => lore.prophecy.clone(),
+    }
+}
+
 fn destiny_section(content: &Content, hero: &Hero, out: &mut Vec<Line>) {
     let words = &content.words;
     let destiny = &hero.destiny;
@@ -361,14 +375,7 @@ fn destiny_section(content: &Content, hero: &Hero, out: &mut Vec<Line>) {
         W::SheetDestiny
     };
     out.push(line(Ink::Heading, &words[heading]));
-    let prophecy = match &destiny.blood_of {
-        Some(blood) => fmt(
-            &content.blood_of_prophecy,
-            &[blood, &lowered(&lore.prophecy)],
-        ),
-        None => lore.prophecy.clone(),
-    };
-    out.push(line(Ink::Body, prophecy));
+    out.push(line(Ink::Body, prophecy(content, hero)));
     // SPEC-GAPS KG-6: UNSPOKEN shows its prophecy only.
     if destiny.kind != Destiny::Unspoken {
         out.push(line(Ink::Note, lore.doom.clone()));

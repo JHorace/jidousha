@@ -147,12 +147,15 @@ pub fn check_battery(checks: &mut Checks, content: &Content) -> Vec<String> {
             }
             // The winter as the hearth opens it (the wounded by the fire), then summer.
             let_the_winter_pass(content, &mut house, &mut rng);
+            crate::play::choose_every_heir(content, &mut house, crate::play::first_heir);
             summer_comes(content, &mut house, &mut rng);
         }
         deaths += house
             .heroes
             .iter()
-            .filter(|h| h.fate == crate::hero::Fate::Dead && h.fate_year >= 1)
+            .filter(|h| {
+                h.fate == crate::hero::Fate::Dead && h.fate_year >= 1 && h.death_place.is_some()
+            })
             .count();
     }
     let mut lines = Vec::new();

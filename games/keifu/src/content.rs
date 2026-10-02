@@ -53,22 +53,16 @@ pub const FILES: [(&str, &str); 15] = [
 ///
 /// Typed reading of these lands with the wave that uses them; until then their
 /// shape is held at the top level so a renamed or missing table fails now.
-const LATER_WAVES: [(&str, &[&str]); 2] = [
-    (
-        "epitaph.json",
-        &[
-            "parts",
-            "frames",
-            "priorities",
-            "sentence_limit",
-            "templates",
-        ],
-    ),
-    (
-        "wanderers.json",
-        &["age_low", "age_high", "standings", "dreams"],
-    ),
-];
+const LATER_WAVES: [(&str, &[&str]); 1] = [(
+    "epitaph.json",
+    &[
+        "parts",
+        "frames",
+        "priorities",
+        "sentence_limit",
+        "templates",
+    ],
+)];
 
 /// A destiny's three lines.
 pub struct DestinyLore {
@@ -162,6 +156,8 @@ pub struct Content {
     pub door_locks: Vec<i32>,
     /// `door.json` `closed_title` and `closed_verdict`: the house closed (W10 SCAFFOLD's screen).
     pub door_closed: [String; 2],
+    /// `wanderers.json`: who a wanderer is drawn as, and the dreams a newcomer rolls.
+    pub wanderers: crate::turning_lore::WandererLore,
     /// `ui-text.json` and `lines.json`, the keys this build reads.
     pub words: Words,
 }
@@ -213,6 +209,7 @@ pub fn load() -> Result<Content, SchemaError> {
             text_at(&at("door.json")?, "closed_verdict")?,
         ],
         ghost: crate::ghost::read_ghost(&at("ghost.json")?)?,
+        wanderers: crate::turning_lore::read_wanderers(&at("wanderers.json")?)?,
         words: read_words(at("ui-text.json")?, at("lines.json")?)?,
         lore,
     })

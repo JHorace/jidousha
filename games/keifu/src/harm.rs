@@ -1,6 +1,6 @@
 //! What a quest can do to the people on it (SPEC §7.4): wounds, a disaster's death
-//! roll, mending, burning, crowning and death — and the heir list the crowned leave
-//! their heirloom by (§15.1, §15.3).
+//! roll, mending, burning, crowning and death. The crowned leave their heirloom to
+//! their nearest kin, which the heir list decides (`heirs.rs`, §15.1, §15.3).
 //!
 //! Every rule writes its lines to the quest page in the order the original does
 //! (the `lines.json` source lines order them where SPEC lists effects), and changes
@@ -9,15 +9,15 @@
 
 use jidousha::prelude::Rng;
 
-use crate::bonds::steadies;
 use crate::chance::chance;
-use crate::constants::{APTITUDE_LIMIT, CARRIER_LOSS, HEIRS_OFFERED, MENDED_BONUS, MENDED_DREAD};
+use crate::constants::{APTITUDE_LIMIT, CARRIER_LOSS, MENDED_BONUS, MENDED_DREAD};
 use crate::destiny::{fire_claims, mends, shields_on_quests};
 use crate::fear::{Occasion, add_dread};
 use crate::grief::grieve;
-use crate::hero::{Deed, DeedKind, Fate, Hero, HeroId, descends_from};
+use crate::heirs::nearest_kin;
+use crate::hero::{Deed, DeedKind, Fate, Hero, HeroId};
 use crate::house::House;
-use crate::ids::{BondKind, Destiny, Pool};
+use crate::ids::{Destiny, Pool};
 use crate::resolve::Afield;
 use crate::text::{capitalized, fmt};
 use crate::words::W;
@@ -262,61 +262,4 @@ pub fn crown(f: &Afield<'_>, house: &mut House, id: HeroId, out: &mut Vec<String
         }
         None => out.push(fmt(&words[W::CrownHeirloomTaken], &[&name, &heirloom.name])),
     }
-}
-
-/// Where `other` ranks as `dead`'s heir (SPEC §15.1's table): children 0, other
-/// descendants 1, the spouse 2, siblings by a shared parent and the parents 3, those
-/// the dead taught 4, anyone the dead holds a steadying bond with 5, everyone else 6.
-/// SPEC-GAPS KG-39: a hero several rows fit takes the first (the lowest rank), and a
-/// parent is known by the bond or by the dead's own parents.
-fn heir_rank(heroes: &[Hero], dead: HeroId, other: HeroId) -> usize {
-    let bond = heroes[dead].bond_to(other);
-    let kind = bond.map(|b| b.kind);
-    let shares_a_parent = heroes[dead]
-        .parents
-        .iter()
-        .flatten()
-        .any(|parent| heroes[other].parents.contains(&Some(*parent)));
-    if kind == Some(BondKind::Child) {
-        0
-    } else if descends_from(heroes, other, dead) {
-        1
-    } else if kind == Some(BondKind::Spouse) {
-        2
-    } else if shares_a_parent
-        || kind == Some(BondKind::Parent)
-        || heroes[dead].parents.contains(&Some(other))
-    {
-        3
-    } else if bond.is_some_and(|b| b.taught) {
-        4
-    } else if kind.is_some_and(steadies) {
-        5
-    } else {
-        6
-    }
-}
-
-/// The heir list (SPEC §15.1, `lineage/passage.jai:186-217`): the living other than
-/// the dead, by rank, then creation order, at most eight.
-pub fn heirs(heroes: &[Hero], dead: HeroId) -> Vec<HeroId> {
-    let mut list: Vec<(usize, HeroId)> = (0..heroes.len())
-        .filter(|&id| id != dead && heroes[id].is_living())
-        .map(|id| (heir_rank(heroes, dead, id), id))
-        .collect();
-    list.sort();
-    list.into_iter()
-        .take(HEIRS_OFFERED)
-        .map(|(_, id)| id)
-        .collect()
-}
-
-/// Nearest kin (SPEC §15.3): on the heir list, the first without an heirloom, else the
-/// first, else no one.
-pub fn nearest_kin(heroes: &[Hero], dead: HeroId) -> Option<HeroId> {
-    let list = heirs(heroes, dead);
-    list.iter()
-        .copied()
-        .find(|&id| heroes[id].heirloom.is_none())
-        .or_else(|| list.first().copied())
 }

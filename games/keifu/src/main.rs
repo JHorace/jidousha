@@ -51,6 +51,7 @@
 #![allow(missing_docs)]
 
 mod art;
+mod births;
 mod blessing;
 mod board;
 mod board_view;
@@ -61,8 +62,10 @@ mod capture;
 mod cast;
 mod chance;
 mod checks;
+mod coming_of_age;
 mod constants;
 mod content;
+mod death_page;
 mod destiny;
 mod dock;
 mod dock_checks;
@@ -89,6 +92,7 @@ mod harm_tests;
 mod hearth;
 mod hearth_help;
 mod hearth_view;
+mod heirs;
 mod hero;
 mod house;
 mod household;
@@ -98,11 +102,13 @@ mod legacy;
 mod legacy_lore;
 mod lore;
 mod moment;
+mod newcomers;
 mod oracles;
 mod passage;
 mod plans;
 #[cfg(test)]
 mod plans_tests;
+mod play;
 mod pointer;
 mod power;
 mod power_lines;
@@ -132,6 +138,8 @@ mod telling_view;
 mod testkit;
 mod text;
 mod tree;
+mod turning;
+mod turning_lore;
 mod turning_view;
 mod verify;
 mod w2;
@@ -146,6 +154,7 @@ mod w6_stages;
 mod w7;
 mod w7_battery;
 mod w7_controls;
+mod wanderer;
 mod winter;
 #[cfg(test)]
 mod winter_tests;

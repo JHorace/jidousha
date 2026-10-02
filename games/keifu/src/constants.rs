@@ -223,6 +223,57 @@ pub const PARENT_AGE_HIGH: i32 = 45;
 /// `HOUSEHOLD_LIMIT`: also the roster size (CONSTANTS §10).
 pub const ROSTER_SEATS: usize = 12;
 
+/// `OLD_AGE_BASE_CHANCE`: the old-age death chance at 55, after the turning's +1
+/// (CONSTANTS §10).
+pub const OLD_AGE_BASE_CHANCE: f64 = 0.04;
+/// `OLD_AGE_YEARLY_CHANCE`: +2.5 points a year past 55 (CONSTANTS §10).
+pub const OLD_AGE_YEARLY_CHANCE: f64 = 0.025;
+/// The age old age begins to roll at: `ELDER_AGE` (CONSTANTS §2, §10).
+pub const OLD_AGE_FROM: i32 = 55;
+/// `OUTLIVING_AGE_FACTOR`: OUTLIVE_THOSE_YOU_LOVE's old-age multiplier (CONSTANTS §8).
+pub const OUTLIVING_AGE_FACTOR: f64 = 0.5;
+/// `BED_AGE_FACTOR`: DIE_IN_YOUR_BED's old-age multiplier (CONSTANTS §8).
+pub const BED_AGE_FACTOR: f64 = 2.0;
+/// `CHILDREN_PER_PAIR`: a pair's children, living or dead, before births stop (CONSTANTS §10).
+pub const CHILDREN_PER_PAIR: usize = 3;
+/// `HOUSEHOLD_LIMIT`: no birth when this many live (CONSTANTS §10).
+pub const HOUSEHOLD_LIMIT: usize = 12;
+/// `WANDERER_ROOM`: no wanderer when this many live (CONSTANTS §10).
+pub const WANDERER_ROOM: usize = 10;
+/// `WANDERER_BASE_CHANCE` (CONSTANTS §10).
+pub const WANDERER_BASE_CHANCE: f64 = 0.2;
+/// `WANDERER_RENOWN_DRAW`: +1 point a house renown (CONSTANTS §10).
+pub const WANDERER_RENOWN_DRAW: f64 = 0.01;
+/// `WANDERER_CHANCE_LIMIT` (CONSTANTS §10).
+pub const WANDERER_CHANCE_LIMIT: f64 = 0.6;
+/// `FEWEST_ADULTS`: fewer living adults and a wanderer comes for certain (CONSTANTS §10).
+pub const FEWEST_ADULTS: usize = 5;
+/// The most personal renown a wanderer arrives with, from 0 (CONSTANTS §10).
+pub const WANDERER_RENOWN_HIGH: i32 = 2;
+/// `NEWBORN_APTITUDE_SHARE`: a newborn's base is `max((p1 + p2) / 4 + U{0,1}, 1)` (CONSTANTS §10).
+pub const NEWBORN_APTITUDE_SHARE: i32 = 4;
+/// The least a newborn's base aptitude can be (CONSTANTS §10, the `max(.., 1)`).
+pub const NEWBORN_APTITUDE_LEAST: i32 = 1;
+/// `INHERITED_FEAR_CHANCE`: a parent's unconquered, unbroken fear passes (CONSTANTS §10).
+pub const INHERITED_FEAR_CHANCE: f64 = 0.4;
+/// `BROKEN_FEAR_CHANCE`: a broken parent's fear passes (CONSTANTS §10).
+pub const BROKEN_FEAR_CHANCE: f64 = 0.8;
+/// `BORN_BRAVE_CHANCE`: a conquered parent's child is born brave (CONSTANTS §10).
+pub const BORN_BRAVE_CHANCE: f64 = 0.5;
+/// `SURPASSING_CHILD_BONUS`: +2 to all three of a CHILD_WILL_SURPASS_YOU parent's first
+/// child (CONSTANTS §8).
+pub const SURPASSING_CHILD_BONUS: i32 = 2;
+/// `TEACHER_AGE_FOR_DREAM`: WORTHY_STUDENT is not rolled for anyone younger (CONSTANTS §10).
+pub const TEACHER_AGE_FOR_DREAM: i32 = 35;
+/// `WANDERER_AGE_LOW`..`HIGH` (CONSTANTS §10).
+pub const WANDERER_AGES: (i32, i32) = (17, 36);
+/// Wanderer standings by house renown: threshold, gift low/high, other low/high
+/// (CONSTANTS §10, "Wanderer standings").
+pub const WANDERER_STANDINGS: [(i32, i32, i32, i32, i32); 3] =
+    [(0, 3, 5, 1, 3), (12, 4, 6, 2, 3), (30, 5, 7, 2, 4)];
+/// A first teacher's teaching shows at the coming of age: +1, below the cap (SPEC §17.5).
+pub const TEACHING_SHOWS: i32 = 1;
+
 /// `LEGACY_HEIRLOOM_BONUS` (CONSTANTS §11).
 pub const LEGACY_HEIRLOOM_BONUS: i32 = 2;
 /// `TALE_YEARLY_RENOWN` (CONSTANTS §11).

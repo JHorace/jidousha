@@ -68,14 +68,11 @@ pub fn require_the_hearth(checks: &mut Checks, sim: &HeadlessSim, seed: u64) {
     );
 }
 
-/// Let the winter pass and read the turning to its end: "Go on" until summer comes.
+/// Let the winter pass and read the turning to its end: "Go on", the first heir on each
+/// death page that waits, until summer comes.
 pub fn through_the_winter(sim: &mut HeadlessSim) {
     point_at(sim, Target::LetWinterPass, true);
-    let mut guard = 0;
-    while sim.world().resource::<House>().passage.is_some() && guard < 20 {
-        point_at(sim, Target::GoOn, true);
-        guard += 1;
-    }
+    crate::play::read_to_summer(sim);
 }
 
 /// Year 1, nobody seated: "Stay home", then the telling left — the hearth is up.
@@ -194,7 +191,7 @@ pub fn check_oracle(checks: &mut Checks) -> (String, Vec<String>) {
             "after the winter Pip's sheet does not read Spirit 3, or Odo's his dream at 1/2 and his student",
             format!("seed {seed:#x}: Pip {pip_sheet:?}; Odo {odo_sheet:?}"),
         );
-        point_at(&mut sim, Target::GoOn, true);
+        crate::play::read_to_summer(&mut sim);
         let house = sim.world().resource::<House>();
         checks.require(
             house.passage.is_none()
@@ -231,13 +228,23 @@ pub fn stage_played_winter(sim: &mut HeadlessSim) -> Vec<String> {
     let mut read = Vec::new();
     let mut guard = 0;
     while guard < 10 {
-        read.extend(turning_lines(sim));
+        // The winter's page only: the turning's pages after it are W8's.
+        let lines = turning_lines(sim);
+        if !lines
+            .first()
+            .is_some_and(|l| l.starts_with("What the winter did"))
+        {
+            break;
+        }
+        read.extend(lines);
         guard += 1;
         if crate::verify::target_rect(sim, Target::Leaf(guard)).is_none() {
             break;
         }
         point_at(sim, Target::Leaf(guard), true);
     }
+    // Back to the winter's page, where the lines name the winter's heroes.
+    point_at(sim, Target::Leaf(0), true);
     read
 }
 

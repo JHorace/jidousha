@@ -4,10 +4,12 @@
 //! stirred (wounds, dread, broken fears, ages from five to seventy, aptitudes, callings,
 //! the two destinies that bar learning or teach greater, spouses and rivals), every
 //! living hero dropped in a random seat of the hall or the hearth — then the plan the
-//! seats preview read, the winter let pass through `season::let_the_winter_pass` (what
-//! "Let the winter pass" calls), and the plan it carried out required equal. Each plan's
-//! effect is asked of the house too: every lesson's amount in the learner's base, every
-//! rest in the wound and the dread, every verdict in the bonds, every teller's renown.
+//! seats preview read, the winter resolved and the year turned by the two halves of
+//! `season::let_the_winter_pass` (what "Let the winter pass" calls), and the plan the
+//! turning records required equal to the preview. Each plan's effect is asked of the house
+//! as the winter left it, before the turning's ageing, deaths and comings of age: every
+//! lesson's amount in the learner's base, every rest in the wound and the dread, every
+//! verdict in the bonds, every teller's renown.
 //! **The page**: on staged hearths, the notes the screen draws are the plan's.
 //!
 //! The battery must have met every excuse but one — "needs a teacher" in the general
@@ -25,7 +27,6 @@ use crate::hero::HeroId;
 use crate::house::House;
 use crate::ids::{BondKind, Destiny, Vocation};
 use crate::plans::{Courtship, Excuse, Lesson, Teller};
-use crate::season::let_the_winter_pass;
 use crate::verify::{SEEDS, session};
 use crate::w7::group_lines;
 use crate::winter::plan;
@@ -124,7 +125,10 @@ pub fn check_agreement(checks: &mut Checks, content: &Content) -> Vec<String> {
         let before = house.clone();
         let planned = plan(content, &house);
         let shown = notes(content, &house, &planned);
-        let_the_winter_pass(content, &mut house, &mut rng);
+        // The winter, then the turning: the plan's effects are read between the two.
+        let (winter, done) = crate::winter::resolve_winter(content, &mut house, &mut rng);
+        let after_winter = house.clone();
+        crate::turning::turn_the_year(content, &mut house, winter, done, &mut rng);
         cases += 1;
         let Some(passage) = &house.passage else {
             checks.require(
@@ -148,7 +152,7 @@ pub fn check_agreement(checks: &mut Checks, content: &Content) -> Vec<String> {
             "the seat notes are not the notes of the plan the winter carried out",
             format!("seed {seed:#x}: {shown:?}"),
         );
-        effects(checks, seed, &before, &house, &planned, &mut met);
+        effects(checks, seed, &before, &after_winter, &planned, &mut met);
     }
     let all_excuses = [
         Excuse::ChildTeacher,

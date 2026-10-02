@@ -271,7 +271,7 @@ fn a_court_triumph_crowns_a_hero_of_eight_renown_and_leaves_the_heirloom_to_the_
 fn the_heir_list_ranks_children_then_descendants_then_kin_then_the_rest() {
     let (_, heroes) = crate::testkit::founded();
     let garrick = id(&heroes, "Garrick");
-    let names: Vec<&str> = crate::harm::heirs(&heroes, garrick)
+    let names: Vec<&str> = crate::heirs::heirs(&heroes, garrick)
         .iter()
         .map(|&h| heroes[h].name.as_str())
         .collect();
@@ -329,7 +329,7 @@ fn a_rival_ranks_with_everyone_else_and_those_taught_above_a_friend() {
     let (_, mut heroes) = crate::testkit::founded();
     let brannoc = id(&heroes, "Brannoc");
     let names = |heroes: &[crate::hero::Hero], dead| -> Vec<String> {
-        crate::harm::heirs(heroes, dead)
+        crate::heirs::heirs(heroes, dead)
             .iter()
             .map(|&h| heroes[h].name.clone())
             .collect()

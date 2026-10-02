@@ -81,6 +81,17 @@ pub struct StageLore {
     pub requirement: Requirement,
 }
 
+/// Where a dream's ghost walks (SPEC §14.4, `dreams.json` `ghost_place`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GhostPlace {
+    /// This place.
+    Fixed(Place),
+    /// AVENGE_THE_LOST's setup place.
+    Setup,
+    /// Where the dead hero died questing, not at the Door; else the Barrow.
+    WhereTheDreamerDied,
+}
+
 /// One dream, as authored.
 pub struct DreamLore {
     /// "To lay the Barrow's dead to rest", or a `%` template.
@@ -91,6 +102,8 @@ pub struct DreamLore {
     pub legacy: LegacyKind,
     /// The three stages.
     pub stages: Vec<StageLore>,
+    /// Where its ghost walks, if it is left to no one.
+    pub ghost_place: GhostPlace,
 }
 
 /// `dreams.json`'s format pieces.
@@ -193,11 +206,30 @@ fn read_dream(kind: DreamKind, item: &At<'_>) -> Result<DreamLore, SchemaError> 
             legacy_of(kind).id()
         )));
     }
+    let ghost_place = match text(item, "ghost_place")?.as_str() {
+        "SETUP_PLACE" if has_setup => GhostPlace::Setup,
+        "WHERE_THE_DREAMER_DIED" => GhostPlace::WhereTheDreamerDied,
+        other => GhostPlace::Fixed(
+            Place::find(other)
+                .filter(|place| *place != Place::SealedDoor)
+                .ok_or_else(|| {
+                    item.reject(format!("ghost_place {other:?} is not a questing place"))
+                })?,
+        ),
+    };
+    let wanderer_dream = flag(item, "wanderer_dream")?;
+    // SPEC §17.4: every dream but AVENGE_THE_LOST can be rolled.
+    if wanderer_dream == (kind == DreamKind::AvengeTheLost) {
+        return Err(item.reject(format!(
+            "wanderer_dream {wanderer_dream}; SPEC §17.4 rolls every dream but AVENGE_THE_LOST"
+        )));
+    }
     Ok(DreamLore {
         title: text(item, "title")?,
         title_arguments,
         legacy,
         stages,
+        ghost_place,
     })
 }
 
