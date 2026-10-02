@@ -63,15 +63,15 @@
 - max: Vec2::new(SHEET.min.x - GUTTER, PAGE_H - 8.0),
 + max: Vec2::new(SHEET.min.x + 40.0, PAGE_H - 8.0),
 
-### K14 the idle dock holds the wrong words
+### K14 the idle dock holds the wrong words (re-cut s6)
 @ src/dock_lines.rs
-- &content.words[W::SummerHelp],
-+ &content.words[W::SummerHousehold],
+-         W::SummerHelp
++         W::SummerHousehold
 
-### K15 a hero dropped on the dock is seated
+### K15 a hero dropped on the dock is seated (re-cut s6)
 @ src/board.rs
-- Target::OpenFamily | Target::CloseFamily | Target::Dock => None,
-+ Target::OpenFamily | Target::CloseFamily => None, Target::Dock => Some(Slot::Quest { quest: 0, seat: 0 }),
+-             Target::OpenFamily⏎            | Target::CloseFamily⏎            | Target::Dock⏎
++             Target::Dock => Some(Slot::Quest { quest: 0, seat: 0 }),⏎            Target::OpenFamily⏎            | Target::CloseFamily⏎
 
 ### K16 the camera is not fitted to a narrow window
 @ src/screen.rs
