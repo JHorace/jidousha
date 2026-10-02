@@ -32,6 +32,8 @@ pub fn check_art(checks: &mut Checks, recorder: &mut FrameRecorder) -> String {
         .flat_map(|pair| pair.iter().map(String::as_str))
         .collect();
     names.push(&content.lore.child_sprite);
+    // Every heirloom a dream can forge (SPEC §14.1), not only the one held at founding.
+    names.extend(content.legacies.heirlooms.iter().map(|h| h.sprite.as_str()));
     let heirlooms: Vec<String> = sim
         .world()
         .resource::<House>()

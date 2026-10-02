@@ -93,8 +93,8 @@ pub struct Blessing {
     pub power: i32,
 }
 
-/// What a deed was. W2 writes the two fear deeds, W3 the three dream deeds; later
-/// waves add their kinds.
+/// What a deed was. W2 writes the two fear deeds, W3 the three dream deeds, W6 the
+/// summer's; later waves add their kinds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DeedKind {
     /// Dread reached 5 (SPEC §10.4).
@@ -107,6 +107,40 @@ pub enum DeedKind {
     DreamFulfilled,
     /// A legacy left (SPEC §14.1).
     LeftLegacy,
+    /// The first quest ever (SPEC §7.1 step 4); weight is the quest's danger.
+    FirstQuest,
+    /// A triumph (SPEC §7.3); weight is the quest's danger.
+    Triumph,
+    /// Wounded on a quest (SPEC §7.4).
+    Wounded,
+    /// Lived through a disaster (SPEC §7.4).
+    SurvivedDisaster,
+    /// Broken and mended, as the Seer said (SPEC §7.4).
+    Mended,
+    /// Crowned (SPEC §7.4).
+    Crowned,
+    /// Companions became friends on the road (SPEC §12.2).
+    Befriended,
+    /// Laid a ghost (SPEC §14.4).
+    LaidGhost,
+}
+
+/// What became of a dead hero's own dream (SPEC §3.2 `bequest`). W6 lays ghosts;
+/// W8 decides the rest on the death page.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DreamFate {
+    /// Not decided yet.
+    Undecided,
+    /// There was no dream.
+    NeverDreamt,
+    /// It was done.
+    Fulfilled,
+    /// An heir took it up.
+    PassedOn,
+    /// No one took it up; it walks as a ghost.
+    LeftToNoOne,
+    /// Its ghost was laid, in `Hero::laid_year`.
+    LaidToRest,
 }
 
 /// One entry in a hero's record of deeds (SPEC §3.2). The telling is never shown;
@@ -195,10 +229,20 @@ pub struct Hero {
     pub fate_telling: String,
     /// Where a questing death happened.
     pub death_place: Option<Place>,
+    /// What a questing death was against: the quest's first tag.
+    pub death_tag: Option<Tag>,
     /// Grief already applied.
     pub grieved: bool,
     /// The bequest has been decided.
     pub bequest_decided: bool,
+    /// The bequest's heir, once one is named.
+    pub bequest_heir: Option<HeroId>,
+    /// The heirloom the bequest records.
+    pub bequest_heirloom: Option<String>,
+    /// What became of the own dream.
+    pub dream_fate: DreamFate,
+    /// The year the hero's ghost was laid (SPEC §14.4).
+    pub laid_year: Option<i32>,
     /// Up to two parents.
     pub parents: [Option<HeroId>; 2],
     /// Places quested at.

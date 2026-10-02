@@ -18,7 +18,7 @@ use crate::words::W;
 
 /// The space a value is kept on the quest sheet's right.
 const VALUE_W: f32 = 48.0;
-/// The heirloom's sprite on the hero sheet: 16 px art at 2x.
+/// The heirloom's sprite on the hero sheet: 16 px art at 2x, 8 px art at 4x.
 const HEIRLOOM_FIGURE: f32 = 32.0;
 /// The history panel's inset.
 const HISTORY_PAD: f32 = 10.0;

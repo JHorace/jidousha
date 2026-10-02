@@ -86,6 +86,10 @@ pub struct Lore {
     pub name_list_separator: String,
     /// " and ".
     pub name_list_last_separator: String,
+    /// Outcome titles, by `Outcome`: "Disaster" ... "Triumph".
+    pub outcomes: Vec<String>,
+    /// "% was %.": the age at death (He/She, age).
+    pub age_at_death: String,
     /// `phase_effect_fragments`, by key.
     pub phase_effect: Vec<(String, String)>,
 }
@@ -183,6 +187,8 @@ pub fn read_lore(at: &At<'_>) -> Result<Lore, SchemaError> {
         name_list_empty: text_at(at, "name_list_empty")?,
         name_list_separator: text_at(at, "name_list_separator")?,
         name_list_last_separator: text_at(at, "name_list_last_separator")?,
+        outcomes: titles(at.key("outcomes")?.items()?)?,
+        age_at_death: text_at(at, "age_at_death")?,
         phase_effect: at
             .key("phase_effect_fragments")?
             .entries()?

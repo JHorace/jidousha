@@ -57,7 +57,7 @@ pub const ART_ARRIVES: u64 = 1;
 ///
 /// A verify run reads no files; the bytes are the ones the window shows, so a
 /// picture that stopped decoding fails here rather than passing on a stub.
-pub const ART_FILES: [(&str, &[u8]); 10] = [
+pub const ART_FILES: [(&str, &[u8]); 12] = [
     (
         "hero_knight.png",
         include_bytes!("../assets/hero_knight.png"),
@@ -88,6 +88,14 @@ pub const ART_FILES: [(&str, &[u8]); 10] = [
     (
         "heirloom_blade.png",
         include_bytes!("../assets/heirloom_blade.png"),
+    ),
+    (
+        "heirloom_road_book.png",
+        include_bytes!("../assets/heirloom_road_book.png"),
+    ),
+    (
+        "heirloom_ring.png",
+        include_bytes!("../assets/heirloom_ring.png"),
     ),
 ];
 
