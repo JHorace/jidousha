@@ -52,7 +52,11 @@ pub const STRONG_WELL_FLOOR: usize = 18;
 /// The roll is the game's own (`roll`, `tier_of`, `odds`), over the occurrence
 /// addresses a played world would produce; nothing is sampled twice.
 pub fn tally(tuning: &Tuning, fit: i64) -> (usize, usize, usize) {
-    let sim = Sim::opening(tuning, crate::modules::ModuleSet::ALL);
+    let sim = Sim::opening(
+        crate::scenario::freeplay(),
+        tuning,
+        crate::modules::ModuleSet::ALL,
+    );
     let at = odds(tuning, fit);
     let mut out = (0, 0, 0);
     for seed in 0..SWEEP_SEEDS {
@@ -110,7 +114,11 @@ pub fn judge_at(checks: &mut crate::checks::Checks, tuning: &Tuning) {
         "safe risky chancy",
     );
     // --- the payout, every case ------------------------------------------
-    let mut sim = Sim::opening(tuning, crate::modules::ModuleSet::ALL);
+    let mut sim = Sim::opening(
+        crate::scenario::freeplay(),
+        tuning,
+        crate::modules::ModuleSet::ALL,
+    );
     sim.everybody_here();
     let haul = JobId { site: 1, slot: 0 }; // the mushroom haul, 40g
     let cases = [
@@ -274,7 +282,11 @@ pub fn judge_one_function(checks: &mut crate::checks::Checks) -> String {
     let grid = crate::grid::grid();
     let shipped = Tuning::SHIPPED;
     let moved = shipped.with(crate::constants::Field::FailBase, 60);
-    let mut sim = Sim::opening(&shipped, crate::modules::ModuleSet::ALL);
+    let mut sim = Sim::opening(
+        crate::scenario::freeplay(),
+        &shipped,
+        crate::modules::ModuleSet::ALL,
+    );
     sim.everybody_here();
     let alex = sim
         .people
@@ -447,6 +459,7 @@ pub fn shot_run() -> crate::sweep::Conducted {
         tuning: Tuning::SHIPPED,
         modules: crate::modules::ModuleSet::ALL,
         seed: Some(SHOT_SEED),
+        scenario: crate::scenario::freeplay(),
         directives: &script,
         photos: &photos,
         probe_ticks: &[],

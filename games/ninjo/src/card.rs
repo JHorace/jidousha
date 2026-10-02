@@ -70,18 +70,21 @@ pub enum Arrange {
 pub fn arrange(petition: &Petition) -> Arrange {
     let condition = petition.template.condition;
     match condition {
-        Condition::SentToFight | Condition::SentSomewhereNew => match petition.site {
-            Some(site) => Arrange::Board {
-                who: petition.who,
-                site,
-            },
-            None => Arrange::WorkOf(petition.who),
-        },
+        Condition::SentToFight | Condition::SentSomewhereNew | Condition::SiteWorked => {
+            match petition.site {
+                Some(site) => Arrange::Board {
+                    who: petition.who,
+                    site,
+                },
+                None => Arrange::WorkOf(petition.who),
+            }
+        }
         Condition::Bench => Arrange::Works,
         Condition::PurseAtLeast
         | Condition::OtherSettled
         | Condition::CraftDone
-        | Condition::PaidWork => Arrange::WorkOf(condition.subject(petition)),
+        | Condition::PaidWork
+        | Condition::PaidAtLeast => Arrange::WorkOf(condition.subject(petition)),
     }
 }
 
@@ -188,12 +191,7 @@ pub fn card(
     panel.text(TextRun::over(
         at + layout::card::SOURCE,
         clipped(
-            &format!(
-                "{} - {} - {}",
-                petition.template.source.phrase(),
-                petition.template.source.class(),
-                petition.template.id
-            ),
+            &petition.template.source.chip(petition.template.id),
             width - layout::card::SOURCE.x,
         ),
         theme::SMALL,

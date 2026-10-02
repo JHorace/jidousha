@@ -212,6 +212,8 @@ pub struct Flow {
     /// The scenario seed on every stamp (DESIGN carries giri's seed
     /// machinery; S1 never reads the `Rng`, and verify asserts it).
     pub seed: u64,
+    /// **The scenario's id**, beside the seed on every stamp (wave 1.6).
+    pub scenario: &'static str,
 }
 impl Resource for Flow {}
 
@@ -411,16 +413,28 @@ impl Breakdown {
 pub struct SessionSeed(pub Option<u64>);
 impl Resource for SessionSeed {}
 
+/// The session's scenario: `Some` when the page carried `?scenario=` or a
+/// harness planted one; `None` opens freeplay, the authored start (wave 1.6).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SessionScenario(pub Option<&'static crate::scenario::Scenario>);
+impl Resource for SessionScenario {}
+
 /// Put the scenario's opening state into the world — startup, and the tuning
 /// drawer's APPLY (which restarts the scenario at the new constants, the
 /// fork's scenario-boundary reading of giri's beat-boundary rule).
 pub fn load_scenario(world: &mut World) {
+    let scenario = world
+        .find_resource::<SessionScenario>()
+        .copied()
+        .unwrap_or_default()
+        .0
+        .unwrap_or_else(crate::scenario::freeplay);
     let seed = world
         .find_resource::<SessionSeed>()
         .copied()
         .unwrap_or_default()
         .0
-        .unwrap_or(0);
+        .unwrap_or(scenario.seed);
     // The Rng is re-seeded so the stamp is honest. **The simulation's own
     // randomness is the resolution roll** (wave 1.4), which is addressed by
     // the occurrence and reads the seed off the `Sim` rather than drawing on
@@ -433,7 +447,7 @@ pub fn load_scenario(world: &mut World) {
         .find_resource::<ModuleSet>()
         .copied()
         .unwrap_or_default();
-    let mut opened = Sim::opening(&tuning, modules);
+    let mut opened = Sim::opening(scenario, &tuning, modules);
     opened.seed = seed;
     world.insert_resource(opened);
     world.insert_resource(Clock::opening());
@@ -443,6 +457,7 @@ pub fn load_scenario(world: &mut World) {
     flow.pulse = None;
     flow.show_ignored = false;
     flow.seed = seed;
+    flow.scenario = scenario.id.as_str();
     flow.explained = None;
     // The stamp on the opening line carries seed and module set; the
     // constants ride the drawer's own stamp, which is always on screen while
@@ -457,7 +472,8 @@ pub fn load_scenario(world: &mut World) {
     let works = world.resource::<Sim>().settlement.stamp();
     let flow = world.resource_mut::<Flow>();
     flow.note(format!(
-        "seed {seed} - {} - {rates} - {works} - the world opens paused; space runs it",
+        "seed {seed} - {} - {} - {rates} - {works} - the world opens paused; space runs it",
+        scenario.stamp(),
         modules.stamp()
     ));
 }

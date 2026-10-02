@@ -1,0 +1,34 @@
+# ninjo scenario file - GDD s6's fourth format (wave 1.6).
+#
+# freeplay: the authored start, moved here from code and not redesigned.
+# The least-pinned scenario: no pins, and the director speaks at the
+# pressure the drawer's calm_days / director_hours / director_max rows set.
+#
+# One statement a line; '#' starts a comment; ASCII only.
+#   scenario <id>        the id every stamp and transcript header carries
+#   seed <n>             the authored seed (?seed= overrides it)
+#   map <id>             the map; this build has one, kawaza
+#   treasury <gold>      what the settlement opens holding
+#   director on|off      whether the injector fires on its own (pins fire either way)
+#   person <id> wallet <gold> desperation <0-10> arrives <world-minute>
+#                        every person of the cast, in registry order
+#   pin <template> at <world-minute> [for <person>]
+#                        a director template fired at exactly that minute
+scenario freeplay
+seed 0
+map kawaza
+treasury 0
+director on
+
+# The four founders open in the camp; the six who came later arrive on the
+# minutes CAST.md s4's arrival column authors.
+person bob   wallet 6  desperation 4 arrives 0
+person steve wallet 3  desperation 5 arrives 0
+person alex  wallet 12 desperation 1 arrives 0
+person tim   wallet 20 desperation 2 arrives 0
+person rin   wallet 5  desperation 2 arrives 600
+person goro  wallet 9  desperation 3 arrives 1080
+person hana  wallet 7  desperation 2 arrives 1920
+person ludo  wallet 2  desperation 4 arrives 2400
+person ines  wallet 10 desperation 2 arrives 3300
+person odd   wallet 8  desperation 3 arrives 3960

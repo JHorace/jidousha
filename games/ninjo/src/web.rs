@@ -45,6 +45,29 @@ pub fn parse_seed(value: &str) -> Result<u64, String> {
     })
 }
 
+/// **The scenario the page asked for with `?scenario=`** (wave 1.6) — a
+/// scenario file this build carries, by id. Refused loudly, never guessed at:
+/// an id nobody carries opens nothing rather than quietly opening freeplay.
+pub fn scenario() -> Option<Result<&'static crate::scenario::Scenario, String>> {
+    query_value("scenario").map(|value| parse_scenario(&value))
+}
+
+/// The `?scenario=` grammar, split out so `links.rs` can hold it to its
+/// refusals without a browser.
+pub fn parse_scenario(value: &str) -> Result<&'static crate::scenario::Scenario, String> {
+    let value = value.trim();
+    crate::scenario::find(value).ok_or_else(|| {
+        let ids: Vec<&str> = crate::scenario::all()
+            .iter()
+            .map(|scenario| scenario.id.as_str())
+            .collect();
+        format!(
+            "?scenario= names no file {value:?} - try {}",
+            ids.join(", ")
+        )
+    })
+}
+
 /// The value of one query parameter of the page this is running on.
 #[cfg(target_arch = "wasm32")]
 fn query_value(key: &str) -> Option<String> {

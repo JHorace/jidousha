@@ -197,7 +197,11 @@ pub fn registry(checks: &mut crate::checks::Checks, tuning: &crate::constants::T
     // A world where one party is out: the two placement chips must divide the
     // present cast, and every count must be the length of the list it opens
     // into.
-    let mut sim = crate::sim::Sim::opening(tuning, crate::modules::ModuleSet::ALL);
+    let mut sim = crate::sim::Sim::opening(
+        crate::scenario::freeplay(),
+        tuning,
+        crate::modules::ModuleSet::ALL,
+    );
     sim.parties[0].activity = crate::sim::Activity::Working { until: 99 };
     let lens = Lens::on(&sim);
     let mut placed = 0usize;
@@ -264,7 +268,11 @@ pub fn registry(checks: &mut crate::checks::Checks, tuning: &crate::constants::T
     // emptied of purses so the chips are not vacuously empty, and asserted
     // against a *burn actually run* rather than against a second reading of
     // the same predicate.
-    let mut staged = crate::sim::Sim::opening(tuning, crate::modules::ModuleSet::ALL);
+    let mut staged = crate::sim::Sim::opening(
+        crate::scenario::freeplay(),
+        tuning,
+        crate::modules::ModuleSet::ALL,
+    );
     staged.everybody_here();
     staged.people[1].wallet = 0;
     staged.people[7].wallet = 0;

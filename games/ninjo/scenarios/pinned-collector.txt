@@ -1,0 +1,25 @@
+# ninjo scenario file - a TEST scenario (wave 1.6), not a game mode.
+#
+# pinned-collector: freeplay's camp, the director's own firings off, and one
+# pin - the collector comes for Bob at world-minute 90 (day 1, 01:30),
+# exactly then, at every speed. What the tutorial will be made of: the
+# format carrying pins is the whole of this wave's obligation to it.
+# Load it on the page with ?scenario=pinned-collector.
+scenario pinned-collector
+seed 0
+map kawaza
+treasury 0
+director off
+
+person bob   wallet 6  desperation 4 arrives 0
+person steve wallet 3  desperation 5 arrives 0
+person alex  wallet 12 desperation 1 arrives 0
+person tim   wallet 20 desperation 2 arrives 0
+person rin   wallet 5  desperation 2 arrives 600
+person goro  wallet 9  desperation 3 arrives 1080
+person hana  wallet 7  desperation 2 arrives 1920
+person ludo  wallet 2  desperation 4 arrives 2400
+person ines  wallet 10 desperation 2 arrives 3300
+person odd   wallet 8  desperation 3 arrives 3960
+
+pin the-collector-comes at 90 for bob

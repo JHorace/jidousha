@@ -385,7 +385,11 @@ pub fn free_slots(lens: &crate::lens::Lens<'_>, index: usize) -> usize {
 /// The registry's own validation: the industry table is authorable data and
 /// the site it names is the one it gets.
 pub fn registry(checks: &mut crate::checks::Checks, tuning: &Tuning) {
-    let sim = Sim::opening(tuning, crate::modules::ModuleSet::ALL);
+    let sim = Sim::opening(
+        crate::scenario::freeplay(),
+        tuning,
+        crate::modules::ModuleSet::ALL,
+    );
     for (index, spec) in INDUSTRIES.iter().enumerate() {
         checks.require(
             !spec.id.is_empty()

@@ -113,6 +113,11 @@ pub struct Memory {
     pub last_out: Option<u64>,
     /// Every piece of paid work they finished, oldest first.
     pub worked: Vec<Worked>,
+    /// **Every payment their work put in their purse**, as (world-minute,
+    /// gold), oldest first (wave 1.6) — a posted wage, a share, a shift's
+    /// wage, a failed posting's wage paid anyway. What the rival offer's
+    /// "paid at least {n}" is judged on.
+    pub earned: Vec<(u64, i64)>,
 }
 
 /// One piece of paid work somebody finished — a job that succeeded, or a
@@ -143,17 +148,36 @@ impl Memory {
     pub fn worked_since(&self, since: u64) -> impl Iterator<Item = &Worked> {
         self.worked.iter().filter(move |done| done.minute >= since)
     }
+
+    /// Everything their work paid them at or after `since`, summed.
+    pub fn earned_since(&self, since: u64) -> i64 {
+        self.earned
+            .iter()
+            .filter(|(minute, _)| *minute >= since)
+            .map(|(_, gold)| gold)
+            .sum()
+    }
 }
 
-/// The founding band (`CAST.md` §4): ten, the number GDD §7's MVP scenario
-/// asks for, drawn from everywhere on purpose.
+/// **The cast** (`CAST.md` §4): ten, the number GDD §7's MVP scenario asks
+/// for, drawn from everywhere on purpose — **who they are, and nothing a
+/// scenario opens them with**.
+///
+/// Since wave 1.6 the opening balances — a purse, a desperation and the
+/// world-minute somebody is in the camp from — are the scenario file's
+/// (`scenario.rs`, GDD §6's fourth format), so every row here opens unopened:
+/// no gold, no desperation, present from minute zero. Nothing reads these
+/// rows raw except [`crate::scenario::Scenario::cast`], which writes the
+/// file's columns over them; a reader that wants the people of a world reads
+/// that world's scenario, and `scenario::freeplay().cast()` is the authored
+/// start.
 ///
 /// Homes are the tents on the near bank of the Kawaza crossing — two rows just
 /// south of the road and east of the ford, far enough apart that ten names,
 /// ten figures and the town's own marker do not collide. `floors.rs` asserts that rather than trusting this sentence,
 /// and [`registry`] asserts the ground is passable, unshared, and off every
 /// named location.
-pub fn roster() -> Vec<Character> {
+pub fn cast() -> Vec<Character> {
     vec![
         Character {
             id: "bob",
@@ -161,8 +185,8 @@ pub fn roster() -> Vec<Character> {
             home: Tile::new(12, 15),
             icon: Art::PortraitBob,
             traits: vec![TraitId::Fight, TraitId::Greedy, TraitId::Indebted],
-            wallet: 6,
-            desperation: 4,
+            wallet: 0,
+            desperation: 0,
             origin: "owes the collector at the toll-house, who counts days",
             source: String::new(),
             shortfalls: 0,
@@ -177,8 +201,8 @@ pub fn roster() -> Vec<Character> {
             home: Tile::new(16, 15),
             icon: Art::PortraitSteve,
             traits: vec![TraitId::Labor, TraitId::Loyal, TraitId::Caring],
-            wallet: 3,
-            desperation: 5,
+            wallet: 0,
+            desperation: 0,
             origin: "sends half of everything to a sister whose hands gave out",
             source: String::new(),
             shortfalls: 0,
@@ -193,8 +217,8 @@ pub fn roster() -> Vec<Character> {
             home: Tile::new(20, 15),
             icon: Art::PortraitAlex,
             traits: vec![TraitId::Scout, TraitId::Cold, TraitId::Restless],
-            wallet: 12,
-            desperation: 1,
+            wallet: 0,
+            desperation: 0,
             origin: "has not slept a full month in one place since childhood",
             source: String::new(),
             shortfalls: 0,
@@ -209,8 +233,8 @@ pub fn roster() -> Vec<Character> {
             home: Tile::new(24, 15),
             icon: Art::PortraitTim,
             traits: vec![TraitId::Labor, TraitId::Proud, TraitId::Vengeful],
-            wallet: 20,
-            desperation: 2,
+            wallet: 0,
+            desperation: 0,
             origin: "keeps the tally, and is owed by half the camp",
             source: String::new(),
             shortfalls: 0,
@@ -225,15 +249,15 @@ pub fn roster() -> Vec<Character> {
             home: Tile::new(28, 15),
             icon: Art::PortraitRin,
             traits: vec![TraitId::Craft, TraitId::Maker, TraitId::Loyal],
-            wallet: 5,
-            desperation: 2,
+            wallet: 0,
+            desperation: 0,
             origin: "cooks for ten on a fire built for three",
             source: String::new(),
             shortfalls: 0,
             active_petition: None,
             memory: Memory::default(),
-            present_from: 600,
-            present: false,
+            present_from: 0,
+            present: true,
         },
         Character {
             id: "goro",
@@ -241,15 +265,15 @@ pub fn roster() -> Vec<Character> {
             home: Tile::new(6, 17),
             icon: Art::PortraitGoro,
             traits: vec![TraitId::Fight, TraitId::Renown, TraitId::Proud],
-            wallet: 9,
-            desperation: 3,
+            wallet: 0,
+            desperation: 0,
             origin: "left home to be talked about, and nobody is talking yet",
             source: String::new(),
             shortfalls: 0,
             active_petition: None,
             memory: Memory::default(),
-            present_from: 1080,
-            present: false,
+            present_from: 0,
+            present: true,
         },
         Character {
             id: "hana",
@@ -257,15 +281,15 @@ pub fn roster() -> Vec<Character> {
             home: Tile::new(10, 17),
             icon: Art::PortraitHana,
             traits: vec![TraitId::Scout, TraitId::Caring, TraitId::Vengeful],
-            wallet: 7,
-            desperation: 2,
+            wallet: 0,
+            desperation: 0,
             origin: "came for her brother; stays exactly as long as he does",
             source: String::new(),
             shortfalls: 0,
             active_petition: None,
             memory: Memory::default(),
-            present_from: 1920,
-            present: false,
+            present_from: 0,
+            present: true,
         },
         Character {
             id: "ludo",
@@ -273,15 +297,15 @@ pub fn roster() -> Vec<Character> {
             home: Tile::new(14, 17),
             icon: Art::PortraitLudo,
             traits: vec![TraitId::Labor, TraitId::Fight, TraitId::Indebted],
-            wallet: 2,
-            desperation: 4,
+            wallet: 0,
+            desperation: 0,
             origin: "works off a debt that was his father's before it was his",
             source: String::new(),
             shortfalls: 0,
             active_petition: None,
             memory: Memory::default(),
-            present_from: 2400,
-            present: false,
+            present_from: 0,
+            present: true,
         },
         Character {
             id: "ines",
@@ -289,15 +313,15 @@ pub fn roster() -> Vec<Character> {
             home: Tile::new(18, 17),
             icon: Art::PortraitInes,
             traits: vec![TraitId::Craft, TraitId::Maker, TraitId::Craven],
-            wallet: 10,
-            desperation: 2,
+            wallet: 0,
+            desperation: 0,
             origin: "mends what breaks, and would rather be far from what breaks it",
             source: String::new(),
             shortfalls: 0,
             active_petition: None,
             memory: Memory::default(),
-            present_from: 3300,
-            present: false,
+            present_from: 0,
+            present: true,
         },
         Character {
             id: "odd",
@@ -305,15 +329,15 @@ pub fn roster() -> Vec<Character> {
             home: Tile::new(22, 17),
             icon: Art::PortraitOdd,
             traits: vec![TraitId::Fight, TraitId::Renown, TraitId::Restless],
-            wallet: 8,
-            desperation: 3,
+            wallet: 0,
+            desperation: 0,
             origin: "took the same job as Goro twice, and only one of them got paid",
             source: String::new(),
             shortfalls: 0,
             active_petition: None,
             memory: Memory::default(),
-            present_from: 3960,
-            present: false,
+            present_from: 0,
+            present: true,
         },
     ]
     .into_iter()
@@ -353,11 +377,12 @@ pub const DESPERATION_MAX: i64 = 10;
 /// **The four founders** — who is standing in the camp when the game opens
 /// (`CAST.md` §4, and §1's "a band arrived a season ago").
 ///
-/// Derived from the roster rather than listed, so the founding band is a
-/// property of the arrival column and not a second list that could disagree
-/// with it.
+/// Derived from the authored start's arrival column (`scenarios/freeplay.txt`)
+/// rather than listed, so the founding band is a property of that column and
+/// not a second list that could disagree with it.
 pub fn founders() -> Vec<usize> {
-    roster()
+    crate::scenario::freeplay()
+        .cast()
         .iter()
         .enumerate()
         .filter(|(_, person)| person.present_from == 0)
@@ -383,7 +408,7 @@ pub fn press(person: &mut Character, by: i64) {
 /// wrong somewhere far from the row that caused it.
 pub fn registry(checks: &mut crate::checks::Checks, tuning: &crate::constants::Tuning) {
     let grid = crate::grid::grid();
-    let cast = roster();
+    let cast = crate::scenario::freeplay().cast();
     checks.require(
         !cast.is_empty(),
         "the settlement has nobody in it",
@@ -549,7 +574,11 @@ pub fn registry(checks: &mut crate::checks::Checks, tuning: &crate::constants::T
     // **And the opening four can do some of the opening work** — otherwise
     // the first decisions the player is offered are not decisions. Asserted
     // over the board the scenario actually authors, per founder.
-    let opening = crate::sim::Sim::opening(tuning, crate::modules::ModuleSet::ALL);
+    let opening = crate::sim::Sim::opening(
+        crate::scenario::freeplay(),
+        tuning,
+        crate::modules::ModuleSet::ALL,
+    );
     for who in founding.iter().copied() {
         let suits = opening
             .sites
@@ -623,7 +652,11 @@ pub fn registry(checks: &mut crate::checks::Checks, tuning: &crate::constants::T
     // figure at a doorstep are the same person, or the map is telling two
     // stories about one name. One party per character, in registry order —
     // the one-person party the dispatch loop moves (`sim.rs`).
-    let sim = crate::sim::Sim::opening(tuning, crate::modules::ModuleSet::ALL);
+    let sim = crate::sim::Sim::opening(
+        crate::scenario::freeplay(),
+        tuning,
+        crate::modules::ModuleSet::ALL,
+    );
     checks.require(
         sim.parties.len() == cast.len(),
         "the settlement does not field one party per person",

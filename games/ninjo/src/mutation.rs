@@ -17,7 +17,9 @@
 //! resolution battery (the share, the fit-to-odds curve and the odds-words'
 //! thresholds, through staged payouts and the staged distribution sweep), or
 //! the petitions battery (the regard and relief a petition moves, the check's
-//! cadence and roll, and the thin-days window, through staged petitions).
+//! cadence and roll, and the thin-days window, through staged petitions), or
+//! the injector battery (the calm window, the drawn gaps and the cap, through
+//! staged firings and idle world zero's first one).
 //!
 //! The round grows with the drawer by construction: it walks `Field::ALL`, so
 //! a constant added to `constants.rs` arrives here needing only a
@@ -53,6 +55,7 @@ pub fn mutation_round(checks: &mut Checks) -> String {
         crate::economy::judge_at(&mut probe, &mutated);
         crate::outcomes::judge_at(&mut probe, &mutated);
         crate::petitioned::judge_at(&mut probe, &mutated);
+        crate::directed::judge_at(&mut probe, &mutated);
         let shipped = Tuning::SHIPPED.field(field);
         if probe.failures() > 0 {
             noticed += 1;
@@ -72,7 +75,8 @@ pub fn mutation_round(checks: &mut Checks) -> String {
                 "{} moved from {shipped} to {} and the order script, the pacing probes, the \
                  path battery, the trait arithmetic, the store battery, the attention battery, \
                  the scorer battery, the asks battery, the economy battery, the resolution \
-                 battery and the petitions battery all still passed; a check that \
+                 battery, the petitions battery and the injector battery all still passed; a \
+                 check that \
                  survives its own constant moving is not measuring it",
                 field.name(),
                 perturbation(field),
@@ -196,5 +200,11 @@ fn perturbation(field: Field) -> i64 {
         Field::PleaOdds => 60,
         // And the thin-days window closes: three shortfalls never fit in it.
         Field::ThinWindow => 0,
+        // **The director loses its calm, fires every hour, and stops being
+        // capped** (wave 1.6): the injector battery's staged first firing,
+        // its drawn gaps and its cap literal see each one.
+        Field::CalmDays => 0,
+        Field::DirectorHours => 1,
+        Field::DirectorMax => 60,
     }
 }

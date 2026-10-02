@@ -102,7 +102,11 @@ pub fn library(checks: &mut Checks) {
         }
         markers.push((spec.name, art));
     }
-    let opening = Sim::opening(&Tuning::SHIPPED, crate::modules::ModuleSet::ALL);
+    let opening = Sim::opening(
+        crate::scenario::freeplay(),
+        &Tuning::SHIPPED,
+        crate::modules::ModuleSet::ALL,
+    );
     let parties = &opening.parties;
     for (index, party) in parties.iter().enumerate() {
         for other in parties.iter().skip(index + 1) {
@@ -242,7 +246,11 @@ pub fn printable_strings(checks: &mut Checks, baseline: &Conducted) {
     tuner.tuner.pending = crate::presets::PRESETS
         .last()
         .map_or(crate::constants::Tuning::SHIPPED, |preset| preset.tuning);
-    let opening = Sim::opening(&Tuning::SHIPPED, crate::modules::ModuleSet::ALL);
+    let opening = Sim::opening(
+        crate::scenario::freeplay(),
+        &Tuning::SHIPPED,
+        crate::modules::ModuleSet::ALL,
+    );
     for text in screens::content(
         &tuner,
         &Lens::on(&opening),

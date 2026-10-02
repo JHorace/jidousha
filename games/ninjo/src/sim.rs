@@ -33,7 +33,7 @@ use crate::grid::{Grid, LOCATIONS, Tile};
 use crate::lens::Lens;
 use crate::modules::ModuleSet;
 use crate::path::Route;
-use crate::people::{self, Character};
+use crate::people::Character;
 use crate::sprites::Art;
 use crate::stores::{self, Regarded, Shared};
 use crate::traits::TaskType;
@@ -521,6 +521,21 @@ enum Occ {
         /// Who.
         who: usize,
     },
+    /// **The director** (GDD §5's events-director, wave 1.6). Unarmed, it is
+    /// the end of the calm window: nothing fires, and the first firing is
+    /// drawn from here. Armed, it fires — reaching somebody, or passing — and
+    /// draws the next. Every gap is drawn at the occurrence's own address,
+    /// so the seed it reads is the world's at that minute, never the opening's.
+    Director {
+        /// Whether this is a firing, or the calm window ending.
+        armed: bool,
+    },
+    /// **A scenario's pinned firing** — the director speaking at a scripted
+    /// world-minute, exactly then.
+    Pin {
+        /// Which of the scenario's pins.
+        pin: usize,
+    },
 }
 
 /// **Every port gold moves through, totalled** (GDD §4.1's exhaustive list).
@@ -591,7 +606,7 @@ impl Ports {
 }
 
 /// The moving world, held as one resource.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Sim {
     /// Every party, in registry order — one per character.
     pub parties: Vec<Party>,
@@ -659,6 +674,10 @@ pub struct Sim {
     /// raised, and what became of it. Sim state; the ledger drawer and the
     /// voicing overlay are views of it.
     pub petitions: crate::pleas::Petitions,
+    /// **The scenario this world opened from** (GDD §6's scenario file, wave
+    /// 1.6) — its id rides every stamp and transcript header, and its pins
+    /// and director switch are what the injector reads.
+    pub scenario: &'static crate::scenario::Scenario,
     queue: Vec<Occurrence>,
     next_seq: u64,
 }
@@ -1018,12 +1037,21 @@ impl Sim {
     /// scheduled**: the world it degrades to is the wave-0b world, where
     /// everyone idles at home until the player says otherwise, and the queue
     /// says so rather than a flag being consulted at every firing.
-    pub fn opening(tuning: &Tuning, modules: ModuleSet) -> Self {
-        let people = people::roster();
+    ///
+    /// **Takes the scenario** since wave 1.6: the roster's opening balances
+    /// and arrival minutes, the treasury, the seed, the pins and the
+    /// director's switch are the file's (`scenario.rs`). The authored start
+    /// is `scenario::freeplay()`.
+    pub fn opening(
+        scenario: &'static crate::scenario::Scenario,
+        tuning: &Tuning,
+        modules: ModuleSet,
+    ) -> Self {
+        let people = scenario.cast();
         let mut sim = Self {
             parties: authored_parties(&people),
             sites: authored_sites(),
-            treasury: 0,
+            treasury: scenario.treasury,
             ports: Ports::default(),
             events: Vec::new(),
             people,
@@ -1035,9 +1063,10 @@ impl Sim {
             modules,
             paused_by: None,
             pauses: 0,
-            seed: 0,
+            seed: scenario.seed,
             resolved: Vec::new(),
             petitions: crate::pleas::Petitions::default(),
+            scenario,
             queue: Vec::new(),
             next_seq: 0,
         };
@@ -1088,6 +1117,21 @@ impl Sim {
         if modules.enabled(crate::petitions::MODULE) {
             for who in 0..sim.people.len() {
                 sim.schedule(crate::pleas::first_check(tuning, who), Occ::Plea { who });
+            }
+        }
+        // **And the director** (wave 1.6): the end of its calm window, when
+        // the scenario lets it speak, and every pin the scenario scripts. It
+        // speaks only through petitions, so with that module off nothing is
+        // scheduled either — the queue says so, not a flag at every firing.
+        if crate::director::runs(modules) {
+            if scenario.director {
+                sim.schedule(
+                    crate::director::calm_until(tuning),
+                    Occ::Director { armed: false },
+                );
+            }
+            for (pin, scripted) in scenario.pins.iter().enumerate() {
+                sim.schedule(scripted.at, Occ::Pin { pin });
             }
         }
         sim
@@ -1155,6 +1199,8 @@ impl Sim {
                     | Occ::Plea { .. }
                     | Occ::Deadline { .. }
                     | Occ::Return { .. }
+                    | Occ::Director { .. }
+                    | Occ::Pin { .. }
             )
         }) && self
             .parties
@@ -1283,6 +1329,13 @@ impl Sim {
     /// **Schedule a walk-out's end.**
     pub fn schedule_return(&mut self, at: u64, who: usize) {
         self.schedule(at, Occ::Return { who });
+    }
+
+    /// **Record one of the director's own occurrences** (wave 1.6) — a firing
+    /// that reached somebody, or one that passed. Bookkeeping: the class opens
+    /// on `ignore`, because what the player sees is the petition it voices.
+    pub fn emit_director(&mut self, minute: u64, who: usize, tile: Tile, note: String) {
+        self.emit(minute, EventClass::Event, who, tile, note);
     }
 
     /// Record somebody arriving in the camp (`CAST.md` §4's arrival column).
@@ -1644,6 +1697,14 @@ pub fn advance_to(sim: &mut Sim, grid: &Grid, tuning: &Tuning, now: u64) {
                 crate::pleas::deadline(sim, tuning, occurrence.at, petition);
             }
             Occ::Return { who } => crate::pleas::come_back(sim, occurrence.at, who),
+            Occ::Director { armed } => {
+                if armed {
+                    crate::director::fire(sim, tuning, occurrence.at);
+                }
+                let next = occurrence.at + crate::director::gap(tuning, sim.seed, occurrence.at);
+                sim.schedule(next, Occ::Director { armed: true });
+            }
+            Occ::Pin { pin } => crate::director::pinned(sim, tuning, occurrence.at, pin),
         }
         // **Every running petition is judged against the world each
         // occurrence leaves** (wave 1.5) — never a frame — so "met at any
@@ -1891,6 +1952,13 @@ fn resolve_job(sim: &mut Sim, tuning: &Tuning, at: u64, index: usize, tile: Tile
         crate::settlement::reopen(sim, job);
     }
     let paid = crate::resolution::settle(sim, tuning, index, job, tier);
+    // **What it paid them, remembered** (wave 1.6): the rival offer is judged
+    // on a purse's takings, not on its balance.
+    if paid.to_worker() > 0
+        && let Some(person) = sim.people.get_mut(index)
+    {
+        person.memory.earned.push((at, paid.to_worker()));
+    }
     // **What they did, remembered** (wave 1.5): a petition's trigger and
     // condition read finished paid work off the person, not off the board.
     if (tier.succeeded() || shift)

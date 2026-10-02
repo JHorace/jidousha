@@ -129,9 +129,20 @@ pub fn median(values: &[i64]) -> i64 {
 
 /// **Run one world, and keep it** — what [`live`] reports on, and what the
 /// petitions sweep reads its record off (wave 1.5). One loop, two readers.
-pub fn world(tuning: &Tuning, modules: ModuleSet, offset: u64, days: u64, player: Player) -> Sim {
+///
+/// **Opens the scenario it is given** (wave 1.6) — freeplay everywhere but
+/// the batteries that compare it against itself with the director's switch
+/// thrown (`directed::scenario_equality`).
+pub fn world(
+    scenario: &'static crate::scenario::Scenario,
+    tuning: &Tuning,
+    modules: ModuleSet,
+    offset: u64,
+    days: u64,
+    player: Player,
+) -> Sim {
     let grid = crate::grid::grid();
-    let mut sim = Sim::opening(tuning, modules);
+    let mut sim = Sim::opening(scenario, tuning, modules);
     sim.stagger_first_looks(tuning, offset);
     // **And its own seed** (wave 1.4): world *k* rolls its jobs at seed *k*,
     // so the population finally varies the one thing a seed exists to vary.
@@ -160,8 +171,16 @@ pub fn live(
     days: u64,
     player: Player,
 ) -> Outcome {
-    let sim = world(tuning, modules, offset, days, player);
-    let opening_wallets: i64 = crate::people::roster()
+    let sim = world(
+        crate::scenario::freeplay(),
+        tuning,
+        modules,
+        offset,
+        days,
+        player,
+    );
+    let opening_wallets: i64 = crate::scenario::freeplay()
+        .cast()
         .iter()
         .map(|person| person.wallet)
         .sum();
@@ -515,7 +534,7 @@ fn judge_a_shift(checks: &mut crate::checks::Checks, tuning: &Tuning) {
     let Some(spec) = crate::settlement::INDUSTRIES.first() else {
         return;
     };
-    let mut sim = Sim::opening(tuning, ModuleSet::ALL);
+    let mut sim = Sim::opening(crate::scenario::freeplay(), tuning, ModuleSet::ALL);
     sim.everybody_here();
     sim.treasury = spec.cost;
     let built = crate::settlement::build(&mut sim, 0, 0);
@@ -605,7 +624,7 @@ pub fn judge_the_wage(checks: &mut crate::checks::Checks, tuning: &Tuning) -> St
     let Some(spec) = crate::settlement::INDUSTRIES.first() else {
         return String::new();
     };
-    let mut sim = Sim::opening(tuning, ModuleSet::ALL);
+    let mut sim = Sim::opening(crate::scenario::freeplay(), tuning, ModuleSet::ALL);
     sim.everybody_here();
     sim.treasury = spec.cost;
     let _ = crate::settlement::build(&mut sim, 0, 0);
@@ -723,7 +742,11 @@ pub fn judge_the_wage(checks: &mut crate::checks::Checks, tuning: &Tuning) -> St
     // ladder above stays empty on purpose: with nobody pressed, money is felt
     // by affinity alone, and that is still one personality in ten.
     let mut pressed = sim.clone();
-    for (person, authored) in pressed.people.iter_mut().zip(crate::people::roster()) {
+    for (person, authored) in pressed
+        .people
+        .iter_mut()
+        .zip(crate::scenario::freeplay().cast())
+    {
         person.desperation = authored.desperation;
     }
     crate::settlement::step_wage(&mut pressed, 0, -crate::settlement::WAGE_MAX);
@@ -855,7 +878,7 @@ pub fn judge_sweeps(checks: &mut crate::checks::Checks, tuning: &Tuning) -> Stri
         let pressed = run
             .desperation
             .iter()
-            .zip(crate::people::roster().iter())
+            .zip(crate::scenario::freeplay().cast().iter())
             .filter(|(now, was)| **now > was.desperation)
             .count();
         checks.require(

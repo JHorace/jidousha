@@ -169,7 +169,8 @@ pub fn post(minute: u64, party: usize, site: usize, slot: usize) -> [Directive; 
 /// a script naming nobody is a fault in the script, and it fails loudly
 /// rather than selecting nobody quietly.
 pub fn pick_at_home(who: usize) -> Act {
-    let home = crate::people::roster()
+    let home = crate::scenario::freeplay()
+        .cast()
         .get(who)
         .map_or(LOCATIONS[crate::grid::TOWN].tile, |person| person.home);
     Act::ClickWorld(layout::home_rect(home).center())
@@ -360,8 +361,11 @@ pub struct Session<'a> {
     /// Which modules are on. The module-off matrix (GDD §9) is a list of
     /// these; a played run uses `ModuleSet::ALL`.
     pub modules: ModuleSet,
-    /// The seed to plant (`None` runs at the authored zero).
+    /// The seed to plant (`None` runs at the scenario's authored seed).
     pub seed: Option<u64>,
+    /// **The scenario to open** (wave 1.6) — freeplay, the authored start,
+    /// everywhere but the pinned firing's own runs.
+    pub scenario: &'static crate::scenario::Scenario,
     /// The script, in due order — the conductor consumes it front-first.
     pub directives: &'a [Directive],
     /// Frames to keep — recording happens only if this is non-empty.
@@ -399,6 +403,7 @@ impl Session<'_> {
             tuning,
             modules: ModuleSet::ALL,
             seed: None,
+            scenario: crate::scenario::freeplay(),
             directives,
             photos: &[],
             probe_ticks: &[],
@@ -421,6 +426,8 @@ pub fn conduct(session: &Session<'_>) -> Conducted {
     sim.world_mut().insert_resource(session.tuning);
     sim.world_mut().insert_resource(session.modules);
     sim.world_mut().insert_resource(SessionSeed(session.seed));
+    sim.world_mut()
+        .insert_resource(crate::flow::SessionScenario(Some(session.scenario)));
     sim.world_mut()
         .insert_resource(camera::Surface(session.viewport));
 
@@ -935,7 +942,8 @@ pub fn judge_orders(checks: &mut Checks, run: &Conducted, label: &str) {
     // in somebody's wallet, and the wages inside the window are what the
     // postings promised.
     let wallets: i64 = run.sim.people.iter().map(|person| person.wallet).sum();
-    let opening: i64 = crate::people::roster()
+    let opening: i64 = crate::scenario::freeplay()
+        .cast()
         .iter()
         .map(|person| person.wallet)
         .sum();

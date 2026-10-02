@@ -17,7 +17,7 @@ use crate::flow::Drawer;
 use crate::grid::Tile;
 use crate::sim::Activity;
 use crate::sweep::{Conducted, Shot};
-use crate::{floors, frames, layout, lens, people, screens, verify};
+use crate::{floors, frames, layout, lens, screens, verify};
 
 /// Every photograph of the reference run, against what it is for.
 pub fn judge(checks: &mut Checks, run: &Conducted, tuning: &Tuning) {
@@ -435,13 +435,13 @@ pub fn judge(checks: &mut Checks, run: &Conducted, tuning: &Tuning) {
             .map(|index| lens.name(index))
             .collect();
         checks.require(
-            away.is_empty() && lens.people().len() == people::roster().len(),
+            away.is_empty() && lens.people().len() == crate::scenario::freeplay().cast().len(),
             "the settlement photograph does not show the whole cast at home",
             format!(
                 "{away:?} are away at the photographed tick, and the frame shows {} of {} \
                  people; nothing has been dispatched yet",
                 lens.people().len(),
-                people::roster().len()
+                crate::scenario::freeplay().cast().len()
             ),
         );
         // Every figure and every name on the frame, at the position the panel

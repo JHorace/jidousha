@@ -85,6 +85,9 @@ pub struct Sessions<'a> {
     /// its petition was met, ARRANGE's arrival, the ledger mixed, and the feed
     /// on a `broke`.
     pub pleaded: &'a Conducted,
+    /// **The wave-1.6 session**: the pinned test scenario's opening minute,
+    /// the pin's card with its `event` chip, and the feed around the firing.
+    pub evented: &'a Conducted,
 }
 
 /// Write every picture this run took.
@@ -99,6 +102,7 @@ pub fn capture_screens(checks: &mut Checks, sessions: &Sessions<'_>) -> String {
         settled,
         resolved,
         pleaded,
+        evented,
     } = *sessions;
     let mut wanted: Vec<Wanted> = Vec::new();
     // The reference-only set: pictures of *what is on screen* rather than of
@@ -244,6 +248,23 @@ pub fn capture_screens(checks: &mut Checks, sessions: &Sessions<'_>) -> String {
                 false,
                 "a petitions capture was never photographed",
                 format!("the {name} photo is missing from the petitions run"),
+            );
+        }
+    }
+    // **The wave-1.6 three**: the injector's, in the pinned test scenario.
+    for (name, _) in crate::eventshots::SHOTS {
+        if let Some(shot) = evented.photo(name) {
+            wanted.push(Wanted {
+                name: format!("{name}-reference"),
+                surface: verify::HEADLESS_VIEWPORT,
+                frame: shot.frame.clone(),
+                font: evented.font,
+            });
+        } else {
+            checks.require(
+                false,
+                "an injector capture was never photographed",
+                format!("the {name} photo is missing from the injector run"),
             );
         }
     }

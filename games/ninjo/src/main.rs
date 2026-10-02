@@ -48,7 +48,10 @@ mod checks;
 mod clock;
 mod compliance;
 mod constants;
+mod directed;
+mod director;
 mod economy;
+mod eventshots;
 mod floors;
 mod flow;
 mod frames;
@@ -73,8 +76,10 @@ mod plead;
 mod pleas;
 mod pleashots;
 mod presets;
+mod pressed;
 mod resolution;
 mod restart;
+mod scenario;
 mod screens;
 mod settlement;
 mod shots;
@@ -192,6 +197,24 @@ fn open_the_world(world: &mut World) {
     // here is only ever read under `headless`, where nothing stamps one at
     // all — which is exactly the case a scripted click has to agree with
     // (jidousha-testing.md's viewport trap).
+    // **The scenario** (wave 1.6): a harness plants one; a page may ask for
+    // one by id; otherwise the world opens on freeplay, the authored start.
+    if world.find_resource::<flow::SessionScenario>().is_none() {
+        let scenario = match web::scenario() {
+            Some(Ok(scenario)) => {
+                println!("[ninjo] ?scenario= accepted - {}", scenario.id);
+                carried = true;
+                Some(scenario)
+            }
+            Some(Err(message)) => {
+                faults.push(message);
+                None
+            }
+            None => None,
+        };
+        world.insert_resource(flow::SessionScenario(scenario));
+    }
+
     let surface = world
         .find_resource::<camera::Surface>()
         .copied()
