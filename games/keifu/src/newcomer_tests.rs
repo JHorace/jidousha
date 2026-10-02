@@ -146,7 +146,7 @@ fn a_pair_has_at_most_three_children_living_or_dead() {
 
 #[test]
 fn no_child_is_born_to_a_house_of_twelve_or_a_yard_of_six() {
-    let (content, mut house, _, _) = wed_house();
+    let (content, house, _, _) = wed_house();
     let wren = id(&house.heroes, "Wren");
     let mut full = house.clone();
     while full.heroes.iter().filter(|h| h.is_living()).count() < 12 {
