@@ -346,3 +346,22 @@ fn a_newborn_never_has_less_than_one_and_takes_each_roll_of_zero_or_one() {
     // Might 4 and 6: 10 / 4 is 2, + 0 or 1.
     assert_eq!(might.into_iter().collect::<Vec<_>>(), [2, 3]);
 }
+
+#[test]
+fn a_conquered_parent_whose_child_is_not_born_brave_lets_the_other_parents_fear_pass() {
+    let (content, mut house, maren, brannoc) = wed_house();
+    house.heroes[maren].fear.conquered = true; // Water: born brave half the time
+    house.heroes[brannoc].fear.broken = true; // Heights: then 80%
+    let (mut heights, mut n) = (0, 0);
+    for seed in 0..600 {
+        let mut copy = house.clone();
+        if births(&content, &mut copy, &mut Rng::from_seed(seed)).is_empty() {
+            continue;
+        }
+        n += 1;
+        heights += i32::from(copy.heroes[copy.heroes.len() - 1].fear.tag == Tag::Heights);
+    }
+    // P(heights) = 0.5 * (0.8 + 0.2 / 8) = 0.4125.
+    let rate = f64::from(heights) / f64::from(n);
+    assert!((0.34..0.49).contains(&rate), "heights {heights} of {n}");
+}

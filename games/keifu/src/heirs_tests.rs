@@ -538,3 +538,22 @@ fn the_choice_s_lines_come_before_the_door_s_promise() {
         "{lines:?}"
     );
 }
+
+#[test]
+fn a_dream_left_undone_is_told_about_the_dead_who_carried_it() {
+    let (content, mut house) = house();
+    let maren = certain_death(&mut house, "Maren");
+    let odo = id(&house.heroes, "Odo");
+    let mut student = house.heroes[odo].dream.clone().expect("a dream");
+    student.advance_to_stage(2);
+    student.owner = Some(odo);
+    house.heroes[maren].burden = Some(student);
+    house.heroes[maren].destiny.kind = Destiny::Unspoken;
+    turn(&content, &mut house, 1);
+    let page = page_of(&house, maren);
+    let lines = &house.passage.as_ref().expect("a turning").pages[page].lines;
+    assert_eq!(
+        lines[0],
+        "She leaves a dream undone: to find a worthy student. Still to do: see a student succeed without her."
+    );
+}

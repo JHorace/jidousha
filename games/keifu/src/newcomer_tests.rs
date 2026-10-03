@@ -191,8 +191,13 @@ fn a_child_takes_up_an_ancestors_ghost_at_coming_of_age_and_the_ghost_is_quiet()
         },
         Ghost {
             hero: garrick,
-            dream: blade,
+            dream: blade.clone(),
             place: Place::Deepwood,
+        },
+        Ghost {
+            hero: garrick,
+            dream: blade,
+            place: Place::HighPass,
         },
     ];
     turn(&content, &mut house, 4);
@@ -203,7 +208,14 @@ fn a_child_takes_up_an_ancestors_ghost_at_coming_of_age_and_the_ghost_is_quiet()
     );
     // A swap remove: the last ghost takes the taken one's place.
     let left: Vec<(HeroId, Place)> = house.ghosts.iter().map(|g| (g.hero, g.place)).collect();
-    assert_eq!(left, [(garrick, Place::Barrow), (garrick, Place::Deepwood)]);
+    assert_eq!(
+        left,
+        [
+            (garrick, Place::Barrow),
+            (garrick, Place::HighPass),
+            (garrick, Place::Deepwood)
+        ]
+    );
     assert_eq!(house.heroes[brannoc].dream_fate, DreamFate::PassedOn);
     assert_eq!(house.heroes[brannoc].bequest_heir, Some(wren));
     let pages = &house.passage.as_ref().expect("a turning").pages;
@@ -436,5 +448,69 @@ fn a_turning_with_nothing_for_the_new_year_has_no_year_page() {
             "A quiet winter. The house kept to the fire.",
             "The year turns. The Sealed Door opens in 24 years."
         ]
+    );
+}
+
+#[test]
+fn a_child_carrying_a_passed_dream_comes_of_age_still_carrying_it() {
+    let (content, mut house) = house();
+    let (wren, garrick) = (id(&house.heroes, "Wren"), id(&house.heroes, "Garrick"));
+    house.heroes[wren].age = 11;
+    house.heroes[garrick].age = 30;
+    let mut carried = house.heroes[garrick].dream.clone().expect("a dream");
+    carried.owner = Some(garrick);
+    house.heroes[wren].dream = Some(carried);
+    turn(&content, &mut house, 4);
+    let pages = &house.passage.as_ref().expect("a turning").pages;
+    let page = pages
+        .iter()
+        .find(|p| p.kind == PageKind::ComingOfAge)
+        .expect("a coming of age");
+    assert_eq!(
+        page.lines[1],
+        "She has carried Garrick's dream since she was a child: to lay the Barrow's dead to rest."
+    );
+}
+
+#[test]
+fn a_child_who_dreams_already_keeps_the_dream_though_a_parent_fell_on_a_quest() {
+    let (content, mut house) = house();
+    let (pip, maren) = (id(&house.heroes, "Pip"), id(&house.heroes, "Maren"));
+    house.heroes[pip].age = 11;
+    let hero = &mut house.heroes[maren];
+    hero.fate = Fate::Dead;
+    hero.grieved = true;
+    hero.death_place = Some(Place::DrownedCoast);
+    hero.death_tag = Some(Tag::Water);
+    turn(&content, &mut house, 4);
+    assert_eq!(
+        house.heroes[pip].dream.as_ref().map(|d| d.kind),
+        Some(DreamKind::SeeTheSea)
+    );
+}
+
+#[test]
+fn a_wanderer_who_rolls_a_claimed_dream_makes_a_rival_of_its_dreamer() {
+    let (content, mut house) = house();
+    // Every one of the eight dreams claimed by an unbound, living adult.
+    for kind in content.wanderers.dreams.clone() {
+        let mut adult = house.heroes[id(&house.heroes, "Ysolde")].clone();
+        adult.bonds.clear();
+        adult.dream = Some(Dream::build(&content, kind, None, None).expect("builds"));
+        house.heroes.push(adult);
+    }
+    house.calendar.begin_winter();
+    let page = crate::wanderer::arrive(&content, &mut house, &mut Rng::from_seed(9));
+    let id = house.heroes.len() - 1;
+    let rivals = house.heroes[id]
+        .bonds
+        .iter()
+        .filter(|b| b.kind == BondKind::Rival)
+        .count();
+    assert!(rivals >= 1, "{:?}", page.lines);
+    assert!(
+        page.lines.iter().any(|l| l.contains(" wants what ")),
+        "{:?}",
+        page.lines
     );
 }
