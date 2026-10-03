@@ -1148,3 +1148,30 @@ The documents were asked nothing new.
   aged 94." Aud's authored fate in `end.before_first_year`: "Aud Hale died of a fever, the winter Wren was
   two, before the first year." A dead TEACH_A_GREATER teacher with no greater student: "... and he never
   learned another thing."
+- **The mutation rounds.** `mutants/w9.txt` is 120 faults: both W9 constants; the wording roll (the
+  run's first frame, the no-repeat frame, the run's memory, one coin per part and its part, the draws'
+  order, a recomposition's frame); the priority walk (a skipped part ending it, the parts' order for the
+  priorities'), the budget (strict, uncounted, empty parts chosen, sentences counted by ". "), the frame's
+  order (the priorities', frame 0's) and the join; the naming rule (none, every part, the first name, the
+  lost "'s", every and no " he " inside, the possessive unlooked-for, the object pronoun); the lore read
+  (priorities, frames, lock names); every part's selection rule branch by branch, and each variant pair;
+  every composition point (the founding's order and its composing, the death page's roll and its step 8,
+  the heir choice, a ghost laid, a ghost taken up, a crowning, a crowning rolled twice, a choice rolling a
+  new wording); and the two surfaces (the remembrance and the death page, and the leaves' room for the
+  epitaph). Round one (`e4c7783`): **109 of 117 noticed, three not built** — M6 and V8 were cut as match
+  guards that left the match non-exhaustive, and W4 (an extra composition before the bequest lines) did
+  not borrow-check; W4 was also equivalent as cut, since steps 2-7 of the page change nothing an epitaph
+  reads, so it is re-cut to a real fault: only a page with nothing to leave composes. All three are marked
+  "(re-cut s9, round 2)". The eight escapes were loose checks, each a staging that never put the rule on
+  its edge: no birth in year 1 itself (O5), no fear faced exactly once (F5), no conquest beside a break
+  (F9), no borrowed dream whose " my " tells for an owner of the other pronoun (M7), no greater student
+  who was never taught (P8), no death in year 1 (E5), no legacy beside a buried heirloom (X3), no made
+  heirloom with no heir (X6). Each now has an assertion that fails under it (`epitaph_tests.rs`,
+  `epitaph_ends_tests.rs`). One earlier fault named code W9 moved and was re-cut to the same fault at the
+  new site, marked "(re-cut s9)": w8 S5 (the turning's leaves now read the heroes, for the epitaph's
+  height). **Round two, all eight lists against `4f52dad`: 850 of 856 noticed**, none unbuilt (tests alone
+  719, verify alone 457) — `w9.txt` **120 of 120** (tests 110, verify 48), `dock.txt` 22 of 22, `w3.txt` 117
+  of 118, `w4.txt` 133 of 134, `w5.txt` 58 of 59, `w6.txt` 100 of 100, `w7.txt` 114 of 115, `w8.txt` 186 of
+  188. **The six escapes are the known equivalents** — K7, K8, R12, E21, B3 and Y3, as sessions 3-8
+  classified them. The round ran as one combined list of the eight, labels prefixed by their list, over four
+  worktrees: 856 faults in about two hours and fifty minutes.
