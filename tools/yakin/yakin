@@ -5,11 +5,14 @@ A yakin tick is a scheduled, stateless Claude Code run (tools/yakin/README.md).
 Everything it knows comes from git, so the decisions that must be the same for
 every tick — is the queue well-formed, are we inside the burn-down window, which
 task do I take — are computed here rather than re-reasoned in prose each time.
-WORKER.md states the rules; this file is their only implementation.
+DOCTRINE.md states the rules; this file is their only implementation.
 
-Usage:  tools/yakin/yakin check     validate tools/yakin/queue.json (README schema)
-        tools/yakin/yakin window    IN or OUT of the window, America/Los_Angeles
-        tools/yakin/yakin next      the task this tick takes, from queue + branches
+Usage:  tools/yakin/yakin check                   validate tools/yakin/queue.json (README schema)
+        tools/yakin/yakin window                  IN or OUT of the window, America/Los_Angeles
+        tools/yakin/yakin next --role <role>      the task a <role> tick takes, from queue + branches
+
+<role> is `design` (DESIGNER.md) or `implement` (WORKER.md), and is required:
+a roleless `next` is a prompt bug, so it prints usage and exits 2.
 
 `next` reads the queue from the default branch (`origin/HEAD`, else
 `origin/main`) and claim state from `origin/claude/yakin-*` — run
@@ -19,11 +22,14 @@ first, or it judges stale refs.
 Exit codes: 0 valid / IN / PICK · 1 invalid / OUT / NONE · 2 tooling fault.
 
 Key functions: `validate_queue`, `in_window`, `parse_checkpoint`, `classify`,
-`pick`, `main`.
+`role_of`, `pick`, `main`.
 Depends on: the Python 3.9+ standard library (zoneinfo), and `git`.
 INVARIANT: claim state is read from branches only, never from queue.json. A
 tick cannot write to the default branch, so a claim recorded there would be a
 claim nobody can make or release.
+INVARIANT: every task row belongs to exactly one role (`role_of`), and `next`
+prints only rows of the asking role — so a design tick and an implement tick
+can never be handed the same branch. Stage is derived, never queued.
 """
 
 from __future__ import annotations
@@ -51,7 +57,7 @@ WINDOW_OPEN = (2, 1, 0)
 WINDOW_CLOSE = (3, 4, 30)
 
 # A branch whose last commit is younger than this may have a live tick on it.
-# Ticks push at least every 60 minutes (WORKER.md), so 90 leaves 30 of margin.
+# Ticks push at least every 60 minutes (DOCTRINE.md §2), so 90 leaves 30 of margin.
 LEASE_MINUTES = 90
 MAX_RESUMES = 2
 
@@ -70,6 +76,8 @@ ENUMS = {
 SPEC_SECTIONS = ("## Goal", "## Fence", "## Done when")
 CHECKPOINT_STAGES = {"design", "implement", "done", "blocked"}
 CHECKPOINT_TICKS = {"live", "released"}
+ROLES = ("design", "implement")
+SPLIT_VARIANTS = {"V2", "V3"}
 
 
 # ---------------------------------------------------------------- check
@@ -235,21 +243,36 @@ def classify(branch: "Branch | None", merged: bool) -> "tuple[str, dict[str, str
 MODES = {"free": "start", "ready": "continue", "stale": "resume", "exhausted": "block"}
 
 
-def pick(rows: "list[dict]", inside: bool) -> "tuple[dict | None, str]":
-    """The row this tick takes, or None and why.
+def role_of(variant: object, stage: "str | None") -> str:
+    """Which role's tick may act on a task: `design` or `implement`.
 
-    Order: an exhausted task first (writing its BLOCKED.md is cheap and unblocks
-    nothing else), then started work oldest-commit first, then fresh work in queue
-    order. Outside the window only `window: any` tasks are eligible.
+    A V2/V3 task is design work while it has no branch (`stage` None) or its
+    CHECKPOINT says `stage: design`; everything else is implement work. A V1 task
+    has no design stage of its own — its inline design notes are the worker's,
+    even while its CHECKPOINT reads `stage: design`.
     """
-    eligible = [row for row in rows if row["state"] in MODES and (inside or row["window"] == "any")]
+    if variant in SPLIT_VARIANTS and stage in (None, "design"):
+        return "design"
+    return "implement"
+
+
+def pick(rows: "list[dict]", inside: bool, role: str) -> "tuple[dict | None, str]":
+    """The row a `role` tick takes, or None and why.
+
+    Only rows of `role` are considered. Order: an exhausted task first (writing
+    its BLOCKED.md is cheap and unblocks nothing else), then started work
+    oldest-commit first, then fresh work in queue order. Outside the window only
+    `window: any` tasks are eligible.
+    """
+    mine = [row for row in rows if row["role"] == role]
+    eligible = [row for row in mine if row["state"] in MODES and (inside or row["window"] == "any")]
     if not eligible:
-        live = [row["id"] for row in rows if row["state"] == "live"]
-        if not inside and any(row["state"] in MODES for row in rows):
-            return None, "outside the window and no queued task is `window: any`"
+        live = [row["id"] for row in mine if row["state"] == "live"]
+        if not inside and any(row["state"] in MODES for row in mine):
+            return None, f"outside the window and no {role} task is `window: any`"
         if live:
-            return None, f"every claimable task is held by a live tick ({', '.join(live)})"
-        return None, "no claimable or queued work"
+            return None, f"every claimable {role} task is held by a live tick ({', '.join(live)})"
+        return None, f"no claimable {role} work"
     rank = {"exhausted": 0, "ready": 1, "stale": 1, "free": 2}
 
     def key(row: dict) -> tuple:
@@ -289,7 +312,7 @@ def remote_branches(root: Path, now: float) -> "dict[str, Branch]":
     return branches
 
 
-def command_next(root: Path) -> int:
+def command_next(root: Path, role: str) -> int:
     ref = default_ref(root)
     shown = git(root, "show", f"{ref}:{QUEUE_PATH}")
     if shown.returncode != 0:
@@ -319,13 +342,16 @@ def command_next(root: Path) -> int:
         rows.append({
             "id": task_id, "index": index, "state": state,
             "window": task.get("window", "burn-down"),
+            "role": role_of(task.get("variant"), fields.get("stage") if branch else None),
             "age_minutes": branch.age_minutes if branch else 0.0,
             "stage": fields.get("stage", "-"), "resumes": fields.get("resumes", "-"),
         })
+        if rows[-1]["role"] != role:
+            continue
         age = f"{branch.age_minutes:.0f}m" if branch else "-"
         print(f"  {task_id:<{ID_MAX}} {state:<9} age={age:<6} stage={rows[-1]['stage']:<9} resumes={rows[-1]['resumes']}")
-    print(f"  window: {'IN' if inside else 'OUT'}")
-    chosen, reason = pick(rows, inside)
+    print(f"  role: {role} · window: {'IN' if inside else 'OUT'}")
+    chosen, reason = pick(rows, inside, role)
     if chosen is None:
         print(f"NONE {reason}")
         return 1
@@ -333,13 +359,22 @@ def command_next(root: Path) -> int:
     return 0
 
 
+USAGE = f"usage: tools/yakin/yakin {{check|window|next --role {'|'.join(ROLES)}}}"
+
+
 def main(argv: "list[str]") -> int:
-    commands = {"check": lambda: command_check(REPO_ROOT), "window": command_window,
-                "next": lambda: command_next(REPO_ROOT)}
-    if len(argv) != 2 or argv[1] not in commands:
-        print(f"usage: tools/yakin/yakin {{{'|'.join(commands)}}}")
-        return 2
-    return commands[argv[1]]()
+    args = argv[1:]
+    if args == ["check"]:
+        return command_check(REPO_ROOT)
+    if args == ["window"]:
+        return command_window()
+    if len(args) == 3 and args[:2] == ["next", "--role"] and args[2] in ROLES:
+        return command_next(REPO_ROOT, args[2])
+    print(USAGE)
+    if args[:1] == ["next"]:
+        print("  `next` needs `--role design` (DESIGNER.md) or `--role implement` (WORKER.md);")
+        print("  likely cause: the tick's prompt ran a roleless `next`; fix: the prompt, not the tool")
+    return 2
 
 
 if __name__ == "__main__":
