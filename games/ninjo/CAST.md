@@ -1,44 +1,27 @@
-# ninjo - the cast (founding band, vocabulary, first templates)
+# ninjo - the cast (founding band, vocabulary, templates)
 
-The content pass GDD s10 left open: who lives in the camp, what the
-trait words are, and the first five petition templates. The roster and
-the vocabulary become data (`people.rs`, `traits.rs`, the template
-table) with the **wave-1.1** session, and this document stays as the
-living cast bible - rewritten state, per the living-docs convention.
-Where a number appears it is a drawer starting value, not a decision.
-
-**Sections 1 to 8 landed with wave 1.1**, as the plan below says: the trait
-vocabulary is `src/traits.rs`, the ten sheets and their homes are
-`src/people.rs`, the task types are on every quest row, the relationship
-presets are the `bonds_preset` drawer row, and the coverage matrix and the
-no-dead-motivator rule are assertions the registry runs. What 1.1 did *not*
-build is s6's template table — petitions are **wave 1.5** — so the no-dead
-rule is asserted against a declared list of the five motivators s6 covers
-(`traits::TEMPLATED_MOTIVATORS`), and 1.5 repoints that constant at the real
-table without the assertion changing. *(Wave 1.5 built s6 and did exactly that.)* The `*Implemented*` notes below are
-per-section.
-
-**Landed early, on 2026-09-02, by the cast-art session** rather than
-with wave 1.1 as the plan above says. That session picked and imported
-the fifteen art roles s9 asks for, and s9 is its record; a document
-whose s9 is the landed state cannot be a document that does not exist
-yet, and three committed files (`src/sprites.rs`,
-`art/sprite_defs.py`, `art/picks_sheet.py`) now cite it by section. No
-other section was touched: sections 1 to 8 are the handoff's text
-verbatim, unbuilt, and wave 1.1 writes their `*Implemented (w1.1):*`
-marks. This is the one deviation that session made from its fences,
-and its reason.
+The cast bible: who lives in Kawaza, what the trait words are, the seeded
+relationships, and the petition templates. It is content where `GDD.md` is
+design; where the two disagree about a decided thing, the GDD wins. The
+roster and the vocabulary are data - the ten sheets and their homes are
+`src/people.rs`, the trait vocabulary `src/traits.rs`, the templates
+`petitions::TEMPLATES`, the standing rates `asks::RATES`, the relationship
+presets the `bonds_preset` drawer row - and this document is the living
+record of that content, rewritten state per the living-docs convention
+(`docs/conventions.md` §Documents). Where a number appears it is a drawer
+starting value or a row's content, not a decision about tuning. A live
+wave's landings carry `*Implemented (wN):*` notes per section; wave 1's are
+folded below and live in git.
 
 **Vocabulary status: LOCKED** (owner, 2026-10-02). Petition copy is
 written against the shipped words, so a change from here is a rename, not a
 data edit. What follows is the record of how they were chosen. The
 aptitude and motivator words below are the owner's leaned choice made
 before the context that would test them exists (party building is
-wave 4; traits become consequential across waves 1.1-1.4). They are
-ids in one table with display names beside them; renaming is a data
-edit. The wave-1.5 playtest carries an explicit vocabulary question
-(s7). Template text and source lines refer to traits by display name
-through the row, never by prose - so a rename touches one cell.
+wave 4). They are ids in one table with display names beside them;
+renaming is a data edit. The MVP gate playtest carries an explicit
+vocabulary question (s7). Template text and source lines refer to traits by
+display name through the row, never by prose - so a rename touches one cell.
 
 All player-facing text here is printable ASCII (the registry asserts
 it).
@@ -63,11 +46,6 @@ template; the **four authored sites** stand as landed (watchtower,
 deep-cave, old-crypt, and the fourth); the camp's **fire** is Rin's and
 is the ancestor of the first industry; money is gold and only gold.
 
-The 0a build called the town by a placeholder name; the owner's name is
-**Kawaza**. *Implemented (w1.1):* renamed everywhere — `grid::LOCATIONS`, the
-docs, the page title, the screenshots — and the old name is grepped for and
-gone from the tree, this sentence included.
-
 ## 2. Task taxonomy (four types; aptitude ids double as task ids)
 
 | task id | what it is | where it shows up at MVP |
@@ -75,24 +53,22 @@ gone from the tree, this sentence included.
 | `fight` | clear a site of what is in it | site jobs at the crypt and the cave |
 | `labor` | camp work; haul and stores | haul/survey site jobs |
 | `scout` | travel-heavy; go and look | the far sites; the fiction asks-travel rides on |
-| `craft` | mend, build | the camp works' standing shifts (1.3); the first building |
+| `craft` | mend, build | the camp works' standing shifts; the first building |
 
-Every authored quest/site job carries a task type from wave 1.1 on
-(data on the quest row). Resolution (1.4) reads the aptitude whose id
-equals the task's type; until then the landed stub ignores it and the
-scorer already weighs it.
+Every authored job carries a task type (`Quest::task`, data on the row),
+and it is **drawn on the row too**: every job on a site's board carries its
+task-type chip, in the aptitude icon whose id is the task's, beside the fit
+the reader has for it (UI.md s3c). `TaskType::aptitude()` and
+`TaskType::of_aptitude()` are the round trip, and the vocabulary's
+validation asserts it both ways - every type has exactly one aptitude row
+and every aptitude row is some type's. Resolution reads the aptitude whose
+id equals the task's type, and the scorer weighs it.
 
-*Implemented (w1.1):* `traits::TaskType`, and `Quest::task` on every authored
-row — the "data on the quest row" this section asks for, and since the
-job-board session (2026-09-06) it is **drawn on the row too**: every job on a
-site's board carries its task-type chip, in the aptitude icon whose id is the
-task's, beside the fit the reader has for it (UI.md §3c). `TaskType::aptitude()` and `TaskType::of_aptitude()` are the round trip,
-and the vocabulary's validation asserts it both ways — every type has exactly
-one aptitude row and every aptitude row is some type's. **The board grew from
-seven jobs to twenty-four**, six a site, each site leaning toward the work its
-fiction implies and carrying at least one of every type: ten people looking
-for work empty a seven-job board before the first day is out, and an aptitude
-with nothing to do is a chip that means nothing. Sites still run dry.
+**The board is twenty-four jobs**, six a site, each site leaning toward the
+work its fiction implies and carrying at least one of every type: ten
+people looking for work empty a seven-job board before the first day is
+out, and an aptitude with nothing to do is a chip that means nothing. Sites
+still run dry.
 
 ## 3. Trait vocabulary (content)
 
@@ -105,12 +81,12 @@ with nothing to do is a chip that means nothing. Sites still run dry.
 | `scout` | scout | "knows the way, or finds it" | 2 |
 | `craft` | crafter | "fixes it, or builds the thing that replaces it" | 2 |
 
-The placeholder rows `strong`, `deft`, `learned` retire (not on any
-sheet; delete the rows - nothing else references them).
-
-*Implemented (w1.1):* deleted, and these four are the rows. The aptitude id
-**is** the task id, so `competence_at(task, traits)` reads one row rather
-than summing everything the carrier can do.
+These four are the rows. The aptitude id **is** the task id, so
+`competence_at(task, traits)` reads one row rather than summing everything
+the carrier can do. Every aptitude row is 2, so the cast has exactly two
+odds per job - a fit of 2 is `safe` (fails 11%, goes well 24%) and a fit of
+0 is `risky` (fails 35%, never goes well) through `resolution::odds`; a
+third would need a third aptitude value, which is content.
 
 ### 3.2 Motivators (kind `motivator`; five, each with its template)
 
@@ -122,43 +98,23 @@ than summing everything the carrier can do.
 | `restless` | restless | "wants to be somewhere else, for a while" | 1/1 | 2 | scout |
 | `maker` | maker | "wants to make something that lasts" | 5/4 | 2 | craft |
 
-**`favors` is a new field on the motivator row** (neutral: none): the
-task type this want's pressure applies to, `any` meaning any paid work.
-The scorer (1.1) adds `pressure` to a candidate whose task type matches
-(or to every paid candidate for `any`). Needs (1.3) reads `upkeep`.
-This is the row's whole mechanical surface; the *petition* half of each
-motivator is s6.
-
-*Implemented (w1.3): `upkeep` is read.* `traits::upkeep_of` had been written
-since 1.1 and called by nothing; `needs::cost_of` is its first caller, and the
-multipliers are what make one interval of the camp's upkeep cost Steve 7g,
-Bob 6g and Alex the base 5g. The whole gradient of who slides and who does not
-comes out of this column and the purses in s4 — nothing else in the economy
-distinguishes one person from another.
-
-*Implemented (w1.1):* `favors` is a field on the row (`Favors::None` neutral,
+**`favors`** (neutral: none) is the task type this want's pressure applies
+to, `any` meaning any paid work. It is a field on the row (`Favors::None`,
 `Any`, or `Task(t)`), asserted neutral on every non-motivator row like every
-other kind-owned field, and read by `traits::pressure_toward` — which is the
-only place a want reaches the scorer, and which never looks at an id.
-
-The placeholder rows `provider`, `ambitious`, `homesick` retire.
-`caring` absorbs provider's upkeep idea (feeding somebody else costs);
-`renown` replaces ambitious; `restless` replaces homesick with the
-direction reversed (away, not home).
+other kind-owned field, and read by `traits::pressure_toward` - the only
+place a want reaches the scorer, and it never looks at an id. **`upkeep`**
+is read by `needs::cost_of` through `traits::upkeep_of`: the multipliers are
+what make one interval of the camp's upkeep cost Steve 7g, Bob 6g and Alex
+the base 5g, and the whole gradient of who slides and who does not comes
+out of this column and the purses in s4 - nothing else in the economy
+distinguishes one person from another. This is the row's whole mechanical
+surface; the *petition* half of each motivator is s6.
 
 **No-dead-motivator rule** (decided): every motivator row has at least
 one template in s6 whose source class is `motivator` and whose trigger
-names it. Checkable as data validation - add the check.
-
-*Implemented (w1.1):* `traits::vocabulary` asserts it against
-`TEMPLATED_MOTIVATORS`, the declared list of the five s6 writes a template
-for, and asserts besides that no motivator has zero pressure. Wave **1.5**
-replaces the constant with a walk over the real table — the templates are
-petitions' and petitions moved (GDD s8).
-
-*Implemented (w1.5):* the constant is gone; the rule walks
-`petitions::templated_motivators()`, the motivator rows the checked templates
-name, and the assertion did not change.
+names it. `traits::vocabulary` asserts it by walking
+`petitions::templated_motivators()`, the motivator rows the checked
+templates name, and asserts besides that no motivator has zero pressure.
 
 ### 3.3 Personalities (giri's nine, audited)
 
@@ -166,39 +122,33 @@ Audit question: *does it shape daily scorer choices or ask verdicts at
 MVP?* Kept rows are on the founding sheets; parked rows stay in the
 vocabulary (the trait x mark reaction table references them and stays
 whole) but appear on no sheet until marks are common - that is the
-betrayal ladder's era (asks, wave 2, and after).
+betrayal ladder's era.
 
 | id | verdict | why |
 |---|---|---|
-| `greedy` | keep | pot pull is a scorer term from 1.1 |
+| `greedy` | keep | pot pull is a scorer term |
 | `loyal` | keep | bonds x2 shape whom they work beside and whom they obey |
-| `proud` | keep | the ask refuser; refuses charity when gifts exist (1.5 - needs a field then; see s8) |
-| `craven` | keep | danger terms x2 once fight tasks carry danger (1.4); dormant until then, harmless |
+| `proud` | keep | the ask refuser; refuses charity when gifts exist - the field for that has no reachable surface yet (s4.1) |
+| `craven` | keep | danger terms x2 once fight tasks carry danger; dormant - failure is economic only, and whether a character weighs their own odds is open (`FINDINGS.md` G-049) |
 | `vengeful` | keep | grudges x2, never decay - the repeat-refusal story |
 | `cold` | keep | edges x1/2 both ways - the one who cannot be bought with regard |
 | `pious` | park | reacts to marks by kind; marks are rare before the ladder |
 | `pragmatic` | park | prefers a known skimmer; mark-dependent |
 | `upright` | park | refuses the dark-marked; mark-dependent |
 
-No personality is added. The scorer does not exist yet; a personality
-that owns a scorer field (a work/idle bias, say) is proposed when 1.1
-finds the scorer wants one, not before.
-
-*Implemented (w1.1):* none was added, and the scorer did not ask for one. The
-parked three are `people::PARKED` — declared beside the roster rather than as
-a field on the trait row, because being on a sheet is a casting decision and
-not a property of the word — and the registry asserts they are in the
-vocabulary and on nobody.
+No personality was added: the scorer did not ask for one. A personality
+that owns a scorer field (a work/idle bias, say) is proposed when the scorer
+wants one, not before. The parked three are `people::PARKED` - declared
+beside the roster rather than as a field on the trait row, because being on
+a sheet is a casting decision and not a property of the word - and the
+registry asserts they are in the vocabulary and on nobody.
 
 Authoring norm: two or three traits per sheet (practice, not rule; the
 list cap is gone).
 
 ## 4. The founding band (ten)
 
-Mongrel names on purpose: a band drawn from everywhere. The four
-0b-landed characters survive as founders with revised sheets. `home`
-tiles are the 1.1 session's to place (passable, unshared, off named
-locations - the registry asserts it).
+Mongrel names on purpose: a band drawn from everywhere.
 
 | id | name | role | traits | wallet | desp. | arrives | source line |
 |---|---|---|---|---|---|---|---|
@@ -213,12 +163,22 @@ locations - the registry asserts it).
 | `ines` | Ines | crafter | crafter, maker, craven | 10 | 2 | d3 07:00 | mends what breaks, and would rather be far from what breaks it |
 | `odd` | Odd | fighter | fighter, renown, restless | 8 | 3 | d3 18:00 | took the same job as Goro twice, and only one of them got paid |
 
-**The arrival column is the backstory, in order** (wave 1.3). The camp opens
-with the four founders, because §1 says a band arrived a season ago and it is
-*that* band; the other six are "the six who came later" made mechanical rather
+All ten, in this order, are `people::roster`; the wallets, desperations and
+arrival minutes are the scenario file's (`scenarios/freeplay.txt`, GDD s6).
+**Homes are two rows of tents south of the road and east of the ford** -
+y=15 at x 12/16/20/24/28 and y=17 at x 6/10/14/18/22 - passable, unshared,
+off named locations (the registry asserts it), and spaced so ten names, ten
+figures and the town's own marker do not collide, which `floors.rs` asserts
+rather than this sentence. A character leaves from the doorstep they are
+standing on and comes home to it, which is why the journey minutes differ
+per character.
+
+**The arrival column is the backstory, in order.** The camp opens with the
+four founders, because s1 says a band arrived a season ago and it is *that*
+band; the other six are "the six who came later" made mechanical rather
 than a new fiction, and the order is the fiction's own:
 
-- **Rin first**, and soonest — the cook follows the fire she built, and the
+- **Rin first**, and soonest - the cook follows the fire she built, and the
   camp is hers to feed before it is anything else.
 - **Goro next**, drawn by what an unclaimed crossing pays a fighter.
 - **Hana after Goro**, because she came for her brother and cannot have
@@ -227,30 +187,19 @@ than a new fiction, and the order is the fiction's own:
 - **Ludo**, following the debt, at the first place that was hiring.
 - **Ines** when there is something worth mending, which is after the band has
   been breaking things for two days.
-- **Odd last**, arriving to find Goro already here and already talked about —
-  the grudge §5 seeds is a thing that has now had time to happen.
+- **Odd last**, arriving to find Goro already here and already talked about -
+  the grudge s5 seeds is a thing that has now had time to happen.
 
 The times are drawer-invariant content: each row carries a `present_from`
 world-minute and the arrival is an occurrence on the one scheduler, so it is
 world-time addressed and speed-invariant like everything else, and the lens
-filters every surface by presence off one derivation (`Lens::roll`).
-
-*Implemented (w1.3): the arrival column.* The camp opens with the four whose
-minute is zero and the six who came later arrive as occurrences; the registry
-asserts the column is monotonic, that presence agrees with it, that the
-founding band is exactly these four names, and — separately, because a camp
-whose opening four cannot do any of the opening work is a camp whose first
-decisions are not decisions — that **each founder has at least one open job
-they have an aptitude for** on the opening board. The coverage matrix in §7
-still applies to the whole roster.
-
-*Implemented (w1.1):* all ten, in this order, in `people::roster`. **Homes are
-two rows of tents south of the road and east of the ford** — y=15 at x
-12/16/20/24/28 and y=17 at x 6/10/14/18/22 — spaced so ten names, ten figures
-and the town's own marker do not collide, which `floors.rs` asserts rather
-than this sentence. A dispatched party leaves from the doorstep it is standing
-on and comes home to it, which is why the journey minutes differ per
-character.
+filters every surface by presence off one derivation (`Lens::roll`). The
+registry asserts the column is monotonic, that presence agrees with it,
+that the founding band is exactly these four names, and - separately,
+because a camp whose opening four cannot do any of the opening work is a
+camp whose first decisions are not decisions - that **each founder has at
+least one open job they have an aptitude for** on the opening board. The
+coverage matrix in s7 applies to the whole roster.
 
 ### 4.1 Demo characters (each MVP module names the person it is proved on)
 
@@ -263,29 +212,40 @@ character.
 | settlement (1.3) | **Rin** - the industry seed | maker; her petition asks for the first building; the camp fire becoming a kitchen is the first-building beat and the baker-dream's ancestor |
 | events-director (1.6) | **Bob** - the loan-shark debtor | indebted + greedy; the collector's canned template has a natural target from minute one |
 
-*Implemented (w1.3): both of this wave's demo claims are assertions now.*
+What each claim is, as the batteries hold it:
 
-- **Steve shortfalls first**, and it is the staged start that made the claim
-  true rather than merely likely. On day one the camp is the four founders;
-  Steve's `caring` multiplies the base upkeep to 7g and he opens with 3g, and
-  he is the only one of the four who cannot meet the first interval — Bob pays
-  his in full with a gold left over. `economy::PARIAH` is the shipped literal
-  and the sweep asserts it in **every** world it runs, which is a stronger
-  claim than the median one the handoff asked for. It is not registry order:
-  Bob is index 0.
-- **Rin is the industry seed**, mechanically: the camp works are `craft` work
-  (§2), the fire she cooks on with a roof over it, and she is the only crafter
-  in Kawaza for two world-days — she arrives on day one and Ines on day three
-  — so the first shift the works ever open is hers to take. Her *petition* for
-  the building is still wave 1.5's; what 1.3 makes true is that the settlement
-  the player builds runs on her trade.
-
-**Ludo's claim moved from the played run to a staged one** and that is a
-deviation worth naming: he is one of the six who came later, and by the time he
-walks in on day two the board has been claimed (`FINDINGS.md` G-032). What the
-claim is about is what he does *with an offer*, and a world with no offer left
-cannot say — so `autonomy::judge_alive` now stages a full board and asserts he
-takes work at the first minute he is asked to think.
+- **Steve shortfalls first in every world** (`economy::PARIAH`), and it is
+  the staged start that makes the claim true rather than merely likely. On
+  day one the camp is the four founders; Steve's `caring` multiplies the base
+  upkeep to 7g and he opens with 3g, and he is the only one of the four who
+  cannot meet the first interval - Bob pays his in full with a gold left
+  over. It is not registry order: Bob is index 0. The economy sweep asserts it
+  in **every** world it runs, a stronger claim than the median one the
+  handoff asked for - and **it is what sets the share**: his 3g purse against
+  a 7g first interval holds the self-chosen share at three percent
+  (`FINDINGS.md` G-048).
+- **Ludo's claim is staged, not played**, and that is a deviation worth
+  naming: he is one of the six who came later, and by the time he walks in on
+  day two the board has been claimed (`FINDINGS.md` G-032). What the claim is
+  about is what he does *with an offer*, and a world with no offer left
+  cannot say - so `autonomy::judge_alive` stages a full board and asserts he
+  takes work at the first minute he is asked to think.
+- **Tim agrees at the standing rates like every other founder.** The
+  refusals the shipped set produces are the *fits*, not the pride: Alex will
+  not leave scouting, and Ines and Rin will not leave crafting. Pride's own
+  refusal needs the gift-refusal field, and that field has no reachable
+  surface: the gift is GIVE, it exists only on a money-shaped condition, and
+  the only one is T1's - carried by Bob and Ludo, neither of them proud. It
+  waits for a proud character with a money-shaped petition (GDD s10). Until
+  then the demo character for this module is a promise rather than a
+  demonstration.
+- **Rin is the industry seed**, mechanically: the camp works are `craft`
+  work (s2), the fire she cooks on with a roof over it, and she is the only
+  crafter in Kawaza for two world-days - she arrives on day one and Ines on
+  day three - so the first shift the works ever open is hers to take. T5 is
+  her petition for the building.
+- **Bob** is D1's natural target from minute one; the pinned test scenario
+  fires it at him at world-minute 90 (GDD s6).
 
 ## 5. Seeded relationships (the `authored` preset)
 
@@ -309,16 +269,16 @@ Regard (directed, small magnitudes; drawer scale):
 - Toward the player: founders (bob, steve, alex, tim) small +; the rest
   0. The guildmaster has to earn the six who came later.
 
-*Implemented (w1.1):* `sim::seed_relationships`, gated on the `bonds_preset`
-drawer row (0 flat, 1 authored) and so on every stamp. Every seed is written
-through the ordinary store API — `adjust_regard`, `record_shared_success`,
-`record_grudge` — so a seeded world is a world that could have got there by
-living, and no vector is written directly. Regard is written before the facts,
-so a bond's floor and a grudge's ceiling are seen to hold what follows them.
-The founders' warmth toward the player is +2 each; the six who came later open
-at nothing. `autonomy::judge_presets` is the flip test: with the board spent,
-somebody goes to see somebody they think well of under the authored seeds and
-stays home under the flat ones.
+`sim::seed_relationships` writes them, gated on the `bonds_preset` drawer
+row (0 flat, 1 authored) and so on every stamp. Every seed is written
+through the ordinary store API - `adjust_regard`, `record_shared_success`,
+`record_grudge` - so a seeded world is a world that could have got there by
+living, and no vector is written directly. Regard is written before the
+facts, so a bond's floor and a grudge's ceiling are seen to hold what
+follows them. The founders' warmth toward the player is +2 each; the six who
+came later open at nothing. `autonomy::judge_presets` is the flip test: with
+the board spent, somebody goes to see somebody they think well of under the
+authored seeds and stays home under the flat ones.
 
 The seeds are chosen so that the two **deliberate gaps** in s7 have
 faces: the fighters who should team up hold a grudge, and the pair who
@@ -331,16 +291,23 @@ Format per GDD s6: id, source class, trigger, body (text, deadline,
 reward, consequence), `next`. Text is a template with `{name}`,
 `{other}`, `{site}`, `{n}`, `{deadline}` slots; the card shows the
 resolved text, the timer bar, the reward, and the declared consequence
-(the 0a-recorded card anatomy). Deadlines are drawer rows.
+(UI.md s3h). `petitions::TEMPLATES` is this section as data, every number
+on the row. **Deadlines and `{n}`s are on the row, not in the drawer**:
+seven deadline rows would have filled the drawer, and a template is
+content; the drawer carries what *is* tuning - the regard step, the relief,
+the check's cadence and roll, and the thin-days window. **No template pays
+gold**; the reward port's first exerciser is a staged row in the battery.
+The lookbacks (T2, T4, T5) are **2** world-days, and the person has to have
+been in the camp that long.
 
-**Consequence vocabulary** (data; a consequence is a template
-reference, GDD s6):
+**Consequence vocabulary** (`petitions::KINDS`, the four, asserted; a
+consequence is a template reference, GDD s6):
 
 | id | what fires |
 |---|---|
 | `sours` | regard(petitioner -> player) large -; grudge on repeat/egregious (the petitions rule) |
 | `broke` | petitioner's wallet to 0 (burned), desperation +2, source line rewritten to the event |
-| `walks-out` | petitioner leaves camp for `{n}` days (an autonomy away-state, not a party), unpaid; returns |
+| `walks-out` | petitioner leaves camp for `{n}` days (presence, not a party - the staged start's own away-state, through the lens), unpaid; returns |
 | `gives-away` | petitioner transfers half their wallet to `{other}` (conserved), desperation +1 |
 
 Every consequence fires `sours` as well unless it *is* `sours`; a
@@ -352,14 +319,14 @@ failed voiced petition always costs regard (GDD s4.2).
 - text: "{name}: I owe {n} gold to a man who counts days. Find me work
   that pays before {deadline}, or he takes it out of me."
 - deadline: 6 world-days. reward: none (pays in regard). condition:
-  `{name}`'s wallet >= `{n}` at any point before the deadline.
+  `{name}`'s wallet >= `{n}` at any point before the deadline. `{n}` is
+  **30g**.
 - consequence: `broke`.
 - next (on failure): `collectors-visit-again` - same text with "He
   came once already." prepended, deadline 3 days, consequence
   `walks-out` (dragged off, {n}=4 days). This is the quest chain in
   miniature; the director's canned loan-shark template *is* T1
-  fired with source class `director` on anyone indebted - D1 below
-  (wave 1.6).
+  fired with source class `director` on anyone indebted - D1 below.
 
 ### T2 `proving-job` (renown)
 
@@ -367,9 +334,14 @@ failed voiced petition always costs regard (GDD s4.2).
 - text: "{name}: Send me somewhere that matters. {site} - not the safe
   one. People should hear about it."
 - deadline: 5 world-days. reward: none. condition: `{name}` dispatched
-  to a `fight` task whose pot >= the drawer threshold.
-- consequence: `sours`. next (on repeat failure): `walks-out` ("gone
-  looking for a name somewhere else", 5 days).
+  to a `fight` task whose pot is **55g** or more (on the row; 55 is the
+  richest fight pot on three of the four boards, so "not the safe one"
+  means something). `{site}` names the authored site with the richest fight
+  job.
+- consequence: `sours`. next (on repeat failure): `proving-job-again` - the
+  same ask a second time, declaring `walks-out` ("gone looking for a name
+  somewhere else", 5 days) - so the repeat's consequence is the one its own
+  card printed, never a different one than the first card showed.
 
 ### T3 `look-after-them` (caring)
 
@@ -378,7 +350,10 @@ failed voiced petition always costs regard (GDD s4.2).
   paying work before {deadline}, or I will feed {other} out of my own
   pocket."
 - deadline: 4 world-days. reward: none. condition: `{other}`'s
-  desperation below the threshold at the deadline.
+  desperation below the threshold at the deadline. **The threshold is the
+  `desperate` chip's**, `needs::DESPERATE_AT` (6) - one predicate, so a
+  person the chip names is a person T3 can speak for. The condition is hard
+  to meet (`FINDINGS.md` G-051, open).
 - consequence: `gives-away` (to `{other}`). Failure feeds the other
   anyway - the consequence is conserving, and the caring one is poorer
   and colder toward you for it.
@@ -389,8 +364,9 @@ failed voiced petition always costs regard (GDD s4.2).
 - text: "{name}: I have been looking at the same tents for too long.
   Send me to {site} before {deadline}. Anywhere I have not been."
 - deadline: 6 world-days. reward: none. condition: `{name}` dispatched
-  to a site they have not visited (a per-character visited set - the
-  scout's memory; small sim state, replay-carried).
+  to a site they have not visited - the per-character visited set is
+  `Character::memory`, written on arrival, replay-carried; `{site}` is the
+  first site in registry order its petitioner has never reached.
 - consequence: `walks-out` (wandered off, 3 days). The cheap fiction
   asks-travel rides on: the restless are who you send far.
 
@@ -402,20 +378,20 @@ failed voiced petition always costs regard (GDD s4.2).
   to make them. Put up {building} or give me {n} days at the {industry}
   before {deadline}."
 - deadline: 8 world-days. reward: none. condition: an industry built,
-  or `{name}` works `{n}` shifts.
-- consequence: `sours`, desperation +1. next (on satisfaction):
-  `first-order` - "{name}: It is up. Give me something to make." - a
-  `craft` task at camp with a small pot from the treasury; the seed of
-  the industry arc and the baker dream (post-1.3 optional; record the
-  link, build when aspirations arrive).
+  or `{name}` works **2** shifts. `{building}` and `{industry}` are the
+  settlement's own content.
+- consequence: `sours`, desperation +1 - `sours` with one more step on the
+  declared consequence, not a fifth kind: the vocabulary is four. next (on
+  satisfaction): `first-order` - "{name}: It is up. Give me something to
+  make." - 3 days, met by any craft work, `sours`. The treasury-paid craft
+  task at camp the chain describes is the seed of the industry arc and the
+  baker dream; the link is recorded and exercised, and that task is built
+  when aspirations arrive.
 
-Before industries exist (1.1), T5 cannot be satisfied and is not fired;
-the trigger's "industry shift" clause is what the 1.2 session turns on.
-
-### T6 `thin-days` (shortfall) — the shortfall exemplar (wave 1.5)
+### T6 `thin-days` (shortfall) - the shortfall exemplar
 
 The escalation pipe's second rung: the first template whose source class is
-`shortfall` rather than a motivator, so it can speak for anybody — Tim, who
+`shortfall` rather than a motivator, so it can speak for anybody - Tim, who
 carries no motivator, included.
 
 - trigger: three `upkeep-shortfall` events on `{name}` inside the thin-days
@@ -429,17 +405,20 @@ carries no motivator, included.
   or shift completed by `{name}` before the deadline.
 - consequence: `walks-out` ({n}=3 days).
 
-### D1-D3 - the director's (wave 1.6), source class `director`
+### D1-D3 - the director's, source class `director`
 
 The capsule's own three examples, carried in from outside the camp by the
-minimal injector (GDD s5's events-director). They are petitions like any
-other - the same card, ledger, cliff and vocabulary of four - and the only
-difference the player sees is the source chip, which reads **`event`**:
-"from outside the camp - not their own want". None is raised by
-the petition check; the injector fires them after the calm window, at most
-`director_max` unresolved at once, on somebody eligible (present, carrying no
-petition, holding a trait the trigger names), drawn by the firing's own
-address. All three pay in regard.
+minimal injector (GDD s5's events-director; `src/director.rs`). They are
+petitions like any other - the same card, ledger, cliff and vocabulary of
+four - and the only difference the player sees is the source chip, which
+reads **`event`**: "from outside the camp - not their own want". None is
+raised by the petition check; the injector fires them after the calm
+window, at most `director_max` unresolved at once, on somebody eligible
+(present, carrying no petition, holding a trait the `Carries` trigger
+names), drawn by the firing's own address. All three pay in regard. The
+no-dead check runs over them too (`petitions::vocabulary`: every director
+row reaches somebody in the cast, and requires the injector's registry
+row).
 
 **D1 `the-collector-comes`** (eligible: `indebted`, wallet regardless)
 
@@ -447,7 +426,9 @@ address. All three pay in regard.
   condition (`{name}`'s wallet >= `{n}`, {n} = 30) and consequence (`broke`),
   with T1's chain (`collectors-visit-again` on failure). What differs is who
   it reaches: anyone indebted, purse regardless - the collector does not wait
-  for poverty, he arrives.
+  for poverty, he arrives. **When the purse already holds 30g it is met at
+  its voicing**: the collector arrives, is paid, and goes - a pressure event
+  that relieves pressure (`FINDINGS.md` G-056, open).
 
 **D2 `rival-offer`** (eligible: `renown` or `greedy`)
 
@@ -464,55 +445,11 @@ address. All three pay in regard.
 - text: "{name}: Travelers say {site} is worth somebody's time again - good
   pots for whoever moves first. We should be first."
 - `{site}`: an authored site with open work on its board, drawn at the
-  firing; with none, D3 reaches nobody.
+  firing; with none, D3 reaches nobody. (The site names carry their own
+  "the", so the text carries none.)
 - deadline: 4 world-days. condition: any job at `{site}` completed, by
   anybody, before the deadline (the player's hand if that job was posted).
 - consequence: `sours`.
-
-*Implemented (w1.6):* all three, as rows of `petitions::TEMPLATES` with
-source `Director` and a `Carries` trigger, fired by `src/director.rs`.
-**What the build decided that this section left open:** D2 and D3's
-deadlines (5 and 4 days - the handoff named none); D2's `{n}` range; D3's
-text drops the article before `{site}` (the site names carry their own
-"the", so the handoff's "the {site}" read "the the Deep Cave"); and D1
-met at its voicing when the purse already holds 30g - the collector arrives,
-is paid, and goes (`FINDINGS.md` G-056).
-
-*Implemented (w1.5): all six, the chains, and the vocabulary.*
-`petitions::TEMPLATES` is this section as data — T1 to T6 in this format, every
-number on the row. **What the build decided that this section left open:**
-
-- **The `{n}`s**: T1's debt is **30g**; T2's "the drawer threshold" is a pot of
-  **55g** or more, on the row (55 is the richest fight pot on three of the four
-  boards, so "not the safe one" means something); T5 asks for **2** shifts;
-  T2, T4 and T5's lookbacks are **2** world-days and the person has to have
-  been in the camp that long.
-- **The chains, all three:** T1's `collectors-visit-again` on failure, as
-  written; T2's "next (on repeat failure): walks-out" as `proving-job-again`
-  — the same ask a second time, declaring `walks-out` 5 days ("gone looking
-  for a name somewhere else") — so the repeat's consequence is the one its own
-  card printed, never a different one than the first card showed; and T5's
-  `first-order` on satisfaction ("{name}: It is up. Give me something to
-  make.", 3 days, met by any craft work, `sours`). **The treasury-paid craft
-  task the note asks for is not built**: the note says build it when
-  aspirations arrive, and the link is recorded and exercised.
-- **The `{site}`s**: T2 names the authored site with the richest fight job;
-  T4 the first site in registry order its petitioner has never reached (the
-  visited set is `Character::memory`, written on arrival, replay-carried).
-  T5's `{building}` and `{industry}` are the settlement's own content.
-- **T3's threshold is the `desperate` chip's**, `needs::DESPERATE_AT` (6) —
-  one predicate, so a person the chip names is a person T3 can speak for. Its
-  condition is built as written and is hard to meet (`FINDINGS.md` G-051).
-- **T5's "sours, desperation +1"** is `sours` with one more step on the
-  declared consequence — not a fifth kind: the vocabulary is four.
-- **No template pays gold**, as written; the reward port's first exerciser is
-  a staged row in the battery.
-- **Deadlines are on the row, not in the drawer** (deviation): seven deadline
-  rows would have filled the drawer, and a template is content. The drawer
-  carries what *is* tuning: the regard step, the relief, the check's cadence and
-  roll, and the thin-days window.
-- **The director's canned loan-shark (T1 fired with source class `director`)**
-  was not built by 1.5; **wave 1.6 built it** as D1 above.
 
 ## 7. Coverage matrix and the deliberate gaps
 
@@ -536,11 +473,11 @@ Counts over the ten sheets:
 | personality | vengeful | tim, hana | 2 |
 | personality | cold | alex | 1 |
 
-Rules the matrix satisfies (assert them in the registry's validation,
-so a future edit that breaks coverage is caught as data): every
-aptitude and every motivator on at least two sheets; every kept
-personality on at least one; every parked personality on none; every
-motivator has a template (s3.2's rule).
+Rules the matrix satisfies, asserted in `people::registry` as rules rather
+than as numbers - so a future edit that breaks coverage fails at the row
+that caused it: every aptitude and every motivator on at least two sheets;
+every kept personality on at least one; every parked personality on none;
+every motivator has a template (s3.2's rule).
 
 **Deliberate gaps** (the matrix is complete but inconvenient):
 
@@ -553,117 +490,58 @@ motivator has a template (s3.2's rule).
 Bonus friction, not counted: two crafters, one of them the cook who is
 always busy - the maker's petition bites.
 
-*Implemented (w1.1):* the counts above are asserted in `people::registry` as
-rules rather than as numbers — every aptitude and motivator on at least two
-sheets, every kept personality on at least one, every parked one on none — so
-a future edit that breaks coverage fails at the row that caused it.
+**The vocabulary question for the MVP gate playtest**, beside the gate's
+own: *do the words on the chips match what you watched them do?* It is
+answerable from the screen: **tapping a trait chip anywhere it appears** - a
+sheet, a roster row - shows one line derived from the row itself, so the
+words and what they do can be compared without reading the source. The
+vocabulary is locked (above): a rename now is a data edit on the row plus
+the prose written against the word.
 
-**The vocabulary question for the wave-1.5 playtest**, beside the
-wave's own: *do the words on the chips match what you watched them
-do?* Wave 1.1 made it answerable early: **tapping a trait chip anywhere it
-appears** — a sheet, a roster row — shows one line derived from the row
-itself, so the words and what they do can be compared without reading the
-source. Renames happen before 1.3 writes petition copy against them if
-the answer is no; after that a rename costs prose.
+## 9. Art - the roles, and what fills them
 
-## 8. Format notes for the implementing sessions
+*(There is no s8: the per-wave format notes that stood there were folded into
+the sections they annotated at the wave-1 close. The number is kept because
+the code and the art tooling cite this section as s9.)*
 
-- **1.1** (*done*): motivator rows gain `favors` (task type or `any`; neutral
-  none). Quest rows gain a task type. Aptitude id = task id. Retired
-  placeholder rows deleted; parked personalities stay as rows.
-  Relationship presets as a drawer/scenario choice. The coverage
-  assertions above.
-- **1.2 asks** (*done*): the standing rates are content, one per task type -
-  `asks::RATES`, the table an event class's default mode is one of, and the
-  panel is the one way to move them. A posting's wage inherits the rate of
-  the work it names, and the wage a job was posted at is what the payment is
-  judged against. **The refusals the shipped set produces are the fits, not
-  the pride**: Alex will not leave scouting and Ines and Rin will not leave
-  crafting, while Tim - §4.1's proud refuser - agrees at the standing rates
-  like every other founder. Pride's own refusal needs the field 1.5 owes it
-  (below), and until then the demo character for this module is a promise
-  rather than a demonstration.
-- **1.3 needs + settlement** (*done*): needs reads `upkeep`; the
-  pariah-candidate check landed as an assertion over every world of the economy
-  sweep rather than over the median one. The per-industry wage and the standing
-  rates are one policy family and the code says so — an industry opens at the
-  standing rate for its own kind of work (the registry asserts it), it steps by
-  the rates panel's own step, and a payment is judged against that rate through
-  the same `answers::wage_regard` a posting's wage goes through. The drift the
-  asks wave measured is why the works pay `craft` work exactly the craft rate:
-  a camp wage that opened off the rate would be a correction of the authoring
-  rather than a decision the player made.
-  **The arrival column is §4's**, and the order is the backstory's.
-- **1.5 petitions** (*done*): the template table in this format, and the
-  no-dead-motivator rule walks it; the consequence vocabulary as data
-  (`petitions::KINDS`, the four, asserted); the per-character visited set for
-  T4 (`Character::memory`); `walks-out` is presence — the staged start's own
-  away-state, through the lens. **`proud`'s field for refusing gifts is not
-  built**: the gift is GIVE, it exists only on a money-shaped condition, and
-  the only one is T1's — carried by Bob and Ludo, neither of them proud — so
-  no surface could reach the field. It waits for a proud character with a
-  money-shaped petition.
-- **1.4 resolution** (*done*): resolution reads the aptitude whose id equals
-  the task's type — `traits::competence_at`, the scorer's own term — through
-  `resolution::odds`, so a fit of 2 is `safe` (fails 11%, goes well 24%) and a
-  fit of 0 is `risky` (fails 35%, never goes well). Every aptitude row is 2, so
-  the cast has exactly two odds per job; a third would need a third aptitude
-  value, which is content. **Steve's pariah assertion survived, and it set
-  the share** (`FINDINGS.md` G-048): his 3g purse against a 7g first interval
-  is what holds the self-chosen share at three percent, and the economy sweep
-  asserts he goes short first in all sixty-four seeded worlds. **`craven` is
-  still dormant**: fight tasks carry no danger this wave (failure is economic
-  only), and whether a character should weigh their own odds is open
-  (G-049). Fit is no longer only a term in whether somebody agrees: the job
-  board's fit chip now says what it decides, derived from the curve.
-- **1.6 injector** (*done*): T1 as the director's loan-shark canned
-  template (D1), with D2 and D3 beside it; the no-dead check runs over the
-  director's templates too (`petitions::vocabulary`: every director row
-  reaches somebody in the cast, and requires the injector's registry row).
+Twenty-eight portrait and icon roles are filled and committed; this section
+is their record.
 
-## 9. Art check - **landed 2026-09-02** (the cast-art session)
-
-Twenty-eight portrait and icon roles are filled and committed. What
-this section asked for is done, and what follows is the landed state
-rather than the plan.
-
-**The roles.** Six portraits - `portrait_rin`, `portrait_goro`,
-`portrait_hana`, `portrait_ludo`, `portrait_ines`, `portrait_odd` -
-and nine trait-chip icons - `icon_fight`, `icon_labor`, `icon_scout`,
-`icon_craft`, `icon_indebted`, `icon_renown`, `icon_caring`,
-`icon_restless`, `icon_maker`. All fifteen are in `Art::ALL` and in
+**The roles.** Ten portraits - the four founders' and `portrait_rin`,
+`portrait_goro`, `portrait_hana`, `portrait_ludo`, `portrait_ines`,
+`portrait_odd` - and nine trait-chip icons - `icon_fight`, `icon_labor`,
+`icon_scout`, `icon_craft`, `icon_indebted`, `icon_renown`, `icon_caring`,
+`icon_restless`, `icon_maker`. All are in `Art::ALL` and in
 `Gallery::load` (`src/sprites.rs`), so `tools/check-assets` and
-`library.rs`'s art contract both know the names and an unfilled role
-is a failure before the game runs. **Nothing draws them yet**: wave
-1.1 lands the characters and the trait rows that wear them, and the
-placeholder policy this section held in reserve is not needed.
+`library.rs`'s art contract both know the names and an unfilled role is a
+failure before the game runs. The portraits are drawn on the map, the roster
+and the character panel; the chips on every trait chip (UI.md s3, s7).
 
 The Coin, Heart, Eye, Flame and Skull icons stay with the
 personalities, untouched.
 
 **Where they came from.** Every portrait is a Tiny Dungeon bust, the
-same pack and the same drawing style as the four that landed in wave
-0b, so the ten faces read as one cast. Every icon is Micro Roguelike
-at 8x8, the same pack as the four personality-chip icons. Sizes and
-drawn scales are `UI.md` s7's table; provenance is
-`assets/CREDITS.md`, one row per file; which pack region fills which
-role is `art/kenney-manifest.json`, with three to five shortlisted
+same pack and the same drawing style, so the ten faces read as one cast.
+Every icon is Micro Roguelike at 8x8, the same pack as the four
+personality-chip icons. Sizes and drawn scales are `UI.md` s7's table;
+provenance is `assets/CREDITS.md`, one row per file; which pack region fills
+which role is `art/kenney-manifest.json`, with three to five shortlisted
 candidates recorded per role.
 
 **Picking was delegated this once** (owner decision 2026-09-01: away
-from the machine with the packs). The session picked against this
+from the machine with the packs). The cast-art session picked against this
 section's written criteria and committed the picks sheet
 `art/picks/cast-2026-09.png` - the ten portraits at 1x, at map scale
 and at 4x, and the nine chips at the 16-unit chip and at 4x, on the
-game's own ground and panel colours. **The curation model (owner
-picks) is unchanged for everything after this**; DESIGN s7 and
-`art/role_sheet.py`'s docstring still say what they said.
+game's own ground and panel colours - and the approval moved to the PR by
+way of that sheet. **The curation model (owner picks) is unchanged for
+everything after**; DESIGN s7 and `art/role_sheet.py`'s docstring still say
+what they said.
 
-**The veto path.** Approve or veto from the PR. A veto is one line:
-edit `chosen` in `art/kenney-manifest.json`, and any later session
-applies it with `art/extract.py` then `art/import_pack.py` - no code
-changes, because the role is the contract and not the picture. The
-roster in wave 1.1 does not wait on it.
+**The veto path.** A veto is one line: edit `chosen` in
+`art/kenney-manifest.json`, and any later session applies it with
+`art/extract.py` then `art/import_pack.py` - no code changes, because the
+role is the contract and not the picture.
 
 **What the picks are, and why.** The reason is one line each; the
 shortlist each was chosen from is in the manifest.
@@ -701,10 +579,10 @@ other pair is above 20%, and most are above 40%. That floor is what
 the packs allow without putting a cyclops (`tinydungeon:109`) or a
 red-eyed troll (`tinydungeon:111`) into a band of human mercenaries;
 both scored better and both were rejected for it, and both stay on the
-shortlists so the trade is on the record. The floor is now a shipped
-assertion rather than a note: `library::portraits_are_tellable_apart`
-fails the verify run if any pair falls under 15%, so a veto that picks
-a near-duplicate is caught before it is a picture (`UI.md` s7). Tim is a quartermaster who
-does not fight and Odd is a fighter, so the pair rarely stands
-together in a party - but they do both stand at home on the map, and
-that is where a veto would be aimed.
+shortlists so the trade is on the record. The floor is a shipped
+assertion: `library::portraits_are_tellable_apart` fails the verify run if
+any pair falls under 15%, so a veto that picks a near-duplicate is caught
+before it is a picture (`UI.md` s7). Tim is a quartermaster who does not
+fight and Odd is a fighter, so the pair rarely stands together in a party -
+but they do both stand at home on the map, and that is where a veto would
+be aimed.
