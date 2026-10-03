@@ -171,3 +171,22 @@ fn the_prologue_counts_dread_in_the_penalty_and_leaves_out_bonds_of_the_road_and
     );
     assert_eq!(lines.len(), 8);
 }
+
+#[test]
+fn the_prologues_summary_counts_a_patron_at_court_at_every_lock() {
+    let (content, mut house) = at_the_door();
+    let party: Vec<HeroId> = ["Garrick", "Maren", "Ysolde", "Brannoc"]
+        .iter()
+        .map(|n| id(&house.heroes, n))
+        .collect();
+    seat(&mut house, 0, &party);
+    house.patrons = 1;
+    let lines = crate::door_prologue::prologue(&content, &house, &party);
+    assert_eq!(
+        lines.last().map(String::as_str),
+        Some(
+            "Against three locks of 34, 34, and 34, they brought Might 23, Wits 23, and Spirit \
+             19. The dark and the cold lay ahead."
+        )
+    );
+}
