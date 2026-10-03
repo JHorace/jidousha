@@ -10,7 +10,8 @@ of earlier ticks and no shared sandbox with them. **Nobody is watching this
 transcript and nobody can be asked anything.** Every place this repo (a skill,
 CLAUDE.md, a template) says "ask the owner/human" means, for you: if the answer
 blocks the task, write BLOCKED.md (§7); if it does not, take the most
-conservative option and record it as a deviation in the PR body.
+conservative option and record it as a deviation in the PR body; roles that
+open no PR record them in CHECKPOINT.md.
 
 You may be halted mid-command when the subscription usage limit hits. Your
 sandbox then vanishes; the next tick sees **only what you pushed**. The push is

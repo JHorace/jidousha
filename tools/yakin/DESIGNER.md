@@ -84,8 +84,8 @@ design — cut scope into Non-goals until it can.
    §2, push, and **end the tick** with `yakin: <id> design released`. One
    design per tick: do not run `next` again.
 
-You open no PR. Where DOCTRINE says a deviation goes "in the PR body", yours
-go in the CHECKPOINT's Deviations section; the worker carries them into the PR.
+You open no PR, so your deviations go in CHECKPOINT.md (DOCTRINE's preamble);
+the worker carries them into its PR.
 
 A deadline stop (DOCTRINE §8) leaves `stage: design`: the next designer tick
 continues it, and no worker can take it meanwhile.

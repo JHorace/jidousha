@@ -82,14 +82,18 @@ failed; rerun it in the background. Never `#[ignore]`, delete or weaken a test t
   wrote `<R>/DESIGN.md` from `tools/yakin/templates/DESIGN.md`. Read it whole
   with the spec. **DESIGN.md is authoritative**: build what it says, keep its
   "Decisions already made" as made, and decide its "Open calls" yourself.
-  Where it and the spec disagree the spec wins. Every departure from DESIGN.md
-  — the spec winning included — is one line in the PR body's Deviations.
+  Where it and the spec disagree the spec wins, and the conflict is data: a
+  FINDINGS entry attributed to the design stage. Every departure from
+  DESIGN.md — the spec winning included — is one line in the PR body's
+  Deviations, as is each line of the designer's CHECKPOINT Deviations.
   A design that **misled** you — it said something about the engine, the
   spec or the time the build needs that was not true — earns a FINDINGS entry
   (DOCTRINE §9) naming what it said, what was true, and what it cost; that
   signal feeds the variant evaluation, so file it even when the fix was cheap.
-  The designer's own findings, if any, are in `<R>/FINDINGS.md`: count them in
-  the PR body's Findings line beside yours.
+  The designer's own findings, if any, are in `<R>/FINDINGS.md`. On a game
+  task, move each entry into `games/<name>/FINDINGS.md` noting its origin
+  (`design stage, <R>/FINDINGS.md`) — the game's ledger stays canonical; a
+  system task keeps them where they are. Count them in the PR's Findings line.
   V3 is identical on the worker side — the review routine comments on its PR
   by itself.
 
