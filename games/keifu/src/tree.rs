@@ -4,11 +4,13 @@
 use jidousha::prelude::*;
 
 use crate::content::Content;
-use crate::family::{remembrance, spouse_pairs, tally, tree_rows};
+use crate::ending::Verdict;
+use crate::family::{remembrance, spouse_pairs, tally, tally_sentence, tree_rows};
 use crate::hero::{Fate, HeroId};
 use crate::house::House;
 use crate::screen::{MIN_TEXT, PAD, PAGE_H, PAGE_W, Page, Target, UiState, ink, layers, wrap};
 use crate::summer::{button, screen_rect};
+use crate::text::fmt;
 use crate::words::W;
 
 /// A node.
@@ -52,11 +54,27 @@ pub fn node_rects(house: &House) -> Vec<(HeroId, Rect)> {
 pub fn lay_out(page: &mut Page, content: &Content, house: &House, ui: &UiState) {
     let words = &content.words;
     let screen = screen_rect();
+    // At the Ending the tree has its own heading and subline, and "The verdict" returns
+    // to the verdict page (SPEC §23).
+    let (heading, subline, close) = match house.ending.as_ref().map(|e| &e.verdict) {
+        Some(verdict) => (
+            match verdict {
+                Verdict::Door { .. } => W::EndingTreeHeadingDoor,
+                Verdict::Closed { .. } => W::EndingTreeHeadingClosed,
+            },
+            fmt(
+                &words[W::EndingTreeSubline],
+                &[&tally_sentence(content, house)],
+            ),
+            W::EndingVerdict,
+        ),
+        None => (W::FamilyHeading, tally(content, house), W::FamilyClose),
+    };
     page.shape(screen, ink::PAGE, layers::OVERLAY);
     page.text(
         layers::OVERLAY_TEXT,
         Vec2::new(24.0, 14.0),
-        &words[W::FamilyHeading],
+        &words[heading],
         20.0,
         ink::HEADING,
         screen,
@@ -64,7 +82,7 @@ pub fn lay_out(page: &mut Page, content: &Content, house: &House, ui: &UiState) 
     page.text(
         layers::OVERLAY_TEXT,
         Vec2::new(24.0, 44.0),
-        tally(content, house),
+        subline,
         MIN_TEXT,
         ink::NOTE,
         screen,
@@ -72,7 +90,7 @@ pub fn lay_out(page: &mut Page, content: &Content, house: &House, ui: &UiState) 
     button(
         page,
         CLOSE_BUTTON,
-        &words[W::FamilyClose],
+        &words[close],
         Target::CloseFamily,
         layers::OVERLAY_MARK - 1,
     );

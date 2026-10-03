@@ -1,7 +1,8 @@
 //! The seasons turning (SPEC §2.1): leaving the telling — the one place the house can
 //! close — into winter, letting the winter pass, and summer coming.
 //!
-//! Leaving the telling of an open house begins winter and opens the hearth (§11.1).
+//! Leaving the telling of an open house begins winter and opens the hearth (§11.1);
+//! leaving the Door's, or a spent house's, enters the Ending (§16.3, §23).
 //! "Let the winter pass" resolves the winter (§11.3, `winter.rs`) and then turns the
 //! year (§18, `turning.rs`); "Summer comes" advances the calendar and prepares the next
 //! summer — and refuses while a death page still waits for its heir (§15.2, §18.1).
@@ -9,22 +10,29 @@
 use jidousha::prelude::Rng;
 
 use crate::content::Content;
+use crate::ending::enter_the_ending;
 use crate::house::House;
 use crate::turning::turn_the_year;
 use crate::winter::resolve_winter;
 
-/// Leave the telling (SPEC §2.1, `scene/scenes/telling.jai:184-196`): at renown 0 the
-/// house closes (the Ending, W10's — its scaffold screen is `ending_view.rs`);
-/// otherwise winter begins and the hearth is seated.
-pub fn leave_the_telling(house: &mut House) {
+/// Leave the telling (SPEC §2.1, `scene/scenes/telling.jai:184-196`): after the Door the
+/// Ending, whatever the renown (§16.3); at renown 0 the house closes into the Ending;
+/// otherwise winter begins and the hearth is seated. The Ending remembers the fallen and
+/// the living as it is entered (§23, `ending.rs`), drawing their wordings from `rng`.
+pub fn leave_the_telling(content: &Content, house: &mut House, rng: &mut Rng) {
     assert!(
         house.telling.is_some(),
         "[keifu] the telling was left with no telling open\n  likely cause: the leave \
          control was offered off the telling screen\n  fix: offer it only on its last leaf"
     );
-    house.telling = None;
+    let door = house.telling.take().and_then(|telling| telling.door);
+    if let Some(door) = door {
+        enter_the_ending(content, house, rng, Some(&door));
+        return;
+    }
     if house.renown <= 0 {
         house.closed = true;
+        enter_the_ending(content, house, rng, None);
         return;
     }
     house.calendar.begin_winter();
@@ -37,6 +45,7 @@ pub fn at_the_hearth(house: &House) -> bool {
         && house.passage.is_none()
         && house.telling.is_none()
         && !house.closed
+        && house.ending.is_none()
 }
 
 /// "Let the winter pass" (SPEC §2.1, `scene/scenes/winter.jai:39-42`): resolve the

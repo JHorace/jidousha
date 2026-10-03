@@ -86,9 +86,18 @@ mod destiny;
 mod dock;
 mod dock_checks;
 mod dock_lines;
+mod door;
+mod door_lore;
+mod door_prologue;
+#[cfg(test)]
+mod door_tests;
+mod door_view;
 mod dream;
 mod dream_lore;
 mod easing;
+mod ending;
+#[cfg(test)]
+mod ending_tests;
 mod ending_view;
 mod epitaph;
 mod epitaph_ends;
@@ -290,6 +299,10 @@ fn found_the_house(world: &mut World) {
              spec/content/README.md"
         ),
     };
+    world.insert_resource(crate::house::Chronicle(vec![crate::house::Founded {
+        seed,
+        ended: None,
+    }]));
     world.insert_resource(house);
     world.insert_resource(content);
     // Only if nothing has installed a store already: a verify run puts a scripted

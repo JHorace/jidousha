@@ -189,7 +189,7 @@ pub fn generate(
         pair_slots: reading.pair.map(|(a, b)| (slot_of(a), slot_of(b))),
         ghost: quests.iter().find_map(|q| match q.source {
             Source::Ghost(hero) => Some(hero),
-            Source::Template(_) => None,
+            Source::Template(_) | Source::Door(_) => None,
         }),
         memory_before: memory,
     };

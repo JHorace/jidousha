@@ -140,7 +140,7 @@ pub fn check_battery(checks: &mut Checks, content: &Content) -> Vec<String> {
                 let gap = (page.power - page.quest.demand).clamp(-10, 9);
                 tally[(gap + 10) as usize][page.outcome.index()] += 1;
             }
-            leave_the_telling(&mut house);
+            leave_the_telling(content, &mut house, &mut rng);
             if house.closed {
                 closed += 1;
                 break;

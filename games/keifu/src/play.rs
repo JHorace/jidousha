@@ -126,7 +126,7 @@ pub fn play_years(content: &Content, house: &mut House, rng: &mut Rng, years: i3
     for _ in 0..years {
         seat_answerable(house);
         set_out(content, house, rng);
-        leave_the_telling(house);
+        leave_the_telling(content, house, rng);
         if house.closed {
             return;
         }

@@ -37,7 +37,8 @@ fn learn(f: &Afield<'_>, house: &mut House, rng: &mut Rng, id: HeroId, out: &mut
     ));
 }
 
-/// The reward (SPEC §7.3) for `members` on a SUCCESS or TRIUMPH that is not the Door.
+/// The reward (SPEC §7.3) for `members` on a SUCCESS or TRIUMPH. At the Door (§16.2) the
+/// renown is all of it: no reward or carrier lines, no triumph deeds, no lessons.
 pub fn reward(
     f: &Afield<'_>,
     house: &mut House,
@@ -46,6 +47,7 @@ pub fn reward(
     out: &mut Vec<String>,
 ) {
     let words = &f.content.words;
+    let at_door = f.quest.is_door_lock();
     let triumph = f.outcome == Outcome::Triumph;
     let renown = f.quest.renown + if triumph { TRIUMPH_RENOWN } else { 0 };
     let carriers: Vec<HeroId> = members
@@ -54,24 +56,29 @@ pub fn reward(
         .filter(|&m| house.heroes[m].destiny.kind == Destiny::CarryTheHouse)
         .collect();
     house.add_renown(renown + carriers.len() as i32 * CARRIED_RENOWN);
-    let whom = match members {
-        [one] => house.heroes[*one].name.clone(),
-        _ => words[W::QuestRewardEach].to_owned(),
-    };
-    out.push(fmt(&words[W::QuestReward], &[&renown.to_string(), &whom]));
-    for &carrier in &carriers {
-        out.push(fmt(
-            &words[W::QuestCarrierBonus],
-            &[&house.heroes[carrier].name, &CARRIED_RENOWN.to_string()],
-        ));
+    if !at_door {
+        let whom = match members {
+            [one] => house.heroes[*one].name.clone(),
+            _ => words[W::QuestRewardEach].to_owned(),
+        };
+        out.push(fmt(&words[W::QuestReward], &[&renown.to_string(), &whom]));
+        for &carrier in &carriers {
+            out.push(fmt(
+                &words[W::QuestCarrierBonus],
+                &[&house.heroes[carrier].name, &CARRIED_RENOWN.to_string()],
+            ));
+        }
     }
     for &member in members {
         let hero = &mut house.heroes[member];
         hero.renown += renown;
-        if triumph {
+        if triumph && !at_door {
             let telling = fmt(&words[W::DeedTriumph], &[place_name(f)]);
             deed(f, hero, DeedKind::Triumph, f.quest.danger, telling);
         }
+    }
+    if at_door {
+        return;
     }
     let aptitude = f.quest.aptitude;
     if triumph {

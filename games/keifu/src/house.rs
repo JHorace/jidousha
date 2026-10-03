@@ -66,6 +66,8 @@ pub struct House {
     pub mourned: Vec<HeroId>,
     /// The house has closed: renown was spent when the telling was left (SPEC §2.1).
     pub closed: bool,
+    /// The Ending, once entered (SPEC §23): after the Door, or once the house closed.
+    pub ending: Option<crate::ending::Ending>,
 }
 
 /// A house tale (SPEC §3.1): its title, whom it is about, and the year it was first told.
@@ -122,6 +124,7 @@ impl House {
             telling: None,
             mourned: Vec::new(),
             closed: false,
+            ending: None,
         };
         for key in &content.founding.dead_at_start {
             let Some(id) = house.heroes.iter().position(|hero| hero.key == *key) else {
@@ -203,13 +206,57 @@ impl House {
     }
 }
 
-/// Begin another house: draw a new seed from the current generator, reseed it,
-/// and found the household again (SPEC §2.1, §22.1). Nothing reads a clock.
+/// One house of the run, as the chronicle records it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Founded {
+    /// The seed it was founded on.
+    pub seed: u64,
+    /// How it ended — the verdict's title and the year — once it has.
+    pub ended: Option<(String, i32)>,
+}
+
+/// The run's transcript of houses: every house founded in this process, in order, each
+/// with its seed and, once another is begun, how it ended. "Begin another house" writes
+/// it; nothing else does, and a replay of the same presses on the same seed writes the
+/// same chronicle (SPEC §22.1: a new house reseeds from a draw of the generator).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Chronicle(pub Vec<Founded>);
+
+impl Resource for Chronicle {}
+
+/// Begin another house (SPEC §2.1, §22.1, `scene/scenes/ending.jai:26-27,38-40`): the
+/// ended house's verdict goes into the chronicle, a new seed is drawn from the current
+/// generator, the generator is reseeded from it, and the authored household is founded
+/// again — the whole game state reset, in process. Nothing reads a clock.
 pub fn begin_another_house(world: &mut World) -> Result<u64, String> {
+    let ended = {
+        let content = world.resource::<Content>();
+        let house = world.resource::<House>();
+        house.ending.as_ref().map(|ending| {
+            (
+                ending.title(content).to_owned(),
+                house.calendar.current_year(),
+            )
+        })
+    };
+    let old_seed = world.resource::<House>().seed;
     let seed = draw_seed(world.resource_mut::<Rng>());
     let mut rng = Rng::from_seed(seed);
     let house = House::found(world.resource::<Content>(), seed, &mut rng)?;
     world.insert_resource(rng);
     world.insert_resource(house);
+    let mut chronicle = world
+        .find_resource::<Chronicle>()
+        .cloned()
+        .unwrap_or_default();
+    match chronicle.0.last_mut() {
+        Some(last) if last.seed == old_seed => last.ended = ended,
+        _ => chronicle.0.push(Founded {
+            seed: old_seed,
+            ended,
+        }),
+    }
+    chronicle.0.push(Founded { seed, ended: None });
+    world.insert_resource(chronicle);
     Ok(seed)
 }

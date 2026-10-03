@@ -18,6 +18,18 @@ use jidousha::prelude::Rng;
 ///
 /// CONTRACT: every argument is used, and no placeholder lacks one.
 pub fn fmt(template: &str, args: &[&str]) -> String {
+    fill(template, args, true)
+}
+
+/// Fill a story whose arguments are numbered and which may leave one out: the Door's
+/// lock endings always name the bearer (`%2`) and only some name the party (`%1`) (SPEC
+/// §16.2, `content/door.json`). Every placeholder still needs its argument.
+pub fn fmt_numbered_story(template: &str, args: &[&str]) -> String {
+    fill(template, args, false)
+}
+
+/// `fmt`'s filling, with or without the every-argument-used contract.
+fn fill(template: &str, args: &[&str], every_used: bool) -> String {
     let mut out = String::with_capacity(template.len() + 16);
     let mut next = 0;
     let mut used = vec![false; args.len()];
@@ -58,7 +70,7 @@ pub fn fmt(template: &str, args: &[&str]) -> String {
             other => out.push(other),
         }
     }
-    if let Some(unused) = used.iter().position(|was| !was) {
+    if let Some(unused) = used.iter().position(|was| !was).filter(|_| every_used) {
         panic!(
             "[keifu] a template was given an argument it does not use\n  {template:?} with \
              {args:?}, argument {} unused\n  likely cause: the caller passes the wrong \

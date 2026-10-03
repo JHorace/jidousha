@@ -26,6 +26,8 @@ pub enum Source {
     Template(usize),
     /// The ghost of this hero (SPEC §14.4).
     Ghost(HeroId),
+    /// One of the Sealed Door's locks, by index into `door.json`'s locks (SPEC §16).
+    Door(usize),
 }
 
 /// One posted quest (SPEC §5.2).
@@ -131,12 +133,17 @@ pub fn post(content: &Content, template: usize, trouble: i32, year: i32, rng: &m
 }
 
 impl Quest {
-    /// The template it was made from; `None` for a ghost's quest.
+    /// The template it was made from; `None` for a ghost's quest or a Door lock.
     pub fn template(&self) -> Option<usize> {
         match self.source {
             Source::Template(template) => Some(template),
-            Source::Ghost(_) => None,
+            Source::Ghost(_) | Source::Door(_) => None,
         }
+    }
+
+    /// Whether it is one of the Sealed Door's locks (SPEC §16).
+    pub fn is_door_lock(&self) -> bool {
+        matches!(self.source, Source::Door(_))
     }
 
     /// What a power sum and a dream call need to know about it.
@@ -145,7 +152,7 @@ impl Quest {
             aptitude: self.aptitude,
             place: self.place,
             tags: &self.tags,
-            door_lock: false,
+            door_lock: self.is_door_lock(),
         }
     }
 
