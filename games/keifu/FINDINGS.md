@@ -1016,3 +1016,40 @@ read and used. The documents were asked nothing new.
   roll read 55/338, 446/1517, 441/943 and 42/59 at danger 1-4, inside CONSTANTS §3's bounds. W5's founded battery cannot move (G-060): 568 of 600 (94.7%) as before; on played summers the
   W8 battery reads the mark in 3093 of 3962 (78.1%) — houses that grow meet demand +3 and +4 a seat with
   more mouths but no more power than their founders had, and fewer callers are free to go.
+- **The mutation rounds.** `mutants/w8.txt` is 188 faults: every W8 constant (CONSTANTS §8 and §10's old
+  age, births, wanderers, standings, the teaching that shows); the turning's step order (ageing before old
+  age, births before comings of age before the wanderer, the tales before the phase lines, the mourned
+  cleared, the year page and the closing line); the heir ranking line by line (each rank, each way a parent
+  is known, the sort, the dead, the cut at eight); every kinship word; both marks and `can_take_dream`; each
+  bequest (the heirloom laid aside, given, deeded, buried with a capital, kept by the dead; the dream passed
+  or raised, its fate, its owner, the burden, rivals; the choice's lines and its record); the ghost's
+  owner and place; the death page and the Door's promise; old age's chance, factors, carrier and record;
+  the bags' no-repeat draw; every birth rule and the fear and blessing inheritance; every coming-of-age rule
+  and §9.5's priority; the wanderer's odds, standing, gift, dates, calling, Seer and rivals; the rolled
+  dream's claims; the phase sentence; and the screen's refusal (Go on, the leaves beyond, Skip ahead, the
+  view after a choice, the dock, the greyed control, the choice's room, `may_turn`). Round one (`0464f3b`):
+  one worker's thread died when a fault (B13, the choice never recorded) hung `--verify` in the checks' own
+  heir loop, so 36 faults went unjudged and the first pass read **134 of 151**, one not built (M8, cut
+  without its closing parenthesis; re-cut). The harness now counts a run that does not end within ten
+  minutes as failed — a hang is noticed — and the heir loop fails loudly when a choice makes no progress.
+  Round one's rest (the 36, the escapes, M8; `c41a21c`'s parent): 46 of 54. Escapes, all loose checks
+  but two: no child created after a grandchild (R1), no parent known by the bond alone (R5) or the
+  parents field alone (R6), no companion among the heirs (K3), no "(not the dream)" asked with no dream
+  to leave (M2), no dead hero leaving both dreams undone (B1), no lower-case heirloom buried (B7), no dream
+  told about another (P3, D2), no choice beside a Door's promise (D3), a dead child in the Door test who was
+  the younger (D12), no weak parents for the newborn's floor (C15) or roll (Y11), no conquered parent
+  failing their roll beside a broken one (Y15), a ghost list too short to tell a swap from a removal
+  (A17), no carried dream at a coming of age (A11), no held dream beside a parent lost questing (A20), no
+  coming-of-age rival (A7), no wanderer rival (W12), no turning without a year page (T11), and no death
+  page long enough for "Skip ahead" and the choice's room to matter (S4, S10). Each now has a test that
+  fails under it. **Round two, all seven lists against `c41a21c`: 730 of 736 noticed**, none unbuilt
+  (tests alone 609, verify alone 398) — `w8.txt` **186 of 188** (tests 175, verify 63), `dock.txt` 22 of
+  22, `w3.txt` 117 of 118, `w4.txt` 133 of 134, `w5.txt` 58 of 59, `w6.txt` 100 of 100, `w7.txt` 114 of
+  115. **The six escapes are equivalent:** K7, K8, R12 and E21 as sessions 3-7 classified them, and W8's
+  two — B3 (the heir's old heirloom cloned rather than taken is overwritten two lines later by the one
+  inherited) and Y3 (a full house skipping one pair rather than stopping: no birth follows a full check,
+  so every later pair meets the same full house). Seven earlier faults named code W8 moved and were re-cut
+  to the same fault at the new site, marked "(re-cut s8)": w6 H16-H19 (the heir ranking, from `harm.rs`
+  to `heirs.rs`) and w7 W2, W4 and W5 (the turning's controls and winter page). The round ran as one
+  combined list of the seven, labels prefixed by their list, over four worktrees: about two faults a
+  minute on this machine's four cores.
