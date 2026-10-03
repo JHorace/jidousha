@@ -130,6 +130,12 @@ fn origin_tells_an_arrival_a_birth_in_play_a_child_of_the_old_house_and_a_founde
             "He was born in the house in year 3, to Maren.".to_owned()
         )
     );
+    // Year 1 is in play: born at its turning.
+    heroes[pip].born_year = 1;
+    assert_eq!(
+        part(&content, &heroes, "Pip", Part::Origin, true),
+        "He was born under this roof in year 1, the child of Maren."
+    );
     // Dead in play, a founder is still a founder.
     let garrick = id(&heroes, "Garrick");
     kill(&mut heroes, garrick, 3, 64, "fell at the Barrow");
@@ -266,6 +272,20 @@ fn fear_tells_born_brave_before_conquered_before_grief_before_broken_before_face
     assert_eq!(
         part(&content, &heroes, "Maren", Part::Fear, true),
         "The year Elsbeth died, grief broke her, and she would never face deep water again."
+    );
+    // A conquest is told before any break.
+    heroes[maren]
+        .deeds
+        .push(deed(DeedKind::ConqueredFear, 5, 42, None, 0));
+    assert_eq!(
+        part(&content, &heroes, "Maren", Part::Fear, true),
+        "She conquered her fear of deep water in year 5."
+    );
+    // Faced once is faced.
+    heroes[odo].fears_faced = 1;
+    assert_eq!(
+        part(&content, &heroes, "Odo", Part::Fear, true),
+        "He never stopped being afraid of crowds. He went once against it all the same."
     );
     heroes[odo]
         .deeds

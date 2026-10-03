@@ -91,6 +91,16 @@ fn dream_reads_the_own_dream_done_passed_left_laid_living_crowned_or_died() {
         part(&content, &heroes, "Pip", Part::Dream, false),
         "He wanted one thing, to see the sea, as Elsbeth had before him, and did it."
     );
+    // " my " in the title is told for the owner, not the bearer.
+    let aud = id(&heroes, "Aud");
+    let mut grown = heroes[aud].dream.clone().expect("Aud dreams");
+    grown.owner = Some(aud);
+    grown.advance_to_stage(3);
+    heroes[pip].dream = Some(grown);
+    assert_eq!(
+        part(&content, &heroes, "Pip", Part::Dream, false),
+        "He wanted one thing, to see her child grown, as Aud had before him, and did it."
+    );
 }
 
 #[test]
@@ -197,12 +207,15 @@ fn prophecy_tells_each_destiny_and_its_coming() {
     let (wren, pip) = (id(&heroes, "Wren"), id(&heroes, "Pip"));
     heroes[wren].aptitudes = [5, 5, 5];
     heroes[pip].aptitudes = [6, 2, 2];
-    for student in [wren, pip] {
+    // Brannoc, a student never taught, is greater still and does not count.
+    let brannoc = id(&heroes, "Brannoc");
+    heroes[brannoc].aptitudes = [9, 9, 9];
+    for (student, taught) in [(brannoc, false), (wren, true), (pip, true)] {
         heroes[odo].bonds.push(Bond {
             kind: BondKind::Student,
             other: student,
             since: 1,
-            taught: true,
+            taught,
             shared_successes: 0,
         });
     }
@@ -296,6 +309,12 @@ fn end_tells_the_living_the_door_and_the_dead_before_and_after_the_first_year() 
             "He fell at the Barrow in year 3, aged 64.".to_owned()
         )
     );
+    // Year 1 is in play: no longer "before the first year".
+    kill(&mut heroes, garrick, 1, 62, "fell at the Barrow");
+    assert_eq!(
+        part(&content, &heroes, "Garrick", Part::End, false),
+        "He fell at the Barrow in year 1, aged 62."
+    );
 }
 
 #[test]
@@ -345,6 +364,13 @@ fn left_tells_what_the_living_made_the_patron_and_what_the_dead_left_to_whom() {
         say(&heroes, "Garrick"),
         "He left a blessing, Garrick's rest, and the Hale cradle-ring to Maren."
     );
+    // With the heirloom buried, the legacy is told alone.
+    heroes[garrick].bequest_heir = None;
+    assert_eq!(
+        say(&heroes, "Garrick"),
+        "He left a blessing on those who come after: Garrick's rest."
+    );
+    heroes[garrick].bequest_heir = Some(maren);
     heroes[garrick].bequest_heirloom = None;
     assert_eq!(
         say(&heroes, "Garrick"),
@@ -360,6 +386,9 @@ fn left_tells_what_the_living_made_the_patron_and_what_the_dead_left_to_whom() {
         say(&heroes, "Garrick"),
         "He made his own road-book, and it went to Maren."
     );
+    // Made, and no heir to have it: nothing is said.
+    heroes[garrick].bequest_heir = None;
+    assert_eq!(say(&heroes, "Garrick"), "");
     heroes[garrick].fate = Fate::Departed;
     assert_eq!(
         say(&heroes, "Garrick"),

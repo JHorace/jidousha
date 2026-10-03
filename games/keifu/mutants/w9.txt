@@ -326,10 +326,10 @@
 -         Fate::Departed => E::DreamCrowned,
 +         Fate::Departed => E::DreamDied,
 
-### M6 no inherited suffix
+### M6 no inherited suffix (re-cut s9, round 2)
 @ src/epitaph_parts.rs
--         Some(owner) => fmt(⏎            &lore[E::DreamInheritedSuffix],
-+         Some(_) if false => fmt(⏎            &lore[E::DreamInheritedSuffix],
+-     let suffix = match dream.owner {
++     let suffix = match None::<HeroId> {
 
 ### M7 the title told for the bearer, not the owner
 @ src/epitaph_parts.rs
@@ -436,10 +436,10 @@
 -     if wording.coin(Part::Love) {
 +     if !wording.coin(Part::Love) {
 
-### V8 spouses alone forget the children
+### V8 spouses forget the children (re-cut s9, round 2)
 @ src/epitaph_ends.rs
--         (false, false) => {⏎            return fmt(⏎                &lore[E::LoveSpousesChildren],
-+         (false, false) if false => {⏎            return fmt(⏎                &lore[E::LoveSpousesChildren],
+-     match (spouses.is_empty(), children.is_empty()) {
++     match (spouses.is_empty(), children.is_empty() || !spouses.is_empty()) {
 
 ### E1 the Door's age is the hero's now
 @ src/epitaph_ends.rs
@@ -546,10 +546,10 @@
 -     house.heroes[dead].wording = Some(crate::epitaph::roll_wording(&mut house.writing, rng));
 +     house.heroes[dead].wording = house.heroes[dead].wording.or(Some(crate::epitaph::Wording { frame: 0, coins: [true; 9] }));⏎    let _ = &rng;
 
-### W4 the death page composes before its bequest is settled
+### W4 only a page with nothing to leave composes (re-cut s9, round 2)
 @ src/death_page.rs
--     let bequest_end = lines.len();
-+     let bequest_end = lines.len();⏎    crate::epitaph::recompose(content, &mut house.heroes, dead);
+-     // 8. The epitaph, composed with the wording step 1 rolled.⏎    crate::epitaph::recompose(content, &mut house.heroes, dead);
++     // 8. The epitaph, composed with the wording step 1 rolled.⏎    if !leaves {⏎        crate::epitaph::recompose(content, &mut house.heroes, dead);⏎    }
 
 ### W5 the death page composes nothing
 @ src/death_page.rs
