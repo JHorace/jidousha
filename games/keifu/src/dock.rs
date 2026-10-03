@@ -42,6 +42,8 @@ pub enum Subject {
     Quest(usize),
     /// A group of winter seats' help.
     Group(crate::hearth::Group),
+    /// The Door's help, naming the best four.
+    Door,
 }
 
 /// What the dock shows for `ui`: the hero in hand, else the hero or quest pointed at.
@@ -54,6 +56,7 @@ pub fn subject(ui: &UiState) -> Subject {
         (None, Some(id), _, _) => Subject::Hero(id),
         (None, None, Some(quest), _) => Subject::Quest(quest),
         (None, None, None, Some(group)) => Subject::Group(group),
+        (None, None, None, None) if ui.pointing_door => Subject::Door,
         (None, None, None, None) => Subject::Help,
     }
 }
@@ -125,6 +128,7 @@ pub fn lay_out(page: &mut Page, content: &Content, house: &House, ui: &UiState) 
         Subject::Hero(id) => hero_lines(content, &house.heroes, id, width),
         Subject::Quest(quest) => quest_lines(content, house, quest, width),
         Subject::Group(group) => group_lines(content, group, width),
+        Subject::Door => crate::dock_lines::door_help_lines(content, house, width),
     };
     let max_first = max_first(&lines, area.size().y);
     let first = ui.dock_first.min(max_first);

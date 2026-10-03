@@ -161,7 +161,9 @@ pub fn read_card(
         // quest shows the ghost line (SPEC-GAPS KG-33).
         dream: match q.source {
             Source::Ghost(dead) => Some(fmt(&words[W::QuestCardGhost], &[&heroes[dead].name])),
-            Source::Template(_) => dreamers_line(content, heroes, q.facts(), party),
+            Source::Template(_) | Source::Door(_) => {
+                dreamers_line(content, heroes, q.facts(), party)
+            }
         },
         warning,
     }

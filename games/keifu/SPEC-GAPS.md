@@ -10,7 +10,7 @@ Session 1 (W0 + W1): 6 entries. Session 2 (W2): 6 entries, KG-7 to KG-12. Sessio
 12 entries, KG-13 to KG-24. Session 4 (W4): 5 entries, KG-25 to KG-29. Session 5 (W5): 4
 entries, KG-30 to KG-33. Session 6 (W6): 7 entries, KG-34 to KG-40. Session 7 (W7): 6 entries,
 KG-41 to KG-46. Session 8 (W8): 10 entries, KG-47 to KG-56. Session 9 (W9): 8 entries, KG-57 to
-KG-64.
+KG-64. Session 10 (W10): 10 entries, KG-65 to KG-74.
 
 ---
 
@@ -810,4 +810,113 @@ KG-64.
 - **Port's choice:** the heir is the bequest's, whoever recorded it (`src/epitaph_ends.rs` `left`), as both
   rules read it literally.
 - **Question:** `generation/hero-context/hero-context.jai:200-210` — does the take-up set `bequest.heir`?
+
+---
+
+## KG-65 — the best four's ties, compared exactly
+
+- **Spec says:** §16.4 "scored `P(all three) + sum(P_i)/1000`, keeping the first strictly best"; OQ-33 "The
+  Door's best-four score adds `/1000` terms in float; ties there are display-only."
+- **Underdetermined:** the original compares float32 sums, where two parties whose scores differ by less than
+  a float32 step (the scores' rationals can differ by 1/(46656 * 36000), below that step near 0.5) tie and the
+  first is kept; exact arithmetic would keep the strictly larger.
+- **Port's choice:** exact: the score scaled by 36^3 * 1000 into integers, the first strictly best kept
+  (`src/door.rs` `Outlook::score`). Display only — the top bar's best four and the Door's help.
+- **Question:** `lineage/door.jai:96-105` — the float type and the order the terms are added.
+
+## KG-66 — the Door prologue's descent: whose parents, and the grandparents' order
+
+- **Spec says:** §16.2 "no parents → `descent_none`; parents but no grandparents → `descent_parents`; else
+  `descent_grandparents` (son/daughter, grandson/granddaughter by the member's pronoun; names as name lists)".
+- **Underdetermined:** whether parents are known by the `parents` field or a PARENT bond (KG-39, KG-63 met
+  this), whether names are first or full, and the grandparents' order and repeats.
+- **Port's choice:** the `parents` field in its order, first names; the grandparents are each parent's parents
+  in that order, each named once (`src/door_prologue.rs` `descent`). A grandparent cannot repeat in a run (two
+  parents who share a parent are kin, and kin do not wed, §11.6), so the "once" changes nothing reachable.
+- **Question:** `lineage/door.jai:280-299`.
+
+## KG-67 — the verdict's lines: where the rest come home, by which names, and "too"
+
+- **Spec says:** §23 "one line per member of the first lock's party (the dead 'fell at <last lock they stood
+  at>', bearers who opened locks 'opened X and Y, and came home', the rest together 'came home [too]')";
+  `door.verdict_returned` takes "names (name list)" and "`door.verdict_too` or ''".
+- **Underdetermined:** whether the rest's line comes last or at the first of them; first or full names (the
+  other two lines take full names, this one's argument says "names"); and when "too" is said.
+- **Port's choice:** the dead's and the bearers' lines in party order, then the rest's last, by first names (the
+  content README's "name"), with " too" only when a bearer's "came home" line was written before it
+  (`src/ending.rs` `verdict_lines`). The staged and the played verdicts are pictured.
+- **Question:** `scene/scenes/ending.jai:120-146`.
+
+## KG-68 — a fallen heirloom at the Ending: the deed and the line
+
+- **Spec says:** §23 step 1 "if holding an heirloom, it goes to their heir (§14.2 heir rule, no choice) or is
+  recorded as buried"; a death page's giving (§15.2) records an INHERITED deed and writes lines.
+- **Underdetermined:** whether the Ending's giving records an INHERITED deed or writes any line (there is no
+  page to write on), and what the bequest records.
+- **Port's choice:** no deed and no line; the bequest records the heirloom, the heir (or none, buried) and
+  decided, as a death page's choice would, so the epitaph's LEFT part reads it (`src/ending.rs`
+  `remember_the_fallen`). Nothing reads an INHERITED deed (INVENTORY.md).
+- **Question:** `scene/scenes/ending.jai:12-15` and the bequest call it makes.
+
+## KG-69 — lock endings that do not name the party
+
+- **Spec says:** §16.2 "The page story is the lock's ending for the outcome with `%1` = standing names and `%2`
+  = bearer's name"; `content/README.md`: "`%1`, `%2`, ... — argument N (1-based), may repeat or appear out of
+  order".
+- **Underdetermined:** six of the twelve endings — the riddles' and the breath's disaster, setback and
+  triumph — use `%2` alone; the README does not say an argument may go unused, and the port's formatter
+  refuses one (`text::fmt`'s contract).
+- **Port's choice:** the endings are filled by `text::fmt_numbered_story`, which takes both arguments and lets
+  an unnamed one go, as the original's `print` does (`src/door.rs` `try_the_door`).
+- **Question:** none, unless the original passes the endings different arguments.
+
+## KG-70 — the Door's deeds' fields
+
+- **Spec says:** §16.2 "OPENED_A_LOCK deed (weight = lock index)", "STOOD_AT_THE_DOOR (weight = locks
+  opened)"; a deed is (kind, year, age, place, weight, other, telling); `lines.deed.opened_a_lock` names the lock.
+- **Underdetermined:** the place, the other hero, and the year (the 26th summer is "year 26" to the calendar and
+  "the last summer" to the year telling).
+- **Port's choice:** dated the current year (26) at the hero's age, at the Sealed Door, no other hero
+  (`src/door.rs` `deed`), as KG-34 chose for the summer's. The epitaph reads only the kinds and the weight.
+- **Question:** `lineage/door.jai:152,160`.
+
+## KG-71 — what the Door card shows besides its numbers
+
+- **Spec says:** §16.4 "The Door card and sheet show the same numbers for the seated party"; `ui.door_sheet`
+  gives the card's words (`card_tags`, `card_text`, `card_all_three`, `card_lock`, `card_odds`, `card_empty`).
+  §5.4's quest card has a Fear: line, a refusal warning and a Dream: line.
+- **Underdetermined:** whether the Door card carries a fear line, "<watched> will not go." or a Dream: line.
+- **Port's choice:** the `door_sheet.card_*` words with §16.4's numbers and "you bring" per lock, nothing else
+  (`src/door_view.rs` `read_door_card`); a hero who would refuse is bounced on release as on every quest (§5.3).
+- **Question:** `lineage/quest-card.jai:320-369`.
+
+## KG-72 — the Door sheet's line for a member's share
+
+- **Spec says:** §16.4 the sheet shows "each member's solo power per lock, the bond total and the patron bonus";
+  `ui.door_sheet` has `lock`, `bonds` and `patron` but no member string.
+- **Underdetermined:** the words a member's solo power is set in.
+- **Port's choice:** the quest sheet's member line, `quest_sheet.power_line_member` ("Garrick, Might 10"), with
+  the solo power (patrons 0) as its value; the bonds and the patron in the right-hand column (KG-26's form). The
+  sheet panics if its lines do not add to the card's number (`src/door_view.rs` `door_sheet`).
+- **Question:** `lineage/quest-card.jai:272-300`.
+
+## KG-73 — a last summer with no adult to send
+
+- **Spec says:** §16.1 "'Try the Door' needs at least one"; §5.3 the control is "disabled until at least one hero
+  is seated". Children are not seated in summer.
+- **Underdetermined:** a house whose living are all children in the last summer can never try the Door, and §2.1
+  offers no other way out of the summer.
+- **Port's choice:** as written: the control stays greyed (`src/summer.rs` `may_set_out`). The full-dynasty
+  battery met no such house in 480.
+- **Question:** does `scene/scenes/summer.jai:39-46` offer anything else then?
+
+## KG-74 — the Door's telling and renown at 0
+
+- **Spec says:** §16.3 "The telling ends with 'After the Door' → Ending (§23) whatever the renown"; §8 "If the
+  house has closed, the Meanwhile page ends with `ui.telling.house_closed`"; §7 step 2: no unanswered costs and
+  no healing at the Door.
+- **Underdetermined:** whether a Door that leaves renown at 0 (three disasters cost 9) writes the closing line.
+- **Port's choice:** no Meanwhile page and no closing line after the Door, and the house does not close
+  (`src/telling_view.rs` `meanwhile_lines`, `src/season.rs` `leave_the_telling`).
+- **Question:** `scene/scenes/telling.jai:229-237` — is the closing line conditioned on the Door?
 

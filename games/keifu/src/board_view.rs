@@ -57,6 +57,15 @@ pub fn hand(house: &House, ui: &UiState) -> Option<(HeroId, Option<Slot>)> {
 
 /// Lay the board out: every card, its seats and its targets.
 pub fn lay_out_board(page: &mut Page, content: &Content, house: &House, ui: &UiState) {
+    // The last summer's board is the Door alone, drawn as its own card (SPEC §16.4).
+    if house
+        .board
+        .first()
+        .is_some_and(|posted| posted.quest.is_door_lock())
+    {
+        crate::door_view::lay_out_door(page, content, house, ui);
+        return;
+    }
     let hand = hand(house, ui);
     let watched = ui.drag.map(|d| d.hero).or(ui.pointing);
     for quest in 0..house.board.len() {

@@ -38,6 +38,12 @@ pub fn help_lines(content: &Content, house: &House, width: f32) -> Vec<Line> {
     vec![paragraph(&content.words[help], width, MIN_TEXT, ink::NOTE)]
 }
 
+/// The Door's help (SPEC §5.4, the top bar's Door hover), naming the best four.
+pub fn door_help_lines(content: &Content, house: &House, width: f32) -> Vec<Line> {
+    let help = crate::family::door_help(content, house);
+    vec![paragraph(&help, width, MIN_TEXT, ink::NOTE)]
+}
+
 /// A group of winter seats' help: its heading, then what its seats do.
 pub fn group_lines(content: &Content, group: crate::hearth::Group, width: f32) -> Vec<Line> {
     let (heading, help) = crate::hearth_help::group_help(content, group);

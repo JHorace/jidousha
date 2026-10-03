@@ -47,6 +47,7 @@ fn resting(ui: UiState, target: Option<Target>) -> UiState {
             Some(Target::Group(group)) if !ui.family_open => Some(group),
             _ => None,
         },
+        pointing_door: target == Some(Target::DoorHelp) && !ui.family_open,
         drag: None,
         ..ui
     }
@@ -143,7 +144,10 @@ pub fn follow_the_pointer(world: &mut World) {
 
 /// Whether the summer screen is up: summer, no telling open, the house not closed.
 fn in_summer(house: &House) -> bool {
-    house.telling.is_none() && !house.closed && !house.calendar.is_winter()
+    house.telling.is_none()
+        && !house.closed
+        && house.ending.is_none()
+        && !house.calendar.is_winter()
 }
 
 /// Whether a screen that seats heroes is up: the summer's, or the hearth's.
@@ -163,7 +167,7 @@ fn with_house(world: &mut World, rule: impl FnOnce(&Content, &mut House, &mut Rn
 
 /// A control pressed (SPEC §5.3, §8): set out; on the telling, "Go on" — the story
 /// whole first, then the next leaf, then leaving — a numbered leaf, or "Skip ahead";
-/// and, once the house has closed, "Begin another house" (W10 SCAFFOLD). Returns the
+/// and, once the house has ended, "Begin another house" (SPEC §23). Returns the
 /// UI state after it: a new screen opens at its top, typing from this tick.
 fn press(world: &mut World, ui: UiState, control: Target) -> UiState {
     let tick = world.resource::<Time>().tick;
@@ -185,7 +189,8 @@ fn press(world: &mut World, ui: UiState, control: Target) -> UiState {
     };
     let house = world.resource::<House>();
     match control {
-        Target::SetOut if in_summer(house) => {
+        // "Try the Door" waits for at least one before it (SPEC §5.3, §16.1).
+        Target::SetOut if in_summer(house) && crate::summer::may_set_out(house) => {
             with_house(world, set_out);
             fresh
         }
@@ -246,11 +251,11 @@ fn press(world: &mut World, ui: UiState, control: Target) -> UiState {
                 _ => true,
             };
             if leave {
-                with_house(world, |_, house, _| leave_the_telling(house));
+                with_house(world, leave_the_telling);
             }
             fresh
         }
-        Target::BeginAgain if house.closed => {
+        Target::BeginAgain if house.ending.is_some() => {
             if let Err(error) = begin_another_house(world) {
                 panic!("[keifu] another house could not be founded\n  {error}");
             }

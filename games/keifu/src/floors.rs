@@ -152,7 +152,7 @@ fn judge(
             ),
         );
     }
-    // The closed house's verdict (W10 SCAFFOLD) is the one screen without the dock.
+    // The Ending's verdict is the one screen without the dock.
     let docked = page.targets.iter().any(|(_, t)| *t == Target::Dock);
     checks.require(
         docked || overlay || page.targets.iter().any(|(_, t)| *t == Target::BeginAgain),
@@ -431,9 +431,10 @@ fn battery(checks: &mut Checks, tally: &mut Tally, recorder: &mut FrameRecorder,
     let w7 = crate::floors_w7::w7_surfaces(checks, tally, recorder, label);
     let w8 = crate::floors_w8::w8_surfaces(checks, tally, recorder, label);
     let w9 = crate::floors_w9::w9_surfaces(checks, tally, recorder, label);
+    let w10 = crate::floors_w10::w10_surfaces(checks, tally, recorder, label);
     checks.require(
         tally.surfaces
-            == 2 + seated.len() + everyone + staged.len() + 1 + w4 + w5 + w6 + w7 + w8 + w9,
+            == 2 + seated.len() + everyone + staged.len() + 1 + w4 + w5 + w6 + w7 + w8 + w9 + w10,
         "a surface was not judged",
         format!("{label}: {} surfaces", tally.surfaces),
     );

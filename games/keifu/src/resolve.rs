@@ -48,19 +48,26 @@ pub struct Afield<'c> {
 /// and keep the telling on the house.
 pub fn set_out(content: &Content, house: &mut House, rng: &mut Rng) {
     assert!(
-        house.telling.is_none() && !house.closed,
+        house.telling.is_none() && !house.closed && house.ending.is_none(),
         "[keifu] set out with a telling already open or the house closed\n  likely cause: the \
          set-out control was offered off the summer screen\n  fix: offer it only in summer"
-    );
-    assert!(
-        !house.calendar.door_stands_open(),
-        "[keifu] set out in the last summer: the Door is W10's\n  likely cause: a summer \
-         was prepared past year 25\n  fix: the Door's summer refuses until W10 lands"
     );
     let mut telling = Telling {
         year: house.calendar.current_year(),
         ..Telling::default()
     };
+    // 2. The last summer: the Door, and nothing else — no unanswered costs, no healing.
+    if house.calendar.door_stands_open() {
+        telling.door = Some(crate::door::try_the_door(
+            content,
+            house,
+            rng,
+            None,
+            &mut telling.pages,
+        ));
+        house.telling = Some(telling);
+        return;
+    }
     let mut cost = 0;
     // SPEC-GAPS KG-35: each party is read off its seats as it resolves; nothing bounces
     // a hero an earlier quest's grief broke, so they go, at their fear's cost.
@@ -140,6 +147,12 @@ fn story(
             let text = &content.ghost.endings[outcome.index()];
             ghost_text(content, text, &house.heroes[dead], &ghost.dream)
         }
+        // The Door writes its own story, naming the bearer (SPEC §16.2, `door.rs`).
+        Source::Door(lock) => panic!(
+            "[keifu] lock {lock} of the Door was told as a posted quest\n  likely cause: the \
+             Door's board was set out as an ordinary summer\n  fix: SPEC §7 step 2 — the last \
+             summer resolves the Door (door::try_the_door)"
+        ),
     };
     fmt(&ending, &[&party])
 }
@@ -166,6 +179,25 @@ pub fn resolve_rolled(
 ) -> QuestPage {
     let quest = house.board[slot].quest.clone();
     let members = house.party(slot);
+    let (q, m) = (quest.clone(), members.clone());
+    let told = move |house: &House, outcome: Outcome| story(content, house, &q, outcome, &m);
+    resolve_party(content, house, rng, quest, members, dice, &told)
+}
+
+/// Resolve `quest` for `members` with `dice` thrown (SPEC §7.1), in exactly the stated
+/// order — a posted quest's, or a lock of the Sealed Door's (§16.2), whose `told` story
+/// names its bearer. At the Door there are no reward or disaster lines, no triumph deeds
+/// or lessons, and no sharing of the road; everything else applies.
+pub fn resolve_party(
+    content: &Content,
+    house: &mut House,
+    rng: &mut Rng,
+    quest: Quest,
+    members: Vec<HeroId>,
+    dice: [i32; 2],
+    told: &dyn Fn(&House, Outcome) -> String,
+) -> QuestPage {
+    let at_door = quest.is_door_lock();
     // 1-2. Forecast with the party and the patrons; band the margin the dice make.
     let power = party_power(&house.heroes, &members, quest.facts(), house.patrons);
     let margin = margin(power, dice[0], dice[1], quest.demand);
@@ -176,7 +208,7 @@ pub fn resolve_rolled(
         outcome,
         year: house.calendar.current_year(),
     };
-    let story = story(content, house, &quest, outcome, &members);
+    let story = told(house, outcome);
     let words = &content.words;
     let mut lines = Vec::new();
     // 3. The place's history.
@@ -208,13 +240,15 @@ pub fn resolve_rolled(
     // 6. Trouble eases: gone on a win, one less on a loss.
     let record = &mut house.places[quest.place.index()];
     record.trouble = if won { 0 } else { (record.trouble - 1).max(0) };
-    // 7. A disaster costs the house its danger.
+    // 7. A disaster costs the house its danger (and tells it, but not at the Door).
     if outcome == Outcome::Disaster {
         house.add_renown(-quest.danger);
-        lines.push(fmt(
-            &words[W::QuestDisasterRenown],
-            &[&quest.danger.to_string()],
-        ));
+        if !at_door {
+            lines.push(fmt(
+                &words[W::QuestDisasterRenown],
+                &[&quest.danger.to_string()],
+            ));
+        }
     }
     // 8. Each member faces the fear.
     for &member in &members {
@@ -240,8 +274,8 @@ pub fn resolve_rolled(
             suffer_disaster(&f, house, rng, member, &mut lines);
         }
     }
-    // 11. Every pair still living shares the road (the Door is W10's and never here).
-    for (i, &a) in members.iter().enumerate() {
+    // 11. Every pair still living shares the road — unless this is the Door.
+    for (i, &a) in members.iter().enumerate().filter(|_| !at_door) {
         for &b in &members[i + 1..] {
             if house.heroes[a].is_living() && house.heroes[b].is_living() {
                 share_the_road(&f, house, rng, a, b, &mut lines);

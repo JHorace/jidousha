@@ -132,7 +132,7 @@ pub fn check_whole_years(checks: &mut Checks, content: &Content) -> Vec<String> 
                     t.quest_deaths += 1;
                 }
             }
-            leave_the_telling(&mut house);
+            leave_the_telling(content, &mut house, &mut rng);
             if house.closed {
                 t.closed += 1;
                 break;
