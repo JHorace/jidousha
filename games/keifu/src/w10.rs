@@ -109,6 +109,9 @@ pub const YEAR_ONE_OUTLOOK: &str =
     "Your best four today bring 22, 22, 18: all three open 0 in 100.";
 /// The Door's help in year 1, naming the best four.
 pub const YEAR_ONE_HELP: &str = "Each lock is a quest: the four bring their power in that aptitude against the lock's number, and the same four try all three in turn. Fears of Dark or Cold count against them. Bonds between the four count at every lock, and so does the Seer's promise. Best four today: Garrick, Maren, Ysolde and Brannoc.";
+/// The top bar with Odo made the strongest: the best four are not the first four.
+pub const BEST_NOT_FIRST_OUTLOOK: &str =
+    "Your best four today bring 40, 40, 39: all three open 100 in 100.";
 /// The prologue's summary for party A.
 pub const PARTY_A_SUMMARY: &str = "Against three locks of 34, 34, and 34, they brought Might 38, Wits 35, and Spirit 36. The dark and the cold lay ahead.";
 /// The verdict's title by locks given (`door.json`, MODULES.md W10).
@@ -359,6 +362,26 @@ fn party_b(checks: &mut Checks) {
     );
 }
 
+/// The top bar when the best four are not the first four: party A with Odo made 9/9/9 —
+/// Garrick, Maren, Ysolde and Odo bring 40, 40, 39 (`door_outlook_tests.rs`), every lock
+/// 36 of 36 — and the Door's help names them.
+fn best_not_first(checks: &mut Checks) {
+    let mut sim = session(SEEDS[0]);
+    stage_the_last_summer(&mut sim);
+    make_party_a(&mut sim);
+    make(&mut sim, "Odo", [9, 9, 9]);
+    sim.tick();
+    let bar = lines_in(&page_of(&sim), TOP_BAR);
+    point_at(&mut sim, Target::DoorHelp, false);
+    let help = lines_in(&page_of(&sim), crate::summer::SHEET);
+    checks.require(
+        bar.iter().any(|l| l == BEST_NOT_FIRST_OUTLOOK)
+            && help.first().is_some_and(|h| h.ends_with("Best four today: Garrick, Maren, Ysolde and Odo.")),
+        "W10: the top bar's outlook or the Door's help is not the best four's when they are not the first four",
+        format!("the bar reads {bar:?}; the help {help:?}"),
+    );
+}
+
 /// W10's oracle on every recorded seed, and party B. Returns the summary and the vector.
 pub fn check_oracle(checks: &mut Checks) -> (String, Vec<String>) {
     let mut given = Vec::new();
@@ -371,6 +394,7 @@ pub fn check_oracle(checks: &mut Checks) -> (String, Vec<String>) {
         }
     }
     party_b(checks);
+    best_not_first(checks);
     (
         format!(
             "W10 oracle: party A dragged onto the Door on {} seeds reads \"you bring\" 38, 35, 36 and \"All three locks open: 59 in 100.\" held and seated, the sheet and the top bar the same; party B 34, 33, 37 and 22 in 100; tried, the verdict's title for the locks given ({given:?})",
