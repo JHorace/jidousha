@@ -48,7 +48,7 @@ pub struct House {
     /// The winter's seats (SPEC §3.1 `hearth`); empty all summer.
     pub hearth: Hearth,
     /// This turning's pages, from the winter's passing until summer comes (SPEC §3.1
-    /// `passage`). W8 SCAFFOLD: only the winter page.
+    /// `passage`).
     pub passage: Option<crate::passage::Passage>,
     /// Per place: visits, triumphs, disasters, trouble.
     pub places: Vec<PlaceRecord>,
@@ -56,6 +56,8 @@ pub struct House {
     pub ghosts: Vec<Ghost>,
     /// Per place, the template its quest had on the last board (SPEC §5.2).
     pub templates_last: Vec<Option<usize>>,
+    /// The name and house bags newcomers are drawn from (SPEC §3.1 `generation`, §17.1).
+    pub bags: crate::newcomers::Bags,
     /// What this summer's board generation decided, for the checks.
     pub board_report: Option<BoardReport>,
     /// This summer's telling, from set out until the player leaves it (SPEC §3.1 `tale`).
@@ -113,6 +115,7 @@ impl House {
             places: vec![PlaceRecord::default(); Place::ALL.len()],
             ghosts: Vec::new(),
             templates_last: vec![None; Place::ALL.len()],
+            bags: crate::newcomers::Bags::new(content),
             board_report: None,
             telling: None,
             mourned: Vec::new(),

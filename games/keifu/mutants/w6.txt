@@ -333,23 +333,23 @@
 - house.patrons += 1;
 + house.patrons += 0;
 
-### H16 nearest kin is the first who holds one
-@ src/harm.rs
+### H16 nearest kin is the first who holds one (re-cut s8)
+@ src/heirs.rs
 - .find(|&id| heroes[id].heirloom.is_none())
 + .find(|&id| heroes[id].heirloom.is_some())
 
-### H17 a parent ranks as a child
-@ src/harm.rs
+### H17 a parent ranks as a child (re-cut s8)
+@ src/heirs.rs
 - if kind == Some(BondKind::Child) {
 + if kind == Some(BondKind::Parent) {
 
-### H18 any bond ranks as a steadying one
-@ src/harm.rs
+### H18 any bond ranks as a steadying one (re-cut s8)
+@ src/heirs.rs
 - } else if kind.is_some_and(steadies) {
 + } else if kind.is_some() {
 
-### H19 those taught rank as anyone
-@ src/harm.rs
+### H19 those taught rank as anyone (re-cut s8)
+@ src/heirs.rs
 - } else if bond.is_some_and(|b| b.taught) {
 + } else if false {
 

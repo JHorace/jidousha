@@ -126,6 +126,8 @@ pub enum Target {
     Group(crate::hearth::Group),
     /// "Let the winter pass" (SPEC §2.1).
     LetWinterPass,
+    /// An heir button on turning page `.0`: that heir, or no one (SPEC §15.2).
+    Heir(usize, Option<HeroId>),
 }
 
 /// A hero in hand: picked up from a seat and not yet released.
@@ -398,7 +400,7 @@ pub fn wrap(text: &str, width: f32, size: f32) -> Vec<String> {
 }
 
 /// The page for the screen that is up: the house closed (W10 SCAFFOLD), the telling,
-/// the turning (W8 SCAFFOLD), the hearth, or the summer — each a projection of the
+/// the turning, the hearth, or the summer — each a projection of the
 /// house, so the scene cannot disagree with it.
 pub fn page(content: &Content, house: &House, ui: &UiState, clock: Clock) -> Page {
     let mut page = Page::default();

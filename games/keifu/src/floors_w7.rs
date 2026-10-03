@@ -186,7 +186,9 @@ pub fn w7_surfaces(
     let mut sim = session(SEEDS[0]);
     stage_oracle_winter(&mut sim);
     if let Some(passage) = sim.world_mut().resource_mut::<House>().passage.as_mut() {
-        passage.winter = (0..8).flat_map(|_| passage.winter.clone()).collect();
+        passage.pages[0].lines = (0..8)
+            .flat_map(|_| passage.pages[0].lines.clone())
+            .collect();
     }
     let leaves = every_leaf(checks, tally, recorder, &mut sim, "W7, a long winter");
     checks.require(

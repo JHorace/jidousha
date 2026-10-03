@@ -133,7 +133,12 @@ pub fn check_controls(checks: &mut Checks) -> String {
         "an empty hearth does not pass as \"A quiet winter.\"",
         format!("{quiet:?}"),
     );
+    // "Skip ahead" stops at a death page that waits; with its heir chosen it brings summer.
     point_at(&mut sim, Target::Skip, true);
+    while let Some(heir) = crate::play::heir_button(&sim) {
+        point_at(&mut sim, heir, true);
+        point_at(&mut sim, Target::Skip, true);
+    }
     let house = sim.world().resource::<House>();
     checks.require(
         house.passage.is_none()
@@ -148,7 +153,9 @@ pub fn check_controls(checks: &mut Checks) -> String {
     {
         let house = sim.world_mut().resource_mut::<House>();
         if let Some(passage) = house.passage.as_mut() {
-            passage.winter = (0..8).flat_map(|_| passage.winter.clone()).collect();
+            passage.pages[0].lines = (0..8)
+                .flat_map(|_| passage.pages[0].lines.clone())
+                .collect();
         }
     }
     point_at(&mut sim, Target::GoOn, true);

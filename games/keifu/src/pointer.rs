@@ -22,9 +22,11 @@ use crate::dock::{PITCH, subject};
 use crate::house::{House, begin_another_house};
 use crate::resolve::set_out;
 use crate::screen::{Clock, DockGrab, Drag, Target, UiState};
-use crate::season::{at_the_hearth, leave_the_telling, let_the_winter_pass, summer_comes};
+use crate::season::{
+    at_the_hearth, leave_the_telling, let_the_winter_pass, may_turn, summer_comes,
+};
 use crate::telling_view::{leaves, story_complete};
-use crate::turning_view::leaves as turning_leaves;
+use crate::turning_view::{first_leaf_of, furthest, last_leaf_of, leaves as turning_leaves};
 
 /// What a pointer resting on `target` points at. Resting on the dock points at what
 /// it already did, so the sheet stays open to be read and scrolled.
@@ -34,7 +36,7 @@ fn resting(ui: UiState, target: Option<Target>) -> UiState {
     }
     UiState {
         pointing: match target {
-            Some(Target::Hero(id)) => Some(id),
+            Some(Target::Hero(id) | Target::Heir(_, Some(id))) => Some(id),
             _ => None,
         },
         pointing_quest: match target {
@@ -97,7 +99,8 @@ pub fn follow_the_pointer(world: &mut World) {
                 | Target::Leaf(_)
                 | Target::Skip
                 | Target::BeginAgain
-                | Target::LetWinterPass),
+                | Target::LetWinterPass
+                | Target::Heir(..)),
             ) if !ui.family_open => press(world, ui, control),
             // Only the summer and the hearth seat heroes: on the telling and the turning a
             // card is read, never lifted.
@@ -190,19 +193,38 @@ fn press(world: &mut World, ui: UiState, control: Target) -> UiState {
             with_house(world, let_the_winter_pass);
             fresh
         }
-        // W8 SCAFFOLD: the turning's winter page — a leaf, the next, or summer.
+        // The turning (SPEC §18.1): it will not go past an undecided death page — "Go on"
+        // there does nothing, a leaf beyond it does nothing, "Skip ahead" goes to it —
+        // and summer comes only once every page is decided. SPEC-GAPS KG-51: "past" is
+        // past the first undecided page's last leaf, where its choice is drawn.
         Target::GoOn | Target::Leaf(_) | Target::Skip if house.passage.is_some() => {
             let Some(passage) = &house.passage else {
                 return ui;
             };
-            let count = turning_leaves(world.resource::<Content>(), passage).len();
-            let current = ui.leaf.min(count - 1);
-            match control {
-                Target::Leaf(leaf) => return turn_to(leaf.min(count - 1)),
-                Target::GoOn if current + 1 < count => return turn_to(current + 1),
+            let leaves = turning_leaves(passage);
+            let current = ui.leaf.min(leaves.len() - 1);
+            let reach = furthest(passage, &leaves);
+            let undecided = passage.first_undecided();
+            match (control, undecided) {
+                (Target::Leaf(leaf), _) if leaf <= reach => return turn_to(leaf),
+                (Target::Leaf(_), _) => return ui,
+                (Target::GoOn, _) if current < reach => return turn_to(current + 1),
+                (Target::Skip, Some(page)) => return turn_to(last_leaf_of(&leaves, page)),
+                _ if !may_turn(house) => return ui,
                 _ => with_house(world, summer_comes),
             }
             fresh
+        }
+        Target::Heir(at, heir) if house.passage.is_some() => {
+            with_house(world, |content, house, _| {
+                crate::heirs::choose(content, house, at, heir)
+            });
+            let house = world.resource::<House>();
+            let Some(passage) = &house.passage else {
+                return ui;
+            };
+            // The leaves are rebuilt; the view stays on the page chosen on.
+            turn_to(first_leaf_of(&turning_leaves(passage), at))
         }
         // SPEC-GAPS KG-37: a numbered button turns to a leaf and types its story again.
         Target::GoOn | Target::Leaf(_) | Target::Skip => {

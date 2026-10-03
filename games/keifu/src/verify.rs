@@ -41,13 +41,20 @@
 //!    wedding, the tale and Ysolde's road-book); the controls and each group's help;
 //!    and the agreement battery — the previews against the resolution over 3000 stirred
 //!    hearths (`w7.rs`, `w7_controls.rs`, `w7_battery.rs`).
-//! 9. **The W0 machinery**: calendar, text conventions, pools, bags (`foundations.rs`).
-//! 10. **Readability floors** over every surface this build has, every page of a
+//! 9. **W8's oracle**, staged and refused — Garrick aged to his death, the winter let
+//!    pass: his death page offers Maren, Pip, Odo, then Ysolde, Brannoc and Wren, then no
+//!    one, unmarked, on every recorded seed; the pointer tries to leave and the year will
+//!    not turn; Maren is chosen and it does; a stirred variant (a wanderer, burdens, a
+//!    blade) holds the marks to their rule; and the whole-year battery — 160 houses
+//!    played up to 25 years, every turning held to its own rules, printed (`w8.rs`,
+//!    `w8_battery.rs`).
+//! 10. **The W0 machinery**: calendar, text conventions, pools, bags (`foundations.rs`).
+//! 11. **Readability floors** over every surface this build has, every page of a
 //!     sheet longer than the dock, at the native window and two web canvases (`floors.rs`).
-//! 11. **The sheet dock** as the player works it: resting, scrolling, a new subject,
+//! 12. **The sheet dock** as the player works it: resting, scrolling, a new subject,
 //!     the hero in hand, a drop on it (`dock_checks.rs`).
-//! 12. **The cast's sprites**: every role imported, every card its role's texture (`cast.rs`).
-//! 13. **A picture** of each oracle's screen (`capture.rs`).
+//! 13. **The cast's sprites**: every role imported, every card its role's texture (`cast.rs`).
+//! 14. **A picture** of each oracle's screen (`capture.rs`).
 
 use std::process::ExitCode;
 
@@ -348,6 +355,11 @@ pub fn run() -> ExitCode {
     summary.push(crate::w7::check_played(&mut checks));
     summary.push(crate::w7_controls::check_controls(&mut checks));
     summary.extend(crate::w7_battery::check_agreement(&mut checks, &content));
+    let (w8_line, w8_vector) = crate::w8::check_oracle(&mut checks);
+    summary.push(w8_line);
+    summary.extend(w8_vector);
+    summary.push(crate::w8::check_long_page(&mut checks));
+    summary.extend(crate::w8_battery::check_whole_years(&mut checks, &content));
     summary.push(crate::sessions::check_family(&mut checks, &mut recorder));
     summary.push(crate::sessions::check_seeds(&mut checks, &content));
     summary.push(crate::sessions::check_staged_sheets(&mut checks));
@@ -362,7 +374,7 @@ pub fn run() -> ExitCode {
     let (passed, failed) = checks.counts();
     if failed == 0 {
         println!(
-            "verified keifu: W0, W1, W2, W3, W4, W5, W6 and W7 oracles hold on {} seeds, {passed} checks",
+            "verified keifu: W0, W1, W2, W3, W4, W5, W6, W7 and W8 oracles hold on {} seeds, {passed} checks",
             SEEDS.len()
         );
     } else {

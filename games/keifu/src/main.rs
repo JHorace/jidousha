@@ -1,6 +1,7 @@
 //! Keifu (系譜): a port of Lineage to Jidousha. Session 1 built modules W0 and W1;
 //! session 2 built W2 and gave the cast its sprites; session 3 built W3; session 4
-//! built W4; session 5 built W5; session 6 built W6; session 7 builds W7.
+//! built W4; session 5 built W5; session 6 built W6; session 7 built W7; session 8
+//! builds W8.
 //!
 //! W0 is the foundation: the content in `spec/content/` loaded and validated, the
 //! lore tables, the calendar and the Door countdown, the randomness primitives
@@ -30,8 +31,13 @@
 //! excuse, the courtship verdict, the rest, the teller's part (`plans`) — previewed on
 //! the hearth screen (`hearth_view`) from the same plan the winter's resolution carries
 //! out in §11.3's order, with the teacher's credit and the rank-limited mentor bond
-//! (`winter`), and the winter's dream moments witnessed live. The turning after it is a
-//! W8 SCAFFOLD (`season`, `passage`, `turning_view`): the winter page, then summer.
+//! (`winter`), and the winter's dream moments witnessed live. W8 is the turn of the year
+//! in §18's order (`turning`): ageing, old age and the death pages (`death_page`), the
+//! heirs, their ranking and the bequest they decide (`heirs`), births (`births`), comings
+//! of age with the dream a child takes into them (`coming_of_age`), wanderers
+//! (`wanderer`), the bags and rolled dreams newcomers are drawn from (`newcomers`,
+//! `turning_lore`), the tales and the year's moment — read on the turning screen
+//! (`passage`, `turning_view`), which will not let the year turn while a page waits.
 //!
 //! What the player can do in this build: point at a hero to read their sheet,
 //! point at a quest to read its sheet and its place's history — both open in the
@@ -40,7 +46,8 @@
 //! held, set out (or stay home) and read the telling page by page, and open the
 //! family. Leaving the telling opens the hearth: drag anyone to any winter seat and
 //! read its preview, point at a group for its help, let the winter pass and read what
-//! it did, and summer comes.
+//! the year did — and on each death page that leaves something, choose the heir (each
+//! heir's sheet opens in the dock as they are pointed at) — and summer comes.
 //!
 //! The spec (`spec/SPEC.md`, `spec/CONSTANTS.md`, `spec/content/`) is the only
 //! source of game behaviour; `SPEC-GAPS.md` lists every place it fell silent.
@@ -51,6 +58,9 @@
 #![allow(missing_docs)]
 
 mod art;
+mod births;
+#[cfg(test)]
+mod births_tests;
 mod blessing;
 mod board;
 mod board_view;
@@ -61,8 +71,10 @@ mod capture;
 mod cast;
 mod chance;
 mod checks;
+mod coming_of_age;
 mod constants;
 mod content;
+mod death_page;
 mod destiny;
 mod dock;
 mod dock_checks;
@@ -78,6 +90,7 @@ mod floors;
 mod floors_w5;
 mod floors_w6;
 mod floors_w7;
+mod floors_w8;
 mod forecast;
 mod foundations;
 mod generation;
@@ -89,6 +102,9 @@ mod harm_tests;
 mod hearth;
 mod hearth_help;
 mod hearth_view;
+mod heirs;
+#[cfg(test)]
+mod heirs_tests;
 mod hero;
 mod house;
 mod household;
@@ -98,11 +114,15 @@ mod legacy;
 mod legacy_lore;
 mod lore;
 mod moment;
+#[cfg(test)]
+mod newcomer_tests;
+mod newcomers;
 mod oracles;
 mod passage;
 mod plans;
 #[cfg(test)]
 mod plans_tests;
+mod play;
 mod pointer;
 mod power;
 mod power_lines;
@@ -132,6 +152,10 @@ mod telling_view;
 mod testkit;
 mod text;
 mod tree;
+mod turning;
+mod turning_lore;
+#[cfg(test)]
+mod turning_tests;
 mod turning_view;
 mod verify;
 mod w2;
@@ -146,6 +170,9 @@ mod w6_stages;
 mod w7;
 mod w7_battery;
 mod w7_controls;
+mod w8;
+mod w8_battery;
+mod wanderer;
 mod winter;
 #[cfg(test)]
 mod winter_tests;

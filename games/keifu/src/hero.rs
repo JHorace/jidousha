@@ -129,15 +129,32 @@ pub enum DeedKind {
     Wed,
     /// Told the tale at the long table (SPEC §11.3).
     ToldTheTale,
+    /// Given a dead hero's heirloom on their death page (SPEC §15.2); `other` is the dead.
+    Inherited,
+    /// Took up a dead hero's dream (SPEC §15.2); `other` is the dream's owner.
+    TookUpDream,
+    /// Had a child (SPEC §17.3); `other` is the child.
+    ChildBorn,
+    /// Came of age and heard the Seer (SPEC §17.5).
+    CameOfAge,
+    /// Came to the house as a wanderer (SPEC §17.2), dated the year they arrive for.
+    Arrived,
 }
 
-/// What became of a dead hero's own dream (SPEC §3.2 `bequest`). W6 lays ghosts;
-/// W8 decides the rest on the death page.
+/// What became of a dead hero's own dream (SPEC §3.2 `bequest`): the death page
+/// decides it (§15.1-§15.2), a ghost laid (§14.4) or taken up (§9.5) changes it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DreamFate {
-    /// Not decided yet. W8 adds NEVER_DREAMT, FULFILLED, PASSED_ON and LEFT_TO_NO_ONE,
-    /// which only the death page decides.
+    /// Not decided yet.
     Undecided,
+    /// No own dream to leave.
+    NeverDreamt,
+    /// The own dream was done.
+    Fulfilled,
+    /// The undone dream went to the heir (`Hero::bequest_heir`).
+    PassedOn,
+    /// No one took it up; its ghost walks.
+    LeftToNoOne,
     /// Its ghost was laid, in `Hero::laid_year`.
     LaidToRest,
 }

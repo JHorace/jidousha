@@ -69,7 +69,12 @@ def parse(path: Path) -> list[tuple[str, str, str, str]]:
 
 
 def run(cmd: list[str], cwd: Path, env: dict) -> int:
-    return subprocess.run(cmd, cwd=cwd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1800).returncode
+    # A run that never ends is a run that failed: a fault that hangs the check is noticed,
+    # and must not take its worker thread (and the rest of its share of the list) with it.
+    try:
+        return subprocess.run(cmd, cwd=cwd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=600).returncode
+    except subprocess.TimeoutExpired:
+        return 124
 
 
 def check_all(root: Path, mutations) -> None:

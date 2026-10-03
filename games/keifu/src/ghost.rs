@@ -1,11 +1,10 @@
 //! Ghosts (SPEC §14.4), the quest part: a ghost on the house's list, and the quest
 //! a board posts to lay it.
 //!
-//! W5 builds what a board reads — the list and the ghost quest; raising a ghost at
-//! a death page and laying one on a won quest are W8's and W6's. Until then nothing
-//! raises one, so the board's ghost slot (§5.2 step 3) is exercised on staged lists.
-//! W6 reads `ghost.json`'s endings for the ghost quest's story and lays a ghost on a
-//! won quest (`lay_ghost`).
+//! W5 builds what a board reads — the list and the ghost quest. W6 reads `ghost.json`'s
+//! endings for the ghost quest's story and lays a ghost on a won quest (`lay_ghost`);
+//! W8 raises one on a death page (`heirs::choose`) and gives one to a descendant coming
+//! of age (`coming_of_age`).
 
 use crate::constants::{GHOST_APTITUDE, GHOST_DANGER, GHOST_SEATS};
 use crate::content::{Content, id_at, text};

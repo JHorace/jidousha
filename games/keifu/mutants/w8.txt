@@ -1,0 +1,947 @@
+#! W8 — the turn of the year (session 8). One fault per line of rule: every W8 constant,
+#! the turning's step order, the heir ranking line by line, the kinship words and the
+#! marks, each bequest (the heirloom laid aside, inherited or buried; the dream passed or
+#! raised as a ghost, and where), the death page and the Door's promise, old age, the bags'
+#! no-repeat draw, every birth rule, every coming-of-age rule and the dream priority, the
+#! wanderer's odds, arrival and standing, the rolled dream, the tales, the phase lines and
+#! the closing line, and the screen's refusal to let the year turn.
+
+### C1 OLD_AGE_BASE_CHANCE 0.04 -> 0.05
+@ src/constants.rs
+- pub const OLD_AGE_BASE_CHANCE: f64 = 0.04;
++ pub const OLD_AGE_BASE_CHANCE: f64 = 0.05;
+
+### C2 OLD_AGE_YEARLY_CHANCE 0.025 -> 0.03
+@ src/constants.rs
+- pub const OLD_AGE_YEARLY_CHANCE: f64 = 0.025;
++ pub const OLD_AGE_YEARLY_CHANCE: f64 = 0.03;
+
+### C3 OLD_AGE_FROM 55 -> 56
+@ src/constants.rs
+- pub const OLD_AGE_FROM: i32 = 55;
++ pub const OLD_AGE_FROM: i32 = 56;
+
+### C4 OUTLIVING_AGE_FACTOR 0.5 -> 0.6
+@ src/constants.rs
+- pub const OUTLIVING_AGE_FACTOR: f64 = 0.5;
++ pub const OUTLIVING_AGE_FACTOR: f64 = 0.6;
+
+### C5 BED_AGE_FACTOR 2 -> 1.9
+@ src/constants.rs
+- pub const BED_AGE_FACTOR: f64 = 2.0;
++ pub const BED_AGE_FACTOR: f64 = 1.9;
+
+### C6 CHILDREN_PER_PAIR 3 -> 4
+@ src/constants.rs
+- pub const CHILDREN_PER_PAIR: usize = 3;
++ pub const CHILDREN_PER_PAIR: usize = 4;
+
+### C7 HOUSEHOLD_LIMIT 12 -> 13
+@ src/constants.rs
+- pub const HOUSEHOLD_LIMIT: usize = 12;
++ pub const HOUSEHOLD_LIMIT: usize = 13;
+
+### C8 WANDERER_ROOM 10 -> 11
+@ src/constants.rs
+- pub const WANDERER_ROOM: usize = 10;
++ pub const WANDERER_ROOM: usize = 11;
+
+### C9 WANDERER_BASE_CHANCE 0.2 -> 0.25
+@ src/constants.rs
+- pub const WANDERER_BASE_CHANCE: f64 = 0.2;
++ pub const WANDERER_BASE_CHANCE: f64 = 0.25;
+
+### C10 WANDERER_RENOWN_DRAW 0.01 -> 0.02
+@ src/constants.rs
+- pub const WANDERER_RENOWN_DRAW: f64 = 0.01;
++ pub const WANDERER_RENOWN_DRAW: f64 = 0.02;
+
+### C11 WANDERER_CHANCE_LIMIT 0.6 -> 0.5
+@ src/constants.rs
+- pub const WANDERER_CHANCE_LIMIT: f64 = 0.6;
++ pub const WANDERER_CHANCE_LIMIT: f64 = 0.5;
+
+### C12 FEWEST_ADULTS 5 -> 4
+@ src/constants.rs
+- pub const FEWEST_ADULTS: usize = 5;
++ pub const FEWEST_ADULTS: usize = 4;
+
+### C13 WANDERER_RENOWN_HIGH 2 -> 3
+@ src/constants.rs
+- pub const WANDERER_RENOWN_HIGH: i32 = 2;
++ pub const WANDERER_RENOWN_HIGH: i32 = 3;
+
+### C14 NEWBORN_APTITUDE_SHARE 4 -> 3
+@ src/constants.rs
+- pub const NEWBORN_APTITUDE_SHARE: i32 = 4;
++ pub const NEWBORN_APTITUDE_SHARE: i32 = 3;
+
+### C15 NEWBORN_APTITUDE_LEAST 1 -> 2
+@ src/constants.rs
+- pub const NEWBORN_APTITUDE_LEAST: i32 = 1;
++ pub const NEWBORN_APTITUDE_LEAST: i32 = 2;
+
+### C16 INHERITED_FEAR_CHANCE 0.4 -> 0.3
+@ src/constants.rs
+- pub const INHERITED_FEAR_CHANCE: f64 = 0.4;
++ pub const INHERITED_FEAR_CHANCE: f64 = 0.3;
+
+### C17 BROKEN_FEAR_CHANCE 0.8 -> 0.6
+@ src/constants.rs
+- pub const BROKEN_FEAR_CHANCE: f64 = 0.8;
++ pub const BROKEN_FEAR_CHANCE: f64 = 0.6;
+
+### C18 BORN_BRAVE_CHANCE 0.5 -> 0.3
+@ src/constants.rs
+- pub const BORN_BRAVE_CHANCE: f64 = 0.5;
++ pub const BORN_BRAVE_CHANCE: f64 = 0.3;
+
+### C19 SURPASSING_CHILD_BONUS 2 -> 1
+@ src/constants.rs
+- pub const SURPASSING_CHILD_BONUS: i32 = 2;
++ pub const SURPASSING_CHILD_BONUS: i32 = 1;
+
+### C20 TEACHER_AGE_FOR_DREAM 35 -> 34
+@ src/constants.rs
+- pub const TEACHER_AGE_FOR_DREAM: i32 = 35;
++ pub const TEACHER_AGE_FOR_DREAM: i32 = 34;
+
+### C21 WANDERER_AGES 17..36 -> 18..36
+@ src/constants.rs
+- pub const WANDERER_AGES: (i32, i32) = (17, 36);
++ pub const WANDERER_AGES: (i32, i32) = (18, 36);
+
+### C22 the second standing's threshold 12 -> 13
+@ src/constants.rs
+-     [(0, 3, 5, 1, 3), (12, 4, 6, 2, 3), (30, 5, 7, 2, 4)];
++     [(0, 3, 5, 1, 3), (13, 4, 6, 2, 3), (30, 5, 7, 2, 4)];
+
+### C23 TEACHING_SHOWS 1 -> 2
+@ src/constants.rs
+- pub const TEACHING_SHOWS: i32 = 1;
++ pub const TEACHING_SHOWS: i32 = 2;
+
+### T1 old age before the ageing
+@ src/turning.rs
+-     for hero in house.heroes.iter_mut().filter(|h| h.is_living()) {⏎        hero.age += 1;⏎    }⏎    // 3. Old age.⏎    old_age(content, house, rng);
++     old_age(content, house, rng);⏎    for hero in house.heroes.iter_mut().filter(|h| h.is_living()) {⏎        hero.age += 1;⏎    }
+
+### T2 the dead age too
+@ src/turning.rs
+-     for hero in house.heroes.iter_mut().filter(|h| h.is_living()) {
++     for hero in house.heroes.iter_mut() {
+
+### T3 the mourned are kept after their pages
+@ src/turning.rs
+-     let mourned = std::mem::take(&mut house.mourned);
++     let mourned = house.mourned.clone();
+
+### T4 the comings of age before the births
+@ src/turning.rs
+-     pages.extend(births(content, house, rng));⏎    pages.extend(comings_of_age(content, house, rng));
++     pages.extend(comings_of_age(content, house, rng));⏎    pages.extend(births(content, house, rng));
+
+### T5 the wanderer before the comings of age
+@ src/turning.rs
+-     pages.extend(comings_of_age(content, house, rng));⏎    pages.extend(wanderer(content, house, rng));
++     pages.extend(wanderer(content, house, rng));⏎    pages.extend(comings_of_age(content, house, rng));
+
+### T6 the tales after the phase lines
+@ src/turning.rs
+-     let mut year_lines = tales(content, house);
++     let mut year_lines = Vec::new();
+
+### T7 a phase line into Youth too
+@ src/turning.rs
+-         if before.is_some_and(|b| b != now) && now != Phase::Youth {
++         if before.is_some_and(|b| b != now) {
+
+### T8 a phase line every year
+@ src/turning.rs
+-         if before.is_some_and(|b| b != now) && now != Phase::Youth {
++         if before.is_some() && now != Phase::Youth {
+
+### T9 no dream moment at the turning
+@ src/turning.rs
+-         year_lines.extend(witness(content, house, id, &Moment::YearTurn));
++         let _ = (id, Moment::YearTurn);
+
+### T10 the year page's title is this year
+@ src/turning.rs
+-             title: fmt(&words[W::TurningYearTitle], &[&(year + 1).to_string()]),
++             title: fmt(&words[W::TurningYearTitle], &[&year.to_string()]),
+
+### T11 a year page even with nothing on it
+@ src/turning.rs
+-     if !year_lines.is_empty() {
++     if true {
+
+### T12 the closing line on the first page
+@ src/turning.rs
+-     if let Some(last) = pages.last_mut() {
++     if let Some(last) = pages.first_mut() {
+
+### T13 the closing count is the years until the Door
+@ src/turning.rs
+-     let r = house.calendar.years_until_door() - 1;
++     let r = house.calendar.years_until_door();
+
+### T14 the Door stands open a year late
+@ src/turning.rs
+-     if r <= 0 {
++     if r < 0 {
+
+### T15 "1 years"
+@ src/turning.rs
+-     let word = if r == 1 { W::YearWord } else { W::YearsWord };
++     let word = if r == 0 { W::YearWord } else { W::YearsWord };
+
+### T16 a tale's renown is not the count
+@ src/turning.rs
+-     let renown = count * TALE_YEARLY_RENOWN;
++     let renown = TALE_YEARLY_RENOWN;
+
+### T17 the many tales' line for one
+@ src/turning.rs
+-     vec![if count == 1 {
++     vec![if count == 0 {
+
+### T18 the newest tale not lowered
+@ src/turning.rs
+-             &[&count.to_string(), &lowered(&newest), &renown.to_string()],
++             &[&count.to_string(), &newest, &renown.to_string()],
+
+### T19 the tales' renown not added
+@ src/turning.rs
+-     house.add_renown(renown);
++     house.add_renown(0);
+
+### R1 descendants rank as children
+@ src/heirs.rs
+-     } else if descends_from(heroes, other, dead) {⏎        1
++     } else if descends_from(heroes, other, dead) {⏎        0
+
+### R2 descent read backwards
+@ src/heirs.rs
+-     } else if descends_from(heroes, other, dead) {⏎        1
++     } else if descends_from(heroes, dead, other) {⏎        1
+
+### R3 the spouse ranks with the parents
+@ src/heirs.rs
+-     } else if kind == Some(BondKind::Spouse) {⏎        2
++     } else if kind == Some(BondKind::Spouse) {⏎        3
+
+### R4 siblings by a shared parent rank as anyone
+@ src/heirs.rs
+-     } else if shares_a_parent⏎        || kind == Some(BondKind::Parent)
++     } else if false⏎        || kind == Some(BondKind::Parent)
+
+### R5 a parent by the bond ranks as anyone
+@ src/heirs.rs
+-         || kind == Some(BondKind::Parent)⏎        || heroes[dead].parents.contains(&Some(other))
++         || false⏎        || heroes[dead].parents.contains(&Some(other))
+
+### R6 a parent by the parents field ranks as anyone
+@ src/heirs.rs
+-         || heroes[dead].parents.contains(&Some(other))⏎    {
++         || false⏎    {
+
+### R7 the taught rank below a steadying bond
+@ src/heirs.rs
+-     } else if bond.is_some_and(|b| b.taught) {⏎        4
++     } else if bond.is_some_and(|b| b.taught) {⏎        5
+
+### R8 the rest rank with the steadying bonds
+@ src/heirs.rs
+-     } else {⏎        6⏎    }
++     } else {⏎        5⏎    }
+
+### R9 heirs in creation order alone
+@ src/heirs.rs
+-     list.sort();
++     list.sort_by_key(|(_, id)| *id);
+
+### R10 the dead among their own heirs
+@ src/heirs.rs
+-         .filter(|&id| id != dead && heroes[id].is_living())
++         .filter(|&id| heroes[id].is_living())
+
+### R11 the dead of the house among the heirs
+@ src/heirs.rs
+-         .filter(|&id| id != dead && heroes[id].is_living())
++         .filter(|&id| id != dead)
+
+### R12 the heir list cut at seven
+@ src/heirs.rs
+-         .take(HEIRS_OFFERED)
++         .take(HEIRS_OFFERED - 1)
+
+### K1 a child named as a grandchild
+@ src/heirs.rs
+-     if bond == Some(BondKind::Child) {⏎        kinship_telling(content, BondKind::Child, other).to_owned()
++     if bond == Some(BondKind::Spouse) {⏎        kinship_telling(content, BondKind::Child, other).to_owned()
+
+### K2 a grandson named a granddaughter
+@ src/heirs.rs
+-             W::HeirKinshipGrandchildHe⏎        } else {⏎            W::HeirKinshipGrandchildShe
++             W::HeirKinshipGrandchildShe⏎        } else {⏎            W::HeirKinshipGrandchildHe
+
+### K3 a companion named by the bond
+@ src/heirs.rs
+-     } else if let Some(kind) = bond.filter(|k| content.bonds.shown[k.index()]) {
++     } else if let Some(kind) = bond {
+
+### K4 a shown bond named as the house
+@ src/heirs.rs
+-     } else if let Some(kind) = bond.filter(|k| content.bonds.shown[k.index()]) {
++     } else if let Some(kind) = bond.filter(|_| false) {
+
+### K5 a sister named a brother
+@ src/heirs.rs
+-             W::HeirKinshipSiblingHe⏎        } else {⏎            W::HeirKinshipSiblingShe
++             W::HeirKinshipSiblingShe⏎        } else {⏎            W::HeirKinshipSiblingHe
+
+### K6 kin named as the house
+@ src/heirs.rs
+-     } else if kin(heroes, dead, heir) {
++     } else if false {
+
+### M1 "(not the dream)" on those who can take it
+@ src/heirs.rs
+-             if leaves_dream && !can_take_dream(&heroes[heir]) {
++             if leaves_dream && can_take_dream(&heroes[heir]) {
+
+### M2 "(not the dream)" with no dream to leave
+@ src/heirs.rs
+-             if leaves_dream && !can_take_dream(&heroes[heir]) {
++             if !can_take_dream(&heroes[heir]) {
+
+### M3 "(lays one aside)" on the empty-handed
+@ src/heirs.rs
+-             } else if leaves_heirloom && heroes[heir].heirloom.is_some() {
++             } else if leaves_heirloom && heroes[heir].heirloom.is_none() {
+
+### M4 "(lays one aside)" with no heirloom to leave
+@ src/heirs.rs
+-             } else if leaves_heirloom && heroes[heir].heirloom.is_some() {
++             } else if heroes[heir].heirloom.is_some() {
+
+### M5 both marks on one button
+@ src/heirs.rs
+-             }⏎            HeirButton {⏎                heir: Some(heir),
++             }⏎            if leaves_heirloom && heroes[heir].heirloom.is_some() && leaves_dream {⏎                label.push_str(&words[W::HeirLaysOneAside]);⏎            }⏎            HeirButton {⏎                heir: Some(heir),
+
+### M6 one with a dream cannot take another
+@ src/heirs.rs
+-     hero.dream.is_none() || hero.burden.as_ref().is_none_or(Dream::is_fulfilled)
++     hero.dream.is_none()
+
+### M7 a fulfilled burden still bars the dream
+@ src/heirs.rs
+-     hero.dream.is_none() || hero.burden.as_ref().is_none_or(Dream::is_fulfilled)
++     hero.dream.is_none() || hero.burden.is_none()
+
+### M8 "No one" is not offered (re-cut: the first cut did not build)
+@ src/heirs.rs
+-     buttons.push(HeirButton {⏎        heir: None,
++     buttons.retain(|_| true);⏎    std::mem::drop(HeirButton {⏎        heir: None,
+
+### B1 the own dream passes before the burden
+@ src/heirs.rs
+-         (Some(burden), _) => Some((Held::Burden, burden)),⏎        (None, Some(own)) => Some((Held::Own, own)),
++         (Some(burden), None) => Some((Held::Burden, burden)),⏎        (_, Some(own)) => Some((Held::Own, own)),
+
+### B2 a fulfilled dream left undone
+@ src/heirs.rs
+-         dream.as_ref().filter(|d| !d.is_fulfilled())
++         dream.as_ref()
+
+### B3 the heir's own heirloom is kept
+@ src/heirs.rs
+-                 if let Some(old) = house.heroes[h].heirloom.take() {
++                 if let Some(old) = house.heroes[h].heirloom.clone() {
+
+### B4 the heir lays nothing aside, silently
+@ src/heirs.rs
+-                     lines.push(fmt(⏎                        &words[W::HeirLaysAside],
++                     let _ = (fmt(⏎                        &words[W::HeirLaysAside],
+
+### B5 the heir is given nothing
+@ src/heirs.rs
+-                 house.heroes[h].heirloom = Some(heirloom);
++                 let _ = heirloom;
+
+### B6 no INHERITED deed
+@ src/heirs.rs
+-                     DeedKind::Inherited,
++                     DeedKind::TookUpDream,
+
+### B7 the buried heirloom's name not capitalised
+@ src/heirs.rs
+-                     &[&capitalized(&heirloom.name), object],
++                     &[&heirloom.name, object],
+
+### B8 the dead keep the heirloom
+@ src/heirs.rs
+-     if let Some(heirloom) = house.heroes[dead].heirloom.take() {
++     if let Some(heirloom) = house.heroes[dead].heirloom.clone() {
+
+### B9 the dream passes to whoever is chosen
+@ src/heirs.rs
+-         match heir.filter(|&h| can_take_dream(&house.heroes[h])) {
++         match heir {
+
+### B10 a passed dream's fate is left to no one
+@ src/heirs.rs
+-                 house.heroes[dead].dream_fate = DreamFate::PassedOn;
++                 house.heroes[dead].dream_fate = DreamFate::LeftToNoOne;
+
+### B11 a raised ghost's fate is passed on
+@ src/heirs.rs
+-                 house.heroes[dead].dream_fate = DreamFate::LeftToNoOne;
++                 house.heroes[dead].dream_fate = DreamFate::PassedOn;
+
+### B12 the choice's lines at the page's end
+@ src/heirs.rs
+-     let at = bequest.bequest_end;
++     let at = page.lines.len();
+
+### B13 the choice is not recorded
+@ src/heirs.rs
+-         b.chosen = Some(heir);
++         b.chosen = None;
+
+### B14 the bequest's heir not recorded
+@ src/heirs.rs
+-     house.heroes[dead].bequest_heir = heir;
++     house.heroes[dead].bequest_heir = None;
+
+### B15 the bequest not decided
+@ src/heirs.rs
+-     house.heroes[dead].bequest_decided = true;⏎    house.heroes[dead].bequest_heir = heir;
++     house.heroes[dead].bequest_heir = heir;
+
+### P1 a passed dream owned by its heir
+@ src/heirs.rs
+-     let owner = *passed.owner.get_or_insert(dead);
++     let owner = *passed.owner.get_or_insert(heir);
+
+### P2 a passed dream always a burden
+@ src/heirs.rs
+-     if hero.dream.is_none() {⏎        hero.dream = Some(passed.clone());
++     if false {⏎        hero.dream = Some(passed.clone());
+
+### P3 the taking told about the heir
+@ src/heirs.rs
+-             &progress(content, &passed, house.heroes[owner].pronoun),
++             &progress(content, &passed, house.heroes[heir].pronoun),
+
+### P4 no dream rivals for a passed dream
+@ src/heirs.rs
+-     lines.extend(dream_rivals(
++     lines.extend(Vec::<String>::new());⏎    let _ = (dream_rivals(
+
+### G1 a ghost's dream owned by no one
+@ src/heirs.rs
+-     copy.owner.get_or_insert(dead);
++     copy.owner.take();
+
+### G2 a ghost walks at the Barrow wherever the dreamer died
+@ src/heirs.rs
+-             .filter(|p| *p != Place::SealedDoor)
++             .filter(|_| false)
+
+### G3 a ghost walks at the Door
+@ src/heirs.rs
+-             .filter(|p| *p != Place::SealedDoor)
++             .filter(|_| true)
+
+### G4 no ghost on the list
+@ src/heirs.rs
+-     house.ghosts.push(Ghost {
++     let _ = (Ghost {
+
+### D1 no heirloom line
+@ src/death_page.rs
+-         lines.push(fmt(⏎            &words[W::DeathLeavesHeirloom],
++         let _ = (fmt(⏎            &words[W::DeathLeavesHeirloom],
+
+### D2 the dream line told about the owner
+@ src/death_page.rs
+-                 &progress(content, dream, hero.pronoun),
++                 &progress(content, dream, owner),
+
+### D3 the bequest lines end after the promise
+@ src/death_page.rs
+-     let bequest_end = lines.len();⏎    let heirloom = hero.heirloom.as_ref().map(|h| h.name.clone());⏎    house.heroes[dead].bequest_heirloom = heirloom.clone();⏎    lines.extend(door_promise(content, &mut house.heroes, dead));
++     let heirloom = hero.heirloom.as_ref().map(|h| h.name.clone());⏎    house.heroes[dead].bequest_heirloom = heirloom.clone();⏎    lines.extend(door_promise(content, &mut house.heroes, dead));⏎    let bequest_end = lines.len();
+
+### D4 no grief on the page
+@ src/death_page.rs
+-     lines.extend(grieve(content, &mut house.heroes, dead, year));
++     let _ = (grieve, year);
+
+### D5 never dreamt is fulfilled
+@ src/death_page.rs
+-         None => hero.dream_fate = DreamFate::NeverDreamt,
++         None => hero.dream_fate = DreamFate::Fulfilled,
+
+### D6 a fulfilled dream's fate undecided
+@ src/death_page.rs
+-         Some(dream) if dream.is_fulfilled() => hero.dream_fate = DreamFate::Fulfilled,
++         Some(dream) if dream.is_fulfilled() => hero.dream_fate = DreamFate::Undecided,
+
+### D7 only an heirloom waits for an heir
+@ src/death_page.rs
+-     let leaves = heirloom.is_some() || undone.is_some();
++     let leaves = heirloom.is_some();
+
+### D8 only a dream waits for an heir
+@ src/death_page.rs
+-     let leaves = heirloom.is_some() || undone.is_some();
++     let leaves = undone.is_some();
+
+### D9 a page with nothing to leave is not decided
+@ src/death_page.rs
+-         house.heroes[dead].bequest_decided = true;⏎        Vec::new()
++         Vec::new()
+
+### D10 the bequest records no heirloom
+@ src/death_page.rs
+-     house.heroes[dead].bequest_heirloom = heirloom.clone();
++     house.heroes[dead].bequest_heirloom = None;
+
+### D11 the Door's promise falls to the youngest
+@ src/death_page.rs
+-         if child.is_living() && firstborn.is_none_or(|f| child.born_year < heroes[f].born_year) {
++         if child.is_living() && firstborn.is_none_or(|f| child.born_year > heroes[f].born_year) {
+
+### D12 the Door's promise to a dead child
+@ src/death_page.rs
+-         if child.is_living() && firstborn.is_none_or(|f| child.born_year < heroes[f].born_year) {
++         if firstborn.is_none_or(|f| child.born_year < heroes[f].born_year) {
+
+### D13 blood of the dead, never the first promisee
+@ src/death_page.rs
+-         .blood_of⏎        .clone()
++         .blood_of⏎        .clone()⏎        .filter(|_| false)
+
+### D14 the promise does not pass
+@ src/death_page.rs
+-     heroes[child].destiny = crate::hero::DestinyState {
++     let _ = crate::hero::DestinyState {
+
+### O1 old age a year older
+@ src/death_page.rs
+-     ((OLD_AGE_BASE_CHANCE + OLD_AGE_YEARLY_CHANCE * f64::from(hero.age - OLD_AGE_FROM)) * factor)
++     ((OLD_AGE_BASE_CHANCE + OLD_AGE_YEARLY_CHANCE * f64::from(hero.age + 1 - OLD_AGE_FROM)) * factor)
+
+### O2 the fire-doomed die in bed
+@ src/death_page.rs
+-     if hero.age < OLD_AGE_FROM || hero.destiny.kind == Destiny::FireWillEndYou {
++     if hero.age < OLD_AGE_FROM {
+
+### O3 the factors swapped
+@ src/death_page.rs
+-         Destiny::OutliveThoseYouLove => OUTLIVING_AGE_FACTOR,⏎        Destiny::DieInYourBed => BED_AGE_FACTOR,
++         Destiny::OutliveThoseYouLove => BED_AGE_FACTOR,⏎        Destiny::DieInYourBed => OUTLIVING_AGE_FACTOR,
+
+### O4 the carrier's renown kept
+@ src/death_page.rs
+-             house.add_renown(-CARRIER_LOSS);
++             house.add_renown(0);
+
+### O5 old age's dead are not mourned
+@ src/death_page.rs
+-         house.mourned.push(id);
++         let _ = id;
+
+### O6 the age at death is the age before
+@ src/death_page.rs
+-         hero.fate_age = hero.age;
++         hero.fate_age = hero.age - 1;
+
+### O7 old age's fate year is next year
+@ src/death_page.rs
+-         hero.fate_year = year;
++         hero.fate_year = year + 1;
+
+### N1 a bag draws with replacement
+@ src/chance.rs
+-         self.left.remove(at)
++         self.left[at].clone()
+
+### N2 a name for her from his bag
+@ src/newcomers.rs
+-             Pronoun::She => self.her.draw(rng),
++             Pronoun::She => self.him.draw(rng),
+
+### N3 a rolled dream claimed by the dead
+@ src/newcomers.rs
+-                 .any(|h| h.is_living() && h.dream.as_ref().is_some_and(|d| d.kind == *kind));
++                 .any(|h| h.dream.as_ref().is_some_and(|d| d.kind == *kind));
+
+### N4 the worthy student rolled for the young
+@ src/newcomers.rs
+-             dreamt || (*kind == DreamKind::WorthyStudent && age < TEACHER_AGE_FOR_DREAM)
++             dreamt
+
+### N5 a rolled dream ignores the claims
+@ src/newcomers.rs
+-     let kind = kinds[unclaimed_index(rng, &claimed)];
++     let kind = kinds[unclaimed_index(rng, &[false; 8])];
+
+### N6 "more" for a phase's loss
+@ src/newcomers.rs
+-         fragment(content, if n < 0 { less } else { more }).to_owned()
++         fragment(content, if n > 0 { less } else { more }).to_owned()
+
+### N7 a youth until 21
+@ src/newcomers.rs
+-                     &PHASE_FROM_AGE[Phase::Prime.index()].to_string(),
++                     &(PHASE_FROM_AGE[Phase::Prime.index()] + 1).to_string(),
+
+### N8 every clause begins "His"
+@ src/newcomers.rs
+-             let his = if any {⏎                forms.possessive.clone()
++             let his = if false {⏎                forms.possessive.clone()
+
+### Y1 births stop no one at twelve
+@ src/births.rs
+-         if living >= HOUSEHOLD_LIMIT || children >= YARD_SPOTS {
++         if children >= YARD_SPOTS {
+
+### Y2 births stop no one at a yard of six
+@ src/births.rs
+-         if living >= HOUSEHOLD_LIMIT || children >= YARD_SPOTS {
++         if living >= HOUSEHOLD_LIMIT {
+
+### Y3 a full house skips one pair, not every birth after
+@ src/births.rs
+-             break;⏎        }⏎        if chance(rng, BIRTH_CHANCE_PERCENT as f32 / 100.0) {
++             continue;⏎        }⏎        if chance(rng, BIRTH_CHANCE_PERCENT as f32 / 100.0) {
+
+### Y4 each pair asked twice
+@ src/births.rs
+-     (first < spouse
++     (first != spouse
+
+### Y5 a child in the wedding's year
+@ src/births.rs
+-         && since < year
++         && since <= year
+
+### Y6 the first parent's age not asked
+@ src/births.rs
+-         && of_age(first)⏎        && of_age(spouse)
++         && of_age(spouse)
+
+### Y7 the second parent's age not asked
+@ src/births.rs
+-         && of_age(first)⏎        && of_age(spouse)
++         && of_age(first)
+
+### Y8 a fourth child
+@ src/births.rs
+-         && together < CHILDREN_PER_PAIR)
++         && together <= CHILDREN_PER_PAIR)
+
+### Y9 a dead spouse can be a parent
+@ src/births.rs
+-         .find(|b| b.kind == BondKind::Spouse && house.heroes[b.other].is_living())
++         .find(|b| b.kind == BondKind::Spouse)
+
+### Y10 a newborn's share is the larger parent's
+@ src/births.rs
+-         let shared = house.heroes[first].base(*aptitude) + house.heroes[second].base(*aptitude);
++         let shared = 2 * house.heroes[first].base(*aptitude).max(house.heroes[second].base(*aptitude));
+
+### Y11 a newborn's share never rolls up
+@ src/births.rs
+-             (shared / NEWBORN_APTITUDE_SHARE + between(rng, 0, 1)).max(NEWBORN_APTITUDE_LEAST);
++             (shared / NEWBORN_APTITUDE_SHARE + between(rng, 0, 0)).max(NEWBORN_APTITUDE_LEAST);
+
+### Y12 the surpassing child of a parent with children
+@ src/births.rs
+-         if hero.destiny.kind == Destiny::ChildWillSurpassYou && childless {
++         if hero.destiny.kind == Destiny::ChildWillSurpassYou {
+
+### Y13 the surpassing destiny never comes
+@ src/births.rs
+-             hero.destiny.fulfilled = true;
++             hero.destiny.fulfilled = hero.destiny.fulfilled;
+
+### Y14 a conquered parent's child never born brave
+@ src/births.rs
+-             if chance(rng, BORN_BRAVE_CHANCE as f32) {
++             if chance(rng, 0.0) {
+
+### Y15 a conquered parent's failed roll ends the inheritance
+@ src/births.rs
+-                 break;⏎            }⏎            continue;
++                 break;⏎            }⏎            break;
+
+### Y16 a broken parent passes the fear as any does
+@ src/births.rs
+-         let p = if theirs.broken {
++         let p = if false {
+
+### Y17 the second parent's fear asked first
+@ src/births.rs
+-     for parent in [first, second] {⏎        let theirs = &house.heroes[parent].fear;
++     for parent in [second, first] {⏎        let theirs = &house.heroes[parent].fear;
+
+### Y18 a newborn not born brave of the conquered tag
+@ src/births.rs
+-                 fear.born_brave = true;
++                 fear.born_brave = false;
+
+### Y19 a newborn of the second parent's house
+@ src/births.rs
+-     let family = house.heroes[first].house.clone();
++     let family = house.heroes[second].house.clone();
+
+### Y20 the second parent's blessings not inherited
+@ src/births.rs
+-     for parent in [first, second] {⏎        for blessing in &house.heroes[parent].blessings {
++     for parent in [first] {⏎        for blessing in &house.heroes[parent].blessings {
+
+### Y21 a blessing twice
+@ src/births.rs
+-             if !child.blessings.iter().any(|b| b.title == blessing.title) {
++             if true {
+
+### Y22 no bond to the second parent
+@ src/births.rs
+-     form(&mut house.heroes, id, second, BondKind::Parent, year);
++     let _ = second;
+
+### Y23 the fear put down to the first parent first
+@ src/births.rs
+-     let alike = [second, first]
++     let alike = [first, second]
+
+### Y24 a father's fear called a mother's
+@ src/births.rs
+-                 &words[if heroes[parent].pronoun == Pronoun::He {
++                 &words[if heroes[parent].pronoun != Pronoun::He {
+
+### Y25 no CHILD_BORN deeds
+@ src/births.rs
+-             DeedKind::ChildBorn,
++             DeedKind::CameOfAge,
+
+### A1 coming of age at thirteen
+@ src/coming_of_age.rs
+-             hero.is_living() && hero.age == crate::constants::COMING_OF_AGE
++             hero.is_living() && hero.age == crate::constants::COMING_OF_AGE + 1
+
+### A2 the first teacher does not choose the calling
+@ src/coming_of_age.rs
+-     let vocation = teacher.map_or(rolled, |t| house.heroes[t].vocation);
++     let vocation = rolled;
+
+### A3 the calling rolled from the worst aptitude
+@ src/coming_of_age.rs
+-     let callings = vocations_of(content, best);
++     let callings = vocations_of(content, crate::ids::Aptitude::Spirit);
+
+### A4 a parent's teaching chooses the calling
+@ src/coming_of_age.rs
+-         .find(|b| b.kind == BondKind::Mentor)
++         .find(|b| matches!(b.kind, BondKind::Mentor | BondKind::Parent))
+
+### A5 the teaching shows at nine
+@ src/coming_of_age.rs
+-         if house.heroes[id].base(aptitude) < APTITUDE_LIMIT {
++         if house.heroes[id].base(aptitude) <= APTITUDE_LIMIT {
+
+### A6 the teaching shows in the child's best
+@ src/coming_of_age.rs
+-         let aptitude = house.heroes[t].best_aptitude();
++         let aptitude = house.heroes[id].best_aptitude();
+
+### A7 no dream rivals at a coming of age
+@ src/coming_of_age.rs
+-         lines.extend(dream_rivals(content, &mut house.heroes, id, &dream, year));
++         let _ = (dream, year);
+
+### A8 the Seer silent
+@ src/coming_of_age.rs
+-     speak(content, &mut house.heroes, id, rng);
++     let _ = speak;
+
+### A9 no CAME_OF_AGE deed
+@ src/coming_of_age.rs
+-         DeedKind::CameOfAge,
++         DeedKind::Arrived,
+
+### A10 a dream held is replaced
+@ src/coming_of_age.rs
+-     if let Some(dream) = &hero.dream {
++     if let Some(dream) = hero.dream.as_ref().filter(|_| false) {
+
+### A11 a carried dream told as one's own
+@ src/coming_of_age.rs
+-         return match dream.owner {
++         return match None::<HeroId> {
+
+### A12 a parent lost at the Door avenged
+@ src/coming_of_age.rs
+-             .filter(|place| *place != Place::SealedDoor);
++             .filter(|_| true);
+
+### A13 the second parent avenged before the first
+@ src/coming_of_age.rs
+-     let lost = hero.parents.iter().flatten().find_map(|&p| {
++     let lost = hero.parents.iter().rev().flatten().find_map(|&p| {
+
+### A14 a ghost taken up by anyone
+@ src/coming_of_age.rs
+-         .position(|ghost| descends_from(&house.heroes, id, ghost.hero))
++         .position(|_| true)
+
+### A15 a ghost taken up by an ancestor
+@ src/coming_of_age.rs
+-         .position(|ghost| descends_from(&house.heroes, id, ghost.hero))
++         .position(|ghost| descends_from(&house.heroes, ghost.hero, id))
+
+### A16 a ghost taken up stays on the list
+@ src/coming_of_age.rs
+-         let ghost = house.ghosts.swap_remove(at);
++         let ghost = house.ghosts[at].clone();
+
+### A17 a ghost removed in order, not swapped
+@ src/coming_of_age.rs
+-         let ghost = house.ghosts.swap_remove(at);
++         let ghost = house.ghosts.remove(at);
+
+### A18 the ghost's dead keep their dream's fate
+@ src/coming_of_age.rs
+-         dead.dream_fate = DreamFate::PassedOn;
++         dead.dream_fate = dead.dream_fate;
+
+### A19 the ghost's dead name no heir
+@ src/coming_of_age.rs
+-         dead.bequest_heir = Some(id);
++         dead.bequest_heir = None;
+
+### A20 the vengeance before the dream held
+@ src/coming_of_age.rs
+-     if let Some(dream) = &hero.dream {⏎        let told
++     if let Some(dream) = hero.dream.as_ref().filter(|_| hero.parents.iter().flatten().all(|&p| house.heroes[p].death_place.is_none())) {⏎        let told
+
+### W1 no room is asked after the adults
+@ src/wanderer.rs
+-     if living >= WANDERER_ROOM {⏎        Odds::NoRoom⏎    } else if adults < FEWEST_ADULTS {⏎        Odds::Certain
++     if adults < FEWEST_ADULTS {⏎        Odds::Certain⏎    } else if living >= WANDERER_ROOM {⏎        Odds::NoRoom
+
+### W2 certain at five adults
+@ src/wanderer.rs
+-     } else if adults < FEWEST_ADULTS {
++     } else if adults <= FEWEST_ADULTS {
+
+### W3 children count as adults
+@ src/wanderer.rs
+-         .filter(|h| h.is_living() && h.is_adult())
++         .filter(|h| h.is_living())
+
+### W4 the wanderer's chance uncapped
+@ src/wanderer.rs
+-                 .min(WANDERER_CHANCE_LIMIT),
++                 .min(1.0),
+
+### W5 a certain wanderer still rolls
+@ src/wanderer.rs
+-         Odds::Certain => true,
++         Odds::Certain => chance(rng, 0.5),
+
+### W6 the lowest standing for every house
+@ src/turning_lore.rs
+-         .rev()⏎        .find(|s| renown >= s.renown_at_least)
++         .find(|s| renown >= s.renown_at_least)
+
+### W7 the gift not overwritten
+@ src/wanderer.rs
+-     aptitudes[gift.index()] = between(rng, standing.gift.0, standing.gift.1);
++     let _ = (gift, standing.gift);
+
+### W8 born a year late
+@ src/wanderer.rs
+-     let mut hero = newcomer(name, family, pronoun, age, next - age, fear);
++     let mut hero = newcomer(name, family, pronoun, age, next - 1 - age, fear);
+
+### W9 arrived this year
+@ src/wanderer.rs
+-         DeedKind::Arrived,⏎        next,
++         DeedKind::Arrived,⏎        next - 1,
+
+### W10 the wanderer's calling of any aptitude
+@ src/wanderer.rs
+-     let callings = vocations_of(content, gift);
++     let callings = vocations_of(content, crate::ids::Aptitude::Might);
+
+### W11 the wanderer unspoken
+@ src/wanderer.rs
+-     speak(content, &mut house.heroes, id, rng);
++     let _ = speak;
+
+### W12 no dream rivals on arrival
+@ src/wanderer.rs
+-     lines.extend(dream_rivals(⏎        content,
++     lines.extend(Vec::<String>::new());⏎    let _ = (dream_rivals(⏎        content,
+
+### S1 "Go on" passes an undecided page
+@ src/pointer.rs
+-                 (Target::GoOn, _) if current < reach => return turn_to(current + 1),
++                 (Target::GoOn, _) if current <= reach => return turn_to(current + 1),
+
+### S2 a leaf beyond the undecided page can be turned to
+@ src/pointer.rs
+-                 (Target::Leaf(leaf), _) if leaf <= reach => return turn_to(leaf),
++                 (Target::Leaf(leaf), _) => return turn_to(leaf),
+
+### S3 "Skip ahead" leaves with a page undecided
+@ src/pointer.rs
+-                 (Target::Skip, Some(page)) => return turn_to(last_leaf_of(&leaves, page)),
++                 (Target::Skip, Some(_)) => {}
+
+### S4 "Skip ahead" goes to the page's first leaf
+@ src/pointer.rs
+-                 (Target::Skip, Some(page)) => return turn_to(last_leaf_of(&leaves, page)),
++                 (Target::Skip, Some(page)) => return turn_to(first_leaf_of(&leaves, page)),
+
+### S5 the view leaves the page chosen on
+@ src/pointer.rs
+-             turn_to(first_leaf_of(&turning_leaves(passage), at))
++             turn_to(first_leaf_of(&turning_leaves(passage), 0))
+
+### S6 pointing at an heir opens no sheet
+@ src/pointer.rs
+-             Some(Target::Hero(id) | Target::Heir(_, Some(id))) => Some(id),
++             Some(Target::Hero(id)) => Some(id),
+
+### S7 "Go on" not greyed where it waits
+@ src/turning_view.rs
+-     if current >= furthest(passage, leaves) && passage.first_undecided().is_some() {
++     if false {
+
+### S8 the heir prompt's pronoun lower-case
+@ src/turning_view.rs
+-         .to_uppercase();
++         .to_lowercase();
+
+### S9 the choice drawn on a decided page
+@ src/turning_view.rs
+-     if leaf.last && waiting(turn) {
++     if leaf.last && turn.bequest.is_some() {
+
+### S10 the choice crowds the page's last lines
+@ src/turning_view.rs
+-             let fits = used + foot <= room;
++             let fits = used <= room;
+
+### S11 summer comes with a page undecided
+@ src/season.rs
+-         .is_some_and(|passage| passage.first_undecided().is_none())
++         .is_some_and(|_| true)

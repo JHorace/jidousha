@@ -549,25 +549,25 @@
 -             with_house(world, let_the_winter_pass);
 +             with_house(world, |_, _, _| {});
 
-### W2 the turning's "Go on" brings summer from any leaf
+### W2 the turning's "Go on" brings summer from any leaf (re-cut s8)
 @ src/pointer.rs
--                 Target::GoOn if current + 1 < count => return turn_to(current + 1),
-+                 Target::GoOn if current + 1 < count && false => return turn_to(current + 1),
+-                 (Target::GoOn, _) if current < reach => return turn_to(current + 1),
++                 (Target::GoOn, _) if current < reach && false => return turn_to(current + 1),
 
 ### W3 summer comes without its board
 @ src/season.rs
 -     house.passage = None;⏎    house.calendar.begin_summer();⏎    house.prepare_summer(content, rng);
 +     house.passage = None;⏎    house.calendar.begin_summer();⏎    house.reseat();
 
-### W4 the quiet winter writes its line even with lines
-@ src/turning_view.rs
--     if passage.winter.is_empty() {
-+     if passage.winter.len() < 99 {
+### W4 the quiet winter writes its line even with lines (re-cut s8)
+@ src/turning.rs
+-     let lines = if winter.is_empty() {
++     let lines = if winter.len() < 99 {
 
-### W5 the winter page's title tells the next year
-@ src/turning_view.rs
--         &[&passage.year.to_string()],
-+         &[&(passage.year + 1).to_string()],
+### W5 the winter page's title tells the next year (re-cut s8)
+@ src/turning.rs
+-         title: fmt(&words[W::TurningWinterTitle], &[&year.to_string()]),
++         title: fmt(&words[W::TurningWinterTitle], &[&(year + 1).to_string()]),
 
 ### W6 the hearth's dock help is the summer's
 @ src/dock_lines.rs

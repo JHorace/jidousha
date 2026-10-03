@@ -6,8 +6,8 @@
 //! (`witness`) and dream calls (`calls`) both ask, so a card cannot say a quest
 //! calls a dreamer that the roll would not move.
 //!
-//! Nothing in this build raises a moment yet: quests (W4-W6) and the hearth and
-//! the turning (W7, W8) are their sources. Verify stages them.
+//! Their sources: every resolved quest (W6), every winter action (W7), and every turning
+//! of the year (W8).
 
 use crate::content::Content;
 use crate::dream::Dream;

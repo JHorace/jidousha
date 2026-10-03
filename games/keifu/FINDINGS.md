@@ -934,3 +934,122 @@ was one earlier sessions had read and used. The documents were asked nothing new
   code W7 moved and were re-cut to the same fault at the new site, marked "(re-cut s7)": dock K12 (the
   dock's subject now matches a fourth field) and w4 U1 and w6 T11 (the drag now begins on any seating
   screen, `seating`, not only the summer's).
+
+---
+
+## Session 8 (W8)
+
+**Reading discipline, session 8.** Read: `CLAUDE.md`, the `make-game` skill, the crate whole
+(`SPEC-GAPS.md` to its end — 46 entries counted from the file, `FINDINGS.md`, `mutants/` — the harness
+and each list's sites, `src/`), and from `spec/` MODULES.md, SPEC.md whole, CONSTANTS.md whole,
+OPEN-QUESTIONS.md whole, `content/README.md`, and the content W8 reads (`lines.json`'s turning, death,
+heir, promise, birth, age, arrival, tales, phase, ghost and deed keys; `ui-text.json`'s `turning`;
+`writing.json`'s SLEEP_DEATHS, BIRTHS and ARRIVALS; `names.json`; `wanderers.json`; `destinies.json`;
+`dreams.json`'s ghost places and wanderer flags; `bonds.json`'s kinship tellings; `lore.json`'s phases,
+vocations and phase-effect fragments; `household.json`). `docs/api/`: nothing new opened — W8 used only
+engine surfaces earlier sessions had read. **Engine source: not opened.** `games/ninjo/` and `attic/`: not
+opened; `grep -oh "^### G-0[0-9]*" games/*/FINDINGS.md` read the G-headings only (G-039's method).
+Incidental, disclosed: `tools/test`'s report prints ninjo's verify lines. No sibling game read.
+
+### G-060 — "the W5/W6 batteries' numbers will move" where W5's cannot
+
+Class: process (misled) · Session: keifu 8 · Owner: the keifu handoff
+
+**Doing:** the handoff's whole-year properties: "The W5/W6 batteries' numbers will move again by the
+rules (houses now grow as well as shrink); note the new baselines beside the old."
+
+**Expected:** both batteries to run through W8's turning.
+
+**Happened:** W5's shape battery is defined over the founding household *as founded* — each summer only
+advances the calendar and prepares the board (`w5_shape.rs`, session 5's "Its summers, before W6 and
+W8"); nothing in it resolves a quest or turns a year, so no W8 rule reaches it and its numbers are
+session 5's to the count. **What I did on its authority:** weighed rewriting it to play its summers, and
+did not — it is W5's oracle as W5 framed it, and a played house is the W8 battery's subject. Instead the
+W8 whole-year battery measures W5's mark on *played* summers and prints it beside W5's founded baseline.
+W6's battery does run through the turning, and its numbers moved.
+
+**Fix:** a handoff naming batteries to move could say which of them read the code it changes.
+
+### docs/api: 0 findings
+
+W8 is rules over the game's own state — the turning, its pages, the heirs — plus one more screen of pages
+and buttons. Every engine surface it touched (the scripted pointer of G-045, the page's rows and targets,
+the per-session recorder of G-043, the floors' measurement, `Rng`'s draws) was one earlier sessions had
+read and used. The documents were asked nothing new.
+
+### The game's own (session 8)
+
+- **The scaffold is retired whole.** `season::turn_the_year`'s scaffold, `passage.rs` and `turning_view.rs`
+  are replaced: the turning runs every step of SPEC §18 in its stated order (`turning.rs`), writes its pages
+  (`passage.rs` — a page per kind, a death page's bequest), and the screen shows them (`turning_view.rs`).
+  `House::mourned`'s carried dead get their pages, the summer's first. `ui.turning.help`'s "Everyone is a year
+  older" is true. The Door's summer still refuses to generate a board, loudly — W10's.
+- **One owner for the heir decision.** `heirs.rs` holds the ranking (moved whole from `harm.rs`, where W6
+  had it for the crowned's nearest kin), the kinship words, the buttons with their marks, and `choose`,
+  which applies the bequest. The buttons' "(not the dream)" asks `can_take_dream`, the function `choose`
+  asks, read when the page is drawn (SPEC-GAPS KG-47), so a button never promises what its press will not do.
+- **The year refuses to turn, three ways.** The screen will not go past the first waiting page ("Go on"
+  greyed and inert there, leaf buttons beyond it inert, "Skip ahead" lands on it — KG-51); `season::may_turn`
+  gates the press; and `season::summer_comes` panics if anything else asks it to turn the year early.
+- **Deviation: the epitaph's wording roll is W9's.** The original rolls an epitaph wording on each death
+  page (§15.1 step 1, §22.2) and composes the epitaph there and after the choice. Both are W9's (MODULES W9,
+  session 1's stated deviation), so the page shows the dead's condition line where the epitaph will go,
+  and the wording's draw is not taken. That shifts the generator's sequence after a death page, not any
+  distribution (§22.1, §22.3); W9 inserts the draw at the marked site.
+- **Deviation: no skull portrait.** §18.1's death page has a skull sprite; the cast has none, so the page
+  shows the dead's own card, greyed as the dead are on every screen. Presentation only.
+- **The heir buttons** are two columns of five (CONSTANTS §14), filled down the first column then the
+  second; the prompt sits above them at the page's foot. A page whose lines leave no room for the choice
+  continues to a leaf of its own. The numbered leaf buttons show a window of twelve around the leaf on
+  screen when a turning has more.
+- **Pointing at an heir opens their sheet in the dock** — the decision's "each candidate's sheet in the
+  dock". The death page's own lines (the heirloom left, the dream left undone) name the dead's legacy.
+- **Earlier waves' checks, walked through the turning.** W6's and W7's played checks read the turning to
+  summer through the screen, choosing the first heir where a page waits (`play::read_to_summer`) — Garrick,
+  63 after year 1's turning, dies of age on about a quarter of the seeds. W7's agreement battery now reads
+  each seat's effect between the winter and the turning (the turning ages, grieves and teaches at a coming
+  of age); the plan the turning records is still required equal to the preview.
+- **The batteries' new baselines.** W6's battery (400 houses, up to 6 summers) now turns real years:
+  2133 summers, 5844 quests, 251 houses closed, 928 died questing (session 7) → 2136 summers, 7251
+  quests, 207 closed, 1226 died questing (the count now restricted to deaths with a place, since old age
+  also kills — unrestricted it read 1470). Houses that grow send more parties and close less. The death
+  roll read 55/338, 446/1517, 441/943 and 42/59 at danger 1-4, inside CONSTANTS §3's bounds. W5's founded battery cannot move (G-060): 568 of 600 (94.7%) as before; on played summers the
+  W8 battery reads the mark in 3093 of 3962 (78.1%) — houses that grow meet demand +3 and +4 a seat with
+  more mouths but no more power than their founders had, and fewer callers are free to go.
+- **The mutation rounds.** `mutants/w8.txt` is 188 faults: every W8 constant (CONSTANTS §8 and §10's old
+  age, births, wanderers, standings, the teaching that shows); the turning's step order (ageing before old
+  age, births before comings of age before the wanderer, the tales before the phase lines, the mourned
+  cleared, the year page and the closing line); the heir ranking line by line (each rank, each way a parent
+  is known, the sort, the dead, the cut at eight); every kinship word; both marks and `can_take_dream`; each
+  bequest (the heirloom laid aside, given, deeded, buried with a capital, kept by the dead; the dream passed
+  or raised, its fate, its owner, the burden, rivals; the choice's lines and its record); the ghost's
+  owner and place; the death page and the Door's promise; old age's chance, factors, carrier and record;
+  the bags' no-repeat draw; every birth rule and the fear and blessing inheritance; every coming-of-age rule
+  and §9.5's priority; the wanderer's odds, standing, gift, dates, calling, Seer and rivals; the rolled
+  dream's claims; the phase sentence; and the screen's refusal (Go on, the leaves beyond, Skip ahead, the
+  view after a choice, the dock, the greyed control, the choice's room, `may_turn`). Round one (`ec79c03`):
+  one worker's thread died when a fault (B13, the choice never recorded) hung `--verify` in the checks' own
+  heir loop, so 36 faults went unjudged and the first pass read **134 of 151**, one not built (M8, cut
+  without its closing parenthesis; re-cut). The harness now counts a run that does not end within ten
+  minutes as failed — a hang is noticed — and the heir loop fails loudly when a choice makes no progress.
+  Round one's rest (the 36, the escapes, M8; `15e27fc`): 46 of 54. Escapes, all loose checks
+  but two: no child created after a grandchild (R1), no parent known by the bond alone (R5) or the
+  parents field alone (R6), no companion among the heirs (K3), no "(not the dream)" asked with no dream
+  to leave (M2), no dead hero leaving both dreams undone (B1), no lower-case heirloom buried (B7), no dream
+  told about another (P3, D2), no choice beside a Door's promise (D3), a dead child in the Door test who was
+  the younger (D12), no weak parents for the newborn's floor (C15) or roll (Y11), no conquered parent
+  failing their roll beside a broken one (Y15), a ghost list too short to tell a swap from a removal
+  (A17), no carried dream at a coming of age (A11), no held dream beside a parent lost questing (A20), no
+  coming-of-age rival (A7), no wanderer rival (W12), no turning without a year page (T11), and no death
+  page long enough for "Skip ahead" and the choice's room to matter (S4, S10). Each now has a test that
+  fails under it. **Round two, all seven lists against `c41a21c`: 730 of 736 noticed**, none unbuilt
+  (tests alone 609, verify alone 398) — `w8.txt` **186 of 188** (tests 175, verify 63), `dock.txt` 22 of
+  22, `w3.txt` 117 of 118, `w4.txt` 133 of 134, `w5.txt` 58 of 59, `w6.txt` 100 of 100, `w7.txt` 114 of
+  115. **The six escapes are equivalent:** K7, K8, R12 and E21 as sessions 3-7 classified them, and W8's
+  two — B3 (the heir's old heirloom cloned rather than taken is overwritten two lines later by the one
+  inherited) and Y3 (a full house skipping one pair rather than stopping: no birth follows a full check,
+  so every later pair meets the same full house). Seven earlier faults named code W8 moved and were re-cut
+  to the same fault at the new site, marked "(re-cut s8)": w6 H16-H19 (the heir ranking, from `harm.rs`
+  to `heirs.rs`) and w7 W2, W4 and W5 (the turning's controls and winter page). The round ran as one
+  combined list of the seven, labels prefixed by their list, over four worktrees: about two faults a
+  minute on this machine's four cores.
