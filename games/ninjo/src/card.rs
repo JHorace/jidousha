@@ -33,7 +33,9 @@ use crate::lens::Lens;
 use crate::panels::clipped;
 use crate::petitions::{self, Condition, Reward};
 use crate::pleas::{Credit, Petition, Status};
-use crate::ui::{IconRun, Panel, TextRun, columns, wrap};
+use jidousha::ui::wrap;
+
+use crate::ui::{self, Panel, columns};
 use crate::{layout, theme};
 
 /// **The petition the world is stopped for**, if it is stopped for one — the
@@ -174,7 +176,7 @@ pub fn card(
     let width = layout::CARD_W;
     let wide = columns(width, theme::SMALL);
     if let Some(person) = lens.person(petition.who) {
-        let mut icon = IconRun::new(
+        let mut icon = ui::icon(
             at + layout::card::PORTRAIT,
             person.icon,
             person.icon.scale_across(32.0),
@@ -182,13 +184,13 @@ pub fn card(
         icon.layer = theme::layers::OVERLAY_TEXT;
         panel.icon(icon);
     }
-    panel.text(TextRun::over(
+    panel.text(ui::over(
         at + layout::card::NAME,
         lens.name(petition.who),
         theme::HEAD,
         theme::GOLD,
     ));
-    panel.text(TextRun::over(
+    panel.text(ui::over(
         at + layout::card::SOURCE,
         clipped(
             &petition.template.source.chip(petition.template.id),
@@ -199,7 +201,7 @@ pub fn card(
     ));
     let words = wrap(&petition.text, columns(width, theme::BODY));
     for (row, line) in words.lines().take(layout::card::TEXT_ROWS).enumerate() {
-        panel.text(TextRun::over(
+        panel.text(ui::over(
             at + layout::card::TEXT + Vec2::new(0.0, row as f32 * (theme::BODY + 2.0)),
             line,
             theme::BODY,
@@ -214,7 +216,7 @@ pub fn card(
         ),
         _ => format!("was due {}", crate::clock::stamp(petition.deadline)),
     };
-    panel.text(TextRun::over(
+    panel.text(ui::over(
         at + layout::card::DUE,
         clipped(&due, width),
         theme::SMALL,
@@ -224,7 +226,7 @@ pub fn card(
             theme::INK
         },
     ));
-    panel.text(TextRun::over(
+    panel.text(ui::over(
         at + layout::card::REWARD,
         clipped(&reward_line(petition, tuning), width),
         theme::SMALL,
@@ -238,7 +240,7 @@ pub fn card(
         wide,
     );
     for (row, line) in met.lines().take(layout::card::MET_ROWS).enumerate() {
-        panel.text(TextRun::over(
+        panel.text(ui::over(
             at + layout::card::MET + Vec2::new(0.0, row as f32 * (theme::SMALL + 2.0)),
             line,
             theme::SMALL,
@@ -247,7 +249,7 @@ pub fn card(
     }
     let chip = layout::card_chip(at);
     let label = format!("on failure: {}", petition.declared().kind.id);
-    panel.text(TextRun::over(
+    panel.text(ui::over(
         crate::ui::centered(chip, &label, theme::SMALL, chip.min.y + 10.0),
         label,
         theme::SMALL,
@@ -260,7 +262,7 @@ pub fn card(
             wide,
         );
         for (row, line) in said.lines().take(layout::card::EXPLAIN_ROWS).enumerate() {
-            panel.text(TextRun::over(
+            panel.text(ui::over(
                 at + layout::card::EXPLAIN + Vec2::new(0.0, row as f32 * (theme::SMALL + 2.0)),
                 line,
                 theme::SMALL,
@@ -272,7 +274,7 @@ pub fn card(
         if petition.active() {
             let act = layout::card_act(at);
             let label = clipped(&arrange_label(lens, petition), act.size().x - 8.0);
-            panel.text(TextRun::over(
+            panel.text(ui::over(
                 crate::ui::centered(act, &label, theme::SMALL, act.min.y + 10.0),
                 label,
                 theme::SMALL,
@@ -292,13 +294,13 @@ pub fn card(
                         format!("no gift: {}", refused.message()),
                     ),
                 };
-                panel.text(TextRun::over(
+                panel.text(ui::over(
                     crate::ui::centered(give, &label, theme::SMALL, give.min.y + 10.0),
                     label,
                     theme::SMALL,
                     tone,
                 ));
-                panel.text(TextRun::over(
+                panel.text(ui::over(
                     at + layout::card::AFTER,
                     clipped(&after, width),
                     theme::SMALL,
@@ -306,7 +308,7 @@ pub fn card(
                 ));
             }
         } else {
-            panel.text(TextRun::over(
+            panel.text(ui::over(
                 at + layout::card::ACT + Vec2::new(0.0, 10.0),
                 clipped(&ending(lens, petition), width),
                 theme::SMALL,
@@ -362,7 +364,7 @@ pub fn focused(flow: &Flow, lens: &Lens<'_>) -> Option<usize> {
 /// focused row opens.
 pub fn pleas_drawer(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning, now: u64) -> Panel {
     let mut panel = Panel::default();
-    panel.text(TextRun::over(
+    panel.text(ui::over(
         layout::pleas_title(),
         Drawer::Pleas.title(),
         theme::SMALL,
@@ -392,21 +394,21 @@ pub fn pleas_drawer(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning, now: u64) -> 
             theme::DIM,
         ),
     };
-    panel.text(TextRun::over(
+    panel.text(ui::over(
         layout::pleas_note(),
         clipped(&note, layout::PLEAS_NOTE_W),
         theme::SMALL,
         tone,
     ));
     if !lens.petitions_on() {
-        panel.text(TextRun::over(
+        panel.text(ui::over(
             layout::plea_row(0).min + layout::plea::HEAD,
             "petitions are off - nobody asks you for anything",
             theme::SMALL,
             theme::FAINT,
         ));
     } else if order.is_empty() {
-        panel.text(TextRun::over(
+        panel.text(ui::over(
             layout::plea_row(0).min + layout::plea::HEAD,
             "nobody has asked you for anything yet",
             theme::SMALL,
@@ -440,7 +442,7 @@ pub fn pleas_drawer(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning, now: u64) -> 
             ),
             Status::Waiting => lens.name(petition.who).to_owned(),
         };
-        panel.text(TextRun::over(
+        panel.text(ui::over(
             at + layout::plea::HEAD,
             clipped(&head, layout::plea::HEAD_W),
             theme::SMALL,
@@ -461,7 +463,7 @@ pub fn pleas_drawer(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning, now: u64) -> 
             .text
             .strip_prefix(&format!("{}: ", lens.name(petition.who)))
             .unwrap_or(&petition.text);
-        panel.text(TextRun::over(
+        panel.text(ui::over(
             at + layout::plea::TEXT,
             clipped(said, layout::plea::TEXT_W),
             theme::SMALL,
@@ -481,14 +483,11 @@ pub fn pleas_drawer(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning, now: u64) -> 
             now,
             petition,
             layout::plea_card(),
-            flow.consequence_open == Some(id),
+            flow.consequence_open.showing(id),
             true,
         ));
     }
-    for run in &mut panel.runs {
-        run.layer = theme::layers::OVERLAY_TEXT;
-    }
-    panel
+    panel.lifted(theme::layers::OVERLAY_TEXT)
 }
 
 /// **The voicing overlay** (UI.md §3h): the card, front and centre, while the
@@ -501,7 +500,7 @@ pub fn voicing_overlay(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning, now: u64) 
     let Some(petition) = lens.petition(id) else {
         return panel;
     };
-    panel.text(TextRun::over(
+    panel.text(ui::over(
         layout::voicing_stamp(),
         clipped("PETITION VOICED - the world stopped for it", layout::CARD_W),
         theme::SMALL,
@@ -513,26 +512,23 @@ pub fn voicing_overlay(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning, now: u64) 
         now,
         petition,
         layout::voicing_card(),
-        flow.consequence_open == Some(id),
+        flow.consequence_open.showing(id),
         false,
     ));
     let later = layout::card_act(layout::voicing_card());
-    panel.text(TextRun::over(
+    panel.text(ui::over(
         crate::ui::centered(later, LATER, theme::SMALL, later.min.y + 10.0),
         LATER,
         theme::SMALL,
         theme::INK,
     ));
-    panel.text(TextRun::over(
+    panel.text(ui::over(
         layout::voicing_hint(),
         "or space resumes",
         theme::SMALL,
         theme::FAINT,
     ));
-    for run in &mut panel.runs {
-        run.layer = theme::layers::OVERLAY_TEXT;
-    }
-    panel
+    panel.lifted(theme::layers::OVERLAY_TEXT)
 }
 
 /// The overlay's one gesture.

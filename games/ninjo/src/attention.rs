@@ -30,7 +30,8 @@
 //! config is sim state for the same reason — a change to it is a recorded
 //! input like a speed change, and a replay carries it.
 
-use jidousha::prelude::*;
+use jidousha::ui::find_class;
+pub use jidousha::ui::{FeedEntry, Mode};
 
 use crate::constants::Tuning;
 use crate::grid::LOCATIONS;
@@ -39,42 +40,20 @@ use crate::sim::Event;
 use crate::sprites::Art;
 use crate::theme;
 
-/// What a class of event does to the player's attention.
+/// What each class currently does to the world — the kit's config over this
+/// game's table, held by `Sim` (ADR-0046).
+pub type Attention = jidousha::ui::Attention<EventClass, Art>;
+
+/// Why the world stopped: the kit's record over this game's classes.
 ///
-/// The Paradox convention, and the whole vocabulary: three modes, per class,
-/// player-configurable (DESIGN §6).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Mode {
-    /// Not even in the feed. The map already shows it.
-    Ignore,
-    /// It lands in the feed and the world keeps running.
-    Log,
-    /// The world stops, and the feed says why.
-    PauseAndFocus,
-}
+/// Simulation state, written by [`crate::sim::Sim::emit`] and cleared by the
+/// player's next speed input — so "what am I looking at" is a fact about the
+/// world and not about the screen, and a replay pauses for the same reason at
+/// the same world-minute.
+pub type Pause = jidousha::ui::Pause<EventClass>;
 
-impl Mode {
-    /// Every mode, in the order the config panel offers them.
-    pub const ALL: &'static [Mode] = &[Mode::Ignore, Mode::Log, Mode::PauseAndFocus];
-
-    /// The name a stamp, a report and the config panel use.
-    pub fn name(self) -> &'static str {
-        match self {
-            Mode::Ignore => "ignore",
-            Mode::Log => "log",
-            Mode::PauseAndFocus => "pause",
-        }
-    }
-
-    /// What it does, in one line — the config panel's own hint.
-    pub fn meaning(self) -> &'static str {
-        match self {
-            Mode::Ignore => "not even in the feed",
-            Mode::Log => "it lands in the feed",
-            Mode::PauseAndFocus => "the world stops for it",
-        }
-    }
-}
+/// One row of the event-class table, over this game's classes and art.
+pub type ClassSpec = jidousha::ui::ClassSpec<EventClass, Art>;
 
 /// The classes of thing that happen. One variant per row of [`CLASSES`].
 ///
@@ -155,24 +134,6 @@ pub enum EventClass {
     /// outside the camp reached somebody, or the world was quiet and it
     /// passed. Bookkeeping — what the player sees is the petition it voices.
     Event,
-}
-
-/// One row of the event-class table: what a class is called, how it is drawn,
-/// and what it does to the world by default.
-#[derive(Clone, Copy, Debug)]
-pub struct ClassSpec {
-    /// Which class this row defines.
-    pub class: EventClass,
-    /// The id a transcript, a stamp and the config panel name it by. ASCII,
-    /// lowercase.
-    pub id: &'static str,
-    /// The colour role its chip is drawn in.
-    pub color: Color,
-    /// The icon role its chip carries — a second channel, so the chip is not
-    /// colour alone (UI.md §1).
-    pub icon: Art,
-    /// What it does to the world before the player says otherwise.
-    pub default_mode: Mode,
 }
 
 /// The event-class table (GDD §3's wave 0a spec, at the mockup's defaults).
@@ -410,18 +371,15 @@ impl EventClass {
 
     /// This class's row.
     ///
-    /// A linear walk over a five-row table, like `Art::index`, so the enum and
-    /// the table cannot drift the way parallel indices do. A class with no row
-    /// is an authoring fault the vocabulary check catches; here it reads as the
+    /// A linear walk over the table, like `Art::index`, so the enum and the
+    /// table cannot drift the way parallel indices do. A class with no row is
+    /// an authoring fault the vocabulary check catches; here it reads as the
     /// first row rather than panicking in a draw system.
     pub fn spec(self) -> &'static ClassSpec {
-        CLASSES
-            .iter()
-            .find(|spec| spec.class == self)
-            .unwrap_or(&CLASSES[0])
+        find_class(CLASSES, self).unwrap_or(&CLASSES[0])
     }
 
-    /// Its index in the table — what [`Attention`] stores modes by.
+    /// Its index in the table — the config panel's row for it.
     pub fn index(self) -> usize {
         CLASSES
             .iter()
@@ -435,103 +393,19 @@ impl EventClass {
     }
 }
 
-/// What each class currently does to the world.
-///
-/// **Simulation state** (`Sim` owns one), because a change to it is a recorded
-/// input that changes what the world does: a replay that did not carry the
-/// config would reproduce the orders and not the pauses. Held as one mode per
-/// row of [`CLASSES`], in table order.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Attention {
-    modes: Vec<Mode>,
-}
-
-impl Default for Attention {
-    fn default() -> Self {
-        Self::opening()
-    }
-}
-
-impl Attention {
-    /// The table's own defaults — what a scenario opens on.
-    pub fn opening() -> Self {
-        Self {
-            modes: CLASSES.iter().map(|spec| spec.default_mode).collect(),
-        }
-    }
-
-    /// What this class does right now.
-    pub fn mode(&self, class: EventClass) -> Mode {
-        self.modes
-            .get(class.index())
-            .copied()
-            .unwrap_or(class.spec().default_mode)
-    }
-
-    /// Set what a class does. The one write, so a screen cannot invent a
-    /// fourth mode or a class the table does not have.
-    pub fn set(&mut self, class: EventClass, mode: Mode) {
-        if let Some(slot) = self.modes.get_mut(class.index()) {
-            *slot = mode;
-        }
-    }
-
-    /// The config as a stamp carries it: `attention:departed=ignore,...`.
-    pub fn stamp(&self) -> String {
-        let body = CLASSES
-            .iter()
-            .map(|spec| format!("{}={}", spec.id, self.mode(spec.class).name()))
-            .collect::<Vec<_>>()
-            .join(",");
-        format!("attention:{body}")
-    }
-}
-
-/// Why the world stopped: the class that did it, and which entry of the event
-/// log it was.
-///
-/// Simulation state, written by [`crate::sim::Sim::emit`] and cleared by the
-/// player's next speed input — so "what am I looking at" is a fact about the
-/// world and not about the screen, and a replay pauses for the same reason at
-/// the same world-minute.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Pause {
-    /// Which entry of `Sim::events` did it.
-    pub event: usize,
-    /// What class it was.
-    pub class: EventClass,
-    /// The world-minute it fired at.
-    pub minute: u64,
-}
-
-/// One row of the feed: which event, and whether it is only here because the
-/// player asked to see ignored classes.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct FeedEntry {
-    /// The index into the sim's event log — the feed's whole state.
-    pub index: usize,
-    /// Whether its class is configured `ignore` (drawn dimmed, for auditing).
-    pub ignored: bool,
-}
-
 /// The feed: the sim's event log, newest first, filtered by the config and
-/// bounded by `feed_cap`.
+/// bounded by `feed_cap` — the kit's view, read through the lens.
 ///
 /// **Derived on every call.** The entries are indices into the log, so there
 /// is nothing here that could be stale, out of order, or missing a line the
 /// transcript has.
 pub fn feed(lens: &Lens<'_>, show_ignored: bool, cap: usize) -> Vec<FeedEntry> {
-    let attention = lens.attention();
-    lens.events()
-        .iter()
-        .enumerate()
-        .rev()
-        .filter_map(|(index, event)| {
-            let ignored = attention.mode(event.class) == Mode::Ignore;
-            (!ignored || show_ignored).then_some(FeedEntry { index, ignored })
-        })
-        .take(cap)
-        .collect()
+    jidousha::ui::feed(
+        lens.events().iter().map(|event| event.class),
+        lens.attention(),
+        show_ignored,
+        cap,
+    )
 }
 
 /// The place tag on a feed row: the named location, or the bare tile when the
@@ -548,14 +422,10 @@ pub fn place_tag(event: &Event) -> String {
 pub fn reason_line(lens: &Lens<'_>) -> Option<String> {
     let pause = lens.pause()?;
     let event = lens.events().get(pause.event)?;
-    // Class and place first, the sentence after: a long note is clipped at
-    // the drawer's edge, and what must survive the clip is what stopped the
-    // world and where.
-    Some(format!(
-        "paused: {} at {} - {}",
+    Some(jidousha::ui::reason_line(
         pause.class.name(),
-        place_tag(event),
-        event.text(lens)
+        &place_tag(event),
+        &event.text(lens),
     ))
 }
 
@@ -577,30 +447,12 @@ pub fn feed_cap(tuning: &Tuning) -> usize {
 
 /// The class table's own validation: the claims a comment cannot hold.
 pub fn vocabulary(checks: &mut crate::checks::Checks) {
+    // The table's own shape — stamp-shaped ids, one row per class, a chip
+    // colour that is not the feed's fill — is the kit's to judge.
+    for breach in jidousha::ui::class_faults(CLASSES, theme::PANEL) {
+        checks.require(false, breach.what, breach.detail);
+    }
     for (index, spec) in CLASSES.iter().enumerate() {
-        checks.require(
-            !spec.id.is_empty()
-                && spec
-                    .id
-                    .chars()
-                    .all(|glyph| glyph.is_ascii_lowercase() || glyph == '-'),
-            "an event class id is not stamp-shaped ASCII",
-            format!("CLASSES[{index}] is named {:?}", spec.id),
-        );
-        checks.require(
-            CLASSES.iter().filter(|other| other.id == spec.id).count() == 1,
-            "two event classes share an id",
-            format!("{:?} appears more than once in CLASSES", spec.id),
-        );
-        checks.require(
-            CLASSES
-                .iter()
-                .filter(|other| other.class == spec.class)
-                .count()
-                == 1,
-            "an event class has more than one row in the table",
-            format!("{:?} appears more than once in CLASSES", spec.class),
-        );
         checks.require(
             spec.class.spec().id == spec.id && spec.class.index() == index,
             "an event class does not find its own row",
@@ -611,16 +463,16 @@ pub fn vocabulary(checks: &mut crate::checks::Checks) {
                 spec.class.index()
             ),
         );
-        // The chip is two channels: a colour that is not the panel it sits on,
-        // and a picture that is square and drawn at a whole scale.
+        // The chip is two channels: a colour that is not the bar it may sit
+        // on either, and a picture that is square and drawn at a whole scale.
         checks.require(
-            spec.color != theme::PANEL && spec.color != theme::BAR && spec.color.a > 0.99,
-            "an event class chip would be invisible on the feed",
+            spec.color != theme::BAR,
+            "an event class chip would be invisible on the bar",
             format!(
-                "{:?} is drawn {:?} and the feed's fill is {:?}",
+                "{:?} is drawn {:?} and the bar's fill is {:?}",
                 spec.id,
                 spec.color,
-                theme::PANEL
+                theme::BAR
             ),
         );
         let texels = spec.icon.texels();
@@ -651,7 +503,7 @@ pub fn vocabulary(checks: &mut crate::checks::Checks) {
     }
     // The mockup's defaults, asserted as the shipped table rather than as a
     // sentence in a document: movement is ignored and a completion is logged.
-    let opening = Attention::opening();
+    let opening = Attention::opening(CLASSES);
     for (class, wanted) in [
         (EventClass::Departed, Mode::Ignore),
         (EventClass::Arrived, Mode::Ignore),
@@ -683,7 +535,7 @@ pub fn vocabulary(checks: &mut crate::checks::Checks) {
         );
     }
     // Setting one mode moves one mode.
-    let mut set = Attention::opening();
+    let mut set = Attention::opening(CLASSES);
     set.set(EventClass::Departed, Mode::PauseAndFocus);
     checks.require(
         set.mode(EventClass::Departed) == Mode::PauseAndFocus

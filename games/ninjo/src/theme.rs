@@ -112,6 +112,10 @@ pub const BODY: f32 = 13.0;
 /// The smallest text ninjo draws — UI.md §7's floor, exactly.
 pub const SMALL: f32 = 12.0;
 
+/// The space between the rows of a block, under a line's own height — the
+/// one number every wrapped band advances by.
+pub const LEADING: f32 = 2.0;
+
 /// The floor itself, so the assertion and the scale read the same constant.
 pub const MIN_TEXT: f32 = 12.0;
 /// The smallest a clickable target may be, on either axis (UI.md §7).

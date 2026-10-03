@@ -25,7 +25,7 @@ use jidousha::prelude::*;
 use crate::constants::{Field, Tuning};
 use crate::flow::{Drawer, Flow};
 use crate::presets::PRESETS;
-use crate::ui::{Panel, TextRun, columns, wrap};
+use crate::ui::{self, Panel, columns};
 use crate::{layout, presets, theme};
 
 /// The drawer's state. **UI state, all of it** — not one field of this is read
@@ -161,7 +161,7 @@ pub fn prose(flow: &Flow) -> (String, Color) {
 pub fn drawer(flow: &Flow, active: &Tuning) -> Panel {
     let tuner = &flow.tuner;
     let mut panel = Panel::default();
-    panel.text(TextRun::over(
+    panel.text(ui::over(
         layout::tuner_title(),
         Drawer::Tune.title(),
         theme::HEAD,
@@ -169,7 +169,7 @@ pub fn drawer(flow: &Flow, active: &Tuning) -> Panel {
     ));
 
     // --- presets: one button per row of the committed table ----------------
-    panel.text(TextRun::over(
+    panel.text(ui::over(
         layout::tuner_presets_label(),
         "presets",
         theme::SMALL,
@@ -177,7 +177,7 @@ pub fn drawer(flow: &Flow, active: &Tuning) -> Panel {
     ));
     for (index, preset) in PRESETS.iter().enumerate() {
         let button = layout::tuner_preset(index);
-        panel.text(TextRun::over(
+        panel.text(ui::over(
             crate::ui::centered(button, preset.name, theme::SMALL, button.min.y + 10.0),
             preset.name,
             theme::SMALL,
@@ -188,7 +188,7 @@ pub fn drawer(flow: &Flow, active: &Tuning) -> Panel {
     // --- one stepper row per constant in the module ------------------------
     for (index, field) in Field::ALL.iter().copied().enumerate() {
         let moved = tuner.pending.field(field) != active.field(field);
-        panel.text(TextRun::over(
+        panel.text(ui::over(
             layout::tuner_name(index),
             field.name(),
             theme::SMALL,
@@ -196,7 +196,7 @@ pub fn drawer(flow: &Flow, active: &Tuning) -> Panel {
         ));
         let value = format!("{}", tuner.pending.field(field));
         let cell = layout::tuner_value(index);
-        panel.text(TextRun::over(
+        panel.text(ui::over(
             crate::ui::centered(cell, &value, theme::SMALL, cell.min.y + 10.0),
             value,
             theme::SMALL,
@@ -206,7 +206,7 @@ pub fn drawer(flow: &Flow, active: &Tuning) -> Panel {
             (layout::tuner_minus(index), "-"),
             (layout::tuner_plus(index), "+"),
         ] {
-            panel.text(TextRun::over(
+            panel.text(ui::over(
                 crate::ui::centered(rect, glyph, theme::BODY, rect.min.y + 10.0),
                 glyph,
                 theme::BODY,
@@ -217,7 +217,7 @@ pub fn drawer(flow: &Flow, active: &Tuning) -> Panel {
 
     // --- the commit verb ---------------------------------------------------
     let apply = layout::tuner_apply();
-    panel.text(TextRun::over(
+    panel.text(ui::over(
         crate::ui::centered(apply, "APPLY", theme::SMALL, apply.min.y + 11.0),
         "APPLY",
         theme::SMALL,
@@ -234,7 +234,12 @@ pub fn drawer(flow: &Flow, active: &Tuning) -> Panel {
     // every other row is being moved; it packs into the header's three rows
     // (`stamp_text`), which no constant added can push into.
     let stamp = stamp_text(active, flow.seed, flow.scenario);
-    panel.block(layout::tuner_stamp(), &stamp, theme::SMALL, theme::INK);
+    panel.block(
+        layout::tuner_stamp(),
+        &stamp,
+        theme::text(theme::SMALL, theme::INK),
+        theme::LEADING,
+    );
 
     // **The prose band, at the fourth column's foot** (since wave 1.6; the
     // header from 1.4): the hint and the note are one band and only one state
@@ -243,18 +248,16 @@ pub fn drawer(flow: &Flow, active: &Tuning) -> Panel {
     // `floors::tuner_right_column` measures every one of those states under
     // one more constant than the drawer has.
     let (hint, tone) = prose(flow);
-    panel.block(
+    panel.hint(
         layout::tuner_hint(),
-        &wrap(&hint, columns(layout::TUNER_HINT_W, theme::SMALL)),
-        theme::SMALL,
-        tone,
+        layout::TUNER_HINT_W,
+        &hint,
+        theme::text(theme::SMALL, tone),
+        theme::LEADING,
     );
     // Every run of `panel.block` above draws on the base text band; the
     // drawer is an overlay, so they are lifted here rather than at each call.
-    for run in &mut panel.runs {
-        run.layer = theme::layers::OVERLAY_TEXT;
-    }
-    panel
+    panel.lifted(theme::layers::OVERLAY_TEXT)
 }
 
 /// The pointer's hover, every tick — the drawer's own rows, so a row's

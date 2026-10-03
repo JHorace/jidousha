@@ -2209,6 +2209,12 @@ impl TouchPhase {
 }
 ```
 
+### The UI kit (`jidousha::ui`)
+
+A screen as data — text rows, icons, chips, a feed, meters — and the floors
+that judge it. Every signature is in `docs/api/jidousha-ui.md`; a game with
+no chrome never names it.
+
 ### Testing (`jidousha::testing`)
 
 Not part of a shipped game, and not in this document. Every signature is
@@ -2328,3 +2334,11 @@ or not at all — a check whose player is a blind `InputScript` never needs it.
 frame is rendered for real and written out as a PNG. A picture answers what no
 assertion reaches — whether it *looks* like the game — and it is the instrument
 that catches a frame every check was happy with.
+
+## Building a screen
+
+`docs/api/jidousha-ui.md`, when the game has chrome: panels of text and icons
+over a map, drawers, chips whose explanation opens, a feed of what happened, a
+row of meters — built as data, judged against readability floors, and found
+again on the recorded frame. Read it beside this document the day the game
+grows a surface; a game of shapes and a score never needs it.

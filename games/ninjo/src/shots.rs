@@ -254,7 +254,7 @@ pub fn judge(checks: &mut Checks, run: &Conducted, tuning: &Tuning) {
     // --- the roster, with a chip's explanation open -------------------------
     if let Some(shot) = run.photo("roster") {
         checks.require(
-            shot.flow.showing(Drawer::Roster) && shot.flow.explained.is_some(),
+            shot.flow.showing(Drawer::Roster) && shot.flow.explained.lit.is_some(),
             "the roster photograph does not show the surface it is for",
             format!(
                 "the open drawer is {:?} and the explained chip is {:?}",
@@ -308,7 +308,7 @@ pub fn judge(checks: &mut Checks, run: &Conducted, tuning: &Tuning) {
             "the roster photograph was taken of a world where nobody is doing anything",
             "the picture is for the column that says what each of them is doing".to_owned(),
         );
-        if let Some(id) = shot.flow.explained {
+        if let Some(id) = shot.flow.explained.lit {
             checks.require(
                 says(
                     &crate::traits::explain(id, shot.sim.modules)
@@ -1228,7 +1228,7 @@ pub fn judge_settled(checks: &mut Checks, run: &Conducted, tuning: &Tuning) -> S
             .unwrap_or(0);
         let faces = crate::meters::faces(&lens, tuning, chip);
         checks.require(
-            shot.flow.drilled == Some(chip) && !faces.is_empty(),
+            shot.flow.drilled.showing(chip) && !faces.is_empty(),
             "the shortfall photograph does not show the chip drilled into",
             format!(
                 "the drilled chip reads {:?} and the short chip counts {}; the picture is of \

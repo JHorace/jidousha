@@ -20,24 +20,18 @@ use crate::constants::Tuning;
 use crate::lens::Lens;
 use crate::sprites::Art;
 
-/// One registered aggregate.
-#[derive(Clone, Copy, Debug)]
-pub struct MeterSpec {
-    /// The id a stamp and a report name it by. ASCII, lowercase.
-    pub id: &'static str,
-    /// What the chip says.
-    pub label: &'static str,
-    /// The chip's icon role — a second channel beside the colour (UI.md §1).
-    pub icon: Art,
-    /// The question the chip asks of one character: `Some(reason)` when they
-    /// count, and the reason is what the faces list shows beside them.
-    ///
-    /// It takes the constants because the pressure chips are questions about
-    /// what upkeep costs, and that cost is a drawer row (`needs::cost_of`) —
-    /// a chip that carried its own copy of the number would be the second
-    /// answer GDD §1 refuses.
-    pub asks: fn(&Lens<'_>, &Tuning, usize) -> Option<String>,
-}
+/// The question a chip asks of one character: `Some(reason)` when they
+/// count, and the reason is what the faces list shows beside them.
+///
+/// It takes the constants because the pressure chips are questions about
+/// what upkeep costs, and that cost is a drawer row (`needs::cost_of`) — a
+/// chip that carried its own copy of the number would be the second answer
+/// GDD §1 refuses.
+pub type Ask = fn(&Lens<'_>, &Tuning, usize) -> Option<String>;
+
+/// One registered aggregate — the kit's row, over this game's art and its
+/// question (ADR-0046).
+pub type MeterSpec = jidousha::ui::MeterSpec<Art, Ask>;
 
 /// Every chip above the map.
 ///
@@ -139,15 +133,15 @@ pub fn faces(lens: &Lens<'_>, tuning: &Tuning, index: usize) -> Vec<(usize, Stri
     let Some(spec) = METERS.get(index) else {
         return Vec::new();
     };
-    lens.roll()
-        .into_iter()
-        .filter_map(|who| (spec.asks)(lens, tuning, who).map(|reason| (who, reason)))
-        .collect()
+    jidousha::ui::faces(lens.roll(), |who| (spec.asks)(lens, tuning, who))
 }
 
 /// How many people chip `index` counts.
 pub fn count(lens: &Lens<'_>, tuning: &Tuning, index: usize) -> usize {
-    faces(lens, tuning, index).len()
+    let Some(spec) = METERS.get(index) else {
+        return 0;
+    };
+    jidousha::ui::count(lens.roll(), |who| (spec.asks)(lens, tuning, who))
 }
 
 /// The chips' own validation, plus the claim that makes them trustworthy:
@@ -156,21 +150,12 @@ pub fn count(lens: &Lens<'_>, tuning: &Tuning, index: usize) -> usize {
 /// pressure surface owes (GDD §9) — **each chip's set is exactly the set the
 /// simulation would act on**.
 pub fn registry(checks: &mut crate::checks::Checks, tuning: &crate::constants::Tuning) {
-    for (index, spec) in METERS.iter().enumerate() {
-        checks.require(
-            !spec.id.is_empty()
-                && spec
-                    .id
-                    .chars()
-                    .all(|glyph| glyph.is_ascii_lowercase() || glyph == '-'),
-            "a meter id is not stamp-shaped ASCII",
-            format!("METERS[{index}] is named {:?}", spec.id),
-        );
-        checks.require(
-            METERS.iter().filter(|other| other.id == spec.id).count() == 1,
-            "two meters share an id",
-            format!("{:?} appears more than once in METERS", spec.id),
-        );
+    // The table's own shape — stamp-shaped ids, no two rows sharing an id or
+    // a picture — is the kit's to judge.
+    for breach in jidousha::ui::meter_faults(METERS) {
+        checks.require(false, breach.what, breach.detail);
+    }
+    for spec in METERS {
         let texels = spec.icon.texels();
         checks.require(
             texels.width == texels.height
@@ -179,18 +164,6 @@ pub fn registry(checks: &mut crate::checks::Checks, tuning: &crate::constants::T
             format!(
                 "{:?} carries {:?}, which is {}x{} texels",
                 spec.id, spec.icon, texels.width, texels.height
-            ),
-        );
-        checks.require(
-            METERS
-                .iter()
-                .filter(|other| other.icon == spec.icon)
-                .count()
-                == 1,
-            "two meter chips carry the same icon",
-            format!(
-                "{:?} draws {:?}, and a chip's picture is how it is told from its neighbour",
-                spec.id, spec.icon
             ),
         );
     }

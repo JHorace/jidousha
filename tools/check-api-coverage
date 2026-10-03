@@ -46,6 +46,7 @@ INTERNAL_CRATES = (
     "jidousha_render_core",
     "jidousha_render_wgpu",
     "jidousha_platform",
+    "jidousha_ui",
 )
 
 PUB_USE_RE = re.compile(r"pub use (?:jidousha_\w+|crate)(?:::\w+)*::\{([^}]*)\}\s*;", re.S)
@@ -137,16 +138,40 @@ TESTING_EXEMPT = {
 }
 
 
+def module_items(text: str, module: str) -> "list[str]":
+    """Every name one of the facade's modules re-exports.
+
+    The module's block runs from its `pub mod <name>` line to the next
+    `pub mod` or the end of the file, so the order the facade declares its
+    modules in does not decide which names land in which list.
+    """
+    marker = f"pub mod {module}"
+    start = text.find(marker)
+    if start < 0:
+        return []
+    rest = text[start + len(marker) :]
+    end = rest.find("\npub mod ")
+    block = rest if end < 0 else rest[:end]
+    names: "list[str]" = []
+    for items in PUB_USE_RE.findall(block):
+        names += [item.strip() for item in items.split(",") if item.strip()]
+    names += PUB_USE_ONE_RE.findall(block)
+    return sorted(set(names), key=str.lower)
+
+
 def testing_items(text: str) -> "list[str]":
     """Every name `jidousha::testing` re-exports."""
-    block = text.split("pub mod testing")
-    if len(block) < 2:
-        return []
-    names: "list[str]" = []
-    for items in PUB_USE_RE.findall(block[1]):
-        names += [item.strip() for item in items.split(",") if item.strip()]
-    names += PUB_USE_ONE_RE.findall(block[1])
-    return sorted(set(names), key=str.lower)
+    return module_items(text, "testing")
+
+
+def ui_items(text: str) -> "list[str]":
+    """Every name `jidousha::ui` re-exports.
+
+    The UI kit (ADR-0046) is held to the game surface's rule rather than the
+    testing surface's: a game *writes* against it, so every item is shown in
+    an example, and `examples/ui_kit.rs` is the one that shows all of them.
+    """
+    return module_items(text, "ui")
 
 
 def entry_of(item: str, document: str) -> str:
@@ -187,7 +212,7 @@ def unreachable_testing(
     **All of them, not the testing one.** ADR-0035 moved the rendering half of
     `jidousha::testing` into `docs/api/jidousha-capture.md`, and a check reading
     one file called every moved item unreachable the moment the split landed. The
-    surface is what the reader can reach across the four documents.
+    surface is what the reader can reach across the five documents.
     """
     corpus = "\n".join(source.read_text(encoding="utf-8") for source in sources)
     orphans = []
@@ -238,7 +263,7 @@ def main(argv: "list[str]") -> int:
         return 2
 
     facade_text = facade.read_text(encoding="utf-8")
-    items = facade_items(facade_text)
+    items = facade_items(facade_text) + ui_items(facade_text)
     missing = uncovered(items, sources)
     breaches = facade_breaches(sources)
 

@@ -136,6 +136,55 @@ more call sites), and that is a note rather than a finding. Its entries below
 report — the promotion list, the hunt and what was considered and left alone —
 is in the pull request.
 
+**The UI-kit extraction (2026-10-03, an engine session) — read**
+`CLAUDE.md`, `docs/agent-practices.md`, `docs/conventions.md`,
+`docs/implementation-plan.md`, `docs/internal/public-api.md`, `docs/api/` (all
+four), the `make-game` skill, PR #115's report whole, this ledger's G-060 to
+G-065, and this game's UI side of `src/` whole — `ui.rs`, `panels.rs`,
+`meters.rs`, `attention.rs`, `floors.rs`, `frames.rs`, `flow.rs`, `camera.rs`,
+`sprites.rs`, `theme.rs`, the screens, the cards, the drawers, `sweep.rs`'s
+conductor and `verify.rs`'s batteries. It was an engine session, so it also
+read `crates/jidousha/src/lib.rs`, `crates/jidousha-render-core`'s `TextStyle`
+and `FrameRecorder`, and the three tools that read the facade. What it did
+here: `ui.rs` became this game's bindings of `jidousha::ui` (its bands, its
+face, its gallery), `attention.rs` and `meters.rs` keep the tables and the
+questions over the kit's row shapes, `floors.rs` and `frames.rs` feed the
+kit's breaches into `Checks`, `Flow`'s three chips became the kit's `Chip`,
+eleven toggles became the kit's `toggle`, six drawer lifts became
+`Panel::lifted`, seven hint blocks became `Panel::hint`, and
+`floors::moved_floors_bite` stages every moved floor through this game's own
+wrappers. **No game behaviour changed**: `tools/verify ninjo` and `tools/verify
+keifu` are byte-identical before and after (reports with the two wall-clock
+fields stripped, stdout, and every PNG), which is the fence the handoff set.
+One entry below (G-066) is about the audit's report; nothing in `docs/`
+misled.
+
+### G-066 — the report's own: a part's "generic half" is bounded by the game's lifetimes, not by its line count
+
+Class: **the report's own** (a doc that misled, agent-practices §2.5; the
+document is PR #115's §3) · Game: ninjo · Files: `games/ninjo/src/meters.rs`,
+`crates/jidousha-ui/src/meters.rs` · **Closed by this session**
+
+The report's P-7 row says the meters mechanism is "already generic, ~60
+lines" and "the cheapest extraction on the list". It is the cheapest; it is
+not sixty lines, and the reason is worth a line for the next audit. The row's
+question is `fn(&Lens<'_>, &Tuning, usize) -> Option<String>` — a function
+pointer over this game's read-only view, which carries a lifetime. A kit row
+that *called* that question would have to name the view's type, and a game's
+view type with a lifetime cannot be a const table's type parameter in any
+spelling the orphan rules and `'static` allow. **Done on its authority:** the
+first design of the kit's `MeterSpec` carried a `Ctx` type and called `asks`
+itself, and did not compile for this game; the second design is the one that
+landed — the row shape with the question as an opaque `Ask`, and `faces`
+taking a closure the game writes (`|who| (spec.asks)(lens, tuning, who)`). The
+generic half is a row shape and a fold, about fifteen lines; the sixty were
+mostly the registry's one-source assertion, which is this game's by the
+report's own column. Expected: the kit calls the question. Happened: the game
+does, and the kit folds. The report's column was right about *what* is
+generic and optimistic about how much of the file that is; the next audit
+should count a part's generic half after asking what types its signatures
+drag with them.
+
 ## The wave-1 sanitation pass, session 1: the UI exemplar audit (2026-10-02) — **6 new findings**, all the game's own
 
 The pass G-031 asked for. Report-first and transcript-identical: the report

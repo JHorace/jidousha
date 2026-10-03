@@ -22,7 +22,7 @@ tools/check-assets          # every asset path in the code names a file that exi
 tools/check-game-deps       # every games/* crate reaches the engine via the facade only
 tools/build-web <name>      # web build → dist/<name>/ (the ONLY web build path)
 tools/serve-web [<name>]    # serve dist/; --check drives a browser (+ ?panic=1)
-tools/gen-api-doc           # regenerate docs/api/ — 4 docs (CI fails if stale)
+tools/gen-api-doc           # regenerate docs/api/ — 5 docs (CI fails if stale)
 tools/check-api-coverage    # every public item is shown in an example
 ```
 
@@ -51,8 +51,10 @@ failure. Delete it in the commit that resolves the blockage.
 | Start any implementation session | `docs/implementation-plan.md` (protocol + checklist) |
 | Modify any subsystem | `docs/internal/<subsystem>.md` |
 | Make or change a design decision | `docs/adr/INDEX.md` (the decision may exist; the index, not the pile) |
+| Promote a part a game keeps re-typing into the engine | `docs/conventions.md` §Extraction (three or more; an audit proposes, the owner decides) |
 | Add/change public API | `docs/conventions.md`, then the matching `examples/` file |
-| Write a game with the engine | `docs/api/` (all four files) and `examples/` ONLY — never `src/` |
+| Write a game with the engine | `docs/api/` (all five files) and `examples/` ONLY — never `src/` |
+| Give a game chrome — a panel, a drawer, a chip, a feed, meters — or wonder why a part is not in the kit | `docs/api/jidousha-ui.md` (the kit, `jidousha::ui`); ADR-0046 for what is in it, what was left out, and how a part gets in |
 | Build a game, or land a wave or module into one | the `make-game` skill — it owns both session shapes (ADR-0038 for where a game lives) |
 | Write — or implement — a game handoff | `docs/templates/DECISIONS.md`, the decision-surface table a handoff must carry (`make-game` §D) |
 | Run as a yakin tick, or change the burn-down pipeline | `tools/yakin/README.md` (ADR-0045) |

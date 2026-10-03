@@ -494,6 +494,10 @@ pub mod prelude {
     pub use crate::{App, Camera, Draw, Sprite, headless};
 }
 
+pub mod ui {
+    pub use jidousha_ui::{Chip, Panel};
+}
+
 pub mod testing {
     pub use jidousha_input::{InputScript};
 }
@@ -521,6 +525,16 @@ class GenApiDocTest(unittest.TestCase):
 
     def test_the_testing_module_is_read_separately(self):
         self.assertEqual(gen_api_doc.testing_exports(FACADE), ["InputScript"])
+
+    def test_the_ui_module_is_read_separately_and_bounded_by_the_next_module(self):
+        # `ui` is declared before `testing`, and neither reader may take the
+        # other's names: the kit's reference is one document and the testing
+        # reference is another (ADR-0046).
+        self.assertEqual(gen_api_doc.ui_exports(FACADE), ["Chip", "Panel"])
+        self.assertNotIn("Chip", gen_api_doc.testing_exports(FACADE))
+        self.assertNotIn("InputScript", gen_api_doc.ui_exports(FACADE))
+        names = [name for _, group in gen_api_doc.facade_exports(FACADE) for name in group]
+        self.assertNotIn("Chip", names, "a module's items are not root items")
 
     def test_a_summary_is_the_whole_first_sentence(self):
         # Doc comments wrap at eighty columns, so taking the first *line* gives
@@ -1014,6 +1028,43 @@ class CaptureSplitTest(unittest.TestCase):
         self.assertIn("docs/api/jidousha-capture.md", game, "the reader has to learn it exists")
         self.assertIn("docs/api/jidousha-capture.md", self.testing)
         self.assertIn("docs/api/jidousha-testing.md", self.capture)
+
+
+class UiKitDocumentTest(unittest.TestCase):
+    """The fifth document (ADR-0046): the kit's reference is in it, whole, and
+    a reader of the game document is told it exists."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.game = (REPO_ROOT / "docs/api/jidousha-api.md").read_text(encoding="utf-8")
+        cls.ui = (REPO_ROOT / "docs/api/jidousha-ui.md").read_text(encoding="utf-8")
+        cls.testing = (REPO_ROOT / "docs/api/jidousha-testing.md").read_text(encoding="utf-8")
+        cls.facade = (REPO_ROOT / "crates/jidousha/src/lib.rs").read_text(encoding="utf-8")
+
+    def test_every_ui_export_has_exactly_one_entry_and_it_is_in_the_ui_document(self):
+        for name in gen_api_doc.ui_exports(self.facade):
+            heading = f"#### `{name}`"
+            self.assertIn(heading, self.ui, name)
+            self.assertNotIn(heading, self.game, name)
+            self.assertNotIn(heading, self.testing, name)
+
+    def test_the_game_document_points_at_the_ui_document_twice(self):
+        # Once where the reference groups are scanned, once where the trailing
+        # sections name the other documents — the two places a reader looks.
+        self.assertEqual(self.game.count("docs/api/jidousha-ui.md"), 2)
+        self.assertIn("### The UI kit (`jidousha::ui`)", self.game)
+        self.assertIn("## Building a screen", self.game)
+
+    def test_the_ui_document_points_back_and_names_no_renderer(self):
+        self.assertIn("docs/api/jidousha-api.md", self.ui)
+        self.assertIn("docs/api/jidousha-testing.md", self.ui)
+        self.assertEqual(gen_api_doc.forbidden_words(self.ui), [])
+
+    def test_the_ui_document_says_where_the_missing_parts_are(self):
+        # ADR-0046 left two parts out with recorded triggers; a reader of the
+        # kit looking for a drawer or a timer bar is told why there is none.
+        for phrase in ("second instance", "deadline"):
+            self.assertIn(phrase, self.ui, phrase)
 
 
 class MetadataSinkTest(unittest.TestCase):
@@ -1815,6 +1866,12 @@ class ApiCoverageTest(unittest.TestCase):
             api_coverage.facade_items(FACADE),
             ["App", "Camera", "Draw", "headless", "math", "Sprite"],
         )
+
+    def test_the_ui_kits_items_are_held_to_the_same_bar(self):
+        # A game writes against `jidousha::ui`, so every item in it is shown in
+        # an example — and the reader stops at the next module.
+        self.assertEqual(api_coverage.ui_items(FACADE), ["Chip", "Panel"])
+        self.assertEqual(api_coverage.testing_items(FACADE), ["InputScript"])
 
     def test_an_item_named_in_an_example_is_covered(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -288,6 +288,14 @@ impl Art {
     }
 }
 
+/// The kit sees a role as the size it is drawn at — nothing more, so the kit
+/// never names a texture and the gallery stays this game's (ADR-0046).
+impl jidousha::ui::Icon for Art {
+    fn size_at(self, scale: f32) -> Vec2 {
+        Art::size_at(self, scale)
+    }
+}
+
 /// The asset store ninjo loads from — the same one the game, the recorder and
 /// the capture path build, so all three sample the same textures.
 ///

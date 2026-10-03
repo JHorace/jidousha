@@ -57,7 +57,7 @@ FENCE_RE = re.compile(r"^\s*```(\w*)\s*$")
 
 # What a block is compiled against. The prose's own promise is that everything is
 # reachable from one import, so the harness takes exactly that import and no
-# other: a block needing a name the prelude does not carry has to say so in a
+# other: a block needing a name none of the three imports carries has to say so in a
 # hidden line, which is the same thing it would ask of a reader.
 PREAMBLE = """#![allow(
     unused_variables,
@@ -70,6 +70,7 @@ PREAMBLE = """#![allow(
 )]
 use jidousha::prelude::*;
 use jidousha::testing::*;
+use jidousha::ui::*;
 
 /// The game a block is a fragment of.
 ///

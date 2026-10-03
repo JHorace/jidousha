@@ -1035,7 +1035,12 @@ Every surface owes the same three things, and the
 verify run is where they are owed: every row of its content in the `Panel`
 (so `floors.rs` can judge what was *meant* and `frames.rs` can find it on
 the frame), every string ASCII (`library.rs` walks them), and every read of
-the world through `lens.rs`. The last one is the easy one to skip and the
+the world through `lens.rs`. **The `Panel`, the floors and the frame check are
+the engine's since ADR-0046** — `jidousha::ui`, extracted from this game —
+and `ui.rs`, `floors.rs` and `frames.rs` are this game's bindings of them: the
+bands a row is born on, the numbers the floors are stated against, the
+treasury-coin rule that is this game's own. A surface's state is one value
+(`Chip`, or an `Option` the kit's `toggle` flips), never a flag beside one. The last one is the easy one to skip and the
 expensive one to retrofit — see that module's header for why.
 
 **What is exempt from the first, and why — the whole list.** Only three

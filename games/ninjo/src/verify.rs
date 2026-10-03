@@ -2960,24 +2960,24 @@ fn the_left_column_is_one_surface(checks: &mut Checks) {
     checks.require(
         drilled
             .probe(10)
-            .is_some_and(|(_, flow, ..)| flow.works && flow.drilled.is_none()),
+            .is_some_and(|(_, flow, ..)| flow.works && flow.drilled.lit.is_none()),
         "the camp's marker did not open the settlement panel",
         format!(
             "after the marker the flow reads works={:?} drilled={:?}",
             drilled.probe(10).map(|(_, flow, ..)| flow.works),
-            drilled.probe(10).map(|(_, flow, ..)| flow.drilled)
+            drilled.probe(10).map(|(_, flow, ..)| flow.drilled.lit)
         ),
     );
     checks.require(
         drilled
             .probe(16)
-            .is_some_and(|(_, flow, ..)| !flow.works && flow.drilled == Some(0)),
+            .is_some_and(|(_, flow, ..)| !flow.works && flow.drilled.showing(0)),
         "a meter chip drilled over the settlement panel left the panel up",
         format!(
             "after the chip the flow reads works={:?} drilled={:?}; the faces list and the \
              settlement panel share the left column and are never up together",
             drilled.probe(16).map(|(_, flow, ..)| flow.works),
-            drilled.probe(16).map(|(_, flow, ..)| flow.drilled)
+            drilled.probe(16).map(|(_, flow, ..)| flow.drilled.lit)
         ),
     );
     // And the frame carries one left-hand surface: the faces list's title and
@@ -3025,7 +3025,7 @@ fn the_left_column_is_one_surface(checks: &mut Checks) {
             flow.selected.is_some()
                 && flow.listing == flow.selected
                 && !flow.works
-                && flow.drilled.is_none()
+                && flow.drilled.lit.is_none()
         }),
         "the sheet's work chip did nothing with the settlement panel up",
         format!(
@@ -3035,7 +3035,7 @@ fn the_left_column_is_one_surface(checks: &mut Checks) {
             probe.and_then(|(_, flow, ..)| flow.selected),
             probe.and_then(|(_, flow, ..)| flow.listing),
             probe.map(|(_, flow, ..)| flow.works),
-            probe.and_then(|(_, flow, ..)| flow.drilled)
+            probe.and_then(|(_, flow, ..)| flow.drilled.lit)
         ),
     );
     checks.require(
@@ -3073,12 +3073,12 @@ fn the_chip_belongs_to_its_card(checks: &mut Checks) {
         panel
             .runs
             .iter()
-            .any(|run| run.text.starts_with("on failure:") && run.color == theme::GOLD)
+            .any(|run| run.text.starts_with("on failure:") && run.style.color == theme::GOLD)
     };
     // The overlay: its chip is open only for the voiced petition.
     for (chip, want) in [(Some(last), true), (Some(other), false), (None, false)] {
         let flow = flow::Flow {
-            consequence_open: chip,
+            consequence_open: jidousha::ui::Chip { lit: chip },
             ..flow::Flow::default()
         };
         let overlay =
@@ -3104,7 +3104,7 @@ fn the_chip_belongs_to_its_card(checks: &mut Checks) {
         let flow = flow::Flow {
             drawer: Some(flow::Drawer::Pleas),
             plea,
-            consequence_open: chip,
+            consequence_open: jidousha::ui::Chip { lit: chip },
             ..flow::Flow::default()
         };
         let drawer =
@@ -4094,7 +4094,8 @@ fn the_picker_names_a_person(checks: &mut Checks, baseline: &Conducted) -> Strin
     let ui = camera::UiMap::for_camera(&run_camera(HEADLESS_VIEWPORT));
     let covered = ui.to_world_rect(layout::board_panel());
     let hidden = (0..cast.len()).find(|who| {
-        floors::inside(covered, layout::home_rect(cast[*who].home)) && opening_order.contains(who)
+        jidousha::ui::inside(covered, layout::home_rect(cast[*who].home))
+            && opening_order.contains(who)
     });
     let Some(hidden) = hidden else {
         checks.require(
@@ -4166,7 +4167,7 @@ fn the_picker_names_a_person(checks: &mut Checks, baseline: &Conducted) -> Strin
     let picker_panel = crate::board::candidate_picker(
         &explained, &open_lens, &grid, &tuning, 0, probe_site, probe_slot,
     );
-    let voice = crate::ui::wrap(
+    let voice = jidousha::ui::wrap(
         &crate::resolution::fit_means(&tuning, open_lens.modules()),
         crate::ui::columns(layout::PICKER_HINT_W, theme::SMALL),
     );
@@ -4255,6 +4256,7 @@ pub fn run() -> ExitCode {
     floors::modes_have_room(&mut checks);
     floors::odds_words(&mut checks);
     let bites = floors::floors_bite(&mut checks);
+    floors::moved_floors_bite(&mut checks, &photographed_run);
     floors::content_floors(&mut checks, &baseline);
     let ui_report = floors::uimap_contract(&mut checks);
     let legibility = floors::map_legibility(&mut checks);
@@ -4466,7 +4468,7 @@ pub fn run() -> ExitCode {
         "  attention: {} classes, {} meter chips, config {}",
         crate::attention::CLASSES.len(),
         crate::meters::METERS.len(),
-        crate::attention::Attention::opening().stamp()
+        crate::attention::Attention::opening(crate::attention::CLASSES).stamp()
     );
     println!("  auto-pause: {pauses}");
     println!("  module-off matrix: {matrix}");
