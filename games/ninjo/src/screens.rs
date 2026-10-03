@@ -33,7 +33,7 @@ use crate::grid::{Grid, LOCATIONS, TOWN, Tile};
 use crate::lens::Lens;
 use crate::sim::{Activity, Sim};
 use crate::sprites::Art;
-use crate::ui::{self, IconRun, Panel, TextRun};
+use crate::ui::{self, Panel};
 use crate::{layout, panels, sim, theme, tuning};
 
 /// The tiles the camera can currently see — the game-side culling (DESIGN
@@ -276,13 +276,13 @@ pub fn content(
     let mut panel = Panel::default();
 
     // --- top bar ------------------------------------------------------------
-    panel.text(TextRun::new(
+    panel.text(ui::row(
         layout::title_at(),
         "ninjo",
         theme::HEAD,
         theme::INK,
     ));
-    panel.text(TextRun::new(
+    panel.text(ui::row(
         layout::clock_at(),
         stamp(clock.minutes),
         theme::HEAD,
@@ -296,15 +296,15 @@ pub fn content(
             2 => !clock.paused && clock.rate == Rate::X2,
             _ => !clock.paused && clock.rate == Rate::X4,
         };
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             ui::centered(chip, label, theme::SMALL, chip.min.y + 10.0),
             label,
             theme::SMALL,
             if active { theme::GROUND } else { theme::DIM },
         ));
     }
-    panel.icon(IconRun::new(layout::treasury_icon_at(), Art::Coin, 2.0));
-    panel.text(TextRun::new(
+    panel.icon(ui::icon(layout::treasury_icon_at(), Art::Coin, 2.0));
+    panel.text(ui::row(
         layout::treasury_text_at(),
         format!("{}g", lens.treasury()),
         theme::HEAD,
@@ -317,7 +317,7 @@ pub fn content(
     for drawer in Drawer::ALL {
         let rect = drawer.handle();
         let label = drawer.label();
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             ui::centered(rect, label, theme::SMALL, rect.min.y + 10.0),
             label,
             theme::SMALL,
@@ -337,7 +337,7 @@ pub fn content(
     // the thing that stopped.
     let voicing = crate::card::voicing(lens).is_some();
     if voicing && let Some(toast) = &flow.toast {
-        panel.text(TextRun::over(
+        panel.text(ui::over(
             layout::voicing_toast(),
             crate::panels::clipped(&toast.text, layout::CARD_W),
             theme::SMALL,
@@ -352,7 +352,7 @@ pub fn content(
     // own prose band, so nothing is lost by keeping quiet here.
     let bare = flow.drawer.is_none() && !voicing;
     if bare && let Some(toast) = &flow.toast {
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             layout::toast_at(),
             toast.text.clone(),
             theme::SMALL,
@@ -420,7 +420,7 @@ pub fn content(
     if flow.selected.is_some() {
         chrome.push(layout::person_panel());
     }
-    if flow.drilled.is_some() {
+    if flow.drilled.lit.is_some() {
         chrome.push(layout::faces_panel());
     }
     if flow.breakdown.is_some() {
@@ -429,7 +429,7 @@ pub fn content(
     taken.extend(chrome.into_iter().map(|rect| ui.to_world_rect(rect)));
     for spec in LOCATIONS {
         let art = Art::for_icon(spec.icon);
-        let mut marker = IconRun::new(
+        let mut marker = ui::icon(
             layout::marker_rect(spec.tile).min,
             art,
             art.scale_across(layout::MARKER),
@@ -453,7 +453,7 @@ pub fn content(
             continue;
         };
         let art = person.icon;
-        let mut drawn = IconRun::new(figure.min, art, art.scale_across(layout::HOME));
+        let mut drawn = ui::icon(figure.min, art, art.scale_across(layout::HOME));
         drawn.layer = theme::layers::TOKEN;
         panel.world_icon(drawn);
         taken.push(figure);
@@ -463,12 +463,12 @@ pub fn content(
     // The words themselves, in one deterministic order: every site's name and
     // its open count, then the cast in registry order.
     let label = |panel: &mut Panel, taken: &mut Vec<Rect>, at: Vec2, text: String, tone| {
-        let mut run = TextRun::new(at, text, theme::SMALL, tone);
+        let mut run = ui::row(at, text, theme::SMALL, tone);
         if taken.iter().any(|rect| run.bounds().overlaps(*rect)) {
             return;
         }
         taken.push(run.bounds());
-        run.layer = theme::layers::MAP_TEXT;
+        run.style.depth = Depth::layer(theme::layers::MAP_TEXT);
         panel.world_text(run);
     };
     if worded && legible {
@@ -545,14 +545,14 @@ pub fn content(
         let over = ui.ui_of(Vec2::new(figure.center().x, figure.min.y))
             - Vec2::new(0.0, theme::SMALL + 2.0);
         for anchor in [under, over] {
-            let run = TextRun::new(
+            let run = ui::row(
                 Vec2::new(anchor.x - width * 0.5, anchor.y),
                 name,
                 theme::SMALL,
                 theme::GOLD,
             );
             let bounds = run.bounds();
-            if !crate::floors::inside(layout::design(), bounds)
+            if !jidousha::ui::inside(layout::design(), bounds)
                 || controls.iter().any(|(_, rect)| bounds.overlaps(*rect))
             {
                 continue;
@@ -766,7 +766,7 @@ pub fn draw_chrome(ctx: &mut DrawCtx) {
         theme::STRIP,
         theme::layers::PANEL,
     );
-    let drilled = flow.drilled;
+    let drilled = flow.drilled.lit;
     for index in 0..crate::meters::METERS.len() {
         let chip = layout::meter_chip(index);
         fill(ctx, chip, theme::PANEL, theme::layers::CARD);

@@ -372,6 +372,19 @@ Prototype findings land here the way E0 run findings do; the ledger is
   documented `ADVANCE_RATIO` constant was the alternative and was **declined**:
   a game would still write the division, which is the thing to remove.
 
+**Added with ADR-0046: `jidousha::ui`, the UI kit, as a module beside
+`testing` and not in the prelude.** Thirty-one items — `Panel`, `TextRun`,
+`IconRun`, `Icon`, `Mapping`, `Floors`, `Breach`, `judge_panel`, `judge_frame`,
+`frame_text_floor`, `glyph_run`, `inside`, `wrap`, `clipped`, `Cell`,
+`centered`, `Chip`, `toggle`, `Mode`, `ClassSpec`, `find_class`, `Attention`,
+`Pause`, `FeedEntry`, `feed`, `reason_line`, `class_faults`, `MeterSpec`,
+`faces`, `count`, `meter_faults` — every one produced three or more times by
+`games/ninjo` and promoted on the wave-1 exemplar audit's report (PR #115 §3)
+and the owner's verdict. They document into their own file,
+`docs/api/jidousha-ui.md` (§4 below), on ADR-0025's rule: the game document
+was at ~24.5k of 25k and a screen is built at a different moment from the
+simulation it shows. `docs/internal/ui.md` is the subsystem doc.
+
 Rough count: ~46 types/functions. CONTRACT: the v1 prototype substrate
 ("agent Pong/asteroids/breakout") must be expressible with this list alone —
 that's exactly what acceptance milestone E0 tests (implementation plan).
@@ -483,6 +496,15 @@ that's exactly what acceptance milestone E0 tests (implementation plan).
   both of which have entries in the testing document; a second copy would be a
   second place to keep right. `crates/jidousha/examples/slalom/` is the worked
   instance the prose points at (run 4's lever, spent — e0-findings.md §6).
+
+  **Five, since ADR-0046, and the fifth is the UI kit's.** `jidousha-ui.md`
+  carries `jidousha::ui`'s reference whole — nothing borrowed, because every
+  kit item is defined there and the engine types it names are the game
+  document's — plus the kit's guide (`tools/api-doc/ui.md`), at ~10k of an
+  11k budget sized just above what it cost on landing. The game document
+  signposts it in the Reference and in a closing section, the way it does
+  the testing document; `tools/check-api-coverage` holds its items to the
+  game surface's rule (every one shown in `examples/ui_kit.rs`).
 
   **Four, after run 10's triage, and the fourth carries a reference (ADR-0035).**
   `jidousha-capture.md` takes the capture recipe and the nine entries only it

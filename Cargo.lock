@@ -627,6 +627,7 @@ dependencies = [
  "jidousha-platform",
  "jidousha-render-core",
  "jidousha-render-wgpu",
+ "jidousha-ui",
 ]
 
 [[package]]
@@ -685,6 +686,15 @@ dependencies = [
  "jidousha-core",
  "jidousha-render-core",
  "wgpu",
+]
+
+[[package]]
+name = "jidousha-ui"
+version = "0.1.0"
+dependencies = [
+ "jidousha-assets",
+ "jidousha-core",
+ "jidousha-render-core",
 ]
 
 [[package]]

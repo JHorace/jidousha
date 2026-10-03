@@ -1,7 +1,8 @@
 //! The Jidousha engine facade — the entire public surface a game may use.
 //!
 //! Key modules: [`prelude`] (one import, everything a game needs), [`math`],
-//! [`testing`] (headless verification vocabulary).
+//! [`ui`] (the UI kit, for a game with chrome), [`testing`] (headless
+//! verification vocabulary).
 //! Depends on: every other jidousha crate. Must never be depended on by: any of
 //! them.
 //! INVARIANT (public-api.md §1, CONTRACT): `docs/api/` is generated from THIS
@@ -106,6 +107,57 @@ pub mod prelude {
         Sprite, Startup, Submissions, Submit, TextExtents, TextStyle, TextureHandle, TextureId,
         Time, Touch, TouchId, TouchPhase, Transform, Update, With, Without, World, WorldView,
         asset_source, draw_sprites, headless, message, run,
+    };
+}
+
+/// The UI kit: a screen as data, chips and feeds as one value, and the floors
+/// that judge what a screen says it draws (ADR-0046).
+///
+/// Not in the prelude, on purpose: a game with no chrome never names it, and
+/// a game with chrome imports it beside the prelude the way a check imports
+/// `testing`. Everything here was produced three or more times by one game
+/// before it was promoted; what is deliberately *not* here, and what would
+/// bring it in, is in the ADR. `docs/api/jidousha-ui.md` is the document.
+///
+/// ```
+/// use jidousha::prelude::*;
+/// use jidousha::ui::{Chip, Floors, Panel, TextRun, judge_panel};
+///
+/// // A game's own picture vocabulary; the kit never names a texture.
+/// #[derive(Clone, Copy, Debug, PartialEq)]
+/// enum Art { Coin }
+/// impl jidousha::ui::Icon for Art {
+///     fn size_at(self, scale: f32) -> Vec2 { Vec2::splat(16.0 * scale) }
+/// }
+/// #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// enum Trait { Caring }
+///
+/// // One chip, one value: which trait's line is showing, or none.
+/// let mut explained: Chip<Trait> = Chip::default();
+/// explained.toggle(Trait::Caring);
+///
+/// // A screen is the rows it draws, handed back as data first.
+/// let small = TextStyle { size: 12.0, color: Color::WHITE, depth: Depth::layer(1), ..TextStyle::default() };
+/// let mut sheet: Panel<Art> = Panel::default();
+/// sheet.text(TextRun::new(Vec2::new(10.0, 10.0), "caring", small));
+/// if let Some(line) = explained.line(|_| "somebody else's trouble".to_owned()) {
+///     sheet.text(TextRun::new(Vec2::new(10.0, 30.0), line, small));
+/// }
+///
+/// // And judged against the floors the game states, before it is drawn.
+/// let floors = Floors {
+///     min_text: 12.0,
+///     chrome: Rect::from_min_size(Vec2::ZERO, Vec2::new(960.0, 540.0)),
+///     world: Rect::from_min_size(Vec2::ZERO, Vec2::new(4000.0, 4000.0)),
+/// };
+/// assert!(judge_panel(&sheet, &floors, &[], &[]).is_empty());
+/// ```
+pub mod ui {
+    pub use jidousha_ui::{
+        Attention, Breach, Cell, Chip, ClassSpec, FeedEntry, Floors, Icon, IconRun, Mapping,
+        MeterSpec, Mode, Panel, Pause, TextRun, centered, class_faults, clipped, count, faces,
+        feed, find_class, frame_text_floor, glyph_run, inside, judge_frame, judge_panel,
+        meter_faults, reason_line, toggle, wrap,
     };
 }
 

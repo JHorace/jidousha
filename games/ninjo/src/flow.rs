@@ -22,6 +22,7 @@
 //! one roster.
 
 use jidousha::prelude::*;
+use jidousha::ui::{Chip, toggle};
 
 use crate::attention::{self, Mode};
 use crate::camera::UiMap;
@@ -104,13 +105,14 @@ pub struct Flow {
     /// **A trait, not a place**: tapping the same word anywhere it appears —
     /// a sheet, a roster row — shows the same line, because the line is
     /// derived from the row (`traits::explain`) and not written per surface.
-    pub explained: Option<crate::traits::TraitId>,
+    /// The kit's one-value chip (ADR-0046): there is no flag beside it.
+    pub explained: Chip<crate::traits::TraitId>,
     /// Whether the feed shows the classes the config ignores, dimmed — the
     /// auditing setting, so a player can see what they told the world to
     /// swallow.
     pub show_ignored: bool,
     /// Which meter chip has been drilled into, if one has.
-    pub drilled: Option<usize>,
+    pub drilled: Chip<usize>,
     /// **Which site's job board is open**, if one is (UI.md §3c).
     ///
     /// The site marker opens this and issues no order; a board row is the one
@@ -178,7 +180,7 @@ pub struct Flow {
     /// construction: a flag beside the card survived a resume and lit the
     /// next voicing's chip before anybody tapped it (`FINDINGS.md` G-063),
     /// the way `explained` is a trait and not a place.
-    pub consequence_open: Option<usize>,
+    pub consequence_open: Chip<usize>,
     /// **The selected character** — the one selection this game has.
     ///
     /// One index over the ten people, which is the same index over the ten
@@ -241,7 +243,7 @@ impl Flow {
     /// shut that panel and leave somebody picked.
     pub(crate) fn close_everything(&mut self) {
         self.drawer = None;
-        self.drilled = None;
+        self.drilled.shut();
         self.works = false;
         self.board = None;
         self.picking = None;
@@ -252,7 +254,7 @@ impl Flow {
         self.fit_explained = false;
         self.breakdown = None;
         self.plea = None;
-        self.consequence_open = None;
+        self.consequence_open.shut();
     }
 
     /// Whether `drawer` is the one that is open.
@@ -351,7 +353,7 @@ impl Flow {
     fn put_the_list_away(&mut self) {
         if self.listing != self.selected
             || self.board.is_some()
-            || self.drilled.is_some()
+            || self.drilled.lit.is_some()
             || self.works
         {
             self.listing = None;
@@ -369,7 +371,7 @@ impl Flow {
         self.board = None;
         self.picking = None;
         self.listing = None;
-        self.drilled = None;
+        self.drilled.shut();
     }
 
     /// **Open the petition ledger on one petition** — LATER's whole act.
@@ -469,7 +471,7 @@ pub fn load_scenario(world: &mut World) {
     flow.show_ignored = false;
     flow.seed = seed;
     flow.scenario = scenario.id.as_str();
-    flow.explained = None;
+    flow.explained.shut();
     // The stamp on the opening line carries seed and module set; the
     // constants ride the drawer's own stamp, which is always on screen while
     // it is open (GDD §9: stamps carry seed, constants, variant, module set),
@@ -643,7 +645,7 @@ fn read_input(world: &mut World) {
             continue;
         }
         let flow = world.resource_mut::<Flow>();
-        flow.drilled = (flow.drilled != Some(index)).then_some(index);
+        flow.drilled.toggle(index);
         // The faces list, the job board and the settlement panel share the
         // left of the screen, so they are never up together —
         // `floors::controls_for` says the same. The works were not on this
@@ -653,7 +655,7 @@ fn read_input(world: &mut World) {
         flow.works = false;
         return;
     }
-    if let Some(drilled) = world.resource::<Flow>().drilled {
+    if let Some(drilled) = world.resource::<Flow>().drilled.lit {
         let faces = {
             let tuning = *world.resource::<Tuning>();
             let lens = Lens::on(world.resource::<Sim>());
@@ -868,7 +870,7 @@ fn read_input(world: &mut World) {
             } else {
                 let job = crate::sim::JobId { site, slot };
                 let flow = world.resource_mut::<Flow>();
-                flow.picking = (flow.picking != Some(job)).then_some(job);
+                toggle(&mut flow.picking, job);
             }
             return;
         }
@@ -891,7 +893,7 @@ fn read_input(world: &mut World) {
                 (Some(_), true) => {
                     let flow = world.resource_mut::<Flow>();
                     let want = Breakdown::Job(crate::sim::JobId { site, slot });
-                    flow.breakdown = (flow.breakdown != Some(want)).then_some(want);
+                    toggle(&mut flow.breakdown, want);
                 }
                 // A verdict is about a person, and a row nobody can be asked
                 // for has no offer to weigh. Both say so rather than opening
@@ -937,7 +939,7 @@ fn read_input(world: &mut World) {
         if layout::person_close().contains(at) {
             let flow = world.resource_mut::<Flow>();
             flow.selected = None;
-            flow.explained = None;
+            flow.explained.shut();
             return;
         }
         // **The work chip, tapped**: the work open to this person, in the
@@ -947,11 +949,11 @@ fn read_input(world: &mut World) {
         // one surface.
         if layout::sheet_work().contains(at) {
             let flow = world.resource_mut::<Flow>();
-            flow.listing = (flow.listing != Some(who)).then_some(who);
+            toggle(&mut flow.listing, who);
             if flow.listing.is_some() {
                 flow.board = None;
                 flow.picking = None;
-                flow.drilled = None;
+                flow.drilled.shut();
                 flow.breakdown = None;
                 // And the settlement panel, which took the column in wave
                 // 1.3 after this list of siblings was written: with it left
@@ -971,7 +973,7 @@ fn read_input(world: &mut World) {
         for (slot, id) in carried.into_iter().take(layout::SHEET_CHIPS).enumerate() {
             if layout::sheet_chip(slot).contains(at) {
                 let flow = world.resource_mut::<Flow>();
-                flow.explained = (flow.explained != Some(id)).then_some(id);
+                flow.explained.toggle(id);
                 return;
             }
         }
@@ -1038,9 +1040,9 @@ fn read_input(world: &mut World) {
             continue;
         }
         let flow = world.resource_mut::<Flow>();
-        flow.board = (flow.board != Some(site_index)).then_some(site_index);
+        toggle(&mut flow.board, site_index);
         flow.works = false;
-        flow.drilled = None;
+        flow.drilled.shut();
         return;
     }
 
@@ -1139,7 +1141,7 @@ fn step_the_wage(world: &mut World, index: usize, delta: i64) {
 /// nothing else to open.
 fn select(world: &mut World, who: usize) {
     let flow = world.resource_mut::<Flow>();
-    flow.selected = (flow.selected != Some(who)).then_some(who);
+    toggle(&mut flow.selected, who);
 }
 
 /// **The five drawers** — and, since they became one value, the whole of
@@ -1241,7 +1243,7 @@ fn roster_click(world: &mut World, at: Vec2) {
         for (slot, id) in carried.into_iter().take(layout::SHEET_CHIPS).enumerate() {
             if layout::roster_chip(row, slot).contains(at) {
                 let flow = world.resource_mut::<Flow>();
-                flow.explained = (flow.explained != Some(id)).then_some(id);
+                flow.explained.toggle(id);
                 return;
             }
         }
@@ -1289,7 +1291,7 @@ fn feed_click(world: &mut World, at: Vec2, tick: u64) {
         if recorded {
             let flow = world.resource_mut::<Flow>();
             let want = Breakdown::Entry(index);
-            flow.breakdown = (flow.breakdown != Some(want)).then_some(want);
+            toggle(&mut flow.breakdown, want);
         } else {
             // Said rather than swallowed: an occurrence nobody decided has no
             // sum behind it, and a dead target would be the silent failure.

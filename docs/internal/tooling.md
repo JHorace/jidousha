@@ -321,11 +321,17 @@ a row (stop rule printed, `failure-streak.json` count 2).
   cannot be forgotten. CI runs `--check`, which fails when a committed file
   differs — stale documentation is worse than none, because an agent believes it.
 
-  **Four documents**, split by what the reader is doing: `jidousha-api.md`
+  **Five documents**, split by what the reader is doing: `jidousha-api.md`
   (writing a game, 25k) since ADR-0025, `jidousha-testing.md` (checking one, 15k)
   since the same, `jidousha-capture.md` (rendering one frame of it, 4k) since
-  ADR-0035, and `jidousha-controllers.md` (driving the check's player, 5k) since
-  ADR-0030 — each with its own token budget and its own vocabulary rule.
+  ADR-0035, `jidousha-controllers.md` (driving the check's player, 5k) since
+  ADR-0030, and `jidousha-ui.md` (building its chrome on the UI kit, 11k) since
+  ADR-0046 — each with its own token budget and its own vocabulary rule. The
+  two module surfaces, `jidousha::testing` and `jidousha::ui`, are read by
+  `module_chunk`, bounded at the next `pub mod`, so neither reader can take
+  the other's names; `check-api-coverage` holds the kit's items to the game
+  surface's rule (every one shown in an example) and `check-api-prose`
+  compiles the kit's prose blocks against `use jidousha::ui::*` too.
 
   **The capture split is the first to move reference entries rather than only
   prose**, which is a shape the checks had never been asked for: an item can now

@@ -16,6 +16,13 @@ the testing document, is not about this engine at all, and had absorbed seven
 findings across six acceptance runs without the file being able to afford an
 eighth (e0-findings.md §6).
 
+**A fifth, `jidousha-ui.md`, is the UI kit** (ADR-0046): how a game's chrome is
+built as data and held to its floors. It is a separate document on ADR-0025's
+own rule — the game document sat at ~24.5k of its 25k when the kit landed, and
+a screen is built at a different moment from the simulation it shows — and it
+carries the `jidousha::ui` reference the way the testing document carries
+`jidousha::testing`'s.
+
 Each has its own budget and its own vocabulary rule; `Document` carries both, so
 the budget, vocabulary and staleness checks are one piece of code each rather
 than two copies that drift.
@@ -88,6 +95,7 @@ GAME_OUTPUT = REPO_ROOT / "docs" / "api" / "jidousha-api.md"
 TESTING_OUTPUT = REPO_ROOT / "docs" / "api" / "jidousha-testing.md"
 CONTROLLERS_OUTPUT = REPO_ROOT / "docs" / "api" / "jidousha-controllers.md"
 CAPTURE_OUTPUT = REPO_ROOT / "docs" / "api" / "jidousha-capture.md"
+UI_OUTPUT = REPO_ROOT / "docs" / "api" / "jidousha-ui.md"
 
 # The budgets from public-api.md §4, one per document (ADR-0025). The point was
 # never the number: it is that everything in a document is relevant to what its
@@ -114,6 +122,12 @@ CONTROLLERS_BUDGET = 5_000
 # where capture findings land now, and a budget that started generous would not
 # be a budget (ADR-0035).
 CAPTURE_BUDGET = 4_000
+# The fifth reader builds a game's chrome, which is a job the game document does
+# not do and could not afford: it was at ~24.5k of 25k when the kit landed. Sized
+# just above what the kit's reference and its guide cost on landing, for the
+# reason the controllers budget was — a budget that started generous would not
+# be a budget (ADR-0046).
+UI_BUDGET = 11_000
 
 # The reference entries that go with the capture document rather than with the
 # testing one. An item belongs here when **no entry outside this set names it**:
@@ -159,6 +173,7 @@ FORBIDDEN = (
     "jidousha_render_core",
     "jidousha_render_wgpu",
     "jidousha_platform",
+    "jidousha_ui",
     "archetype",
     "wgpu",
     "winit",
@@ -260,17 +275,41 @@ def module_exports(text: str, module: str) -> "list[str]":
     return [name.strip() for name in match.group(1).split(",") if name.strip()]
 
 
-def testing_exports(text: str) -> "list[str]":
-    """Everything `jidousha::testing` re-exports, sorted."""
-    if "pub mod testing" not in text:
-        return []
-    chunk = text.split("pub mod testing")[1]
+def module_chunk(text: str, module: str) -> str:
+    """One facade module's block: from its `pub mod` line to the next one.
+
+    Bounded at the next `pub mod` rather than at the end of the file, so the
+    order the facade declares `ui` and `testing` in cannot put one module's
+    re-exports in the other's reference.
+    """
+    marker = f"pub mod {module}"
+    start = text.find(marker)
+    if start < 0:
+        return ""
+    rest = text[start + len(marker) :]
+    end = rest.find("\npub mod ")
+    return rest if end < 0 else rest[:end]
+
+
+def module_reexports(text: str, module: str) -> "list[str]":
+    """Everything one facade module re-exports, sorted."""
+    chunk = module_chunk(text, module)
     names: "list[str]" = []
     for _, _, items in PUB_USE_RE.findall(chunk):
         names += [item.strip() for item in items.split(",") if item.strip()]
     for _, item in PUB_USE_ONE_RE.findall(chunk):
         names.append(item)
     return sorted(set(names), key=str.lower)
+
+
+def testing_exports(text: str) -> "list[str]":
+    """Everything `jidousha::testing` re-exports, sorted."""
+    return module_reexports(text, "testing")
+
+
+def ui_exports(text: str) -> "list[str]":
+    """Everything `jidousha::ui` re-exports, sorted (ADR-0046)."""
+    return module_reexports(text, "ui")
 
 
 # `pub struct Sprite {`, `pub fn headless(`, `pub enum AssetStatus {`, ...
@@ -1364,6 +1403,13 @@ def documents(repo: Path) -> "list[Document]":
             text=render_capture(repo, facade, items),
         ),
         Document(
+            path=UI_OUTPUT,
+            budget=UI_BUDGET,
+            # Nothing a screen draws names a renderer, and nothing here may.
+            allowed=(),
+            text=render_ui(repo, facade, items),
+        ),
+        Document(
             path=CONTROLLERS_OUTPUT,
             budget=CONTROLLERS_BUDGET,
             # No renderer is named here: a controller decides what to press and
@@ -1430,6 +1476,18 @@ def render_game(repo: Path, facade: str, items: "dict[str, Item]") -> str:
             if item.kind == "mod":
                 out += render_module(item, facade, items, repo)
 
+    if ui_exports(facade):
+        # The same signpost for the UI kit: a game with chrome imports it beside
+        # the prelude, and a reader scanning these groups has to learn it is there.
+        out += [
+            "### The UI kit (`jidousha::ui`)",
+            "",
+            "A screen as data — text rows, icons, chips, a feed, meters — and the floors",
+            "that judge it. Every signature is in `docs/api/jidousha-ui.md`; a game with",
+            "no chrome never names it.",
+            "",
+        ]
+
     if testing_exports(facade):
         # A signpost, not a section: a reader scanning the groups would
         # otherwise find `jidousha::testing` missing and conclude it does not
@@ -1467,6 +1525,14 @@ def render_game(repo: Path, facade: str, items: "dict[str, Item]") -> str:
         "frame is rendered for real and written out as a PNG. A picture answers what no",
         "assertion reaches — whether it *looks* like the game — and it is the instrument",
         "that catches a frame every check was happy with.",
+        "",
+        "## Building a screen",
+        "",
+        "`docs/api/jidousha-ui.md`, when the game has chrome: panels of text and icons",
+        "over a map, drawers, chips whose explanation opens, a feed of what happened, a",
+        "row of meters — built as data, judged against readability floors, and found",
+        "again on the recorded frame. Read it beside this document the day the game",
+        "grows a surface; a game of shapes and a score never needs it.",
         "",
     ]
     return "\n".join(out)
@@ -1571,6 +1637,64 @@ def render_capture(repo: Path, facade: str, items: "dict[str, Item]") -> str:
     ]
     for name in [item for item in testing_exports(facade) if item in CAPTURE_ITEMS]:
         out += render_item(items.get(name, Item(name=name)))
+    return "\n".join(out)
+
+
+def render_ui(repo: Path, facade: str, items: "dict[str, Item]") -> str:
+    """The document a game's screens are built from (ADR-0046).
+
+    The fifth split, on ADR-0025's rule: building chrome is a distinct task,
+    done once the game runs and by a reader who has the game document already,
+    and the game document had no room for it. It carries the `jidousha::ui`
+    reference whole — nothing is borrowed from another document, because every
+    kit item is defined here and the engine types it names (`Rect`, `Color`,
+    `TextStyle`) are the game document's.
+    """
+    guide = visible_prose((repo / "tools/api-doc/ui.md").read_text(encoding="utf-8")).strip()
+
+    out = [
+        "# Jidousha — building a screen",
+        "",
+        "GENERATED by `tools/gen-api-doc`. Do not edit; edit the facade crate or",
+        "`tools/api-doc/` and regenerate.",
+        "",
+        "The fifth document, and the one to read when the game grows chrome: panels of",
+        "text and icons over a map, drawers, chips whose explanation opens on a tap, a",
+        "feed of what happened, a row of meters. `docs/api/jidousha-api.md` is how the",
+        "game is written and is assumed here — `Rect`, `Color`, `TextStyle`, `DrawCtx`",
+        "and the rest come from `jidousha::prelude` and are documented there.",
+        "`docs/api/jidousha-testing.md` is how the game is checked, and the floors",
+        "below are written for a `--verify` mode built the way that document says.",
+        "",
+        "The Reference at the end is one import, taken beside the prelude:",
+        "",
+        "```rust",
+        "use jidousha::ui::*;",
+        "```",
+        "",
+        "**Nothing here decides anything the game simulates.** A panel is the strings",
+        "and icons a screen hands back; a chip is which id is lit; a feed is a view",
+        "over a log the game owns. The kit carries the *shape* of a screen; every",
+        "number, every sentence and every picture is the game's.",
+        "",
+        "## Building a screen",
+        "",
+        guide,
+        "",
+        "## Reference",
+        "",
+    ]
+    names = ui_exports(facade)
+    if names:
+        out += [
+            "### `jidousha::ui`",
+            "",
+            "The kit, whole. A game with chrome imports it beside the prelude; a game",
+            "with none never names it.",
+            "",
+        ]
+        for name in names:
+            out += render_item(items.get(name, Item(name=name)))
     return "\n".join(out)
 
 
@@ -1825,8 +1949,10 @@ def main(argv: "list[str]") -> int:
 
     facade = FACADE.read_text(encoding="utf-8") if FACADE.exists() else ""
     items = scan_sources(crate_sources(REPO_ROOT))
-    groups, testing_names = facade_exports(facade), testing_exports(facade)
-    failures = completeness_failures(groups, testing_names, items)
+    groups = facade_exports(facade)
+    # The two module surfaces are held to the same completeness bar as the root.
+    module_names = testing_exports(facade) + ui_exports(facade)
+    failures = completeness_failures(groups, module_names, items)
 
     for document in generated:
         name = shown(document.path)

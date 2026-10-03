@@ -8,6 +8,7 @@
 //! is a constant size on screen at any zoom.
 
 use jidousha::prelude::*;
+use jidousha::ui::{Floors, inside};
 
 use crate::camera::UiMap;
 use crate::checks::{Checks, greater, near};
@@ -18,16 +19,17 @@ use crate::grid::LOCATIONS;
 use crate::lens::Lens;
 use crate::sim::Sim;
 use crate::sweep::{Conducted, Shot};
-use crate::ui::Panel;
+use crate::ui::{self, Panel};
 use crate::{camera, layout, panels, screens, theme, tuning, verify};
 
-/// Whether `bounds` sits inside `area`, to within a hundredth of a unit.
-pub fn inside(area: Rect, bounds: Rect) -> bool {
-    const SLACK: f32 = 0.01;
-    bounds.min.x >= area.min.x - SLACK
-        && bounds.min.y >= area.min.y - SLACK
-        && bounds.max.x <= area.max.x + SLACK
-        && bounds.max.y <= area.max.y + SLACK
+/// The numbers this game's floors are stated against (UI.md §7): the text
+/// floor, the UI rect, and the map.
+pub fn floors() -> Floors {
+    Floors {
+        min_text: theme::MIN_TEXT,
+        chrome: layout::design(),
+        world: crate::grid::grid().world_rect(),
+    }
 }
 
 /// The base screen's controls with a site's job board up instead of the faces
@@ -624,7 +626,7 @@ pub fn layout_floors(checks: &mut Checks) {
         .into_iter()
         .max_by_key(String::len)
         .unwrap_or_default();
-        let rows = crate::ui::wrap(
+        let rows = jidousha::ui::wrap(
             &longest,
             crate::ui::columns(layout::PICKER_HINT_W, theme::SMALL),
         )
@@ -678,7 +680,7 @@ pub fn layout_floors(checks: &mut Checks) {
         .max_by_key(String::len)
         .unwrap_or_default();
     let rows = |width: f32| {
-        crate::ui::wrap(&longest, crate::ui::columns(width, theme::SMALL))
+        jidousha::ui::wrap(&longest, crate::ui::columns(width, theme::SMALL))
             .lines()
             .count()
     };
@@ -1032,7 +1034,7 @@ pub fn tuner_right_column(checks: &mut Checks) {
     );
     // --- the prose band, under one more constant ------------------------------
     let prose = crate::ui::columns(layout::TUNER_HINT_W, theme::SMALL);
-    let rows = |text: &str| crate::ui::wrap(text, prose).lines().count();
+    let rows = |text: &str| jidousha::ui::wrap(text, prose).lines().count();
     let resting = format!("{} {}", tuning::RESTING_HINT, tuning::APPLY_NOTE);
     let tallest = crate::constants::Field::ALL
         .iter()
@@ -1142,14 +1144,14 @@ pub fn floors_bite(checks: &mut Checks) -> String {
     before.block(
         layout::tuner_foot_for(36) + Vec2::new(0.0, 14.0),
         &format!("{}\nseed 0", Tuning::SHIPPED.readout()),
-        theme::SMALL,
-        theme::INK,
+        theme::text(theme::SMALL, theme::INK),
+        theme::LEADING,
     );
     before.block(
         Vec2::new(layout::tuner_foot_for(36).x, PRE_FIX_HINT_Y),
-        &crate::ui::wrap(tuning::RESTING_HINT, prose),
-        theme::SMALL,
-        theme::FAINT,
+        &jidousha::ui::wrap(tuning::RESTING_HINT, prose),
+        theme::text(theme::SMALL, theme::FAINT),
+        theme::LEADING,
     );
     let mut staged = Checks::default();
     judge_panel(
@@ -1179,7 +1181,7 @@ pub fn floors_bite(checks: &mut Checks) -> String {
     both.absorb(tuning::drawer(&flow, &Tuning::SHIPPED));
     let mut staged = Checks::default();
     judge_panel(&mut staged, &both, "TUNE drawn over an open ROSTER", &[]);
-    let count_bites = staged.reported("two drawers' content is in one frame");
+    let count_bites = staged.reported("two overlays' content is in one frame");
     checks.require(
         count_bites,
         "the one-drawer floor does not fail on the screen it was written for",
@@ -1194,6 +1196,221 @@ pub fn floors_bite(checks: &mut Checks) -> String {
          bites on TUNE over ROSTER ({} problems)",
         overlap_bites as usize, count_bites as usize
     )
+}
+
+/// **Every floor that moved into the kit, staged and seen to bite from its
+/// new home** (ADR-0046) — silent on pass.
+///
+/// `floors_bite` stages the two the owner's screenshots were about (the
+/// chrome overlap and the drawer count); this stages the rest, each through
+/// this game's own wrapper so what is proved is the wrapper feeding the kit's
+/// breach into `Checks`, by the floor's name. Seven over a panel, three over
+/// a photograph whose state has been doctored to claim something its frame
+/// does not carry, and the frame floor over a frame that draws text under it.
+pub fn moved_floors_bite(checks: &mut Checks, run: &Conducted) {
+    let judge = |panel: &Panel, what: &str, controls: &[(String, Rect)]| {
+        let mut staged = Checks::default();
+        judge_panel(&mut staged, panel, what, controls);
+        staged
+    };
+    fn bites(checks: &mut Checks, floor: &'static str, staged: &Checks, how: &str) {
+        checks.require(
+            staged.reported(floor),
+            "a floor that moved into the kit no longer bites from there",
+            format!(
+                "{how}: judging it reported {} problem(s) and none was {floor:?}",
+                staged.failures()
+            ),
+        );
+    }
+    // --- the panel floors ---------------------------------------------------
+    let mut panel = Panel::default();
+    panel.text(ui::row(
+        Vec2::new(10.0, 60.0),
+        "a tenth under",
+        theme::MIN_TEXT - 0.1,
+        theme::INK,
+    ));
+    bites(
+        checks,
+        "a row of text is smaller than the readability floor allows",
+        &judge(&panel, "a row a tenth under the floor", &[]),
+        "a row set a tenth of a pixel under the floor",
+    );
+    let mut panel = Panel::default();
+    panel.text(ui::row(
+        Vec2::new(layout::DESIGN_W - 10.0, 60.0),
+        "off the right edge",
+        theme::SMALL,
+        theme::INK,
+    ));
+    bites(
+        checks,
+        "a row of chrome text runs off the UI rect",
+        &judge(&panel, "a row starting ten pixels from the right edge", &[]),
+        "a row that starts ten pixels inside the right edge",
+    );
+    let chip = layout::speed_chip(0);
+    let mut panel = Panel::default();
+    panel.text(ui::row(
+        Vec2::new(chip.min.x - 40.0, chip.min.y + 10.0),
+        "a row running into a chip",
+        theme::SMALL,
+        theme::INK,
+    ));
+    bites(
+        checks,
+        "a row of text lies across a control it is not the label of",
+        &judge(
+            &panel,
+            "a row running into the first speed chip",
+            &[("the first speed chip".to_owned(), chip)],
+        ),
+        "a row that starts forty pixels left of a speed chip and runs into it",
+    );
+    let world = crate::grid::grid().world_rect();
+    let mut panel = Panel::default();
+    panel.world_text(ui::row(
+        world.max + Vec2::splat(10.0),
+        "past the world",
+        theme::SMALL,
+        theme::INK,
+    ));
+    bites(
+        checks,
+        "a map label runs off the world",
+        &judge(&panel, "a label ten units past the map's corner", &[]),
+        "a map label placed ten units past the map's far corner",
+    );
+    let mut panel = Panel::default();
+    panel.world_text(ui::row(
+        world.center(),
+        "the Deep Cave",
+        theme::SMALL,
+        theme::INK,
+    ));
+    panel.world_text(ui::row(
+        world.center() + Vec2::splat(4.0),
+        "the Old Crypt",
+        theme::SMALL,
+        theme::INK,
+    ));
+    bites(
+        checks,
+        "two map labels overlap",
+        &judge(&panel, "two labels four units apart", &[]),
+        "two map labels four units apart",
+    );
+    let mut panel = Panel::default();
+    panel.icon(ui::icon(
+        Vec2::new(10.0, 60.0),
+        crate::sprites::Art::Coin,
+        1.5,
+    ));
+    bites(
+        checks,
+        "a pixel-art icon is drawn at a fractional scale",
+        &judge(&panel, "a coin at one and a half", &[]),
+        "a coin drawn at one and a half texels per texel",
+    );
+    let mut panel = Panel::default();
+    // The coin is eight texels; at two texels per texel it is sixteen wide,
+    // and starting ten inside the edge it ends six past it.
+    panel.icon(ui::icon(
+        Vec2::new(layout::DESIGN_W - 10.0, 60.0),
+        crate::sprites::Art::Coin,
+        2.0,
+    ));
+    bites(
+        checks,
+        "a chrome icon runs off the UI rect",
+        &judge(&panel, "a coin ten pixels from the right edge", &[]),
+        "a coin sixteen wide that starts ten pixels inside the right edge",
+    );
+    // --- the frame floors: a photograph whose state claims more than it has --
+    //
+    // The map photograph was taken with nobody selected; a flow that says
+    // somebody is claims the character panel's rows and portrait, and the
+    // frame has neither. The feed photograph was taken under a drawer, where
+    // the map's words are silent; a flow with no drawer claims them.
+    let doctored = |shot: &Shot, flow: Flow| Shot {
+        name: shot.name,
+        frame: shot.frame.clone(),
+        sim: shot.sim.clone(),
+        clock: shot.clock,
+        flow,
+        camera: shot.camera,
+    };
+    if let Some(shot) = run.photo("map") {
+        let mut flow = shot.flow.clone();
+        flow.selected = Some(0);
+        let claimed = doctored(shot, flow);
+        let mut staged = Checks::default();
+        crate::frames::judge_chrome(&mut staged, run, &claimed, "the map, claiming a sheet");
+        bites(
+            checks,
+            "a row of the chrome is not drawn as the string it is",
+            &staged,
+            "the map photograph judged against a flow that claims the character panel",
+        );
+        bites(
+            checks,
+            "an icon the screen says it draws is not on the frame",
+            &staged,
+            "the map photograph judged against a flow that claims a portrait",
+        );
+    } else {
+        checks.require(false, "the map photograph was not taken", String::new());
+    }
+    if let Some(shot) = run.photo("feed") {
+        let mut flow = shot.flow.clone();
+        flow.drawer = None;
+        let claimed = doctored(shot, flow);
+        let mut staged = Checks::default();
+        crate::frames::judge_chrome(
+            &mut staged,
+            run,
+            &claimed,
+            "the feed, claiming the map's words",
+        );
+        bites(
+            checks,
+            "a map label is not drawn as the string it is",
+            &staged,
+            "the feed photograph judged against a flow with no drawer up",
+        );
+    } else {
+        checks.require(false, "the feed photograph was not taken", String::new());
+    }
+    // --- the frame floor: a frame that draws under it -----------------------
+    fn under_the_floor(ctx: &mut DrawCtx) {
+        ctx.text(
+            Vec2::ZERO,
+            "under",
+            TextStyle {
+                size: theme::MIN_TEXT - 1.0,
+                ..theme::text(theme::SMALL, theme::INK)
+            },
+        );
+    }
+    let mut sim = headless(crate::config(), |app| {
+        app.add_system(Draw, under_the_floor);
+    });
+    let mut recorder = jidousha::testing::FrameRecorder::new(verify::HEADLESS_VIEWPORT);
+    let frame = recorder.draw(&mut sim);
+    let mut staged = Checks::default();
+    judge_frame_floor(
+        &mut staged,
+        recorder.font_texture(),
+        &frame,
+        "a frame with a glyph a pixel under the floor",
+    );
+    bites(
+        checks,
+        "a glyph was drawn below the readability floor",
+        &staged,
+        "a frame drawn with text one pixel under the floor",
+    );
 }
 
 /// One drawer's controls against the floors.
@@ -1413,7 +1630,7 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
     // The roster, with a chip's explanation up: the loudest that surface gets.
     let mut roster_open = played.clone();
     roster_open.drawer = Some(Drawer::Roster);
-    roster_open.explained = crate::traits::TRAITS
+    roster_open.explained.lit = crate::traits::TRAITS
         .iter()
         .max_by_key(|def| {
             crate::traits::explain(def.id, crate::modules::ModuleSet::ALL)
@@ -1425,10 +1642,10 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
     // base screen, both up at once.
     let mut looked_at = played.clone();
     looked_at.selected = Some(baseline.sim.people.len().saturating_sub(1));
-    looked_at.drilled = Some(0);
+    looked_at.drilled.lit = Some(0);
     // With the longest explanation a trait has, open on the sheet: a panel
     // that fits its widest state fits every other one.
-    looked_at.explained = crate::traits::TRAITS
+    looked_at.explained.lit = crate::traits::TRAITS
         .iter()
         .max_by_key(|def| {
             crate::traits::explain(def.id, crate::modules::ModuleSet::ALL)
@@ -1562,7 +1779,7 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
     // overlay, the first ledger row on the mixed ledger, the widest card on
     // its own.
     let voicing_flow = Flow {
-        consequence_open: Some(last),
+        consequence_open: jidousha::ui::Chip { lit: Some(last) },
         ..Flow::default()
     };
     let first_row = crate::card::ledger_order(&Lens::on(&pleaded))
@@ -1570,7 +1787,7 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
         .copied();
     let pleas_flow = Flow {
         drawer: Some(Drawer::Pleas),
-        consequence_open: first_row,
+        consequence_open: jidousha::ui::Chip { lit: first_row },
         ..Flow::default()
     };
     let widest = pleaded
@@ -1581,7 +1798,7 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
         .map(|petition| petition.id);
     let widest_flow = Flow {
         drawer: Some(Drawer::Pleas),
-        consequence_open: widest,
+        consequence_open: jidousha::ui::Chip { lit: widest },
         plea: widest,
         ..Flow::default()
     };
@@ -1874,134 +2091,23 @@ pub fn content_floors(checks: &mut Checks, baseline: &Conducted) {
     }
 }
 
-/// One panel against the floors.
+/// One panel against the floors: the kit's generic floors over this game's
+/// numbers (`floors()`), its control set and its drawers, then the one floor
+/// that is this game's own.
 pub fn judge_panel(checks: &mut Checks, panel: &Panel, what: &str, controls: &[(String, Rect)]) {
-    let map_rect = crate::grid::grid().world_rect();
-    for text in panel.runs.iter().chain(panel.world_runs.iter()) {
-        checks.require(
-            !greater(theme::MIN_TEXT, text.size),
-            "a row of text is smaller than the readability floor allows",
-            format!(
-                "{what}: {:?} is set at {:.1} reference pixels and the floor is {:.0}",
-                text.text,
-                text.size,
-                theme::MIN_TEXT
-            ),
-        );
-    }
-    for text in &panel.runs {
-        checks.require(
-            inside(layout::design(), text.bounds()),
-            "a row of chrome text runs off the UI rect",
-            format!("{what}: {:?} occupies {:?}", text.text, text.bounds()),
-        );
-        // Nothing lies across a control it is not the label of.
-        for (control, target) in controls {
-            if !text.bounds().overlaps(*target) {
-                continue;
-            }
-            checks.require(
-                inside(*target, text.bounds()),
-                "a row of text lies across a control it is not the label of",
-                format!(
-                    "{what}: {:?} at {:?} crosses {control} at {target:?}",
-                    text.text,
-                    text.bounds()
-                ),
-            );
-        }
-    }
-    for text in &panel.world_runs {
-        checks.require(
-            inside(map_rect, text.bounds()),
-            "a map label runs off the world",
-            format!("{what}: {:?} occupies {:?}", text.text, text.bounds()),
-        );
-    }
-    // **No two rows of chrome on one band collide** — the floor the tuning
-    // drawer's right column needed and did not have.
-    //
-    // `judge_panel` asked chrome text against *controls* and map labels
-    // against *each other*, and never chrome against chrome; so the stamp
-    // growing a row every other constant walked into the prose band beside it
-    // and no check said a word (`FINDINGS.md` G-028). **On one band**, because
-    // the layers are what make an overlay legitimate: the breakdown band is
-    // drawn over the feed drawer's footer with its own ground behind it and
-    // that is deliberate (UI.md §3e), while two rows on the same band are two
-    // rows drawn through each other.
-    let mut chrome: Vec<&crate::ui::TextRun> = panel.runs.iter().collect();
-    chrome.sort_by_key(|run| run.layer);
-    for (index, text) in chrome.iter().enumerate() {
-        for other in chrome.iter().skip(index + 1) {
-            if other.layer != text.layer {
-                continue;
-            }
-            checks.require(
-                !text.bounds().overlaps(other.bounds()),
-                "two rows of chrome text overlap",
-                format!(
-                    "{what}: {:?} at {:?} and {:?} at {:?}, both on band {}",
-                    text.text,
-                    text.bounds(),
-                    other.text,
-                    other.bounds(),
-                    text.layer
-                ),
-            );
-        }
-    }
-    // **At most one drawer's content in the frame.**
-    //
-    // With `Flow::drawer` a single `Option<Drawer>` this is unrepresentable,
-    // and the floor says it anyway: the next surface to grow an open-flag of
-    // its own should fail here rather than be found in a screenshot. It
-    // counts the drawers by the head row each of them draws — `Drawer::title`,
-    // the one string the drawer prints and this reads, so the two cannot
-    // drift apart into a floor that sees nothing.
-    let drawers: Vec<&'static str> = Drawer::ALL
+    // **At most one drawer's content in the frame.** With `Flow::drawer` a
+    // single `Option<Drawer>` this is unrepresentable, and the floor says it
+    // anyway: the next surface to grow an open-flag of its own should fail
+    // here rather than be found in a screenshot. The kit counts the drawers
+    // by the head row each of them draws — `Drawer::title`, the one string
+    // the drawer prints and the floor reads, so the two cannot drift apart
+    // into a floor that sees nothing.
+    let drawers: Vec<(&str, &str)> = Drawer::ALL
         .into_iter()
-        .filter(|drawer| panel.runs.iter().any(|run| run.text == drawer.title()))
-        .map(Drawer::label)
+        .map(|drawer| (drawer.label(), drawer.title()))
         .collect();
-    checks.require(
-        drawers.len() <= 1,
-        "two drawers' content is in one frame",
-        format!("{what}: {drawers:?} are all drawing, and a drawer covers the screen"),
-    );
-    // Map labels never collide with each other — the authored placement's
-    // own floor.
-    for (index, text) in panel.world_runs.iter().enumerate() {
-        for other in panel.world_runs.iter().skip(index + 1) {
-            checks.require(
-                !text.bounds().overlaps(other.bounds()),
-                "two map labels overlap",
-                format!(
-                    "{what}: {:?} at {:?} and {:?} at {:?}",
-                    text.text,
-                    text.bounds(),
-                    other.text,
-                    other.bounds()
-                ),
-            );
-        }
-    }
-    for icon in panel.icons.iter().chain(panel.world_icons.iter()) {
-        checks.require(
-            near(icon.scale, icon.scale.round()),
-            "a pixel-art icon is drawn at a fractional scale",
-            format!(
-                "{what}: {:?} is drawn at {:.2}x, and the engine samples nearest - a fraction \
-                 puts a wobble in it",
-                icon.art, icon.scale
-            ),
-        );
-    }
-    for icon in &panel.icons {
-        checks.require(
-            inside(layout::design(), icon.bounds()),
-            "a chrome icon runs off the UI rect",
-            format!("{what}: {:?} occupies {:?}", icon.art, icon.bounds()),
-        );
+    for breach in jidousha::ui::judge_panel(panel, &floors(), controls, &drawers) {
+        checks.require(false, breach.what, format!("{what}: {}", breach.detail));
     }
     // The redundancy floor: the treasury's number has its coin beside it.
     if let Some(gold) = panel
@@ -2037,21 +2143,9 @@ pub fn judge_frame_floor(
     frame: &jidousha::testing::FrameRecord,
     what: &str,
 ) {
-    let smallest = frame
-        .quads()
-        .iter()
-        .filter(|quad| quad.texture == font)
-        .map(|quad| quad.bounds().size().y)
-        .fold(f32::MAX, f32::min);
-    checks.require(
-        smallest == f32::MAX || !greater(theme::MIN_TEXT - 0.01, smallest),
-        "a glyph was drawn below the readability floor",
-        format!(
-            "{what}: the shortest glyph quad is {smallest:.2} reference pixels and the floor \
-             is {:.0}",
-            theme::MIN_TEXT
-        ),
-    );
+    for breach in jidousha::ui::frame_text_floor(frame, font, theme::MIN_TEXT) {
+        checks.require(false, breach.what, format!("{what}: {}", breach.detail));
+    }
 }
 
 /// The drawer's own screens against the floors — the states no played

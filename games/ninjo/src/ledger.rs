@@ -16,20 +16,21 @@ use crate::flow::{Drawer, Flow};
 use crate::lens::Lens;
 use crate::panels::clipped;
 use crate::traits::TaskType;
-use crate::ui::{Panel, TextRun, columns, wrap};
+
+use crate::ui::{self, Panel};
 use crate::{layout, theme};
 
 /// The ledger drawer: what the player has asked for, and what the settlement
 /// pays for work.
 pub fn ledger_drawer(flow: &Flow, lens: &Lens<'_>) -> Panel {
     let mut panel = Panel::default();
-    panel.text(TextRun::over(
+    panel.text(ui::over(
         layout::ledger_title(),
         Drawer::Ledger.title(),
         theme::SMALL,
         theme::DIM,
     ));
-    panel.text(TextRun::over(
+    panel.text(ui::over(
         layout::ledger_note(),
         clipped(
             "a posting binds nobody until it is heard; withdrawing is instant",
@@ -52,7 +53,7 @@ pub fn ledger_drawer(flow: &Flow, lens: &Lens<'_>) -> Panel {
             Status::Filled => theme::REGARD,
             Status::Withdrawn => theme::FAINT,
         };
-        panel.text(TextRun::over(
+        panel.text(ui::over(
             at + layout::ledger::HEAD,
             clipped(
                 &format!("{} - {}", posting.status.name(), posting.line(lens)),
@@ -61,7 +62,7 @@ pub fn ledger_drawer(flow: &Flow, lens: &Lens<'_>) -> Panel {
             theme::SMALL,
             tone,
         ));
-        panel.text(TextRun::over(
+        panel.text(ui::over(
             at + layout::ledger::ANSWER,
             clipped(&answers_line(lens, posting), layout::LEDGER_ROW_W),
             theme::SMALL,
@@ -69,7 +70,7 @@ pub fn ledger_drawer(flow: &Flow, lens: &Lens<'_>) -> Panel {
         ));
         if posting.status == Status::Open {
             let button = layout::ledger_withdraw(row);
-            panel.text(TextRun::over(
+            panel.text(ui::over(
                 crate::ui::centered(button, "WITHDRAW", theme::SMALL, button.min.y + 10.0),
                 "WITHDRAW",
                 theme::SMALL,
@@ -78,7 +79,7 @@ pub fn ledger_drawer(flow: &Flow, lens: &Lens<'_>) -> Panel {
         }
     }
     if lens.postings().is_empty() {
-        panel.text(TextRun::over(
+        panel.text(ui::over(
             layout::ledger_row(0).min + layout::ledger::HEAD,
             "nothing posted yet - tap a job on a site's board to ask somebody for it",
             theme::SMALL,
@@ -87,21 +88,21 @@ pub fn ledger_drawer(flow: &Flow, lens: &Lens<'_>) -> Panel {
     }
 
     // ── the standing rates: four rows, and what they price ────────────────
-    panel.text(TextRun::over(
+    panel.text(ui::over(
         layout::rates_title(),
         "STANDING RATES",
         theme::SMALL,
         theme::GOLD,
     ));
     for (row, task) in TaskType::ALL.iter().copied().enumerate() {
-        panel.text(TextRun::over(
+        panel.text(ui::over(
             layout::rates_name(row),
             task.id(),
             theme::SMALL,
             theme::INK,
         ));
         for (rect, glyph) in [(layout::rates_down(row), "-"), (layout::rates_up(row), "+")] {
-            panel.text(TextRun::over(
+            panel.text(ui::over(
                 crate::ui::centered(rect, glyph, theme::BODY, rect.min.y + 10.0),
                 glyph,
                 theme::BODY,
@@ -110,7 +111,7 @@ pub fn ledger_drawer(flow: &Flow, lens: &Lens<'_>) -> Panel {
         }
         let value = layout::rates_value(row);
         let money = format!("{}g", lens.standing_rate(task));
-        panel.text(TextRun::over(
+        panel.text(ui::over(
             crate::ui::centered(value, &money, theme::SMALL, value.min.y + 10.0),
             money,
             theme::SMALL,
@@ -126,23 +127,21 @@ pub fn ledger_drawer(flow: &Flow, lens: &Lens<'_>) -> Panel {
         });
         let button = layout::rates_post(row);
         let label = if standing { "STANDS" } else { "STAND" };
-        panel.text(TextRun::over(
+        panel.text(ui::over(
             crate::ui::centered(button, label, theme::SMALL, button.min.y + 10.0),
             label,
             theme::SMALL,
             if standing { theme::GOLD } else { theme::REGARD },
         ));
     }
-    panel.block(
+    panel.hint(
         layout::rates_note(),
-        &wrap(
-            "what a posting offers unless you change it, and what people expect to be paid.",
-            columns(layout::RATES_NOTE_W, theme::SMALL),
-        ),
-        theme::SMALL,
-        theme::FAINT,
+        layout::RATES_NOTE_W,
+        "what a posting offers unless you change it, and what people expect to be paid.",
+        theme::text(theme::SMALL, theme::FAINT),
+        theme::LEADING,
     );
-    panel.text(TextRun::over(
+    panel.text(ui::over(
         layout::ledger_footer(),
         clipped(
             "raise a rate and its work fills easier, with nobody named",
@@ -152,10 +151,7 @@ pub fn ledger_drawer(flow: &Flow, lens: &Lens<'_>) -> Panel {
         theme::FAINT,
     ));
     let _ = flow;
-    for run in &mut panel.runs {
-        run.layer = theme::layers::OVERLAY_TEXT;
-    }
-    panel
+    panel.lifted(theme::layers::OVERLAY_TEXT)
 }
 
 /// A posting's second line: who has heard it, and what anybody said.

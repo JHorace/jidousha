@@ -119,8 +119,8 @@ the milestone's honesty depends on:
   the moment E0 is re-run.
 
 After E0: the `make-game` skill (practices §3) was written from what E0 taught
-— `.claude/skills/make-game/SKILL.md`, a checklist that orders the four
-`docs/api/` documents and points into them. With it, v1 is done and the
+— `.claude/skills/make-game/SKILL.md`, a checklist that orders the
+`docs/api/` documents (four then; five since ADR-0046) and points into them. With it, v1 is done and the
 deferred lists become the roadmap conversation.
 
 ## 4. Progress checklist
@@ -167,7 +167,7 @@ CLAUDE.md                        router — always read first
 docs/agent-practices.md          why every rule exists; enforcement map
 docs/conventions.md              coordinates, units, color, naming
 docs/implementation-plan.md      this file
-docs/adr/0001..0043              decisions; DELIBERATE tags point here
+docs/adr/0001..0046              decisions; DELIBERATE tags point here
 docs/internal/core.md            ECS, schedule, time, app (M-milestones)
 docs/internal/renderer.md        submissions, backend seam (R-milestones)
 docs/internal/assets.md          handles, readiness determinism (A-milestones)

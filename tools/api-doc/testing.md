@@ -519,6 +519,26 @@ resource still said so. Twenty minutes went into re-reading correct paddle code.
 Set every piece of state the frame depends on, including the state you are not
 asking about.
 
+**A photograph is taken with the state it was drawn in, and judged after.**
+Once a game has more than a few screens, staging each by hand stops scaling,
+and the shape that replaces it is a *conductor*: one scripted session — a
+list of directives, each `when` (a tick, or the first tick the world clock
+reads a minute) and `what` (a key, a click at a UI point, a click at a world
+point) — that the check drives tick by tick, plus a schedule of *photos*, each
+a name and the moment to take it. At that moment the conductor records the
+frame **and** copies out the state it was drawn from — the world, the clock,
+the UI state, the camera — into one `Shot`, and every judgement runs later
+over the shot rather than over the live sim: is every row the screen says it
+draws on this frame, does the thing this picture is *of* hold in this state.
+Two rules make it an instrument. A photo of an auto-pause is gated on the
+pause being a fact of the world, not on the minute the event fires at, because
+the clock is coarser than a minute at speed. And a scripted click is a check
+about where it *lands*: a way out of a board written as "another site's
+marker" that lands on a job row is a check about a posting, and it will pass
+for the wrong reason. `games/ninjo/src/sweep.rs` is the conductor worked, with
+its `Directive`, `Photo` and `Shot`; the kit's `judge_frame`
+(`docs/api/jidousha-ui.md`) is the frame half of every shot's judgement.
+
 **Then check the contracts your run never exercises.** Those screens are the
 visible half of a general problem: **a run only tests the states it reaches, and
 the safety margins a game is built on are exactly the states a correct game never

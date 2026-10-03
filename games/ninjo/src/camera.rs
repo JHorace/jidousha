@@ -143,3 +143,14 @@ impl UiMap {
         (world - self.origin) / self.scale
     }
 }
+
+/// The one conversion, as the kit's `Panel::draw` and `judge_frame` take it.
+impl jidousha::ui::Mapping for UiMap {
+    fn to_world(&self, ui: Vec2) -> Vec2 {
+        self.origin + ui * self.scale
+    }
+
+    fn scale(&self) -> f32 {
+        self.scale
+    }
+}

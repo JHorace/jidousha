@@ -14,6 +14,10 @@ jidousha-assets = { path = "../jidousha-assets" }
 jidousha-input = { path = "../jidousha-input" }
 jidousha-render-core = { path = "../jidousha-render-core" }
 jidousha-platform = { path = "../jidousha-platform" }
+# The UI kit (ADR-0046): screens as data, one-value chips and feeds, and the
+# floors that judge them. Reached as `jidousha::ui`; not in the prelude, because
+# a game with no chrome never names it.
+jidousha-ui = { path = "../jidousha-ui" }
 # For `testing::WgpuBackend` only — a golden image has to come from somewhere,
 # and there is exactly one thing that makes pixels. No `wgpu` type crosses this
 # edge; `WgpuBackend` is opaque and speaks engine types (ADR-0003).

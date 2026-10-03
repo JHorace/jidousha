@@ -30,7 +30,7 @@ use crate::flow::Flow;
 use crate::lens::Lens;
 use crate::panels::clipped;
 use crate::sim::{JobId, JobState};
-use crate::ui::{IconRun, Panel, TextRun};
+use crate::ui::{self, Panel};
 use crate::{layout, theme};
 
 /// **One open job, read for one person** — a row of the list.
@@ -139,7 +139,7 @@ pub fn work_list(
     // the picker are the same decision approached from two sides and a person
     // whose need reads one way on one of them and another way on the other is
     // two answers to one question.
-    panel.text(TextRun::new(
+    panel.text(ui::row(
         layout::worklist_title(),
         clipped(
             &format!(
@@ -160,7 +160,7 @@ pub fn work_list(
     // this line would clip at twenty-four of twenty-four otherwise, and what a
     // clip takes is the tail.
     let shown = openings.len().min(layout::WORK_ROWS);
-    panel.text(TextRun::new(
+    panel.text(ui::row(
         layout::worklist_note(),
         clipped(
             &format!("{shown} of {} open - at the standing rate", openings.len()),
@@ -170,7 +170,7 @@ pub fn work_list(
         theme::GOLD,
     ));
     let close = layout::board_close();
-    panel.text(TextRun::new(
+    panel.text(ui::row(
         crate::ui::centered(close, "X", theme::BODY, close.min.y + 10.0),
         "X",
         theme::BODY,
@@ -180,7 +180,7 @@ pub fn work_list(
     // flag, one sentence (`resolution::fit_means`), because fit described in a
     // third voice is three surfaces somebody has to keep in step.
     let chip = layout::board_fit_chip();
-    panel.text(TextRun::new(
+    panel.text(ui::row(
         crate::ui::centered(chip, "what is fit?", theme::SMALL, chip.min.y + 10.0),
         "what is fit?",
         theme::SMALL,
@@ -200,30 +200,30 @@ pub fn work_list(
             continue;
         };
         let art = quest.task.aptitude().icon();
-        panel.icon(IconRun::new(
+        panel.icon(ui::icon(
             at + layout::work::TASK_ICON,
             art,
             art.scale_across(CHIP),
         ));
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             at + layout::work::NAME,
             clipped(quest.name, layout::work::NAME_W),
             theme::SMALL,
             theme::INK,
         ));
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             at + layout::work::POT,
             clipped(&format!("{}g", quest.pot), layout::work::POT_W),
             theme::SMALL,
             theme::GOLD,
         ));
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             at + layout::work::DURATION,
             clipped(&format!("{} min", quest.duration), layout::work::DURATION_W),
             theme::SMALL,
             theme::DIM,
         ));
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             at + layout::work::FIT,
             clipped(
                 &crate::resolution::fit_cell(opening.fit, opening.odds, tuning),
@@ -236,7 +236,7 @@ pub fn work_list(
                 theme::FAINT
             },
         ));
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             at + layout::work::WHERE,
             clipped(
                 crate::sim::plain(
@@ -247,7 +247,7 @@ pub fn work_list(
             theme::SMALL,
             theme::DIM,
         ));
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             at + layout::work::TRAVEL,
             clipped(
                 &match &opening.route {
@@ -277,7 +277,7 @@ pub fn work_list(
                 theme::FAINT,
             ),
         };
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             at + layout::work::SAYS,
             clipped(&says, layout::work::SAYS_W),
             theme::SMALL,
@@ -299,14 +299,12 @@ pub fn work_list(
             lens.name(who)
         )
     };
-    panel.block(
+    panel.hint(
         layout::worklist_hint(),
-        &crate::ui::wrap(
-            &hint,
-            crate::ui::columns(layout::WORKLIST_HINT_W, theme::SMALL),
-        ),
-        theme::SMALL,
-        theme::FAINT,
+        layout::WORKLIST_HINT_W,
+        &hint,
+        theme::text(theme::SMALL, theme::FAINT),
+        theme::LEADING,
     );
     panel
 }

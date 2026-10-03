@@ -42,7 +42,7 @@ pub fn overlay_click(world: &mut World, at: Vec2, tick: u64) {
     }
     if layout::card_chip(origin).contains(at) {
         let flow = world.resource_mut::<Flow>();
-        flow.consequence_open = (flow.consequence_open != Some(id)).then_some(id);
+        flow.consequence_open.toggle(id);
         return;
     }
     let chips = [
@@ -92,7 +92,7 @@ pub fn ledger_click(world: &mut World, at: Vec2, tick: u64) {
     let origin = layout::plea_card();
     if layout::card_chip(origin).contains(at) {
         let flow = world.resource_mut::<Flow>();
-        flow.consequence_open = (flow.consequence_open != Some(id)).then_some(id);
+        flow.consequence_open.toggle(id);
         return;
     }
     let (active, money) =

@@ -37,7 +37,7 @@ use crate::flow::Flow;
 use crate::lens::Lens;
 use crate::panels::clipped;
 use crate::sim::JobState;
-use crate::ui::{IconRun, Panel, TextRun};
+use crate::ui::{self, Panel};
 use crate::{layout, theme};
 
 /// **The site panel**: one site's job board, which is where an order is given
@@ -67,7 +67,7 @@ pub fn site_board(
         return panel;
     };
     let where_ = crate::grid::LOCATIONS[crate::sim::site_location(site)].name;
-    panel.text(TextRun::new(
+    panel.text(ui::row(
         layout::board_title(),
         clipped(
             &format!(
@@ -81,7 +81,7 @@ pub fn site_board(
         theme::INK,
     ));
     let close = layout::board_close();
-    panel.text(TextRun::new(
+    panel.text(ui::row(
         crate::ui::centered(close, "X", theme::BODY, close.min.y + 10.0),
         "X",
         theme::BODY,
@@ -91,7 +91,7 @@ pub fn site_board(
     if let Some(who) = flow.selected
         && let Some(route) = lens.travel(grid, tuning, who, site)
     {
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             layout::board_travel(),
             clipped(
                 &format!(
@@ -122,7 +122,7 @@ pub fn site_board(
             theme::DIM
         };
         let chip = layout::board_fit_chip();
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             crate::ui::centered(chip, "what is fit?", theme::SMALL, chip.min.y + 10.0),
             "what is fit?",
             theme::SMALL,
@@ -145,19 +145,19 @@ pub fn site_board(
                 format!("{} did it", lens.name(by)),
             ),
         };
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             at + layout::job::NAME,
             clipped(quest.name, layout::job::NAME_W),
             theme::SMALL,
             name_tone,
         ));
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             at + layout::job::POT,
             clipped(&format!("{}g", quest.pot), layout::job::POT_W),
             theme::SMALL,
             if open { theme::GOLD } else { theme::FAINT },
         ));
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             at + layout::job::DURATION,
             clipped(&format!("{} min", quest.duration), layout::job::DURATION_W),
             theme::SMALL,
@@ -165,10 +165,10 @@ pub fn site_board(
         ));
         let mut said = false;
         let art = quest.task.aptitude().icon();
-        let mut icon = IconRun::new(at + layout::job::TASK_ICON, art, art.scale_across(CHIP));
+        let mut icon = ui::icon(at + layout::job::TASK_ICON, art, art.scale_across(CHIP));
         icon.tint = if open { theme::INK } else { theme::FAINT };
         panel.icon(icon);
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             at + layout::job::TASK_NAME,
             clipped(quest.task.id(), layout::job::TASK_W),
             theme::SMALL,
@@ -183,7 +183,7 @@ pub fn site_board(
             // **And the odds, in a word** (wave 1.4) — `resolution::odds_for`
             // through the lens, the function the roll reads.
             let odds = lens.odds(tuning, who, crate::sim::JobId { site, slot });
-            panel.text(TextRun::new(
+            panel.text(ui::row(
                 at + layout::job::FIT,
                 clipped(
                     &crate::resolution::fit_cell(fit, odds, tuning),
@@ -203,7 +203,7 @@ pub fn site_board(
             // no candidate to pick and the click says so instead.
             if open && !flow.post_open {
                 let target = layout::board_who(slot);
-                panel.text(TextRun::new(
+                panel.text(ui::row(
                     crate::ui::centered(target, "who?", theme::SMALL, target.min.y + 12.0),
                     "who?",
                     theme::SMALL,
@@ -224,7 +224,7 @@ pub fn site_board(
                 } else {
                     theme::EMBER
                 };
-                panel.text(TextRun::new(
+                panel.text(ui::row(
                     at + layout::job::SAYS,
                     clipped(
                         &format!("{} - {}", reading.verdict.name(), reading.why),
@@ -239,7 +239,7 @@ pub fn site_board(
                 // Gold while this row's sum is the one on the band.
                 let why = layout::board_why(slot);
                 let lit = flow.breakdown == Some(crate::flow::Breakdown::Job(job));
-                panel.text(TextRun::new(
+                panel.text(ui::row(
                     crate::ui::centered(why, "?", theme::BODY, why.min.y + 12.0),
                     "?",
                     theme::BODY,
@@ -249,7 +249,7 @@ pub fn site_board(
             }
         }
         if !said {
-            panel.text(TextRun::new(
+            panel.text(ui::row(
                 at + layout::job::SAYS,
                 clipped(&state_text, layout::job::SAYS_W),
                 theme::SMALL,
@@ -267,7 +267,7 @@ pub fn site_board(
             (layout::board_wage_down(), "-"),
             (layout::board_wage_up(), "+"),
         ] {
-            panel.text(TextRun::new(
+            panel.text(ui::row(
                 crate::ui::centered(rect, glyph, theme::BODY, rect.min.y + 10.0),
                 glyph,
                 theme::BODY,
@@ -276,7 +276,7 @@ pub fn site_board(
         }
         let value = layout::board_wage_value();
         let money = format!("{wage}g");
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             crate::ui::centered(value, &money, theme::SMALL, value.min.y + 10.0),
             money,
             theme::SMALL,
@@ -288,7 +288,7 @@ pub fn site_board(
             (false, Some(who)) => format!("TO {}", lens.name(who)),
             (false, None) => "NOBODY".to_owned(),
         };
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             crate::ui::centered(to, &label, theme::SMALL, to.min.y + 10.0),
             clipped(&label, 84.0),
             theme::SMALL,
@@ -317,14 +317,12 @@ pub fn site_board(
             ),
         }
     };
-    panel.block(
+    panel.hint(
         layout::board_hint(),
-        &crate::ui::wrap(
-            &hint,
-            crate::ui::columns(layout::BOARD_HINT_W, theme::SMALL),
-        ),
-        theme::SMALL,
-        theme::FAINT,
+        layout::BOARD_HINT_W,
+        &hint,
+        theme::text(theme::SMALL, theme::FAINT),
+        theme::LEADING,
     );
     panel
 }
@@ -526,7 +524,7 @@ pub fn candidate_picker(
         return panel;
     };
     let wage = wage_offered(flow, lens, site, slot, quest.task);
-    panel.text(TextRun::new(
+    panel.text(ui::row(
         layout::picker_title(),
         clipped(&format!("who for {}?", quest.name), layout::PICKER_HEAD_W),
         theme::SMALL,
@@ -535,7 +533,7 @@ pub fn candidate_picker(
     // **The wage on its own line**, because it is what the answers below were
     // read at and it appears nowhere else while this panel is covering the
     // board's footer — so it is the one thing here a clip may not take.
-    panel.text(TextRun::new(
+    panel.text(ui::row(
         layout::picker_wage(),
         clipped(
             &format!("{wage}g offered - best fit first"),
@@ -545,7 +543,7 @@ pub fn candidate_picker(
         theme::GOLD,
     ));
     let close = layout::board_close();
-    panel.text(TextRun::new(
+    panel.text(ui::row(
         crate::ui::centered(close, "X", theme::BODY, close.min.y + 10.0),
         "X",
         theme::BODY,
@@ -556,7 +554,7 @@ pub fn candidate_picker(
     // not describe it in two voices, and the way to make that structural is
     // for there to be one chip rather than two that agree.
     let chip = layout::board_fit_chip();
-    panel.text(TextRun::new(
+    panel.text(ui::row(
         crate::ui::centered(chip, "what is fit?", theme::SMALL, chip.min.y + 10.0),
         "what is fit?",
         theme::SMALL,
@@ -575,19 +573,19 @@ pub fn candidate_picker(
         let at = layout::picker_row(row).min;
         let picked = flow.selected == Some(candidate.who);
         if let Some(person) = lens.person(candidate.who) {
-            panel.icon(IconRun::new(
+            panel.icon(ui::icon(
                 at + layout::cand::PORTRAIT,
                 person.icon,
                 layout::sheet::PORTRAIT_SCALE,
             ));
         }
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             at + layout::cand::NAME,
             clipped(lens.name(candidate.who), layout::cand::NAME_W),
             theme::SMALL,
             if picked { theme::GOLD } else { theme::INK },
         ));
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             at + layout::cand::FIT,
             clipped(
                 &crate::resolution::fit_cell(candidate.fit, candidate.odds, tuning),
@@ -607,7 +605,7 @@ pub fn candidate_picker(
         // predicate and the burn's, so a row cannot say somebody is coping
         // while the sim is about to take the last of their money.
         let short = crate::needs::is_short(lens, tuning, candidate.who);
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             at + layout::cand::NEED,
             clipped(
                 &need_mark(lens, tuning, candidate.who),
@@ -624,13 +622,13 @@ pub fn candidate_picker(
         ));
         // **Where they are** — the whereabouts line, so somebody who is out
         // reads as out, with where and when the work they are on is done.
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             at + layout::cand::WHERE,
             clipped(&lens.whereabouts(candidate.who), layout::cand::WHERE_W),
             theme::SMALL,
             theme::DIM,
         ));
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             at + layout::cand::SAYS,
             clipped(
                 &format!(
@@ -649,7 +647,7 @@ pub fn candidate_picker(
         ));
         // **The walk from wherever they stand** — `sim::route_out` through the
         // lens, which is the route the dispatch lays and the party then walks.
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             at + layout::cand::TRAVEL,
             clipped(
                 &match &candidate.route {
@@ -674,14 +672,12 @@ pub fn candidate_picker(
             quest.name
         )
     };
-    panel.block(
+    panel.hint(
         layout::picker_hint(),
-        &crate::ui::wrap(
-            &hint,
-            crate::ui::columns(layout::PICKER_HINT_W, theme::SMALL),
-        ),
-        theme::SMALL,
-        theme::FAINT,
+        layout::PICKER_HINT_W,
+        &hint,
+        theme::text(theme::SMALL, theme::FAINT),
+        theme::LEADING,
     );
     panel
 }

@@ -118,6 +118,33 @@ the enforcement. Every entry here is assumed by all subsystem docs.
   cause/fix, system name included). Applies to every crate, compile-time
   diagnostics (`on_unimplemented`) included.
 
+## Extraction — when a game's part becomes the engine's
+
+The genre grammar a game builds — its panels, chips, feeds, meters, floors — is
+shared: the next game of the kind will build the same parts, and two games that
+each re-typed one part is how they come to disagree about it. The rule for
+moving a part into the engine:
+
+- **A part produced three or more times is a promotion candidate.** Three
+  call sites, three surfaces, three games — the count is of *productions*, and
+  one well-understood instance is not a candidate however clean it is.
+- **Promotion is proposed by an exemplar audit's report and decided by the
+  owner.** The report (`docs/templates/SANITATION.md`) lists each candidate with
+  its call sites, its generic half, the game's half, and the cost; the owner's
+  verdict names what rides an engine session. The session that extracts it
+  writes an ADR saying what is in, what is out, and why.
+- **Below three, record the trigger and wait.** The ADR (or the kit's document)
+  names the part and the event that brings it in — a second instance, the next
+  wave that adds a deadline — so a reader looking for it finds the reason there
+  is no entry rather than a gap.
+- **The generic half moves; the game's half stays.** Formatters, sort keys,
+  offsets, predicates and palettes are the game's by construction. A swap onto
+  the extracted part is transcript-identical (agent-practices §2.5): the game's
+  verify output is byte-identical before and after, or the swap is a behaviour
+  change wearing the wrong name.
+
+ADR-0046 is the first application, and `jidousha::ui` is what it produced.
+
 ## Documents
 
 These are conventions about the repo's prose, and they exist for the same reason

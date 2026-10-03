@@ -1,0 +1,20 @@
+[package]
+name = "jidousha-ui"
+description = "The UI kit for the Jidousha engine: screens as data, one-value chips and feeds, and the readability floors that judge them."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+# Both already in the tree: the kit adds no external crate (ADR-0046).
+[dependencies]
+jidousha-core = { path = "../jidousha-core" }
+jidousha-render-core = { path = "../jidousha-render-core" }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+# The floor tests draw a panel with an icon in it, and an icon is a sprite over
+# a texture handle only the asset store mints. Dev-only, already in the tree.
+jidousha-assets = { path = "../jidousha-assets" }

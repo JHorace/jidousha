@@ -1059,7 +1059,7 @@ impl Sim {
             rates: Rates::opening(),
             settlement: crate::settlement::Settlement::opening(),
             shared: Shared::opening(),
-            attention: Attention::opening(),
+            attention: Attention::opening(crate::attention::CLASSES),
             modules,
             paused_by: None,
             pauses: 0,

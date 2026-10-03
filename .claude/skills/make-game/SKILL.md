@@ -27,7 +27,7 @@ than after: a handoff missing its decision-surface section stops the session.
 
 ### 0.1 The reading fence
 
-**A new prototype reads `docs/api/` — all four documents — and
+**A new prototype reads `docs/api/` — all five documents — and
 `crates/jidousha/examples/`, and nothing else**: not `crates/*/src/`, not
 `docs/internal/`, not `docs/adr/`. This binds the *session*, not only the game
 file: opening the engine's source to answer a question spends the evidence
@@ -68,7 +68,7 @@ at (§A.7 / §B.6), and the findings (§C). §D binds the handoff itself.
 
 ## A. A new prototype, end to end
 
-Everything a game needs to *know* is in the four API documents. What this
+Everything a game needs to *know* is in the five API documents. What this
 checklist adds is **order**: each step is cheap at the moment it is listed and
 expensive after it, and every one of these orderings was paid for by a session
 that met the fact too late.
@@ -81,6 +81,7 @@ that met the fact too late.
 | `docs/api/jidousha-testing.md` — top to bottom once | when the game first runs, before the first check |
 | `docs/api/jidousha-controllers.md` — whole, it is short | when the check needs a player that can win — and before tuning any constant |
 | `docs/api/jidousha-capture.md` | last, once `--verify` runs and asserts |
+| `docs/api/jidousha-ui.md` — the kit, `jidousha::ui` | the day the game grows chrome: a panel, a drawer, a chip, a feed, a row of meters. A game of shapes and a score never opens it |
 
 Each document names the next; this table is the same order stated once, so
 none has to be discovered by needing it.
@@ -115,6 +116,11 @@ Before the first system:
 - [ ] State the layout in constants derived from the window — the three-line
   block in *Concepts* ("A layout in constants"). One line now; a hand-typed
   ratio later, coupled to the window by nothing but an assertion.
+- [ ] If the game will have chrome — a panel, a drawer, a feed — build it on
+  `jidousha::ui` from the first screen (`docs/api/jidousha-ui.md`): a screen
+  as a `Panel`, its bands bound once, its floors stated as the game's numbers.
+  The kit's parts were extracted from a game that re-typed each of them three
+  times; a second copy is the thing it exists to refuse (ADR-0046).
 - [ ] Write what a check will need to predict — the opponent's decision, the
   collision response — as free functions from the first draft (*Concepts*,
   "Write the two decisions a check will want as free functions, now, while
@@ -280,11 +286,14 @@ If your module emits anything the player should notice:
 
 - [ ] **Every occurrence carries time, place and class** (GDD §3). A thing
   that happened nowhere or at no time is not an event in this game.
-- [ ] **A new event class registers in the event-class table** — today that is
-  `EventClass` in the game's `src/sim.rs`, the five S1 classes plus whatever
-  waves have added since. The registry's `reads`/`writes` columns do not have
-  an `emits` column; **the class table is where emission is declared**, so a
-  class added without a row there is an emission nobody can find.
+- [ ] **A new event class registers in the event-class table** — the game's
+  `&[ClassSpec]` over the kit's row shape (`docs/api/jidousha-ui.md`, *The
+  feed, and the table that is its behaviour*; ninjo's is `src/attention.rs`),
+  one row per variant with the id, the chip's colour and picture, and the
+  mode it opens on. The registry's `reads`/`writes` columns do not have an
+  `emits` column; **the class table is where emission is declared**, so a
+  class added without a row there is an emission nobody can find — and the
+  kit's `class_faults` is what the game's vocabulary check runs over it.
 - [ ] **Give each new class a default attention mode** — ignore / log /
   pause-and-focus (GDD §3, wave 0a). Until wave 0a lands the mode column, say
   the intended default in the class's comment and in your PR, so the attention
@@ -310,9 +319,14 @@ makes "modular" a fact rather than a claim (GDD §9). Your module owes:
   That is how wave 0b landed regard drift, and it is the cheapest possible
   proof that a change changed nothing.
 - [ ] **Floors and the screenshot process on every surface you add** — the
-  game's `UI.md` §4 and §6 own both: every row of content in the `Panel`,
-  every string ASCII, every read of the world through the lens. Open every PNG
-  and name what you see.
+  game's `UI.md` §4 and §6 own both: every row of content in the kit's
+  `Panel`, judged by the kit's floors through the game's wrapper
+  (`docs/api/jidousha-ui.md`, *The floors*; ninjo's is `floors::judge_panel`)
+  and found on the photograph by `judge_frame`; every string ASCII, every read
+  of the world through the lens. A new surface's state is **one value** — a
+  `Chip`, an `Option` the kit's `toggle` flips — never a flag beside one; the
+  overlay floor is what catches the day it is not. Open every PNG and name
+  what you see.
 - [ ] **Stamps carry seed, constants and module set** — verify's report and the
   scenario's opening log line both. A recording whose stamp does not say which
   modules were on is a recording of an unknown build.

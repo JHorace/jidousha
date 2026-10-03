@@ -18,14 +18,16 @@ use crate::flow::{Drawer, Flow};
 use crate::lens::Lens;
 use crate::meters::{self, METERS};
 use crate::sprites::Art;
-use crate::ui::{IconRun, Panel, TextRun, columns, wrap};
+use jidousha::ui::wrap;
+
+use crate::ui::{self, IconRun, Panel, columns};
 use crate::{layout, theme};
 
 /// An icon on an overlay's band.
 fn over_icon(at: Vec2, art: Art, units: f32) -> IconRun {
     IconRun {
         layer: theme::layers::OVERLAY_TEXT,
-        ..IconRun::new(at, art, art.scale_across(units))
+        ..ui::icon(at, art, art.scale_across(units))
     }
 }
 
@@ -37,14 +39,7 @@ fn over_icon(at: Vec2, art: Art, units: f32) -> IconRun {
 /// that stops mid-word reads as a rendering fault rather than as a row that
 /// ran out of drawer.
 pub fn clipped(text: &str, width: f32) -> String {
-    let style = theme::text(theme::SMALL, theme::INK);
-    let fits = style.fits_in(text, width);
-    if fits >= text.chars().count() {
-        return text.to_owned();
-    }
-    let head: String = text.chars().take(fits.saturating_sub(3)).collect();
-    let cut = head.rfind(' ').unwrap_or(head.len());
-    format!("{}...", head[..cut].trim_end())
+    jidousha::ui::clipped(&theme::text(theme::SMALL, theme::INK), text, width)
 }
 
 /// The feed drawer: the sim's event log, as a view.
@@ -56,7 +51,7 @@ pub fn clipped(text: &str, width: f32) -> String {
 /// `Lens::pause`.
 pub fn feed_drawer(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning) -> Panel {
     let mut panel = Panel::default();
-    panel.text(TextRun::over(
+    panel.text(ui::over(
         layout::feed_title(),
         Drawer::Feed.title(),
         theme::SMALL,
@@ -69,7 +64,7 @@ pub fn feed_drawer(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning) -> Panel {
             theme::FAINT,
         ),
     };
-    panel.text(TextRun::over(
+    panel.text(ui::over(
         layout::feed_reason(),
         clipped(&reason, layout::FEED_REASON_W),
         theme::SMALL,
@@ -81,7 +76,7 @@ pub fn feed_drawer(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning) -> Panel {
     } else {
         "IGNORED: HIDDEN"
     };
-    panel.text(TextRun::over(
+    panel.text(ui::over(
         crate::ui::centered(toggle, toggle_label, theme::SMALL, toggle.min.y + 10.0),
         toggle_label,
         theme::SMALL,
@@ -102,7 +97,7 @@ pub fn feed_drawer(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning) -> Panel {
         let spec = event.class.spec();
         let highlit = triggered == Some(entry.index);
         let (stamp_tone, class_tone, text_tone, place_tone) = tones(entry, highlit, spec.color);
-        panel.text(TextRun::over(
+        panel.text(ui::over(
             at + layout::entry::STAMP,
             crate::clock::stamp(event.minute),
             theme::SMALL,
@@ -111,19 +106,19 @@ pub fn feed_drawer(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning) -> Panel {
         let mut icon = over_icon(at + layout::entry::CHIP_ICON, spec.icon, CHIP);
         icon.tint = class_tone;
         panel.icon(icon);
-        panel.text(TextRun::over(
+        panel.text(ui::over(
             at + layout::entry::CHIP_NAME,
             spec.id,
             theme::SMALL,
             class_tone,
         ));
-        panel.text(TextRun::over(
+        panel.text(ui::over(
             at + layout::entry::PLACE,
             clipped(&format!("- {}", attention::place_tag(event)), 200.0),
             theme::SMALL,
             place_tone,
         ));
-        panel.text(TextRun::over(
+        panel.text(ui::over(
             at + layout::entry::TEXT,
             clipped(&event.text(lens), layout::entry::TEXT_W),
             theme::SMALL,
@@ -135,7 +130,7 @@ pub fn feed_drawer(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning) -> Panel {
         if event.judged.is_some() {
             let why = layout::feed_why(row);
             let lit = flow.breakdown == Some(crate::flow::Breakdown::Entry(entry.index));
-            panel.text(TextRun::over(
+            panel.text(ui::over(
                 crate::ui::centered(why, "?", theme::BODY, why.min.y + 12.0),
                 "?",
                 theme::BODY,
@@ -144,7 +139,7 @@ pub fn feed_drawer(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning) -> Panel {
         }
     }
     if entries.is_empty() {
-        panel.text(TextRun::over(
+        panel.text(ui::over(
             layout::feed_row(0).min + layout::entry::TEXT,
             "nothing yet - the world opens paused, and space runs it",
             theme::SMALL,
@@ -163,14 +158,14 @@ pub fn feed_drawer(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning) -> Panel {
     // the last thing the *player* did, and it is still there when the band is
     // put away.
     if flow.breakdown.is_none() {
-        panel.text(TextRun::over(
+        panel.text(ui::over(
             layout::notices_title(),
             "NOTICES - speed, refused asks, rates, restarts",
             theme::SMALL,
             theme::FAINT,
         ));
         for (index, line) in flow.log.iter().take(layout::NOTICE_ROWS).enumerate() {
-            panel.text(TextRun::over(
+            panel.text(ui::over(
                 layout::notice_row(index),
                 clipped(line, 900.0),
                 theme::SMALL,
@@ -207,9 +202,9 @@ pub fn breakdown_band(
     let over = open.over_a_drawer();
     let row = |at: Vec2, text: String, colour: Color| {
         if over {
-            TextRun::over(at, text, theme::SMALL, colour)
+            ui::over(at, text, theme::SMALL, colour)
         } else {
-            TextRun::new(at, text, theme::SMALL, colour)
+            ui::row(at, text, theme::SMALL, colour)
         }
     };
     let Some((heading, reckoning)) = read_breakdown(flow, lens, tuning, now, open) else {
@@ -324,7 +319,7 @@ fn tones(entry: &FeedEntry, highlit: bool, class: Color) -> (Color, Color, Color
 /// *means*.
 pub fn modes_drawer(lens: &Lens<'_>) -> Panel {
     let mut panel = Panel::default();
-    panel.text(TextRun::over(
+    panel.text(ui::over(
         layout::modes_title(),
         Drawer::Modes.title(),
         theme::SMALL,
@@ -339,15 +334,15 @@ pub fn modes_drawer(lens: &Lens<'_>) -> Panel {
     panel.block(
         layout::modes_note(),
         &wrap(&note, prose),
-        theme::SMALL,
-        theme::DIM,
+        theme::text(theme::SMALL, theme::DIM),
+        theme::LEADING,
     );
     for (index, class) in EventClass::all().into_iter().enumerate() {
         let spec = class.spec();
         let mut icon = over_icon(layout::modes_icon(index), spec.icon, CHIP);
         icon.tint = spec.color;
         panel.icon(icon);
-        panel.text(TextRun::over(
+        panel.text(ui::over(
             layout::modes_name(index),
             spec.id,
             theme::SMALL,
@@ -356,7 +351,7 @@ pub fn modes_drawer(lens: &Lens<'_>) -> Panel {
         let held = lens.attention().mode(class);
         for (slot, mode) in Mode::ALL.iter().copied().enumerate() {
             let button = layout::modes_radio(index, slot);
-            panel.text(TextRun::over(
+            panel.text(ui::over(
                 crate::ui::centered(button, mode.name(), theme::SMALL, button.min.y + 10.0),
                 mode.name(),
                 theme::SMALL,
@@ -375,14 +370,11 @@ pub fn modes_drawer(lens: &Lens<'_>) -> Panel {
              pauses at the same world-minutes, for the same reasons.",
             prose,
         ),
-        theme::SMALL,
-        theme::FAINT,
+        theme::text(theme::SMALL, theme::FAINT),
+        theme::LEADING,
     );
     // Everything above is drawn on the overlay's own band.
-    for run in &mut panel.runs {
-        run.layer = theme::layers::OVERLAY_TEXT;
-    }
-    panel
+    panel.lifted(theme::layers::OVERLAY_TEXT)
 }
 
 /// The glance: the meter chips, the pause banner, the faces list a chip opens,
@@ -402,14 +394,14 @@ pub fn glance(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning) -> Panel {
         } else {
             theme::GOLD
         };
-        let mut icon = IconRun::new(
+        let mut icon = ui::icon(
             chip.min + Vec2::splat(layout::mchip::ICON),
             spec.icon,
             spec.icon.scale_across(CHIP),
         );
         icon.tint = tone;
         panel.icon(icon);
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             chip.min + Vec2::new(layout::mchip::LABEL_X, layout::mchip::LABEL_TOP),
             format!("{} {count}", spec.label),
             theme::SMALL,
@@ -422,7 +414,7 @@ pub fn glance(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning) -> Panel {
     // shortfall logic uses (`needs::camp_line`), and no income figure at all,
     // because this build records no window to derive one from and a guess on
     // this band would be the surface that disagrees with the sim.
-    panel.text(TextRun::new(
+    panel.text(ui::row(
         layout::camp_line_at(),
         clipped(
             &crate::needs::camp_line(lens, tuning),
@@ -432,14 +424,14 @@ pub fn glance(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning) -> Panel {
         theme::DIM,
     ));
     if let Some(reason) = attention::reason_line(lens) {
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             layout::banner_at(),
             clipped(&reason, 900.0),
             theme::SMALL,
             theme::GOLD,
         ));
     }
-    if let Some(drilled) = flow.drilled {
+    if let Some(drilled) = flow.drilled.lit {
         panel.absorb(faces_panel(lens, tuning, drilled));
     }
     if let Some(who) = flow.selected {
@@ -452,7 +444,7 @@ pub fn glance(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning) -> Panel {
 fn faces_panel(lens: &Lens<'_>, tuning: &Tuning, index: usize) -> Panel {
     let mut panel = Panel::default();
     let label = METERS.get(index).map_or("", |spec| spec.label);
-    panel.text(TextRun::new(
+    panel.text(ui::row(
         layout::faces_title(),
         format!("{label} - who, and why"),
         theme::SMALL,
@@ -465,19 +457,15 @@ fn faces_panel(lens: &Lens<'_>, tuning: &Tuning, index: usize) -> Panel {
     {
         let at = layout::faces_row(row).min;
         if let Some(person) = lens.person(who) {
-            panel.icon(IconRun::new(
-                at,
-                person.icon,
-                person.icon.scale_across(32.0),
-            ));
+            panel.icon(ui::icon(at, person.icon, person.icon.scale_across(32.0)));
         }
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             at + Vec2::new(36.0, 2.0),
             lens.name(who),
             theme::SMALL,
             theme::INK,
         ));
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             at + Vec2::new(36.0, 17.0),
             clipped(&reason, 240.0),
             theme::SMALL,
@@ -504,13 +492,13 @@ pub fn person_panel(flow: &Flow, lens: &Lens<'_>, who: usize) -> Panel {
     let mut panel = Panel::default();
     let origin = layout::person_panel().min;
     if let Some(person) = lens.person(who) {
-        panel.icon(IconRun::new(
+        panel.icon(ui::icon(
             origin + sheet::PORTRAIT,
             person.icon,
             sheet::PORTRAIT_SCALE,
         ));
     }
-    panel.text(TextRun::new(
+    panel.text(ui::row(
         origin + sheet::NAME,
         clipped(lens.name(who), sheet::NAME_W),
         theme::HEAD,
@@ -522,7 +510,7 @@ pub fn person_panel(flow: &Flow, lens: &Lens<'_>, who: usize) -> Panel {
     // control that is showing what it opened.
     let chip = layout::sheet_work();
     let label = format!("work {}", crate::worklist::open_jobs(lens));
-    panel.text(TextRun::new(
+    panel.text(ui::row(
         crate::ui::centered(chip, &label, theme::SMALL, chip.min.y + 10.0),
         label,
         theme::SMALL,
@@ -533,13 +521,13 @@ pub fn person_panel(flow: &Flow, lens: &Lens<'_>, who: usize) -> Panel {
         },
     ));
     let close = layout::person_close();
-    panel.text(TextRun::new(
+    panel.text(ui::row(
         crate::ui::centered(close, "X", theme::BODY, close.min.y + 10.0),
         "X",
         theme::BODY,
         theme::INK,
     ));
-    panel.text(TextRun::new(
+    panel.text(ui::row(
         origin + sheet::TRAITS,
         "traits - tap one for what it does",
         theme::SMALL,
@@ -555,26 +543,26 @@ pub fn person_panel(flow: &Flow, lens: &Lens<'_>, who: usize) -> Panel {
         panel.absorb(trait_chip(
             layout::sheet_chip(slot),
             id,
-            flow.explained == Some(id),
+            flow.explained.showing(id),
         ));
     }
-    panel.icon(IconRun::new(
+    panel.icon(ui::icon(
         origin + sheet::WALLET_ICON,
         Art::Coin,
         Art::Coin.scale_across(CHIP),
     ));
-    panel.text(TextRun::new(
+    panel.text(ui::row(
         origin + sheet::WALLET_TEXT,
         format!("{}g in hand", lens.wallet(who)),
         theme::SMALL,
         theme::GOLD,
     ));
-    panel.icon(IconRun::new(
+    panel.icon(ui::icon(
         origin + sheet::NEED_ICON,
         Art::Flame,
         Art::Flame.scale_across(CHIP),
     ));
-    panel.text(TextRun::new(
+    panel.text(ui::row(
         origin + sheet::NEED_TEXT,
         format!("desperation {}", lens.desperation(who)),
         theme::SMALL,
@@ -585,8 +573,12 @@ pub fn person_panel(flow: &Flow, lens: &Lens<'_>, who: usize) -> Panel {
     let left = origin.x + sheet::SOURCE.x;
     let mut y = origin.y + sheet::SOURCE.y;
     let mut flowed = |panel: &mut Panel, text: &str, color| {
-        y = panel.block(Vec2::new(left, y), &wrap(text, prose), theme::SMALL, color)
-            + sheet::FLOW_GAP;
+        y = panel.block(
+            Vec2::new(left, y),
+            &wrap(text, prose),
+            theme::text(theme::SMALL, color),
+            theme::LEADING,
+        ) + sheet::FLOW_GAP;
     };
     flowed(&mut panel, lens.source(who), theme::DIM);
     let doing = match lens.quest(who) {
@@ -598,12 +590,11 @@ pub fn person_panel(flow: &Flow, lens: &Lens<'_>, who: usize) -> Panel {
         format!("({}, {})", tile.x, tile.y)
     });
     flowed(&mut panel, &format!("home {home}"), theme::FAINT);
-    if let Some(id) = flow.explained {
-        flowed(
-            &mut panel,
-            &crate::traits::explain(id, lens.modules()),
-            theme::GOLD,
-        );
+    if let Some(line) = flow
+        .explained
+        .line(|id| crate::traits::explain(id, lens.modules()))
+    {
+        flowed(&mut panel, &line, theme::GOLD);
     }
     panel
 }
@@ -618,14 +609,14 @@ fn trait_chip(rect: Rect, id: crate::traits::TraitId, lit: bool) -> Panel {
     use layout::rrow;
     let mut panel = Panel::default();
     let tone = if lit { theme::GOLD } else { theme::INK };
-    let mut icon = IconRun::new(
+    let mut icon = ui::icon(
         rect.min + rrow::CHIP_ICON,
         id.icon(),
         id.icon().scale_across(CHIP),
     );
     icon.tint = tone;
     panel.icon(icon);
-    panel.text(TextRun::new(
+    panel.text(ui::row(
         rect.min + rrow::CHIP_NAME,
         id.name(),
         theme::SMALL,
@@ -644,14 +635,17 @@ fn trait_chip(rect: Rect, id: crate::traits::TraitId, lit: bool) -> Panel {
 pub fn roster_drawer(flow: &Flow, lens: &Lens<'_>) -> Panel {
     use layout::rrow;
     let mut panel = Panel::default();
-    panel.text(TextRun::over(
+    panel.text(ui::over(
         layout::roster_title(),
         Drawer::Roster.title(),
         theme::SMALL,
         theme::DIM,
     ));
-    let (explanation, tone) = match flow.explained {
-        Some(id) => (crate::traits::explain(id, lens.modules()), theme::GOLD),
+    let (explanation, tone) = match flow
+        .explained
+        .line(|id| crate::traits::explain(id, lens.modules()))
+    {
+        Some(line) => (line, theme::GOLD),
         None => ("tap a trait chip for what it does".to_owned(), theme::FAINT),
     };
     // **Two rows, not one clipped one.** A trait's explanation now says what
@@ -669,7 +663,7 @@ pub fn roster_drawer(flow: &Flow, lens: &Lens<'_>) -> Panel {
         .take(layout::ROSTER_EXPLAIN_ROWS)
         .enumerate()
     {
-        panel.text(TextRun::over(
+        panel.text(ui::over(
             layout::roster_explain() + Vec2::new(0.0, index as f32 * (theme::SMALL + 2.0)),
             line,
             theme::SMALL,
@@ -688,7 +682,7 @@ pub fn roster_drawer(flow: &Flow, lens: &Lens<'_>) -> Panel {
     {
         let open = layout::roster_open(row);
         if let Some(person) = lens.person(who) {
-            let mut face = IconRun::new(
+            let mut face = ui::icon(
                 open.min + rrow::PORTRAIT,
                 person.icon,
                 layout::sheet::PORTRAIT_SCALE,
@@ -696,7 +690,7 @@ pub fn roster_drawer(flow: &Flow, lens: &Lens<'_>) -> Panel {
             face.layer = theme::layers::OVERLAY_TEXT;
             panel.icon(face);
         }
-        panel.text(TextRun::over(
+        panel.text(ui::over(
             open.min + rrow::NAME,
             lens.name(who),
             theme::SMALL,
@@ -709,32 +703,26 @@ pub fn roster_drawer(flow: &Flow, lens: &Lens<'_>) -> Panel {
             .take(layout::SHEET_CHIPS)
             .enumerate()
         {
-            let mut chip = trait_chip(
+            let chip = trait_chip(
                 layout::roster_chip(row, slot),
                 id,
-                flow.explained == Some(id),
+                flow.explained.showing(id),
             );
-            for run in &mut chip.runs {
-                run.layer = theme::layers::OVERLAY_TEXT;
-            }
-            for icon in &mut chip.icons {
-                icon.layer = theme::layers::OVERLAY_TEXT;
-            }
-            panel.absorb(chip);
+            panel.absorb(chip.lifted(theme::layers::OVERLAY_TEXT));
         }
-        panel.text(TextRun::over(
+        panel.text(ui::over(
             open.min + rrow::WALLET,
             format!("{}g", lens.wallet(who)),
             theme::SMALL,
             theme::GOLD,
         ));
-        panel.text(TextRun::over(
+        panel.text(ui::over(
             open.min + rrow::NEED,
             format!("desp {}", lens.desperation(who)),
             theme::SMALL,
             theme::EMBER,
         ));
-        panel.text(TextRun::over(
+        panel.text(ui::over(
             open.min + rrow::DOING,
             clipped(&lens.activity_line(who), rrow::DOING_W),
             theme::SMALL,

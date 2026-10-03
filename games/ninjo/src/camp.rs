@@ -21,7 +21,7 @@ use crate::flow::Flow;
 use crate::lens::Lens;
 use crate::panels::clipped;
 use crate::settlement::{self, INDUSTRIES};
-use crate::ui::{IconRun, Panel, TextRun};
+use crate::ui::{self, Panel};
 use crate::{layout, theme};
 
 /// **What the camp is called right now** — the phasing arc's first beat, said
@@ -59,7 +59,7 @@ pub fn shift_odds(lens: &Lens<'_>) -> String {
 pub fn settlement_panel(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning) -> Panel {
     let mut panel = Panel::default();
     let town = crate::grid::LOCATIONS[crate::grid::TOWN].name;
-    panel.text(TextRun::new(
+    panel.text(ui::row(
         layout::works_title(),
         clipped(
             &format!("{town} - {}", standing_as(lens)),
@@ -76,7 +76,7 @@ pub fn settlement_panel(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning) -> Panel 
         .into_iter()
         .filter(|who| lens.at_home(*who))
         .count();
-    panel.text(TextRun::new(
+    panel.text(ui::row(
         layout::works_state(),
         clipped(
             &format!("{} - {idle} idle", crate::needs::camp_line(lens, tuning)),
@@ -86,7 +86,7 @@ pub fn settlement_panel(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning) -> Panel 
         theme::GOLD,
     ));
     let close = layout::works_close();
-    panel.text(TextRun::new(
+    panel.text(ui::row(
         crate::ui::centered(close, "X", theme::BODY, close.min.y + 10.0),
         "X",
         theme::BODY,
@@ -97,12 +97,12 @@ pub fn settlement_panel(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning) -> Panel 
         let at = layout::works_row(index).min;
         let standing = lens.settlement().standing(index);
         let art = spec.task.aptitude().icon();
-        panel.icon(IconRun::new(
+        panel.icon(ui::icon(
             at + layout::works::TASK_ICON,
             art,
             art.scale_across(CHIP),
         ));
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             at + layout::works::NAME,
             clipped(spec.name, layout::works::NAME_W),
             theme::SMALL,
@@ -112,7 +112,7 @@ pub fn settlement_panel(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning) -> Panel 
         // decision, and after it is built the second half becomes what is
         // free, because a slot nobody is on is the thing to act on.
         let free = settlement::free_slots(lens, index);
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             at + layout::works::COST,
             clipped(
                 &if standing {
@@ -143,7 +143,7 @@ pub fn settlement_panel(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning) -> Panel 
                     .join(", ")
             )
         };
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             at + layout::works::HANDS,
             clipped(&who, layout::works::HANDS_W),
             theme::SMALL,
@@ -177,7 +177,7 @@ pub fn settlement_panel(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning) -> Panel 
                 format!("{wage}g a shift - the {}g {} rate", rate, spec.task.id())
             }
         };
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             at + layout::works::AGAINST,
             clipped(&against, layout::works::AGAINST_W),
             theme::SMALL,
@@ -194,7 +194,7 @@ pub fn settlement_panel(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning) -> Panel 
         } else {
             ("BUILD", theme::FAINT)
         };
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             crate::ui::centered(build, verb, theme::SMALL, build.min.y + 10.0),
             verb,
             theme::SMALL,
@@ -204,7 +204,7 @@ pub fn settlement_panel(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning) -> Panel 
             (layout::works_wage_down(index), "-"),
             (layout::works_wage_up(index), "+"),
         ] {
-            panel.text(TextRun::new(
+            panel.text(ui::row(
                 crate::ui::centered(rect, glyph, theme::BODY, rect.min.y + 8.0),
                 glyph,
                 theme::BODY,
@@ -213,7 +213,7 @@ pub fn settlement_panel(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning) -> Panel 
         }
         let value = layout::works_wage_value(index);
         let shown = format!("{wage}g");
-        panel.text(TextRun::new(
+        panel.text(ui::row(
             crate::ui::centered(value, &shown, theme::SMALL, value.min.y + 10.0),
             shown,
             theme::SMALL,
@@ -237,14 +237,12 @@ pub fn settlement_panel(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning) -> Panel 
              where {town} stops being a camp"
         )
     };
-    panel.block(
+    panel.hint(
         layout::works_hint(),
-        &crate::ui::wrap(
-            &hint,
-            crate::ui::columns(layout::WORKS_HINT_W, theme::SMALL),
-        ),
-        theme::SMALL,
-        theme::FAINT,
+        layout::WORKS_HINT_W,
+        &hint,
+        theme::text(theme::SMALL, theme::FAINT),
+        theme::LEADING,
     );
     let _ = flow;
     panel
