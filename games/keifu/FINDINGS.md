@@ -1027,12 +1027,12 @@ read and used. The documents were asked nothing new.
   the bags' no-repeat draw; every birth rule and the fear and blessing inheritance; every coming-of-age rule
   and §9.5's priority; the wanderer's odds, standing, gift, dates, calling, Seer and rivals; the rolled
   dream's claims; the phase sentence; and the screen's refusal (Go on, the leaves beyond, Skip ahead, the
-  view after a choice, the dock, the greyed control, the choice's room, `may_turn`). Round one (`0464f3b`):
+  view after a choice, the dock, the greyed control, the choice's room, `may_turn`). Round one (`ec79c03`):
   one worker's thread died when a fault (B13, the choice never recorded) hung `--verify` in the checks' own
   heir loop, so 36 faults went unjudged and the first pass read **134 of 151**, one not built (M8, cut
   without its closing parenthesis; re-cut). The harness now counts a run that does not end within ten
   minutes as failed — a hang is noticed — and the heir loop fails loudly when a choice makes no progress.
-  Round one's rest (the 36, the escapes, M8; `c41a21c`'s parent): 46 of 54. Escapes, all loose checks
+  Round one's rest (the 36, the escapes, M8; `15e27fc`): 46 of 54. Escapes, all loose checks
   but two: no child created after a grandchild (R1), no parent known by the bond alone (R5) or the
   parents field alone (R6), no companion among the heirs (K3), no "(not the dream)" asked with no dream
   to leave (M2), no dead hero leaving both dreams undone (B1), no lower-case heirloom buried (B7), no dream
