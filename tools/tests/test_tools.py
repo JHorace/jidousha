@@ -3333,7 +3333,7 @@ class GameToolingTest(unittest.TestCase):
         self.assertEqual(release.splitlines()[0].split()[0], "pong")
 
     def test_a_console_example_is_listed_as_one_and_a_game_never_is(self):
-        # The six console examples never call platform::run(), so they have no
+        # The seven console examples never call platform::run(), so they have no
         # canvas to draw on and never reach the forced ?panic=1. Games are
         # always windowed — ADR-0038 means a new prototype must get the
         # stricter assertion without anybody adding it to a list.

@@ -553,7 +553,7 @@ example and every game.
   page that deploys was never checked before merging (§1's CONTRACT records
   the outage this caused).
 - **The listing says what each page must prove**: a second column, `windowed`
-  or `console`. Six of the engine's examples — `CONSOLE_EXAMPLES` in
+  or `console`. Seven of the engine's examples — `CONSOLE_EXAMPLES` in
   `tools/build-web`, the list's only home — teach with a `World` and a
   `println!` and never call `platform::run()`. That decides two assertions at
   once, because both live behind `run()`: such a page has no surface, so a

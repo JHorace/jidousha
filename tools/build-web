@@ -200,7 +200,7 @@ HEADLINE_EXAMPLE = "prototype_kit"
 # Named here because `serve-web --check` cannot tell "draws nothing by design"
 # from "broken" by looking, and a check that cannot tell them apart has to do
 # one of two wrong things: drop the assertions for every page, or call these
-# six a failure. `fleet.txt` carries the answer out to the check
+# seven a failure. `fleet.txt` carries the answer out to the check
 # (`fleet_listing`), so the workflow still never names a page.
 #
 # An example that grows a window belongs out of this list in the same commit.
@@ -211,6 +211,7 @@ CONSOLE_EXAMPLES = frozenset(
         "loading_gate",
         "scripted_player",
         "spawn_and_reap",
+        "ui_kit",
         "vec2_tour",
     }
 )
