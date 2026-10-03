@@ -47,6 +47,7 @@ impl Wording {
 
 /// Roll a wording (SPEC §20, CONSTANTS §13): the frame uniform over the three, never the
 /// frame rolled last anywhere in the run (the first is uniform over all), then nine coins.
+/// SPEC-GAPS KG-58: the frame first, then one fair coin per part in `parts` order.
 pub fn roll_wording(writing: &mut WritingMemory, rng: &mut Rng) -> Wording {
     let frame = match writing.last_frame {
         None => index(rng, EPITAPH_FRAME_COUNT),
@@ -128,6 +129,7 @@ pub fn compose(content: &Content, heroes: &[Hero], id: HeroId, wording: Wording)
 /// "His "/"Her " becomes "<full name>'s"; otherwise the first " he "/" she " inside
 /// becomes " <full name> "; otherwise the part is unchanged. The forms are the hero's
 /// own pronoun's, from the lore — the only pronoun of the hero a part can carry.
+/// SPEC-GAPS KG-60: the inside search is the lower-case form, case-sensitive, once.
 pub fn name_the_subject(content: &Content, hero: &Hero, part: &str) -> String {
     let forms = &content.lore.pronouns[hero.pronoun.index()];
     let full = hero.full_name();

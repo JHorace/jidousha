@@ -142,6 +142,7 @@ pub fn tally(content: &Content, house: &House) -> String {
 
 /// The remembrance for a pointed-at hero (SPEC §19.2): their full name, then the epitaph
 /// if one is composed, else — for the living — the station and the `living_*` lines.
+/// SPEC-GAPS KG-61: `ui.family.departed` is never shown; every crowning composes one.
 pub fn remembrance(content: &Content, house: &House, id: HeroId) -> Vec<String> {
     let words = &content.words;
     let heroes = &house.heroes;

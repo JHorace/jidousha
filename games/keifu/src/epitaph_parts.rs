@@ -90,7 +90,8 @@ pub fn parts(content: &Content, heroes: &[Hero], id: HeroId, wording: Wording) -
 }
 
 /// ORIGIN (`:154-177`): an arrival; nothing for the dead before the first year; born in
-/// play to parents; a child of the old house; a founder.
+/// play to parents; a child of the old house; a founder. SPEC-GAPS KG-63: "a parent" is
+/// the `parents` field, named by first name in its order.
 fn origin(content: &Content, heroes: &[Hero], id: HeroId, wording: Wording) -> String {
     let lore = &content.epitaph;
     let hero = &heroes[id];
@@ -129,7 +130,7 @@ fn origin(content: &Content, heroes: &[Hero], id: HeroId, wording: Wording) -> S
 
 /// ROADS (`:187-219`): never quested (a living child's teachers, a dead child, an adult
 /// who kept the house); quested before any FIRST_QUEST deed was kept (a founder, KG-40);
-/// once; many.
+/// once (SPEC-GAPS KG-59: `quests_faced` is exactly one); many.
 fn roads(content: &Content, heroes: &[Hero], id: HeroId, wording: Wording) -> String {
     let lore = &content.epitaph;
     let hero = &heroes[id];

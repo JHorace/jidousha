@@ -11,7 +11,8 @@ use crate::ids::{BondKind, Destiny, LegacyKind, Part, Pronoun};
 use crate::text::{capitalized, fmt, name_list, year_telling};
 
 /// PROPHECY (`:328-382`): nothing for the unspoken; each destiny's sentence, the `*_came`
-/// one once fulfilled; the Door by blood and by standing there; the greater student.
+/// one once fulfilled; the Door by blood and by standing there; the greater student, read
+/// as the students stand when the epitaph is composed (SPEC-GAPS KG-62).
 pub fn prophecy(content: &Content, heroes: &[Hero], id: HeroId) -> String {
     let lore = &content.epitaph;
     let hero = &heroes[id];
@@ -214,7 +215,8 @@ fn own_making(hero: &Hero, possessive: &str) -> String {
 
 /// LEFT (`:450-484`): what the living made or carry; the departed's patron; what the dead
 /// left — a legacy beside an heirloom, a tale, a blessing, a made heirloom, an heirloom
-/// that went or was buried.
+/// that went or was buried. SPEC-GAPS KG-64: the heir is the bequest's, which a ghost
+/// taken up at a coming of age also names.
 pub fn left(content: &Content, heroes: &[Hero], id: HeroId) -> String {
     let lore = &content.epitaph;
     let hero = &heroes[id];
