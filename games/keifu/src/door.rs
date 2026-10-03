@@ -91,7 +91,7 @@ impl Outlook {
 
     /// The best-four score `P(all three) + (P1 + P2 + P3) / 1000` (CONSTANTS §12), scaled
     /// by 36^3 * 1000 so two parties compare exactly (SPEC-GAPS KG-65).
-    fn score(&self) -> i64 {
+    pub fn score(&self) -> i64 {
         let product: i64 = self.ways.iter().map(|&w| i64::from(w)).product();
         let sum: i64 = self.ways.iter().map(|&w| i64::from(w)).sum();
         product * BEST_FOUR_DIVISOR as i64 + sum * i64::from(DICE_OUTCOMES).pow(2)

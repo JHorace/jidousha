@@ -107,6 +107,8 @@ pub const PARTY_A_OUTLOOK: &str =
 /// The founding household's outlook in year 1 (`door_tests.rs`: every four at 0 in 100).
 pub const YEAR_ONE_OUTLOOK: &str =
     "Your best four today bring 22, 22, 18: all three open 0 in 100.";
+/// The Door's help in year 1, naming the best four.
+pub const YEAR_ONE_HELP: &str = "Each lock is a quest: the four bring their power in that aptitude against the lock's number, and the same four try all three in turn. Fears of Dark or Cold count against them. Bonds between the four count at every lock, and so does the Seer's promise. Best four today: Garrick, Maren, Ysolde and Brannoc.";
 /// The prologue's summary for party A.
 pub const PARTY_A_SUMMARY: &str = "Against three locks of 34, 34, and 34, they brought Might 38, Wits 35, and Spirit 36. The dark and the cold lay ahead.";
 /// The verdict's title by locks given (`door.json`, MODULES.md W10).
@@ -180,6 +182,15 @@ pub fn telling_read(sim: &mut HeadlessSim) -> Vec<String> {
     read
 }
 
+/// The colour "Try the Door"'s label is set in: greyed, or lit.
+fn control_ink(sim: &HeadlessSim) -> Option<Color> {
+    let page = page_of(sim);
+    page.rows
+        .iter()
+        .find(|row| row.panel == crate::summer::SET_OUT_BUTTON)
+        .map(|row| row.style.color)
+}
+
 /// The verdict page's lines.
 pub fn verdict_lines(sim: &HeadlessSim) -> Vec<String> {
     lines_in(&page_of(sim), crate::ending_view::PANEL)
@@ -195,7 +206,20 @@ fn oracle_on(checks: &mut Checks, seed: u64) -> (usize, Vec<String>) {
         "W10: year 1's top bar does not read the best four's outlook",
         format!("seed {seed:#x}: wanted {YEAR_ONE_OUTLOOK:?}; the bar reads {bar:?}"),
     );
+    // The Door's help names the best four (SPEC §5.4's Door hover).
+    point_at(&mut sim, Target::DoorHelp, false);
+    let help = lines_in(&page_of(&sim), crate::summer::SHEET);
+    checks.require(
+        help == [YEAR_ONE_HELP],
+        "W10: the Door's help does not name the best four",
+        format!("seed {seed:#x}: the dock reads {help:?}"),
+    );
     stage_the_last_summer(&mut sim);
+    checks.require(
+        control_ink(&sim) == Some(crate::screen::ink::GONE),
+        "W10: \"Try the Door\" is not greyed with nobody before it",
+        format!("seed {seed:#x}: {:?}", control_ink(&sim)),
+    );
     checks.require(
         door_card(&sim) == EMPTY_CARD
             && crate::verify::target_rect(&sim, Target::SetOut).is_some()
@@ -234,6 +258,11 @@ fn oracle_on(checks: &mut Checks, seed: u64) -> (usize, Vec<String>) {
     let held = door_card(&sim);
     mouse.release(&mut sim, over);
     let seated = door_card(&sim);
+    checks.require(
+        control_ink(&sim) == Some(crate::screen::ink::BODY),
+        "W10: \"Try the Door\" is not lit with four before it",
+        format!("seed {seed:#x}: {:?}", control_ink(&sim)),
+    );
     checks.require(
         held == PARTY_A_CARD && seated == PARTY_A_CARD,
         "W10 oracle: party A's Door card does not read its three \"you bring\" and \"All three locks open: 59 in 100.\"",

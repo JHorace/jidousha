@@ -48,20 +48,20 @@
 //!    blade) holds the marks to their rule; and the whole-year battery — 160 houses
 //!    played up to 25 years, every turning held to its own rules, printed (`w8.rs`,
 //!    `w8_battery.rs`).
-//! 9b. **W10's oracle**, live — party A dragged onto the Door: the card's three "you bring"
+//! 10. **W10's oracle**, live — party A dragged onto the Door: the card's three "you bring"
 //!     and "All three locks open: 59 in 100." mid-drag and seated, the Door sheet, the top
 //!     bar's outlook; "Try the Door", the prologue, "After the Door", the verdict's title
 //!     for the locks given; party B's card; all four titles by staged lock outcomes; the
 //!     Ending's remembering in order, its family, "The verdict", and "Begin another house"
 //!     to the authored founding, replayed; and the full-dynasty battery, two players, 240
 //!     houses each, to the verdict (`w10.rs`, `w10_ending.rs`, `w10_battery.rs`).
-//! 10. **The W0 machinery**: calendar, text conventions, pools, bags (`foundations.rs`).
-//! 11. **Readability floors** over every surface this build has, every page of a
+//! 11. **The W0 machinery**: calendar, text conventions, pools, bags (`foundations.rs`).
+//! 12. **Readability floors** over every surface this build has, every page of a
 //!     sheet longer than the dock, at the native window and two web canvases (`floors.rs`).
-//! 12. **The sheet dock** as the player works it: resting, scrolling, a new subject,
+//! 13. **The sheet dock** as the player works it: resting, scrolling, a new subject,
 //!     the hero in hand, a drop on it (`dock_checks.rs`).
-//! 13. **The cast's sprites**: every role imported, every card its role's texture (`cast.rs`).
-//! 14. **A picture** of each oracle's screen (`capture.rs`).
+//! 14. **The cast's sprites**: every role imported, every card its role's texture (`cast.rs`).
+//! 15. **A picture** of each oracle's screen (`capture.rs`).
 
 use std::process::ExitCode;
 

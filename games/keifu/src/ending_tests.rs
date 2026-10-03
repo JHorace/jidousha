@@ -400,3 +400,18 @@ fn after_the_door_the_ending_comes_whatever_the_renown() {
         Some(Verdict::Door { .. })
     ));
 }
+
+#[test]
+fn a_fallen_hero_whose_own_dream_was_done_is_remembered_as_fulfilled() {
+    let (content, mut house) = at_the_door();
+    let brannoc = make(&mut house, "Brannoc", [1, 1, 1]);
+    let odo = make(&mut house, "Odo", [9, 9, 9]);
+    seat(&mut house, 0, &[odo, brannoc]);
+    house.heroes[odo].wounded = true;
+    if let Some(dream) = house.heroes[odo].dream.as_mut() {
+        dream.current = 3;
+    }
+    through_the_door(&content, &mut house, [[1, 1]; 3], 5);
+    assert!(!house.heroes[odo].is_living());
+    assert_eq!(house.heroes[odo].dream_fate, DreamFate::Fulfilled);
+}

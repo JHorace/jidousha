@@ -127,3 +127,47 @@ fn an_heirloom_of_ones_own_making_is_carried_as_ones_own() {
          by Maren, year 4."
     );
 }
+
+#[test]
+fn the_prologue_counts_dread_in_the_penalty_and_leaves_out_bonds_of_the_road_and_narrow_blessings()
+{
+    let (content, mut house) = at_the_door();
+    let party: Vec<HeroId> = ["Garrick", "Maren", "Ysolde", "Brannoc"]
+        .iter()
+        .map(|n| id(&house.heroes, n))
+        .collect();
+    let (maren, ysolde) = (party[1], party[2]);
+    // Dread 3: a penalty of 2 + 3/2 = 3.
+    house.heroes[ysolde].fear.dread = 3;
+    // A blessing against the walking dead counts at no lock, and is not told.
+    house.heroes[ysolde].blessings.push(crate::hero::Blessing {
+        title: "Garrick's rest".to_owned(),
+        scope: crate::hero::Scope::AgainstTag(Tag::Undead),
+        power: 2,
+    });
+    // Companions of the road: a bond that is not shown, so no one went beside anyone for it.
+    crate::bonds::form(
+        &mut house.heroes,
+        maren,
+        ysolde,
+        crate::ids::BondKind::Companion,
+        3,
+    );
+    seat(&mut house, 0, &party);
+    let lines = crate::door_prologue::prologue(&content, &house, &party);
+    assert_eq!(
+        lines[3],
+        "Ysolde was 24, and of the house before its years were counted. The Seer had said \
+         it: \"You will open the Sealed Door.\" +5 at every lock. She had been afraid of \
+         the dark all her life, and went down into it anyway: -3."
+    );
+    assert_eq!(
+        lines[5],
+        "Garrick went down beside his daughter Maren (+2), at every lock."
+    );
+    assert_eq!(
+        lines[6],
+        "Ysolde went down beside her rival Brannoc (-1), at every lock."
+    );
+    assert_eq!(lines.len(), 8);
+}

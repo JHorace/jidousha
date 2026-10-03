@@ -256,3 +256,63 @@ pub fn link_style() -> (f32, Color, Depth) {
         Depth::layer(layers::OVERLAY_MARK),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ids::BondKind;
+    use crate::testkit::{house, id};
+
+    /// The founding household with `more` wanderers like Odo (no parents) added.
+    fn crowded(more: usize) -> House {
+        let (_, mut house) = house();
+        let odo = id(&house.heroes, "Odo");
+        for n in 0..more {
+            let mut hero = house.heroes[odo].clone();
+            hero.name = format!("Ann{n}");
+            hero.bonds.clear();
+            house.heroes.push(hero);
+        }
+        house
+    }
+
+    #[test]
+    fn a_generation_wider_than_the_screen_wraps_onto_lines_of_eleven() {
+        let house = crowded(14);
+        let lines = tree_lines(&house);
+        assert!(lines.iter().all(|line| line.len() <= 11), "{lines:?}");
+        let total: usize = lines.iter().map(Vec::len).sum();
+        assert_eq!(total, house.heroes.len());
+        let rects = node_rects(&house);
+        for (i, (_, a)) in rects.iter().enumerate() {
+            assert!(a.size().x >= 104.0 && a.max.y <= 504.0, "{a:?}");
+            for (_, b) in &rects[i + 1..] {
+                assert!(!a.overlaps(*b), "{a:?} {b:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_hero_and_the_spouse_after_them_wrap_together() {
+        let mut house = crowded(14);
+        let row = &tree_rows(&house.heroes)[0];
+        // Wed the eleventh of the first generation to the next one along.
+        let (a, b) = (row[10], row[11]);
+        crate::bonds::form(&mut house.heroes, a, b, BondKind::Spouse, 1);
+        let lines = tree_lines(&house);
+        let line_of = |h: HeroId| lines.iter().position(|line| line.contains(&h));
+        assert_eq!(line_of(a), line_of(b), "{lines:?}");
+        assert!(
+            lines[0].len() < 11,
+            "the line broke before the pair: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn many_lines_close_up_to_stay_above_the_remembrance() {
+        let house = crowded(80);
+        let rects = node_rects(&house);
+        assert!(rects.iter().all(|(_, r)| r.max.y <= 504.0));
+        assert!(tree_lines(&house).len() >= 8);
+    }
+}

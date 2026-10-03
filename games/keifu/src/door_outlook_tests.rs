@@ -144,3 +144,21 @@ fn the_bearer_is_the_strongest_alone_the_first_on_ties_patrons_aside() {
     assert_eq!(name(2).as_deref(), Some("Ysolde"));
     assert_eq!(bearer(&house.heroes, &[], &lock_quest(&content, 0)), None);
 }
+
+#[test]
+fn the_best_four_score_puts_all_three_first_and_the_three_chances_after_by_a_thousandth() {
+    let (content, house) = at_the_door();
+    let mut sure_of_two = outlook(&content, &house.heroes, &[], 0);
+    sure_of_two.ways = [36, 36, 0];
+    let mut even = sure_of_two.clone();
+    even.ways = [10, 10, 10];
+    // 0 + 72/36/1000 against 1000/46656 + 30/36/1000: all three counts first.
+    assert!(even.score() > sure_of_two.score());
+    // Equal products (216), the larger sum of chances wins: 21 against 18.
+    let mut level = even.clone();
+    level.ways = [6, 6, 6];
+    let mut uneven = even.clone();
+    uneven.ways = [3, 12, 6];
+    assert!(uneven.score() > level.score());
+    assert_eq!(level.score(), level.clone().score(), "a tie is a tie");
+}

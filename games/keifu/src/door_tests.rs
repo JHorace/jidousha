@@ -445,3 +445,71 @@ fn a_first_quest_at_the_door_is_still_a_first_quest() {
         .collect();
     assert_eq!(first, [(3, Some(Place::SealedDoor))]);
 }
+
+#[test]
+fn a_dead_hero_on_the_doors_seats_does_not_stand_and_the_story_names_only_the_standing() {
+    let (content, mut house) = at_the_door();
+    let party = party_a(&mut house);
+    let garrick = party[0];
+    house.heroes[garrick].fate = crate::hero::Fate::Dead;
+    // Maren, Ysolde and Brannoc: Might 8 + 10 + 9 - 1 = 26, a disaster at any dice would
+    // follow — the lock of iron with a 12 brings 26 + 12 - 41 = -3, a setback; the story
+    // names the three who stand and the bearer among them, Ysolde (10).
+    let (record, pages) = tried(&content, &mut house, [[6, 6], [6, 6], [6, 6]]);
+    assert_eq!(record.tried[0].standing, party[1..]);
+    assert_eq!(house.heroes[record.tried[0].bearer].name, "Ysolde");
+    assert_eq!(
+        record.party, party,
+        "the party is the seats, the dead among them"
+    );
+    assert_eq!(pages[0].outcome, Outcome::Setback);
+    assert_eq!(
+        pages[0].story,
+        "Maren, Ysolde and Brannoc came down the last steps to the lock of iron. Ysolde \
+         strained at the bar until something tore. It shifted a hand's width, and no more."
+    );
+}
+
+#[test]
+fn the_door_sheet_adds_each_members_share_the_bonds_and_a_patron_to_the_cards_number() {
+    let (content, mut house) = at_the_door();
+    let party = party_a(&mut house);
+    house.patrons = 1;
+    let sheet = crate::door_view::door_sheet(&content, &house, &party);
+    let read: Vec<(String, Option<String>)> = sheet
+        .lines
+        .iter()
+        .map(|l| (l.text.clone(), l.value.clone()))
+        .collect();
+    // 39, 36, 37: margins +5, +2, +3, 36 * 30 * 33 = 35640 of 46656 — 76.4 in 100.
+    assert_eq!(read[1].0, "All three open: 76 in 100.");
+    assert_eq!(read[3].0, "bring 39, open 100 in 100");
+    assert_eq!(
+        read[4].0, "Garrick, Might 10",
+        "a share is alone, the patron aside"
+    );
+    assert_eq!(
+        read[8],
+        ("Bonds between them".to_owned(), Some("+1".to_owned()))
+    );
+    assert_eq!(
+        read[9],
+        ("A patron at Court".to_owned(), Some("+1".to_owned()))
+    );
+}
+
+#[test]
+fn at_the_door_no_closing_line_is_told_however_low_the_renown() {
+    let (content, mut house) = at_the_door();
+    party_a(&mut house);
+    house.renown = 0;
+    let (record, pages) = tried(&content, &mut house, [[1, 1], [1, 1], [1, 1]]);
+    house.renown = 0;
+    let telling = crate::telling::Telling {
+        year: 26,
+        pages,
+        meanwhile: Vec::new(),
+        door: Some(record),
+    };
+    assert!(crate::telling_view::meanwhile_lines(&content, &house, &telling).is_empty());
+}
