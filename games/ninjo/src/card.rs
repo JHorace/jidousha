@@ -481,7 +481,7 @@ pub fn pleas_drawer(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning, now: u64) -> 
             now,
             petition,
             layout::plea_card(),
-            flow.consequence_open,
+            flow.consequence_open == Some(id),
             true,
         ));
     }
@@ -513,7 +513,7 @@ pub fn voicing_overlay(flow: &Flow, lens: &Lens<'_>, tuning: &Tuning, now: u64) 
         now,
         petition,
         layout::voicing_card(),
-        flow.consequence_open,
+        flow.consequence_open == Some(id),
         false,
     ));
     let later = layout::card_act(layout::voicing_card());

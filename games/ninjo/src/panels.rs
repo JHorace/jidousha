@@ -265,10 +265,15 @@ fn read_breakdown(
     open: crate::flow::Breakdown,
 ) -> Option<(String, crate::autonomy::Reckoning)> {
     match open {
-        crate::flow::Breakdown::Job(slot) => {
-            let (site, who) = (flow.board?, flow.selected?);
-            let quest = lens.site(site)?.quest(slot)?;
-            let job = crate::sim::JobId { site, slot };
+        crate::flow::Breakdown::Job(job) => {
+            // The band is about one row of the board it was opened on; a
+            // board that has been replaced under it is the orphaning
+            // `Flow::put_the_band_away` catches on the next tick.
+            if flow.board != Some(job.site) {
+                return None;
+            }
+            let who = flow.selected?;
+            let quest = lens.site(job.site)?.quest(job.slot)?;
             let reading = crate::board::reading_for(flow, lens, tuning, now, who, job, quest.task);
             // The board's own title says which site, so the heading names the
             // row and not the journey: a heading clipped at "the posting for

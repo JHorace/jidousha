@@ -115,6 +115,208 @@ came of them — the answer it used is the game's own `panels::clipped`, and
 finding, but "looked in the engine first" is what the fence measures. Its
 entries below are all about *this game* (G-056 to G-059).
 
+**The wave-1 sanitation pass, session 1 — the UI exemplar audit
+(2026-10-02) — read** `CLAUDE.md`, `docs/templates/SANITATION.md`,
+`docs/agent-practices.md` §2.5, `docs/conventions.md` §Documents,
+`docs/implementation-plan.md` §2, the `make-game` skill, this game's `UI.md`
+whole and `FINDINGS.md` whole, `GDD.md` §8's wave-plan lines, and the UI side
+of `src/` whole — the flow, the screens, the panels, the board and its picker,
+the work list, the card and its clicks, the tuning drawer, the meters, the
+ledger, the settlement panel, the floors, the frames, the layout's rectangles,
+the attention table, the lens's header, and the harness that photographs them
+(the sweep's conductor, `verify.rs`'s UI batteries, `shots.rs`, `pleashots.rs`,
+`eventshots.rs`, `capture.rs`). It opened no file under `crates/*/src/`, no
+`docs/internal/`, and no ADR; the two tool scripts it read (`tools/verify`,
+`tools/test`) were read to know what a transcript contains. **It asked
+`docs/api/` nothing.** The one document it could not find is the "process
+doc §13" the handoff cites for the extraction rule, which is not in this
+repository; the rule applied is the handoff's own statement of it (three or
+more call sites), and that is a note rather than a finding. Its entries below
+(G-060 to G-065) are all about *this game* and its harness, and the audit's
+report — the promotion list, the hunt and what was considered and left alone —
+is in the pull request.
+
+## The wave-1 sanitation pass, session 1: the UI exemplar audit (2026-10-02) — **6 new findings**, all the game's own
+
+The pass G-031 asked for. Report-first and transcript-identical: the report
+was written before the first edit, the five suspected states were staged
+through the real click harness by a throwaway test module that was deleted
+before any change, and `tools/verify ninjo` and `tools/verify keifu` are
+byte-identical before and after (the pull request carries both). Three of
+the five fixes are one line each, which is the signature of the class: the
+fix is never hard, only unfindable from inside one wave.
+
+### G-060 — the class, fifth instance: the left column is five fields, and three bites were in it
+
+Class: **the class** (G-031's shape, one layer down from the drawers) · Game:
+ninjo · Files: `games/ninjo/src/flow.rs`, `src/screens.rs`, `src/verify.rs`,
+`UI.md` §3f, §3g · **The three bites closed here; the collapse open — an
+owner call**
+
+UI.md §3g states the fact once: the left of the screen is one surface at a
+time — the job board, the candidate picker, the work list, the settlement
+panel, the faces list. `Flow` states it five times: `board`, `picking`,
+`listing`, `works`, `drilled`, kept in step by four hand-written clearings
+(`open_the_works`, the marker click, the meter-chip click, the work chip) and
+two tick rules. Each clearing was correct on the day it was written. The
+settlement panel arrived in wave 1.3 and was added to the marker's list and
+to its own, and not to the two that predate it:
+
+- **A meter chip drilled over the settlement panel drew both.** The chip's
+  click clears `board` and not `works`; the frame carried the faces list's
+  title and the panel's, the faces rows took the click, `floors::controls_for`
+  named the settlement set, and judging that frame against it reported seven
+  problems (faces text across BUILD and the wage steppers). Reachable in two
+  taps: the camp's marker, then any chip. G-027's shape exactly — the thing
+  drawn, the thing clicked and the thing judged were three different lists.
+- **The sheet's work chip did nothing with the settlement panel up.** Its
+  clearing names the board, the picker, the drilled chip and the band — the
+  siblings as of 2026-09-11 — and `put_the_list_away` then dropped the list on
+  the same tick because `works` was true. The chip never lit, no list drew, no
+  notice was written: a tap that did nothing and said nothing, which is the
+  failure CLAUDE.md's third convention forbids.
+- **Twelve map words were drawn under the work list.** `screens::content`'s
+  `worded` silenced the map under the board and the works and not under the
+  list, which takes the board's rectangle (§3f). Hidden by the list's fill,
+  so no photograph showed them; present in the `Panel`, so `frames::judge_chrome`
+  found every one on the frame and no floor said a word.
+
+Expected: one value. Happened: five, and the three places a later surface
+was not added. **What closed here** is the three bites — `works` goes down on
+a drill and on the work chip, and `worded` names the list — with
+`verify::the_left_column_is_one_surface` walking both paths through the real
+handles and `map_labels_are_governed` asking the label rule of all three
+surfaces that take the board's rectangle. **What is open** is the remedy
+G-027 got: `Flow::column: Option<Column>` — `Board(site)`, `Picker(JobId)`,
+`List(who)`, `Faces(chip)`, `Works` — one `match` in the render, the click
+routing and `controls_for`, which also retires G-031's four tick-checked
+pairs. It touches every reader of the five fields and it is the owner's call
+(the pull request's Q3).
+
+### G-061 — the game's own: the breakdown band carried a slot, and a marker that replaced the board left it explaining a row nobody tapped
+
+Class: **the game's own** (the class, in the band) · Game: ninjo · Files:
+`games/ninjo/src/flow.rs`, `src/panels.rs`, `src/board.rs`, `src/floors.rs`,
+`UI.md` §3c · **Closed by this session**
+
+`Breakdown::Job` held a slot. UI.md §3c says, of the picker, exactly why that
+is not enough: a slot alone is a number read against whichever board happens
+to be open, and a marker outside the surface's own rectangle is still
+clickable. The band's orphaning rule asked `board.is_none()`, which a
+*replacement* never satisfies.
+
+Expected: the band goes with the board it explains. Happened, staged through
+the harness: board A open, somebody selected, the `?` tapped on row 1, then
+the Black Vault's marker — which lies under the character panel's body at the
+reference camera, and the body falls through (§3a). The board became the
+Vault's, the band stayed `Job(1)` and recomputed itself as `WHY - Bob would
+take it the vault door`, and a gold `?` lit on the Vault's row 1, which
+nobody had tapped. On a board whose row 1 is not open the band draws nothing
+while its gold frame stays up and swallows clicks.
+
+**The fix is the picker's shape**: `Breakdown::Job(JobId)`, and
+`Flow::put_the_band_away` compares sites; `panels::read_breakdown` refuses a
+board that is not the job's. `verify::the_band_belongs_to_its_surface`'s
+marker way is what asserts it — once that way reached a marker (G-062).
+
+### G-062 — the game's own: a battery's way out was a posting, and the check passed for the wrong reason
+
+Class: **the game's own** (the harness; a check that passed for the wrong
+reason) · Game: ninjo · Files: `games/ninjo/src/verify.rs`
+(`the_band_belongs_to_its_surface`) · **Closed by this session**
+
+The band battery walks four ways out of a board with the band up and asserts
+the band is gone after each. Its fourth way, "another site's marker, which is
+a board about something else", clicked the Deep Cave's marker — which at the
+reference camera lies **inside the open board's rectangle**, and the board
+swallows its own rectangle on purpose (§3c). The click landed on a job row and
+made a posting; the posting put the selection and the board down; the band
+went because of that; the check passed. The one way written to prove the band
+survives a *replaced* board never replaced a board, which is why G-061 lived
+under a green check.
+
+Expected: a way out named "another site's marker" reaches a marker. Happened:
+it reached a row. **Done on its authority:** nothing beyond trusting the green
+— the probe that staged G-061 is what read the four events. The way now
+clicks the Black Vault's marker (under the panel's body, which falls through),
+carries the board it expects to find, and asserts no event was emitted, so it
+cannot pass by posting again. The class is worth naming for the next battery:
+a scripted click that lands somewhere other than the thing its label says is
+a check about a different claim.
+
+### G-063 — the game's own: the consequence chip was a flag beside the card
+
+Class: **the game's own** (the class; the handoff's "boolean beside an
+`Option` it shadows") · Game: ninjo · Files: `games/ninjo/src/flow.rs`,
+`src/card.rs`, `src/plead.rs`, `src/floors.rs`, `UI.md` §3h · **Closed by
+this session**
+
+`Flow::consequence_open: bool` stood beside the card it was about — the
+ledger's focused petition or the voiced one. The ledger reset it when a
+*tapped* row changed; the overlay's chip, a resume by space or a speed chip,
+and the ledger's fallback focus (`card::focused`, the first row) did not.
+
+Expected: a chip open for one card and no other. Happened, staged at seed 10
+through the real clicks: Bob's overlay, the chip tapped, `3` pressed; after
+the resume the flag was still true, and Steve's overlay opened two world-days
+later with its chip already gold and explained before anybody tapped it.
+
+The fix is the type: `consequence_open: Option<usize>`, the petition whose
+chip is open — the same shape as `explained: Option<TraitId>`, a trait and
+not a place — so the overlay and the ledger each ask "is it mine" and the
+ledger's row-change reset is retired as a rule nobody needs.
+`verify::the_chip_belongs_to_its_card` stages both placements with the chip
+open for the right card and for the wrong one.
+
+### G-064 — the game's own: the board's offer and its TO toggle outlive the board
+
+Class: **the game's own** (the class; a value feeding a recorded input) ·
+Game: ninjo · Files: `games/ninjo/src/flow.rs`, `src/board.rs`, `UI.md` §3c ·
+**Open — an owner call**
+
+`Flow::offer` says of itself that it "goes down with the board", and UI.md
+§3c says the wage stepper "opens at the standing rate". Only `make_posting`
+and `close_everything` clear it; the board's X, bare ground and a marker
+switch do not, and `post_open` survives even a posting.
+
+Expected: the next board opens at the standing rate, offering to the
+selection. Happened, staged: a board opened, the wage stepped to 24g, TO
+toggled to anyone, the board closed with its X, another opened — its footer
+read `24g` and `TO ANY` where the standing rate for its first open row is 16g.
+What is shown is what is posted (`board_wage` and `make_posting` read the same
+field), so the footer and the posting agree with each other and both disagree
+with the documents.
+
+**Not fixed here**, deliberately: the remedy by construction is the board as
+one value — `Option<Board { site, offer: Option<i64>, to_anyone: bool }>` —
+which touches every reader of `flow.board` and changes the wage a posting is
+made at on a path no script walks. That is a decision about a recorded
+input's source, and the sanitation fence hands it back. `board::wage_offered`'s
+two ignored parameters and its "this row's wage" doc comment are the same
+item's doc-truth half, left for that audit. UI.md §3c carries a note.
+
+### G-065 — the game's own: three handles have a box and three do not
+
+Class: **the game's own** (the class; a hand-list beside `Drawer::ALL`) ·
+Game: ninjo · Files: `games/ninjo/src/screens.rs` (`draw_chrome`) · **Open
+— its own small session**
+
+`draw_chrome` draws a ghost ground and a border under `[feed_button,
+tune_button, modes_button]` — the three handles that existed when the line
+was written. UI.md §3 says every handle is walked off `Drawer::ALL` "and
+nothing else to remember"; the labels and the click routing are, the boxes
+are not. ROSTER (1.1), LEDGER (1.2) and PLEAS (1.5) are bare text on every
+committed screenshot, and no floor sees a fill.
+
+Expected: six boxes. Happened: three. **Not fixed here**: walking
+`Drawer::ALL` is one loop, and it adds fifteen quads to every frame — the map
+photograph's draw transcript is printed by the verify run, so the fix moves
+the transcript and is not sanitation. It wants its own commit with the
+regenerated PNGs. The drawer fills are the same second-list shape
+(`feed_panel()` for four drawers, where `layout::roster_panel()` and
+`ledger_panel()` are aliases of it today); a `Drawer::rect()` beside
+`handle()` would end both.
+
 ### G-050 — the game's own: an idle camp reaches the desperation ceiling on its fifth night, petitions or not
 
 Class: **the game's own** (a design fact the petition horizon exposed; the
@@ -870,8 +1072,9 @@ this session's.
 ### G-031 — the class: four defects in four waves, all of them two representations of one fact
 
 Class: **the class** (a pattern across this game's own findings) · Game: ninjo
-· Files: the four entries it names · **Open — for the wave-1 close's exemplar
-audit**
+· Files: the four entries it names · **Open — the audit ran (2026-10-02, the
+wave-1 sanitation pass) and found the fifth instance; closes with G-060's
+collapse**
 
 Four defects now, in four consecutive waves, with one shape:
 
@@ -905,6 +1108,12 @@ playtest to find one. A start, from this session: `Flow::board` and
 merely conventional, which is the weaker version of the remedy and the reason
 they have not bitten — but they are still two values where the surfaces they
 describe are one column.
+
+*The audit's answer (2026-10-02):* the column is the fifth instance — five
+fields, four hand-written clearings, and three bites in the gap between them
+(G-060), plus the band carrying a slot where the picker carries a job (G-061)
+and the consequence chip's flag beside its card (G-063). The remedy proposed
+is the same one, `Option<Column>`, and it is the owner's call.
 
 ### G-021 — the game's own: the standing rate is a coarse lever at the rate it ships at
 

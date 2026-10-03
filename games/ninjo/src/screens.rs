@@ -379,7 +379,13 @@ pub fn content(
     // words it hides are the words it carries in full: a site's name and the
     // count of what is open there. So while a board is up the map is a picture
     // and the board is the words (UI.md §3c).
-    let worded = bare && flow.board.is_none() && !flow.works;
+    //
+    // **And the work list and the settlement panel are the same rule**: each
+    // stands in the board's own rectangle (UI.md §3f, §3g). The list was
+    // missing from this line, and twelve words were drawn under it on every
+    // frame it was up — hidden by its fill, so no photograph showed them and
+    // no floor counted them (`FINDINGS.md` G-060).
+    let worded = bare && flow.board.is_none() && !flow.works && flow.listing.is_none();
 
     // **The floor governs the labels, and the zoom no longer yields to them**
     // (UI.md §4, `FINDINGS.md` G-022). A name is drawn in world units and

@@ -1511,7 +1511,10 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
     // arithmetic open on the board, and a decision's arithmetic open under
     // the feed — the band's two placements, both judged.
     let mut explained = board.clone();
-    explained.breakdown = Some(crate::flow::Breakdown::Job(0));
+    explained.breakdown = Some(crate::flow::Breakdown::Job(crate::sim::JobId {
+        site: explained.board.unwrap_or(0),
+        slot: 0,
+    }));
     let mut explained_entry = feed_open.clone();
     explained_entry.breakdown = baseline
         .sim
@@ -1554,25 +1557,32 @@ pub fn content_states(baseline: &Conducted) -> Vec<(&'static str, Flow, Sim, Clo
     // with the chip's explanation open, the ledger with every kind of row and
     // its card explained, and the ledger on the card whose explanation is
     // longest — a gives-away naming the one it speaks for.
-    let (pleaded, voiced, pleaded_clock, _) = petitioned_world();
+    let (pleaded, voiced, pleaded_clock, last) = petitioned_world();
+    // The chip is open for its own card's id: the voiced petition on the
+    // overlay, the first ledger row on the mixed ledger, the widest card on
+    // its own.
     let voicing_flow = Flow {
-        consequence_open: true,
+        consequence_open: Some(last),
         ..Flow::default()
     };
+    let first_row = crate::card::ledger_order(&Lens::on(&pleaded))
+        .first()
+        .copied();
     let pleas_flow = Flow {
         drawer: Some(Drawer::Pleas),
-        consequence_open: true,
+        consequence_open: first_row,
         ..Flow::default()
     };
+    let widest = pleaded
+        .petitions
+        .all()
+        .iter()
+        .find(|petition| petition.template.id == "look-after-them")
+        .map(|petition| petition.id);
     let widest_flow = Flow {
         drawer: Some(Drawer::Pleas),
-        consequence_open: true,
-        plea: pleaded
-            .petitions
-            .all()
-            .iter()
-            .find(|petition| petition.template.id == "look-after-them")
-            .map(|petition| petition.id),
+        consequence_open: widest,
+        plea: widest,
         ..Flow::default()
     };
     vec![

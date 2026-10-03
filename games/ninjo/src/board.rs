@@ -238,7 +238,7 @@ pub fn site_board(
                 // control inside a control is what the overlap floor refuses.
                 // Gold while this row's sum is the one on the band.
                 let why = layout::board_why(slot);
-                let lit = flow.breakdown == Some(crate::flow::Breakdown::Job(slot));
+                let lit = flow.breakdown == Some(crate::flow::Breakdown::Job(job));
                 panel.text(TextRun::new(
                     crate::ui::centered(why, "?", theme::BODY, why.min.y + 12.0),
                     "?",
