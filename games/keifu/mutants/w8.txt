@@ -911,10 +911,10 @@
 -                 (Target::Skip, Some(page)) => return turn_to(last_leaf_of(&leaves, page)),
 +                 (Target::Skip, Some(page)) => return turn_to(first_leaf_of(&leaves, page)),
 
-### S5 the view leaves the page chosen on
+### S5 the view leaves the page chosen on (re-cut s9)
 @ src/pointer.rs
--             turn_to(first_leaf_of(&turning_leaves(passage), at))
-+             turn_to(first_leaf_of(&turning_leaves(passage), 0))
+-             turn_to(first_leaf_of(&turning_leaves(passage, &house.heroes), at))
++             turn_to(first_leaf_of(&turning_leaves(passage, &house.heroes), 0))
 
 ### S6 pointing at an heir opens no sheet
 @ src/pointer.rs
