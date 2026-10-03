@@ -94,8 +94,10 @@ pub fn draw_seed(rng: &mut Rng) -> u64 {
 }
 
 impl House {
-    /// Found a house on `seed` and prepare its first summer, drawing the board's
-    /// rolls from `rng` (the run's generator).
+    /// Found a house on `seed` and prepare its first summer, drawing from `rng` (the run's
+    /// generator) in SPEC §22.2's order: the two dead founders' epitaph wordings (Elsbeth
+    /// first, as `dead_at_start` lists them, each composed as it is rolled), then the
+    /// board's rolls.
     pub fn found(content: &Content, seed: u64, rng: &mut Rng) -> Result<Self, String> {
         let founded = found(content)?;
         let mut house = Self {
@@ -121,6 +123,12 @@ impl House {
             mourned: Vec::new(),
             closed: false,
         };
+        for key in &content.founding.dead_at_start {
+            let Some(id) = house.heroes.iter().position(|hero| hero.key == *key) else {
+                return Err(format!("dead_at_start names {key:?}, who was not founded"));
+            };
+            crate::epitaph::remember(content, &mut house.heroes, &mut house.writing, id, rng);
+        }
         house.prepare_summer(content, rng);
         Ok(house)
     }

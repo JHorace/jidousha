@@ -3,8 +3,9 @@
 //! further leaves ("..., continued").
 //!
 //! A death, birth, coming-of-age or arrival page shows the card of the hero it is about;
-//! a death page shows the dead's condition line where the original sets the epitaph
-//! (W9's — session 1's stated deviation). An undecided death page ends with "WHO IS HIS
+//! a death page sets the dead's epitaph at its top, under the card (SPEC §18.1), read off
+//! the hero so a recomposition shows the moment it happens. An undecided death page ends
+//! with "WHO IS HIS
 //! HEIR? One choice. It cannot be unmade." and its heir buttons, two columns of up to
 //! five, the last "No one. Let it lie."; pointing at one opens that heir's sheet in the
 //! dock. While a page is undecided the turning will not go past it: "Go on" there is
@@ -16,6 +17,7 @@ use jidousha::prelude::*;
 
 use crate::content::Content;
 use crate::heirs::heir_buttons;
+use crate::hero::Hero;
 use crate::house::House;
 use crate::passage::{PageKind, Passage, TurnPage};
 use crate::screen::{MIN_TEXT, PAD, Page, Target, UiState, ink, layers, wrap};
@@ -72,19 +74,34 @@ fn height(text: &str) -> f32 {
     wrap(text, text_area().size().x, MIN_TEXT).len() as f32 * PITCH
 }
 
-/// What a page's first leaf sets above its lines: the title, the card, the condition.
-fn first_header(page: &TurnPage) -> f32 {
+/// A death page's epitaph: the dead's, as composed now. A death page whose dead has none
+/// was made without its step 8 (SPEC §15.1), and is refused loudly.
+pub fn page_epitaph<'h>(page: &TurnPage, heroes: &'h [Hero]) -> Option<&'h str> {
+    let (PageKind::Death, Some(id)) = (page.kind, page.about) else {
+        return None;
+    };
+    match &heroes[id].epitaph {
+        Some(epitaph) => Some(epitaph),
+        None => panic!(
+            "[keifu] {}'s death page has no epitaph to set at its top\n  likely cause: the \
+             page was made without composing it\n  fix: SPEC §15.1 step 8 composes it on the page",
+            heroes[id].name
+        ),
+    }
+}
+
+/// What a page's first leaf sets above its lines: the title, the card, a death's epitaph.
+fn first_header(page: &TurnPage, heroes: &[Hero]) -> f32 {
     let card = if page.about.is_some() {
         CARD.y + PART_GAP
     } else {
         0.0
     };
-    let condition = if page.kind == PageKind::Death {
-        PITCH + LINE_GAP
-    } else {
-        0.0
+    let epitaph = match page_epitaph(page, heroes) {
+        Some(epitaph) => height(epitaph) + PART_GAP,
+        None => 0.0,
     };
-    TITLE_PITCH + PART_GAP + card + condition
+    TITLE_PITCH + PART_GAP + card + epitaph
 }
 
 /// Whether a page waits for its heir.
@@ -95,8 +112,9 @@ fn waiting(page: &TurnPage) -> bool {
 }
 
 /// The turning's leaves, in order: each page split under its heading, an undecided death
-/// page keeping room on its last leaf for the choice.
-pub fn leaves(passage: &Passage) -> Vec<Leaf> {
+/// page keeping room on its last leaf for the choice. A death page's epitaph is read off
+/// `heroes`, so the leaves follow it when it is recomposed.
+pub fn leaves(passage: &Passage, heroes: &[Hero]) -> Vec<Leaf> {
     let room = text_area().size().y;
     let mut out = Vec::new();
     for (index, page) in passage.pages.iter().enumerate() {
@@ -104,7 +122,13 @@ pub fn leaves(passage: &Passage) -> Vec<Leaf> {
         let mut at = 0;
         let mut first = true;
         loop {
-            let mut used = PITCH + PART_GAP + if first { first_header(page) } else { 0.0 };
+            let mut used = PITCH
+                + PART_GAP
+                + if first {
+                    first_header(page, heroes)
+                } else {
+                    0.0
+                };
             let start = at;
             while at < page.lines.len() && used + height(&page.lines[at]) <= room {
                 used += height(&page.lines[at]) + LINE_GAP;
@@ -181,7 +205,7 @@ pub fn lay_out(page: &mut Page, content: &Content, house: &House, passage: &Pass
     let words = &content.words;
     lay_out_top_bar(page, content, house);
     page.shape(PANEL, ink::PANEL, layers::PANEL);
-    let leaves = leaves(passage);
+    let leaves = leaves(passage, &house.heroes);
     let current = ui.leaf.min(leaves.len() - 1);
     let leaf = &leaves[current];
     let turn = &passage.pages[leaf.page];
@@ -208,11 +232,8 @@ pub fn lay_out(page: &mut Page, content: &Content, house: &House, passage: &Pass
             page.targets.push((rect, Target::Hero(id)));
             y += CARD.y + PART_GAP;
         }
-        if let (PageKind::Death, Some(id)) = (turn.kind, turn.about) {
-            // W9 sets the epitaph here; until then, the sheet's condition line.
-            let sheet = crate::sheet::hero_sheet(content, &house.heroes, id);
-            let condition = sheet.lines[2].text.clone();
-            y = text(page, &condition, y, MIN_TEXT, ink::NOTE, None) + LINE_GAP;
+        if let Some(epitaph) = page_epitaph(turn, &house.heroes) {
+            y = text(page, epitaph, y, MIN_TEXT, ink::BODY, None) + PART_GAP;
         }
     }
     for line in &turn.lines[leaf.lines.clone()] {

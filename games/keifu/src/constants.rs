@@ -1,4 +1,4 @@
-//! The rule numbers W0 to W8 read, each copied from `spec/CONSTANTS.md`.
+//! The rule numbers W0 to W9 read, each copied from `spec/CONSTANTS.md`.
 //!
 //! Numbers are rules, not hand-authored words, so they live in source. Where a
 //! number also appears in a content file, `content::load` checks the two agree
@@ -305,6 +305,11 @@ pub fn stage_goal(kind: DreamKind, stage: usize) -> i32 {
 
 /// `DOOR_LOCKS`: demands of the Might, Wits, Spirit locks (CONSTANTS §12).
 pub const DOOR_LOCKS: [i32; 3] = [34, 34, 34];
+
+/// `EPITAPH_SENTENCES`: an epitaph's budget, counted as "." characters (CONSTANTS §13).
+pub const EPITAPH_SENTENCES: usize = 6;
+/// `EPITAPH_FRAME_COUNT`: the frames a wording rolls among (CONSTANTS §13).
+pub const EPITAPH_FRAME_COUNT: usize = 3;
 
 /// The telling's typewriter: story letters per second (CONSTANTS §14). Presentation:
 /// render-side pacing over the fixed sim, which nothing in the house reads.

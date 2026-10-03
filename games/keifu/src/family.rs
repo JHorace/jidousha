@@ -1,9 +1,9 @@
 //! The top bar (SPEC §5.4) and the family screen's membership (SPEC §19.2), as information.
 //!
 //! The family screen shows every hero who ever lived, parents above children and
-//! spouses linked. Pointing at a living hero shows their station and the
-//! `ui.family.living_*` lines. Epitaphs are W9: pointing at the dead shows the
-//! sheet's condition line until then (a deviation, stated in the PR).
+//! spouses linked. Pointing at a hero shows the remembrance (§19.2): the epitaph once
+//! one is composed (the dead, the crowned), otherwise for the living their station and
+//! the `ui.family.living_*` lines.
 
 use crate::content::Content;
 use crate::dream::{progress, told_title};
@@ -140,13 +140,18 @@ pub fn tally(content: &Content, house: &House) -> String {
     )
 }
 
-/// The remembrance for a pointed-at hero (SPEC §19.2), without epitaphs.
+/// The remembrance for a pointed-at hero (SPEC §19.2): their full name, then the epitaph
+/// if one is composed, else — for the living — the station and the `living_*` lines.
 pub fn remembrance(content: &Content, house: &House, id: HeroId) -> Vec<String> {
     let words = &content.words;
     let heroes = &house.heroes;
     let hero = &heroes[id];
+    if let Some(epitaph) = &hero.epitaph {
+        return vec![hero.full_name(), epitaph.clone()];
+    }
     if !hero.is_living() {
-        // Epitaphs are W9. Until then the dead read as their sheet's condition line.
+        // SPEC-GAPS KG-57: a summer's dead await their death page, and their epitaph, until
+        // the turning; until then they read as their sheet's condition line.
         let sheet = crate::sheet::hero_sheet(content, heroes, id);
         return sheet
             .lines

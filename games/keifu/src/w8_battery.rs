@@ -88,11 +88,14 @@ pub fn check_whole_years(checks: &mut Checks, content: &Content) -> Vec<String> 
         ..Tally::default()
     };
     let mut ever_ghosts = 0;
+    // W9 watches the same houses for their epitaphs (`w9_battery.rs`).
+    let mut watch = crate::w9_battery::Watch::default();
     for seed in BATTERY {
         let mut rng = Rng::from_seed(seed);
         let Ok(mut house) = House::found(content, seed, &mut rng) else {
             crate::checks::fail("a battery house did not found", &format!("seed {seed:#x}"));
         };
+        watch.found(content, seed, &house);
         let mut told: BTreeSet<HeroId> = BTreeSet::new();
         let mut on_quest_pages: BTreeSet<(HeroId, i32)> = BTreeSet::new();
         for year in 1..=YEARS {
@@ -106,6 +109,13 @@ pub fn check_whole_years(checks: &mut Checks, content: &Content) -> Vec<String> 
             set_out(content, &mut house, &mut rng);
             t.laid += ghosts_walking - house.ghosts.len();
             let telling = house.telling.clone().unwrap_or_default();
+            let crowned: Vec<HeroId> = telling
+                .pages
+                .iter()
+                .flat_map(|page| page.members.iter().copied())
+                .filter(|&m| before_summer[m].is_living() && house.heroes[m].fate == Fate::Departed)
+                .collect();
+            watch.observe(content, &house, &crowned, "a summer");
             for page in &telling.pages {
                 for &m in &page.members {
                     t.require(before_summer[m].is_living(), || {
@@ -141,9 +151,18 @@ pub fn check_whole_years(checks: &mut Checks, content: &Content) -> Vec<String> 
             let_the_winter_pass(content, &mut house, &mut rng);
             t.turnings += 1;
             one_turning(&mut t, content, seed, year, &before, &house, &mut told);
+            let paged: Vec<HeroId> = house
+                .passage
+                .iter()
+                .flat_map(|p| p.pages.iter())
+                .filter(|p| p.kind == PageKind::Death)
+                .filter_map(|p| p.about)
+                .collect();
+            watch.observe(content, &house, &paged, "a turning");
             let ghosts_before = house.ghosts.len();
             let passed_before = count_fate(&house, crate::hero::DreamFate::PassedOn);
             crate::play::choose_every_heir(content, &mut house, rotating(seed));
+            watch.observe(content, &house, &[], "the heirs chosen");
             t.raised += house.ghosts.len().saturating_sub(ghosts_before);
             t.passed += count_fate(&house, crate::hero::DreamFate::PassedOn) - passed_before;
             chosen(&mut t, &house);
@@ -191,6 +210,7 @@ pub fn check_whole_years(checks: &mut Checks, content: &Content) -> Vec<String> 
             t.births, t.comings, t.wanderers, t.old_age, t.raised, t.passed
         ),
     );
+    let epitaphs = watch.summary(checks);
     let mean = |y: usize| {
         let (n, sum) = t.living_at[y];
         if n == 0 { 0.0 } else { sum as f64 / n as f64 }
@@ -242,6 +262,9 @@ pub fn check_whole_years(checks: &mut Checks, content: &Content) -> Vec<String> 
             100.0 * t.fair as f64 / t.summers.max(1) as f64
         ),
     ]
+    .into_iter()
+    .chain(epitaphs)
+    .collect()
 }
 
 fn count_fate(house: &House, fate: crate::hero::DreamFate) -> usize {

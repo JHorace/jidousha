@@ -174,6 +174,7 @@ fn a_child_takes_up_an_ancestors_ghost_at_coming_of_age_and_the_ghost_is_quiet()
     house.heroes[wren].age = 11;
     house.heroes[brannoc].fate = Fate::Dead;
     house.heroes[brannoc].grieved = true;
+    crate::testkit::paged(&mut house, brannoc);
     let blade = Dream::build(&content, DreamKind::ForgeABlade, None, None).expect("builds");
     let barrow = house.heroes[garrick].dream.clone().expect("a dream");
     let mut owned = blade.clone();

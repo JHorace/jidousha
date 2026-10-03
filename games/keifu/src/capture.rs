@@ -15,7 +15,9 @@
 //! cradle-ring, with Garrick's sheet in the dock), and the closed house's verdict. Then
 //! W7's: Odo held over Pip's bench with the "+1 Spirit" preview, the played winter's
 //! hearth seated with every preview, the winter page, Pip's and Odo's sheets after it,
-//! and Ysolde's road-book on her sheet beside the played winter's page.
+//! and Ysolde's road-book on her sheet beside the played winter's page. Then W8's turning
+//! and grown house, and W9's: Elsbeth's epitaph on the family screen's remembrance panel,
+//! and a questing death's and an old age's epitaph at the top of their death pages.
 
 use std::path::{Path, PathBuf};
 
@@ -92,6 +94,9 @@ pub fn capture_all(checks: &mut Checks) -> Vec<String> {
         (&["w8-turned", "kind:Year"][..], "keifu-w8-year.png"),
         (&["w8-grown"][..], "keifu-w8-grown.png"),
         (&["w8-grown", ""][..], "keifu-w8-grown-family.png"),
+        (&["", "Elsbeth"][..], "keifu-w9-elsbeth.png"),
+        (&["w9-questing"][..], "keifu-w9-questing-death.png"),
+        (&["w9-old-age"][..], "keifu-w9-old-age.png"),
     ]
     .into_iter()
     .enumerate()
@@ -138,6 +143,15 @@ pub fn capture_all(checks: &mut Checks) -> Vec<String> {
                 continue;
             } else if *name == "w8-turned" {
                 crate::w8::stage_turned_year(&mut sim);
+                continue;
+            } else if *name == "w9-questing" || *name == "w9-old-age" {
+                if *name == "w9-questing" {
+                    crate::w9::stage_questing_death(&mut sim);
+                } else {
+                    crate::w9::stage_old_age(&mut sim);
+                }
+                // A frame for the page to settle under the pointer at rest.
+                crate::verify::point(&mut sim, jidousha::prelude::Vec2::new(4.0, 700.0), false);
                 continue;
             }
             if name.is_empty() {

@@ -77,10 +77,13 @@ pub fn old_age(content: &Content, house: &mut House, rng: &mut Rng) {
 /// lines — the heirloom left, the dream left undone — then the Door's promise and, for
 /// an old-age death, grief. The dream's fate is settled where there is nothing to
 /// choose; with an heirloom or an undone dream the heirs are gathered and the page
-/// waits. The epitaph wording the original rolls here, and the epitaph it composes,
-/// are W9's: until then the page shows the dead's condition line.
-pub fn death_page(content: &Content, house: &mut House, dead: HeroId) -> TurnPage {
+/// waits. The page rolls the dead's epitaph wording first (step 1) and composes the
+/// epitaph last (step 8), over everything the page settled; the screen sets it at the
+/// top of the page.
+pub fn death_page(content: &Content, house: &mut House, dead: HeroId, rng: &mut Rng) -> TurnPage {
     let words = &content.words;
+    // 1. The epitaph's wording (SPEC §15.1, §22.2: one per death page).
+    house.heroes[dead].wording = Some(crate::epitaph::roll_wording(&mut house.writing, rng));
     let year = house.calendar.current_year();
     let mut lines = Vec::new();
     let hero = &house.heroes[dead];
@@ -131,6 +134,8 @@ pub fn death_page(content: &Content, house: &mut House, dead: HeroId) -> TurnPag
         house.heroes[dead].bequest_decided = true;
         Vec::new()
     };
+    // 8. The epitaph, composed with the wording step 1 rolled.
+    crate::epitaph::recompose(content, &mut house.heroes, dead);
     TurnPage {
         kind: PageKind::Death,
         title: fmt(&words[W::DeathTitle], &[&house.heroes[dead].full_name()]),

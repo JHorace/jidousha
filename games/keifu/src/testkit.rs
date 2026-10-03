@@ -80,3 +80,12 @@ pub fn pooled(content: &Content, pool: crate::ids::Pool, args: &[&str]) -> Vec<S
         .map(|line| crate::text::fmt(line, args))
         .collect()
 }
+
+/// A hero staged dead by hand, given the wording their death page would have rolled
+/// (SPEC §15.1 step 1) — every later recomposition reads it (SPEC §20).
+pub fn paged(house: &mut House, hero: HeroId) {
+    house.heroes[hero].wording = Some(crate::epitaph::roll_wording(
+        &mut house.writing,
+        &mut Rng::from_seed(hero as u64),
+    ));
+}

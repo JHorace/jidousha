@@ -182,6 +182,8 @@ fn read_hero(item: &At<'_>) -> Result<FoundingHero, SchemaError> {
         bequest_heirloom: None,
         dream_fate: crate::hero::DreamFate::Undecided,
         laid_year: None,
+        wording: None,
+        epitaph: None,
         parents: [None, None],
         roads_walked: places("roads_walked")?,
         quests_faced: count("quests_faced")?,

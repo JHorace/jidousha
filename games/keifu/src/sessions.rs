@@ -123,8 +123,10 @@ pub fn check_family(checks: &mut Checks, recorder: &mut FrameRecorder) -> String
 /// (two quests, seats then wobble each), so the draw comes four later. Re-recorded
 /// in session 5: the founding now generates the board (SPEC §5.2) — up to sixteen
 /// planned boards, each drawing place, template, seats and wobble per drawn quest —
-/// so the draw comes a seed-dependent number later.
-const SEED_AFTER_SEVEN: u64 = 0x52ec_97b2_4d27_2e97;
+/// so the draw comes a seed-dependent number later. Re-recorded in session 9: the
+/// founding first rolls Elsbeth's and Aud's epitaph wordings (SPEC §22.2: a frame and nine
+/// coins each, before the board), so the board's draws — and this one — come after them.
+const SEED_AFTER_SEVEN: u64 = 0x0213_ec98_7493_1ee4;
 
 /// Seeds are recorded state; the household does not depend on them; a new house reseeds.
 pub fn check_seeds(checks: &mut Checks, content: &Content) -> String {

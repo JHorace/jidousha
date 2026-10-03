@@ -100,14 +100,15 @@ pub fn w6_surfaces(
         false,
     );
     // A page and a Meanwhile long enough to run on: the played page with its lines
-    // told five times over, and the Meanwhile's lines likewise.
+    // told thirty times over — long enough whatever the summer's dice gave it (a success
+    // writes one line) — and the Meanwhile's eight times.
     let mut sim = session(SEEDS[0]);
     stage_page(&mut sim);
     {
         let house = sim.world_mut().resource_mut::<House>();
         if let Some(telling) = house.telling.as_mut() {
             let page = &mut telling.pages[0];
-            page.lines = (0..5).flat_map(|_| page.lines.clone()).collect();
+            page.lines = (0..30).flat_map(|_| page.lines.clone()).collect();
             telling.meanwhile = (0..8).flat_map(|_| telling.meanwhile.clone()).collect();
         }
     }

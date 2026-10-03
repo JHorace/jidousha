@@ -1,7 +1,7 @@
 //! Keifu (系譜): a port of Lineage to Jidousha. Session 1 built modules W0 and W1;
 //! session 2 built W2 and gave the cast its sprites; session 3 built W3; session 4
 //! built W4; session 5 built W5; session 6 built W6; session 7 built W7; session 8
-//! builds W8.
+//! built W8; session 9 builds W9.
 //!
 //! W0 is the foundation: the content in `spec/content/` loaded and validated, the
 //! lore tables, the calendar and the Door countdown, the randomness primitives
@@ -37,7 +37,13 @@
 //! of age with the dream a child takes into them (`coming_of_age`), wanderers
 //! (`wanderer`), the bags and rolled dreams newcomers are drawn from (`newcomers`,
 //! `turning_lore`), the tales and the year's moment — read on the turning screen
-//! (`passage`, `turning_view`), which will not let the year turn while a page waits.
+//! (`passage`, `turning_view`), which will not let the year turn while a page waits. W9 is
+//! epitaphs and remembrance: a wording rolled with the no-repeat frame, the nine parts and
+//! their rules, the priority walk under the six-sentence budget, the frame's order and the
+//! subject named (`epitaph`, `epitaph_parts`, `epitaph_ends`, `epitaph_lore`) — composed at
+//! the founding, a crowning and each death page, recomposed at the heir choice, a ghost
+//! laid and a ghost's dream taken up — set at the top of every death page and shown by the
+//! family screen's remembrance panel.
 //!
 //! What the player can do in this build: point at a hero to read their sheet,
 //! point at a quest to read its sheet and its place's history — both open in the
@@ -46,8 +52,9 @@
 //! held, set out (or stay home) and read the telling page by page, and open the
 //! family. Leaving the telling opens the hearth: drag anyone to any winter seat and
 //! read its preview, point at a group for its help, let the winter pass and read what
-//! the year did — and on each death page that leaves something, choose the heir (each
-//! heir's sheet opens in the dock as they are pointed at) — and summer comes.
+//! the year did — each death page under its dead's epitaph, and on each that leaves
+//! something, choose the heir (each heir's sheet opens in the dock as they are pointed at)
+//! — and summer comes. On the family screen, the dead are remembered by their epitaphs.
 //!
 //! The spec (`spec/SPEC.md`, `spec/CONSTANTS.md`, `spec/content/`) is the only
 //! source of game behaviour; `SPEC-GAPS.md` lists every place it fell silent.
@@ -83,6 +90,16 @@ mod dream;
 mod dream_lore;
 mod easing;
 mod ending_view;
+mod epitaph;
+mod epitaph_ends;
+#[cfg(test)]
+mod epitaph_ends_tests;
+mod epitaph_lore;
+mod epitaph_parts;
+#[cfg(test)]
+mod epitaph_points_tests;
+#[cfg(test)]
+mod epitaph_tests;
 mod facing;
 mod family;
 mod fear;
@@ -91,6 +108,7 @@ mod floors_w5;
 mod floors_w6;
 mod floors_w7;
 mod floors_w8;
+mod floors_w9;
 mod forecast;
 mod foundations;
 mod generation;
@@ -172,6 +190,8 @@ mod w7_battery;
 mod w7_controls;
 mod w8;
 mod w8_battery;
+mod w9;
+mod w9_battery;
 mod wanderer;
 mod winter;
 #[cfg(test)]

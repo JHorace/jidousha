@@ -49,21 +49,6 @@ pub const FILES: [(&str, &str); 15] = [
     ),
 ];
 
-/// The top-level keys the files no W0/W1 rule reads must still carry.
-///
-/// Typed reading of these lands with the wave that uses them; until then their
-/// shape is held at the top level so a renamed or missing table fails now.
-const LATER_WAVES: [(&str, &[&str]); 1] = [(
-    "epitaph.json",
-    &[
-        "parts",
-        "frames",
-        "priorities",
-        "sentence_limit",
-        "templates",
-    ],
-)];
-
 /// A destiny's three lines.
 pub struct DestinyLore {
     /// "Your child will surpass you."
@@ -160,6 +145,8 @@ pub struct Content {
     pub wanderers: crate::turning_lore::WandererLore,
     /// `ui-text.json` and `lines.json`, the keys this build reads.
     pub words: Words,
+    /// `epitaph.json`, with the words its parts borrow (SPEC §20).
+    pub epitaph: crate::epitaph_lore::EpitaphLore,
 }
 
 /// Parse and validate every content file.
@@ -177,12 +164,6 @@ pub fn load() -> Result<Content, SchemaError> {
                 what: "the file is not in the baked-in list".to_owned(),
             })
     };
-    for (file, keys) in LATER_WAVES {
-        let root = At::root(doc(file)?, file);
-        for key in keys {
-            root.key(key)?;
-        }
-    }
     let at = |name: &'static str| -> Result<At<'_>, SchemaError> { Ok(At::root(doc(name)?, name)) };
     let lore = crate::lore::read_lore(&at("lore.json")?)?;
     let destinies = at("destinies.json")?;
@@ -211,6 +192,12 @@ pub fn load() -> Result<Content, SchemaError> {
         ghost: crate::ghost::read_ghost(&at("ghost.json")?)?,
         wanderers: crate::turning_lore::read_wanderers(&at("wanderers.json")?)?,
         words: read_words(at("ui-text.json")?, at("lines.json")?)?,
+        epitaph: crate::epitaph_lore::read_epitaph(
+            &at("epitaph.json")?,
+            &dreams_at,
+            &at("legacies.json")?,
+            &at("door.json")?,
+        )?,
         lore,
     })
 }

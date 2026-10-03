@@ -112,6 +112,8 @@ pub fn newcomer(
         bequest_heirloom: None,
         dream_fate: crate::hero::DreamFate::Undecided,
         laid_year: None,
+        wording: None,
+        epitaph: None,
         parents: [None; 2],
         roads_walked: Vec::new(),
         quests_faced: 0,

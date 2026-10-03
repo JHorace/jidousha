@@ -64,7 +64,7 @@ pub fn turn_the_year(
     // 4. The death pages, in order of death; then the mourned are cleared.
     let mourned = std::mem::take(&mut house.mourned);
     for dead in mourned {
-        pages.push(death_page(content, house, dead));
+        pages.push(death_page(content, house, dead, rng));
     }
     // 5-7. Births, comings of age, a wanderer.
     pages.extend(births(content, house, rng));

@@ -201,7 +201,7 @@ fn press(world: &mut World, ui: UiState, control: Target) -> UiState {
             let Some(passage) = &house.passage else {
                 return ui;
             };
-            let leaves = turning_leaves(passage);
+            let leaves = turning_leaves(passage, &house.heroes);
             let current = ui.leaf.min(leaves.len() - 1);
             let reach = furthest(passage, &leaves);
             let undecided = passage.first_undecided();
@@ -224,7 +224,7 @@ fn press(world: &mut World, ui: UiState, control: Target) -> UiState {
                 return ui;
             };
             // The leaves are rebuilt; the view stays on the page chosen on.
-            turn_to(first_leaf_of(&turning_leaves(passage), at))
+            turn_to(first_leaf_of(&turning_leaves(passage, &house.heroes), at))
         }
         // SPEC-GAPS KG-37: a numbered button turns to a leaf and types its story again.
         Target::GoOn | Target::Leaf(_) | Target::Skip => {

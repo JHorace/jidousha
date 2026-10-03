@@ -215,8 +215,8 @@ pub fn die(f: &Afield<'_>, house: &mut House, id: HeroId, fate: String, out: &mu
 /// Crowned (SPEC §7.4, `lineage/tale.jai:317-352`): the destiny comes; departed; a
 /// patron for the house; out of every seat; the line and the deed. An heirloom goes
 /// to the nearest kin (§15.3) — whose own is laid aside, OQ-5 — or to Court with them.
-/// The epitaph the original rolls and composes here is W9's.
-pub fn crown(f: &Afield<'_>, house: &mut House, id: HeroId, out: &mut Vec<String>) {
+/// Then an epitaph wording is rolled and the epitaph composed, never to be recomposed.
+pub fn crown(f: &Afield<'_>, house: &mut House, rng: &mut Rng, id: HeroId, out: &mut Vec<String>) {
     let words = &f.content.words;
     let hero = &mut house.heroes[id];
     hero.destiny.fulfilled = true;
@@ -235,31 +235,31 @@ pub fn crown(f: &Afield<'_>, house: &mut House, id: HeroId, out: &mut Vec<String
     );
     house.patrons += 1;
     house.unseat(id);
-    let Some(heirloom) = house.heroes[id].heirloom.clone() else {
-        return;
-    };
-    let heir = nearest_kin(&house.heroes, id);
-    // SPEC-GAPS KG-38: the bequest is recorded, and decided, only for an heirloom.
-    let hero = &mut house.heroes[id];
-    hero.bequest_heirloom = Some(heirloom.name.clone());
-    hero.bequest_heir = heir;
-    hero.bequest_decided = true;
-    let name = hero.name.clone();
-    match heir {
-        Some(heir) => {
-            if let Some(old) = house.heroes[heir].heirloom.take() {
+    if let Some(heirloom) = house.heroes[id].heirloom.clone() {
+        let heir = nearest_kin(&house.heroes, id);
+        // SPEC-GAPS KG-38: the bequest is recorded, and decided, only for an heirloom.
+        let hero = &mut house.heroes[id];
+        hero.bequest_heirloom = Some(heirloom.name.clone());
+        hero.bequest_heir = heir;
+        hero.bequest_decided = true;
+        let name = hero.name.clone();
+        match heir {
+            Some(heir) => {
+                if let Some(old) = house.heroes[heir].heirloom.take() {
+                    out.push(fmt(
+                        &words[W::CrownHeirLaysAside],
+                        &[&house.heroes[heir].name, &old.name],
+                    ));
+                }
                 out.push(fmt(
-                    &words[W::CrownHeirLaysAside],
-                    &[&house.heroes[heir].name, &old.name],
+                    &words[W::CrownHeirloomLeft],
+                    &[&name, &heirloom.name, &house.heroes[heir].name],
                 ));
+                house.heroes[heir].heirloom = Some(heirloom);
+                house.heroes[id].heirloom = None;
             }
-            out.push(fmt(
-                &words[W::CrownHeirloomLeft],
-                &[&name, &heirloom.name, &house.heroes[heir].name],
-            ));
-            house.heroes[heir].heirloom = Some(heirloom);
-            house.heroes[id].heirloom = None;
+            None => out.push(fmt(&words[W::CrownHeirloomTaken], &[&name, &heirloom.name])),
         }
-        None => out.push(fmt(&words[W::CrownHeirloomTaken], &[&name, &heirloom.name])),
     }
+    crate::epitaph::remember(f.content, &mut house.heroes, &mut house.writing, id, rng);
 }

@@ -101,7 +101,7 @@ pub fn ghost_text(content: &Content, text: &str, dead: &Hero, dream: &Dream) -> 
 /// tale "The laying of <name>'s ghost"; the dead hero's dream fate LAID_TO_REST with
 /// the year; `lines.ghost.laid`; a LAID_GHOST deed for each living member; and the
 /// ghost swap-removed from the list. The dream is not fulfilled and leaves nothing
-/// else. The epitaph the original recomposes here is W9's.
+/// else. The dead hero's epitaph is recomposed with the wording they have.
 pub fn lay_ghost(
     f: &crate::resolve::Afield<'_>,
     house: &mut crate::house::House,
@@ -132,6 +132,8 @@ pub fn lay_ghost(
     let hero = &mut house.heroes[dead];
     hero.dream_fate = crate::hero::DreamFate::LaidToRest;
     hero.laid_year = Some(f.year);
+    crate::epitaph::recompose(content, &mut house.heroes, dead);
+    let hero = &house.heroes[dead];
     let subject = &content.lore.pronouns[hero.pronoun.index()].subject;
     out.push(fmt(
         &content.words[W::GhostLaid],
