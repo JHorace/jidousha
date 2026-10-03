@@ -325,6 +325,13 @@ fn whoever_dies_at_one_lock_does_not_stand_at_the_next_and_lies_among_the_doors_
             &mut pages,
         );
         assert_eq!(pages[0].outcome, Outcome::Disaster);
+        // The lock of iron's disaster, its bearer Ysolde (3 - 2 + 5 - 2 = 4 alone).
+        assert_eq!(
+            pages[0].story,
+            "Garrick, Maren, Ysolde and Brannoc came down the last steps to the lock of iron. \
+             It did not move. It pushed back, once, and threw them all down the steps, Ysolde \
+             first."
+        );
         // At the lock of riddles only Maren (mended at 9, the cap, and wounded: 9 - 2) and
         // Brannoc (9 - 2)
         // stand: 14, a disaster, and Maren — wounded and mended already — dies of it.
