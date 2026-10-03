@@ -341,10 +341,10 @@
 -     hero.dream.is_none() || hero.burden.as_ref().is_none_or(Dream::is_fulfilled)
 +     hero.dream.is_none() || hero.burden.is_none()
 
-### M8 "No one" is not offered
+### M8 "No one" is not offered (re-cut: the first cut did not build)
 @ src/heirs.rs
 -     buttons.push(HeirButton {⏎        heir: None,
-+     buttons.retain(|_| true);⏎    let _ = HeirButton {⏎        heir: None,
++     buttons.retain(|_| true);⏎    std::mem::drop(HeirButton {⏎        heir: None,
 
 ### B1 the own dream passes before the burden
 @ src/heirs.rs

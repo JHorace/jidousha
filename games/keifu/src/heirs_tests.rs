@@ -387,3 +387,154 @@ fn passing_a_dream_on_makes_dream_rivals_of_those_who_want_the_same() {
         Some(BondKind::Rival)
     );
 }
+
+#[test]
+fn a_child_created_after_a_grandchild_still_ranks_first() {
+    let (_, mut heroes) = crate::testkit::founded();
+    let garrick = id(&heroes, "Garrick");
+    let mut late = heroes[id(&heroes, "Wren")].clone();
+    late.name = "Late".to_owned();
+    late.parents = [Some(garrick), None];
+    late.bonds.clear();
+    heroes.push(late);
+    let child = heroes.len() - 1;
+    form(&mut heroes, child, garrick, BondKind::Parent, 1);
+    let list: Vec<&str> = heirs(&heroes, garrick)
+        .iter()
+        .map(|&h| heroes[h].name.as_str())
+        .collect();
+    assert_eq!(list[..3], ["Maren", "Late", "Pip"]);
+}
+
+#[test]
+fn a_parent_known_only_by_the_parents_field_ranks_with_the_parents() {
+    let (_, mut heroes) = crate::testkit::founded();
+    let (wren, garrick) = (id(&heroes, "Wren"), id(&heroes, "Garrick"));
+    heroes[wren].parents[1] = Some(garrick);
+    let list: Vec<&str> = heirs(&heroes, wren)
+        .iter()
+        .map(|&h| heroes[h].name.as_str())
+        .collect();
+    // Garrick by the field, Maren a sister by him, Brannoc by the bond: all rank 3.
+    assert_eq!(list[..3], ["Garrick", "Maren", "Brannoc"]);
+}
+
+#[test]
+fn a_parent_known_only_by_the_bond_ranks_above_those_taught() {
+    let (_, mut heroes) = crate::testkit::founded();
+    let (wren, odo, pip) = (id(&heroes, "Wren"), id(&heroes, "Odo"), id(&heroes, "Pip"));
+    form(&mut heroes, wren, odo, BondKind::Parent, 1);
+    form(&mut heroes, pip, wren, BondKind::Mentor, 1);
+    if let Some(b) = heroes[wren].bonds.iter_mut().find(|b| b.other == pip) {
+        b.taught = true;
+    }
+    let list: Vec<&str> = heirs(&heroes, wren)
+        .iter()
+        .map(|&h| heroes[h].name.as_str())
+        .collect();
+    assert_eq!(list[..3], ["Brannoc", "Odo", "Pip"]);
+}
+
+#[test]
+fn a_companion_is_named_of_the_house() {
+    let (content, mut heroes) = crate::testkit::founded();
+    let (garrick, ysolde) = (id(&heroes, "Garrick"), id(&heroes, "Ysolde"));
+    form(&mut heroes, garrick, ysolde, BondKind::Companion, 1);
+    let list = heirs(&heroes, garrick);
+    let labels: Vec<String> = heir_buttons(&content, &heroes, garrick, &list)
+        .into_iter()
+        .map(|b| b.label)
+        .collect();
+    assert!(
+        labels.contains(&"Ysolde, of the house".to_owned()),
+        "{labels:?}"
+    );
+}
+
+#[test]
+fn no_one_is_marked_not_the_dream_when_the_dead_leave_no_dream() {
+    let (content, mut house) = house();
+    let garrick = certain_death(&mut house, "Garrick");
+    let ysolde = id(&house.heroes, "Ysolde");
+    house.heroes[garrick]
+        .dream
+        .as_mut()
+        .expect("a dream")
+        .advance_to_stage(3);
+    house.heroes[ysolde].burden = Some(dream(&content, DreamKind::SeeTheSea));
+    turn(&content, &mut house, 1);
+    let page = page_of(&house, garrick);
+    assert!(labels(&content, &house, page).contains(&"Ysolde, of the house".to_owned()));
+}
+
+#[test]
+fn a_burden_and_an_own_dream_both_undone_leave_the_burden() {
+    let (content, mut house) = house();
+    let garrick = certain_death(&mut house, "Garrick");
+    let pip = id(&house.heroes, "Pip");
+    house.heroes[garrick].burden = Some(dream(&content, DreamKind::KnownAtCourt));
+    turn(&content, &mut house, 1);
+    let page = page_of(&house, garrick);
+    let lines = &house.passage.as_ref().expect("a turning").pages[page].lines;
+    assert!(lines[1].starts_with("He leaves a dream undone: to be known at Court."));
+    choose(&content, &mut house, page, Some(pip));
+    let burden = house.heroes[pip].burden.as_ref().expect("a burden");
+    assert_eq!(burden.kind, DreamKind::KnownAtCourt);
+}
+
+#[test]
+fn a_buried_heirloom_is_named_with_a_capital() {
+    let (content, mut house) = house();
+    let garrick = certain_death(&mut house, "Garrick");
+    if let Some(h) = house.heroes[garrick].heirloom.as_mut() {
+        h.name = "the Thorne cradle-ring".to_owned();
+    }
+    turn(&content, &mut house, 1);
+    let page = page_of(&house, garrick);
+    choose(&content, &mut house, page, None);
+    let lines = &house.passage.as_ref().expect("a turning").pages[page].lines;
+    assert_eq!(
+        lines[2],
+        "The Thorne cradle-ring was laid in the ground with him."
+    );
+}
+
+#[test]
+fn a_dream_taken_up_is_told_about_its_owner() {
+    let (content, mut house) = house();
+    let odo = certain_death(&mut house, "Odo");
+    let maren = id(&house.heroes, "Maren");
+    house.heroes[odo].destiny.kind = Destiny::Unspoken;
+    house.heroes[odo]
+        .dream
+        .as_mut()
+        .expect("a dream")
+        .advance_to_stage(2);
+    turn(&content, &mut house, 1);
+    let page = page_of(&house, odo);
+    choose(&content, &mut house, page, Some(maren));
+    let lines = &house.passage.as_ref().expect("a turning").pages[page].lines;
+    assert_eq!(
+        lines[1],
+        "Maren takes the dream up where Odo left it: see a student succeed without him."
+    );
+}
+
+#[test]
+fn the_choice_s_lines_come_before_the_door_s_promise() {
+    let (content, mut house) = house();
+    let ysolde = certain_death(&mut house, "Ysolde");
+    let wren = id(&house.heroes, "Wren");
+    turn(&content, &mut house, 1);
+    let page = page_of(&house, ysolde);
+    choose(&content, &mut house, page, Some(wren));
+    let lines = &house.passage.as_ref().expect("a turning").pages[page].lines;
+    assert!(
+        lines[1].starts_with("Wren takes the dream up where Ysolde left it"),
+        "{lines:?}"
+    );
+    assert!(
+        lines[2].starts_with("Ysolde was promised to the Sealed Door"),
+        "{lines:?}"
+    );
+}

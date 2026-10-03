@@ -359,3 +359,55 @@ pub fn turn_to_kind(sim: &mut HeadlessSim, kind: crate::passage::PageKind) {
     ui.leaf = leaf;
     crate::verify::set_ui(sim, ui);
 }
+
+/// A death page long enough to run over several leaves, at every length from two to
+/// nine times Garrick's: "Skip ahead" from the winter's page lands on its last leaf, where
+/// the choice is drawn, and every heir button sits inside the page's text, clear of the
+/// navigation — whatever the last leaf's lines leave of it.
+pub fn check_long_page(checks: &mut Checks) -> String {
+    let mut most = 0;
+    for times in 2..=9 {
+        let mut sim = session(recorded()[0]);
+        stage_garricks_winter(&mut sim);
+        point_at(&mut sim, Target::LetWinterPass, true);
+        {
+            let house = sim.world_mut().resource_mut::<House>();
+            if let Some(page) = house.passage.as_mut().and_then(|p| p.pages.get_mut(1)) {
+                page.lines = (0..times).flat_map(|_| page.lines.clone()).collect();
+            }
+        }
+        point_at(&mut sim, Target::Leaf(0), true);
+        point_at(&mut sim, Target::Skip, true);
+        let (leaf, last, first) = {
+            let house = sim.world().resource::<House>();
+            let leaves = house
+                .passage
+                .as_ref()
+                .map(crate::turning_view::leaves)
+                .unwrap_or_default();
+            (
+                sim.world().resource::<UiState>().leaf,
+                crate::turning_view::last_leaf_of(&leaves, 1),
+                crate::turning_view::first_leaf_of(&leaves, 1),
+            )
+        };
+        let page = page_of(&sim);
+        let area = crate::telling_view::text_area();
+        let buttons: Vec<Rect> = page
+            .targets
+            .iter()
+            .filter(|(_, t)| matches!(t, Target::Heir(..)))
+            .map(|(r, _)| *r)
+            .collect();
+        let inside = buttons.iter().all(|r| area.contains_rect(*r));
+        checks.require(
+            last > first && leaf == last && buttons.len() == 7 && inside,
+            "on a long death page \"Skip ahead\" does not land on the leaf with the choice, or the choice spills out of the page",
+            format!("{times} times: leaf {leaf}, the page's leaves {first}..={last}, {} buttons, inside {inside}", buttons.len()),
+        );
+        most = most.max(last - first + 1);
+    }
+    format!(
+        "W8 long death pages: two to nine times Garrick's, up to {most} leaves; \"Skip ahead\" lands on the last, the choice inside the page"
+    )
+}

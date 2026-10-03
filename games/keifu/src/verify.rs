@@ -358,6 +358,7 @@ pub fn run() -> ExitCode {
     let (w8_line, w8_vector) = crate::w8::check_oracle(&mut checks);
     summary.push(w8_line);
     summary.extend(w8_vector);
+    summary.push(crate::w8::check_long_page(&mut checks));
     summary.extend(crate::w8_battery::check_whole_years(&mut checks, &content));
     summary.push(crate::sessions::check_family(&mut checks, &mut recorder));
     summary.push(crate::sessions::check_seeds(&mut checks, &content));

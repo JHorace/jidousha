@@ -389,3 +389,52 @@ fn the_tales_come_before_the_phase_lines_and_each_hero_s_dream_moment_follows_th
     assert!(year.lines[3].starts_with("Odo"), "{:?}", year.lines);
     assert_eq!(house.heroes[odo].dream.as_ref().map(|d| d.current), Some(1));
 }
+
+#[test]
+fn a_child_coming_of_age_makes_a_rival_of_one_who_wants_the_same() {
+    let (content, mut house) = house();
+    let (pip, odo) = (id(&house.heroes, "Pip"), id(&house.heroes, "Odo"));
+    house.heroes[pip].age = 11;
+    house.heroes[odo].dream =
+        Some(Dream::build(&content, DreamKind::SeeTheSea, None, None).expect("builds"));
+    turn(&content, &mut house, 4);
+    let pages = &house.passage.as_ref().expect("a turning").pages;
+    let page = pages
+        .iter()
+        .find(|p| p.kind == PageKind::ComingOfAge)
+        .expect("a coming of age");
+    assert!(
+        page.lines[2].starts_with("Pip wants what Odo wants"),
+        "{:?}",
+        page.lines
+    );
+    assert_eq!(
+        house.heroes[pip].bond_to(odo).map(|b| b.kind),
+        Some(BondKind::Rival)
+    );
+}
+
+#[test]
+fn a_turning_with_nothing_for_the_new_year_has_no_year_page() {
+    let (content, mut house) = house();
+    let garrick = id(&house.heroes, "Garrick");
+    house.heroes[garrick].age = 30;
+    let wren = id(&house.heroes, "Wren");
+    // Ten living: no wanderer; the clones are children, whose phase does not change.
+    while house.heroes.iter().filter(|h| h.is_living()).count() < 10 {
+        let mut child = house.heroes[wren].clone();
+        child.bonds.clear();
+        house.heroes.push(child);
+    }
+    turn(&content, &mut house, 4);
+    let pages = &house.passage.as_ref().expect("a turning").pages;
+    let kinds: Vec<PageKind> = pages.iter().map(|p| p.kind).collect();
+    assert_eq!(kinds, [PageKind::Winter]);
+    assert_eq!(
+        pages[0].lines,
+        [
+            "A quiet winter. The house kept to the fire.",
+            "The year turns. The Sealed Door opens in 24 years."
+        ]
+    );
+}

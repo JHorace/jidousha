@@ -326,3 +326,23 @@ fn the_birth_fear_line_names_the_parent_whose_fear_it_is_the_second_first() {
     }
     let _ = brannoc;
 }
+
+#[test]
+fn a_newborn_never_has_less_than_one_and_takes_each_roll_of_zero_or_one() {
+    let (content, mut house, maren, brannoc) = wed_house();
+    // Spirit 1 and 1: 2 / 4 is 0, + 0 or 1, at least 1 — always 1.
+    house.heroes[maren].aptitudes[2] = 1;
+    house.heroes[brannoc].aptitudes[2] = 1;
+    let mut might = std::collections::BTreeSet::new();
+    for seed in 0..120 {
+        let mut copy = house.clone();
+        if births(&content, &mut copy, &mut Rng::from_seed(seed)).is_empty() {
+            continue;
+        }
+        let child = &copy.heroes[copy.heroes.len() - 1];
+        assert_eq!(child.aptitudes[2], 1);
+        might.insert(child.aptitudes[0]);
+    }
+    // Might 4 and 6: 10 / 4 is 2, + 0 or 1.
+    assert_eq!(might.into_iter().collect::<Vec<_>>(), [2, 3]);
+}

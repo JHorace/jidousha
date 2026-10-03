@@ -36,6 +36,13 @@ pub fn choose_every_heir(
         };
         let heir = pick(house, &bequest);
         crate::heirs::choose(content, house, at, heir);
+        let still = house.passage.as_ref().and_then(|p| p.first_undecided());
+        if still == Some(at) {
+            crate::checks::fail(
+                "a death page was chosen on and still waits",
+                &format!("turning page {at}: heirs::choose did not record the choice"),
+            );
+        }
     }
 }
 

@@ -255,14 +255,15 @@ mod tests {
         crate::bonds::form(&mut heroes, wren, pip, BondKind::Parent, 1);
         door_promise(&content, &mut heroes, pip);
         assert_eq!(heroes[wren].destiny.blood_of.as_deref(), Some("Ysolde"));
-        // A dead child is passed over.
+        // A dead child is passed over: the elder, Pip, dead, the promise falls to Wren.
         let mut again = heroes.clone();
-        again[wren].fate = Fate::Dead;
-        again[pip].fate = Fate::Living;
-        again[pip].destiny.kind = Destiny::Unspoken;
-        again[pip].destiny.blood_of = None;
+        again[pip].fate = Fate::Dead;
+        again[wren].fate = Fate::Living;
+        again[wren].destiny.kind = Destiny::Unspoken;
+        again[wren].destiny.blood_of = None;
         door_promise(&content, &mut again, ysolde);
-        assert_eq!(again[pip].destiny.kind, Destiny::OpenTheSealedDoor);
+        assert_eq!(again[wren].destiny.kind, Destiny::OpenTheSealedDoor);
+        assert_eq!(again[wren].destiny.blood_of.as_deref(), Some("Ysolde"));
         let odo = id(&heroes, "Odo");
         assert!(door_promise(&content, &mut heroes, odo).is_empty());
     }
