@@ -9,7 +9,8 @@ adjudicated one gets a **Resolved:** line.
 Session 1 (W0 + W1): 6 entries. Session 2 (W2): 6 entries, KG-7 to KG-12. Session 3 (W3):
 12 entries, KG-13 to KG-24. Session 4 (W4): 5 entries, KG-25 to KG-29. Session 5 (W5): 4
 entries, KG-30 to KG-33. Session 6 (W6): 7 entries, KG-34 to KG-40. Session 7 (W7): 6 entries,
-KG-41 to KG-46. Session 8 (W8): 10 entries, KG-47 to KG-56.
+KG-41 to KG-46. Session 8 (W8): 10 entries, KG-47 to KG-56. Session 9 (W9): 8 entries, KG-57 to
+KG-64.
 
 ---
 
@@ -715,3 +716,98 @@ KG-41 to KG-46. Session 8 (W8): 10 entries, KG-47 to KG-56.
   and a wanderer arrives into whatever phase their age is, told on their own page.
 - **Question:** `lineage/passage.jai:90-98` — where the previous phase is read from (a saved age, or
   `age - 1`, which would tell a wanderer of 20 that they are "in the prime of life now").
+
+---
+
+## KG-57 — the remembrance of the dead who await their death page
+
+- **Spec says:** §19.2 "Pointing at a node shows the remembrance: the epitaph if composed (the dead, the
+  crowned, and everyone at the Ending), otherwise for the living their station and `ui.family.living_*`
+  lines." §15.1 composes a summer's dead's epitaph on their death page, at the turning.
+- **Underdetermined:** what the family screen shows for a hero who died this summer — dead, so not "the
+  living", and with no epitaph composed until the turning. The family can be opened from the telling and
+  the hearth, where such a hero is pointed at.
+- **Port's choice:** their name and their sheet's first lines — station, and the condition "Died in year N,
+  aged A" — the stand-in session 1 used for every dead hero, now kept only for the dead the turning has not
+  yet reached (`src/family.rs` `remembrance`). Once the page composes the epitaph the remembrance shows it.
+- **Question:** `lineage/family-tree.jai:340-380` — what it shows when the epitaph is empty and the hero is
+  not living (the epitaph's empty string, or the `living_*` lines regardless).
+
+## KG-58 — the order of a wording's draws, and which coin is which part's
+
+- **Spec says:** §20 "a frame 0..2 rolled uniformly but never equal to the previous frame rolled anywhere in
+  the run, and nine independent fair coins (one per part, 0 or 1)"; `epitaph.json` `parts` lists the nine.
+- **Underdetermined:** whether the frame is drawn before the coins, how a fair coin is drawn (`index(2)` or
+  `chance(0.5)`), and whether the coins are indexed by `parts` or by another list (`priorities`, a frame).
+  None of it moves a distribution; all of it moves the sequence after a wording.
+- **Port's choice:** the frame first (`index(3)` for the run's first, `fresh_index(3, last)` after), then
+  nine `index(2)` draws, coin `i` for `parts[i]` (`src/epitaph.rs` `roll_wording`); the loader refuses a
+  `parts` list out of SPEC §20's order, since the coins are indexed by it.
+- **Question:** `lineage/epitaph.jai:62-70`.
+
+## KG-59 — ROADS's "exactly one"
+
+- **Spec says:** §20 ROADS "No FIRST_QUEST deed → `roads.count_only`. Exactly one → `roads.once`. Else
+  `roads.many_v`."
+- **Underdetermined:** exactly one of what — quests faced, or FIRST_QUEST deeds (of which a hero has at most
+  one, which would make `roads.many_v` unreachable).
+- **Port's choice:** `quests_faced` is exactly one (`src/epitaph_parts.rs` `roads`), the reading that leaves
+  every template reachable and matches `roads.once`'s words ("went out once").
+- **Question:** `lineage/epitaph.jai:199-208`.
+
+## KG-60 — the naming rule's pronouns and case
+
+- **Spec says:** §20 "a leading 'He '/'She ' becomes the full name; a leading 'His '/'Her ' becomes
+  '<full name>'s'; otherwise the first ' he '/' she ' inside becomes ' <full name> '".
+- **Underdetermined:** whether the rule looks for both pronouns or the subject's own, and whether the inside
+  search is case-sensitive (a later sentence's "She" is preceded by ". ", not " ").
+- **Port's choice:** the subject's own forms, from the lore (`He `/`His `/` he ` for him, `She `/`Her `/` she `
+  for her), and the inside search lower-case and case-sensitive, first occurrence only (`src/epitaph.rs`
+  `name_the_subject`). No template carries another hero's pronoun, so the first half cannot change a word.
+- **Question:** `lineage/epitaph.jai:118-140`.
+
+## KG-61 — `ui.family.departed`, never shown
+
+- **Spec says:** §19.2 the remembrance shows "the epitaph if composed (the dead, the crowned, ...)"; §7.4
+  every crowning rolls a wording and composes. `ui-text.json` has `family.departed` = "% %, in year %, aged %.
+  The house has had a patron at Court since." (`lineage/family-tree.jai:345`).
+- **Underdetermined:** when `family.departed` is shown, since every departed hero has an epitaph.
+- **Port's choice:** never: the crowned show their epitaph, as §19.2 says (`src/family.rs` `remembrance`).
+  If the original shows `departed` in place of the epitaph, the crowned's remembrance is the one to change.
+- **Question:** `lineage/family-tree.jai:340-346` — the condition on the `departed` line.
+
+## KG-62 — the greater student, as they stand when the epitaph is composed
+
+- **Spec says:** §20 PROPHECY "TEACH_A_GREATER: `prophecy.greater_came` naming the first student they
+  taught ... whose best base aptitude value exceeds the teacher's best base value, else `prophecy.greater`."
+- **Underdetermined:** a student who passes a dead teacher later — learning, a coming of age's teaching that
+  shows, a mending — moves no recomposition point, so the epitaph keeps the sentence composed at the death.
+- **Port's choice:** read when the epitaph is composed, and not recomposed for (`src/epitaph_ends.rs`
+  `prophecy`). The W9 battery counts how often a held epitaph and its hero's composition now differ this
+  way (0 in 160 houses).
+- **Question:** does the original recompose epitaphs anywhere §20 does not list (the Ending's "deaths not
+  yet given a page" suggests not)?
+
+## KG-63 — ORIGIN's "has a parent", and the parents' names
+
+- **Spec says:** §20 ORIGIN "born_year >= 1 and has a parent → `origin.born_v`. Has a parent →
+  `origin.child_of_old`"; the templates' argument is "parent names".
+- **Underdetermined:** whether a parent is known by the `parents` field or a PARENT bond (KG-39 met this for
+  the heir ranking), and whether "names" are first or full.
+- **Port's choice:** the `parents` field, in its order, first names as a name list — `content/README.md`'s
+  "name" (`src/epitaph_parts.rs` `origin`). Every parent the rules make (§4, §17.3) is in both, so the two
+  readings agree on every hero a run can make.
+- **Question:** `lineage/epitaph.jai:163-173`.
+
+## KG-64 — the heir a ghost taken up names, read by LEFT
+
+- **Spec says:** §9.5 at a coming of age "the dead hero's bequest becomes PASSED_ON to this hero and their
+  epitaph is recomposed"; §20 LEFT reads "an heir" for `left.legacy_and_heirloom`, `left.heirloom_made` and
+  `left.heirloom_went`, and "decided without heir" for `left.buried_with`.
+- **Underdetermined:** whether "PASSED_ON to this hero" records the taker as the bequest's heir (W8 chose
+  yes, so DREAM's "fate PASSED_ON with an heir" can name them). If it does, a dead hero whose heirloom was
+  buried and whose ghost a grandchild later takes up reads "<heirloom> went to <grandchild>" from then on.
+- **Port's choice:** the heir is the bequest's, whoever recorded it (`src/epitaph_ends.rs` `left`), as both
+  rules read it literally.
+- **Question:** `generation/hero-context/hero-context.jai:200-210` — does the take-up set `bequest.heir`?
+

@@ -158,6 +158,7 @@ fn winning_a_ghosts_quest_lays_it_and_swap_removes_it_from_the_list() {
     for dead in [garrick, maren, odo] {
         house.heroes[dead].fate = Fate::Dead;
         house.unseat(dead);
+        crate::testkit::paged(&mut house, dead);
     }
     house.ghosts = vec![
         ghost(garrick, &house),
@@ -275,6 +276,7 @@ fn ghost_on_the_board(content: &crate::content::Content, house: &mut House, plac
     let garrick = id(&house.heroes, "Garrick");
     house.heroes[garrick].fate = Fate::Dead;
     house.unseat(garrick);
+    crate::testkit::paged(house, garrick);
     house.ghosts = vec![crate::ghost::Ghost {
         hero: garrick,
         dream: house.heroes[garrick].dream.clone().expect("Garrick dreams"),

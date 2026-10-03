@@ -139,6 +139,12 @@ pub enum DeedKind {
     CameOfAge,
     /// Came to the house as a wanderer (SPEC §17.2), dated the year they arrive for.
     Arrived,
+    /// Bore a lock of the Sealed Door open (SPEC §16.2); weight is the lock's index.
+    /// W10 writes it; the epitaph reads it (§20 END).
+    OpenedALock,
+    /// Stood at the Sealed Door and lived (SPEC §16.2); weight is the locks opened.
+    /// W10 writes it; the epitaph reads it (§20 PROPHECY, END).
+    StoodAtTheDoor,
 }
 
 /// What became of a dead hero's own dream (SPEC §3.2 `bequest`): the death page
@@ -160,7 +166,7 @@ pub enum DreamFate {
 }
 
 /// One entry in a hero's record of deeds (SPEC §3.2). The telling is never shown;
-/// the epitaph (W9) reads the deeds themselves.
+/// the epitaph (`epitaph.rs`) reads the deeds themselves.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Deed {
     /// What it was.
@@ -259,6 +265,10 @@ pub struct Hero {
     pub dream_fate: DreamFate,
     /// The year the hero's ghost was laid (SPEC §14.4).
     pub laid_year: Option<i32>,
+    /// The epitaph's wording — its frame and its nine coins — once rolled (SPEC §20).
+    pub wording: Option<crate::epitaph::Wording>,
+    /// The epitaph, once composed (SPEC §20); the remembrance shows it (§19.2).
+    pub epitaph: Option<String>,
     /// Up to two parents.
     pub parents: [Option<HeroId>; 2],
     /// Places quested at.

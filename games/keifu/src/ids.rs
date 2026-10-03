@@ -156,6 +156,22 @@ ids!(
 );
 
 ids!(
+    /// An epitaph's nine parts (SPEC §20), in `epitaph.json`'s `parts` order: each
+    /// wording's coin is the part's index.
+    Part {
+        Origin = "ORIGIN",
+        Roads = "ROADS",
+        Triumph = "TRIUMPH",
+        Fear = "FEAR",
+        Dream = "DREAM",
+        Prophecy = "PROPHECY",
+        Love = "LOVE",
+        End = "END",
+        Left = "LEFT",
+    }
+);
+
+ids!(
     /// He or she.
     Pronoun { He = "HE", She = "SHE" }
 );

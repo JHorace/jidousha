@@ -187,7 +187,7 @@ pub fn heir_buttons(
 /// 250-311`): once, irrevocably. The heirloom goes to the heir — whose own is laid
 /// aside and lost (OQ-5) — or into the ground; the undone dream passes to an heir who
 /// can take it, or its ghost is raised. The choice's lines go right after the bequest
-/// lines. The epitaph the original recomposes here is W9's.
+/// lines, and the dead's epitaph is recomposed with the wording their page rolled.
 pub fn choose(content: &Content, house: &mut House, page: usize, heir: Option<HeroId>) {
     let year = house.calendar.current_year();
     let Some(bequest) = house
@@ -259,6 +259,8 @@ pub fn choose(content: &Content, house: &mut House, page: usize, heir: Option<He
             }
         }
     }
+    // SPEC §15.2: "the epitaph is recomposed with the same wording".
+    crate::epitaph::recompose(content, &mut house.heroes, dead);
     let Some(page) = house.passage.as_mut().and_then(|p| p.pages.get_mut(page)) else {
         return;
     };

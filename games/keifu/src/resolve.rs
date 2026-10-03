@@ -269,7 +269,7 @@ pub fn resolve_rolled(
             if house.heroes[member].is_living()
                 && crown_claims(&house.heroes[member], quest.place, outcome)
             {
-                crown(&f, house, member, &mut lines);
+                crown(&f, house, rng, member, &mut lines);
             }
         }
     }

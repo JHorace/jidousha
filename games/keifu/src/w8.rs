@@ -43,12 +43,9 @@ pub const ORACLE_HEIRS: [&str; 7] = [
     "Wren, of the house",
     "No one. Let it lie.",
 ];
-/// `ui.turning.heir_prompt` for a hero, and the death page's heading and title.
-pub const ORACLE_PAGE: [&str; 3] = [
-    "The house is one fewer",
-    "In memory of Garrick Thorne",
-    "Died in year 1, aged 94",
-];
+/// The death page's heading and title; under them, the dead's epitaph (W9 — it took the
+/// place of session 8's stand-in, the condition line "Died in year 1, aged 94").
+pub const ORACLE_PAGE: [&str; 2] = ["The house is one fewer", "In memory of Garrick Thorne"];
 pub const ORACLE_PROMPT: &str = "WHO IS HIS HEIR? One choice. It cannot be unmade.";
 /// `lines.heir.takes_dream` for Maren, told about the dream's owner.
 pub const ORACLE_TAKEN: &str =
@@ -107,6 +104,33 @@ pub fn stir(sim: &mut HeadlessSim, burdened: bool) -> usize {
     wanderer
 }
 
+/// Every leaf of turning page `index`, in order, as the panel reads it (the view put on
+/// each in turn, then returned to the leaf it was on).
+pub fn page_leaves(sim: &mut HeadlessSim, index: usize) -> Vec<Vec<String>> {
+    let at = sim.world().resource::<UiState>().leaf;
+    let wanted: Vec<usize> = {
+        let house = sim.world().resource::<House>();
+        let Some(passage) = &house.passage else {
+            return Vec::new();
+        };
+        let leaves = crate::turning_view::leaves(passage, &house.heroes);
+        (0..leaves.len())
+            .filter(|&l| leaves[l].page == index)
+            .collect()
+    };
+    let mut out = Vec::new();
+    for leaf in wanted {
+        let mut ui = *sim.world().resource::<UiState>();
+        ui.leaf = leaf;
+        crate::verify::set_ui(sim, ui);
+        out.push(lines_in(&page_of(sim), PANEL));
+    }
+    let mut ui = *sim.world().resource::<UiState>();
+    ui.leaf = at;
+    crate::verify::set_ui(sim, ui);
+    out
+}
+
 /// After the winter is let pass: "Go on" to the first leaf that offers heirs.
 pub fn go_to_the_choice(sim: &mut HeadlessSim) {
     let mut guard = 0;
@@ -128,10 +152,21 @@ pub fn check_oracle(checks: &mut Checks) -> (String, Vec<String>) {
         let page = page_of(&sim);
         let panel = lines_in(&page, PANEL);
         let labels: Vec<String> = heir_labels(&page).into_iter().map(|(_, l)| l).collect();
+        let first = page_leaves(&mut sim, 1)
+            .into_iter()
+            .next()
+            .unwrap_or_default();
+        let garrick = hero_named(&sim, "Garrick");
+        let epitaph = sim.world().resource::<House>().heroes[garrick]
+            .epitaph
+            .clone();
         checks.require(
-            panel.len() >= 3 && panel[..3] == ORACLE_PAGE && panel.contains(&ORACLE_PROMPT.to_owned()),
-            "Garrick's death page does not read \"The house is one fewer\", \"In memory of Garrick Thorne\" and the heir prompt",
-            format!("seed {seed:#x}: {panel:?}"),
+            first.len() >= 3
+                && first[..2] == ORACLE_PAGE
+                && Some(&first[2]) == epitaph.as_ref()
+                && panel.contains(&ORACLE_PROMPT.to_owned()),
+            "Garrick's death page does not read \"The house is one fewer\", \"In memory of Garrick Thorne\", his epitaph, and the heir prompt",
+            format!("seed {seed:#x}: first leaf {first:?}; the choice's {panel:?}"),
         );
         checks.require(
             labels == ORACLE_HEIRS,
@@ -140,7 +175,7 @@ pub fn check_oracle(checks: &mut Checks) -> (String, Vec<String>) {
         );
         refusal(checks, &mut sim, seed);
         if seed == recorded()[0] {
-            vector.push(format!("W8 vector, Garrick's death page: {panel:?}"));
+            vector.push(format!("W8 vector, Garrick's death page: {first:?}"));
             vector.push(format!("W8 vector, its heirs: {labels:?}"));
         }
         stirred(checks, seed, index % 2 == 0, &mut vector);
@@ -218,8 +253,16 @@ fn refusal(checks: &mut Checks, sim: &mut HeadlessSim, seed: u64) {
         format!("seed {seed:#x}: {dock:?}"),
     );
     point_at(sim, target, true);
+    let now = sim.world().resource::<UiState>().leaf;
+    let on_page = {
+        let house = sim.world().resource::<House>();
+        house.passage.as_ref().is_some_and(|passage| {
+            let leaves = crate::turning_view::leaves(passage, &house.heroes);
+            leaves.get(now).is_some_and(|l| l.page == 1)
+        })
+    };
+    let panel: Vec<String> = page_leaves(sim, 1).concat();
     let house = sim.world().resource::<House>();
-    let panel = lines_in(&page_of(sim), PANEL);
     let held = house.heroes[maren]
         .heirloom
         .as_ref()
@@ -227,10 +270,10 @@ fn refusal(checks: &mut Checks, sim: &mut HeadlessSim, seed: u64) {
     checks.require(
         panel.contains(&ORACLE_TAKEN.to_owned())
             && heir_labels(&page_of(sim)).is_empty()
-            && sim.world().resource::<UiState>().leaf == leaf
+            && on_page
             && held.as_deref() == Some("Thornfall"),
         "choosing Maren does not stay on the page, tell her taking the dream up and give her Thornfall",
-        format!("seed {seed:#x}: {panel:?}, holds {held:?}"),
+        format!("seed {seed:#x}: {panel:?}, leaf {leaf} -> {now}, holds {held:?}"),
     );
     crate::play::read_to_summer(sim);
     let house = sim.world().resource::<House>();
@@ -353,7 +396,10 @@ pub fn turn_to_kind(sim: &mut HeadlessSim, kind: crate::passage::PageKind) {
         let Some(page) = passage.pages.iter().position(|p| p.kind == kind) else {
             crate::checks::fail("the turning has no page of a kind", &format!("{kind:?}"));
         };
-        crate::turning_view::first_leaf_of(&crate::turning_view::leaves(passage), page)
+        crate::turning_view::first_leaf_of(
+            &crate::turning_view::leaves(passage, &house.heroes),
+            page,
+        )
     };
     let mut ui = *sim.world().resource::<UiState>();
     ui.leaf = leaf;
@@ -383,7 +429,7 @@ pub fn check_long_page(checks: &mut Checks) -> String {
             let leaves = house
                 .passage
                 .as_ref()
-                .map(crate::turning_view::leaves)
+                .map(|passage| crate::turning_view::leaves(passage, &house.heroes))
                 .unwrap_or_default();
             (
                 sim.world().resource::<UiState>().leaf,

@@ -137,13 +137,17 @@ pub fn signed(value: i32) -> String {
     }
 }
 
-/// Per-pool memory of the line picked last (SPEC §21 "Writing pools").
+/// Per-pool memory of the line picked last (SPEC §21 "Writing pools"), and the last
+/// epitaph frame rolled anywhere in the run (SPEC §3.1 `writing`, §20).
 ///
 /// Each pick is uniform over the pool excluding the line picked last time from
-/// that same pool in this run; the first pick is uniform over all of it.
+/// that same pool in this run; the first pick is uniform over all of it. An epitaph's
+/// frame is rolled the same way against the last frame (`epitaph::roll_wording`).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct WritingMemory {
     last: Vec<Option<usize>>,
+    /// The frame the last wording rolled, if any has been.
+    pub last_frame: Option<usize>,
 }
 
 impl WritingMemory {

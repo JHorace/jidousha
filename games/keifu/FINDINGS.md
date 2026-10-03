@@ -1053,3 +1053,125 @@ read and used. The documents were asked nothing new.
   to `heirs.rs`) and w7 W2, W4 and W5 (the turning's controls and winter page). The round ran as one
   combined list of the seven, labels prefixed by their list, over four worktrees: about two faults a
   minute on this machine's four cores.
+
+---
+
+## Session 9 (W9)
+
+**Reading discipline, session 9.** Read: `CLAUDE.md`, the `make-game` skill, the crate whole
+(`SPEC-GAPS.md` to its end — 56 entries counted from the file, `FINDINGS.md`, `mutants/` — the harness
+whole and each list's headers and re-cut sites, `src/`), and from `spec/` MODULES.md, SPEC.md §0-§4, §7.4,
+§9.5, §14.4, §15-§23, CONSTANTS.md §13-§14, OPEN-QUESTIONS.md's OQ-2 to OQ-5 and OQ-12/13,
+`content/README.md`, and the content W9 reads (`epitaph.json` whole; `dreams.json`'s `progress_tellings`;
+`legacies.json`'s `legacy_nouns` and heirloom names; `door.json`'s lock names; `household.json`'s dead;
+`lore.json`'s tags, places and pronouns; `writing.json`'s fate pools; `ui-text.json`'s `family` and
+`turning`; `lines.json`'s `fate.*`). `docs/api/`: nothing new opened — W9 used only engine surfaces earlier
+sessions had read. **Engine source: not opened.** `games/ninjo/` and `attic/`: not opened;
+`grep -oh "^### G-0[0-9]*" games/*/FINDINGS.md` read the G-headings only (G-039's method). Incidental,
+disclosed: `tools/test`'s report prints ninjo's verify lines. No sibling game read.
+
+### G-066 — "W5's founded battery reaches no death and cannot move", and it moved
+
+Class: process (misled) · Session: keifu 9 · Owner: the keifu handoff
+
+**Doing:** re-baselining the batteries the wording draw shifts — "the W6 and W8 batteries pass death pages,
+so their sequences shift ...; W5's founded battery reaches no death and cannot move" (G-060's own fix,
+applied).
+
+**Expected:** W5's numbers unchanged, as G-060 found them in session 8.
+
+**Happened:** they moved — 568 of 600 (94.7%) became 566 (94.3%), and the year-1 draws and the loop's
+counts with them. SPEC §22.2 puts **two** wording rolls at the founding ("two epitaph wordings ... Then board
+generation for year 1"), before the first board, and every battery founds its houses through
+`House::found`. The handoff counted only the death page's roll, the one session 8 marked; the founding's two
+(session 1's, never marked in code or named as a deviation) and the crowning's (session 6's, marked at its
+site in `harm.rs`) were untaken too. **What I did on its authority:** took W5 as fixed until the first verify
+run printed 566; then re-read §22.2, took all three draws, and noted W5's new baseline beside the others
+(the W8 battery's printed reference to it now reads 566).
+
+**Fix:** a handoff that names a shift's reach could list the draws from §22.2 rather than from the marked
+sites; and a session that skips a draw the spec lists should mark the site and say so in FINDINGS, as
+session 8 did for the death page — session 1 did neither for the founding's two.
+
+### docs/api: 0 findings
+
+W9 is rules over the game's own state — the wording, the parts, the composition — plus one more line on
+two screens that already existed. Every engine surface it touched (the page's rows and targets, the
+per-session recorder of G-043, the floors' measurement, `Rng`'s draws) earlier sessions had read and used.
+The documents were asked nothing new.
+
+### The game's own (session 9)
+
+- **Both deviations are retired.** The death page rolls its wording at step 1 (the site session 8 marked)
+  and composes at step 8; the page sets the epitaph under the dead's card, read off the hero, so the heir
+  choice's recomposition shows at once. The family's remembrance shows the dead's and the crowned's
+  epitaphs where session 1's condition line stood. The condition line stays only for a summer's dead before
+  their page (SPEC-GAPS KG-57), and on the hero sheet itself, where §19.1 puts it.
+- **Every wording draw the spec lists is taken**: the founding's two (Elsbeth, then Aud, before the board),
+  each death page's, and each crowning's (G-066). The Ending's — un-mourned dead and every living hero — are
+  W10's; nothing living carries a wording or an epitaph yet, and the battery holds that.
+- **One source for the epitaph.** `epitaph.rs` rolls and composes; `epitaph_parts.rs` and `epitaph_ends.rs`
+  hold the nine parts' rules; `epitaph_lore.rs` reads `epitaph.json` by key, with every list checked against
+  the canonical part order and the budget and frame count against CONSTANTS §13. Six callers compose — the
+  founding, a crowning, the death page, the heir choice, a ghost laid, a ghost taken up — and nothing else
+  writes an epitaph. A recomposition with no wording ever rolled panics, loudly.
+- **Elsbeth's epitaph, by hand.** ORIGIN is empty (dead before the first year), END is two sentences, DREAM
+  ("died before it was done": her dream's fate is UNDECIDED at founding, so the rule falls to `dream.died`)
+  and LOVE one each: four. FEAR's coin decides the rest — the two-sentence wording fills the budget at six
+  and ROADS's "went out eleven times in all" is skipped; the one-sentence wording leaves room for it. The
+  oracle holds the remembrance to one of the six resulting strings, shipped as literals, and part by part.
+  Over the 27 recorded seeds: frames 10/8/9, the one-sentence fear on 17.
+- **Every battery epitaph is exactly six sentences.** 44,532 readings over the W8 battery's dead, all at
+  six: a dead hero always has more than six sentences' worth of parts, so the priority order decides what is
+  said, every time — which makes it the rule most worth the owner's eye (below).
+- **The W8 oracle reads Garrick's page across its leaves.** Six sentences under the card push the heir
+  choice to a continued leaf on most seeds; the oracle reads the heading, the title and the epitaph off the
+  first leaf and the prompt and heirs off the choice's, and "stays on the page" now means a leaf of page 2
+  (the view returns to the page's first leaf after the choice, as before).
+- **Recorded seeds and baselines.** `SEED_AFTER_SEVEN` re-recorded: 0x52ec_97b2_4d27_2e97 →
+  0x0213_ec98_7493_1ee4. The batteries move by the sequence, inside their bounds:
+  W5 founded 568/600 (94.7%) → 566/600 (94.3%), the reader's own call 516 → 521;
+  W6 2136 summers, 7251 quests, 207 closed, 1226 died questing → 2137, 7246, 218, 1289, the death roll
+  55/338, 446/1517, 441/943, 42/59 → 44/313, 487/1550, 442/975, 52/80 at danger 1-4;
+  W6's played summer on 27 seeds (setback 4, success 12, triumph 11 → 3, 14, 10);
+  W8 3957 turnings, 5 closed, old age 427, quests 99, 525 death pages, 1028 births, 1061 comings of age,
+  289 wanderers → 3973, 4, 439, 90, 529, 994, 1023, 325; W5's mark on played summers 78.1% → 78.7%.
+  One W6 floors staging was seed-bound — a played page "told five times over" stopped overflowing a leaf
+  when seed 1's summer became a one-line success — and is now told thirty times, whatever the dice.
+- **Pictures** (`screens/`): `w9-elsbeth.png` — the family in year 1, Elsbeth pointed at, her name and
+  epitaph on the remembrance panel (frame 2, the two-sentence fear); `w9-questing-death.png` — Brannoc,
+  fallen at the Barrow in year 1, his page's epitaph above "He leaves a dream undone" and the heirs;
+  `w9-old-age.png` — Odo, dead in his sleep at 94, his epitaph (his friend Garrick, the Seer's "outlive")
+  above the grief it caused.
+- **Voice, as shipped.** Content is identical by contract, and some joins read oddly; none was smoothed.
+  A SLEEP_DEATHS fate in `end.dead_0`: "He fell asleep over a book in the last week of winter in year 1,
+  aged 94." Aud's authored fate in `end.before_first_year`: "Aud Hale died of a fever, the winter Wren was
+  two, before the first year." A dead TEACH_A_GREATER teacher with no greater student: "... and he never
+  learned another thing."
+- **The mutation rounds.** `mutants/w9.txt` is 120 faults: both W9 constants; the wording roll (the
+  run's first frame, the no-repeat frame, the run's memory, one coin per part and its part, the draws'
+  order, a recomposition's frame); the priority walk (a skipped part ending it, the parts' order for the
+  priorities'), the budget (strict, uncounted, empty parts chosen, sentences counted by ". "), the frame's
+  order (the priorities', frame 0's) and the join; the naming rule (none, every part, the first name, the
+  lost "'s", every and no " he " inside, the possessive unlooked-for, the object pronoun); the lore read
+  (priorities, frames, lock names); every part's selection rule branch by branch, and each variant pair;
+  every composition point (the founding's order and its composing, the death page's roll and its step 8,
+  the heir choice, a ghost laid, a ghost taken up, a crowning, a crowning rolled twice, a choice rolling a
+  new wording); and the two surfaces (the remembrance and the death page, and the leaves' room for the
+  epitaph). Round one (`e4c7783`): **109 of 117 noticed, three not built** — M6 and V8 were cut as match
+  guards that left the match non-exhaustive, and W4 (an extra composition before the bequest lines) did
+  not borrow-check; W4 was also equivalent as cut, since steps 2-7 of the page change nothing an epitaph
+  reads, so it is re-cut to a real fault: only a page with nothing to leave composes. All three are marked
+  "(re-cut s9, round 2)". The eight escapes were loose checks, each a staging that never put the rule on
+  its edge: no birth in year 1 itself (O5), no fear faced exactly once (F5), no conquest beside a break
+  (F9), no borrowed dream whose " my " tells for an owner of the other pronoun (M7), no greater student
+  who was never taught (P8), no death in year 1 (E5), no legacy beside a buried heirloom (X3), no made
+  heirloom with no heir (X6). Each now has an assertion that fails under it (`epitaph_tests.rs`,
+  `epitaph_ends_tests.rs`). One earlier fault named code W9 moved and was re-cut to the same fault at the
+  new site, marked "(re-cut s9)": w8 S5 (the turning's leaves now read the heroes, for the epitaph's
+  height). **Round two, all eight lists against `4f52dad`: 850 of 856 noticed**, none unbuilt (tests alone
+  719, verify alone 457) — `w9.txt` **120 of 120** (tests 110, verify 48), `dock.txt` 22 of 22, `w3.txt` 117
+  of 118, `w4.txt` 133 of 134, `w5.txt` 58 of 59, `w6.txt` 100 of 100, `w7.txt` 114 of 115, `w8.txt` 186 of
+  188. **The six escapes are the known equivalents** — K7, K8, R12, E21, B3 and Y3, as sessions 3-8
+  classified them. The round ran as one combined list of the eight, labels prefixed by their list, over four
+  worktrees: 856 faults in about two hours and fifty minutes.

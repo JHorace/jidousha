@@ -132,8 +132,7 @@ pub fn seer_lines(lore: &crate::content::DestinyLore) -> Vec<String> {
 /// The dream a hero takes into their coming of age (SPEC §9.5), and its line: the
 /// dream they hold; vengeance for a parent (parent 0 first) dead on a quest not at the
 /// Door; the first ghost on the list that is an ancestor's, taken up — its dead's
-/// dream fate becomes PASSED_ON to them (the epitaph recomposed there is W9's); or a
-/// rolled one.
+/// dream fate becomes PASSED_ON to them and their epitaph is recomposed; or a rolled one.
 fn take_a_dream(content: &Content, house: &mut House, id: HeroId, rng: &mut Rng) -> String {
     let words = &content.words;
     let hero = &house.heroes[id];
@@ -207,6 +206,7 @@ fn take_a_dream(content: &Content, house: &mut House, id: HeroId, rng: &mut Rng)
         let dead = &mut house.heroes[ghost.hero];
         dead.dream_fate = DreamFate::PassedOn;
         dead.bequest_heir = Some(id);
+        crate::epitaph::recompose(content, &mut house.heroes, ghost.hero);
         let owner = ghost.dream.owner.unwrap_or(ghost.hero);
         let line = fmt(
             &words[W::AgeGhostDream],
