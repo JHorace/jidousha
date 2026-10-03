@@ -28,8 +28,9 @@ use crate::content::Content;
 use crate::hero::{Hero, HeroId};
 use crate::house::House;
 use crate::screen::{Clock, MIN_TEXT, PAD, PAGE_H, Page, Target, UiState, ink, layers, wrap};
-use crate::summer::{CARD, CARD_GAP, LEFT_X, SHEET, TOP_H, button, hero_card, lay_out_top_bar};
+use crate::summer::{CARD, CARD_GAP, LEFT_X, SHEET, TOP_H, hero_card, lay_out_top_bar};
 use crate::telling::{QuestPage, Telling};
+use crate::telling_nav::NAV_H;
 use crate::text::fmt;
 use crate::words::W;
 
@@ -38,8 +39,6 @@ pub const PANEL: Rect = Rect {
     min: Vec2::new(LEFT_X, TOP_H + 8.0),
     max: Vec2::new(SHEET.min.x - 12.0, PAGE_H - 8.0),
 };
-/// The navigation strip along the panel's foot.
-const NAV_H: f32 = 48.0;
 /// The story's type, and its pitch.
 const STORY: f32 = 16.0;
 const STORY_PITCH: f32 = 20.0;
@@ -48,9 +47,6 @@ const PITCH: f32 = 17.0;
 /// Air between a leaf's lines, and between its parts.
 const LINE_GAP: f32 = 6.0;
 const PART_GAP: f32 = 10.0;
-/// A navigation button.
-const NAV_BUTTON: Vec2 = Vec2::new(36.0, 34.0);
-const NAV_WIDE: f32 = 140.0;
 
 /// Where a leaf's type is set.
 pub fn text_area() -> Rect {
@@ -92,7 +88,8 @@ pub struct Leaf {
 /// "A quiet summer" only when there is no quest page and no Meanwhile line.
 pub fn meanwhile_lines(content: &Content, house: &House, telling: &Telling) -> Vec<String> {
     let mut lines = telling.meanwhile.clone();
-    // After the Door the Ending comes whatever the renown (SPEC §16.3): nothing closes.
+    // After the Door the Ending comes whatever the renown (SPEC §16.3): nothing closes
+    // (SPEC-GAPS KG-74).
     if house.renown <= 0 && telling.door.is_none() {
         lines.push(content.words[W::TellingHouseClosed].to_owned());
     }
@@ -507,66 +504,6 @@ pub fn lay_out(
             ) + LINE_GAP;
         }
     }
-    lay_out_nav(page, content, house, telling, leaves.len(), current);
+    crate::telling_nav::lay_out_nav(page, content, house, telling, leaves.len(), current);
     crate::dock::lay_out(page, content, house, ui);
-}
-
-/// The navigation strip: a numbered button per leaf, "Skip ahead", and "Go on" — on the
-/// last leaf "Winter comes", "After the Door" after the Door, or "The last of it" if the
-/// house has closed (SPEC §8).
-fn lay_out_nav(
-    page: &mut Page,
-    content: &Content,
-    house: &House,
-    telling: &Telling,
-    count: usize,
-    current: usize,
-) {
-    let words = &content.words;
-    let top = PANEL.max.y - NAV_H + (NAV_H - NAV_BUTTON.y) * 0.5;
-    for leaf in 0..count {
-        let rect = Rect::from_min_size(
-            Vec2::new(PANEL.min.x + PAD + leaf as f32 * (NAV_BUTTON.x + 6.0), top),
-            NAV_BUTTON,
-        );
-        button(
-            page,
-            rect,
-            &(leaf + 1).to_string(),
-            Target::Leaf(leaf),
-            layers::PANEL,
-        );
-        if leaf == current {
-            let mark = Rect::from_min_size(
-                Vec2::new(rect.min.x, rect.max.y + 2.0),
-                Vec2::new(NAV_BUTTON.x, 3.0),
-            );
-            page.shape(mark, ink::GOLD, layers::MARK);
-        }
-    }
-    let next = if current + 1 < count {
-        W::TellingNext
-    } else if telling.door.is_some() {
-        W::TellingAfterDoor
-    } else if house.renown <= 0 {
-        W::TellingClosed
-    } else {
-        W::TellingToWinter
-    };
-    let go_on = Rect::from_min_size(
-        Vec2::new(PANEL.max.x - PAD - NAV_WIDE, top),
-        Vec2::new(NAV_WIDE, NAV_BUTTON.y),
-    );
-    button(page, go_on, &words[next], Target::GoOn, layers::PANEL);
-    let skip = Rect::from_min_size(
-        Vec2::new(go_on.min.x - 12.0 - NAV_WIDE, top),
-        Vec2::new(NAV_WIDE, NAV_BUTTON.y),
-    );
-    button(
-        page,
-        skip,
-        &words[W::TellingSkip],
-        Target::Skip,
-        layers::PANEL,
-    );
 }

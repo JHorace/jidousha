@@ -62,7 +62,7 @@ pub const DOOR_LINES: Rect = Rect {
 };
 /// "The family" button, at the bar's right end.
 pub const FAMILY_BUTTON: Rect = Rect {
-    min: Vec2::new(TOP_BAR.max.x - 152.0, 12.0),
+    min: Vec2::new(TOP_BAR.max.x - 136.0, 12.0),
     max: Vec2::new(TOP_BAR.max.x - 12.0, 46.0),
 };
 
@@ -92,7 +92,7 @@ pub fn screen_rect() -> Rect {
 
 /// The set-out control (SPEC §5.3), in the bar left of "The family".
 pub const SET_OUT_BUTTON: Rect = Rect {
-    min: Vec2::new(FAMILY_BUTTON.min.x - 124.0, 12.0),
+    min: Vec2::new(FAMILY_BUTTON.min.x - 152.0, 12.0),
     max: Vec2::new(FAMILY_BUTTON.min.x - 12.0, 46.0),
 };
 
@@ -110,7 +110,8 @@ pub fn set_out_label<'c>(content: &'c Content, house: &House) -> &'c str {
 }
 
 /// Whether the set-out control acts: always, but "Try the Door" not until at least one
-/// hero is before it (SPEC §5.3, §16.1).
+/// hero is before it (SPEC §5.3, §16.1). SPEC-GAPS KG-73: a last summer with no living
+/// adult never offers it.
 pub fn may_set_out(house: &House) -> bool {
     !house.calendar.door_stands_open() || (0..house.board.len()).any(|s| !house.party(s).is_empty())
 }

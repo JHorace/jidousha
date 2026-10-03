@@ -228,10 +228,10 @@
 - hero.renown += renown;
 + hero.renown += renown + 1;
 
-### W5 a success records a triumph
+### W5 a success records a triumph (re-cut s10)
 @ src/reward.rs
-- if triumph {⏎            let telling
-+ if true {⏎            let telling
+- if triumph && !at_door {⏎            let telling
++ if true && !at_door {⏎            let telling
 
 ### W6 the triumph lesson goes to the highest base
 @ src/reward.rs
@@ -438,13 +438,13 @@
 - if complete {⏎        for line in &lines {
 + if true {⏎        for line in &lines {
 
-### T4 the closing line needs renown below 0
+### T4 the closing line needs renown below 0 (re-cut s10)
 @ src/telling_view.rs
-- if house.renown <= 0 {⏎        lines.push
-+ if house.renown < 0 {⏎        lines.push
+- if house.renown <= 0 && telling.door.is_none() {
++ if house.renown < 0 && telling.door.is_none() {
 
-### T5 the last button never reads "The last of it"
-@ src/telling_view.rs
+### T5 the last button never reads "The last of it" (re-cut s10: the strip is telling_nav.rs)
+@ src/telling_nav.rs
 - } else if house.renown <= 0 {
 + } else if house.renown < 0 {
 
@@ -498,7 +498,7 @@
 - house.prepare_summer(content, rng);
 + house.reseat();
 
-### L4 the set-out control crowds the Door's countdown
+### L4 the set-out control crowds the Door's countdown (re-cut s10: the control is wider for "Try the Door")
 @ src/summer.rs
-- min: Vec2::new(FAMILY_BUTTON.min.x - 124.0, 12.0),
-+ min: Vec2::new(FAMILY_BUTTON.min.x - 152.0, 12.0),
+- min: Vec2::new(FAMILY_BUTTON.min.x - 152.0, 12.0),
++ min: Vec2::new(FAMILY_BUTTON.min.x - 196.0, 12.0),

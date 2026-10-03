@@ -192,7 +192,7 @@ impl DoorRecord {
     }
 }
 
-/// A deed at the Door, dated now.
+/// A deed at the Door, dated now (SPEC-GAPS KG-70: at the Sealed Door, no other hero).
 fn deed(hero: &mut Hero, kind: DeedKind, year: i32, weight: i32, telling: String) {
     hero.deeds.push(Deed {
         kind,
@@ -246,6 +246,8 @@ pub fn try_the_door(
             .iter()
             .map(|&m| house.heroes[m].name.clone())
             .collect();
+        // SPEC-GAPS KG-69: some endings name only the bearer (`%2`); the party's `%1` is
+        // then left out, as the original's print leaves an unused argument.
         let told = |house: &House, outcome: Outcome| {
             let names: Vec<&str> = names.iter().map(String::as_str).collect();
             fmt_numbered_story(

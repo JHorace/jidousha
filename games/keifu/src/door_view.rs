@@ -42,7 +42,8 @@ pub enum CardInk {
 /// The Door card's lines, top to bottom, for `party` (SPEC §16.4): the place, its tags
 /// and "It asks for four.", what the locks are; then, with anyone before it, "All three
 /// locks open: P in 100." and each lock — what it needs, "you bring N" and its four odds;
-/// with nobody, "No one stands before it.".
+/// with nobody, "No one stands before it.". SPEC-GAPS KG-71: only §16.4's numbers and the
+/// `door_sheet.card_*` words — no fear, refusal or dream line.
 pub fn read_door_card(
     content: &Content,
     house: &House,
@@ -194,6 +195,7 @@ pub fn door_sheet(content: &Content, house: &House, party: &[HeroId]) -> QuestSh
         ));
         let aptitude = &content.lore.aptitudes[quest.aptitude.index()];
         let mut sum = 0;
+        // SPEC-GAPS KG-72: a member's solo power reads as the quest sheet's member line.
         for &member in party {
             let solo = party_power(heroes, &[member], quest.facts(), 0);
             sum += solo;

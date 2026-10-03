@@ -34,17 +34,68 @@ pub const CLOSE_BUTTON: Rect = Rect {
 };
 const LINK_THICKNESS: f32 = 2.0;
 
-/// Where every hero's node sits.
-pub fn node_rects(house: &House) -> Vec<(HeroId, Rect)> {
+/// The narrowest a node is drawn — room for a seven-letter name at 16 px — and the air
+/// between two nodes on a line.
+const NODE_MIN_W: f32 = 104.0;
+const NODE_GAP: f32 = 8.0;
+/// The tree's foot: the generations stop short of the remembrance panel.
+const TREE_FOOT: f32 = 504.0;
+
+/// The tree's lines, top to bottom: each generation in order, wrapped onto as many lines
+/// as its heroes need at `NODE_MIN_W` — never between a hero and the spouse placed after
+/// them, so a spouse link stays on one line.
+pub fn tree_lines(house: &House) -> Vec<Vec<HeroId>> {
+    let fits = ((TREE_RIGHT - TREE_LEFT + NODE_GAP) / (NODE_MIN_W + NODE_GAP)) as usize;
+    let heroes = &house.heroes;
+    let married = |a: HeroId, b: HeroId| {
+        heroes[a]
+            .bond_to(b)
+            .is_some_and(|bond| bond.kind == crate::ids::BondKind::Spouse)
+    };
     let mut out = Vec::new();
-    for (generation, row) in tree_rows(&house.heroes).iter().enumerate() {
-        let span = (TREE_RIGHT - TREE_LEFT) / row.len() as f32;
-        for (index, id) in row.iter().enumerate() {
+    for row in tree_rows(heroes) {
+        let mut line: Vec<HeroId> = Vec::new();
+        for id in row {
+            if line.len() == fits {
+                // Carry a hero over with the spouse who follows them.
+                let carried = match line.last() {
+                    Some(&last) if line.len() > 1 && married(last, id) => line.pop(),
+                    _ => None,
+                };
+                out.push(std::mem::take(&mut line));
+                line.extend(carried);
+            }
+            line.push(id);
+        }
+        if !line.is_empty() {
+            out.push(line);
+        }
+    }
+    out
+}
+
+/// From one line of the tree to the next: a generation's step, or less to fit `lines`.
+fn line_step(lines: usize) -> f32 {
+    let between = lines.saturating_sub(1).max(1) as f32;
+    GENERATION_STEP.min((TREE_FOOT - TREE_TOP - NODE.y) / between)
+}
+
+/// Where every hero's node sits: line by line, the lines spread down to the tree's foot
+/// at most a generation's step apart, each line's nodes spread across the width and
+/// narrowed (to no less than `NODE_MIN_W`) when many share it.
+pub fn node_rects(house: &House) -> Vec<(HeroId, Rect)> {
+    let lines = tree_lines(house);
+    let step = line_step(lines.len());
+    let mut out = Vec::new();
+    for (at, line) in lines.iter().enumerate() {
+        let span = (TREE_RIGHT - TREE_LEFT) / line.len() as f32;
+        let size = Vec2::new(NODE.x.min(span - NODE_GAP), NODE.y);
+        for (index, id) in line.iter().enumerate() {
             let center = Vec2::new(
                 TREE_LEFT + (index as f32 + 0.5) * span,
-                TREE_TOP + generation as f32 * GENERATION_STEP + NODE.y * 0.5,
+                TREE_TOP + at as f32 * step + NODE.y * 0.5,
             );
-            out.push((*id, Rect::from_center_size(center, NODE)));
+            out.push((*id, Rect::from_center_size(center, size)));
         }
     }
     out
@@ -79,14 +130,18 @@ pub fn lay_out(page: &mut Page, content: &Content, house: &House, ui: &UiState) 
         ink::HEADING,
         screen,
     );
-    page.text(
-        layers::OVERLAY_TEXT,
-        Vec2::new(24.0, 44.0),
-        subline,
-        MIN_TEXT,
-        ink::NOTE,
-        screen,
-    );
+    // Wrapped short of the close control: the Ending's subline is the longer.
+    for (index, piece) in wrap(&subline, CLOSE_BUTTON.min.x - 12.0 - 24.0, MIN_TEXT)
+        .into_iter()
+        .enumerate()
+    {
+        let at = Vec2::new(24.0, 44.0 + index as f32 * 17.0);
+        if index == 0 {
+            page.text(layers::OVERLAY_TEXT, at, piece, MIN_TEXT, ink::NOTE, screen);
+        } else {
+            page.continue_text(layers::OVERLAY_TEXT, at, piece, MIN_TEXT, ink::NOTE, screen);
+        }
+    }
     button(
         page,
         CLOSE_BUTTON,
@@ -96,6 +151,7 @@ pub fn lay_out(page: &mut Page, content: &Content, house: &House, ui: &UiState) 
     );
 
     let nodes = node_rects(house);
+    let lines = tree_lines(house).len();
     let rect_of = |id: HeroId| nodes.iter().find(|(n, _)| *n == id).map(|(_, r)| *r);
     for (a, b) in spouse_pairs(&house.heroes) {
         if let (Some(a), Some(b)) = (rect_of(a), rect_of(b)) {
@@ -122,7 +178,8 @@ pub fn lay_out(page: &mut Page, content: &Content, house: &House, ui: &UiState) 
         } else {
             first.max.y
         };
-        let elbow = rect.min.y - 18.0;
+        // Half-way between the lines, however close they have had to come.
+        let elbow = rect.min.y - ((line_step(lines) - NODE.y) * 0.5).min(18.0);
         let to = Vec2::new(rect.center().x, rect.min.y);
         page.links
             .push((Vec2::new(from_x, from_y), Vec2::new(from_x, elbow)));

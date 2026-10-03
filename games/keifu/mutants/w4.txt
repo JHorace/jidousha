@@ -238,10 +238,10 @@
 - let trouble = |place: Place| house.places[place.index()].trouble;
 + let trouble = |_: Place| 0;
 
-### B4 every quest has two seats
+### B4 every quest has two seats (re-cut s10: the Door posts its own seats)
 @ src/board.rs
-- seats: vec![None; quest.seats as usize],
-+ seats: vec![None; 2],
+- self.templates_last = memory;⏎        self.board = quests⏎            .into_iter()⏎            .map(|quest| Posted {⏎                seats: vec![None; quest.seats as usize],
++ self.templates_last = memory;⏎        self.board = quests⏎            .into_iter()⏎            .map(|quest| Posted {⏎                seats: vec![None; 2],
 
 ### B5 a swap loses the displaced
 @ src/board.rs

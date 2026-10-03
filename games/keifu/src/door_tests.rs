@@ -1,7 +1,8 @@
-//! The Door's unit half (SPEC §16): the last summer's board, the outlook and the best four,
-//! the bearer rule, the locks in their order, what carries from one lock into the next,
-//! the Door's exceptions to §7.1, its deeds and its prologue — on the founding household
-//! moved to the last summer, with the dice chosen so each lock's outcome is staged.
+//! The Door's unit half (SPEC §16): the last summer's board, the locks in their order, what
+//! carries from one lock into the next, the Door's exceptions to §7.1 and its deeds — on
+//! the founding household moved to the last summer, with the dice chosen so each lock's
+//! outcome is staged. The outlook, the best four and the bearer are
+//! `door_outlook_tests.rs`'s; the prologue `door_prologue_tests.rs`'s.
 //!
 //! INVARIANT: every expectation is a shipped literal worked by hand from `household.json`,
 //! `door.json` and CONSTANTS §3/§12 — never arithmetic over the constant under test.
@@ -17,7 +18,7 @@
 use jidousha::prelude::Rng;
 
 use crate::content::Content;
-use crate::door::{bearer, best_four, lock_quest, outlook, try_the_door};
+use crate::door::{lock_quest, try_the_door};
 use crate::hero::{DeedKind, HeroId};
 use crate::house::House;
 use crate::ids::{Aptitude, BondKind, Outcome, Place, Tag};
@@ -36,7 +37,7 @@ pub fn at_the_door() -> (Content, House) {
 }
 
 /// Give `name` the base aptitudes `bases` at age 30 (prime: no phase adjustment).
-fn make(house: &mut House, name: &str, bases: [i32; 3]) -> HeroId {
+pub fn make(house: &mut House, name: &str, bases: [i32; 3]) -> HeroId {
     let who = id(&house.heroes, name);
     house.heroes[who].aptitudes = bases;
     house.heroes[who].age = 30;
@@ -144,140 +145,6 @@ fn the_control_reads_try_the_door_and_waits_for_one_before_it() {
         "Try the Door"
     );
     assert!(crate::summer::may_set_out(&house));
-}
-
-#[test]
-fn party_a_brings_thirty_eight_thirty_five_thirty_six_and_opens_all_three_fifty_nine_in_a_hundred()
-{
-    let (content, mut house) = at_the_door();
-    let party = party_a(&mut house);
-    let seen = outlook(&content, &house.heroes, &party, house.patrons);
-    assert_eq!(seen.powers, [38, 35, 36]);
-    assert_eq!(seen.ways, [35, 26, 30]);
-    assert_eq!(
-        [
-            seen.lock_percent(0),
-            seen.lock_percent(1),
-            seen.lock_percent(2)
-        ],
-        [97, 72, 83]
-    );
-    assert_eq!(seen.all_percent(), 59);
-}
-
-#[test]
-fn party_b_brings_thirty_four_thirty_three_thirty_seven_and_opens_all_three_twenty_two_in_a_hundred()
- {
-    let (content, mut house) = at_the_door();
-    let party = party_b(&mut house);
-    let seen = outlook(&content, &house.heroes, &party, house.patrons);
-    assert_eq!(seen.powers, [34, 33, 37]);
-    assert_eq!(seen.ways, [21, 15, 33]);
-    assert_eq!(seen.all_percent(), 22);
-    // A patron at Court adds one at every lock.
-    house.patrons = 1;
-    let seen = outlook(&content, &house.heroes, &party, house.patrons);
-    assert_eq!(seen.powers, [35, 34, 38]);
-    assert_eq!(seen.ways, [26, 21, 35]);
-    // 26 * 21 * 35 = 19110 of 46656: 40.96 in 100.
-    assert_eq!(seen.all_percent(), 41);
-}
-
-#[test]
-fn all_three_rounds_a_half_up_as_percent_does() {
-    let (content, _) = at_the_door();
-    let mut seen = outlook(&content, &[], &[], 0);
-    // 18 * 18 * 18 of 46656 is exactly 12.5 in 100.
-    seen.ways = [18, 18, 18];
-    assert_eq!(seen.all_percent(), 13);
-    seen.ways = [36, 36, 35];
-    assert_eq!(seen.all_percent(), 97);
-    seen.ways = [0, 36, 36];
-    assert_eq!(seen.all_percent(), 0);
-}
-
-#[test]
-fn nobody_on_the_door_brings_nothing_and_opens_nothing() {
-    let (content, house) = at_the_door();
-    let seen = outlook(&content, &house.heroes, &[], 3);
-    assert_eq!(seen.powers, [0, 0, 0]);
-    assert_eq!(seen.ways, [0, 0, 0]);
-}
-
-#[test]
-fn the_founding_households_best_four_is_the_first_four_bringing_twenty_two_twenty_two_eighteen() {
-    // Year 1: five living adults, every four of them at 0 in 100; the first is kept.
-    let (content, house) = house();
-    let best = best_four(&content, &house);
-    let names: Vec<&str> = best
-        .party
-        .iter()
-        .map(|&m| house.heroes[m].name.as_str())
-        .collect();
-    assert_eq!(names, ["Garrick", "Maren", "Ysolde", "Brannoc"]);
-    assert_eq!(best.powers, [22, 22, 18]);
-    assert_eq!(best.all_percent(), 0);
-}
-
-#[test]
-fn the_best_four_is_the_first_strictly_best_of_every_four_in_creation_order() {
-    let (content, mut house) = at_the_door();
-    party_a(&mut house);
-    // Odo strong enough that the four without Brannoc is better: Odo 9/9/9 at 30.
-    make(&mut house, "Odo", [9, 9, 9]);
-    let best = best_four(&content, &house);
-    let names: Vec<&str> = best
-        .party
-        .iter()
-        .map(|&m| house.heroes[m].name.as_str())
-        .collect();
-    // Garrick, Maren, Ysolde, Odo: Might 10+8+10+9+2+1 = 40, Wits 7+9+12+9+3 = 40,
-    // Spirit 8+7+12+9+3 = 39 — margins +6, +6, +5: every lock 36 of 36.
-    assert_eq!(names, ["Garrick", "Maren", "Ysolde", "Odo"]);
-    assert_eq!(best.powers, [40, 40, 39]);
-    assert_eq!(best.all_percent(), 100);
-}
-
-#[test]
-fn the_best_four_counts_a_wounded_and_a_refusing_hero_and_takes_everyone_when_four_or_fewer() {
-    let (content, mut house) = at_the_door();
-    party_a(&mut house);
-    let odo = make(&mut house, "Odo", [9, 9, 9]);
-    // Odo broken by the cold would be bounced from the Door, and still counts (OQ-14) —
-    // his dread staged at 0, so his penalty is the least a fear costs (-2 at each lock):
-    // with him the four bring 38, 38, 37, better than party A's 38, 35, 36.
-    house.heroes[odo].fear.tag = Tag::Cold;
-    house.heroes[odo].fear.broken = true;
-    let best = best_four(&content, &house);
-    assert!(best.party.contains(&odo), "a refuser is not left out");
-    // Down to four living adults: all of them, whoever they are.
-    let brannoc = id(&house.heroes, "Brannoc");
-    house.heroes[brannoc].fate = crate::hero::Fate::Dead;
-    house.heroes[odo].wounded = true;
-    let best = best_four(&content, &house);
-    let names: Vec<&str> = best
-        .party
-        .iter()
-        .map(|&m| house.heroes[m].name.as_str())
-        .collect();
-    assert_eq!(names, ["Garrick", "Maren", "Ysolde", "Odo"]);
-}
-
-#[test]
-fn the_bearer_is_the_strongest_alone_the_first_on_ties_patrons_aside() {
-    let (content, mut house) = at_the_door();
-    let party = party_a(&mut house);
-    house.patrons = 3;
-    let name = |lock: usize| {
-        let who = bearer(&house.heroes, &party, &lock_quest(&content, lock));
-        who.map(|m| house.heroes[m].name.clone())
-    };
-    // Might alone: Garrick 10 and Ysolde 10 (the first kept), Brannoc 9, Maren 8.
-    assert_eq!(name(0).as_deref(), Some("Garrick"));
-    // Wits: Ysolde 12. Spirit: Ysolde 12.
-    assert_eq!(name(1).as_deref(), Some("Ysolde"));
-    assert_eq!(name(2).as_deref(), Some("Ysolde"));
-    assert_eq!(bearer(&house.heroes, &[], &lock_quest(&content, 0)), None);
 }
 
 #[test]
@@ -577,123 +444,4 @@ fn a_first_quest_at_the_door_is_still_a_first_quest() {
         .map(|d| (d.weight, d.place))
         .collect();
     assert_eq!(first, [(3, Some(Place::SealedDoor))]);
-}
-
-#[test]
-fn the_prologue_names_the_four_what_each_carried_who_went_beside_whom_and_what_they_brought() {
-    let (content, mut house) = at_the_door();
-    let party: Vec<HeroId> = ["Garrick", "Maren", "Ysolde", "Brannoc"]
-        .iter()
-        .map(|n| id(&house.heroes, n))
-        .collect();
-    seat(&mut house, 0, &party);
-    let lines = crate::door_prologue::prologue(&content, &house, &party);
-    assert_eq!(
-        lines,
-        [
-            "In the last summer the Sealed Door stood open, as it had been foretold for \
-             twenty-five years. The house sent Garrick Thorne, Maren Thorne, Ysolde Vane and \
-             Brannoc Hale.",
-            "Garrick was 62, and of the house before its years were counted. He carried \
-             Thornfall. Carried by every Thorne since the first. Nobody remembers who made it.",
-            "Maren was 38, the daughter of Garrick and Elsbeth.",
-            "Ysolde was 24, and of the house before its years were counted. The Seer had said \
-             it: \"You will open the Sealed Door.\" +5 at every lock. She had been afraid of \
-             the dark all her life, and went down into it anyway: -2.",
-            "Brannoc was 31, and of the house before its years were counted.",
-            "Garrick went down beside his daughter Maren (+2), at every lock.",
-            "Ysolde went down beside her rival Brannoc (-1), at every lock.",
-            "Against three locks of 34, 34, and 34, they brought Might 22, Wits 22, and \
-             Spirit 18. The dark and the cold lay ahead.",
-        ]
-    );
-}
-
-#[test]
-fn the_prologue_tells_a_grandchild_an_arrival_the_blood_a_conquest_a_blessing_and_a_wound() {
-    let (content, mut house) = at_the_door();
-    let (pip, wren, ysolde, odo) = (
-        id(&house.heroes, "Pip"),
-        id(&house.heroes, "Wren"),
-        id(&house.heroes, "Ysolde"),
-        id(&house.heroes, "Odo"),
-    );
-    // Pip: Maren's son, Garrick and Elsbeth's grandson, promised by blood, wounded.
-    house.heroes[pip].age = 20;
-    house.heroes[pip].destiny.kind = crate::ids::Destiny::OpenTheSealedDoor;
-    house.heroes[pip].destiny.blood_of = Some("Ysolde".to_owned());
-    house.heroes[pip].wounded = true;
-    // Wren: afraid of the cold no more — conquered in year 9; blessed everywhere.
-    house.heroes[wren].age = 18;
-    house.heroes[wren].fear.tag = Tag::Cold;
-    house.heroes[wren].fear.conquered = true;
-    house.heroes[wren].deeds.push(crate::epitaph_tests::deed(
-        DeedKind::ConqueredFear,
-        9,
-        14,
-        None,
-        0,
-    ));
-    house.heroes[wren].blessings.push(crate::hero::Blessing {
-        title: "Odo's patience".to_owned(),
-        scope: crate::hero::Scope::Everywhere,
-        power: 1,
-    });
-    // Ysolde born brave of the dark; Odo come up the road in year 3.
-    house.heroes[ysolde].fear.born_brave = true;
-    house.heroes[ysolde].fear.conquered = true;
-    house.heroes[odo].deeds.push(crate::epitaph_tests::deed(
-        DeedKind::Arrived,
-        3,
-        40,
-        None,
-        0,
-    ));
-    let lines = crate::door_prologue::prologue(&content, &house, &[pip, wren, ysolde, odo]);
-    assert_eq!(
-        lines[1],
-        "Pip was 20, the son of Maren and the grandson of Garrick and Elsbeth. The Door was \
-         promised to Ysolde, and he went as Ysolde's blood: +5 at every lock. He had been \
-         afraid of the dark all his life, and went down into it anyway: -2. He went \
-         wounded: -2."
-    );
-    assert_eq!(
-        lines[2],
-        "Wren was 18, the daughter of Brannoc and Aud. She had conquered her fear of the cold \
-         in year 9, and here it counted: +2. Odo's patience went with her: +1."
-    );
-    assert_eq!(
-        lines[3],
-        "Ysolde was 24, and of the house before its years were counted. The Seer had said \
-         it: \"You will open the Sealed Door.\" +5 at every lock. She was born unafraid of \
-         the dark, and here it counted: +2."
-    );
-    assert_eq!(lines[4], "Odo was 47, and had come up the road in year 3.");
-    // No conquest on record: the conquered line without a year.
-    house.heroes[wren].deeds.clear();
-    let lines = crate::door_prologue::prologue(&content, &house, &[wren]);
-    assert_eq!(
-        lines[1],
-        "Wren was 18, the daughter of Brannoc and Aud. She had conquered her fear of the cold, \
-         and here it counted: +2. Odo's patience went with her: +1."
-    );
-}
-
-#[test]
-fn an_heirloom_of_ones_own_making_is_carried_as_ones_own() {
-    let (content, mut house) = at_the_door();
-    let maren = id(&house.heroes, "Maren");
-    house.heroes[maren].heirloom = Some(crate::hero::Heirloom {
-        name: "Maren's road-book".to_owned(),
-        sprite: "reward-guidebook".to_owned(),
-        aptitude: Aptitude::Wits,
-        bonus: 2,
-        provenance: "Kept by Maren, year 4.".to_owned(),
-    });
-    let lines = crate::door_prologue::prologue(&content, &house, &[maren]);
-    assert_eq!(
-        lines[1],
-        "Maren was 38, the daughter of Garrick and Elsbeth. She carried her own road-book. Kept \
-         by Maren, year 4."
-    );
 }
