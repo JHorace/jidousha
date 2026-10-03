@@ -5,7 +5,7 @@ chrome, the signifiers, and the mechanical readability rules. `DESIGN.md`
 owns the rules of the world and `GDD.md` the rules of the game; where they
 meet, the design documents win.
 
-This file inherits giri's `games/giri/UI.md` wholesale — its principles
+This file inherits giri's `attic/giri/UI.md` wholesale — its principles
 (§1), its floors (§7), its screenshot process (§8), its tuning-drawer rules
 (§9a, §12) and its interim-UI standing law: **ugly is acceptable;
 unreadable is a regression against shipped assertions.** What follows is
@@ -14,10 +14,9 @@ giri's text stands.
 
 ## 1. The one screen, and the two spaces
 
-giri had three screens; the substrate has **one** — the map — with three
-drawers over it (the feed, the auto-pause config, the tuning drawer) and,
-over the map itself, the attention surfaces §3a describes. Everything drawn lives in one of two
-spaces:
+giri had three screens; ninjo has **one** — the map — with six drawers over
+it (§3) and, over the map itself, the surfaces §3a–§3h describe. Everything
+drawn lives in one of two spaces:
 
 - **World space**: the terrain tiles, the location markers and their
   labels, the party tokens. Pans and zooms with the engine `Camera`.
@@ -48,7 +47,7 @@ giri's colour roles stand. The changed and new rows:
 | a portrait, on the map | **a character, standing wherever they are** | one per person and exactly one, at marker weight (32 world units), at their doorstep or on their road (§3, §4); named underneath only at a doorstep |
 | dungeon icons (cave/crypt/tower/vault) | one quest site each | unchanged in art, now map markers; **a marker opens that site's board and issues no order** (§3c) |
 | an aptitude chip on a job row | **what kind of work the job is** — the task type (`CAST.md` §2) | the icon is the aptitude row whose id *is* the task's, so the chip on a job and the chip on a person are the same picture of the same word |
-| `open` in regard-green on a job row | **the row can be ordered from** | the only state a job row takes an order in; a claimed row is dim and a done row fainter still, and both name whose it is |
+| `open` in regard-green on a job row | **the row can be posted from** | the only state a job row takes a posting in; a claimed row is dim and a done row fainter still, and both name whose it is |
 | `fit N` on a job row | **what the selected character brings to that work** | `traits::competence_at`, the scorer's own aptitude term; gold when it is more than nothing, faint at zero. Absent when nobody is selected |
 | a verdict in regard-green or ember on a job row | **what the selected character would do about a posting here, and why** | `would take it` / `reluctant` / `would refuse`, from `answers::read` — the scorer's own answer, read-only. It stands where the row's state would be, because an open row's state is the word it replaces |
 | `- 20g +` and `TO <name>` in the board's footer | **what the next tap offers, and whom it offers it to** | the board's own two controls; the wage opens at the standing rate for the site's first open row |
@@ -75,9 +74,8 @@ not a queue — the import path (`art/`) rode along from giri.
   (integer world-minutes, days from one), the four speed chips
   `PAUSE 1x 2x 4x` (active in gold; they do exactly what space and 1/2/3
   do), the treasury with its coin, and the six drawer handles — TUNE, ROSTER,
-  LEDGER, PLEAS, FEED, MODES. **Sixty-six reference pixels wide at a pitch of
-  seventy since wave 1.5**, where the petition ledger is the sixth; the row
-  still starts right of the treasury and ends at 942.
+  LEDGER, PLEAS, FEED, MODES — sixty-six reference pixels wide at a pitch of
+  seventy; the row starts right of the treasury and ends at 942.
 - **The map**: terrain tiles culled to the camera; markers + labels + an
   open-job count per site (`2 quests` / `1 quest` / `dry`) — **the glance the
   board is read through**, and clicking the marker is how the board is
@@ -87,8 +85,8 @@ not a queue — the import path (`art/`) rode along from giri.
   **Under an open job board the map's own words say nothing**, exactly as
   under a drawer: the board lies across markers and their labels at the
   reference camera, and the words it hides are the words it carries in full.
-- **The cast, wherever they are** (wave 0b; one figure each since the
-  double-drawn cast): every character is drawn exactly once on the map, at
+- **The cast, wherever they are**: every character is drawn exactly once on
+  the map, at
   `screens::where_drawn` — at their home tile while they are there, on their
   party's moving token while they are out, **never both**. A **name** is drawn
   under them at a doorstep and not on the road — a name has a tent under it to
@@ -96,54 +94,40 @@ not a queue — the import path (`art/`) rode along from giri.
   would come and go as the figure passed things; where somebody on the road is
   going is the roster's column and their own panel's line. **And a name is
   drawn only where the floor and the map leave room for it** (§4). They
-  are **click targets since wave 0a**, and since the fix that is true on the
-  road as well as at a door: clicking a figure selects that person and opens
-  their panel (§3a), and the 32-world-unit figure meets the target floor at
+  are **click targets**, on the road as well as at a door: clicking a figure
+  selects that person and opens their panel (§3a), and the 32-world-unit figure meets the target floor at
   the reference zoom exactly as a site marker does. **A site marker takes the
   click first**, because a party working at a site stands on that site's
-  marker and a figure that answered there would make the site unorderable
-  while anybody worked it — the same refusal §3a makes for the character
+  marker and a figure that answered there would make the site's board
+  unreachable while anybody worked it — the same refusal §3a makes for the character
   panel's body; a person standing on a site is still three doors away. What a
   person *has* — wallet, desperation and its source, traits — is on their
   panel and nowhere else.
-- **The party strip is gone** (owner decision, 2026-09-08). It was one chip
-  per person along the foot of the screen — portrait, name, and a one-line
-  status — and by the time the double-drawn cast was fixed every job it held
-  had somewhere better to live: **selection** to the map's figures, the
-  roster's rows and a faces list (§3b's doors, three now instead of four);
-  **dispatch** to the job rows (§3c); **who is out** to the meters band and
-  its drill-down (§3a); **who is who** to the ROSTER drawer, which carries
-  what the strip carried and four columns more. The band it held is the map's
-  again, and the breakdown band (§3e) borrows it while somebody has asked a
-  verdict why. It is the third S1 residue retired after the world it was built
-  for stopped needing it (`FINDINGS.md` G-024).
-
-  **That disposition list was checked for coverage and not for reach**
-  (`FINDINGS.md` G-026). Selection did have three homes left, and one of them
-  is the map — which is the surface the job board covers, and the board is the
-  one surface that needs a selection to do its own job. Listing where a job
-  moved is not the same as checking the new home is reachable in every mode
-  the old one was. §3c's candidate picker is the fourth door, put back for
-  that reason.
+- **There is no party strip** (owner decision, 2026-09-08; `FINDINGS.md`
+  G-024). Selection lives on the map's figures, the roster's rows, the faces
+  list and the candidate picker (§3b's four doors); posting on the job rows
+  (§3c); who is out on the meters band and its drill-down (§3a); who is who
+  in the ROSTER drawer. The band it held is the map's, and the breakdown band
+  (§3e) borrows it while somebody has asked a verdict why. The candidate
+  picker exists because a retired surface's jobs must be reachable in every
+  mode the old one was, not merely re-homed (G-026).
 - **Pan/zoom**: arrows pan, `-`/`=` and the scroll wheel zoom; the camera
   clamps to the map and to a zoom range. All of it is input through the
   snapshot, none of it simulation state.
-- **Feed drawer**: §3a. It replaced wave 0b's log drawer, which was a copy
-  of the event list; the feed is a view of it.
+- **Feed drawer**: §3a — a view of the event list.
 - **Tuning drawer**: giri's §12 rules verbatim, at the game's fifty-three
-  constants since wave 1.6 — **four stepper columns of fourteen**, the fourth
+  constants — **four stepper columns of fourteen**, the fourth
   holding the overflow from the top; **the in-effect stamp in the header band**
   beside the presets — `seed <n> <scenario>` on its first row, then `in
   effect: the shipped set` or the moved constants packed as `name value` pairs,
   never split, with `+N more` for the rest — and **the prose band** (a hovered
   constant's meaning, a refused link, the resting line and the APPLY note) at
-  the foot of the fourth column. The two swapped places in wave 1.6 when the
-  column filled (`FINDINGS.md` G-059); the whole set still rides every report
-  and link, and APPLY restarts the **scenario** (this game's boundary). The
+  the foot of the fourth column (`FINDINGS.md` G-059 is why they stand
+  there); the whole set rides every report and link, and APPLY restarts the **scenario** (this game's boundary). The
   variant picker is gone with the variant machinery.
 - **Trait chips are drawn on the character panel and on every roster row**,
   at the 16 units square the vocabulary specifies, in the icon each row
-  carries. **A chip is a click target wherever it appears** (wave 1.1): the
+  carries. **A chip is a click target wherever it appears**: the
   same tap on the same word opens the same one-line explanation, because the
   line is *derived from the row* — `traits::explain` reads the row's
   stranger-facing line and then the fields the row actually moves (`upkeep
@@ -152,7 +136,7 @@ not a queue — the import path (`art/`) rode along from giri.
   trait, so a rename, a moved multiplier or a sixth want changes the
   explanation without anybody editing prose. The chip whose line is showing
   is drawn in gold.
-- **The roster drawer** (wave 1.1, the ROSTER handle or the `r` key):
+- **The roster drawer** (the ROSTER handle or the `r` key):
   **everyone in one list** — portrait and name, their chips, their purse,
   their desperation, and what they are doing *with the reason they are doing
   it*, all through the lens. The name selects that character (§3b), which
@@ -161,7 +145,7 @@ not a queue — the import path (`art/`) rode along from giri.
   and its chips are separate targets, because a control inside a control is
   what the overlap floor refuses.
 
-## 3a. The attention surfaces (wave 0a)
+## 3a. The attention surfaces
 
 All of them are **interim UI under the standing law**, and all of them are
 laid out in `layout.rs` and asserted in `floors.rs` like every other row.
@@ -173,7 +157,7 @@ laid out in `layout.rs` and asserted in `floors.rs` like every other row.
   and the *reason* each is counted, never a bare number. Clicking a face
   selects that character (§3b) — the fourth door, and the same act as the
   other three.
-  **Four chips since wave 1.3**, where there were two: `idle` and `away` are
+  **Four chips**: `idle` and `away` are
   where everybody is, and **`short`** and **`desperate`** are the pressure
   surface — who cannot meet their upkeep this interval, and who the need has
   pressed past the threshold. The first pair partitions the camp; the second
@@ -218,13 +202,13 @@ laid out in `layout.rs` and asserted in `floors.rs` like every other row.
 - **The auto-pause config drawer** (`MODES`): one row per registered class,
   each with its chip and three radios — `ignore` / `log` / `pause`. The write
   goes into the simulation, and the footer says so. **Twelve rows of two
-  columns since wave 1.5**, at a pitch of thirty-two, in a rectangle of its own
-  that runs to the foot of the screen (`FINDINGS.md` G-047, closed): twenty-four
-  slots for twenty-two classes. The petitions' three open on the approved
-  mockup's defaults — `petition-voiced` and `petition-failed` on **pause**,
-  `petition-satisfied` on **log** — and are the config's to override.
-- **The feed's class column is eighteen glyphs since wave 1.5**: the place tag
-  moved forty pixels right for `petition-satisfied`.
+  columns**, at a pitch of thirty-two, in a rectangle of its own that runs to
+  the foot of the screen (`FINDINGS.md` G-047): twenty-four slots for the
+  twenty-three classes of `attention::CLASSES`, and `floors::modes_have_room`
+  fails one class early (§4). The defaults are the table's (GDD §3) — four
+  classes on **pause** — and are the config's to override.
+- **The feed's class column is eighteen glyphs**, wide enough for
+  `petition-satisfied`.
 - **The character panel**: portrait, name, trait chips, wallet, desperation
   and its source line, what they are doing, and where they live — every field
   read through `lens.rs`. **It is the selection's own surface**: it is open
@@ -232,32 +216,29 @@ laid out in `layout.rs` and asserted in `floors.rs` like every other row.
   the selection came through (§3b). Its close button puts the selection down.
   **Its controls are a click target and its body is not**: the close button
   and the trait chips answer a click, and anything else that lands on it goes
-  to the map underneath — a marker takes the order, a figure moves the
+  to the map underneath — a marker opens its board, a figure moves the
   selection, bare ground puts it down. The panel is up through the whole of a
-  two-click dispatch and it lies across two of the four site markers at the
+  two-click posting and it lies across two of the four site markers at the
   reference camera, so a body that swallowed clicks would make those two sites
-  unorderable.
-- **Never two at once, and it is the type that says so** (the 2026-09-11
-  session). There is **one drawer**: `Flow::drawer` is an `Option<Drawer>`
-  over the five, the render is one `match` over it and the click routing is
-  the same `match` over the same value, so "two drawers are open" is not a
-  rule anybody keeps — it is a state this game cannot represent, and the
-  drawer that is drawn is the drawer that answers a click by construction
-  rather than by two lists agreeing. It was five independent flags absorbed
-  under five `if`s, and the owner opened TUNE over an open ROSTER and got both
-  (`FINDINGS.md` G-027). Opening any drawer **displaces** whatever was open
-  and closes both over-the-map panels (`Flow::close_everything`) — which,
-  since the panel *is* the selection, means opening a drawer puts the
-  selection down; its comment claims exactly that and is now true of every
-  drawer rather than of four of them.
+  unreachable.
+- **Never two at once, and it is the type that says so.** There is **one
+  drawer**: `Flow::drawer` is an `Option<Drawer>` over the six, the render is
+  one `match` over it and the click routing is the same `match` over the same
+  value, so "two drawers are open" is not a rule anybody keeps — it is a state
+  this game cannot represent, and the drawer that is drawn is the drawer that
+  answers a click by construction rather than by two lists agreeing (six
+  independent flags were the defect, `FINDINGS.md` G-027). Opening any drawer
+  **displaces** whatever was open and closes both over-the-map panels
+  (`Flow::close_everything`) — which, since the panel *is* the selection,
+  means opening a drawer puts the selection down.
 - **The handles stand above the drawers.** The top bar is not covered, so a
   handle is live from inside another drawer: one tap displaces, and a tap on
   the open drawer's own handle puts it down. **The open drawer's handle is
   lit gold**, like every other control in this game that is showing what it
-  opened, so which one of the five is up is readable from the bar rather than
+  opened, so which one of the six is up is readable from the bar rather than
   from the screen under it. Every handle and the `r` key go through
-  `Flow::toggle_drawer`, and the five handles, their labels and each drawer's
-  own head row are walked off `Drawer::ALL` — a sixth drawer is a variant of
+  `Flow::toggle_drawer`, and the handles, their labels and each drawer's own
+  head row are walked off `Drawer::ALL` — a seventh drawer is a variant of
   that enum and nothing else to remember.
 - A click that is not one of the open drawer's own controls shuts it (the
   tuning drawer excepted, which its handle closes). Under an open drawer the
@@ -265,7 +246,7 @@ laid out in `layout.rs` and asserted in `floors.rs` like every other row.
   all: a row nobody can read lying across a control somebody can click is
   exactly what the floors forbid.
 
-## 3h. The petitions — the voicing overlay, the ledger, and one card (wave 1.5)
+## 3h. The petitions — the voicing overlay, the ledger, and one card
 
 **Obligation is voicing, and the card is the warning** (owner, 2026-10-02,
 from the approved architecture mockup). A petition binds the player the minute
@@ -285,9 +266,8 @@ the deadline is never a surprise.
   `on failure: broke` — whose explanation, tapped, is `petitions::explain` over
   the vocabulary row's fields and the drawer's regard step, never a sentence
   written per card. **The chip is open for its own card's id**
-  (`Flow::consequence_open`, since the wave-1 exemplar audit): a flag beside
-  the card survived a resume and lit the next voicing's chip before anybody
-  tapped it (`FINDINGS.md` G-063). **No need-state on the card**: the faces list, the roster
+  (`Flow::consequence_open`, an `Option` of the petition, not a flag beside
+  the card — `FINDINGS.md` G-063). **No need-state on the card**: the faces list, the roster
   and the character panel carry desperation and the source line.
 - **The voicing overlay** (`card::voicing_overlay`) is the screen while the
   world is stopped for a `petition-voiced` — a state the sim's own pause says
@@ -309,8 +289,8 @@ the deadline is never a surprise.
   while the world is stopped, the pause's own sentence in gold instead**
   (`attention::reason_line`, the feed header's function): an open drawer
   silences the map's banner, and LATER is what puts the player here, so a
-  cliff falling while the ledger is open stopped the world and said nothing
-  until the wave 1.5 browser playtest met it (`FINDINGS.md` G-055). A row
+  cliff falling while the ledger is open must say so here (`FINDINGS.md`
+  G-055). A row
   puts its card beside the list; the first row's card is up until one is
   tapped. A petition still on its messenger is not on the ledger: it binds
   nobody yet.
@@ -328,7 +308,7 @@ the deadline is never a surprise.
   when it cannot. A gift is a recorded input at the clock's minute, like a
   posting; it debits exactly the `{n}` it shows, and the purse it fills meets
   the condition through the same predicate as ever.
-- **The `event` chip** (wave 1.6). A petition the director carried in is a
+- **The `event` chip.** A petition the director carried in is a
   petition like any other — the same card, the same ledger, the same cliff —
   and **the source chip is the only difference**: it leads with the class's
   display word and its meaning, both off `petitions::SOURCES` and never
@@ -346,7 +326,7 @@ the deadline is never a surprise.
   your hand was in it`, `met by Alex's world, not you`, or `failed d8 00:24 -
   walks-out fired, as the card said`.
 
-## 3b. Selection, and the dispatch that reads it
+## 3b. Selection, and the posting that reads it
 
 **There is one selection.** One index (`Flow::selected`) over the ten people,
 which is the same index over the ten parties — a party is a one-person band in
@@ -359,20 +339,17 @@ never the fix.
 **roster row's name**, their **face in a faces list**, or their **row in a
 job's candidate picker** (§3c) — does the same thing from every surface.
 **The work list (§3f) is not a fifth**: it is opened *from* a selection and
-names a job, not a person — the picker's mirror, running the other way. There
-were four before the party strip retired too, and the one that went was the one
-that did nothing the other three did not: **no path was lost with it**, which
-is the test a retirement has to pass (§3). The picker is the one that came
-back, and it came back because the three that were left all needed the player
-to be able to reach the person: two of them are drawers that shut the board,
-and the third is the map the board covers.
+names a job, not a person — the picker's mirror, running the other way. The
+picker is the door the board needs: the other three all require reaching the
+person, and two of them are drawers that shut the board while the third is the
+map the board covers (§3c).
 
 **The candidate picker is a writer of this field and not a selection of its
 own.** It holds a *job* (`Flow::picking`, a `JobId` on the open board) and
 there is nowhere in it to put a person; choosing a candidate sets
-`Flow::selected` and returns, exactly as a faces row does. That is the whole defence: a
-`picked_candidate` beside `selected` was the wave-1.1 bug (`FINDINGS.md`
-G-017) and this was the third surface that could have reintroduced it.
+`Flow::selected` and returns, exactly as a faces row does. That is the whole
+defence: a second field beside `selected` is the defect `FINDINGS.md` G-017
+records.
 Choosing **sets** rather than toggles, like a faces row and unlike a map
 sprite — the picker's job is to name somebody for a job, and a tap that could
 un-name the person it had just named would leave the footer reading `NOBODY`
@@ -406,15 +383,15 @@ derived from recorded clicks: two runs of one scenario that issue the same
 clicks produce byte-identical transcripts whether or not anybody was ever
 selected, and a replay carries the clicks, not the selection.
 
-**Dispatch reads the same selection** and DESIGN §5's two clicks are unchanged
-in number: select somebody, then tap an open **job row** on a site's board
-(§3c). The marker is how the board is reached and it issues no order. If they
-are idle the order is issued at the clock's minute; if they are out it bounces
-with its reason (`sim::Refusal`), which is where the refusal belongs — the
-*selection* of somebody who is out is allowed, because looking at a person is
-not ordering them. A row tapped with nobody selected says so and does nothing;
-dispatch never became one click. A successful order puts the selection down —
-and the board with it, §3c.
+**A posting reads the same selection**, and it is two clicks: select
+somebody, then tap an open **job row** on a site's board (§3c). The marker is
+how the board is reached and it posts nothing. The posting is made at the
+clock's minute whether they are home or out — asks travel, and somebody out
+hears it when a messenger reaches them; the *selection* of somebody who is
+out is likewise allowed, because looking at a person is not asking them. A
+row tapped with nobody selected, and the `TO` toggle not offering to anyone,
+says so and does nothing; posting never became one click. A made posting
+puts the selection down — and the board with it, §3c.
 
 `verify::one_selection` is the reproduction of the bug this rule replaced —
 roster-select one character, sprite-select another, count the rings on the
@@ -426,38 +403,34 @@ picker's own half — that choosing writes this field and nothing else — is
 
 ## 3c. The site panel — the job board, and the posting made from it
 
-**A site marker opens a panel for that site, and asks nothing.** Before the
-job board a marker showed a count and took an order, so with six jobs a site
-the player could see how much work stood at a place and never what it was; the
-owner's wave-1.1 playtest reported exactly that (`FINDINGS.md` G-019), and
-"whom do I send, and why" is the decision the trait vocabulary exists to pose.
-The panel is where that decision is made and given.
+**A site marker opens a panel for that site, and asks nothing.** A marker that
+showed a count and took an order left the player seeing how much work stood
+at a place and never what it was (`FINDINGS.md` G-019), and "whom do I send,
+and why" is the decision the trait vocabulary exists to pose. The panel is
+where that decision is made and given.
 
 - **The panel** (`layout::board_panel`, left of the character panel and clear
   of it) carries the site's name and how much of it is open, and one row per
   authored job. It is not a drawer: it is up *with* the character panel
-  through the whole of a dispatch, because the board says what the work is
-  and the panel says who is being sent.
+  through the whole of a posting, because the board says what the work is
+  and the panel says who is being asked.
 - **A row's anatomy**: name, pot, duration and the **fit** on the first line;
   the **task-type chip** (icon + word) and the **state** on the second. State
   is `open`, `<name> has it`, or `<name> did it` — open in
-  regard-green, a taken row dim, a finished one fainter still. The fit moved
-  up to the first line when the `who?` control took fifty-two pixels out of
-  the row's width, and the reason it moved rather than the verdict shrinking
-  is that the verdict's reason is the sentence wave 1.2 exists to print: the
-  duration had left room on the first line, so the reason came out of the
-  change **twenty-eight pixels wider** and the longest one the scorer can
-  produce now fits it whole — on this row and on a candidate row, at the same
-  number, so one sentence about one offer is cut in the same place on both.
+  regard-green, a taken row dim, a finished one fainter still. The fit sits
+  on the first line so the verdict's reason has the second line's width: the
+  longest reason the scorer can produce fits it whole — on this row and on a
+  candidate row, at the same number, so one sentence about one offer is cut
+  in the same place on both.
 - **Fit and travel belong to the one selection.** Each row shows the selected
   character's `traits::competence_at` for that task, and the header shows
   `sim::route_out` from wherever they stand — the same two functions the
   scorer and the dispatch use, never a second computation. **With nobody
   selected there is no fit column and no travel line at all**, because a fit
   for nobody is a number about nothing; the footer says what to do instead.
-- **The row is the posting** (wave 1.2, and the whole of what changed). The
-  same one-tap gesture that ordered somebody now **posts that job to them at
-  the wage the footer is showing**, and they answer for themselves. The row
+- **The row is the posting.** The one-tap gesture on an open row **posts that
+  job to the selection at the wage the footer is showing**, and they answer
+  for themselves. The row
   says so before the tap: with somebody selected, each open row carries the
   scorer's own read of that offer — `would take it` / `reluctant` / `would
   refuse`, with the reason — from `answers::read`, which builds the candidate
@@ -483,23 +456,22 @@ The panel is where that decision is made and given.
   opens at the last offer rather than at the standing rate. The remedy is the
   board as one value, and it is the owner's call. They are the board's because
   a stepper inside a row would be a control inside a control, and because a
-  row cut short to make room for one leaves no room for the verdict's reason —
-  which is the sentence this wave exists to put on screen.
+  row cut short to make room for one leaves no room for the verdict's reason.
 - **A made posting puts the board down with the selection.** The ask is made,
   the answer is the world's, and a board left open would lie across the
   markers the next one needs.
 - **The board swallows clicks inside its own rectangle**, where the character
   panel's body falls through, and the difference is not an inconsistency. The
-  panel is a passive detail view that must be up during a dispatch, so a body
-  that took clicks would make the markers under it unorderable; the board *is*
-  the dispatch surface, and a marker answering a click that landed between two
-  rows would let a stray tap open a different site instead of ordering. The
+  panel is a passive detail view that must be up during a posting, so a body
+  that took clicks would make the markers under it unreachable; the board *is*
+  the posting surface, and a marker answering a click that landed between two
+  rows would let a stray tap open a different site instead of posting. The
   ways out of a board are its close, bare ground beyond it, any drawer, or the
-  order itself.
+  posting itself.
 - **The marker keeps its count** as the glance (§3): the count is what the
   board is read through, and it is the same number the board's header says in
   words. Under an open board the map's own words say nothing (§3).
-- **The fit cell carries the odds, in a word** (wave 1.4): `fit 2 safe`,
+- **The fit cell carries the odds, in a word**: `fit 2 safe`,
   `fit 0 risky` — the selected character's fit for that row's work beside the
   chance it goes wrong, as one of three words (`safe` / `chancy` / `risky`, at
   the drawer's `odds_safe` and `odds_risky` thresholds over the failure
@@ -509,7 +481,7 @@ The panel is where that decision is made and given.
   list print the same cell. Where nothing is rolled (the module off, or an
   industry's shift) the cell is the fit alone.
 - **The fit chip** in the header (`what is fit?`) says what fit does, **derived,
-  never written** (wave 1.4; `FINDINGS.md` G-046): with resolution on, the odds
+  never written** (`FINDINGS.md` G-046): with resolution on, the odds
   at every fit the vocabulary can produce, off the curve itself — `fit sways
   answers and sets odds - fit 2 safe: 11% fail, 24% well; fit 0 risky: 35%
   fail. well pays as done today.` — and with it off, the trait chips' own
@@ -521,15 +493,11 @@ The panel is where that decision is made and given.
 
 **The candidate picker — the board naming its own person.**
 
-**The defect was the requirement, not the occlusion.** Every drawer covers the
-map — the feed, the roster, the ledger — and that is accepted. The board was
-the one surface whose *purpose* required a map interaction: a posting had to be
-aimed by selecting a character, and the three doors onto the selection left
-after the party strip retired were two drawers that shut the board and the map
-the board is lying across. So with a board open over somebody's sprite, that
-somebody could not be posted to at all; and selecting first only works if you
-already know what work stands at the site, which is what the board exists to
-tell you (`FINDINGS.md` G-026). The board is not docked, inset, shrunk or
+**The board names its own person because it covers the map.** Every drawer
+covers the map and that is accepted; the board is the one surface whose
+*purpose* requires reaching a person, and the other three doors onto the
+selection are two drawers that shut the board and the map the board lies
+across (`FINDINGS.md` G-026). The board is not docked, inset, shrunk or
 panned around. It names people instead.
 
 - **A `who?` on each open job row opens that job's candidate list.** The
@@ -556,7 +524,7 @@ panned around. It names people instead.
   the list, and the character panel, the map ring, the row verdicts and the
   footer's `TO <name>` all follow from that one field (§3b).
 - **Posting stays on the job row.** The picker names a person; the row makes
-  the posting, as wave 1.2 established. Choosing does not post. One way to
+  the posting. Choosing does not post. One way to
   post.
 - **It draws instead of the board, not over it.** Ten rows of two lines do not
   fit the board's rectangle, and the space below the board is the breakdown
@@ -586,10 +554,8 @@ panned around. It names people instead.
   for a different job than the `who?` that was tapped. The pair is checked on
   every tick (`Flow::put_the_picker_away`) and on every way out of a board
   (`verify::the_picker_names_a_person`). **The breakdown band carries the
-  whole `JobId` for the same reason** since the wave-1 exemplar audit
-  (`FINDINGS.md` G-061): a slot read against whichever board was open was a
-  band explaining a row nobody tapped after a marker replaced the board under
-  it, and `Flow::put_the_band_away` compares sites as the picker's rule does.
+  whole `JobId` for the same reason** (`FINDINGS.md` G-061), and
+  `Flow::put_the_band_away` compares sites as the picker's rule does.
 - **Ten rows, which is the whole cast**; `floors::layout_floors` asserts the
   registry is not larger, because a candidate with no row is a person the board
   cannot name, which is the defect this surface exists to close.
@@ -601,14 +567,13 @@ answering it (`traits::competence_at`, `answers::read`, `Lens::travel`), same
 one chip describing fit, same rule that neither of them posts. Two ways to
 *arrive* at the board's row, one way to post from it.
 
-**This is the assign-picker wave 1.5 was going to invent.** The petition-card
-anatomy recorded at wave 0a names an "assign-picker with willingness hints" as
-part of the card; this is that widget, arriving early because the job board
-needed it first. **Wave 1.5 inherits it rather than building a second one** —
-the willingness hint is the verdict column, and it is `answers::read` on both
-surfaces or it is two answers to one question.
+**This is the petition card's assign-picker.** The card anatomy names an
+"assign-picker with willingness hints"; this is that widget, and the card has
+no second one — ARRANGE navigates here (§3h), the willingness hint is the
+verdict column, and it is `answers::read` on both surfaces or it is two
+answers to one question.
 
-## 3d. The postings ledger, and the standing rates (wave 1.2)
+## 3d. The postings ledger, and the standing rates
 
 **One drawer, two bands**, for the reason the feed drawer carries the notices
 band: they are two readings of one subject, and a player deciding what to pay
@@ -635,10 +600,9 @@ opens it; with the asks module off it does not open at all and says so.
 
 **A verdict a player cannot account for is the thing this surface fixes.** A
 job row says `would refuse` and a reason; the reason is the loudest term of a
-sum with five or six terms in it, and until this session the rest was computed
-and thrown away. The owner's wave-1.2 playtest reported the consequence — "it
-is difficult to determine what traits actually do" — and the answer is not
-more words on the row but the sum itself, one tap deeper.
+sum with five or six terms in it, and a reason alone leaves "it is difficult
+to determine what traits actually do" (the owner's own words at wave 1.2).
+The answer is not more words on the row but the sum itself, one tap deeper.
 
 - **The verdict stays the headline.** Nothing about a row changes until the
   `?` at the end of it is tapped. Arithmetic shown by default would bury the
@@ -649,14 +613,13 @@ more words on the row but the sum itself, one tap deeper.
   name box and its chips (§3). It is drawn only where there is a sum to show:
   on an open row with somebody selected, and on a feed entry that recorded a
   decision. Tapped anywhere else it bounces and says why.
-- **The band** (`layout::breakdown_panel`) is the space the party strip left,
-  the width of the screen: five rows of two columns, ten cells — one more than
-  the widest sum this game can produce, which `layout_floors` asserts against
-  the scorer's own term count rather than against a memory of it. It took the
-  width from the character panel, which gave up the sixty pixels of height it
-  had briefly taken from the same band: a term line is a value, a word and an
-  attribution, and the attribution is the half a narrow cell clips off.
-  `layout_floors` walks every term line the vocabulary can produce and asserts
+- **The band** (`layout::breakdown_panel`) is the foot of the screen, the
+  width of it: five rows of two columns, ten cells — one more than the widest
+  sum this game can produce, which `layout_floors` asserts against the
+  scorer's own term count rather than against a memory of it. It is the width
+  of the screen because a term line is a value, a word and an attribution,
+  and the attribution is the half a narrow cell clips off. `layout_floors`
+  walks every term line the vocabulary can produce and asserts
   the widest fits a cell, because a want covered by two of somebody's
   motivators names both rows and the third one authored would say so silently. Each cell is one term: **the value, what the scorer calls the term, and
   what produced it** (`+6 aptitude - fighter`). Then the total. Then, where the
@@ -694,8 +657,9 @@ more words on the row but the sum itself, one tap deeper.
 
 **The same decision, approached from the person instead of the job.** The
 board serves "whom do I post this job to"; this serves "what work is there for
-*them*". The owner's 2026-09-11 playtest asked for it: finding work for one
-character meant opening four boards in turn and remembering what each held.
+*them*" — without it, finding work for one character meant opening four
+boards in turn and remembering what each held (the owner's 2026-09-11
+playtest).
 
 - **The door is on the character panel**: a `work N` chip in the sheet's own
   header, beside the name it is about, carrying the number of jobs standing
@@ -731,7 +695,7 @@ character meant opening four boards in turn and remembering what each held.
   puts first; there is no scrolling.
 - **Tapping a row navigates. It does not post.** The board opens on that job's
   site with the character still selected, the list goes down, and the board's
-  row posts as it has since wave 1.2 — one way to post, two ways to arrive at
+  row posts — one way to post, two ways to arrive at
   it. "In view" is the site's whole board: `layout_floors` asserts a row for
   every job a site is authored with.
 - **Fit is described in one voice because there is one chip.** The board's
@@ -742,16 +706,14 @@ character meant opening four boards in turn and remembering what each held.
   when the selection moves off it, when a board opens, and when a meter chip
   is drilled — one rule in one place (`Flow::put_the_list_away`), the same
   shape as the picker's and the band's. **And under it the map's own words
-  say nothing**, as under the board whose rectangle it takes (§3c): the list
-  was left off that rule and twelve words were drawn under its fill on every
-  frame it was up, invisible to the eye and to the floors (`FINDINGS.md`
-  G-060).
+  say nothing**, as under the board whose rectangle it takes (§3c;
+  `FINDINGS.md` G-060).
 - **With the asks module off there are no verdicts**, and the column says so
   rather than being blank: the module's degrades-to sentence, on this surface.
 
 ## 3g. The settlement panel — the camp's own marker, and what can be built
 
-**The one marker that never had a board has one now** (wave 1.3). What stands
+**The camp's marker opens the settlement panel.** What stands
 at Kawaza is not work to be posted but **capacity to be built**, so the camp's
 marker opens the surface where that decision is made, and it opens nothing
 else: the industry's standing slots live at the camp, and a board over them
@@ -761,13 +723,10 @@ would be a second way to reach work the scorer fills for itself.
   picker and the work list** — the fourth surface of the one column, for the
   reason those three draw instead of each other: the left of the screen is one
   surface at a time and the character panel has the other. Opening any of the
-  four puts the other three down — **and so do a meter chip's drill and the
-  sheet's work chip**, which were written before this panel existed and left
-  it up: a drill drew the faces list over it, and the work chip's list was
-  dropped on the same tick, a tap that did nothing and said nothing
-  (`FINDINGS.md` G-060). The column is still five fields kept in step by
-  hand; one `Option<Column>` is the remedy the audit proposes, and it is the
-  owner's call.
+  four puts the other three down, **and so do a meter chip's drill and the
+  sheet's work chip**. The column is five fields kept in step by hand; one
+  `Option<Column>` is the remedy on the table, and it is the owner's call
+  (`FINDINGS.md` G-060).
 - **The header is two lines**: `Kawaza - a camp` or `Kawaza - a settlement`,
   which is the phasing arc's first beat said in the one place the player can
   cause it (`CAST.md` §1); and under it the **state-of-the-camp line** (§3a)
@@ -781,9 +740,9 @@ would be a second way to reach work the scorer fills for itself.
   (`20g a shift - the 20g craft rate`, or `over`/`under` it), which is the one
   expectation `answers::wage_regard` judges a payment against — so the row says
   what the simulation is about to do rather than a second opinion about it.
-  **The wage is a lever on who comes since wave 1.4**: a shift's wage is felt
-  by need as well as by greed (`autonomy::money`), and over the camp as it is
-  a step changes who takes a shift (`FINDINGS.md` G-035, closed). Once the works
+  **The wage is a lever on who comes**: a shift's wage is felt by need as
+  well as by greed (`autonomy::money`), and over the camp as it is a step
+  changes who takes a shift (`FINDINGS.md` G-035). Once the works
   stand, the footer also says **a shift always pays, whatever the fit** —
   derived from `resolution::rolls_at` by `camp::shift_odds`, so the day a shift
   gains odds the line changes because the rule did.
@@ -817,7 +776,7 @@ world unit is one reference pixel); no interactive overlap; no text across
 a control it does not label; stat numbers carry their icon (the treasury's
 coin); ASCII everywhere.
 
-**The petitions' surfaces bind like every other** (wave 1.5): a ledger row,
+**The petitions' surfaces bind like every other**: a ledger row,
 the card's chip, ARRANGE and GIVE, and the overlay's chip and LATER are all at
 or above the target floor and overlap nothing that shares their screen
 (`floors::pleas_targets`, `floors::voicing_targets`, and `controls_for` reads
@@ -856,19 +815,15 @@ chips narrowed when the band went from two of them to four.
 
 **And the tuning drawer says when it is full.** `floors::tuner_has_room` asks
 whether the *next* constant's stepper would still be inside the drawer, so it
-fails while the drawer still draws, and that every name fits its cell; wave
-1.4 moved the right column for the six constants resolution brought
-(`FINDINGS.md` G-034, closed): four stepper columns at a pitch of 232. Wave
-1.6 swapped the stamp and the prose band when the fourth column filled
-(G-059): `floors::tuner_right_column` asserts the stamp packs into the
-header's three rows at its tallest with no row wider than its band — a pair
-split across rows puts a value under the wrong name, which the first
-photograph of the fourth column once did with `forest 7` — and that the prose
-band's tallest state ends inside the drawer **under one more constant** than
-the game has.
+fails while the drawer still draws, and that every name fits its cell: four stepper columns
+at a pitch of 232 (`FINDINGS.md` G-034), the stamp in the header band and
+the prose band at the foot of the fourth column (G-059).
+`floors::tuner_right_column` asserts the stamp packs into the header's three
+rows at its tallest with no row wider than its band — a pair split across
+rows puts a value under the wrong name — and that the prose band's tallest
+state ends inside the drawer **under one more constant** than the game has.
 
-**The odds-words bind like every other word on a row** (wave 1.4,
-`floors::odds_words`): each word and each tier name is lowercase ASCII and no
+**The odds-words bind like every other word on a row** (`floors::odds_words`): each word and each tier name is lowercase ASCII and no
 two are alike; at the shipped thresholds the three words own non-empty bands
 over the failure chance in the order safe, chancy, risky, and the word never
 gets safer as the chance of failure rises; and the widest cell any row can
@@ -878,17 +833,13 @@ cells, with the picker's name cell still holding the longest name in the cast.
 board, picker and work list each compare the drawn cell against
 `resolution::cell_for`, built from the roll's own functions — and
 `outcomes::judge_one_function` moves `fail_base` and watches the row and the
-roll move together. The auto-pause config holds twenty classes since the same
-wave (ten rows of thirty-six; `FINDINGS.md` G-047).
+roll move together.
 
-**Two floors the 2026-09-11 session added, because the screen they were owed
-against was wrong and nothing said so.**
+**Two floors over the chrome itself.**
 
-- **No two rows of chrome on one band collide.** `judge_panel` asked chrome
-  text against *controls* and map labels against *each other*, and never
-  chrome against chrome — so the tuning drawer's stamp, which grows a row
-  every other constant, walked into the prose band beside it and passed every
-  check (`FINDINGS.md` G-028). **On one band**, because the layers are what
+- **No two rows of chrome on one band collide** (`FINDINGS.md` G-028: the
+  tuning drawer's stamp, which grows a row every other constant, is what
+  walks). **On one band**, because the layers are what
   make an overlay legitimate: the breakdown band is drawn over the feed
   drawer's footer with its own ground behind it and that is deliberate (§3e),
   while two rows on the same band are two rows drawn through each other.
@@ -905,10 +856,9 @@ two drawers, judges them into a throwaway `Checks`, and asserts each claim is
 reported by name). A floor nobody has seen fail is a floor nobody knows is
 connected.
 
-**A band whose height is data is measured, not offset.** The tuning drawer's
-right column and the character panel's lower rows both used typed offsets that
-were true at the lengths of the day they were typed, and both had grown
-through the row below (`FINDINGS.md` G-028, G-029). Both now flow: each block
+**A band whose height is data is measured, not offset** (`FINDINGS.md`
+G-028, G-029). The tuning drawer's right column and the character panel's
+lower rows both flow: each block
 starts where the one above it ended (`tuning::prose_top`, the character
 panel's flowed rows), and `floors::tuner_right_column` asserts the drawer's
 column still fits at `tuning::STAMP_HEADROOM` rows of growth — it fails while
@@ -945,10 +895,8 @@ rides `UiMap` and is a constant size on screen however the camera moves; a name
 under a figure is drawn in *world* units and shrinks as the camera pulls back.
 `floors::map_legibility` states the two numbers: at the default camera a name
 reads at exactly the twelve-pixel floor, and **one notch of the wheel out puts
-it at 10.7**. Until the legibility session that arithmetic was used as a
-refusal — the name was going to be drawn whatever the camera did, so the floor
-forbade the zoom, and wave 1.2's rider to open the default out one level was
-turned down. That was the wrong way round. **The label is what yields now:**
+it at 10.7**. The floor does not forbid the zoom; **the label is what
+yields:**
 
 - a label is drawn only where it would clear the floor **and** land on nothing
   already drawn — no figure, no marker, no label accepted before it, and no
@@ -982,120 +930,108 @@ frame judges hold all three.
 
 ## 5. Screenshot process
 
-Thirty-eight PNGs per verify run. Reference-only, because they are pictures of what
-is on screen rather than of how the chrome scales: **the settlement** at
-world-minute 0 (the whole cast standing at their homes, named, before
-anything is dispatched, which is wave 0b's own exit question), **the
-auto-pause config** with a class set to pause, **a character's panel** with
-the selection ring on their figure and a trait chip tapped, **the roster**
-with a chip's explanation open on it, the **job board** in its three states —
-read by a selected character (the fit column and the travel line up, on a
-site whose rows are not all one kind of work), the moment after an order was
-given from one of its rows, and refusing a row somebody already has — and
-**the world living on its own** —
-the map at a minute when nobody was told to go anywhere and half the band is
-on the road because they decided to be, which is wave 1.1's own exit
-question — **the selection reproduction**: the owner's own playtest steps,
-one character picked on the roster and another picked on the map, with one
-ring and one gold name on the second of them (§3b) — and, since the double-drawn
-cast, **the ring on a token**: somebody picked while they are out, marked on
-the figure walking the road with their own doorstep standing empty, which is
-the selection's other state and had no picture at all while the map drew
-everybody twice — and, since wave 1.2, **a
-refusal mid-pause** (a posting made to somebody who says no, the world stopped
-by `ask-declined`, and the reason on the banner) and **the postings ledger**
-with one posting still recruiting, one refused, and the standing rates beside
-them — and, since the legibility session, **three more**: a job row's
-**breakdown open on a refusal**, with every term, what produced each, the total
-and the job that beat it (§3e); **a decision's breakdown in the feed**, which is
-"why did they go there" answered after the fact; and **the settlement one notch
-of the wheel out**, where the map's words are gone, the figures are not, and
-the selected character is still named because that name is chrome (§4). The
-last of those is the picture the owner judges the default camera against.
-And, since the candidate-picker session, **two more**: **a job's candidate
-picker open with nobody selected** — the cast for one job, best fit first,
-each of them named, fitted, answered and placed, which is the picture of a
-board that can be aimed without reaching the map it is covering — and **the
-board after choosing from it**, the footer reading `TO <name>`, that
-character's panel up, and the row still the thing that posts. The first is
-asserted to be a mixed-fit job whose list carries at least one refusal and at
-least one person who is out, and the row it chooses from is asserted *not* to
-be the best fit on the list, because "the player took the top row" is the one
-reading that picture must not support.
-And, since wave 1.3, **four more, and they are pictures of *time***: **the
-camp on the day somebody first goes short** — the `short` chip lit, the faces
-list drilled into it, and each face saying what they hold against what the camp
-is asking for; **the settlement panel over a camp that can build** (the works
-priced, the slots named, BUILD gold and the treasury behind it) and **the same
-panel after it is built** (`Kawaza - a settlement`, three slots standing,
-`STANDING` where the verb was); and **a camp with all ten of the band in it**,
-past the last arrival the column schedules. They are taken on a session of
-their own (`verify::settled`), because the reference session stops at minute
-800 and none of that has happened yet: the first interval of upkeep falls due
-at the end of day one, the treasury does not hold a building until a day's work
-has been banked, and the last of the six who came later walks in on the evening
-of day three. Nothing is posted in it and no rate is moved — it is the playtest
-the wave asks the owner for, scripted. The **settlement** picture at minute
-zero is now its opposite number and is asserted to be **the founding band
-alone**, because the pair is only worth keeping while the first one really is
-four people.
-And, since the 2026-09-11 session, **two more**: **the work list** open on a
-selected character — every job standing open anywhere, sorted by fit, with the
-character panel beside it saying whose list it is (§3f), asserted to carry a
-spread of fits and at least one refusal, because a list of ten identical
-yesses is a picture of a list and not of this decision — and **TUNE opened
-over an open ROSTER**, the owner's exact path, showing one drawer and a right
-column whose stamp and prose are clear of each other. The second is asserted
-to carry exactly one drawer's head row.
-And, since wave 1.4, **four more, taken on a session of their own at seed 3**
-(`outcomes::shot_run`): **a posted job failing** — Steve, a labourer, posted
-to the Old Crypt's second seal (fight work, `fit 0 risky` on the row he was
-posted from), the world stopped by `task-failed` and the banner saying he
-botched it, the wage paid anyway; **that job back on its board** a little
-later with Steve selected, the row open again and reading `fit 0 risky` beside
-his one `fit 2 safe` row; **the feed with a job that went well in it**, beside
-Steve's own botched errand under `own-job-failed`; and **the camp a day after a
-string of failures** — the settlement panel at day two, three jobs having
-failed. Each is asserted to be what it says (`outcomes::judge_shots`).
-At both the reference surface and
-600x540 narrow: **the mid-travel map** (photographed with two parties on
-visibly different routes) and **the feed mid-pause** (the reason line
-showing, and the entry that stopped the world ringed in gold). Plus the
-tuning drawer (reference only, pending state showing gold).
+Forty-one PNGs per verify run, each asserted to be what it says; committed
+copies live in `screens/` (its README is the index), and the implementing
+agent opens and looks at every one before declaring done. Reference-only
+unless noted, because they are pictures of what is on screen rather than of
+how the chrome scales.
 
-And, since wave 1.5, **six more, taken on a session of their own at seed 10**
-(`pleashots::shot_run`), played the way the playtest asks: **a petition voiced
-mid-pause** (Bob's `collectors-visit`, the overlay up, the world stopped);
-**Bob's own panel before and after** the player put the card in the ledger and
-gave him the thirty gold — desperation down a step, the purse up thirty, the
-source line rewritten to *paid the collector off, for now*; **where ARRANGE
-went** on Steve's `thin-days` — his work list, with nothing on it once the board
-is spent (`FINDINGS.md` G-052); **the ledger mixed** — asking, met and failed
-rows and a card with GIVE lit; and **the feed open when `broke` fires** on
-Ludo's ignored `collectors-visit`. Each is asserted to be what it says
-(`pleashots::judge_shots`) and each carries the three frame judges.
+**The reference session** (`shots`):
 
-And, since wave 1.6, **three more, in the pinned test scenario**
-(`eventshots::shot_run`, `scenarios/pinned-collector.txt` at 1x): **its opening
-minute** with the feed open, so the notices band shows the scenario's own stamp;
-**the pin's card** at d1 01:30, the world stopped on its voicing and the source
-chip reading `event - from outside the camp - not their own want`, asserted drawn
-whole; and **the feed around the firing**, ignored classes shown, the director's
-`event` line under the voicing it caused. Each is asserted to be what it says
-(`eventshots::judge_shots`) and each carries the three frame judges.
+- **the settlement** at world-minute 0 — asserted to be **the founding band
+  alone**, standing at their homes, named, before anything is dispatched;
+- **the auto-pause config** with a class set to pause;
+- **a character's panel** with the selection ring on their figure and a trait
+  chip tapped;
+- **the roster** with a chip's explanation open on it;
+- **the job board** in three states: read by a selected character (the fit
+  column and the travel line up, on a site whose rows are not all one kind of
+  work), the moment after a posting was agreed to from one of its rows, and
+  the bounce on a row somebody already has;
+- **the world living on its own** — the map at a minute when nobody was told
+  to go anywhere and half the band is on the road because they decided to be;
+- **the selection reproduction** — one character picked on the roster and
+  another on the map, with one ring and one gold name on the second (§3b);
+- **the ring on a token** — somebody picked while they are out, marked on the
+  figure walking the road with their own doorstep standing empty;
+- **a refusal mid-pause** — a posting made to somebody who says no, the world
+  stopped by `ask-declined`, the reason on the banner — and **the postings
+  ledger** with one posting still recruiting, one refused, and the standing
+  rates beside them;
+- **a job row's breakdown open on a refusal**, with every term, what produced
+  each, the total and the job that beat it (§3e); **a decision's breakdown
+  in the feed**; and **the settlement one notch of the wheel out**, where the
+  map's words are gone, the figures are not, and the selected character is
+  still named because that name is chrome (§4) — the picture the owner
+  judges the default camera against;
+- **a job's candidate picker open with nobody selected** — asserted to be a
+  mixed-fit job whose list carries at least one refusal and at least one
+  person who is out — and **the board after choosing from it**, the footer
+  reading `TO <name>`, that character's panel up, the row still the thing
+  that posts; the row chosen is asserted *not* to be the best fit on the list,
+  because "the player took the top row" is the one reading that picture must
+  not support;
+- **the work list** open on a selected character, asserted to carry a spread
+  of fits and at least one refusal (§3f); and **TUNE opened over an open
+  ROSTER**, the owner's exact path, asserted to carry exactly one drawer's
+  head row with its stamp and prose clear of each other.
 
-Committed copies live in `screens/`; the implementing agent opens and looks
-at every one before declaring done.
+**Pictures of time** (`verify::settled`, a session of its own, because the
+reference session stops at minute 800 and none of this has happened yet):
+**the camp on the day somebody first goes short** — the `short` chip lit, the
+faces list drilled into it, each face saying what they hold against what the
+camp is asking for; **the settlement panel over a camp that can build** (the
+works priced, the slots named, BUILD gold and the treasury behind it) and
+**the same panel after it is built** (`Kawaza - a settlement`, three slots
+standing, `STANDING` where the verb was); and **a camp with all ten of the
+band in it**, past the last arrival. Nothing is posted in it and no rate is
+moved — it is the playtest the wave asked the owner for, scripted.
+
+**Outcomes** (`outcomes::shot_run`, seed 3): **a posted job failing** — Steve,
+a labourer, posted to the Old Crypt's second seal (`fit 0 risky` on the row he
+was posted from), the world stopped by `task-failed` and the banner saying he
+botched it, the wage paid anyway; **that job back on its board** with Steve
+selected, the row open again and reading `fit 0 risky` beside his one `fit 2
+safe` row; **the feed with a job that went well in it**, beside Steve's own
+botched errand under `own-job-failed`; and **the camp a day after a string of
+failures** — the settlement panel at day two, three jobs having failed
+(`outcomes::judge_shots`).
+
+**Petitions** (`pleashots::shot_run`, seed 10, played the way the playtest
+asks): **a petition voiced mid-pause** (Bob's `collectors-visit`, the overlay
+up, the world stopped); **Bob's own panel before and after** the player put
+the card in the ledger and gave him the thirty gold — desperation down a
+step, the purse up thirty, the source line rewritten to *paid the collector
+off, for now*; **where ARRANGE went** on Steve's `thin-days` — his work list,
+with nothing on it once the board is spent (`FINDINGS.md` G-052); **the
+ledger mixed** — asking, met and failed rows and a card with GIVE lit; and
+**the feed open when `broke` fires** on Ludo's ignored `collectors-visit`
+(`pleashots::judge_shots`).
+
+**The director** (`eventshots::shot_run`, `scenarios/pinned-collector.txt` at
+1x): **its opening minute** with the feed open, so the notices band shows the
+scenario's own stamp; **the pin's card** at d1 01:30, the world stopped on
+its voicing and the source chip reading `event - from outside the camp - not
+their own want`, asserted drawn whole; and **the feed around the firing**,
+ignored classes shown, the director's `event` line under the voicing it
+caused (`eventshots::judge_shots`).
+
+**At both the reference surface and 600x540 narrow**: **the mid-travel map**
+(two parties on visibly different routes) and **the feed mid-pause** (the
+reason line showing, and the entry that stopped the world ringed in gold).
+Plus the tuning drawer (reference only, pending state showing gold).
+
+Every photograph carries the three frame judges.
 
 **Text is the built-in bitmap face, deliberately.** The engine's TTF support
-landed before wave 0a and was not adopted: the owner's verdict is that
+is not adopted: the owner's verdict is that
 proportional-heavy display faces are out for dense information, and the feed
 is the densest surface this game has. Every floor and every glyph-count
 assertion is stated against the five-by-seven face.
 
 ## 6. What binds a new surface
 
-Every surface added after wave 0b owes the same three things, and the
+Every surface owes the same three things, and the
 verify run is where they are owed: every row of its content in the `Panel`
 (so `floors.rs` can judge what was *meant* and `frames.rs` can find it on
 the frame), every string ASCII (`library.rs` walks them), and every read of
@@ -1114,51 +1050,28 @@ rather than only at their code site:
   position of its own, and the ring's rectangle is `screens::where_drawn`,
   which the floors judge on the figure it rings.
 
-**The party tokens were a fourth, undeclared, and that is where the
-double-drawn cast hid** (`FINDINGS.md` G-023). This section said "every row
-of its content in the `Panel`" without qualification; `screens.rs` took an
-exception for the tokens on the grounds that their between-tile position is
-derived at draw time, and wrote it in its own module header, where nobody
-reading the rule would meet it. It was not even needed — interpolation is a
-reading of the clock and a `Panel` icon takes a position like any other. The
-cost of the undeclared exception was that the one thing on the map drawn
-outside the `Panel` was the one thing drawn twice per person, on all sixteen
-photographs, for two waves, and no floor could see it. **An exemption that
-is not in this list is a defect, not an exemption.**
+**An exemption that is not in this list is a defect, not an exemption.** The
+party tokens were once a fourth, undeclared in a module header where nobody
+reading the rule would meet it, and that is where the double-drawn cast hid
+from every floor (`FINDINGS.md` G-023); a `Panel` icon takes an interpolated
+position like any other, so the exception was never needed.
 
-**The candidate picker adds no exemption either** (§3c). Its fill, its border
-and its row ghosts are chrome fills like the board's; every row of text on it —
-the header, each candidate's name, fit, whereabouts, verdict and journey, the
-footer — is a `TextRun` in the `Panel`, and its portraits are `Panel` icons, so
-`floors::judge_panel` judges what it says and `frames::judge_chrome` finds each
-row on the frame. That is why `shots::judge_picker` can assert every
-photographed candidate row is the person the list puts there.
+**No later surface adds one.** The job board, the candidate picker (§3c), the
+work list (§3f), the settlement panel (§3g), the breakdown band (§3e) and the
+petition surfaces (§3h) are all chrome fills — a fill, a border, a button's
+ghost — under `TextRun`s and `Panel` icons: every row of text on each is in
+the `Panel`, and every portrait and task chip is a `Panel` icon, so
+`floors::judge_panel` judges what each says and `frames::judge_chrome` finds
+each row on the frame. That is why `shots::judge_picker` can assert every
+photographed candidate row is the person the list puts there, and
+`shots::judge_breakdowns` that the recorded terms of a decision appear on the
+band that explains it, term for term. **The timer bars are fills**, like a
+panel's ground and a button's ghost: they carry no string and no position of
+their own — the track is `layout::card_bar` and its length is
+`card::left_share` of the petition the card is drawing — and the words beside
+them (`due d8 01:48 - 6d 0h left`) are what the floors read.
 
-**The settlement panel adds no exemption** (§3g). Its fill, its border and its
-button ghosts are chrome fills like the board's; every row of text on it — the
-two header lines, each industry's name, cost, hands and wage line, the BUILD
-verb, the stepper glyphs and the wage between them, the footer — is a
-`TextRun` in the `Panel`, and its task chips are `Panel` icons. So
-`floors::judge_panel` judges what it says and `frames::judge_chrome` finds each
-row on the frame.
-
-**The petitions add no exemption** (§3h). Every row of a card, the ledger's
-rows and the overlay's stamp and LATER are `TextRun`s in the `Panel`, and the
-portrait is a `Panel` icon. **The timer bars are fills**, like a panel's
-ground and a button's ghost: they carry no string and no position of their own
-— the track is `layout::card_bar` and its length is `card::left_share` of the
-petition the card is drawing — and the words beside them (`due d8 01:48 - 6d 0h
-left`) are what the floors read.
-
-**The breakdown band adds no exemption** (§3e). Its fill and its border are
-chrome fills, like the character panel's; every row of text on it — the
-heading, each term, the total, the line naming what beat a refusal — is a
-`TextRun` in the `Panel`, so `floors::judge_panel` judges what it says and
-`frames::judge_chrome` finds each row on the frame. That is why
-`shots::judge_breakdowns` can assert the recorded terms of a decision appear
-on the photograph of the band that explains it, term for term.
-
-**And the map's figures are counted now.** Two floors, both directions:
+**The map's figures are counted.** Two floors, both directions:
 `floors::judge_cast` reads the `Panel` — one figure per person, at
 `where_drawn`, drawn exactly where its person stands unless somebody else is
 standing there, and no two closer than `floors::FIGURES_APART` — on every
@@ -1172,8 +1085,8 @@ frame; the second is what asks whether anything else is.
 
 giri's §9 forecast the slots and its §11 recorded the sizes they landed at.
 The fork's table supersedes both, because the fork has a different set: no
-card, no quest detail panel, a map that draws portraits as tokens, and — since
-2026-09-02 — the founding cast's fifteen new roles (CAST.md §4, §9).
+card, no quest detail panel, a map that draws portraits as tokens, and the
+founding cast's fifteen roles (CAST.md §4, §9).
 
 **The role is the contract, not the picture** (`src/sprites.rs`,
 DESIGN §12's curation model). Every slot is a native texel size drawn at a
@@ -1194,12 +1107,12 @@ thing over every icon actually drawn (§1.4, §4).
 Twenty-eight roles; `assets/CREDITS.md` carries one row per file and
 `art/kenney-manifest.json` says which pack region fills which.
 
-**The nine trait chips are roles ahead of their wearers.** They are in
-`Art::ALL` and in `Gallery::load` so `tools/check-assets` and `library.rs`'s
-art contract both know the names, and nothing draws them: wave 1.1 lands the
-trait rows that carry them. The five personality chips keep the category icons
-§3's trait-chip rule gave them (coin, heart, eye, flame, skull) — that
-borrowing is unchanged, and the nine new icons do not touch it.
+**The nine trait chips are drawn wherever a trait chip is** (§3), in the
+icon each row carries; they are in `Art::ALL` and in `Gallery::load` so
+`tools/check-assets` and `library.rs`'s art contract both know the names. The
+five personality chips keep the category icons §3's trait-chip rule gave them
+(coin, heart, eye, flame, skull) — that borrowing is unchanged, and the nine
+aptitude and motivator icons do not touch it.
 
 **The two chip families are told apart by weight, not by subject.** An
 aptitude is line-work — a steel-and-timber implement with the panel showing
@@ -1210,7 +1123,7 @@ bench). That is the cue a glance uses at 16 units, where the *subject* of an
 draws the generated fallbacks to the same cue, so a withdrawn pack does not
 change which family a chip reads as.
 
-**The eye is still the one generated slot.** No eye glyph exists in any of the
+**The eye is the one generated slot.** No eye glyph exists in any of the
 packs (`art/kenney-manifest.json`'s `gaps`), and §2 fixes what the eye means, so
 the slot keeps its violet icon rather than taking a substitute. The scout
 lantern is the second gap recorded there: neither pack has a boot, a footprint,
