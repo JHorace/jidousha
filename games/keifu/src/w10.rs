@@ -35,6 +35,11 @@ pub const EMPTY_CARD: [&str; 4] = [
     "Three locks, tried in turn by the same four. Whoever falls at one lock does not reach the next. There is no summer after this one.",
     "No one stands before it.",
 ];
+/// The Door's sheet with nobody before it.
+pub const EMPTY_SHEET: [&str; 2] = [
+    "The Sealed Door",
+    "Drag four onto the Door. Each lock weighs what they bring in one aptitude: their own, heirlooms, the Seer's promise, conquered fears, and every bond between them. Fear of the dark or the cold counts against them.",
+];
 /// Party A's card: margins +4, +1, +2 (CONSTANTS §3: 35, 26 and 30 of 36 open).
 pub const PARTY_A_CARD: [&str; 13] = [
     "The Sealed Door",
@@ -229,6 +234,14 @@ fn oracle_on(checks: &mut Checks, seed: u64) -> (usize, Vec<String>) {
             && lines_in(&page_of(&sim), crate::summer::SET_OUT_BUTTON) == ["Try the Door"],
         "W10: the last summer's board is not the Door, empty, under \"Try the Door\"",
         format!("seed {seed:#x}: the card reads {:?}", door_card(&sim)),
+    );
+    // The Door's sheet with nobody before it: how the locks are weighed.
+    point_at(&mut sim, Target::Quest(0), false);
+    let empty = lines_in(&page_of(&sim), crate::summer::SHEET);
+    checks.require(
+        empty == EMPTY_SHEET,
+        "W10: the Door's sheet with nobody before it does not say how the locks are weighed",
+        format!("seed {seed:#x}: the dock reads {empty:?}"),
     );
     // "Try the Door" with nobody before it does nothing.
     point_at(&mut sim, Target::SetOut, true);
