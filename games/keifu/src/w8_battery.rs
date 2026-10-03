@@ -256,7 +256,7 @@ pub fn check_whole_years(checks: &mut Checks, content: &Content) -> Vec<String> 
             t.living_at[25].0
         ),
         format!(
-            "W8 whole years, W5's mark on played summers: a fair-chance Dream: mark in {} of {} ({:.1}%) — beside W5's founded baseline, 568 of 600 (94.7%); the most ghosts walking at once {ever_ghosts}",
+            "W8 whole years, W5's mark on played summers: a fair-chance Dream: mark in {} of {} ({:.1}%) — beside W5's founded baseline, 566 of 600 (94.3%); the most ghosts walking at once {ever_ghosts}",
             t.fair,
             t.summers,
             100.0 * t.fair as f64 / t.summers.max(1) as f64
