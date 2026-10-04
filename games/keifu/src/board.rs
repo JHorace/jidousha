@@ -61,8 +61,22 @@ pub struct PlaceRecord {
 impl House {
     /// Post the summer's board (SPEC §5.2, `generation.rs`): the kept, eased board
     /// in place order, each quest with its seats empty; the per-place template memory
-    /// and what generation decided are kept on the house.
+    /// and what generation decided are kept on the house. The last summer posts the
+    /// Door's Might lock alone (§5.1, §16.1).
     pub fn post_board(&mut self, content: &Content, rng: &mut Rng) {
+        // SPEC §5.1: if the Door stands open, the board is cleared and slot 0 becomes the
+        // Might lock — nothing is generated, nothing remembered.
+        if self.calendar.door_stands_open() {
+            self.board = crate::door::door_board(content)
+                .into_iter()
+                .map(|quest| Posted {
+                    seats: vec![None; quest.seats as usize],
+                    quest,
+                })
+                .collect();
+            self.board_report = None;
+            return;
+        }
         let (quests, memory, report) = generate(content, self, rng);
         self.templates_last = memory;
         self.board = quests
@@ -185,7 +199,8 @@ impl House {
             // SPEC-GAPS KG-41: a group of winter seats is not a drop target; only its seats.
             | Target::Group(_)
             | Target::LetWinterPass
-            | Target::Heir(..) => None,
+            | Target::Heir(..)
+            | Target::DoorHelp => None,
         }
     }
 }

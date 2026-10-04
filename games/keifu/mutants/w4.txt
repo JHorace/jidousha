@@ -238,10 +238,10 @@
 - let trouble = |place: Place| house.places[place.index()].trouble;
 + let trouble = |_: Place| 0;
 
-### B4 every quest has two seats
+### B4 every quest has two seats (re-cut s10: the Door posts its own seats)
 @ src/board.rs
-- seats: vec![None; quest.seats as usize],
-+ seats: vec![None; 2],
+- self.templates_last = memory;⏎        self.board = quests⏎            .into_iter()⏎            .map(|quest| Posted {⏎                seats: vec![None; quest.seats as usize],
++ self.templates_last = memory;⏎        self.board = quests⏎            .into_iter()⏎            .map(|quest| Posted {⏎                seats: vec![None; 2],
 
 ### B5 a swap loses the displaced
 @ src/board.rs
@@ -348,10 +348,10 @@
 - fmt(&words[W::QuestCardRenown], &[&q.renown.to_string()])
 + fmt(&words[W::QuestCardRenown], &[&q.danger.to_string()])
 
-### K12 the dream line ignores the party (re-cut s5)
+### K12 the dream line ignores the party (re-cut s5, re-cut s10)
 @ src/quest_card.rs
-- Source::Template(_) => dreamers_line(content, heroes, q.facts(), party),
-+ Source::Template(_) => dreamers_line(content, heroes, q.facts(), &[]),
+- dreamers_line(content, heroes, q.facts(), party)
++ dreamers_line(content, heroes, q.facts(), &[])
 
 ### S1 no premise (re-cut s5)
 @ src/quest_sheet.rs

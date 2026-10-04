@@ -62,6 +62,10 @@ fn line(ink: Ink, text: impl Into<String>, value: Option<String>) -> SheetLine {
 pub fn quest_sheet(content: &Content, house: &House, quest: usize, party: &[HeroId]) -> QuestSheet {
     let words = &content.words;
     let q = &house.board[quest].quest;
+    // The last summer's one quest has a sheet of its own (SPEC §16.4).
+    if q.is_door_lock() {
+        return crate::door_view::door_sheet(content, house, party);
+    }
     let place = &content.lore.places[q.place.index()];
     let heroes = &house.heroes;
     let mut out = vec![

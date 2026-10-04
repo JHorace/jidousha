@@ -17,7 +17,10 @@
 //! hearth seated with every preview, the winter page, Pip's and Odo's sheets after it,
 //! and Ysolde's road-book on her sheet beside the played winter's page. Then W8's turning
 //! and grown house, and W9's: Elsbeth's epitaph on the family screen's remembrance panel,
-//! and a questing death's and an old age's epitaph at the top of their death pages.
+//! and a questing death's and an old age's epitaph at the top of their death pages. Then
+//! W10's (`w10_stages.rs`): the Door card empty, mid-drag and seated, its sheet and its
+//! help; the prologue and a lock's page; each verdict; the family at the Ending, staged
+//! and played; and another house begun.
 
 use std::path::{Path, PathBuf};
 
@@ -97,6 +100,21 @@ pub fn capture_all(checks: &mut Checks) -> Vec<String> {
         (&["", "Elsbeth"][..], "keifu-w9-elsbeth.png"),
         (&["w9-questing"][..], "keifu-w9-questing-death.png"),
         (&["w9-old-age"][..], "keifu-w9-old-age.png"),
+        (&["w10:door-empty"][..], "keifu-w10-door-empty.png"),
+        (&["w10:door-help"][..], "keifu-w10-door-help.png"),
+        (&["w10:door-drag"][..], "keifu-w10-door-drag.png"),
+        (&["w10:door-card"][..], "keifu-w10-door-card.png"),
+        (&["w10:door-sheet"][..], "keifu-w10-door-sheet.png"),
+        (&["w10:prologue"][..], "keifu-w10-prologue.png"),
+        (&["w10:lock"][..], "keifu-w10-lock.png"),
+        (&["w10:verdict-0"][..], "keifu-w10-verdict-0.png"),
+        (&["w10:verdict-1"][..], "keifu-w10-verdict-1.png"),
+        (&["w10:verdict-2"][..], "keifu-w10-verdict-2.png"),
+        (&["w10:verdict-3"][..], "keifu-w10-verdict-3.png"),
+        (&["w10:family"][..], "keifu-w10-family.png"),
+        (&["w10:played"][..], "keifu-w10-played.png"),
+        (&["w10:played-family"][..], "keifu-w10-played-family.png"),
+        (&["w10:reset"][..], "keifu-w10-reset.png"),
     ]
     .into_iter()
     .enumerate()
@@ -154,7 +172,9 @@ pub fn capture_all(checks: &mut Checks) -> Vec<String> {
                 crate::verify::point(&mut sim, jidousha::prelude::Vec2::new(4.0, 700.0), false);
                 continue;
             }
-            if name.is_empty() {
+            if let Some(w10) = name.strip_prefix("w10:") {
+                crate::w10_stages::stage(&mut sim, w10);
+            } else if name.is_empty() {
                 point_at(&mut sim, Target::OpenFamily, true);
             } else if *name == "w3" {
                 stage_w3(&mut sim);

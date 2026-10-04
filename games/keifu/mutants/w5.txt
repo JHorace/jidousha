@@ -118,10 +118,10 @@
 - let mut memory_after = memory.clone();
 + let mut memory_after = vec![None; memory.len()];
 
-### P14 a ghost's quest writes the memory
+### P14 a ghost's quest writes the memory (re-cut s10)
 @ src/quest.rs
-- Source::Ghost(_) => None,
-+ Source::Ghost(_) => Some(0),
+- Source::Ghost(_) | Source::Door(_) => None,
++ Source::Ghost(_) => Some(0),⏎            Source::Door(_) => None,
 
 ### P15 the board sorted by demand
 @ src/generation.rs

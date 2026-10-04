@@ -7,7 +7,7 @@
 //! key. A file that does not match its schema stops the game at startup with a
 //! message naming the file, the path inside it, and what was expected.
 
-use crate::constants::{BOND_RANK_POWER_GRIEF, DOOR_LOCKS, DOOR_YEARS, bond_mirror};
+use crate::constants::{BOND_RANK_POWER_GRIEF, bond_mirror};
 use crate::constants::{
     CROWN_RENOWN, DOOR_DESTINY_POWER, MAXIMUM_SEATS, OUTLIVING_DREAD, PATRON_POWER,
 };
@@ -97,6 +97,10 @@ pub struct BondLore {
     /// The kinship telling of a bond's other hero, by `BondKind`, then by the
     /// other's pronoun (HE, SHE); the same word twice for an ungendered kind.
     pub kinship: Vec<[String; 2]>,
+    /// "brother", "sister": kin by a shared parent, between two of a party (SPEC §21).
+    pub sibling: [String; 2],
+    /// "companion": two of a party with no bond between them (SPEC §21).
+    pub no_bond: String,
 }
 
 /// `names.json`.
@@ -137,10 +141,9 @@ pub struct Content {
     pub founding: Founding,
     /// `ghost.json`: a ghost quest's title and premise.
     pub ghost: crate::ghost::GhostLore,
-    /// `door.json`: the Door's tags come from lore; its lock demands from here.
-    pub door_locks: Vec<i32>,
-    /// `door.json` `closed_title` and `closed_verdict`: the house closed (W10 SCAFFOLD's screen).
-    pub door_closed: [String; 2],
+    /// `door.json`: the three locks, the verdicts and the closed house's (SPEC §16, §23).
+    /// The Door's tags come from lore.
+    pub door: crate::door_lore::DoorLore,
     /// `wanderers.json`: who a wanderer is drawn as, and the dreams a newcomer rolls.
     pub wanderers: crate::turning_lore::WandererLore,
     /// `ui-text.json` and `lines.json`, the keys this build reads.
@@ -184,11 +187,7 @@ pub fn load() -> Result<Content, SchemaError> {
             houses: strings(&at("names.json")?, "houses")?,
         },
         founding: read_household(&at("household.json")?)?,
-        door_locks: read_door(&at("door.json")?)?,
-        door_closed: [
-            text_at(&at("door.json")?, "closed_title")?,
-            text_at(&at("door.json")?, "closed_verdict")?,
-        ],
+        door: crate::door_lore::read_door(&at("door.json")?)?,
         ghost: crate::ghost::read_ghost(&at("ghost.json")?)?,
         wanderers: crate::turning_lore::read_wanderers(&at("wanderers.json")?)?,
         words: read_words(at("ui-text.json")?, at("lines.json")?)?,
@@ -382,6 +381,11 @@ fn read_bonds(at: &At<'_>) -> Result<BondLore, SchemaError> {
         shown: Vec::new(),
         gendered: Vec::new(),
         kinship: Vec::new(),
+        sibling: {
+            let forms = kinship.key("sibling")?;
+            [text(&forms, "HE")?, text(&forms, "SHE")?]
+        },
+        no_bond: text(&kinship, "no_bond")?,
     };
     for (kind, item) in BondKind::ALL.iter().zip(&kinds) {
         let numbers = (
@@ -437,23 +441,4 @@ fn read_pools(at: &At<'_>) -> Result<Vec<Vec<String>>, SchemaError> {
             Ok(lines)
         })
         .collect()
-}
-
-fn read_door(at: &At<'_>) -> Result<Vec<i32>, SchemaError> {
-    let years = at.key("years")?.int()?;
-    let locks = at.key("locks")?;
-    let mut demands = Vec::new();
-    for (aptitude, lock) in Aptitude::ALL.iter().zip(locks.items()?) {
-        let named = id_at(&lock, "aptitude", Aptitude::find)?;
-        demands.push(lock.key("demand")?.int()?);
-        if named != *aptitude {
-            return Err(lock.reject("locks are not in Might, Wits, Spirit order".into()));
-        }
-    }
-    if years != DOOR_YEARS || demands != DOOR_LOCKS {
-        return Err(at.reject(format!(
-            "years {years} and lock demands {demands:?} disagree with CONSTANTS.md §1/§12"
-        )));
-    }
-    Ok(demands)
 }

@@ -120,7 +120,7 @@ pub enum Target {
     Leaf(usize),
     /// "Skip ahead": leave the telling now.
     Skip,
-    /// "Begin another house", once the house has closed (W10 SCAFFOLD).
+    /// "Begin another house", once the house has ended (SPEC §23).
     BeginAgain,
     /// A group of winter seats, or the hall: pointing at it opens its help in the dock.
     Group(crate::hearth::Group),
@@ -128,6 +128,8 @@ pub enum Target {
     LetWinterPass,
     /// An heir button on turning page `.0`: that heir, or no one (SPEC §15.2).
     Heir(usize, Option<HeroId>),
+    /// The top bar's Door lines: pointing at them opens the Door's help in the dock.
+    DoorHelp,
 }
 
 /// A hero in hand: picked up from a seat and not yet released.
@@ -154,6 +156,8 @@ pub struct UiState {
     pub pointing_quest: Option<usize>,
     /// The group of winter seats under the pointer.
     pub pointing_group: Option<crate::hearth::Group>,
+    /// The pointer rests on the top bar's Door lines.
+    pub pointing_door: bool,
     /// The hero in hand, if a drag is under way.
     pub drag: Option<Drag>,
     /// The first line the sheet dock shows: how far its sheet is scrolled.
@@ -399,26 +403,23 @@ pub fn wrap(text: &str, width: f32, size: f32) -> Vec<String> {
     lines
 }
 
-/// The page for the screen that is up: the house closed (W10 SCAFFOLD), the telling,
-/// the turning, the hearth, or the summer — each a projection of the
-/// house, so the scene cannot disagree with it.
+/// The page for the screen that is up: the Ending's verdict (SPEC §23), the telling, the
+/// turning, the hearth, or the summer — each a projection of the house, so the scene
+/// cannot disagree with it.
 pub fn page(content: &Content, house: &House, ui: &UiState, clock: Clock) -> Page {
     let mut page = Page::default();
-    if house.closed {
-        crate::ending_view::lay_out(&mut page, content, house);
-        return page;
-    }
-    match (&house.telling, &house.passage) {
-        (Some(telling), _) => {
+    match (&house.ending, &house.telling, &house.passage) {
+        (Some(ending), _, _) => crate::ending_view::lay_out(&mut page, content, house, ending),
+        (None, Some(telling), _) => {
             crate::telling_view::lay_out(&mut page, content, house, telling, ui, clock)
         }
-        (None, Some(passage)) => {
+        (None, None, Some(passage)) => {
             crate::turning_view::lay_out(&mut page, content, house, passage, ui)
         }
-        (None, None) if house.calendar.is_winter() => {
+        (None, None, None) if house.calendar.is_winter() => {
             crate::hearth_view::lay_out(&mut page, content, house, ui)
         }
-        (None, None) => crate::summer::lay_out(&mut page, content, house, ui),
+        (None, None, None) => crate::summer::lay_out(&mut page, content, house, ui),
     }
     if ui.family_open {
         // The overlay covers the summer screen, so only its targets are live.

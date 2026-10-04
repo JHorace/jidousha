@@ -14,11 +14,10 @@ use crate::sheet::station;
 use crate::text::{capitalized, fmt};
 use crate::words::W;
 
-/// The top bar's five readings, in order (SPEC §5.4; the W0 oracle).
-///
-/// The Door outlook ("Your best four today ...") reads power (§6, §16.4) and lands
-/// with W10; the top bar shows it from then.
-pub fn top_bar(content: &Content, house: &House) -> [String; 5] {
+/// The top bar's six readings, in order (SPEC §5.4; the W0 oracle's five, then the
+/// Door outlook — "Your best four today bring M, W, S: all three open P in 100." — read
+/// off `door::best_four`, the outlook the Door card and the locks read, §16.4).
+pub fn top_bar(content: &Content, house: &House) -> [String; 6] {
     let words = &content.words;
     let calendar = house.calendar;
     let year = if calendar.is_last_summer() {
@@ -55,11 +54,41 @@ pub fn top_bar(content: &Content, house: &House) -> [String; 5] {
         .iter()
         .map(|tag| content.lore.tags[tag.index()].title.as_str())
         .collect();
-    let locks: Vec<String> = content.door_locks.iter().map(i32::to_string).collect();
+    let locks: Vec<String> = content
+        .door
+        .locks
+        .iter()
+        .map(|l| l.demand.to_string())
+        .collect();
     let mut args: Vec<&str> = tags;
     args.extend(locks.iter().map(String::as_str));
     let door_tags = fmt(&words[W::TopDoorTags], &args);
-    [year, season, renown, door, door_tags]
+    let best = crate::door::best_four(content, house);
+    let numbers: Vec<String> = best
+        .powers
+        .iter()
+        .copied()
+        .chain([best.all_percent()])
+        .map(|n| n.to_string())
+        .collect();
+    let numbers: Vec<&str> = numbers.iter().map(String::as_str).collect();
+    let outlook = fmt(&words[W::TopDoorOutlook], &numbers);
+    [year, season, renown, door, door_tags, outlook]
+}
+
+/// The Door's help (SPEC §5.4, `ui.top_bar.door_help`): how the locks are tried, naming
+/// the best four today.
+pub fn door_help(content: &Content, house: &House) -> String {
+    let best = crate::door::best_four(content, house);
+    let names: Vec<&str> = best
+        .party
+        .iter()
+        .map(|&id| house.heroes[id].name.as_str())
+        .collect();
+    fmt(
+        &content.words[W::TopDoorHelp],
+        &[&crate::text::name_list(content, &names)],
+    )
 }
 
 /// Which generation a hero is drawn in: one below their deepest parent.
@@ -118,14 +147,28 @@ pub fn spouse_pairs(heroes: &[Hero]) -> Vec<(HeroId, HeroId)> {
 
 /// "L living, G gone. <tales sentence> House renown R." under "Year N." (SPEC §19.2).
 pub fn tally(content: &Content, house: &House) -> String {
+    fmt(
+        &content.words[W::FamilySubline],
+        &[
+            &house.calendar.current_year().to_string(),
+            &tally_sentence(content, house),
+        ],
+    )
+}
+
+/// The house tally (SPEC §19.2, `:313-321`): "L living, G gone. <tales sentence> House
+/// renown R." — the family's, and the Ending's (§23).
+pub fn tally_sentence(content: &Content, house: &House) -> String {
     let words = &content.words;
     let (living, gone) = house.living_and_gone();
     let tales = match house.tales.len() {
+        // At the Ending no tale will be told "yet".
+        0 if house.ending.is_some() => words[W::FamilyTallyNoneEnding].to_owned(),
         0 => words[W::FamilyTallyNone].to_owned(),
         1 => words[W::FamilyTallyOne].to_owned(),
         n => fmt(&words[W::FamilyTallyMany], &[&n.to_string()]),
     };
-    let sentence = fmt(
+    fmt(
         &words[W::FamilyTally],
         &[
             &living.to_string(),
@@ -133,10 +176,6 @@ pub fn tally(content: &Content, house: &House) -> String {
             &tales,
             &house.renown.to_string(),
         ],
-    );
-    fmt(
-        &words[W::FamilySubline],
-        &[&house.calendar.current_year().to_string(), &sentence],
     )
 }
 

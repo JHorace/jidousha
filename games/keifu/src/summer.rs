@@ -22,8 +22,9 @@ use crate::ids::Phase;
 use crate::screen::{MIN_TEXT, PAGE_H, PAGE_W, Page, Target, UiState, ink, layers};
 use crate::words::W;
 
-/// The top bar's height.
-pub const TOP_H: f32 = 58.0;
+/// The top bar's height: four rows — the year, season and renown; the Door's countdown;
+/// its tags and locks; and the outlook of the best four (SPEC §5.4, §16.4).
+pub const TOP_H: f32 = 76.0;
 /// Where the household and yard column starts.
 pub const LEFT_X: f32 = 16.0;
 /// A hero card: the figure, the name under it, the dread pips under that.
@@ -54,9 +55,14 @@ pub const BOARD: Rect = Rect {
     ),
     max: Vec2::new(SHEET.min.x - GUTTER, PAGE_H - 8.0),
 };
+/// The top bar's Door lines — countdown, tags, outlook — which point at the Door's help.
+pub const DOOR_LINES: Rect = Rect {
+    min: Vec2::new(LEFT_X, 25.0),
+    max: Vec2::new(SET_OUT_BUTTON.min.x - 8.0, TOP_H),
+};
 /// "The family" button, at the bar's right end.
 pub const FAMILY_BUTTON: Rect = Rect {
-    min: Vec2::new(TOP_BAR.max.x - 152.0, 12.0),
+    min: Vec2::new(TOP_BAR.max.x - 136.0, 12.0),
     max: Vec2::new(TOP_BAR.max.x - 12.0, 46.0),
 };
 
@@ -86,31 +92,39 @@ pub fn screen_rect() -> Rect {
 
 /// The set-out control (SPEC §5.3), in the bar left of "The family".
 pub const SET_OUT_BUTTON: Rect = Rect {
-    min: Vec2::new(FAMILY_BUTTON.min.x - 124.0, 12.0),
+    min: Vec2::new(FAMILY_BUTTON.min.x - 152.0, 12.0),
     max: Vec2::new(FAMILY_BUTTON.min.x - 12.0, 46.0),
 };
 
-/// The set-out control's label: "Set out" if anyone is seated, "Stay home" if nobody
-/// is (SPEC §5.3). The last summer's "Try the Door" is W10's.
+/// The set-out control's label: "Try the Door" in the last summer, else "Set out" if
+/// anyone is seated, "Stay home" if nobody is (SPEC §5.3).
 pub fn set_out_label<'c>(content: &'c Content, house: &House) -> &'c str {
     let anyone = (0..house.board.len()).any(|slot| !house.party(slot).is_empty());
-    if anyone {
+    if house.calendar.door_stands_open() {
+        &content.words[W::SummerTryTheDoor]
+    } else if anyone {
         &content.words[W::SummerSetOut]
     } else {
         &content.words[W::SummerStayHome]
     }
 }
 
+/// Whether the set-out control acts: always, but "Try the Door" not until at least one
+/// hero is before it (SPEC §5.3, §16.1). SPEC-GAPS KG-73: a last summer with no living
+/// adult never offers it.
+pub fn may_set_out(house: &House) -> bool {
+    !house.calendar.door_stands_open() || (0..house.board.len()).any(|s| !house.party(s).is_empty())
+}
+
 /// Lay the summer screen out.
 pub fn lay_out(page: &mut Page, content: &Content, house: &House, ui: &UiState) {
     lay_out_top_bar(page, content, house);
-    button(
-        page,
-        SET_OUT_BUTTON,
-        set_out_label(content, house),
-        Target::SetOut,
-        layers::PANEL,
-    );
+    let label = set_out_label(content, house);
+    if may_set_out(house) {
+        button(page, SET_OUT_BUTTON, label, Target::SetOut, layers::PANEL);
+    } else {
+        greyed_button(page, SET_OUT_BUTTON, label, Target::SetOut, layers::PANEL);
+    }
     lay_out_household(page, content, house, ui);
 }
 
@@ -119,7 +133,7 @@ pub fn lay_out(page: &mut Page, content: &Content, house: &House, ui: &UiState) 
 pub fn lay_out_top_bar(page: &mut Page, content: &Content, house: &House) {
     let top = TOP_BAR;
     page.shape(top, ink::PANEL, layers::PANEL);
-    let [year, season, renown, door, door_tags] = top_bar(content, house);
+    let [year, season, renown, door, door_tags, outlook] = top_bar(content, house);
     let style = TextStyle {
         size: 16.0,
         ..TextStyle::default()
@@ -150,6 +164,17 @@ pub fn lay_out_top_bar(page: &mut Page, content: &Content, house: &House) {
         ink::NOTE,
         top,
     );
+    page.text(
+        layers::TEXT,
+        Vec2::new(LEFT_X, 57.0),
+        outlook,
+        MIN_TEXT,
+        ink::NOTE,
+        top,
+    );
+    // The Door's hover names the best four (SPEC §5.4): pointing at its lines opens it in
+    // the dock.
+    page.targets.push((DOOR_LINES, Target::DoorHelp));
     button(
         page,
         FAMILY_BUTTON,
@@ -237,6 +262,22 @@ fn renown_ink(house: &House) -> Color {
 }
 
 /// A labelled button.
+/// A control that is shown and does nothing yet: its label greyed on the panel colour.
+pub fn greyed_button(page: &mut Page, rect: Rect, label: &str, target: Target, layer: i16) {
+    page.shape(rect, ink::PANEL, layer);
+    let style = TextStyle {
+        size: MIN_TEXT,
+        ..TextStyle::default()
+    };
+    let at = Vec2::new(
+        rect.center().x - style.width_of(label) * 0.5,
+        rect.center().y - MIN_TEXT * 0.5,
+    );
+    page.text(layer + 2, at, label, MIN_TEXT, ink::GONE, rect);
+    page.targets.push((rect, target));
+}
+
+/// A control: its label centred on a lit panel.
 pub fn button(page: &mut Page, rect: Rect, label: &str, target: Target, layer: i16) {
     page.shape(rect, ink::HOT, layer);
     let style = TextStyle {

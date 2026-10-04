@@ -95,9 +95,20 @@ pub fn check_w0_and_w1(
     seed: u64,
 ) -> (String, FrameRecord) {
     let mut sim = session(seed);
-    let frame = crate::verify::frame(recorder, &mut sim);
+    check_w0_and_w1_on(checks, recorder, &mut sim, seed)
+}
+
+/// The W0 and W1 oracles on the house `sim` holds now — a founding, or another house
+/// begun at the Ending (W10) — labelled by its `seed`.
+pub fn check_w0_and_w1_on(
+    checks: &mut Checks,
+    recorder: &mut FrameRecorder,
+    sim: &mut HeadlessSim,
+    seed: u64,
+) -> (String, FrameRecord) {
+    let frame = crate::verify::frame(recorder, sim);
     let font = recorder.font_texture();
-    let page = page_of(&sim);
+    let page = page_of(sim);
     for want in W0_TOP_BAR {
         let found = find_from(&page, 0, want);
         checks.require(
@@ -110,12 +121,12 @@ pub fn check_w0_and_w1(
         );
     }
 
-    let garrick = hero_named(&sim, "Garrick");
-    point_at(&mut sim, Target::Hero(garrick), false);
+    let garrick = hero_named(sim, "Garrick");
+    point_at(sim, Target::Hero(garrick), false);
     // Garrick's sheet is longer than the dock, so it is read the way a player reads
     // it: paged through by the wheel, each line once, in order, on the page that
     // shows it (`verify::dock_pages`).
-    let pages = crate::verify::dock_pages(&mut sim, recorder);
+    let pages = crate::verify::dock_pages(sim, recorder);
     let read = crate::verify::dock_read(&pages);
     let sheet: Vec<String> = read.iter().map(|line| line.text.clone()).collect();
     let mut at = 0;
@@ -162,7 +173,7 @@ pub fn check_w0_and_w1(
         None => crate::checks::fail("the dock showed no page", "dock_pages returned none"),
     };
     check_dread_pips(checks, &read_pages, seed);
-    check_cards(checks, &sim, &page, seed);
+    check_cards(checks, sim, &page, seed);
     (
         format!(
             "oracles: W0 top bar ({} readings) and W1 Garrick sheet ({} lines) on screen",

@@ -48,13 +48,20 @@
 //!    blade) holds the marks to their rule; and the whole-year battery — 160 houses
 //!    played up to 25 years, every turning held to its own rules, printed (`w8.rs`,
 //!    `w8_battery.rs`).
-//! 10. **The W0 machinery**: calendar, text conventions, pools, bags (`foundations.rs`).
-//! 11. **Readability floors** over every surface this build has, every page of a
+//! 10. **W10's oracle**, live — party A dragged onto the Door: the card's three "you bring"
+//!     and "All three locks open: 59 in 100." mid-drag and seated, the Door sheet, the top
+//!     bar's outlook; "Try the Door", the prologue, "After the Door", the verdict's title
+//!     for the locks given; party B's card; all four titles by staged lock outcomes; the
+//!     Ending's remembering in order, its family, "The verdict", and "Begin another house"
+//!     to the authored founding, replayed; and the full-dynasty battery, two players, 240
+//!     houses each, to the verdict (`w10.rs`, `w10_ending.rs`, `w10_battery.rs`).
+//! 11. **The W0 machinery**: calendar, text conventions, pools, bags (`foundations.rs`).
+//! 12. **Readability floors** over every surface this build has, every page of a
 //!     sheet longer than the dock, at the native window and two web canvases (`floors.rs`).
-//! 12. **The sheet dock** as the player works it: resting, scrolling, a new subject,
+//! 13. **The sheet dock** as the player works it: resting, scrolling, a new subject,
 //!     the hero in hand, a drop on it (`dock_checks.rs`).
-//! 13. **The cast's sprites**: every role imported, every card its role's texture (`cast.rs`).
-//! 14. **A picture** of each oracle's screen (`capture.rs`).
+//! 14. **The cast's sprites**: every role imported, every card its role's texture (`cast.rs`).
+//! 15. **A picture** of each oracle's screen (`capture.rs`).
 
 use std::process::ExitCode;
 
@@ -364,6 +371,15 @@ pub fn run() -> ExitCode {
     summary.push(w9_line);
     summary.extend(w9_vector);
     summary.push(crate::w9::check_pages(&mut checks));
+    let (w10_line, w10_vector) = crate::w10::check_oracle(&mut checks);
+    summary.push(w10_line);
+    summary.extend(w10_vector);
+    summary.push(crate::w10_ending::check_titles(&mut checks));
+    summary.extend(crate::w10_ending::check_ending(&mut checks, &mut recorder));
+    summary.extend(crate::w10_battery::check_full_dynasty(
+        &mut checks,
+        &content,
+    ));
     summary.push(crate::sessions::check_family(&mut checks, &mut recorder));
     summary.push(crate::sessions::check_seeds(&mut checks, &content));
     summary.push(crate::sessions::check_staged_sheets(&mut checks));
@@ -378,7 +394,7 @@ pub fn run() -> ExitCode {
     let (passed, failed) = checks.counts();
     if failed == 0 {
         println!(
-            "verified keifu: W0, W1, W2, W3, W4, W5, W6, W7, W8 and W9 oracles hold on {} seeds, {passed} checks",
+            "verified keifu: W0, W1, W2, W3, W4, W5, W6, W7, W8, W9 and W10 oracles hold on {} seeds, {passed} checks",
             SEEDS.len()
         );
     } else {

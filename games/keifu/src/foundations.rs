@@ -86,12 +86,12 @@ fn check_calendar(checks: &mut Checks, content: &Content, house: &mut House) {
         house.calendar.begin_summer();
         years.push(house.calendar.current_year());
         if house.calendar.current_year() == 25 {
-            let [year, _, _, door, _] = top_bar(content, house);
+            let [year, _, _, door, ..] = top_bar(content, house);
             seen.push(year);
             seen.push(door);
         }
     }
-    let [year, season, _, door, _] = top_bar(content, house);
+    let [year, season, _, door, ..] = top_bar(content, house);
     seen.extend([year, season, door]);
     // One year per turning: 2, 3, ... 26, written out rather than computed.
     let want: Vec<i32> = vec![

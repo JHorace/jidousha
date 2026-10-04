@@ -305,6 +305,16 @@ pub fn stage_goal(kind: DreamKind, stage: usize) -> i32 {
 
 /// `DOOR_LOCKS`: demands of the Might, Wits, Spirit locks (CONSTANTS §12).
 pub const DOOR_LOCKS: [i32; 3] = [34, 34, 34];
+/// `DOOR_SEATS`: the one party the Door asks for (CONSTANTS §12).
+pub const DOOR_SEATS: i32 = 4;
+/// `DOOR_DANGER`: each lock's danger — a death chance of 45% in a lock's disaster
+/// (CONSTANTS §12).
+pub const DOOR_DANGER: i32 = 3;
+/// `DOOR_RENOWN`: renown per opened lock, house and each member (+1 on a triumph)
+/// (CONSTANTS §12).
+pub const DOOR_RENOWN: i32 = 5;
+/// The best-four score's divisor: `P(all three) + (P1 + P2 + P3) / 1000` (CONSTANTS §12).
+pub const BEST_FOUR_DIVISOR: f64 = 1000.0;
 
 /// `EPITAPH_SENTENCES`: an epitaph's budget, counted as "." characters (CONSTANTS §13).
 pub const EPITAPH_SENTENCES: usize = 6;

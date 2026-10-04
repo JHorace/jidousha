@@ -1,7 +1,9 @@
 //! The telling screen (SPEC §8): what set out wrote, page by page, under the top bar,
 //! with the sheet dock beside it.
 //!
-//! Pages in order — one per resolved quest in board order, then "Meanwhile" (the
+//! Pages in order — in the last summer the Door's prologue first ("The last summer", the
+//! four who went and what they carried), then one per resolved quest in board order (at
+//! the Door, one per lock tried), then "Meanwhile" (the
 //! unanswered lines, their total, home healing, and the closing line if the house
 //! has closed), or "A quiet summer" when there is nothing at all. A page longer than
 //! the panel continues on further leaves ("What it did to them, continued."); the
@@ -26,8 +28,9 @@ use crate::content::Content;
 use crate::hero::{Hero, HeroId};
 use crate::house::House;
 use crate::screen::{Clock, MIN_TEXT, PAD, PAGE_H, Page, Target, UiState, ink, layers, wrap};
-use crate::summer::{CARD, CARD_GAP, LEFT_X, SHEET, TOP_H, button, hero_card, lay_out_top_bar};
+use crate::summer::{CARD, CARD_GAP, LEFT_X, SHEET, TOP_H, hero_card, lay_out_top_bar};
 use crate::telling::{QuestPage, Telling};
+use crate::telling_nav::NAV_H;
 use crate::text::fmt;
 use crate::words::W;
 
@@ -36,8 +39,6 @@ pub const PANEL: Rect = Rect {
     min: Vec2::new(LEFT_X, TOP_H + 8.0),
     max: Vec2::new(SHEET.min.x - 12.0, PAGE_H - 8.0),
 };
-/// The navigation strip along the panel's foot.
-const NAV_H: f32 = 48.0;
 /// The story's type, and its pitch.
 const STORY: f32 = 16.0;
 const STORY_PITCH: f32 = 20.0;
@@ -46,9 +47,6 @@ const PITCH: f32 = 17.0;
 /// Air between a leaf's lines, and between its parts.
 const LINE_GAP: f32 = 6.0;
 const PART_GAP: f32 = 10.0;
-/// A navigation button.
-const NAV_BUTTON: Vec2 = Vec2::new(36.0, 34.0);
-const NAV_WIDE: f32 = 140.0;
 
 /// Where a leaf's type is set.
 pub fn text_area() -> Rect {
@@ -61,6 +59,8 @@ pub fn text_area() -> Rect {
 /// Which page a leaf belongs to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Part {
+    /// The Door's prologue (SPEC §8: "the Door prologue (last summer only)").
+    Prologue,
     /// A resolved quest's page, by index into `Telling::pages`.
     Quest(usize),
     /// "Meanwhile".
@@ -88,7 +88,9 @@ pub struct Leaf {
 /// "A quiet summer" only when there is no quest page and no Meanwhile line.
 pub fn meanwhile_lines(content: &Content, house: &House, telling: &Telling) -> Vec<String> {
     let mut lines = telling.meanwhile.clone();
-    if house.renown <= 0 {
+    // After the Door the Ending comes whatever the renown (SPEC §16.3): nothing closes
+    // (SPEC-GAPS KG-74).
+    if house.renown <= 0 && telling.door.is_none() {
         lines.push(content.words[W::TellingHouseClosed].to_owned());
     }
     lines
@@ -171,10 +173,24 @@ fn split(part: Part, lines: &[String], first_header: f32, more_header: f32, out:
     }
 }
 
+/// How tall the Door prologue's first leaf's header is: the heading, the intro, the cards.
+fn prologue_header(content: &Content) -> f32 {
+    PITCH + line_height(&content.words[W::TellingDoorIntro]) + PART_GAP + CARD.y + PART_GAP
+}
+
 /// The telling's leaves, in order (SPEC §8).
 pub fn leaves(content: &Content, house: &House, telling: &Telling) -> Vec<Leaf> {
     let mut out = Vec::new();
     let heading = PITCH + PART_GAP;
+    if let Some(door) = &telling.door {
+        split(
+            Part::Prologue,
+            &door.prologue,
+            prologue_header(content),
+            heading,
+            &mut out,
+        );
+    }
     for (index, page) in telling.pages.iter().enumerate() {
         split(
             Part::Quest(index),
@@ -314,6 +330,56 @@ pub fn lay_out(
     let typed = typing(telling, leaf, ui, clock);
     let complete = story_complete(telling, leaf, ui, clock);
     let (heading, lines): (String, Vec<String>) = match leaf.part {
+        Part::Prologue => {
+            let Some(door) = &telling.door else {
+                panic!(
+                    "[keifu] a prologue leaf in a telling with no Door\n  likely cause: the \
+                     leaves were read off another telling\n  fix: build them with leaves()"
+                );
+            };
+            let lines = door.prologue[leaf.lines.clone()].to_vec();
+            if !leaf.first {
+                (words[W::TellingDoorIntroMore].to_owned(), lines)
+            } else {
+                y = paragraph(
+                    page,
+                    &words[W::TellingDoorHeading],
+                    y,
+                    MIN_TEXT,
+                    PITCH,
+                    ink::HEADING,
+                    None,
+                    None,
+                );
+                y = paragraph(
+                    page,
+                    &words[W::TellingDoorIntro],
+                    y,
+                    MIN_TEXT,
+                    PITCH,
+                    ink::NOTE,
+                    None,
+                    None,
+                );
+                y += PART_GAP;
+                for (seat, &member) in door.party.iter().enumerate() {
+                    let rect = Rect::from_min_size(
+                        Vec2::new(area.min.x + seat as f32 * (CARD.x + CARD_GAP), y),
+                        CARD,
+                    );
+                    hero_card(
+                        page,
+                        content,
+                        &house.heroes,
+                        member,
+                        rect,
+                        ui.pointing == Some(member),
+                    );
+                }
+                y += CARD.y + PART_GAP;
+                (String::new(), lines)
+            }
+        }
         Part::Quest(index) => {
             let quest_page = &telling.pages[index];
             let lines = quest_page.lines[leaf.lines.clone()].to_vec();
@@ -438,56 +504,6 @@ pub fn lay_out(
             ) + LINE_GAP;
         }
     }
-    lay_out_nav(page, content, house, leaves.len(), current);
+    crate::telling_nav::lay_out_nav(page, content, house, telling, leaves.len(), current);
     crate::dock::lay_out(page, content, house, ui);
-}
-
-/// The navigation strip: a numbered button per leaf, "Skip ahead", and "Go on" — on the
-/// last leaf "Winter comes", or "The last of it" if the house has closed (SPEC §8).
-fn lay_out_nav(page: &mut Page, content: &Content, house: &House, count: usize, current: usize) {
-    let words = &content.words;
-    let top = PANEL.max.y - NAV_H + (NAV_H - NAV_BUTTON.y) * 0.5;
-    for leaf in 0..count {
-        let rect = Rect::from_min_size(
-            Vec2::new(PANEL.min.x + PAD + leaf as f32 * (NAV_BUTTON.x + 6.0), top),
-            NAV_BUTTON,
-        );
-        button(
-            page,
-            rect,
-            &(leaf + 1).to_string(),
-            Target::Leaf(leaf),
-            layers::PANEL,
-        );
-        if leaf == current {
-            let mark = Rect::from_min_size(
-                Vec2::new(rect.min.x, rect.max.y + 2.0),
-                Vec2::new(NAV_BUTTON.x, 3.0),
-            );
-            page.shape(mark, ink::GOLD, layers::MARK);
-        }
-    }
-    let next = if current + 1 < count {
-        W::TellingNext
-    } else if house.renown <= 0 {
-        W::TellingClosed
-    } else {
-        W::TellingToWinter
-    };
-    let go_on = Rect::from_min_size(
-        Vec2::new(PANEL.max.x - PAD - NAV_WIDE, top),
-        Vec2::new(NAV_WIDE, NAV_BUTTON.y),
-    );
-    button(page, go_on, &words[next], Target::GoOn, layers::PANEL);
-    let skip = Rect::from_min_size(
-        Vec2::new(go_on.min.x - 12.0 - NAV_WIDE, top),
-        Vec2::new(NAV_WIDE, NAV_BUTTON.y),
-    );
-    button(
-        page,
-        skip,
-        &words[W::TellingSkip],
-        Target::Skip,
-        layers::PANEL,
-    );
 }

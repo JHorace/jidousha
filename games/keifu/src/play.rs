@@ -126,7 +126,7 @@ pub fn play_years(content: &Content, house: &mut House, rng: &mut Rng, years: i3
     for _ in 0..years {
         seat_answerable(house);
         set_out(content, house, rng);
-        leave_the_telling(house);
+        leave_the_telling(content, house, rng);
         if house.closed {
             return;
         }
@@ -135,6 +135,64 @@ pub fn play_years(content: &Content, house: &mut House, rng: &mut Rng, years: i3
         choose_every_heir(content, house, rotating(seed));
         summer_comes(content, house, rng);
     }
+}
+
+/// The battery's teaching winter, after `seat_the_winter`: the training yard given the pair
+/// from the hall whose planned lesson teaches most, then each bench the child from the
+/// yard and the teacher from the hall who would teach most — first found on ties, and
+/// left empty where nothing would be learned (the plans are `plans.rs`'s, which the
+/// winter carries out).
+pub fn seat_the_lessons(content: &Content, house: &mut House) {
+    use crate::plans::{bench_lesson, yard_lesson};
+    let hall: Vec<HeroId> = house.roster.iter().flatten().copied().collect();
+    let mut best: Option<(i32, HeroId, HeroId)> = None;
+    for &learner in &hall {
+        for &teacher in hall.iter().filter(|&&t| t != learner) {
+            let amount = yard_lesson(content, &house.heroes, learner, Some(teacher)).amount();
+            if amount > best.map_or(0, |b| b.0) {
+                best = Some((amount, learner, teacher));
+            }
+        }
+    }
+    if let Some((_, learner, teacher)) = best {
+        house.unseat(learner);
+        house.unseat(teacher);
+        house.hearth.put(Seat::Learner, Some(learner));
+        house.hearth.put(Seat::Teacher, Some(teacher));
+    }
+    for bench in 0..crate::constants::BENCHES {
+        let hall: Vec<HeroId> = house.roster.iter().flatten().copied().collect();
+        let yard: Vec<HeroId> = (0..crate::constants::YARD_SPOTS)
+            .filter_map(|spot| house.hearth.at(Seat::Yard(spot)))
+            .collect();
+        let mut best: Option<(i32, HeroId, HeroId)> = None;
+        for &child in &yard {
+            for &teacher in &hall {
+                let amount = bench_lesson(content, &house.heroes, child, Some(teacher)).amount();
+                if amount > best.map_or(0, |b| b.0) {
+                    best = Some((amount, child, teacher));
+                }
+            }
+        }
+        if let Some((_, child, teacher)) = best {
+            house.unseat(child);
+            house.unseat(teacher);
+            house.hearth.put(Seat::BenchChild(bench), Some(child));
+            house.hearth.put(Seat::BenchTeacher(bench), Some(teacher));
+        }
+    }
+}
+
+/// Seat the outlook's best four on the Door (SPEC §16.4), as the battery's player does —
+/// less whoever would refuse it, who goes back to the household (§5.3). Returns the party.
+pub fn seat_the_door(content: &Content, house: &mut House) -> Vec<HeroId> {
+    let best = crate::door::best_four(content, house);
+    for (at, &hero) in best.party.iter().enumerate() {
+        house.unseat(hero);
+        house.board[0].seats[at] = Some(hero);
+    }
+    house.send_back_refusers();
+    house.party(0)
 }
 
 /// The heir the battery chooses: by a rotation over the list and "no one".

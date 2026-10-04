@@ -1175,3 +1175,147 @@ The documents were asked nothing new.
   188. **The six escapes are the known equivalents** — K7, K8, R12, E21, B3 and Y3, as sessions 3-8
   classified them. The round ran as one combined list of the eight, labels prefixed by their list, over four
   worktrees: 856 faults in about two hours and fifty minutes.
+
+---
+
+## Session 10 (W10)
+
+**Reading discipline, session 10.** Read: `CLAUDE.md`, the `make-game` skill, `docs/templates/DECISIONS.md`'s
+header row (the handoff copies it), the crate whole (`SPEC-GAPS.md` to its end — 64 entries counted from the
+file, `FINDINGS.md`, `mutants/` — the harness whole and each list's headers and re-cut sites, `src/`), and from
+`spec/` MODULES.md, SPEC.md §0-§8, §9.3-§10, §12.2, §12.5-§16, §19-§23, CONSTANTS.md §1, §3, §12-§14,
+OPEN-QUESTIONS.md's OQ-14, OQ-15, OQ-23, OQ-24, OQ-32 and OQ-33, `content/README.md`, and the content W10
+reads (`door.json` whole; `lines.json`'s door, deed and fate keys; `ui-text.json`'s `top_bar`, `summer`,
+`door_sheet`, `telling`, `ending` and `family`; `bonds.json`'s kinship tellings; `lore.json`'s tags, places and
+pronouns; `household.json`; `names.json`'s longest name, for the tree's narrowest node). `docs/api/`: nothing
+new opened — W10 used only engine surfaces earlier sessions had read. **Engine source: not opened.**
+`games/ninjo/` and `attic/`: not opened; `grep -oh "^### G-0[0-9]*" games/*/FINDINGS.md` read the G-headings
+only (G-039's method), and `grep -l`/`grep -c` on that heading named the two files that hold G-066 (G-067).
+Incidental, disclosed: `tools/test`'s report prints ninjo's verify lines. No sibling game read.
+
+### G-067 — "the living's are six sentences too", and they are not
+
+Class: process (misled) · Session: keifu 10 · Owner: the keifu handoff
+
+**Doing:** the Ending's acceptance — "every living hero with an epitaph (W9's battery property extends: the
+living's are six sentences too)".
+
+**Expected:** every living hero's epitaph at exactly six sentences, as every dead one's is (W9: 44,532 of
+44,532).
+
+**Happened:** a living child's parts are mostly empty — no roads, no triumph, no love of their own, an unspoken
+destiny, `end.child` — so the priority walk runs out of parts before the budget. Over the full-dynasty battery
+the living's epitaphs read by sentences 0..6 `[0, 0, 0, 384, 24, 10, 1690]` (the keeper) and `[0, 0, 0, 331, 63,
+21, 2132]` (the teacher); the staged Ending's two children read three and four: "Cerys Thorne was born in the
+house in year 20, to Pip and Clove. Even small, she was afraid of the dark. She was 5 when the story ended, and
+not yet grown." **What I did on its authority:** planned an exact-six assertion; the battery's first run showed
+it false by the rules, so the checks hold the rule SPEC §20 states — at most six, every one naming its subject —
+and print the distribution.
+
+**Fix:** a handoff that extends a battery property could say which half of it is a rule (the budget) and which
+an observation of one population (the dead always overflow it).
+
+### G-068 — the G-sequence forked at G-066
+
+Class: process · Session: keifu 10 · Owner: G-039's fix (a neutral home for the last G-number)
+
+**Doing:** numbering this session's first finding by the heading grep.
+
+**Expected:** one largest heading.
+
+**Happened:** `### G-066` heads an entry in both `games/keifu/FINDINGS.md` (session 9) and
+`games/ninjo/FINDINGS.md` — two sessions in flight at once each took the next number from the files as they
+stood. **What I did:** numbered from G-067 and read nothing of ninjo's entry; the two G-066s stay as filed.
+
+**Fix:** G-039's — keep the last-used G-number in one neutral place a session claims it in (`games/README.md`).
+
+### G-069 — "the transcript records it" names nothing in this crate
+
+Class: process · Session: keifu 10 · Owner: the keifu handoff
+
+**Doing:** "Begin another house … The transcript records it; a replay reproduces it."
+
+**Expected:** a transcript this port keeps — a record of the run's presses or houses.
+
+**Happened:** nothing in the crate or its docs is called a transcript (the word appears once in `src/`, for a
+frame's textual dump). **What I did:** built the nearest thing that answers both halves: `house::Chronicle`, the
+run's record of every house founded in this process — its seed, and how it ended once another is begun — kept
+outside the house so a reset cannot erase it, and a verify replay that presses the same buttons on the same seed
+in a second session and requires the same chronicle and the same new house.
+
+**Fix:** a handoff naming an artifact could point at its file, or say "build one".
+
+### docs/api: 0 findings
+
+W10 is rules over the game's own state — the Door, the Ending — plus a card, a sheet, a verdict page and a tree
+that grows. Every engine surface it touched (the scripted pointer of G-045, the page's rows and targets, the
+per-session recorder of G-043, the floors' measurement, `Rng`'s draws, `world_mut().insert_resource` for the
+reset) earlier sessions had read and used. The documents were asked nothing new.
+
+### The game's own (session 10)
+
+- **The refusal and the scaffold are retired whole.** The last summer posts the Door's Might lock alone
+  (`board::post_board`, `door::door_board`); `resolve::set_out` tries the Door there (§7 step 2) and nowhere
+  else; generation still refuses the last summer, loudly — it is never asked now. `ending_view.rs` is the real
+  verdict page, `ending.rs` what entering the Ending does.
+- **One function owns §16.2.** `door::try_the_door`: the prologue, then each lock in order — the standing read
+  off the house after the last lock changed it, the bearer (`door::bearer`), the lock resolved by
+  `resolve::resolve_party` (the quest's own fifteen steps, factored out of `resolve_rolled` so both read them
+  once, with the Door's exceptions inside it and inside `reward`), the opened lock's deed — then the stood deed.
+  The card, the sheet and the top bar read `door::outlook` over `door::lock_quest`, the quest the locks are
+  resolved as: one source for the numbers and the roll.
+- **The top bar has four rows.** The outlook ("Your best four today bring …") needs a row of its own; `TOP_H`
+  58 → 76 moves every screen under the bar down 18 px, and the floors at the three sizes hold on all of it.
+  "The family" narrowed 140 → 124 px and the set-out control widened 112 → 140 for "Try the Door"; the telling's
+  wide buttons 140 → 164 for "After the Door" (both found by the floors, not by eye).
+- **The Door's help.** The original's Door hover names the best four; pointing at the top bar's Door lines opens
+  `ui.top_bar.door_help` in the dock, as session 1 made every hover inline.
+- **The tree holds a big house.** The Ending's family must show everyone who ever lived; a generation wider than
+  eleven nodes wraps onto another line (never between a hero and the spouse placed after them), and the lines
+  step closer to stay above the remembrance (`tree::tree_lines`, `node_rects`). Seen and left: a spouse from
+  another generation (a wanderer wed to a grandchild) is linked by a line that runs under the nodes between them
+  — the tree's rows have always put a spouse beside a hero only within one generation (`screens/w10-played-family.png`).
+- **"Try the Door" with nobody waits, greyed** (`summer::greyed_button`), and a press does nothing.
+- **Two players for the full-dynasty battery.** The W8 battery's player never teaches, and with it the Door
+  almost never gives (2 of 233 houses opened one lock): the battery would only say "a house that never trains
+  fails". So it plays every house twice: that player ("the keeper"), and the same player teaching every winter
+  ("the teacher": the training yard's best pair, each bench's best child and teacher, by the plans the winter
+  carries out). The teacher's houses spread across all five verdicts — the number the owner reads.
+- **The full-dynasty battery's numbers** (`w10_battery.rs`, 240 houses from `0xa_0000`, every one founded and
+  played to its Ending). The keeper: 7 closed before the Door, 233 tried it; stayed shut 231, a hand's breadth 2.
+  The teacher: 1 closed, 239 tried; stayed shut 75, a hand's breadth 41, half open 57, is open 66, closed 1. The
+  locks against CONSTANTS §3 at the powers rolled: iron 131/239 (forecast 134.1, 1.0σ), riddles 122/238 (129.5,
+  2.1σ), breath 100/225 (97.9, 0.7σ) — all inside the 4σ bound fixed before the first run. The outlook's "all three
+  open" averaged 25.8 in 100 and all three gave in 66 of 239 (27.6%). The living's epitaphs by sentences 0..6:
+  keeper `[0,0,0,384,24,10,1690]`, teacher `[0,0,0,331,63,21,2132]` (G-067). No house broke, and none came to the
+  Door with no one to send.
+- **The mutation rounds.** `mutants/w10.txt` is 146 faults: every §16 constant (the seats, danger, renown, the
+  locks' demands, the Door's destiny power, the best four's divisor); the lore read (titles, names, verdicts, the
+  closed house's); the lock as a quest (aptitude, place, tags, danger, renown, demand, seats, `is_door_lock`, the
+  Door's promise); the outlook and best four (each lock's chance, all three, patrons, triumph against success, the
+  combinations, ties, the wounded and refusers kept, the score); the bearer rule (ties, the weakest, the first who
+  stands, the dead); the locks' order and carry-over (reversed, the dice, the dead standing, the opened and stood
+  deeds, their weights, year and place); the Door's exceptions (reward, disaster lines, renown, the road, lessons,
+  triumph deeds); the control (the label, greyed, inert, the press); the top bar, the help, the card and the
+  sheet; the prologue fragment by fragment; every §23 rule (the remembering's order, the bequest, the heirloom and
+  heir, the dream's fate, mourning cleared, entered once, the verdict by locks given, the closed year, the verdict
+  lines and "too"); the reset and chronicle (only after an Ending, the seed's source, the new house, how the old
+  ended); and the tree (the wrap, a spouse kept beside, the lines closing up, the Ending's heading and way back).
+  Round one (`9e2d0b6`): **142 of 146 noticed**, none unbuilt (tests alone 121, verify alone 74). The four escapes
+  were loose checks: no disaster's story read at a lock (L1), no outlook whose best four are not the first four
+  (F4), the Door's sheet never read with nobody before it (V12), no patron in a prologue's summary (D22). Each now
+  has a check that fails under it (`door_tests.rs`, `w10.rs`'s best-not-first and empty-sheet literals,
+  `door_prologue_tests.rs`). Seven earlier faults named code W10 moved and were re-cut to the same fault at the new
+  site, marked "(re-cut s10)": w4 K12, B4 (the resolution factored into `resolve_party`); w5 P14 (the board posted
+  through `post_board`); w6 L4, W5, T4, T5 (the telling's nav strip moved to `telling_nav.rs`, set out's gate).
+  **Round two, all nine lists against `e2e1c21`: 996 of 1002 noticed**, none unbuilt (tests alone 843, verify alone
+  537) — `w10.txt` **146 of 146**, `dock.txt` 22 of 22, `w3.txt` 117 of 118, `w4.txt` 133 of 134, `w5.txt` 58 of
+  59, `w6.txt` 100 of 100, `w7.txt` 114 of 115, `w8.txt` 186 of 188, `w9.txt` 120 of 120. **The six escapes are the
+  known equivalents** — K7, K8, R12, E21, B3 and Y3, as sessions 3-9 classified them. One combined list over four
+  worktrees, as session 9 ran it.
+- **The pictures** (`screens/w10-*.png`, fifteen, each opened): the Door's card empty, mid-drag with its odds live,
+  three seated and four; its help in the dock; its sheet; the telling's prologue and a lock's page; the four
+  verdicts and the closed house's; the family at the Ending on a staged house and on a battery-played one (the big
+  tree wrapping, the cross-generation spouse line noted above); and another house begun at year 1. Every earlier
+  screen re-taken under the four-row top bar. The web build (`tools/build-web keifu`, `tools/serve-web keifu
+  --check`) draws year 1's summer in the browser with the outlook row, at the small 640 canvas.

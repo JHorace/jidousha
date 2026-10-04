@@ -1,5 +1,6 @@
 //! The telling as data (SPEC §3.1 `tale`, §8): what set out wrote — one page per
-//! resolved quest, in board order, and the "Meanwhile" lines.
+//! resolved quest, in board order, and the "Meanwhile" lines; in the last summer, the
+//! Door's prologue and one page per lock tried.
 //!
 //! Resolution (`resolve.rs`) writes it and nothing reads it but the telling screen
 //! (`telling_view.rs`) and the checks. It is the house's, so the summer that made it
@@ -40,4 +41,7 @@ pub struct Telling {
     pub pages: Vec<QuestPage>,
     /// Unanswered lines, the unanswered total, home healing — in that order.
     pub meanwhile: Vec<String>,
+    /// The last summer's Door (SPEC §16.2): its prologue and its locks, whose pages are
+    /// `pages`, one to a lock tried.
+    pub door: Option<crate::door::DoorRecord>,
 }

@@ -1,7 +1,7 @@
 //! Keifu (系譜): a port of Lineage to Jidousha. Session 1 built modules W0 and W1;
 //! session 2 built W2 and gave the cast its sprites; session 3 built W3; session 4
 //! built W4; session 5 built W5; session 6 built W6; session 7 built W7; session 8
-//! built W8; session 9 builds W9.
+//! built W8; session 9 built W9; session 10 builds W10 and completes the initial port.
 //!
 //! W0 is the foundation: the content in `spec/content/` loaded and validated, the
 //! lore tables, the calendar and the Door countdown, the randomness primitives
@@ -43,7 +43,15 @@
 //! subject named (`epitaph`, `epitaph_parts`, `epitaph_ends`, `epitaph_lore`) — composed at
 //! the founding, a crowning and each death page, recomposed at the heir choice, a ghost
 //! laid and a ghost's dream taken up — set at the top of every death page and shown by the
-//! family screen's remembrance panel.
+//! family screen's remembrance panel. W10 is the Sealed Door and the Ending: the last
+//! summer's board, the Door alone (`door`); its three locks tried in order by one party, the
+//! bearer of each, wounds, deaths and dread carried from lock to lock, the prologue
+//! (`door_prologue`); the outlook and the best four, read by the top bar, the Door card and
+//! sheet (`door_view`) through the functions the locks roll; the Ending — the fallen and the
+//! living remembered, each with a new wording and an epitaph, the verdict by the locks given
+//! or the closed house's (`ending`, `ending_view`) — and "Begin another house", an
+//! in-process reset to the authored founding on a seed drawn from the generator, kept in
+//! the run's chronicle.
 //!
 //! What the player can do in this build: point at a hero to read their sheet,
 //! point at a quest to read its sheet and its place's history — both open in the
@@ -55,6 +63,9 @@
 //! the year did — each death page under its dead's epitaph, and on each that leaves
 //! something, choose the heir (each heir's sheet opens in the dock as they are pointed at)
 //! — and summer comes. On the family screen, the dead are remembered by their epitaphs.
+//! In the last summer: drag up to four onto the Door, read each lock's odds on its card
+//! and every member's share on its sheet, "Try the Door", read what each lock did, and
+//! read the verdict; open the family to read everyone's epitaph; begin another house.
 //!
 //! The spec (`spec/SPEC.md`, `spec/CONSTANTS.md`, `spec/content/`) is the only
 //! source of game behaviour; `SPEC-GAPS.md` lists every place it fell silent.
@@ -86,9 +97,22 @@ mod destiny;
 mod dock;
 mod dock_checks;
 mod dock_lines;
+mod door;
+mod door_lore;
+#[cfg(test)]
+mod door_outlook_tests;
+mod door_prologue;
+#[cfg(test)]
+mod door_prologue_tests;
+#[cfg(test)]
+mod door_tests;
+mod door_view;
 mod dream;
 mod dream_lore;
 mod easing;
+mod ending;
+#[cfg(test)]
+mod ending_tests;
 mod ending_view;
 mod epitaph;
 mod epitaph_ends;
@@ -104,6 +128,7 @@ mod facing;
 mod family;
 mod fear;
 mod floors;
+mod floors_w10;
 mod floors_w5;
 mod floors_w6;
 mod floors_w7;
@@ -163,6 +188,7 @@ mod sessions;
 mod sheet;
 mod summer;
 mod telling;
+mod telling_nav;
 #[cfg(test)]
 mod telling_tests;
 mod telling_view;
@@ -176,6 +202,10 @@ mod turning_lore;
 mod turning_tests;
 mod turning_view;
 mod verify;
+mod w10;
+mod w10_battery;
+mod w10_ending;
+mod w10_stages;
 mod w2;
 mod w3;
 mod w4;
@@ -290,6 +320,10 @@ fn found_the_house(world: &mut World) {
              spec/content/README.md"
         ),
     };
+    world.insert_resource(crate::house::Chronicle(vec![crate::house::Founded {
+        seed,
+        ended: None,
+    }]));
     world.insert_resource(house);
     world.insert_resource(content);
     // Only if nothing has installed a store already: a verify run puts a scripted
