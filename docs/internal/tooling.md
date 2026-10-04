@@ -33,6 +33,7 @@ package ecosystem is exactly what broke.
 | `tools/gen-api-doc` | Is `docs/api/` what the facade actually says? | 0 written/current · 1 stale, over budget, leaking vocabulary, or naming a test or example that is not there · 2 could not run |
 | `tools/check-api-coverage` | Is every public item shown in an example — and can anything reach each `testing` export? | 0 covered · 1 a gap, an unreachable entry, or a breach · 2 could not run |
 | `tools/check-api-prose` | Does the hand-written half of `docs/api/` contain code that compiles? | 0 every block compiles · 1 one does not · 2 could not build the facade |
+| `tools/mutate` | Does the run notice when the game is broken one line at a time? (ADR-0047; §5, "mutation rounds") | 0 round scored — escapes are in the score, not the exit code · 2 could not be scored · 130 interrupted |
 
 Not built yet: `tools/check-tags`, `tools/check-headers`.
 

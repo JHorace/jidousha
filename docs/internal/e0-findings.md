@@ -6539,6 +6539,18 @@ building it now, and neither is "it would not work":
 What lands instead is the cheap half, which is already in the document: both
 traps named, at the point the round is described.
 
+**Closed, between runs and on purpose, for adopted games only (2026-10-04,
+ADR-0047).** The decision this paragraph preserved was taken by the owner in a
+tooling session with no E0 run open. The evidence that moved it came from the
+adopted games rather than from E0: keifu lost its first two harnesses with
+their lists (keifu G-044), committed a third, and by session 10 its full round
+of nine lists ran past six hours. `tools/mutate <game> <list>...` is now the
+harness for every game under `games/`, scoring keifu's lists exactly as the
+retired `mutate.py` did. **E0 is unchanged**: `tools/` stays off its may-read
+list, `e0-prompt.md` and its ledger are untouched, and an E0 author still
+writes their own harness from the testing document's two traps — so argument 1
+above still holds for E0, and what E0 measures is what it measured.
+
 ### F-141 — The capture recipe is worked for a game with art, and a game of shapes cannot tell what to leave out
 
 Class: docs · Run: 11 · Also found by: first · Settled by: —
@@ -7479,8 +7491,9 @@ item as an open question, not as a result.
   ask for it and this list is not a licence to add the ask — the question is
   whether a second run volunteers it, which would say the reporting is a property
   of the round rather than of run 11.
-- **Whether `tools/mutate` gets wanted.** F-140 records the decision not to build
-  it and the two arguments for waiting. The evidence that would change it is a run
+- **Whether `tools/mutate` gets wanted.** *Taken for adopted games, 2026-10-04
+  (ADR-0047; F-140's closing entry); the item stands for E0.* F-140 records the
+  decision not to build it and the two arguments for waiting. The evidence that would change it is a run
   that reports a harness which lied — a search-and-replace that matched nothing
   counted as a caught fault, or a failed build counted as a caught fault — or a
   second run that says building the harness was a meaningful part of what the run

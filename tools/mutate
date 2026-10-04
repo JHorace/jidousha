@@ -1,0 +1,687 @@
+#!/usr/bin/env python3
+"""tools/mutate — the mutation round: break a game one line at a time, demand the run notices.
+
+A round injects one-line faults into a game under `games/` and asks, per fault,
+whether `cargo test -p <game>` or the game's `--verify` fails. A fault neither
+notices is an escape — a check that is looser than it reads. The technique and
+its two traps are `docs/api/jidousha-testing.md` ("Mutate the game and check the
+run notices"); this is the instrument for adopted games (ADR-0047). E0 authors
+still write their own, and that is part of what E0 measures.
+
+Usage:  tools/mutate <game> <list>... [--jobs N] [--fast] [--changed-since REV]
+                                      [--only ID ...] [--fresh]
+
+A list is `games/<game>/mutants/*.txt` (a path, or one relative to the game's
+directory; a glob is expanded either way). One fault per block of four lines:
+
+    ### label — what the fault is
+    @ src/witness.rs
+    - the exact text to find (it must occur exactly once in the file)
+    + the text that replaces it
+
+`⏎` in either text stands for a line break; a line starting `#!` is a header.
+Several lists are one round, each label prefixed by its list's stem (`w9:C1`).
+
+Per fault: build `-p <package>` (tests, then the binary), run `cargo test`, then
+the game's verify exactly as `tools/test` runs it (`tools/verify`'s command and
+judgement, loaded from that file). Noticed if either fails. The two hard errors:
+a find that matches other than once stops the round before anything is written,
+and a fault that does not build is NOT BUILT — never noticed. Files are restored
+from the bytes read; every worktree is checked clean after the round; a check
+that does not end in ten minutes is noticed, and its process group is killed.
+
+Workers run in persistent worktrees, `target/mutants/w<n>`: detached, moved to
+HEAD and checked clean at round start, and built unmutated before the first
+fault, so their `target/` stays warm across rounds. `--fresh` recreates them.
+`--fast` skips verify for a fault the tests already noticed (`verify=-`; the
+"verify alone" count is withheld). `--changed-since REV` keeps a fault iff its
+`@` file differs between REV and HEAD.
+
+Exit codes: 0 the round ran and is scored (escapes are findings, not faults of
+the tool) · 2 the round could not be scored (a hard error; nothing was counted)
+· 130 interrupted (every file written back; nothing scored).
+
+Key functions: `parse_list`, `resolve_lists`, `check_matches`, `filter_changed`,
+`check_fault`, `judge`, `mutate_once`, `prepare_worktree`, `summarize`, `main`.
+Depends on: the Python 3.8+ standard library, `git`, `cargo`, and `tools/verify`.
+INVARIANT: a fault is noticed only if it built; NOT BUILT is its own verdict.
+INVARIANT: every file a fault writes is written back from the bytes read before it.
+"""
+
+from __future__ import annotations
+
+import argparse
+import glob
+import importlib.machinery
+import importlib.util
+import json
+import os
+import queue
+import shutil
+import signal
+import subprocess
+import sys
+import threading
+import time
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+WORKTREE_ROOT = REPO_ROOT / "target" / "mutants"
+REPORT_PATH = WORKTREE_ROOT / "report.json"
+GAMES_DIR = "games"
+
+# Per command, as the retired harness had it: a check that has not ended in ten
+# minutes is a check that failed, and must not hold its worker forever.
+CHECK_TIMEOUT_S = 600
+# Building HEAD unmutated in a fresh worktree is the cold build of the whole
+# dependency graph, which is exactly what the per-fault clock must not pay.
+WARM_TIMEOUT_S = 3600
+TIMED_OUT = 124
+
+LINE_BREAK = "⏎"
+NOT_BUILT = "NOT BUILT"
+NOTICED = "noticed"
+ESCAPED = "ESCAPED"
+
+
+class RoundError(Exception):
+    """The round cannot be scored. Raised before anything is counted."""
+
+
+def load_verify():
+    """`tools/verify` as a module: its command and its judgement, not a copy of them."""
+    path = REPO_ROOT / "tools" / "verify"
+    loader = importlib.machinery.SourceFileLoader("jidousha_tool_verify_for_mutate", str(path))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
+VERIFY = load_verify()
+
+
+@dataclass(frozen=True)
+class Mutation:
+    """One fault: where it goes, what it finds, what it writes instead."""
+
+    label: str  # prefixed by its list's stem: "w9:C1 the first frame..."
+    file: str  # relative to the game's directory, as the list wrote it
+    find: str
+    replace: str
+
+    @property
+    def ident(self) -> str:
+        return self.label.split(" ")[0]
+
+    @property
+    def stem(self) -> str:
+        return self.label.split(":", 1)[0]
+
+
+@dataclass
+class Result:
+    label: str
+    verdict: str  # noticed | ESCAPED | NOT BUILT
+    tests: "bool | None"  # None: not run (NOT BUILT)
+    verify: "bool | None"  # None: not run (NOT BUILT, or skipped under --fast)
+    worker: int
+    seconds: float
+
+
+def parse_list(path: Path) -> "list[Mutation]":
+    """Every fault in one list, labels prefixed by the list's stem.
+
+    A block that is not label / @ file / - find / + replace, or a label used
+    twice, is a hard error naming the line: a list that half-parses is a round
+    that silently scores fewer faults than it says.
+    """
+    stem = path.stem
+    lines = path.read_text(encoding="utf-8").splitlines()
+    out: "list[Mutation]" = []
+    i = 0
+    while i < len(lines):
+        if not lines[i].strip() or lines[i].startswith("#!"):
+            i += 1
+            continue
+        block = lines[i : i + 4]
+        if (
+            len(block) < 4
+            or not block[0].startswith("### ")
+            or not block[1].startswith("@ ")
+            or not block[2].startswith("- ")
+            or not block[3].startswith("+ ")
+        ):
+            raise RoundError(
+                f"{path}:{i + 1}: a fault is four lines — ### label / @ file / - find / + replace\n"
+                f"  likely cause: a line was added or lost inside a block\n"
+                f"  fix: edit the list so every block has exactly those four lines"
+            )
+        out.append(
+            Mutation(
+                label=f"{stem}:{block[0][4:].strip()}",
+                file=block[1][2:].strip(),
+                find=block[2][2:].replace(LINE_BREAK, "\n"),
+                replace=block[3][2:].replace(LINE_BREAK, "\n"),
+            )
+        )
+        i += 4
+    labels = [m.label for m in out]
+    dupes = sorted({label for label in labels if labels.count(label) > 1})
+    if dupes:
+        raise RoundError(
+            f"{path}: duplicate labels {dupes}\n"
+            f"  likely cause: a fault was copied and its label not changed\n"
+            f"  fix: give each fault in a list its own label"
+        )
+    return out
+
+
+def resolve_lists(args: "list[str]", game_dir: Path, cwd: Path) -> "list[Path]":
+    """The list files named, in order, each once.
+
+    A name is tried as given (from the current directory), then inside the
+    game's directory, so `mutants/*.txt` works from the repository root. A name
+    that matches nothing is a hard error: an empty round scores 0 of 0.
+    """
+    found: "list[Path]" = []
+    for arg in args:
+        hits: "list[Path]" = []
+        for base in (cwd, game_dir):
+            pattern = str(base / arg) if not Path(arg).is_absolute() else arg
+            hits = sorted(Path(p) for p in glob.glob(pattern) if Path(p).is_file())
+            if hits:
+                break
+        if not hits:
+            raise RoundError(
+                f"no list file matches {arg!r} (looked in {cwd} and {game_dir})\n"
+                f"  likely cause: a typo, or a list that has not been written yet\n"
+                f"  fix: name a file under {game_dir / 'mutants'}"
+            )
+        for hit in hits:
+            if hit.resolve() not in [f.resolve() for f in found]:
+                found.append(hit)
+    stems = [f.stem for f in found]
+    clashes = sorted({s for s in stems if stems.count(s) > 1})
+    if clashes:
+        raise RoundError(
+            f"two lists share the stem {clashes}, so their labels would collide\n"
+            f"  fix: rename one list"
+        )
+    return found
+
+
+def select_only(mutations: "list[Mutation]", only: "list[str] | None") -> "list[Mutation]":
+    """`--only`: a prefixed id (`w9:C1`) picks one fault, a bare id (`C1`) that id in every list."""
+    if only is None:
+        return mutations
+    wanted = set(only)
+    picked = [m for m in mutations if m.ident in wanted or m.ident.split(":", 1)[1] in wanted]
+    named = {m.ident for m in picked} | {m.ident.split(":", 1)[1] for m in picked}
+    unknown = sorted(wanted - named)
+    if unknown:
+        raise RoundError(f"--only names no fault in these lists: {unknown}")
+    return picked
+
+
+def check_matches(mutations: "list[Mutation]", read_head) -> None:
+    """Hard error one: every find occurs exactly once in HEAD's copy of its file.
+
+    Checked for the whole round before a byte is written. A find that matches
+    nothing would write the file back unchanged and count the clean run as an
+    escape — or, in a harness less careful than this one, as noticed.
+    """
+    for m in mutations:
+        text = read_head(m.file)
+        if text is None:
+            raise RoundError(
+                f"{m.label}: {m.file} is not in HEAD\n"
+                f"  likely cause: the file moved since the list was written\n"
+                f"  fix: re-cut the fault at the code's new site and mark it so"
+            )
+        hits = text.count(m.find)
+        if hits != 1:
+            raise RoundError(
+                f"{m.label}: {m.find!r} occurs {hits} times in {m.file}; a fault must match exactly once\n"
+                f"  likely cause: the code changed under the list, or the find is too short to be unique\n"
+                f"  fix: re-cut the find against HEAD; nothing has been written"
+            )
+
+
+def filter_changed(
+    mutations: "list[Mutation]", changed: "set[str]", game_rel: str
+) -> "tuple[list[Mutation], list[Mutation]]":
+    """`--changed-since`: (kept, skipped), by each fault's `@` file and nothing else.
+
+    `changed` is repository-relative paths, as `git diff --name-only` prints
+    them; a fault's file is relative to the game's directory.
+    """
+    kept, skipped = [], []
+    for m in mutations:
+        (kept if f"{game_rel}/{m.file}" in changed else skipped).append(m)
+    return kept, skipped
+
+
+def judge(built: bool, tests_failed: "bool | None", verify_failed: "bool | None") -> str:
+    """The verdict for one fault. A fault that did not build is never noticed."""
+    if not built:
+        return NOT_BUILT
+    return NOTICED if tests_failed or verify_failed else ESCAPED
+
+
+def mutate_once(path: Path, m: Mutation, check) -> "tuple[bool, bool | None, bool | None]":
+    """Write one fault into `path`, run `check()`, and put the original bytes back.
+
+    The restore is from the bytes read, not `git checkout`, and happens however
+    `check` ends — an exception, a timeout, an interrupt.
+    """
+    original = path.read_bytes()
+    text = original.decode("utf-8")
+    if text.count(m.find) != 1:
+        raise RoundError(f"{m.label}: {m.file} changed under the round; its find no longer matches once")
+    try:
+        path.write_bytes(text.replace(m.find, m.replace, 1).encode("utf-8"))
+        return check()
+    finally:
+        path.write_bytes(original)
+
+
+@dataclass(frozen=True)
+class Commands:
+    """What one fault runs, in order. The same four commands the retired harness ran,
+    with verify taken from `tools/verify` so it is the command `tools/test` runs."""
+
+    builds: "tuple[list[str], list[str]]"
+    test: "list[str]"
+    verify: "list[str]"
+
+    @staticmethod
+    def for_game(package: str, game: str) -> "Commands":
+        return Commands(
+            builds=(
+                ["cargo", "build", "-q", "-p", package, "--tests"],
+                ["cargo", "build", "-q", "-p", package],
+            ),
+            test=["cargo", "test", "-q", "-p", package],
+            verify=VERIFY.verify_command(package, game, "game", []),
+        )
+
+
+def check_fault(run, commands: Commands, fast: bool) -> "tuple[bool, bool | None, bool | None]":
+    """(built, tests failed, verify failed) for the fault currently written.
+
+    `run(cmd, capture)` returns (exit code, output). A build that fails stops
+    here: neither check runs, so nothing can count a compile error as noticed.
+    Verify is judged by `tools/verify`'s own rule — a pass needs exit 0 *and*
+    the verdict line — and under `fast` is not run once the tests have noticed.
+    """
+    for cmd in commands.builds:
+        if run(cmd, False)[0] != 0:
+            return False, None, None
+    tests = run(commands.test, False)[0] != 0
+    if tests and fast:
+        return True, True, None
+    code, out = run(commands.verify, True)
+    status = "ok" if code == 0 else ("timeout" if code == TIMED_OUT else "failed")
+    verdict, _ = VERIFY.parse_verdict(out)
+    return True, tests, VERIFY.verdict_status(status, verdict) != "pass"
+
+
+class Runner:
+    """Runs commands for the workers, and can kill every one of them at once."""
+
+    def __init__(self) -> None:
+        self.lock = threading.Lock()
+        self.live: "set[subprocess.Popen]" = set()
+        self.stopping = threading.Event()
+
+    def run(self, cmd: "list[str]", cwd: Path, env: dict, timeout: int, capture: bool = False) -> "tuple[int, str]":
+        """(exit code, output). A timeout is TIMED_OUT, with the whole group killed:
+        `cargo test` hanging leaves its test binary running otherwise."""
+        posix = os.name == "posix"
+        proc = subprocess.Popen(
+            cmd,
+            cwd=cwd,
+            env=env,
+            stdout=subprocess.PIPE if capture else subprocess.DEVNULL,
+            stderr=subprocess.STDOUT if capture else subprocess.DEVNULL,
+            start_new_session=posix,
+        )
+        with self.lock:
+            self.live.add(proc)
+        try:
+            out, _ = proc.communicate(timeout=timeout)
+            code = proc.returncode
+        except subprocess.TimeoutExpired:
+            self.kill(proc)
+            out, _ = proc.communicate()
+            code = TIMED_OUT
+        finally:
+            with self.lock:
+                self.live.discard(proc)
+        return code, (out or b"").decode("utf-8", "replace")
+
+    @staticmethod
+    def kill(proc: subprocess.Popen) -> None:
+        try:
+            if os.name == "posix":
+                os.killpg(proc.pid, signal.SIGKILL)
+            else:
+                proc.kill()
+        except (ProcessLookupError, PermissionError, OSError):
+            pass
+
+    def kill_all(self) -> None:
+        self.stopping.set()
+        with self.lock:
+            for proc in list(self.live):
+                self.kill(proc)
+
+
+def git(*args: str, cwd: Path = REPO_ROOT, check: bool = True) -> str:
+    proc = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True)
+    if check and proc.returncode != 0:
+        raise RoundError(f"git {' '.join(args)} failed in {cwd}: {proc.stderr.strip()}")
+    return proc.stdout
+
+
+def registered_worktrees() -> "set[Path]":
+    listing = git("worktree", "list", "--porcelain")
+    return {Path(line[len("worktree ") :]).resolve() for line in listing.splitlines() if line.startswith("worktree ")}
+
+
+def prepare_worktree(tree: Path, head: str, fresh: bool) -> str:
+    """Make `tree` a detached, clean checkout of `head`; say what was done.
+
+    Reused when it is a registered worktree; moved to HEAD with a forced
+    checkout (a fault an interrupted round left written is undone here); then
+    checked clean. Anything still dirty after that — an untracked file, say —
+    is a hard error, never quietly deleted: the round would otherwise run on a
+    tree that is not HEAD.
+    """
+    if fresh and tree.exists():
+        if tree.resolve() in registered_worktrees():
+            git("worktree", "remove", "--force", str(tree))
+        else:
+            shutil.rmtree(tree)
+    git("worktree", "prune")
+    if tree.exists() and tree.resolve() not in registered_worktrees():
+        raise RoundError(
+            f"{tree} exists and is not a git worktree\n"
+            f"  likely cause: it was copied or its registration was pruned\n"
+            f"  fix: tools/mutate ... --fresh (recreates every worker's worktree)"
+        )
+    if tree.exists():
+        action = "reused"
+        git("checkout", "--quiet", "--force", "--detach", head, cwd=tree)
+    else:
+        action = "created"
+        tree.parent.mkdir(parents=True, exist_ok=True)
+        git("worktree", "add", "--quiet", "--detach", str(tree), head)
+    dirty = git("status", "--porcelain", cwd=tree).strip()
+    at = git("rev-parse", "HEAD", cwd=tree).strip()
+    if dirty or at != head:
+        raise RoundError(
+            f"{tree} is not a clean checkout of {head[:12]} after the reset: {dirty or at}\n"
+            f"  likely cause: something wrote into the worktree's source tree\n"
+            f"  fix: tools/mutate ... --fresh"
+        )
+    return action
+
+
+def find_game(metadata: dict, name: str) -> "tuple[str, Path]":
+    """(package, directory) of the game binary called `name` under games/."""
+    playables = VERIFY.parse_playables(metadata, REPO_ROOT)
+    found = VERIFY.find_playable(playables, name)
+    if found is None or found[1] != "game":
+        games = ", ".join(p for _, p, kind in playables if kind == "game")
+        raise RoundError(
+            f"there is no game called {name!r} under {GAMES_DIR}/ (games: {games})\n"
+            f"  likely cause: a typo, or an example rather than a game (ADR-0038)\n"
+            f"  fix: name a game's binary, as `tools/verify --list` prints it"
+        )
+    package = found[0]
+    for entry in metadata.get("packages", []):
+        if entry["name"] == package:
+            return package, Path(entry["manifest_path"]).parent
+    raise RoundError(f"cargo metadata names {package!r} as a member and has no manifest for it")
+
+
+def fmt_duration(seconds: float) -> str:
+    seconds = int(round(seconds))
+    hours, rest = divmod(seconds, 3600)
+    return f"{hours}h{rest // 60:02d}m{rest % 60:02d}s" if hours else f"{rest // 60}m{rest % 60:02d}s"
+
+
+def mark(flag: "bool | None") -> str:
+    return "-" if flag is None else ("x" if flag else ".")
+
+
+def fault_line(r: Result) -> str:
+    return f"[mutate] {r.verdict:9} tests={mark(r.tests)} verify={mark(r.verify)}  {r.label}"
+
+
+def summarize(results: "list[Result]", stems: "list[str]", fast: bool) -> "list[str]":
+    """The score, as sessions have been reporting it — and per list when there are several."""
+
+    def score(rs: "list[Result]", name: str = "") -> str:
+        built = [r for r in rs if r.verdict != NOT_BUILT]
+        noticed = sum(r.verdict == NOTICED for r in built)
+        unbuilt = len(rs) - len(built)
+        tests = sum(bool(r.tests) for r in built)
+        head = f"{name}{noticed} of {len(built)} noticed"
+        if unbuilt:
+            head += f", {unbuilt} not built"
+        if fast:
+            return f"{head}; tests alone {tests}"
+        return f"{head}; tests alone {tests}, verify alone {sum(bool(r.verify) for r in built)}"
+
+    lines = [f"[mutate] {score(results)}"]
+    if fast:
+        lines.append(
+            "[mutate] verify alone: not reported — --fast skips verify once the tests notice, "
+            "so the count would be low by every fault both would catch"
+        )
+    if len(stems) > 1:
+        for stem in stems:
+            lines.append(f"[mutate]   {score([r for r in results if r.label.startswith(stem + ':')], stem + '.txt ')}")
+    for r in results:
+        if r.verdict != NOTICED:
+            lines.append(f"[mutate] {r.verdict}: {r.label}")
+    return lines
+
+
+def child_cpu_seconds() -> "float | None":
+    try:
+        import resource
+    except ImportError:  # Windows: no rusage, and the round's score does not need it
+        return None
+    usage = resource.getrusage(resource.RUSAGE_CHILDREN)
+    return usage.ru_utime + usage.ru_stime
+
+
+def main(argv: "list[str]") -> int:
+    parser = argparse.ArgumentParser(prog="tools/mutate", description=__doc__.split("\n\n")[0])
+    parser.add_argument("game")
+    parser.add_argument("lists", nargs="+")
+    parser.add_argument("--jobs", type=int, default=1)
+    parser.add_argument("--fast", action="store_true")
+    parser.add_argument("--changed-since", metavar="REV")
+    parser.add_argument("--only", nargs="+", default=None)
+    parser.add_argument("--fresh", action="store_true")
+    args = parser.parse_args(argv[1:])
+    try:
+        return run_round(args)
+    except RoundError as err:
+        print(f"[mutate] {err}", file=sys.stderr)
+        return 2
+
+
+def run_round(args: argparse.Namespace) -> int:
+    if args.jobs < 1:
+        raise RoundError("--jobs must be at least 1")
+    started = time.monotonic()
+    cpu_before = child_cpu_seconds()
+    meta = subprocess.run(
+        ["cargo", "metadata", "--format-version", "1", "--no-deps"],
+        cwd=REPO_ROOT, capture_output=True, text=True,
+    )
+    if meta.returncode != 0:
+        raise RoundError(f"cargo metadata failed: {meta.stderr.strip()}")
+    package, game_dir = find_game(json.loads(meta.stdout), args.game)
+    game_rel = game_dir.relative_to(REPO_ROOT).as_posix()
+
+    if git("status", "--porcelain", "--", game_rel).strip():
+        raise RoundError(
+            f"{game_rel} has uncommitted changes, and the round runs on HEAD\n"
+            f"  fix: commit every file the round touches first (the testing document says why)"
+        )
+    head = git("rev-parse", "HEAD").strip()
+
+    lists = resolve_lists(args.lists, game_dir, Path.cwd())
+    mutations = [m for path in lists for m in parse_list(path)]
+    mutations = select_only(mutations, args.only)
+
+    def read_head(file: str) -> "str | None":
+        proc = subprocess.run(["git", "show", f"{head}:{game_rel}/{file}"], cwd=REPO_ROOT, capture_output=True)
+        return proc.stdout.decode("utf-8") if proc.returncode == 0 else None
+
+    check_matches(mutations, read_head)
+
+    if args.changed_since:
+        if subprocess.run(["git", "rev-parse", "--verify", "--quiet", f"{args.changed_since}^{{commit}}"],
+                          cwd=REPO_ROOT, capture_output=True).returncode != 0:
+            raise RoundError(f"--changed-since {args.changed_since!r} names no commit")
+        changed = set(git("diff", "--name-only", args.changed_since, head).splitlines())
+        mutations, skipped = filter_changed(mutations, changed, game_rel)
+        print(
+            f"[mutate] --changed-since {args.changed_since}: kept {len(mutations)}, "
+            f"skipped {len(skipped)} (their @ file is unchanged since then)",
+            flush=True,
+        )
+    stems = [path.stem for path in lists]
+    print(f"[mutate] {len(mutations)} faults from {', '.join(p.name for p in lists)} on {head[:12]}, "
+          f"{args.jobs} worker(s){', --fast' if args.fast else ''}", flush=True)
+
+    if not mutations:
+        print("[mutate] nothing to run; 0 of 0 is not a score", flush=True)
+        return 0
+    trees = [WORKTREE_ROOT / f"w{n}" for n in range(args.jobs)]
+    for n, tree in enumerate(trees):
+        action = prepare_worktree(tree, head, args.fresh)
+        print(f"[mutate] w{n}: {action} at {tree.relative_to(REPO_ROOT)}", flush=True)
+
+    runner = Runner()
+    work: "queue.Queue[tuple[int, Mutation]]" = queue.Queue()
+    for index, m in enumerate(mutations):
+        work.put((index, m))
+    results: "list[Result | None]" = [None] * len(mutations)
+    warm_s: "list[float]" = [0.0] * len(trees)
+    first_verdict: "list[float]" = []
+    errors: "list[str]" = []
+    lock = threading.Lock()
+
+    def worker(n: int, tree: Path) -> None:
+        env = dict(os.environ, CARGO_TARGET_DIR=str(tree / "target"), CARGO_TERM_COLOR="never")
+        commands = Commands.for_game(package, args.game)
+
+        def run(cmd: "list[str]", capture: bool) -> "tuple[int, str]":
+            return runner.run(cmd, tree, env, CHECK_TIMEOUT_S, capture)
+
+        try:
+            t0 = time.monotonic()
+            for cmd in commands.builds:
+                code, _ = runner.run(cmd, tree, env, WARM_TIMEOUT_S)
+                if code != 0 and not runner.stopping.is_set():
+                    raise RoundError(
+                        f"w{n}: HEAD does not build unmutated (`{' '.join(cmd)}` exited {code})\n"
+                        f"  fix: make HEAD build, commit, and run the round again"
+                    )
+            warm_s[n] = time.monotonic() - t0
+            while not runner.stopping.is_set():
+                try:
+                    index, m = work.get_nowait()
+                except queue.Empty:
+                    return
+                t0 = time.monotonic()
+                built, tests, verified = mutate_once(
+                    tree / game_rel / m.file, m, lambda: check_fault(run, commands, args.fast)
+                )
+                if runner.stopping.is_set():
+                    return
+                r = Result(m.label, judge(built, tests, verified), tests, verified, n,
+                           round(time.monotonic() - t0, 1))
+                with lock:
+                    results[index] = r
+                    if not first_verdict:
+                        first_verdict.append(time.monotonic() - started)
+                    print(fault_line(r), flush=True)
+        except RoundError as err:
+            with lock:
+                errors.append(str(err))
+            runner.kill_all()
+
+    threads = [threading.Thread(target=worker, args=(n, tree), daemon=True) for n, tree in enumerate(trees)]
+    for t in threads:
+        t.start()
+    try:
+        for t in threads:
+            while t.is_alive():
+                t.join(0.5)
+    except KeyboardInterrupt:
+        runner.kill_all()
+        for t in threads:
+            t.join()
+        print("\n[mutate] interrupted; every file was written back, nothing is scored", file=sys.stderr)
+        return 130
+    if errors:
+        raise RoundError("\n".join(errors))
+
+    for n, tree in enumerate(trees):
+        dirty = git("status", "--porcelain", cwd=tree).strip()
+        if dirty:
+            raise RoundError(f"w{n} is not clean after the round, so the score is not trusted: {dirty}")
+    if any(r is None for r in results):
+        raise RoundError("a fault went unjudged; the round is not scored")
+    done = [r for r in results if r is not None]
+
+    wall = time.monotonic() - started
+    cpu_after = child_cpu_seconds()
+    cpu = None if cpu_before is None or cpu_after is None else cpu_after - cpu_before
+    print()
+    for line in summarize(done, stems, args.fast):
+        print(line)
+    timing = (
+        f"[mutate] wall {fmt_duration(wall)}; first verdict at {fmt_duration(first_verdict[0]) if first_verdict else '-'}; "
+        f"worktree builds {', '.join(fmt_duration(s) for s in warm_s)}"
+    )
+    if cpu is not None:
+        timing += f"; cpu {cpu / 60:.1f} core-min"
+    print(timing)
+    report = {
+        "tool": "tools/mutate",
+        "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "game": args.game,
+        "package": package,
+        "commit": head,
+        "lists": [p.name for p in lists],
+        "jobs": args.jobs,
+        "fast": args.fast,
+        "changed_since": args.changed_since,
+        "wall_s": round(wall, 1),
+        "first_verdict_s": round(first_verdict[0], 1) if first_verdict else None,
+        "worktree_build_s": [round(s, 1) for s in warm_s],
+        "cpu_core_min": None if cpu is None else round(cpu / 60, 1),
+        "summary": summarize(done, stems, args.fast),
+        "faults": [asdict(r) for r in done],
+    }
+    REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    REPORT_PATH.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(f"[mutate] report (ground truth): {REPORT_PATH.relative_to(REPO_ROOT)}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

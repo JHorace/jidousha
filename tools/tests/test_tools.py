@@ -64,6 +64,7 @@ check_assets = load_tool("check-assets")
 gen_api_doc = load_tool("gen-api-doc")
 check_api_prose = load_tool("check-api-prose")
 check_api_coverage = load_tool("check-api-coverage")
+mutate = load_tool("mutate")
 check_compile_fail = load_tool("check-compile-fail")
 check_game_deps = load_tool("check-game-deps")
 api_coverage = load_tool("check-api-coverage")
@@ -3581,6 +3582,197 @@ class GameToolingTest(unittest.TestCase):
         manifest = (REPO_ROOT / "Cargo.toml").read_text("utf-8")
         self.assertIn('"games/*"', manifest)
         self.assertIn('exclude = ["attic"]', manifest)
+
+
+class MutateToolTest(unittest.TestCase):
+    """`tools/mutate` (ADR-0047): the parsing, the two hard errors, NOT BUILT, the restore."""
+
+    LIST = (
+        "#! header lines are skipped\n"
+        "\n"
+        "### C1 SEATS 4 -> 3\n"
+        "@ src/constants.rs\n"
+        "- pub const SEATS: i32 = 4;\n"
+        "+ pub const SEATS: i32 = 3;\n"
+        "\n"
+        "### R2 a fault over two lines\n"
+        "@ src/door.rs\n"
+        "- if open {\u23ce    close();\n"
+        "+ if open {\u23ce    open();\n"
+    )
+
+    def write_list(self, directory, name, text):
+        path = Path(directory) / name
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def commands(self):
+        return mutate.Commands(
+            builds=(["build", "--tests"], ["build"]), test=["test"], verify=["verify"]
+        )
+
+    def fake_run(self, codes, verify_output="verified keifu\n"):
+        """A `run` that answers from `codes` by command name and records what ran."""
+        ran = []
+
+        def run(cmd, capture):
+            ran.append(" ".join(cmd))
+            out = verify_output if cmd == ["verify"] else ""
+            return codes.get(" ".join(cmd), 0), out
+
+        return run, ran
+
+    def test_a_list_parses_into_faults_labelled_by_their_lists_stem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            faults = mutate.parse_list(self.write_list(tmp, "w9.txt", self.LIST))
+        self.assertEqual([f.label for f in faults], ["w9:C1 SEATS 4 -> 3", "w9:R2 a fault over two lines"])
+        self.assertEqual(faults[0].file, "src/constants.rs")
+        self.assertEqual(faults[0].find, "pub const SEATS: i32 = 4;")
+        self.assertEqual(faults[1].find, "if open {\n    close();")
+        self.assertEqual(faults[1].replace, "if open {\n    open();")
+        self.assertEqual(faults[1].ident, "w9:R2")
+
+    def test_a_block_that_is_not_four_lines_is_a_hard_error_naming_its_line(self):
+        broken = "### C1 a fault\n@ src/a.rs\n+ replace without a find\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaisesRegex(mutate.RoundError, r"w3.txt:1: a fault is four lines"):
+                mutate.parse_list(self.write_list(tmp, "w3.txt", broken))
+
+    def test_a_label_used_twice_in_one_list_is_a_hard_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            twice = self.write_list(tmp, "w3.txt", self.LIST + "\n" + self.LIST.split("\n\n", 1)[1])
+            with self.assertRaisesRegex(mutate.RoundError, "duplicate labels"):
+                mutate.parse_list(twice)
+
+    def test_several_lists_are_one_round_and_two_with_one_stem_are_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            game = Path(tmp) / "game"
+            (game / "mutants").mkdir(parents=True)
+            (Path(tmp) / "elsewhere").mkdir()
+            self.write_list(game / "mutants", "w3.txt", self.LIST)
+            self.write_list(game / "mutants", "w4.txt", self.LIST)
+            self.write_list(Path(tmp) / "elsewhere", "w3.txt", self.LIST)
+            # A glob relative to the game's directory works from anywhere.
+            found = mutate.resolve_lists(["mutants/*.txt"], game, Path(tmp))
+            self.assertEqual([p.name for p in found], ["w3.txt", "w4.txt"])
+            with self.assertRaisesRegex(mutate.RoundError, "share the stem"):
+                mutate.resolve_lists(["mutants/w3.txt", "elsewhere/w3.txt"], game, Path(tmp))
+            with self.assertRaisesRegex(mutate.RoundError, "no list file matches"):
+                mutate.resolve_lists(["mutants/w99.txt"], game, Path(tmp))
+
+    def test_a_find_that_matches_nothing_stops_the_round_before_anything_is_written(self):
+        # Hard error one: a miss would write the file back unchanged and score
+        # a clean run.
+        with tempfile.TemporaryDirectory() as tmp:
+            faults = mutate.parse_list(self.write_list(tmp, "w9.txt", self.LIST))
+        head = {"src/constants.rs": "pub const SEATS: i32 = 5;\n", "src/door.rs": "if open {\n    close();\n"}
+        with self.assertRaisesRegex(mutate.RoundError, r"w9:C1 .*occurs 0 times in src/constants.rs"):
+            mutate.check_matches(faults, head.get)
+
+    def test_a_find_that_matches_twice_stops_the_round_too(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            faults = mutate.parse_list(self.write_list(tmp, "w9.txt", self.LIST))
+        twice = "pub const SEATS: i32 = 4;\npub const SEATS: i32 = 4;\n"
+        head = {"src/constants.rs": twice, "src/door.rs": "if open {\n    close();\n"}
+        with self.assertRaisesRegex(mutate.RoundError, "occurs 2 times"):
+            mutate.check_matches(faults, head.get)
+        head = {"src/constants.rs": "pub const SEATS: i32 = 4;\n"}
+        with self.assertRaisesRegex(mutate.RoundError, "src/door.rs is not in HEAD"):
+            mutate.check_matches(faults, head.get)
+
+    def test_a_find_that_matches_exactly_once_passes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            faults = mutate.parse_list(self.write_list(tmp, "w9.txt", self.LIST))
+        head = {"src/constants.rs": "pub const SEATS: i32 = 4;\n", "src/door.rs": "if open {\n    close();\n}\n"}
+        mutate.check_matches(faults, head.get)
+
+    def test_a_fault_that_does_not_build_is_not_built_and_runs_no_check(self):
+        # Hard error two: a compile error is not a caught fault.
+        run, ran = self.fake_run({"build --tests": 101})
+        built, tests, verified = mutate.check_fault(run, self.commands(), fast=False)
+        self.assertEqual((built, tests, verified), (False, None, None))
+        self.assertEqual(ran, ["build --tests"])
+        self.assertEqual(mutate.judge(built, tests, verified), "NOT BUILT")
+        run, ran = self.fake_run({"build": 101})
+        self.assertEqual(mutate.check_fault(run, self.commands(), fast=False), (False, None, None))
+        self.assertNotIn("test", ran)
+
+    def test_not_built_is_never_noticed_whatever_the_checks_say(self):
+        self.assertEqual(mutate.judge(False, True, True), "NOT BUILT")
+        self.assertEqual(mutate.judge(True, True, False), "noticed")
+        self.assertEqual(mutate.judge(True, False, True), "noticed")
+        self.assertEqual(mutate.judge(True, False, False), "ESCAPED")
+
+    def test_verify_is_judged_by_tools_verify_and_exiting_0_without_a_verdict_is_a_failure(self):
+        run, _ = self.fake_run({}, verify_output="it ran and asserted nothing\n")
+        self.assertEqual(mutate.check_fault(run, self.commands(), fast=False), (True, False, True))
+        run, _ = self.fake_run({})
+        self.assertEqual(mutate.check_fault(run, self.commands(), fast=False), (True, False, False))
+
+    def test_fast_skips_verify_only_when_the_tests_noticed(self):
+        run, ran = self.fake_run({"test": 101})
+        self.assertEqual(mutate.check_fault(run, self.commands(), fast=True), (True, True, None))
+        self.assertNotIn("verify", ran)
+        run, ran = self.fake_run({})
+        self.assertEqual(mutate.check_fault(run, self.commands(), fast=True), (True, False, False))
+        self.assertIn("verify", ran)
+        run, ran = self.fake_run({"build": 101})
+        self.assertEqual(mutate.check_fault(run, self.commands(), fast=True), (False, None, None))
+
+    def test_the_file_is_restored_from_the_bytes_read_even_when_the_check_raises(self):
+        original = b"pub const SEATS: i32 = 4;\r\nno newline at the end"
+        fault = mutate.Mutation("w9:C1", "a.rs", "SEATS: i32 = 4", "SEATS: i32 = 3")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "a.rs"
+            path.write_bytes(original)
+            seen = []
+
+            def check():
+                seen.append(path.read_bytes())
+                return True, True, False
+
+            self.assertEqual(mutate.mutate_once(path, fault, check), (True, True, False))
+            self.assertEqual(seen, [b"pub const SEATS: i32 = 3;\r\nno newline at the end"])
+            self.assertEqual(path.read_bytes(), original)
+
+            def explode():
+                raise KeyboardInterrupt
+
+            with self.assertRaises(KeyboardInterrupt):
+                mutate.mutate_once(path, fault, explode)
+            self.assertEqual(path.read_bytes(), original)
+
+    def test_changed_since_filters_by_the_faults_file_and_never_by_its_label(self):
+        faults = [
+            mutate.Mutation("w9:C1 door.rs's seats", "src/constants.rs", "a", "b"),
+            mutate.Mutation("w9:R2 the door", "src/door.rs", "a", "b"),
+        ]
+        kept, skipped = mutate.filter_changed(faults, {"games/keifu/src/door.rs"}, "games/keifu")
+        self.assertEqual([f.ident for f in kept], ["w9:R2"])
+        self.assertEqual([f.ident for f in skipped], ["w9:C1"])
+
+    def test_only_takes_a_prefixed_id_or_a_bare_one(self):
+        faults = [mutate.Mutation(f"{stem}:C1 x", "a.rs", "a", "b") for stem in ("w3", "w4")]
+        self.assertEqual(len(mutate.select_only(faults, ["C1"])), 2)
+        self.assertEqual([f.stem for f in mutate.select_only(faults, ["w4:C1"])], ["w4"])
+        with self.assertRaisesRegex(mutate.RoundError, "names no fault"):
+            mutate.select_only(faults, ["C2"])
+
+    def test_the_summary_withholds_verify_alone_under_fast_and_counts_no_unbuilt_fault(self):
+        results = [
+            mutate.Result("w9:C1 a", "noticed", True, None, 0, 1.0),
+            mutate.Result("w9:C2 b", "NOT BUILT", None, None, 0, 1.0),
+            mutate.Result("w3:C1 c", "ESCAPED", False, False, 0, 1.0),
+        ]
+        fast = mutate.summarize(results, ["w9", "w3"], fast=True)
+        self.assertEqual(fast[0], "[mutate] 1 of 2 noticed, 1 not built; tests alone 1")
+        self.assertIn("verify alone: not reported", fast[1])
+        self.assertIn("[mutate]   w9.txt 1 of 1 noticed, 1 not built; tests alone 1", fast)
+        self.assertIn("[mutate] NOT BUILT: w9:C2 b", fast)
+        self.assertIn("[mutate] ESCAPED: w3:C1 c", fast)
+        full = mutate.summarize(results, ["w9", "w3"], fast=False)
+        self.assertEqual(full[0], "[mutate] 1 of 2 noticed, 1 not built; tests alone 1, verify alone 0")
+        self.assertEqual(mutate.fault_line(results[0]), "[mutate] noticed   tests=x verify=-  w9:C1 a")
 
 
 if __name__ == "__main__":
