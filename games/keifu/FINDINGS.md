@@ -1281,4 +1281,41 @@ reset) earlier sessions had read and used. The documents were asked nothing new.
   fails". So it plays every house twice: that player ("the keeper"), and the same player teaching every winter
   ("the teacher": the training yard's best pair, each bench's best child and teacher, by the plans the winter
   carries out). The teacher's houses spread across all five verdicts — the number the owner reads.
-
+- **The full-dynasty battery's numbers** (`w10_battery.rs`, 240 houses from `0xa_0000`, every one founded and
+  played to its Ending). The keeper: 7 closed before the Door, 233 tried it; stayed shut 231, a hand's breadth 2.
+  The teacher: 1 closed, 239 tried; stayed shut 75, a hand's breadth 41, half open 57, is open 66, closed 1. The
+  locks against CONSTANTS §3 at the powers rolled: iron 131/239 (forecast 134.1, 1.0σ), riddles 122/238 (129.5,
+  2.1σ), breath 100/225 (97.9, 0.7σ) — all inside the 4σ bound fixed before the first run. The outlook's "all three
+  open" averaged 25.8 in 100 and all three gave in 66 of 239 (27.6%). The living's epitaphs by sentences 0..6:
+  keeper `[0,0,0,384,24,10,1690]`, teacher `[0,0,0,331,63,21,2132]` (G-067). No house broke, and none came to the
+  Door with no one to send.
+- **The mutation rounds.** `mutants/w10.txt` is 146 faults: every §16 constant (the seats, danger, renown, the
+  locks' demands, the Door's destiny power, the best four's divisor); the lore read (titles, names, verdicts, the
+  closed house's); the lock as a quest (aptitude, place, tags, danger, renown, demand, seats, `is_door_lock`, the
+  Door's promise); the outlook and best four (each lock's chance, all three, patrons, triumph against success, the
+  combinations, ties, the wounded and refusers kept, the score); the bearer rule (ties, the weakest, the first who
+  stands, the dead); the locks' order and carry-over (reversed, the dice, the dead standing, the opened and stood
+  deeds, their weights, year and place); the Door's exceptions (reward, disaster lines, renown, the road, lessons,
+  triumph deeds); the control (the label, greyed, inert, the press); the top bar, the help, the card and the
+  sheet; the prologue fragment by fragment; every §23 rule (the remembering's order, the bequest, the heirloom and
+  heir, the dream's fate, mourning cleared, entered once, the verdict by locks given, the closed year, the verdict
+  lines and "too"); the reset and chronicle (only after an Ending, the seed's source, the new house, how the old
+  ended); and the tree (the wrap, a spouse kept beside, the lines closing up, the Ending's heading and way back).
+  Round one (`9e2d0b6`): **142 of 146 noticed**, none unbuilt (tests alone 121, verify alone 74). The four escapes
+  were loose checks: no disaster's story read at a lock (L1), no outlook whose best four are not the first four
+  (F4), the Door's sheet never read with nobody before it (V12), no patron in a prologue's summary (D22). Each now
+  has a check that fails under it (`door_tests.rs`, `w10.rs`'s best-not-first and empty-sheet literals,
+  `door_prologue_tests.rs`). Seven earlier faults named code W10 moved and were re-cut to the same fault at the new
+  site, marked "(re-cut s10)": w4 K12, B4 (the resolution factored into `resolve_party`); w5 P14 (the board posted
+  through `post_board`); w6 L4, W5, T4, T5 (the telling's nav strip moved to `telling_nav.rs`, set out's gate).
+  **Round two, all nine lists against `e2e1c21`: 996 of 1002 noticed**, none unbuilt (tests alone 843, verify alone
+  537) — `w10.txt` **146 of 146**, `dock.txt` 22 of 22, `w3.txt` 117 of 118, `w4.txt` 133 of 134, `w5.txt` 58 of
+  59, `w6.txt` 100 of 100, `w7.txt` 114 of 115, `w8.txt` 186 of 188, `w9.txt` 120 of 120. **The six escapes are the
+  known equivalents** — K7, K8, R12, E21, B3 and Y3, as sessions 3-9 classified them. One combined list over four
+  worktrees, as session 9 ran it.
+- **The pictures** (`screens/w10-*.png`, fifteen, each opened): the Door's card empty, mid-drag with its odds live,
+  three seated and four; its help in the dock; its sheet; the telling's prologue and a lock's page; the four
+  verdicts and the closed house's; the family at the Ending on a staged house and on a battery-played one (the big
+  tree wrapping, the cross-generation spouse line noted above); and another house begun at year 1. Every earlier
+  screen re-taken under the four-row top bar. The web build (`tools/build-web keifu`, `tools/serve-web keifu
+  --check`) draws year 1's summer in the browser with the outlook row, at the small 640 canvas.
