@@ -44,8 +44,8 @@ here with HTTP 403.
   PR opens, so CI is usually still running and the worker may push one more
   commit (its final CHECKPOINT). Neither is a finding; say "CI pending" in the
   header line and judge the gates from the PR body and the diff.
-- `tools/yakin/WORKER.md` §9 — **its hard-fence list is the boundary list** —
-  and §6's game-task substitutions, which are the bar a yakin game PR is held
+- `tools/yakin/DOCTRINE.md` §9 — **its hard-fence list is the boundary list** —
+  and its §6 game-task substitutions, which are the bar a yakin game PR is held
   to (a PR saying nobody played the build is meeting it, not missing it).
 
 Do not build, run gates, or check out the branch to edit it. What the diff and
@@ -65,7 +65,7 @@ the reports say is the evidence.
   reproduce. You need not judge engine source: a diff touching `crates/` is
   already a boundary finding.
 - **boundary** — any path outside the spec's Fence, the run folder and a root
-  `BLOCKED.md`; any path on WORKER.md §9's hard-fence list; a dependency other
+  `BLOCKED.md`; any path on DOCTRINE.md §9's hard-fence list; a dependency other
   than the `jidousha` facade; a `Cargo.lock` change beyond the task's own new
   crate; `unwrap()`/`expect()` outside tests and examples; a deleted, weakened
   or `#[ignore]`d test.
