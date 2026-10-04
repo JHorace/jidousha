@@ -614,7 +614,11 @@ a row (stop rule printed, `failure-streak.json` count 2).
   `w9.txt`, 120 faults, `--jobs 4`, the cloud sandbox (4 cores, no SMT), with
   the game's tree identical to `64394fe` in every round. Every round scored
   120 of 120 with the same per-fault verdict and the same tests / verify
-  columns, diffed fault by fault.
+  columns, diffed fault by fault. Because w9 exercises neither of the other
+  two verdicts, a scratch list (never committed) of `dock.txt`'s 22 plus one
+  fault that does not compile and one that edits only a comment went through
+  the retired harness, the default and `--fast`: 22 noticed, one NOT BUILT,
+  one ESCAPED in all three, fault by fault.
 
   | round | wall | first verdict | CPU |
   |---|---|---|---|
