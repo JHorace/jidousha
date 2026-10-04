@@ -588,6 +588,47 @@ a row (stop rule printed, `failure-streak.json` count 2).
   - **fmt, clippy and doctor were already their own jobs**, so there was no
     fail-fast split left to make: a short job already fails first, and
     `tools/test` does not run them.
+- **Mutation rounds, and what they cost — four maintained numbers**
+  (ADR-0047). `tools/mutate` is the one harness for games under `games/`; a
+  round is per fault one incremental build, `cargo test -p`, and the game's
+  `--verify`, in series, so the work is single-thread bound and parallel only
+  across faults. Anything sized for rounds later — a cloud environment, a CI
+  runner, a VPS — starts from these, re-measured when they move:
+  - **Core-minutes per fault: ~1.55 on the cloud sandbox, ~0.7 on the owner's
+    desktop**, for keifu's full pair at W10 (2026-10-04). It is the game's own
+    number — keifu's `--verify` is most of it and grows with every wave —
+    and the machine's per-core speed. `--fast` brings keifu's to **~0.28**,
+    because most faults are noticed by the tests and skip verify.
+  - **Core-minutes per cold build of the dependency graph: ~3.5 on the
+    sandbox** (four worktrees built side by side, 3m31s each), **~7 by the
+    owner's solve** on the desktop. Paid once per worktree now, not once per
+    worker per round: the worktrees in `target/mutants/` persist.
+  - **SMT is worth ~0.** The owner's desktop scored w9 in 19m00s at 8 workers
+    on 8 cores and 18m24s at 16 on 16 threads. The sandbox has none to spend.
+  - **Throughput is linear in physical cores**, and a full round is linear in
+    the port's length, because every session reruns every earlier list.
+    `--changed-since <rev>` is the session-time lever for that; the full
+    round's home is a scheduled job, not a session.
+
+  **The before and after, measured in the session that built the tool**: keifu
+  `w9.txt`, 120 faults, `--jobs 4`, the cloud sandbox (4 cores, no SMT), with
+  the game's tree identical to `64394fe` in every round. Every round scored
+  120 of 120 with the same per-fault verdict and the same tests / verify
+  columns, diffed fault by fault.
+
+  | round | wall | first verdict | CPU |
+  |---|---|---|---|
+  | retired `mutate.py` (fresh worktrees in `/tmp`, removed after) | 54m41s | 3m45s | 202.5 core-min |
+  | `tools/mutate`, default, `--fresh` | 51m19s | 3m41s | 200.2 core-min |
+  | `tools/mutate`, default, second round on the same worktrees | 47m45s | 0m15s | 186.1 core-min |
+  | `tools/mutate --fast`, same worktrees | **9m22s** | 0m16s | **33.2 core-min** |
+
+  The first verdict falls from the cold build's 3m41s to one incremental
+  build's 15s. The warm round saves ~14 core-minutes, ~3.5 per worker, which
+  is half what the owner's solve predicted per cold build, so the sandbox's
+  number above is the measured one. `--fast` is the big lever on keifu because
+  its verify is the long pole of every fault, and the tests notice 110 of the
+  120 alone.
 
 - **"Was the canvas drawn on" takes two questions, not one.** The original check
   asked only whether the canvas differed from the page's own background, and I1

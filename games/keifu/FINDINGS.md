@@ -1319,3 +1319,7 @@ reset) earlier sessions had read and used. The documents were asked nothing new.
   tree wrapping, the cross-generation spouse line noted above); and another house begun at year 1. Every earlier
   screen re-taken under the four-row top bar. The web build (`tools/build-web keifu`, `tools/serve-web keifu
   --check`) draws year 1's summer in the browser with the outlook row, at the small 640 canvas.
+- **The harness** (engine tooling session, 2026-10-04, not a keifu session): `mutants/mutate.py` is retired and
+  `tools/mutate keifu mutants/*.txt` runs the same lists, unchanged. Both scored `w9.txt` on the same tree, 120 of
+  120 with every per-fault verdict and both columns identical, and `--fast` agreed on every verdict. On warm
+  worktrees the full pair took 47m45s and `--fast` 9m22s on this machine's four cores; the old harness took 54m41s.
