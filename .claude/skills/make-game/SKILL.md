@@ -192,7 +192,13 @@ to move.
   which revert eats what.
 - [ ] Inject one-line faults and demand the run names each one. The same
   passage names the two ways a hand-rolled harness lies about its own score;
-  build both as hard errors before trusting a number.
+  under `games/` the harness is `tools/mutate <game> <list>...`, which has
+  both as hard errors — never write a second one. Commit every round's list
+  in `games/<game>/mutants/` with the game: a round that cannot be rerun is
+  evidence for one commit only (keifu G-044). A later session's round is its
+  own list plus the earlier ones filtered to what it touched — `tools/mutate
+  <game> mutants/*.txt --fast --changed-since <the last full round's commit>`
+  — unless its handoff asks for the full round.
 - [ ] **Write the instrument's expectation as a shipped literal**, never as
   arithmetic over the constant under test: a check that derives its expectation
   from the number being mutated cannot see that number move. (ninjo wave 0b,

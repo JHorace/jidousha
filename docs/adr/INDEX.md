@@ -25,7 +25,7 @@ disagrees with the file it names, the file is right and this index is a bug.
 - **Assets and text** — 0011 · 0040 · 0042
 - **Input, snapshots and recording** — 0014 · 0017 · 0019 · 0023 · 0043
 - **Frame pacing** — 0041
-- **Checking a game — the verification surface** — 0022 · 0026 · 0027 · 0028 · 0031 · 0032 · 0033
+- **Checking a game — the verification surface** — 0022 · 0026 · 0027 · 0028 · 0031 · 0032 · 0033 · 0047
 - **The documentation product** — 0025 · 0030 · 0034 · 0035 · 0046
 - **Milestones and prototypes** — 0029 · 0036 · 0038
 - **Process — unattended agent work** — 0045
@@ -81,6 +81,7 @@ disagrees with the file it names, the file is right and this index is a bug.
 | [0044](0044-macos-is-a-development-platform-not-tier-1.md) | macOS is a supported development platform, and not tier 1 — **extends 0005**, whose tier-1 set is unchanged | accepted · 2026-09-13 |
 | [0045](0045-yakin-stateless-ticks-state-in-git.md) | yakin: stateless scheduled ticks keep all state in git — a branch is a claim, a pushed CHECKPOINT is progress, a PR is the only output | accepted · 2026-10-01 |
 | [0046](0046-the-ui-kit-is-extracted-from-a-game-by-the-rule-of-three.md) | The UI kit — `jidousha::ui`, extracted from ninjo by the rule of three on an audit's report and the owner's verdict; P-3 and P-6 deferred with triggers; a fifth `docs/api/` document | accepted · 2026-10-03 · **extends ADR-0025** |
+| [0047](0047-the-mutation-round-is-an-engine-tool.md) | The mutation round is an engine tool — `tools/mutate <game> <list>...` for adopted games: persistent worktrees, `--fast`, `--changed-since`, verdicts identical to the harness it retires; E0 unchanged | accepted · 2026-10-04 · **takes the decision e0-findings F-140 deferred** |
 
 ## The two superseded records, and by what
 

@@ -568,6 +568,13 @@ unchanged and reports success, so make a miss an error rather than a no-op; and 
 mutation that does not compile is not a caught fault, so tell a failed build apart
 from a failed check before counting it.
 
+**A game that lives under `games/` does not write that harness.** `tools/mutate
+<game> <list>...` is it, with both traps above built in as hard errors: one
+fault per four-line block (`### label`, `@ file`, `- find`, `+ replace`) in a
+list kept beside the game, `games/<game>/mutants/*.txt`, committed with it so a
+later session reruns every earlier fault. A game built anywhere else writes its
+own, and the two traps are what it has to get right.
+
 It is worth doing, because the answers are not guessable. A file that catches
 seventeen of seventeen injected faults usually gets there only after two checks
 written carefully and believed thorough turn out to be loose. The swept test
