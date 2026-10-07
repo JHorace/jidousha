@@ -3,10 +3,10 @@
 task: keifu-x-inheritance
 variant: V2
 stage: implement
-tick: released
+tick: live
 resumes: 0
 gates-green-at: none
-updated: 2026-10-07 09:05 PDT
+updated: 2026-10-07 09:09 PDT
 
 ## Done so far
 - branch claimed (32c3d1d); mainline Keifu's spec, source and docs/api read (heartbeat 1743f0e)
