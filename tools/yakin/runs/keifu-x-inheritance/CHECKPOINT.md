@@ -5,8 +5,8 @@ variant: V2
 stage: implement
 tick: live
 resumes: 0
-gates-green-at: none
-updated: 2026-10-07 11:38 PDT
+gates-green-at: 8d281df
+updated: 2026-10-07 12:16 PDT
 
 ## Done so far
 - branch claimed (32c3d1d); mainline Keifu read; DESIGN.md written and released by the designer
