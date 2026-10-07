@@ -56,7 +56,7 @@ fn read_left_alone(card: &[String]) -> Option<(Span, i32)> {
 }
 
 /// Stay home, leave the telling and the winter: next summer's board is up.
-fn stay_home_to_next_summer(sim: &mut HeadlessSim) {
+pub fn stay_home_to_next_summer(sim: &mut HeadlessSim) {
     point_at(sim, Target::SetOut, true);
     point_at(sim, Target::GoOn, true);
     crate::w7::through_the_winter(sim);

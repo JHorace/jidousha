@@ -10,7 +10,8 @@
 //! previewing them both with his sheet in the dock; the quest sheet once both are
 //! seated; the staged worst case and its sheet. Then the sheet dock's own: idle,
 //! holding the help over year 1's full board, and Garrick's sheet scrolled to its end;
-//! and W5's staged ghost: "Lay Garrick's ghost" on a year-2 board. Then W6's telling:
+//! and W5's staged ghost: "Lay Garrick's ghost" on a year-2 board; then the foresight (the
+//! idle dock under year 1's seating) and the telegraph (a year-2 card and its sheet's end). Then W6's telling:
 //! the stay-home Meanwhile, a story half typed, the played page whole, a forging (the
 //! cradle-ring, with Garrick's sheet in the dock), and the closed house's verdict. Then
 //! W7's: Odo held over Pip's bench with the "+1 Spirit" preview, the played winter's
@@ -70,6 +71,8 @@ pub fn capture_all(checks: &mut Checks) -> Vec<String> {
         (&[][..], "keifu-dock-idle.png"),
         (&["Garrick", "end"][..], "keifu-dock-scrolled.png"),
         (&["w5-ghost"][..], "keifu-w5-ghost.png"),
+        (&["foresight"][..], "keifu-foresight.png"),
+        (&["telegraph"][..], "keifu-telegraph.png"),
         (&["w6-stay"][..], "keifu-w6-stay-home.png"),
         (&["w6-typing"][..], "keifu-w6-typing.png"),
         (&["w6-page"][..], "keifu-w6-page.png"),
@@ -205,6 +208,15 @@ pub fn capture_all(checks: &mut Checks) -> Vec<String> {
                 point_at(&mut sim, Target::Leaf(0), true);
             } else if *name == "w5-ghost" {
                 crate::w5::stage_ghost_board(&mut sim);
+            } else if *name == "foresight" {
+                // Garrick and Brannoc on Grave goods; the pointer at rest, so the dock is idle.
+                let _ = crate::w4::seat_the_oracle(&mut sim);
+                crate::verify::point(&mut sim, jidousha::prelude::Vec2::new(4.0, 700.0), false);
+            } else if *name == "telegraph" {
+                // Year 2, after a summer at home: a troubled card, and its sheet to its end.
+                crate::outlook_checks::stay_home_to_next_summer(&mut sim);
+                point_at(&mut sim, Target::Quest(0), false);
+                crate::verify::scroll_dock(&mut sim, -100.0);
             } else if *name == "q0" {
                 point_at(&mut sim, Target::Quest(0), false);
             } else if *name == "w4-sheet" {
