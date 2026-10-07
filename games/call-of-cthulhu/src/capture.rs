@@ -23,7 +23,12 @@ fn one_line(message: &str) -> String {
 }
 
 /// Render `frame` and write it as a PNG. A machine with no GPU is skipped aloud, not failed.
-pub fn capture_frame(checks: &mut Checks, frame: &FrameRecord, font: BackendTextureId) -> String {
+pub fn capture_frame(
+    checks: &mut Checks,
+    frame: &FrameRecord,
+    font: BackendTextureId,
+    file: &str,
+) -> String {
     checks.require(
         CAPTURE_SIZE.width * crate::WINDOW.height == CAPTURE_SIZE.height * crate::WINDOW.width,
         "the capture is not the recorder's shape",
@@ -77,7 +82,7 @@ pub fn capture_frame(checks: &mut Checks, frame: &FrameRecord, font: BackendText
             "an offscreen backend can always read its own target",
         );
     };
-    let path = artifact_path();
+    let path = artifact_path(file);
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
@@ -97,11 +102,11 @@ pub fn capture_frame(checks: &mut Checks, frame: &FrameRecord, font: BackendText
 }
 
 /// Where the captured frame is written.
-fn artifact_path() -> PathBuf {
+fn artifact_path(file: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("..")
         .join("..")
         .join("target")
         .join("verify")
-        .join("call-of-cthulhu.png")
+        .join(file)
 }

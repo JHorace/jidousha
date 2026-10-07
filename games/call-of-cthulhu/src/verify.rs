@@ -22,7 +22,7 @@ use crate::players::{Player, choose as player_choose, play, sweep};
 use crate::rules::{
     ACTIONS, Action, Kind, answer_outcome, exchange_cost, option_kinds, plan_night,
 };
-use crate::screens::{FLOORS, MIN_TEXT, NoArt, controls, panel};
+use crate::screens::{FLOORS, MIN_TEXT, NoArt, panel};
 use crate::view::UiMap;
 use crate::{DEFAULT_SEED, camera};
 
@@ -38,14 +38,9 @@ pub fn judge_screen(checks: &mut Checks, label: &str, driver: &mut Driver) -> (F
     let cam = camera();
     let map = UiMap::for_camera(&cam);
     let view = cam.visible_bounds();
-    let named: Vec<(String, Rect)> = controls(&game)
-        .into_iter()
-        .map(|(rect, choice)| (format!("{choice:?}"), rect))
-        .collect();
     for breach in judge_panel(&screen, &FLOORS, &[], &[]) {
         checks.require(false, &format!("{label}: {}", breach.what), breach.detail);
     }
-    let _ = named;
     let font = driver.recorder.font_texture();
     for breach in judge_frame(&screen, &frame, font, &map, view) {
         checks.require(false, &format!("{label}: {}", breach.what), breach.detail);
@@ -895,15 +890,28 @@ pub fn run() -> ExitCode {
     summary.extend(check_players(&mut checks));
     summary.push(check_screens(&mut checks));
     summary.push(check_floors_bite(&mut checks));
+    // The pictures: the morning as it opens, then a call on the line.
     let mut driver = Driver::new(DEFAULT_SEED);
+    let (morning, _) = judge_screen(&mut checks, "the morning's picture", &mut driver);
+    let morning_font = driver.recorder.font_texture();
+    let morning_file = crate::capture::capture_frame(
+        &mut checks,
+        &morning,
+        morning_font,
+        "call-of-cthulhu-morning.png",
+    );
     driver.option(ACTIONS.len() - 2);
     let frame = driver.draw();
     let (_, clearance) = judge_screen(&mut checks, "the capture's screen", &mut driver);
     summary.push(format!(
         "capture screen: closest quad to the edge {clearance:.2} units"
     ));
-    let captured =
-        crate::capture::capture_frame(&mut checks, &frame, driver.recorder.font_texture());
+    let captured = crate::capture::capture_frame(
+        &mut checks,
+        &frame,
+        driver.recorder.font_texture(),
+        "call-of-cthulhu.png",
+    );
     let (passed, failed) = checks.counts();
     if failed == 0 {
         println!(
@@ -919,6 +927,7 @@ pub fn run() -> ExitCode {
         println!("  {line}");
     }
     println!("  capture: {captured}");
+    println!("  also captured: {morning_file}");
     println!();
     println!("{}", frame.transcript());
     checks.verdict()
