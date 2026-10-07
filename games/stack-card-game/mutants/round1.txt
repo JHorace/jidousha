@@ -1,0 +1,219 @@
+### S1 flip over a one-item stack is allowed
+@ src/rules.rs
+- if card == Card::Flip && self.stack.len() < 2 {
++ if card == Card::Flip && self.stack.len() < 1 {
+
+### S2 a sorcery may be played over a non-empty stack
+@ src/rules.rs
+- if data.sorcery && !(self.active == side && self.stack.is_empty()) {
++ if data.sorcery && !(self.active == side) {
+
+### S3 a card costing exactly your mana is refused
+@ src/rules.rs
+- if u32::from(data.cost) > self.mana[side.index()] {
++ if u32::from(data.cost) >= self.mana[side.index()] {
+
+### S4 one pass resolves the stack
+@ src/rules.rs
+- if self.passes < 2 {
++ if self.passes < 1 {
+
+### S5 priority after a resolution goes to the other side
+@ src/rules.rs
+- self.say(step.text);⏎            self.priority = self.active;
++ self.say(step.text);⏎            self.priority = side.other();
+
+### S6 mana grows past the cap
+@ src/rules.rs
+- self.mana[who] = self.turns_taken[who].min(MANA_CAP);
++ self.mana[who] = self.turns_taken[who].min(MANA_CAP + 1);
+
+### S7 a full hand still draws
+@ src/rules.rs
+- if self.hands[who].len() < HAND_LIMIT {
++ if self.hands[who].len() <= HAND_LIMIT {
+
+### S8 the turn limit is one turn late
+@ src/rules.rs
+- if self.turn >= TURN_LIMIT {
++ if self.turn > TURN_LIMIT {
+
+### S9 Negate cannot target the top item
+@ src/rules.rs
+- Card::Negate => ids(stack),
++ Card::Negate => ids(&stack[..stack.len().saturating_sub(1)]),
+
+### S10 Hush reaches cost three
+@ src/rules.rs
+- .filter(|item| info(item.card).cost <= 2)
++ .filter(|item| info(item.card).cost <= 3)
+
+### S11 Bury may target the bottom item
+@ src/rules.rs
+- Card::Bury if stack.len() >= 2 => ids(&stack[1..]),
++ Card::Bury if stack.len() >= 2 => ids(stack),
+
+### S12 Raise may target the top item
+@ src/rules.rs
+- Card::Raise if stack.len() >= 2 => ids(&stack[..stack.len() - 1]),
++ Card::Raise if stack.len() >= 2 => ids(stack),
+
+### S13 Echo may copy an Echo
+@ src/rules.rs
+- .filter(|item| item.card != Card::Echo)
++ .filter(|_| true)
+
+### S14 Redirect flips nothing
+@ src/rules.rs
+- other.aim = other.aim.map(Side::other);
++ other.aim = other.aim;
+
+### S15 an Echo copy keeps the original's owner
+@ src/rules.rs
+- owner: item.owner,⏎                        target: original.target,
++ owner: original.owner,⏎                        target: original.target,
+
+### S16 an Echo copy keeps the original's aim
+@ src/rules.rs
+- aim: default_aim(original.card, item.owner),
++ aim: original.aim,
+
+### S17 Bury sends the item second from the bottom
+@ src/rules.rs
+- core.stack.insert(0, moved);
++ core.stack.insert(core.stack.len().min(1), moved);
+
+### S18 Raise sends the item to the bottom
+@ src/rules.rs
+- core.stack.push(moved);
++ core.stack.insert(0, moved);
+
+### S19 Flip reverses nothing
+@ src/rules.rs
+- core.stack.reverse();
++ core.stack.rotate_left(0);
+
+### S20 a Mend lands on its owner whatever its aim
+@ src/rules.rs
+- let aim = item.aim.unwrap_or(item.owner);
++ let aim = item.owner;
+
+### S21 damage lands on the opponent whatever its aim
+@ src/rules.rs
+- let aim = item.aim.unwrap_or(item.owner.other());
++ let aim = item.owner.other();
+
+### S22 killing the NPC is a loss
+@ src/rules.rs
+- (false, true) => Some(Outcome::Won(Side::You)),
++ (false, true) => Some(Outcome::Won(Side::Npc)),
+
+### S23 the preview runs past a decided match
+@ src/rules.rs
+- while !copy.stack.is_empty() && copy.outcome.is_none() {
++ while !copy.stack.is_empty() {
+
+### S24 a counter is reported one step early
+@ src/rules.rs
+- return Some(Fate::Countered(index + 1));
++ return Some(Fate::Countered(index));
+
+### S25 a Mend defaults to the opponent
+@ src/rules.rs
+- } else if data.heal > 0 {⏎        Some(owner)
++ } else if data.heal > 0 {⏎        Some(owner.other())
+
+### S26 starting life is 25
+@ src/rules.rs
+- pub const START_LIFE: i32 = 20;
++ pub const START_LIFE: i32 = 25;
+
+### S27 playing a card leaves the pass count alone
+@ src/rules.rs
+- self.passes = 0;⏎        self.priority = side.other();⏎        Ok(id)
++ self.priority = side.other();⏎        Ok(id)
+
+### S28 the opening hand is four cards
+@ src/rules.rs
+- pub const HAND: usize = 5;
++ pub const HAND: usize = 4;
+
+### S29 Cleaver deals five
+@ src/cards.rs
+- Card::Cleaver => ("Cleaver", 3, true, 6, 0, "6 damage"),
++ Card::Cleaver => ("Cleaver", 3, true, 5, 0, "6 damage"),
+
+### S30 Siege costs four
+@ src/cards.rs
+- Card::Siege => ("Siege", 5, true, 10, 0, "10 damage"),
++ Card::Siege => ("Siege", 4, true, 10, 0, "10 damage"),
+
+### S31 Mend heals three
+@ src/cards.rs
+- Card::Mend => ("Mend", 2, false, 0, 4, "gain 4"),
++ Card::Mend => ("Mend", 2, false, 0, 3, "gain 4"),
+
+### S32 Hush costs two
+@ src/cards.rs
+- Card::Hush => ("Hush", 1, false, 0, 0, "counter cost<=2"),
++ Card::Hush => ("Hush", 2, false, 0, 0, "counter cost<=2"),
+
+### S33 Cleaver is an instant
+@ src/cards.rs
+- Card::Cleaver => ("Cleaver", 3, true, 6, 0, "6 damage"),
++ Card::Cleaver => ("Cleaver", 3, false, 6, 0, "6 damage"),
+
+### S34 the NPC deck has one Siege
+@ src/cards.rs
+- (Card::Siege, 2),
++ (Card::Siege, 1),
+
+### S35 the NPC only ever Hushes
+@ src/npc.rs
+- for card in [Card::Redirect, Card::Negate, Card::Hush] {
++ for card in [Card::Hush] {
+
+### S36 the NPC never answers
+@ src/npc.rs
+- const WORTH_ANSWERING: i32 = 4;
++ const WORTH_ANSWERING: i32 = 11;
+
+### S37 the target cursor starts at the bottom
+@ src/game.rs
+- legal.reverse();
++ legal.rotate_left(0);
+
+### S38 the panel shows life after swapped
+@ src/ui.rs
+- format!("#{k} {}-{}", after[0], after[1])
++ format!("#{k} {}-{}", after[1], after[0])
+
+### S39 a countered item is not labelled
+@ src/ui.rs
+- Some(Fate::Countered(k)) => format!("x by #{k}"),
++ Some(Fate::Countered(k)) => format!("#{k} x"),
+
+### S40 the stack panel lists bottom first
+@ src/ui.rs
+- core.stack.iter().rev().enumerate().take(shown)
++ core.stack.iter().enumerate().take(shown)
+
+### S41 legal targets are not marked
+@ src/ui.rs
+- Some(t) if t.legal.contains(&item.id) => Mark::Legal,
++ Some(t) if t.legal.contains(&item.id) => Mark::None,
+
+### S42 the priority indicator does not say the NPC may respond
+@ src/ui.rs
+- "NPC HAS PRIORITY: it may still respond"
++ "NPC is thinking"
+
+### S43 a damage row shows the wrong arrow
+@ src/ui.rs
+- format!("{}>{aim}", data.damage)
++ format!("{}<{aim}", data.damage)
+
+### S44 the skilled player never acts
+@ src/players.rs
+- if score > best.0 + 0.5 {
++ if score > best.0 + 50.0 {
