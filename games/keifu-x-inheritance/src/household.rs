@@ -135,6 +135,7 @@ fn read_hero(item: &At<'_>) -> Result<FoundingHero, SchemaError> {
         key: text(item, "key")?,
         name: text(item, "name")?,
         house: text(item, "house")?,
+        family: true,
         pronoun: id_at(item, "pronoun", Pronoun::find)?,
         vocation: id_at(item, "vocation", Vocation::find)?,
         age: item.key("age")?.int()?,

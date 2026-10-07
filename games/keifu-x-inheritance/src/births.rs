@@ -98,7 +98,12 @@ fn born(
     let year = house.calendar.current_year();
     let pronoun = roll_pronoun(rng);
     let name = house.bags.name(pronoun, rng);
-    let family = house.heroes[first].house.clone();
+    // Variant: the house name is the family parent's, the first-created's when both are.
+    let family = if house.heroes[first].family || !house.heroes[second].family {
+        house.heroes[first].house.clone()
+    } else {
+        house.heroes[second].house.clone()
+    };
     let mut aptitudes = [0; 3];
     for aptitude in Aptitude::ALL {
         let shared = house.heroes[first].base(*aptitude) + house.heroes[second].base(*aptitude);
@@ -142,6 +147,7 @@ fn born(
     let mut child = newcomer(name, family, pronoun, 0, year, fear);
     child.aptitudes = aptitudes;
     child.parents = [Some(first), Some(second)];
+    child.family = house.heroes[first].family || house.heroes[second].family;
     for parent in [first, second] {
         for blessing in &house.heroes[parent].blessings {
             if !child.blessings.iter().any(|b| b.title == blessing.title) {

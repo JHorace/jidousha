@@ -327,3 +327,10 @@ pub const TYPEWRITER_LETTERS_PER_SECOND: f32 = 90.0;
 
 /// Bonds shown on the hero sheet before "and N more" (CONSTANTS §14).
 pub const BONDS_SHOWN: usize = 6;
+
+// ---- Keifu X Inheritance (VARIANT.md): outsiders, traits and the black mark.
+
+/// An outsider's personal renown at which the family will take them in marriage.
+pub const MARRY_IN_RENOWN: i32 = 5;
+/// The house takes `renown / DOWRY_SHARE` of a spouse who marries in (integer division).
+pub const DOWRY_SHARE: i32 = 2;

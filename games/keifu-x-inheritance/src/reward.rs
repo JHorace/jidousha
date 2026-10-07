@@ -12,6 +12,7 @@ use crate::harm::{deed, place_name};
 use crate::hero::{DeedKind, HeroId};
 use crate::house::House;
 use crate::ids::{Aptitude, Destiny, Outcome, Phase, Pool};
+use crate::outsiders::is_family;
 use crate::resolve::Afield;
 use crate::text::fmt;
 use crate::words::W;
@@ -50,18 +51,29 @@ pub fn reward(
     let at_door = f.quest.is_door_lock();
     let triumph = f.outcome == Outcome::Triumph;
     let renown = f.quest.renown + if triumph { TRIUMPH_RENOWN } else { 0 };
+    // Variant: the house earns a quest's renown only if the family went; carriers are
+    // counted over the family, and outsiders earn only themselves.
+    let family_went = members.iter().any(|&m| is_family(&house.heroes[m]));
     let carriers: Vec<HeroId> = members
         .iter()
         .copied()
+        .filter(|&m| is_family(&house.heroes[m]))
         .filter(|&m| house.heroes[m].destiny.kind == Destiny::CarryTheHouse)
         .collect();
-    house.add_renown(renown + carriers.len() as i32 * CARRIED_RENOWN);
+    if family_went {
+        house.add_renown(renown + carriers.len() as i32 * CARRIED_RENOWN);
+    }
     if !at_door {
         let whom = match members {
             [one] => house.heroes[*one].name.clone(),
             _ => words[W::QuestRewardEach].to_owned(),
         };
-        out.push(fmt(&words[W::QuestReward], &[&renown.to_string(), &whom]));
+        let line = if family_went {
+            W::QuestReward
+        } else {
+            W::QuestRewardOutsiders
+        };
+        out.push(fmt(&words[line], &[&renown.to_string(), &whom]));
         for &carrier in &carriers {
             out.push(fmt(
                 &words[W::QuestCarrierBonus],

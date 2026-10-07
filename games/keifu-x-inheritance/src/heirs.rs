@@ -17,6 +17,7 @@ use crate::ghost::Ghost;
 use crate::hero::{Deed, DeedKind, DreamFate, Hero, HeroId, descends_from, kin};
 use crate::house::House;
 use crate::ids::{BondKind, Place, Pronoun};
+use crate::outsiders::is_family;
 use crate::rivals::dream_rivals;
 use crate::text::{capitalized, fmt};
 use crate::witness::Held;
@@ -59,7 +60,7 @@ fn heir_rank(heroes: &[Hero], dead: HeroId, other: HeroId) -> usize {
 /// the dead, by rank, then creation order, at most eight.
 pub fn heirs(heroes: &[Hero], dead: HeroId) -> Vec<HeroId> {
     let mut list: Vec<(usize, HeroId)> = (0..heroes.len())
-        .filter(|&id| id != dead && heroes[id].is_living())
+        .filter(|&id| id != dead && heroes[id].is_living() && is_family(&heroes[id]))
         .map(|id| (heir_rank(heroes, dead, id), id))
         .collect();
     list.sort();
@@ -72,6 +73,10 @@ pub fn heirs(heroes: &[Hero], dead: HeroId) -> Vec<HeroId> {
 /// Nearest kin (SPEC §15.3): on the heir list, the first without an heirloom, else the
 /// first, else no one.
 pub fn nearest_kin(heroes: &[Hero], dead: HeroId) -> Option<HeroId> {
+    // Variant: a crowned outsider has no one of the name to leave it with.
+    if !is_family(&heroes[dead]) {
+        return None;
+    }
     let list = heirs(heroes, dead);
     list.iter()
         .copied()
@@ -237,13 +242,7 @@ pub fn choose(content: &Content, house: &mut House, page: usize, heir: Option<He
                 );
                 house.heroes[h].heirloom = Some(heirloom);
             }
-            None => {
-                let object = &content.lore.pronouns[house.heroes[dead].pronoun.index()].object;
-                lines.push(fmt(
-                    &words[W::HeirBuriedWith],
-                    &[&capitalized(&heirloom.name), object],
-                ));
-            }
+            None => lines.push(bury_heirloom(content, &house.heroes[dead], &heirloom)),
         }
     }
     if let Some((_, dream)) = undone_dream(&house.heroes[dead]) {
@@ -332,6 +331,31 @@ fn pass_dream(
         &passed,
         year,
     ));
+    lines
+}
+
+/// The line that lays `heirloom` in the ground with `dead` (`lines.heir.buried_with`).
+fn bury_heirloom(content: &Content, dead: &Hero, heirloom: &crate::hero::Heirloom) -> String {
+    let object = &content.lore.pronouns[dead.pronoun.index()].object;
+    fmt(
+        &content.words[W::HeirBuriedWith],
+        &[&capitalized(&heirloom.name), object],
+    )
+}
+
+/// What "No one. Let it lie." does with the dead's legacy (SPEC §15.2): the heirloom
+/// buried, an undone dream's ghost raised. A choice of no one and an outsider's death
+/// both settle here, once. Returns the lines.
+pub fn settle_with_no_one(content: &Content, house: &mut House, dead: HeroId) -> Vec<String> {
+    let mut lines = Vec::new();
+    if let Some(heirloom) = house.heroes[dead].heirloom.take() {
+        lines.push(bury_heirloom(content, &house.heroes[dead], &heirloom));
+    }
+    if let Some((_, dream)) = undone_dream(&house.heroes[dead]) {
+        let dream = dream.clone();
+        lines.push(raise_ghost(content, house, dead, &dream));
+        house.heroes[dead].dream_fate = DreamFate::LeftToNoOne;
+    }
     lines
 }
 

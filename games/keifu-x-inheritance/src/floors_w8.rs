@@ -1,6 +1,6 @@
 //! W8's readability floors: the turning's new pages and the grown house, judged by
 //! `floors.rs`'s `look` at each of its sizes — Garrick's death page waiting for its heir,
-//! with an heir's sheet in the dock; the stirred page's eight heirs and "No one"; every
+//! with an heir's sheet in the dock; the stirred page's six heirs and "No one"; every
 //! leaf of a turned year with a page of every kind; a death page long enough to continue
 //! with its choice on the leaf after; and a house grown over fifteen played years — its
 //! summer, its family, and the sheets of a newborn and a wanderer — and grown over
@@ -79,8 +79,8 @@ pub fn w8_surfaces(
     go_to_the_choice(&mut sim);
     let heirs = heir_labels(&page_of(&sim)).len();
     checks.require(
-        heirs == 8,
-        "the stirred page does not show seven heirs and no one",
+        heirs == 7,
+        "the stirred page does not show six heirs and no one (the wanderer is an outsider)",
         format!("{label}: {heirs} buttons"),
     );
     look(
@@ -88,7 +88,7 @@ pub fn w8_surfaces(
         tally,
         recorder,
         &mut sim,
-        "W8, the stirred page, eight buttons",
+        "W8, the stirred page, seven buttons",
         false,
     );
     // A death page long enough to continue: its lines told six times over.

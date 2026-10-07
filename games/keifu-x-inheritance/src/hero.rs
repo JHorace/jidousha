@@ -205,6 +205,9 @@ pub struct Hero {
     pub name: String,
     /// House name.
     pub house: String,
+    /// Of the family: a founder, a child of the family, or an outsider who married in.
+    /// An outsider is a wanderer who has not (variant: `VARIANT.md`).
+    pub family: bool,
     /// He or she.
     pub pronoun: Pronoun,
     /// Calling; children carry the default Knight, invisibly.

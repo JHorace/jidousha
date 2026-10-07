@@ -11,7 +11,7 @@
 use jidousha::prelude::Rng;
 
 use crate::bonds::{change, form};
-use crate::constants::{BENCHES, FIRE_SEATS, GARDEN_SEATS, TALE_RENOWN, TALE_SEATS};
+use crate::constants::{BENCHES, DOWRY_SHARE, FIRE_SEATS, GARDEN_SEATS, TALE_RENOWN, TALE_SEATS};
 use crate::content::Content;
 use crate::fear::shed_dread;
 use crate::hearth::Seat;
@@ -19,6 +19,7 @@ use crate::hero::{Deed, DeedKind, HeroId};
 use crate::house::House;
 use crate::ids::{BondKind, Pool, WinterAction};
 use crate::moment::Moment;
+use crate::outsiders::marrying_in;
 use crate::plans::{
     Courtship, Lesson, Rest, Teller, bench_lesson, courtship, rest, tellers, yard_lesson,
 };
@@ -299,6 +300,28 @@ fn court(
                     other: Some(other),
                     telling: fmt(&words[W::DeedWed], &[&other_name]),
                 });
+            }
+            // Variant: an outsider who weds in becomes family (`outsiders::may_marry_in`
+            // already held the garden to the threshold).
+            if let Some(outsider) = marrying_in(&house.heroes, a, b) {
+                let spouse = if outsider == a { b } else { a };
+                let name = house.heroes[spouse].house.clone();
+                let hero = &mut house.heroes[outsider];
+                hero.family = true;
+                hero.house = name.clone();
+                let dowry = hero.renown / DOWRY_SHARE;
+                let first = hero.name.clone();
+                house.add_renown(dowry);
+                // The name changes everywhere it is drawn, the dead's epitaphs included.
+                for dead in 0..house.heroes.len() {
+                    if house.heroes[dead].wording.is_some() {
+                        crate::epitaph::recompose(content, &mut house.heroes, dead);
+                    }
+                }
+                lines.push(fmt(
+                    &words[W::WinterMarriedIn],
+                    &[&first, &name, &dowry.to_string()],
+                ));
             }
         }
         (Courtship::Rivals, [Some(a), Some(b)]) => {

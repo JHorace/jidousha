@@ -18,10 +18,11 @@ use crate::constants::{
 use crate::content::Content;
 use crate::dream::{progress, told_title};
 use crate::grief::grieve;
-use crate::heirs::{heirs, undone_dream};
+use crate::heirs::{heirs, settle_with_no_one, undone_dream};
 use crate::hero::{DreamFate, Fate, Hero, HeroId};
 use crate::house::House;
 use crate::ids::{BondKind, Destiny, Pool};
+use crate::outsiders::is_family;
 use crate::passage::{Bequest, PageKind, TurnPage};
 use crate::text::{capitalized, fmt};
 use crate::words::W;
@@ -88,6 +89,9 @@ pub fn death_page(content: &Content, house: &mut House, dead: HeroId, rng: &mut 
     let mut lines = Vec::new();
     let hero = &house.heroes[dead];
     let he = capitalized(&content.lore.pronouns[hero.pronoun.index()].subject);
+    if !is_family(hero) {
+        return outsider_page(content, house, dead);
+    }
     if let Some(heirloom) = &hero.heirloom {
         let effect = fmt(
             &content.legacies.heirloom_effect,
@@ -144,6 +148,44 @@ pub fn death_page(content: &Content, house: &mut House, dead: HeroId, rng: &mut 
             dead,
             leaves,
             heirs,
+            chosen: None,
+            bequest_end,
+        }),
+        about: Some(dead),
+    }
+}
+
+/// An outsider's death page (variant): nothing passes down. It says so, then does what
+/// "No one. Let it lie." does — the heirloom buried, an undone dream's ghost raised —
+/// and never waits; the Door's promise and grief are mainline's.
+fn outsider_page(content: &Content, house: &mut House, dead: HeroId) -> TurnPage {
+    let words = &content.words;
+    let year = house.calendar.current_year();
+    let hero = &house.heroes[dead];
+    let object = content.lore.pronouns[hero.pronoun.index()].object.clone();
+    let mut lines = vec![fmt(&words[W::DeathOutsider], &[&hero.name, &object])];
+    let heirloom = hero.heirloom.as_ref().map(|h| h.name.clone());
+    house.heroes[dead].bequest_heirloom = heirloom;
+    lines.extend(settle_with_no_one(content, house, dead));
+    let bequest_end = lines.len();
+    lines.extend(door_promise(content, &mut house.heroes, dead));
+    lines.extend(grieve(content, &mut house.heroes, dead, year));
+    let hero = &mut house.heroes[dead];
+    hero.bequest_decided = true;
+    match &hero.dream {
+        None => hero.dream_fate = DreamFate::NeverDreamt,
+        Some(dream) if dream.is_fulfilled() => hero.dream_fate = DreamFate::Fulfilled,
+        Some(_) => {}
+    }
+    crate::epitaph::recompose(content, &mut house.heroes, dead);
+    TurnPage {
+        kind: PageKind::Death,
+        title: fmt(&words[W::DeathTitle], &[&house.heroes[dead].full_name()]),
+        lines,
+        bequest: Some(Bequest {
+            dead,
+            leaves: false,
+            heirs: Vec::new(),
             chosen: None,
             bequest_end,
         }),

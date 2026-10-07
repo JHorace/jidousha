@@ -266,6 +266,7 @@ words! {
     CourtTooYoung = Ui "winter.courtship_notes.TOO_YOUNG",
     CourtTooFarApart = Ui "winter.courtship_notes.TOO_FAR_APART",
     CourtWillWed = Ui "winter.courtship_notes.WILL_WED",
+    CourtUnproven = Ui "winter.courtship_notes.UNPROVEN",
     ExcuseChildTeacher = Ui "winter.lesson_excuses.child_teacher",
     ExcuseChildTeacherWasted = Ui "winter.lesson_excuses.child_teacher_wasted",
     ExcuseLearnsNothing = Ui "winter.lesson_excuses.learns_nothing",
@@ -423,6 +424,11 @@ words! {
     EndingLivedHere = Ui "ending.lived_here",
     EndingTree = Ui "ending.buttons.tree",
     EndingVerdict = Ui "ending.buttons.verdict",
+    QuestRewardOutsiders = Lines "quest.reward_outsiders",
+    SheetOutsider = Ui "hero_sheet.outsider",
+    ArrivalOutsider = Lines "arrival.outsider",
+    DeathOutsider = Lines "death.outsider",
+    WinterMarriedIn = Lines "winter.married_in",
     FamilyTallyNoneEnding = Ui "family.tally_none_ending",
 }
 

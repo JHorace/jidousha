@@ -300,7 +300,7 @@ fn stirred(checks: &mut Checks, seed: u64, burdened: bool, vector: &mut Vec<Stri
     let name = sim.world().resource::<House>().heroes[wanderer]
         .name
         .clone();
-    let mark = if burdened { " (not the dream)" } else { "" };
+    // Variant: a wanderer is an outsider, so they are never offered, burdened or not.
     let want = [
         "Maren, daughter".to_owned(),
         "Pip, grandson".to_owned(),
@@ -308,12 +308,11 @@ fn stirred(checks: &mut Checks, seed: u64, burdened: bool, vector: &mut Vec<Stri
         "Ysolde, of the house (not the dream)".to_owned(),
         "Brannoc, of the house (lays one aside)".to_owned(),
         "Wren, of the house".to_owned(),
-        format!("{name}, of the house{mark}"),
         "No one. Let it lie.".to_owned(),
     ];
     checks.require(
-        labels == want,
-        "stirred, Garrick's heirs are not marked by the rule: \"(not the dream)\" on an undone burden only, \"(lays one aside)\" on an heirloom",
+        labels == want && !labels.iter().any(|l| l.starts_with(&name)),
+        "stirred, Garrick's heirs are not marked by the rule: \"(not the dream)\" on an undone burden only, \"(lays one aside)\" on an heirloom, and the outsider is never offered",
         format!("seed {seed:#x}: {labels:?}"),
     );
     if seed == recorded()[0] || seed == recorded()[1] {

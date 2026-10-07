@@ -12,7 +12,7 @@ use jidousha::prelude::Rng;
 use crate::chance::{between, chance, index};
 use crate::coming_of_age::seer_lines;
 use crate::constants::{
-    FEWEST_ADULTS, WANDERER_AGES, WANDERER_BASE_CHANCE, WANDERER_CHANCE_LIMIT,
+    FEWEST_ADULTS, MARRY_IN_RENOWN, WANDERER_AGES, WANDERER_BASE_CHANCE, WANDERER_CHANCE_LIMIT,
     WANDERER_RENOWN_DRAW, WANDERER_RENOWN_HIGH, WANDERER_ROOM,
 };
 use crate::content::Content;
@@ -99,6 +99,7 @@ pub fn arrive(content: &Content, house: &mut House, rng: &mut Rng) -> TurnPage {
     hero.vocation = vocation;
     hero.dream = Some(dream.clone());
     hero.renown = renown;
+    hero.family = false;
     let id = house.heroes.len();
     house.heroes.push(hero);
     speak(content, &mut house.heroes, id, rng);
@@ -146,6 +147,14 @@ pub fn arrive(content: &Content, house: &mut House, rng: &mut Rng) -> TurnPage {
     lines.push(fmt(
         &words[W::ArrivalFear],
         &[&he, &content.lore.tags[hero.fear.tag.index()].noun],
+    ));
+    lines.push(fmt(
+        &words[W::ArrivalOutsider],
+        &[
+            &he,
+            &capitalized(&forms.possessive),
+            &MARRY_IN_RENOWN.to_string(),
+        ],
     ));
     lines.push(fmt(
         &words[W::ArrivalSeer],

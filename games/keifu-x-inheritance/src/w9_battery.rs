@@ -34,6 +34,7 @@ use crate::ids::{Destiny, Pronoun};
 /// What one hero looked like at the last observation.
 #[derive(Clone)]
 struct Seen {
+    full: String,
     wording: Option<Wording>,
     epitaph: Option<String>,
     bequest: (DreamFate, Option<HeroId>, bool, Option<i32>),
@@ -41,6 +42,7 @@ struct Seen {
 
 fn seen(hero: &Hero) -> Seen {
     Seen {
+        full: hero.full_name(),
         wording: hero.wording,
         epitaph: hero.epitaph.clone(),
         bequest: (
@@ -180,7 +182,14 @@ impl Watch {
             return;
         };
         let changed = before.epitaph.as_ref() != Some(epitaph);
-        let moved = before.bequest != seen(hero).bequest;
+        // Variant: an outsider who marries in takes the family name, and the dead's
+        // epitaphs that name them are composed again (`winter::court`).
+        let renamed = house
+            .heroes
+            .iter()
+            .enumerate()
+            .any(|(i, h)| self.last.get(i).is_some_and(|s| s.full != h.full_name()));
+        let moved = before.bequest != seen(hero).bequest || renamed;
         if changed && !rolled {
             self.recomposed += 1;
             self.require(moved, || {

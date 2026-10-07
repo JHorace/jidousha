@@ -1584,6 +1584,44 @@
       "args": [],
       "when": "",
       "source": "scene/scenes/ending.jai:145"
+    },
+    "winter.married_in": {
+      "text": "%1 takes the name of %2, and the house is the richer by %3 renown.",
+      "args": [
+        "outsider first name",
+        "the house name taken",
+        "the dowry"
+      ],
+      "when": "variant",
+      "source": "keifu-x-inheritance VARIANT.md"
+    },
+    "quest.reward_outsiders": {
+      "text": "% renown to %. No one of the name went, so the house has none.",
+      "args": [
+        "renown per hero",
+        "the sole member's first name, else quest.reward_each"
+      ],
+      "when": "variant",
+      "source": "keifu-x-inheritance VARIANT.md"
+    },
+    "death.outsider": {
+      "text": "% was never of the name, and the house keeps nothing of %.",
+      "args": [
+        "dead first name",
+        "object pronoun"
+      ],
+      "when": "variant",
+      "source": "keifu-x-inheritance VARIANT.md"
+    },
+    "arrival.outsider": {
+      "text": "%1 is an outsider, not of the name. %2 quests and tales earn the house nothing until %1 marries in, at %3 renown.",
+      "args": [
+        "capitalized subject pronoun",
+        "capitalized possessive pronoun",
+        "MARRY_IN_RENOWN"
+      ],
+      "when": "variant",
+      "source": "keifu-x-inheritance VARIANT.md"
     }
   }
 }

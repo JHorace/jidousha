@@ -1,4 +1,4 @@
-//! `--verify`: the headless run `tools/verify keifu` drives.
+//! `--verify`: the headless run `tools/verify keifu-x-inheritance` drives.
 //!
 //! It plays the game the window plays — the same `register`, the same camera —
 //! with the pointer scripted, and asserts:
@@ -399,7 +399,7 @@ pub fn run() -> ExitCode {
         );
     } else {
         println!(
-            "verify keifu FAILED: {failed} of {} checks",
+            "verify keifu-x-inheritance FAILED: {failed} of {} checks",
             passed + failed
         );
     }

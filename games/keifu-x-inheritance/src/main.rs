@@ -73,8 +73,8 @@
 //! The spec (`spec/SPEC.md`, `spec/CONSTANTS.md`, `spec/content/`) is the only
 //! source of game behaviour; `SPEC-GAPS.md` lists every place it fell silent.
 //!
-//! Run it: `cargo run -p keifu` (`-- --seed N` fixes the run's seed)
-//! Check it: `tools/verify keifu`
+//! Run it: `cargo run -p keifu-x-inheritance` (`-- --seed N` fixes the run's seed)
+//! Check it: `tools/verify keifu-x-inheritance`
 
 #![allow(missing_docs)]
 
@@ -164,6 +164,9 @@ mod moment;
 mod newcomer_tests;
 mod newcomers;
 mod oracles;
+mod outsiders;
+#[cfg(test)]
+mod outsiders_tests;
 mod passage;
 mod plans;
 #[cfg(test)]
@@ -285,7 +288,7 @@ fn main() -> ExitCode {
             None => {
                 eprintln!(
                     "[keifu] --seed needs a number\n  got {:?}\n  likely cause: a typo on \
-                     the command line\n  fix: `cargo run -p keifu -- --seed 42`",
+                     the command line\n  fix: `cargo run -p keifu-x-inheritance -- --seed 42`",
                     args.get(at + 1)
                 );
                 return ExitCode::FAILURE;

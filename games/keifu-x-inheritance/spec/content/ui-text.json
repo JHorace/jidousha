@@ -729,6 +729,13 @@
       "args": [
         "count"
       ]
+    },
+    "outsider": {
+      "text": "An outsider: nothing won here goes to the house. May marry in at % renown.",
+      "source": "keifu-x-inheritance VARIANT.md",
+      "args": [
+        "MARRY_IN_RENOWN (5)"
+      ]
     }
   },
   "telling": {
@@ -988,6 +995,15 @@
       "WILL_WED": {
         "text": "will wed",
         "source": "lineage/hearth.jai:180"
+      },
+      "UNPROVEN": {
+        "text": "% unproven: renown % of %",
+        "source": "keifu-x-inheritance VARIANT.md",
+        "args": [
+          "the outsider's first name",
+          "their personal renown",
+          "MARRY_IN_RENOWN (5)"
+        ]
       }
     },
     "lesson_excuses": {

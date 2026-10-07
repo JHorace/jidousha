@@ -52,7 +52,7 @@ fn complaint(what: &str, specifics: &str) -> String {
         what,
         specifics,
         "the game, its content, or the engine changed",
-        "run `cargo run -p keifu` and point at the hero or screen named above, then \
+        "run `cargo run -p keifu-x-inheritance` and point at the hero or screen named above, then \
          compare with spec/SPEC.md and spec/MODULES.md",
     )
 }

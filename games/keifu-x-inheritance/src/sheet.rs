@@ -7,7 +7,7 @@
 use crate::blessing::blessing_effect;
 use crate::constants::{
     BONDS_SHOWN, CONQUERED_FEAR_BONUS, COURAGE_TO_CONQUER, DREAD_LIMIT, LEGACY_HEIRLOOM_BONUS,
-    TALE_YEARLY_RENOWN, WOUND_PENALTY, fear_penalty, phase_adjustment,
+    MARRY_IN_RENOWN, TALE_YEARLY_RENOWN, WOUND_PENALTY, fear_penalty, phase_adjustment,
 };
 use crate::content::Content;
 use crate::dream::{Dream, StageMark, told_title};
@@ -149,6 +149,12 @@ pub fn hero_sheet(content: &Content, heroes: &[Hero], id: HeroId) -> Sheet {
             fmt(&words[W::SheetRenown], &[&hero.renown.to_string()]),
         ),
     });
+    if !hero.family && hero.is_living() {
+        out.push(line(
+            Ink::Note,
+            fmt(&words[W::SheetOutsider], &[&MARRY_IN_RENOWN.to_string()]),
+        ));
+    }
     for aptitude in Aptitude::ALL {
         out.push(line(Ink::Body, aptitude_row(content, hero, *aptitude)));
     }

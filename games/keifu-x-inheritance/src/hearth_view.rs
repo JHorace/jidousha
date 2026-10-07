@@ -169,7 +169,7 @@ pub fn notes(content: &Content, house: &House, plan: &WinterPlan) -> Notes {
         training: pair(plan.yard, Seat::Teacher, W::WinterNoLearner),
         garden: plan
             .garden
-            .map(|c| c.note(content))
+            .map(|c| c.note(content, &house.heroes))
             .filter(|note| !note.is_empty()),
         table: plan.tellers.map(|t| t.map(|t| t.note(content).to_owned())),
         benches: std::array::from_fn(|b| {

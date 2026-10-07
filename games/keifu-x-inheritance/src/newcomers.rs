@@ -78,6 +78,7 @@ pub fn newcomer(
         key: String::new(),
         name,
         house,
+        family: true,
         pronoun,
         vocation: Vocation::Knight,
         age,

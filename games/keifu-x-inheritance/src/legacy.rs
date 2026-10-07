@@ -209,6 +209,8 @@ pub fn heir(heroes: &[Hero], hero: HeroId) -> Option<HeroId> {
                 let other = &heroes[bond.other];
                 other.is_living()
                     && other.heirloom.is_none()
+                    // Variant: an outsider never inherits, a student of the house or not.
+                    && crate::outsiders::is_family(other)
                     && (bond.kind == BondKind::Spouse || bond.taught)
             })
             .map(|bond| bond.other)

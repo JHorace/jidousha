@@ -9,13 +9,14 @@
 
 use crate::constants::{
     APTITUDE_LIMIT, CHILD_TAUGHT_LIMIT, COURTING_AGE_GAP, GREATER_LESSON, GREATER_TAUGHT,
-    MARRYING_AGE, SEASONED_TEACHER_BONUS, SELF_TAUGHT_LIMIT, TEACHABLE_AGE, WINTER_GAIN_LIMIT,
-    WINTER_LESSON, YOUNG_LEARNER_BONUS,
+    MARRY_IN_RENOWN, MARRYING_AGE, SEASONED_TEACHER_BONUS, SELF_TAUGHT_LIMIT, TEACHABLE_AGE,
+    WINTER_GAIN_LIMIT, WINTER_LESSON, YOUNG_LEARNER_BONUS,
 };
 use crate::content::Content;
 use crate::destiny::may_still_learn;
 use crate::hero::{Hero, HeroId, kin};
 use crate::ids::{Aptitude, BondKind, Destiny, Phase};
+use crate::outsiders::{is_family, may_marry_in};
 use crate::words::W;
 
 /// Why a lesson was wasted (SPEC §11.4, `ui.winter.lesson_excuses`).
@@ -240,13 +241,20 @@ pub enum Courtship {
     Rivals,
     /// Either has a living spouse.
     WedAlready,
+    /// One is an outsider whose renown is under the threshold (variant).
+    Unproven {
+        /// The outsider.
+        outsider: HeroId,
+        /// Their personal renown.
+        renown: i32,
+    },
     /// They wed.
     WillWed,
 }
 
 impl Courtship {
     /// The garden's preview: "will wed", "under 18", ... (`NOBODY` is empty).
-    pub fn note(self, content: &Content) -> String {
+    pub fn note(self, content: &Content, heroes: &[Hero]) -> String {
         let words = &content.words;
         match self {
             Courtship::Nobody => words[W::CourtNobody].to_owned(),
@@ -258,6 +266,14 @@ impl Courtship {
             Courtship::TooFarApart => words[W::CourtTooFarApart].to_owned(),
             Courtship::Rivals => words[W::CourtRivals].to_owned(),
             Courtship::WedAlready => words[W::CourtWedAlready].to_owned(),
+            Courtship::Unproven { outsider, renown } => crate::text::fmt(
+                &words[W::CourtUnproven],
+                &[
+                    &heroes[outsider].name,
+                    &renown.to_string(),
+                    &MARRY_IN_RENOWN.to_string(),
+                ],
+            ),
             Courtship::WillWed => words[W::CourtWillWed].to_owned(),
         }
     }
@@ -287,6 +303,9 @@ pub fn courtship(heroes: &[Hero], a: Option<HeroId>, b: Option<HeroId>) -> Court
     }
     if has_living_spouse(heroes, a) || has_living_spouse(heroes, b) {
         return Courtship::WedAlready;
+    }
+    if let Some((outsider, renown)) = may_marry_in(heroes, a, b) {
+        return Courtship::Unproven { outsider, renown };
     }
     Courtship::WillWed
 }
@@ -358,14 +377,16 @@ impl Teller {
 /// Each table seat's part, in seat order: the first adult tells it for the house, a
 /// second adult for themselves, a child not at all.
 pub fn tellers<const N: usize>(heroes: &[Hero], table: [Option<HeroId>; N]) -> [Option<Teller>; N] {
-    let mut adults = 0;
+    let mut house_told = false;
     table.map(|seat| {
         let hero = seat?;
         if !heroes[hero].is_adult() {
             return Some(Teller::Child);
         }
-        adults += 1;
-        Some(if adults == 1 {
+        // Variant: the first *family* adult tells it for the house; an outsider adult
+        // tells it for themselves, whichever seat.
+        Some(if is_family(&heroes[hero]) && !house_told {
+            house_told = true;
             Teller::House
         } else {
             Teller::Own
