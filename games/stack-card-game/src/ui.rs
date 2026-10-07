@@ -4,7 +4,7 @@
 
 use crate::cards::{Card, Side, info};
 use crate::game::{Game, SLOT_KEYS};
-use crate::rules::{Fate, Item, ItemId, fate, preview};
+use crate::rules::{Fate, Item, fate, preview};
 use jidousha::prelude::*;
 
 pub const VIEW_HEIGHT: f32 = 20.0;
@@ -73,7 +73,6 @@ pub enum Mark {
 /// One stack item as the player reads it.
 #[derive(Clone, Debug)]
 pub struct StackRow {
-    pub id: ItemId,
     pub left: String,
     pub right: String,
     pub mark: Mark,
@@ -173,7 +172,7 @@ pub fn priority_line(game: &Game) -> String {
     let core = &game.core;
     if let Some(targeting) = &game.ui.targeting {
         return format!(
-            "CHOOSE TARGET: Up/Down, Enter confirm, Esc cancel ({} legal)",
+            "TARGET: Up/Down, Enter ok, Esc cancel ({} legal)",
             targeting.legal.len()
         );
     }
@@ -181,7 +180,7 @@ pub fn priority_line(game: &Game) -> String {
         Side::You if core.stack.is_empty() => {
             "YOUR PRIORITY: 1-7 pick, Enter play, Space pass".to_owned()
         }
-        Side::You => "YOUR PRIORITY: respond or Space to let the stack resolve".to_owned(),
+        Side::You => "YOUR PRIORITY: respond, or Space to resolve".to_owned(),
         Side::Npc => "NPC HAS PRIORITY: it may still respond".to_owned(),
     }
 }
@@ -196,8 +195,6 @@ pub fn build(game: &Game, view: Rect) -> Screen {
     let left = view.min.x + MARGIN;
     let inner_w = view.size().x - 2.0 * MARGIN;
     let steps = preview(core);
-
-    p.rect(view, palette::BACKDROP, layer::PANEL - 1);
 
     // --- header: the opponent, and whose turn it is -------------------
     let head = Rect::from_min_size(Vec2::new(left, top + 0.3), Vec2::new(inner_w, 1.4));
@@ -220,7 +217,7 @@ pub fn build(game: &Game, view: Rect) -> Screen {
 
     // --- the stack panel ---------------------------------------------
     let panel_top = top + 2.2;
-    let panel_h = 8.8;
+    let panel_h = 8.4;
     let panel_w = inner_w * 0.62;
     let panel = Rect::from_min_size(Vec2::new(left, panel_top), Vec2::new(panel_w, panel_h));
     p.rect(panel, palette::PANEL, layer::PANEL);
@@ -241,7 +238,24 @@ pub fn build(game: &Game, view: Rect) -> Screen {
         palette::DIM,
     );
     let rows_max = ((panel_h - 1.4) / LINE) as usize;
-    for (row, item) in core.stack.iter().rev().enumerate().take(rows_max) {
+    // A stack deeper than the panel says so, rather than dropping its bottom.
+    let shown = if core.stack.len() > rows_max {
+        rows_max - 1
+    } else {
+        core.stack.len()
+    };
+    if core.stack.len() > shown {
+        let more = format!("(+{} deeper, they resolve last)", core.stack.len() - shown);
+        let y = panel.min.y + 1.3 + shown as f32 * LINE;
+        p.text(
+            panel,
+            Vec2::new(panel.min.x + 1.1, y),
+            &more,
+            TEXT,
+            palette::DIM,
+        );
+    }
+    for (row, item) in core.stack.iter().rev().enumerate().take(shown) {
         let y = panel.min.y + 1.3 + row as f32 * LINE;
         let rect = Rect::from_min_size(
             Vec2::new(panel.min.x + 0.2, y - 0.1),
@@ -299,7 +313,6 @@ pub fn build(game: &Game, view: Rect) -> Screen {
             palette::TEXT,
         );
         p.screen.stack_rows.push(StackRow {
-            id: item.id,
             left: left_text,
             right: right_text,
             mark,
@@ -351,27 +364,22 @@ pub fn build(game: &Game, view: Rect) -> Screen {
     p.screen.log_lines = wrapped;
 
     // --- status: priority, and the last refusal -----------------------
-    let status = Rect::from_min_size(Vec2::new(left, top + 11.3), Vec2::new(inner_w, 2.0));
+    let status = Rect::from_min_size(Vec2::new(left, top + 10.8), Vec2::new(inner_w, 2.5));
     let prompt = priority_line(game);
     p.text(status, status.min, &prompt, TEXT, palette::MARK);
-    if !game.ui.message.is_empty() {
-        let lines = wrap(
-            &game.ui.message,
-            TextStyle {
-                size: TEXT,
-                ..TextStyle::default()
-            }
-            .columns_in(inner_w),
+    let columns = TextStyle {
+        size: TEXT,
+        ..TextStyle::default()
+    }
+    .columns_in(inner_w);
+    for (row, line) in wrap(&game.ui.message, columns).iter().enumerate() {
+        p.text(
+            status,
+            status.min + Vec2::new(0.0, LINE * (row + 1) as f32),
+            line,
+            TEXT,
+            palette::NPC,
         );
-        if let Some(first) = lines.first() {
-            p.text(
-                status,
-                status.min + Vec2::new(0.0, LINE),
-                first,
-                TEXT,
-                palette::NPC,
-            );
-        }
     }
     p.screen.priority_line = prompt;
     p.screen.status = game.ui.message.clone();

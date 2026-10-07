@@ -12,8 +12,6 @@ pub enum Side {
 }
 
 impl Side {
-    pub const BOTH: [Side; 2] = [Side::You, Side::Npc];
-
     pub fn other(self) -> Side {
         match self {
             Side::You => Side::Npc,

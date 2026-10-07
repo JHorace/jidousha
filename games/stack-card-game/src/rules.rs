@@ -66,6 +66,13 @@ impl fmt::Display for RuleError {
     }
 }
 
+impl RuleError {
+    /// What the status line shows: what happened and what to do about it.
+    pub fn shown(&self) -> String {
+        format!("{}: {}", self.what, self.fix)
+    }
+}
+
 fn refuse(what: &str, cause: &str, fix: &str) -> RuleError {
     RuleError {
         what: what.to_owned(),
@@ -388,10 +395,10 @@ impl Core {
         let who = self.active.index();
         self.turns_taken[who] += 1;
         self.mana[who] = self.turns_taken[who].min(MANA_CAP);
-        if self.hands[who].len() < HAND_LIMIT {
-            if let Some(card) = self.decks[who].pop() {
-                self.hands[who].push(card);
-            }
+        if self.hands[who].len() < HAND_LIMIT
+            && let Some(card) = self.decks[who].pop()
+        {
+            self.hands[who].push(card);
         }
         let line = format!("turn {}: {}", self.turn, self.active.name());
         self.say(line);

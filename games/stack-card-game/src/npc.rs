@@ -75,10 +75,9 @@ pub fn choose(core: &Core) -> Action {
         .stack
         .iter()
         .find(|item| item.owner == Side::You && item.card == Card::Mend && resolves(item))
+        && let Some(action) = play(core, Card::Hush, Some(heal))
     {
-        if let Some(action) = play(core, Card::Hush, Some(heal)) {
-            return action;
-        }
+        return action;
     }
 
     // 3. Double my own damage once, after the player has had priority.
@@ -86,20 +85,18 @@ pub fn choose(core: &Core) -> Action {
         .stack
         .iter()
         .any(|item| item.owner == ME && item.card == Card::Echo);
-    if !echo_on_stack {
-        if let Some(mine) = core.stack.iter().rev().find(|item| {
+    if !echo_on_stack
+        && let Some(mine) = core.stack.iter().rev().find(|item| {
             item.owner == ME
                 && item.aim == Some(Side::You)
                 && info(item.card).damage >= 3
                 && resolves(item)
                 && legal_targets(&core.stack, Card::Echo, ME).contains(&item.id)
-        }) {
-            if core.passes > 0 {
-                if let Some(action) = play(core, Card::Echo, Some(mine)) {
-                    return action;
-                }
-            }
-        }
+        })
+        && core.passes > 0
+        && let Some(action) = play(core, Card::Echo, Some(mine))
+    {
+        return action;
     }
 
     // 4. On an empty stack: heal when low, then cast the biggest affordable sorcery.
@@ -107,19 +104,18 @@ pub fn choose(core: &Core) -> Action {
         let has_answer = core.hands[ME.index()]
             .iter()
             .any(|card| matches!(card, Card::Negate | Card::Redirect));
-        if core.life[ME.index()] <= HEAL_BELOW {
-            if let Some(action) = play(core, Card::Mend, None) {
-                return action;
-            }
+        if core.life[ME.index()] <= HEAL_BELOW
+            && let Some(action) = play(core, Card::Mend, None)
+        {
+            return action;
         }
         for card in [Card::Siege, Card::Cleaver] {
             if core.active == ME
                 && can_afford(core, card)
                 && (core.mana[ME.index()] >= u32::from(info(card).cost) + 2 || !has_answer)
+                && let Some(action) = play(core, card, None)
             {
-                if let Some(action) = play(core, card, None) {
-                    return action;
-                }
+                return action;
             }
         }
         if core.active == ME

@@ -2,12 +2,18 @@
 //! See DESIGN.md for the rules. `--verify` runs the headless check.
 #![allow(missing_docs)]
 
+mod capture;
 mod cards;
+mod checks;
 mod game;
+mod layout;
 mod npc;
 mod players;
+mod rowcheck;
+mod rulechecks;
 mod rules;
 mod ui;
+mod verify;
 
 use game::{Game, SLOT_KEYS};
 use jidousha::prelude::*;
@@ -75,6 +81,9 @@ fn npc_acts(world: &mut World) {
 }
 
 fn main() -> ExitCode {
+    if std::env::args().any(|argument| argument == "--verify") {
+        return verify::run();
+    }
     match run(config(), register) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {

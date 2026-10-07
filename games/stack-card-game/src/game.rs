@@ -94,7 +94,7 @@ impl Game {
             Key::Enter => self.play_selected(),
             Key::Space => match self.core.try_pass(Side::You) {
                 Ok(()) => self.ui.message.clear(),
-                Err(error) => self.ui.message = error.to_string(),
+                Err(error) => self.ui.message = error.shown(),
             },
             _ => {}
         }
@@ -114,7 +114,7 @@ impl Game {
             return;
         };
         match self.core.options(Side::You, hand_index) {
-            Err(error) => self.ui.message = error.to_string(),
+            Err(error) => self.ui.message = error.shown(),
             Ok(None) => self.commit(hand_index, None),
             Ok(Some(mut legal)) => {
                 // Top of the stack first: the cursor starts on the item that resolves next.
@@ -136,7 +136,7 @@ impl Game {
                 self.ui.targeting = None;
                 self.ui.message.clear();
             }
-            Err(error) => self.ui.message = error.to_string(),
+            Err(error) => self.ui.message = error.shown(),
         }
     }
 
