@@ -2,11 +2,11 @@
 
 task: stack-card-game
 variant: V1
-stage: implement
-tick: live
+stage: done
+tick: released
 resumes: 0
 gates-green-at: dea659e
-updated: 2026-10-07 04:01 PDT
+updated: 2026-10-07 04:02 PDT
 
 ## Done so far
 - claimed
@@ -17,7 +17,7 @@ updated: 2026-10-07 04:01 PDT
 - full gate green at dea659e (tools/test 1487 passed)
 
 ## Exact next step
-PR open; nothing further.
+PR #125 open; nothing further.
 
 ## Deviations
 - none
