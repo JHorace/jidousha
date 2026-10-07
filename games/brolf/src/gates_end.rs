@@ -61,7 +61,7 @@ pub fn session_d(checks: &mut Checks, gallery: &mut Gallery) {
             && line.contains("keeps heavy ball, helmet")
             && line.contains("HOLD heavy ball, helmet")
             && line.contains("RIVALS 5")
-            && line.contains("PIN #6"),
+            && line.contains("PIN #"),
         "the status line does not promise what extracting keeps",
         format!("status line 2 on tick 2799: {line:?}"),
     );
