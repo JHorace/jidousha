@@ -2,8 +2,8 @@
 
 task: keifu-x-inheritance
 variant: V2
-stage: implement
-tick: live
+stage: done
+tick: released
 resumes: 0
 gates-green-at: 8d281df
 updated: 2026-10-07 12:16 PDT
@@ -18,7 +18,7 @@ updated: 2026-10-07 12:16 PDT
 - x1.txt round: 56 of 57 noticed (P10 is an equivalent: both costs are 2); escapes fixed with tests; earlier lists re-cut at the variant's sites; VARIANT.md and ledgers written. Earlier-lists round (--changed-since 075ff00, 507 faults) running: target/yakin/mutate3.log
 
 ## Exact next step
-Read target/yakin/mutate3.log (tail: `N of 507 noticed`); fix real escapes with tests (known equivalents are fine, name them); then the full gate: `python3 tools/doctor`, tools/test in the background (verdict target/verify/report.json), `python3 tools/check-claude-md`, `python3 tools/yakin/yakin check`; `python3 tools/build-web keifu-x-inheritance && python3 tools/serve-web keifu-x-inheritance --check`; `python3 tools/verify keifu`; copy the four x1 pictures to games/keifu-x-inheritance/screens/ if mainline's convention commits them (it does: screens/*.png); then the PR (WORKER.md §4).
+None: PR https://github.com/JHorace/jidousha/pull/129 is open; the owner reviews. Never merge.
 
 ## Deviations
 - DESIGN.md names a new `src/family.rs`; mainline already has `family.rs` (the family screen), so the one eligibility function lives in `src/outsiders.rs` (`is_family`, `may_marry_in`, `marrying_in`). A FINDINGS entry will be filed (design misled).
