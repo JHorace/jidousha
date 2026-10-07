@@ -1369,3 +1369,11 @@ Class: process (decision) · Session: keifu-x-inheritance (implement) · Owner: 
 Step 8b counts marks on the *living* family; the death pages are made at step 4, before it, and choose later. A hero who dies
 carrying the only mark leaves the house unweighed that year and the heir pays from the next. Kept as designed; named so the
 owner can decide.
+
+### G-075 — the battery numbers: the variant closes more houses (reported, not retuned)
+
+Class: process (report) · Session: keifu-x-inheritance (implement) · Owner: the owner (the constants are the design's)
+
+Mainline against the variant, same seeds: W8 whole years, houses closed 4 of 160 → 10 of 160 (still open at year 25: 157 → 151);
+weddings 911 → 722; W10 full dynasty, closed before the Door 7 → 12 of 240 (keeper) and 1 → 3 of 240 (teacher). Outsiders earn
+the house nothing and must be proven before they wed, and marks drain the house; the survival shape is thinner and still open.
