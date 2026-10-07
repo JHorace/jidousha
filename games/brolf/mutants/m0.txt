@@ -1,0 +1,143 @@
+#! m0 — brolf's first round: every rule constant the four decision rows rest on, the two
+#! outcome functions, the equipment values, the Update order, and the zone's colour and
+#! boundary. One fault per line of rule; each must be noticed by the unit tests or `--verify`.
+
+### M1 GRACE_TICKS 300 -> 240
+@ src/zone.rs
+- pub const GRACE_TICKS: u64 = 300;
++ pub const GRACE_TICKS: u64 = 240;
+
+### M2 DAZE_TICKS 180 -> 120
+@ src/contact.rs
+- pub const DAZE_TICKS: u64 = 180;
++ pub const DAZE_TICKS: u64 = 120;
+
+### M3 STRIKE_DISTANCE 4.0 -> 3.0
+@ src/shots.rs
+- pub const STRIKE_DISTANCE: f32 = 4.0;
++ pub const STRIKE_DISTANCE: f32 = 3.0;
+
+### M4 heavy ball strike_taken 0.5 -> 0.6
+@ src/items.rs
+- strike_taken: 0.5,
++ strike_taken: 0.6,
+
+### M5 heavy ball shot_reach 0.75 -> 1.0
+@ src/items.rs
+- shot_reach: 0.75,
++ shot_reach: 1.0,
+
+### M6 EXTRACT_TICKS 120 -> 60
+@ src/outcome.rs
+- pub const EXTRACT_TICKS: u64 = 120;
++ pub const EXTRACT_TICKS: u64 = 60;
+
+### M7 kept_on Extracted keeps nothing
+@ src/outcome.rs
+- Outcome::HoledOut | Outcome::LastStanding | Outcome::ClosestToPin | Outcome::Extracted => {
++ Outcome::Extracted => Kit::default(),⏎        Outcome::HoledOut | Outcome::LastStanding | Outcome::ClosestToPin => {
+
+### M8 kept_on Eliminated keeps the kit
+@ src/outcome.rs
+- Outcome::Eliminated | Outcome::Lost { .. } => Kit::default(),
++ Outcome::Lost { .. } => Kit::default(),⏎        Outcome::Eliminated => *kit,
+
+### M9 second stop radius 8.0 -> 7.0
+@ src/zone.rs
+- (2100, 8.0),
++ (2100, 7.0),
+
+### M10 third stop radius 5.0 -> 4.0
+@ src/zone.rs
+- (3900, 5.0),
++ (3900, 4.0),
+
+### M11 SHOT_SPREAD 0.12 -> 0.2
+@ src/shots.rs
+- pub const SHOT_SPREAD: f32 = 0.12;
++ pub const SHOT_SPREAD: f32 = 0.2;
+
+### M12 MAX_SHOT 7.0 -> 6.0
+@ src/shots.rs
+- pub const MAX_SHOT: f32 = 7.0;
++ pub const MAX_SHOT: f32 = 6.0;
+
+### M13 PAD_OPENS 2700 -> 3000
+@ src/outcome.rs
+- pub const PAD_OPENS: u64 = 2700;
++ pub const PAD_OPENS: u64 = 3000;
+
+### M14 HOLE_OPENS 5700 -> 5000
+@ src/outcome.rs
+- pub const HOLE_OPENS: u64 = 5700;
++ pub const HOLE_OPENS: u64 = 5000;
+
+### M15 swing runs after fly
+@ src/main.rs
+- app.add_system(Update, systems::swing);⏎    app.add_system(Update, systems::shoot);⏎    app.add_system(Update, systems::fly);
++ app.add_system(Update, systems::fly);⏎    app.add_system(Update, systems::swing);⏎    app.add_system(Update, systems::shoot);
+
+### M16 a body exactly at swing reach is out of reach
+@ src/contact.rs
+- if to_body <= reach && !rival.dazed(tick)
++ if to_body < reach && !rival.dazed(tick)
+
+### M17 the current zone is drawn in the next zone's colour
+@ src/draw.rs
+- ZONE_NOW,
++ ZONE_NEXT,
+
+### M18 the zone's edge is outside the zone
+@ src/zone.rs
+- (p - self.center).length_squared() <= self.radius * self.radius
++ (p - self.center).length_squared() < self.radius * self.radius
+
+### M19 WALK_SPEED 4.0 -> 5.0
+@ src/systems.rs
+- pub const WALK_SPEED: f32 = 4.0;
++ pub const WALK_SPEED: f32 = 5.0;
+
+### M20 PICKUP_RADIUS 0.6 -> 0.5
+@ src/systems.rs
+- pub const PICKUP_RADIUS: f32 = 0.6;
++ pub const PICKUP_RADIUS: f32 = 0.5;
+
+### M21 SWING_COOLDOWN 120 -> 60
+@ src/contact.rs
+- pub const SWING_COOLDOWN: u64 = 120;
++ pub const SWING_COOLDOWN: u64 = 60;
+
+### M22 the extraction result's headline is wrong
+@ src/text.rs
+- Outcome::Extracted => "EXTRACTED",
++ Outcome::Extracted => "ELIMINATED",
+
+### M23 the pin rank starts at zero
+@ src/outcome.rs
+- pin_rank: nearer + 1,
++ pin_rank: nearer,
+
+### M24 a strike sends the ball toward the striker
+@ src/shots.rs
+- let away = (ball - striker).normalize_or_zero();
++ let away = (striker - ball).normalize_or_zero();
+
+### M25 a helmet does not shorten the daze
+@ src/contact.rs
+- daze_ticks: (DAZE_TICKS as f32 * rival.effects.daze_taken).round() as u64,
++ daze_ticks: (DAZE_TICKS as f32).round() as u64,
+
+### M26 a ball in the hole counts before the hole opens
+@ src/outcome.rs
+- if tick >= HOLE_OPENS {
++ if tick >= 0 {
+
+### M27 the hole's radius 0.35 -> 0.5
+@ src/outcome.rs
+- pub const HOLE_RADIUS: f32 = 0.35;
++ pub const HOLE_RADIUS: f32 = 0.5;
+
+### M28 the pad's radius 1.2 -> 0.8
+@ src/outcome.rs
+- pub const PAD_RADIUS: f32 = 1.2;
++ pub const PAD_RADIUS: f32 = 0.8;
