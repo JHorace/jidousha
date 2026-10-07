@@ -194,3 +194,30 @@ fn an_outsiders_death_page_never_waits_buries_the_heirloom_and_says_nothing_pass
     assert!(house.heroes[stranger].bequest_decided);
     let _ = Place::Barrow;
 }
+
+#[test]
+fn an_outsiders_carrier_destiny_adds_nothing_to_the_house() {
+    let (content, mut house) = house();
+    let maren = id(&house.heroes, "Maren");
+    let stranger = wanderer(&content, &mut house, 30, 0);
+    house.heroes[stranger].aptitudes = [9, 9, 9];
+    house.heroes[stranger].destiny.kind = crate::ids::Destiny::CarryTheHouse;
+    seat(&mut house, 1, &[maren, stranger]);
+    house.board[1].quest.demand = 1;
+    let renown = house.renown;
+    let page = resolve_rolled(&content, &mut house, &mut Rng::from_seed(4), 1, [6, 6]);
+    assert_eq!(house.renown, renown + page.quest.renown + 1);
+}
+
+#[test]
+fn a_wed_family_hero_is_wed_already_before_an_outsider_is_unproven() {
+    let (content, mut house) = house();
+    let (maren, brannoc) = (id(&house.heroes, "Maren"), id(&house.heroes, "Brannoc"));
+    crate::bonds::form(&mut house.heroes, maren, brannoc, BondKind::Spouse, 1);
+    let age = house.heroes[maren].age;
+    let stranger = wanderer(&content, &mut house, age, 0);
+    assert_eq!(
+        courtship(&house.heroes, Some(maren), Some(stranger)),
+        Courtship::WedAlready
+    );
+}

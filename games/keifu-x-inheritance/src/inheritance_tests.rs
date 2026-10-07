@@ -188,3 +188,92 @@ fn a_child_is_born_under_the_marks_both_parents_carry_counted_once() {
     }
     panic!("no birth in 200 seeds");
 }
+
+#[test]
+fn a_candidate_who_already_carries_one_of_two_marks_shows_two_with_one_new_and_pays_for_one() {
+    let (content, mut house, garrick, page) = marked_deathbed();
+    let maren = id(&house.heroes, "Maren");
+    house.heroes[garrick].marks.push(mark(maren, 2, 0));
+    house.heroes[maren].marks.push(mark(maren, 2, 0));
+    let bequest = house.passage.as_ref().expect("a turning").pages[page]
+        .bequest
+        .clone()
+        .expect("a death page");
+    let lines = heir_lines(&content, &house.heroes, garrick, &bequest.heirs);
+    assert_eq!(lines[0], "Maren, daughter: Sharp; marks 2 (+1)");
+    assert_eq!(lines[1], "Pip, grandson: no trait; marks 2 (+2)");
+    let renown = house.heroes[maren].renown;
+    choose(&content, &mut house, page, Some(maren));
+    assert_eq!(house.heroes[maren].renown, renown - 1);
+    let pip = id(&house.heroes, "Pip");
+    let (content, mut house, garrick, page) = marked_deathbed();
+    house.heroes[garrick].marks.push(mark(garrick, 2, 0));
+    house.heroes[pip].renown = 5;
+    choose(&content, &mut house, page, Some(pip));
+    assert_eq!(
+        house.heroes[pip].renown, 3,
+        "a renown for each of two marks"
+    );
+}
+
+#[test]
+fn marks_are_told_apart_by_place_and_by_year() {
+    let (_, mut house) = house();
+    let (garrick, maren) = (id(&house.heroes, "Garrick"), id(&house.heroes, "Maren"));
+    house.heroes[maren].marks.push(mark(garrick, 1, 0));
+    house.heroes[garrick].marks.push(Mark {
+        place: Place::HighPass,
+        ..mark(garrick, 1, 0)
+    });
+    assert_eq!(inherit(&house.heroes, garrick, maren).taken, 1);
+    house.heroes[garrick].marks = vec![mark(garrick, 2, 0)];
+    assert_eq!(inherit(&house.heroes, garrick, maren).taken, 1);
+}
+
+#[test]
+fn a_death_page_with_only_a_mark_to_leave_still_waits() {
+    let (content, mut house) = house();
+    let garrick = id(&house.heroes, "Garrick");
+    house.heroes[garrick].heirloom = None;
+    house.heroes[garrick].dream = None;
+    house.heroes[garrick].marks.push(mark(garrick, 1, 0));
+    house.heroes[garrick].age = 93;
+    house.calendar.begin_winter();
+    turn_the_year(
+        &content,
+        &mut house,
+        Vec::new(),
+        WinterPlan::default(),
+        &mut Rng::from_seed(2),
+    );
+    let page = house
+        .passage
+        .as_ref()
+        .expect("a turning")
+        .pages
+        .iter()
+        .find(|p| p.about == Some(garrick))
+        .expect("a page");
+    assert!(page.bequest.as_ref().expect("a bequest").undecided());
+}
+
+#[test]
+fn a_child_is_born_under_the_second_parents_marks_too() {
+    let (content, mut house) = house();
+    let (maren, brannoc) = (id(&house.heroes, "Maren"), id(&house.heroes, "Brannoc"));
+    form(&mut house.heroes, maren, brannoc, BondKind::Spouse, 1);
+    house.heroes[brannoc].marks.push(mark(brannoc, 1, 0));
+    house.calendar.begin_winter();
+    house.calendar.begin_summer();
+    house.calendar.begin_winter();
+    for seed in 0..200 {
+        let mut copy = house.clone();
+        let pages = crate::births::births(&content, &mut copy, &mut Rng::from_seed(seed));
+        if let Some(page) = pages.first() {
+            let child = page.about.expect("a child");
+            assert_eq!(copy.heroes[child].marks, [mark(brannoc, 1, 1)]);
+            return;
+        }
+    }
+    panic!("no birth");
+}

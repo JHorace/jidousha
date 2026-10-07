@@ -153,3 +153,60 @@ fn a_mark_on_an_outsider_or_on_the_dead_weighs_nothing() {
     assert_eq!(weigh(&content, &mut house), Vec::<String>::new());
     assert_eq!(house.marks_carried(), []);
 }
+
+#[test]
+fn a_dream_carried_as_a_burden_makes_no_quest_personal() {
+    let (content, mut house) = house();
+    let maren = id(&house.heroes, "Maren");
+    let mut dream = Dream::build(&content, DreamKind::QuietTheBarrow, None, None).expect("a dream");
+    dream.advance_to_stage(2);
+    house.heroes[maren].burden = Some(dream);
+    let quest = house.board[0].quest.clone();
+    assert_eq!(
+        personal(&content, &house.heroes, quest.facts(), &[maren]),
+        []
+    );
+}
+
+#[test]
+fn a_setback_marks_the_name_too_and_a_bare_success_does_not() {
+    let (content, mut house) = house();
+    let garrick = id(&house.heroes, "Garrick");
+    seat(&mut house, 0, &[garrick]);
+    crate::testkit::aim(&mut house, 0, [4, 3], -2);
+    let page = resolve_rolled(&content, &mut house, &mut Rng::from_seed(4), 0, [4, 3]);
+    assert_eq!(page.outcome, Outcome::Setback);
+    assert_eq!(house.heroes[garrick].marks, [mark(garrick, 1)]);
+    let (content, mut house) = crate::testkit::house();
+    seat(&mut house, 0, &[garrick]);
+    crate::testkit::aim(&mut house, 0, [4, 3], 0);
+    let page = resolve_rolled(&content, &mut house, &mut Rng::from_seed(4), 0, [4, 3]);
+    assert_eq!(page.outcome, Outcome::Success);
+    assert!(house.heroes[garrick].marks.is_empty());
+}
+
+#[test]
+fn a_failure_never_takes_personal_renown_below_nothing() {
+    let (content, mut house) = house();
+    let garrick = id(&house.heroes, "Garrick");
+    house.heroes[garrick].renown = 1;
+    seat(&mut house, 0, &[garrick]);
+    resolve_rolled(&content, &mut house, &mut Rng::from_seed(4), 0, [1, 1]);
+    assert_eq!(house.heroes[garrick].renown, 0);
+}
+
+#[test]
+fn a_lapse_is_told_only_for_marks_the_living_family_carried() {
+    let (content, mut house) = house();
+    let (garrick, elsbeth) = (id(&house.heroes, "Garrick"), id(&house.heroes, "Elsbeth"));
+    crate::wanderer::arrive(&content, &mut house, &mut Rng::from_seed(3));
+    let stranger = house.heroes.len() - 1;
+    house.heroes[stranger].marks.push(mark(garrick, 1));
+    house.heroes[elsbeth].marks.push(mark(garrick, 1));
+    in_year(&mut house, 9);
+    assert_eq!(weigh(&content, &mut house), Vec::<String>::new());
+    assert!(
+        house.heroes[stranger].marks.is_empty(),
+        "but it is forgotten all the same"
+    );
+}
