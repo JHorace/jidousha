@@ -764,7 +764,100 @@ fn check_state(checks: &mut Checks) -> String {
             );
         }
     }
-    "state: morning effects applied as stated, a clean night, grudges, bars and temper words"
+    // Composure stops at 2, with a refusal said aloud.
+    let mut steady = Driver::new(seed);
+    let mut game = steady.game().clone();
+    game.composure = 2;
+    steady.stage(game);
+    steady.option(key(Action::Train));
+    checks.require(
+        steady.game().composure == 2
+            && steady.game().note == "Your composure cannot be trained further.",
+        "composure can be trained past 2, or the refusal is not said",
+        format!("{} {:?}", steady.game().composure, steady.game().note),
+    );
+    // Resting one short of full gives the one point there is room for.
+    let mut near = Driver::new(seed);
+    let mut game = near.game().clone();
+    game.sanity = 59;
+    near.stage(game);
+    near.option(key(Action::Rest));
+    checks.require(
+        near.game().sanity == 60,
+        "resting at 59 does not reach 60",
+        format!("{}", near.game().sanity),
+    );
+    // Sanity at zero ends the run: an answer that takes the last point loses.
+    let mut last = Driver::new(seed);
+    let mut game = staged_call(seed, Being::Dagon, 0, true, 0);
+    game.sanity = 1;
+    last.stage(game);
+    let slot = last.game().call.as_ref().map_or(0, |c| c.slot);
+    let right = option_kinds(seed, last.game().day, slot, 0)
+        .iter()
+        .position(|k| *k == Kind::Right)
+        .unwrap_or(0);
+    last.option(right);
+    checks.require(
+        last.game().sanity == 0 && last.game().stage == Stage::Over(Ending::Lost),
+        "the last point of sanity does not end the run",
+        format!(
+            "sanity {} stage {:?}",
+            last.game().sanity,
+            last.game().stage
+        ),
+    );
+    // A study morning leaves nothing studied after the night.
+    let mut after_study = Driver::new(seed);
+    let target = plan_night(after_study.game())[0].being;
+    after_study.option(key(Action::Study(target)));
+    for _ in 0..200 {
+        if matches!(after_study.game().stage, Stage::Morning) {
+            break;
+        }
+        let game = after_study.game();
+        let pick = game.call.as_ref().and_then(|c| {
+            let kinds = option_kinds(game.seed, game.day, c.slot, c.exchange);
+            let right = kinds.iter().position(|k| *k == Kind::Right);
+            right.filter(|_| game.known[c.plan.being.index()][c.fact_index()])
+        });
+        after_study.option(pick.unwrap_or(0));
+    }
+    checks.require(
+        matches!(after_study.game().stage, Stage::Morning)
+            && after_study.game().studied_today.is_none(),
+        "what the morning studied is still studied the morning after",
+        format!("{:?}", after_study.game().studied_today),
+    );
+    // How long each being's call lasts, as DESIGN.md states.
+    for (being, length) in [
+        (Being::YogSothoth, 4),
+        (Being::Dagon, 6),
+        (Being::Nyarlathotep, 4),
+    ] {
+        let game = staged_call(seed, being, 0, true, 0);
+        let remaining = game.call.as_ref().map(|c| c.remaining);
+        checks.require(
+            remaining == Some(length),
+            "a call does not open with the shipped number of exchanges",
+            format!("{}: {remaining:?}, want {length}", being.name()),
+        );
+    }
+    // The drain on the screen is steadied by Composure.
+    for (composure, want) in [
+        (0, "Every exchange costs 2 sanity."),
+        (2, "Every exchange costs 1 sanity."),
+    ] {
+        let mut game = staged_call(seed, Being::YogSothoth, 0, true, 0);
+        game.composure = composure;
+        let text = crate::decisions::text_of(&panel(&game));
+        checks.require(
+            text.contains(want),
+            "the call screen's drain does not account for composure",
+            format!("composure {composure}: wanted {want:?}"),
+        );
+    }
+    "state: morning effects applied as stated, a clean night, grudges, call lengths, bars and temper words"
         .to_owned()
 }
 
