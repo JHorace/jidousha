@@ -5,15 +5,16 @@ variant: V1
 stage: implement
 tick: live
 resumes: 0
-gates-green-at: none
-updated: 2026-10-07 05:18 PDT
+gates-green-at: b724dc1
+updated: 2026-10-07 06:01 PDT
 
 ## Done so far
+- game, --verify (both decision rows, three players, win and loss), mutants 46 of 46, captures, FINDINGS, web check; full gate green (1487 passed) at b724dc1
 - claimed
 - read docs/api (all five) and prototype_kit/text examples; wrote games/call-of-cthulhu/DESIGN.md
 
 ## Exact next step
-Write games/call-of-cthulhu/{Cargo.toml,src/*.rs} per DESIGN.md: lore.rs data, model.rs pure rules, call.rs, screens.rs, input.rs, main.rs, then verify.rs/checks.rs/players.rs/capture.rs.
+Open the PR (WORKER.md §4) if none exists for claude/yakin-call-of-cthulhu, then set stage done.
 
 ## Deviations
 - none
