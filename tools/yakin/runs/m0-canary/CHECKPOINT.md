@@ -2,10 +2,10 @@
 
 task: m0-canary
 variant: V1
-stage: implement
-tick: live
+stage: done
+tick: released
 resumes: 0
-gates-green-at: none
+gates-green-at: none (canary: tools/test only, report pass)
 updated: 2026-10-07 01:09 PDT
 
 ## Done so far
