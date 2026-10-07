@@ -376,4 +376,19 @@ mod tests {
         house.heroes[garrick].fear.broken = true;
         assert!(!could_go(&content, &house.heroes, &grave, 0, garrick));
     }
+
+    #[test]
+    fn a_likely_party_picks_each_candidate_on_solo_power_not_on_the_bonds_they_would_form() {
+        let (content, house) = house();
+        let (maren, garrick, brannoc) = (
+            id(&house.heroes, "Maren"),
+            id(&house.heroes, "Garrick"),
+            id(&house.heroes, "Brannoc"),
+        );
+        let grave = quest_titled(&content, "Grave goods", 13);
+        // Garrick and Brannoc each bring 7 alone, so the earlier in the candidate list
+        // wins; Garrick's +2 bond to his daughter Maren, the leader, must not count.
+        let party = likely_party(&house.heroes, &[brannoc, garrick], &grave, Some(maren));
+        assert_eq!(party, [maren, brannoc]);
+    }
 }
