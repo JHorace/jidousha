@@ -94,6 +94,14 @@ pub fn session_b(checks: &mut Checks, gallery: &mut Gallery) {
             me.map(|p| p.kit.ball)
         ),
     );
+    checks.require(
+        me.is_some_and(|p| p.swing_ready_at == 320),
+        "a swing did not make the clubber wait two seconds",
+        format!(
+            "human swing_ready_at {:?}, wanted 320",
+            me.map(|p| p.swing_ready_at)
+        ),
+    );
     let at200 = positions(run.world(), 1);
     run.to(379);
     let at379 = positions(run.world(), 1);
@@ -206,6 +214,14 @@ pub fn session_c(checks: &mut Checks, gallery: &mut Gallery) {
             break;
         };
         let distance = (body - heavy_at).length();
+        if run.tick == 100 {
+            let walked = (body.x - anchor.x) * m;
+            checks.require(
+                within(walked, 6.6, 0.01),
+                "a held key does not walk four units a second",
+                format!("after 99 ticks of walking the human is {walked} from where it started, wanted 6.6"),
+            );
+        }
         if near_at.is_none() && distance <= 2.5 {
             near_at = Some(gallery.snap(&mut recorder, &mut run, "equipment, the label in reach"));
         }
@@ -255,6 +271,7 @@ pub fn session_c(checks: &mut Checks, gallery: &mut Gallery) {
         format!("heavy ball at {heavy_at:?}"),
     );
 
+    run.to(200);
     // Part one of the effect: a rival's strike on the human's ball travels 4.0 x 0.5.
     run.to(220);
     let ball = Vec2::new(-4.0 * m, 3.0);

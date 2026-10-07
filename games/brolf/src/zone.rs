@@ -179,6 +179,16 @@ mod tests {
     }
 
     #[test]
+    fn the_zones_edge_is_inside_the_zone() {
+        let zone = Zone {
+            center: Vec2::new(1.0, 1.0),
+            radius: 2.0,
+        };
+        assert!(zone.contains(Vec2::new(3.0, 1.0)));
+        assert!(!zone.contains(Vec2::new(3.01, 1.0)));
+    }
+
+    #[test]
     fn the_next_stop_is_the_first_one_still_ahead() {
         let mut rng = Rng::from_seed(3);
         let schedule = Schedule::seeded(&mut rng, Vec2::new(2.0, 1.0));

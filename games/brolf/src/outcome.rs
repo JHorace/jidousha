@@ -320,6 +320,18 @@ mod tests {
     }
 
     #[test]
+    fn a_ball_drops_in_within_a_third_of_a_unit_and_not_beyond_and_the_pin_rank_counts_from_one() {
+        let hole = Vec2::ZERO;
+        let far = snap(1, Vec2::new(9.0, 9.0));
+        let at = |d: f32| [snap(0, Vec2::new(d, 0.0)), far];
+        assert!(settle(&at(0.3), &[], hole, HOLE_OPENS).is_some());
+        assert!(settle(&at(0.4), &[], hole, HOLE_OPENS).is_none());
+        let pad = PadState::Gone;
+        assert_eq!(standing(&at(0.4), 0, hole, 10, pad).pin_rank, 1);
+        assert_eq!(standing(&at(0.4), 1, hole, 10, pad).pin_rank, 2);
+    }
+
+    #[test]
     fn the_pad_is_closed_then_open_then_gone() {
         assert_eq!(
             pad_state(Some(5000), PAD_OPENS - 1),
