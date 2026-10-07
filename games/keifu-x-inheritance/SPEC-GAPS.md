@@ -920,3 +920,16 @@ KG-64. Session 10 (W10): 10 entries, KG-65 to KG-74.
   (`src/telling_view.rs` `meanwhile_lines`, `src/season.rs` `leave_the_telling`).
 - **Question:** `scene/scenes/telling.jai:229-237` — is the closing line conditioned on the Door?
 
+
+## Keifu X Inheritance
+
+### KG-75 — traits at the Door
+- **Spec says (VARIANT.md):** nothing else reads a trait: not training, old age, courtship or the Door.
+- **Port's choice:** `member_power` and the power lines skip a trait when the quest is a Door lock, so W10's oracles are unchanged.
+
+### KG-76 — a spring that lands on a parent's trait
+- **Underdetermined:** the spring roll can give the child a trait a parent holds, which "neither parent is" would misstate.
+- **Port's choice:** it is told as that parent's (`traits::trait_from`).
+
+### KG-77 — a personal quest on a ghost's quest
+- **Port's choice:** a ghost's quest can be personal (the same `dream_call` rule); its card shows the ghost line, then the marked row.

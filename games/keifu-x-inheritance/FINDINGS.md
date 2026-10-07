@@ -1323,3 +1323,49 @@ reset) earlier sessions had read and used. The documents were asked nothing new.
   `tools/mutate keifu mutants/*.txt` runs the same lists, unchanged. Both scored `w9.txt` on the same tree, 120 of
   120 with every per-fault verdict and both columns identical, and `--fast` agreed on every verdict. On warm
   worktrees the full pair took 47m45s and `--fast` 9m22s on this machine's four cores; the old harness took 54m41s.
+
+## Keifu X Inheritance
+
+(The variant's implement stage, `tools/yakin/runs/keifu-x-inheritance/`. G-numbers continue from mainline's G-069.)
+
+### G-070 — DESIGN.md says "new `src/family.rs`", and `family.rs` is the family screen
+
+Class: doc (misled) · Session: keifu-x-inheritance (implement) · Owner: the designer routine / DESIGN.md template
+
+**Doing:** adding the one eligibility function `may_marry_in` and the `is_family` predicate, in the file DESIGN.md names.
+**Expected:** a new file. **Happened:** `src/family.rs` exists (the top bar and the family screen). **What I did on the doc's
+authority:** planned the module list around it; found the collision when adding `mod`. Put both in `src/outsiders.rs`.
+Cost: a minute; the fix is a design stage that greps the crate for a module name before naming one.
+
+### G-071 — DESIGN.md's G6 roll counts are not what the rule consumes
+
+Class: doc (misled) · Session: keifu-x-inheritance (implement) · Owner: the designer routine
+
+**Doing:** writing the trait-branch unit tests from "the roll count per branch (0, 1, 1, 1 or 2)".
+**Happened:** a trait only one parent holds takes 1 roll if it passes, else 2 (the spring roll missed) or 3 (it sprang);
+neither parent takes 1 or 2. **What I did:** asserted the counts the rule gives.
+
+### G-072 — two mainline checks assume a sheet fits the dock; the variant's lines break that
+
+Class: process (gap) · Session: keifu-x-inheritance (implement) · Owner: the keifu handoff
+
+The PERSONAL line (a quest sheet) and the TRAITS and MARKS sections (a hero sheet) make sheets longer than the dock. W4's
+history panel (at the sheet's foot) fell out of view, and `floors::look`'s wheel scroll over a held hero lets go of the hero.
+DESIGN.md said no surface needed a change; these two checks did. W4 now reads the history with the wheel at the end;
+`look` does not scroll a held hero's sheet (the same sheet is scrolled whole when pointed at).
+
+### G-073 — a rename after a death changes an epitaph the W9 battery says only triggers change
+
+Class: doc (misled) · Session: keifu-x-inheritance (implement) · Owner: the designer routine
+
+DESIGN.md: marrying in changes the full name "everywhere it is drawn". The W9 watcher holds that an epitaph changes only at
+a trigger and equals its composition. **What I did:** recomposed the dead's epitaphs at the wedding and taught the watcher a
+rename is a reason to change. The alternative, freezing the epitaph, would also have needed the watcher changed.
+
+### G-074 — the dead's marks are not weighed until an heir takes them
+
+Class: process (decision) · Session: keifu-x-inheritance (implement) · Owner: the owner
+
+Step 8b counts marks on the *living* family; the death pages are made at step 4, before it, and choose later. A hero who dies
+carrying the only mark leaves the house unweighed that year and the heir pays from the next. Kept as designed; named so the
+owner can decide.
