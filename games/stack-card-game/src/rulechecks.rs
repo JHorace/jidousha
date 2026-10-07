@@ -285,6 +285,62 @@ fn effects(checks: &mut Checks) {
     );
 }
 
+fn opening_and_npc(checks: &mut Checks) {
+    let core = Core::new(3);
+    checks.require(
+        core.hands[0].len() == 5 && core.hands[1].len() == 5 && core.decks[0].len() == 15,
+        "a match does not open with five cards each and fifteen in the deck",
+        format!(
+            "hands {} {}, deck {}",
+            core.hands[0].len(),
+            core.hands[1].len(),
+            core.decks[0].len()
+        ),
+    );
+    // Flip over a single item changes nothing, so it is refused.
+    let mut one = Core::new(3);
+    one.hands[0] = vec![Card::Flip];
+    one.mana = [6, 6];
+    one.stack = vec![item(1, Card::Ember, Side::Npc, None)];
+    checks.require(
+        one.options(Side::You, 0).err().map(|e| e.what).as_deref()
+            == Some("Flip would change nothing"),
+        "Flip was allowed over a one-item stack",
+        "a stack of one item".to_owned(),
+    );
+    // The NPC answers a 6-damage Cleaver aimed at it with Redirect, then Negate; it
+    // cannot Hush a cost-3 card, so with only Hush it lets it resolve.
+    let answer = |hand: &[Card]| {
+        let mut core = Core::new(3);
+        core.active = Side::You;
+        core.priority = Side::Npc;
+        core.hands[1] = hand.to_vec();
+        core.mana = [6, 6];
+        let mut cleaver = item(1, Card::Cleaver, Side::You, None);
+        cleaver.aim = Some(Side::Npc);
+        core.stack = vec![cleaver];
+        npc::choose(&core)
+    };
+    let play = |hand_index| Action::Play {
+        hand_index,
+        target: Some(ItemId(1)),
+    };
+    checks.require(
+        answer(&[Card::Negate, Card::Redirect]) == play(1)
+            && answer(&[Card::Hush, Card::Negate]) == play(1)
+            && answer(&[Card::Hush]) == Action::Pass
+            && answer(&[Card::Ember]) == Action::Pass,
+        "the NPC does not answer big damage with Redirect, then Negate",
+        format!(
+            "{:?} {:?} {:?} {:?}",
+            answer(&[Card::Negate, Card::Redirect]),
+            answer(&[Card::Hush, Card::Negate]),
+            answer(&[Card::Hush]),
+            answer(&[Card::Ember])
+        ),
+    );
+}
+
 fn turn_machine(checks: &mut Checks) {
     let mut core = Core::new(3);
     let (a, b) = (core.hands[1].len(), core.decks[1].len());
@@ -452,6 +508,7 @@ pub fn sweep(checks: &mut Checks) -> Sweep {
 pub fn run_all(checks: &mut Checks) {
     card_table(checks);
     legality(checks);
+    opening_and_npc(checks);
     effects(checks);
     turn_machine(checks);
 }
