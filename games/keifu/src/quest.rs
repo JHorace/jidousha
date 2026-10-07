@@ -114,20 +114,31 @@ pub fn stakes(making: Making, calm_seats: i32, calm_danger: i32, trouble: i32, y
     }
 }
 
-/// Post `template` at its place's `trouble` in `year`: roll the calm seats, then
-/// the wobble (SPEC §5.2, "Generating a quest from a template").
-pub fn post(content: &Content, template: usize, trouble: i32, year: i32, rng: &mut Rng) -> Quest {
+/// What template `template` is before its stakes: the one `post` and the outlook share.
+pub fn making_of(content: &Content, template: usize) -> Making {
     let t: &QuestTemplate = &content.quest_templates[template];
-    let making = Making {
+    Making {
         source: Source::Template(template),
         title: t.title.clone(),
         premise: t.premise.clone(),
         place: t.place,
         aptitude: t.aptitude,
         tags: t.tags.clone(),
-    };
+    }
+}
+
+/// Post `template` at its place's `trouble` in `year`: roll the calm seats, then
+/// the wobble (SPEC §5.2, "Generating a quest from a template").
+pub fn post(content: &Content, template: usize, trouble: i32, year: i32, rng: &mut Rng) -> Quest {
+    let t: &QuestTemplate = &content.quest_templates[template];
     let calm_seats = between(rng, t.seats_low, t.seats_high);
-    let mut quest = stakes(making, calm_seats, t.danger, trouble, year);
+    let mut quest = stakes(
+        making_of(content, template),
+        calm_seats,
+        t.danger,
+        trouble,
+        year,
+    );
     quest.demand += between(rng, -DEMAND_WOBBLE, DEMAND_WOBBLE);
     quest
 }

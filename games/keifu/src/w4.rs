@@ -185,10 +185,10 @@ pub fn check_oracle(checks: &mut Checks) -> (String, Vec<String>) {
             );
         }
         let outcomes = [
-            "Beat it by 4: +3 renown. The least able learns.",
-            "Meet it: +2 renown.",
-            "Miss by up to 4: one is wounded.",
-            "Miss by more: -2 renown, all wounded, each dies 30 in 100.",
+            "Beat it by 4 or more: +3 renown; the least able learns.",
+            "Make it, by up to 3: +2 renown.",
+            "Fall short by up to 4: one is wounded.",
+            "Fall short by more: -2 renown, all wounded, each dies 30 in 100.",
         ];
         for (index, outcome) in outcomes.iter().enumerate() {
             let at = sheet.iter().position(|l| l == outcome);

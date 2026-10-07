@@ -350,6 +350,8 @@ pub fn run() -> ExitCode {
     summary.extend(crate::w5_shape::check_shape(&mut checks, &content));
     summary.push(crate::w5::check_ghost_slot(&mut checks, &content));
     summary.push(crate::w6::check_stay_home(&mut checks));
+    summary.push(crate::outlook_checks::check_telegraph(&mut checks));
+    summary.push(crate::outlook_checks::check_foresight(&mut checks));
     let (played, played_vector) = crate::w6::check_played(&mut checks);
     summary.push(played);
     summary.extend(played_vector);

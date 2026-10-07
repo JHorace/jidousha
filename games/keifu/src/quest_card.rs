@@ -13,6 +13,7 @@ use crate::fear::{fears, refuses};
 use crate::forecast::{Forecast, card_percentages, forecast};
 use crate::hero::HeroId;
 use crate::house::House;
+use crate::outlook::telegraph;
 use crate::power::{fear_line, party_power, you_bring};
 use crate::quest::Source;
 use crate::text::fmt;
@@ -49,6 +50,9 @@ pub struct CardReading {
     pub dream: Option<String>,
     /// "Ysolde will not go." for a watched hero who refuses, else the fear line.
     pub warning: Option<String>,
+    /// "Left alone: danger 3-4, needs up to 14": what this place's next quest could be
+    /// if this one goes unanswered (SPEC §7.2), where there is a next summer's board.
+    pub left_alone: Option<String>,
 }
 
 /// The seats board slot `quest` shows while `hand` (a hero, and where they would
@@ -166,6 +170,12 @@ pub fn read_card(
             }
         },
         warning,
+        left_alone: telegraph(content, house, q).map(|t| {
+            fmt(
+                &words[W::QuestCardLeftAlone],
+                &[&t.next.danger.text(), &t.next.demand.hi.to_string()],
+            )
+        }),
     }
 }
 

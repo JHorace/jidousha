@@ -354,12 +354,12 @@ fn battery(checks: &mut Checks, tally: &mut Tally, recorder: &mut FrameRecorder,
         "summer, nobody pointed at",
         false,
     );
-    // The idle dock holds the help, and nothing else.
+    // The idle dock holds the help, then next summer's foresight, and nothing else.
     let help = crate::verify::content_of(&sim).words[crate::words::W::SummerHelp].to_owned();
     let idle = crate::scripted::lines_in(&page_of(&sim), SHEET);
     checks.require(
-        idle == [help],
-        "the idle dock does not hold the help",
+        idle.first() == Some(&help) && idle.get(1).map(String::as_str) == Some("NEXT SUMMER"),
+        "the idle dock does not hold the help, then next summer",
         format!("{label}: the dock reads {idle:?}"),
     );
     let seated: Vec<usize> = {

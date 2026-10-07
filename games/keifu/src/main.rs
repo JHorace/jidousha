@@ -161,6 +161,8 @@ mod moment;
 mod newcomer_tests;
 mod newcomers;
 mod oracles;
+mod outlook;
+mod outlook_checks;
 mod passage;
 mod plans;
 #[cfg(test)]
