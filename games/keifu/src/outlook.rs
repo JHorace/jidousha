@@ -384,6 +384,106 @@ mod tests {
         assert!(both.demand.hi >= high.demand.hi);
     }
 
+    fn with_ghost(house: &mut House) {
+        let garrick = crate::testkit::id(&house.heroes, "Garrick");
+        let dream = house.heroes[garrick].dream.clone().expect("Garrick dreams");
+        house.ghosts.push(Ghost {
+            hero: garrick,
+            dream,
+            place: Place::Barrow,
+        });
+    }
+
+    #[test]
+    fn the_year_a_quest_comes_in_is_next_summers_not_this_ones() {
+        let (content, mut house) = crate::testkit::house();
+        // Year 6's summer: demand creeps one per seat in year 7.
+        house.calendar.year_index = 5;
+        let told = telegraph(&content, &house, &house.board[0].quest).expect("a telegraph");
+        let in_year_seven = next_quest(
+            &content,
+            Place::Barrow,
+            house.board[0].quest.template(),
+            Span::of(1),
+            7,
+        );
+        let in_year_six = next_quest(
+            &content,
+            Place::Barrow,
+            house.board[0].quest.template(),
+            Span::of(1),
+            6,
+        );
+        assert_eq!(told.next, in_year_seven);
+        assert!(in_year_seven.demand.hi > in_year_six.demand.hi);
+    }
+
+    #[test]
+    fn nothing_is_told_of_a_summer_that_is_the_doors() {
+        let (content, mut house) = crate::testkit::house();
+        house.calendar.year_index = 24;
+        assert_eq!(telegraph(&content, &house, &house.board[0].quest), None);
+        assert_eq!(foresight(&content, &house), None);
+        house.calendar.year_index = 23;
+        assert!(foresight(&content, &house).is_some());
+    }
+
+    #[test]
+    fn a_ghosts_quest_returns_as_the_one_quest_at_a_higher_trouble() {
+        let (content, mut house) = crate::testkit::house();
+        with_ghost(&mut house);
+        let ghost = house.ghosts[0].clone();
+        house.board[0].quest = crate::ghost::ghost_quest(&content, &house.heroes, &ghost, 0, 1);
+        let told = telegraph(&content, &house, &house.board[0].quest).expect("a telegraph");
+        // Trouble 1 in year 2: seats 1, danger 3, demand 1 x (3 + 2 + 1), no wobble.
+        assert_eq!(told.trouble_after, 1);
+        assert!(told.next.pool.is_empty());
+        assert_eq!(
+            (told.next.seats, told.next.danger, told.next.demand),
+            (Span::of(1), Span::of(3), Span::of(6))
+        );
+    }
+
+    #[test]
+    fn the_first_ghosts_place_is_foretold_as_its_ghost_and_the_rest_by_pool() {
+        let (content, mut house) = crate::testkit::house();
+        with_ghost(&mut house);
+        let places = foresight(&content, &house).expect("a foresight");
+        assert_eq!(places.len(), 6);
+        assert_eq!(places[0].place, Place::Barrow);
+        assert_eq!(places[0].ghost, Some(house.ghosts[0].hero));
+        assert!(places[0].next.pool.is_empty());
+        assert!(
+            places[1..]
+                .iter()
+                .all(|p| p.ghost.is_none() && p.next.pool.len() >= 3)
+        );
+    }
+
+    #[test]
+    fn the_foresight_follows_the_seating_left_alone_rises_answered_clears() {
+        let (content, mut house) = crate::testkit::house();
+        house.places[Place::Barrow.index()].trouble = 1;
+        house.board[0].quest.trouble = 1;
+        let troubles = |house: &House| {
+            foresight(&content, house)
+                .expect("a foresight")
+                .iter()
+                .map(|p| p.trouble)
+                .collect::<Vec<_>>()
+        };
+        // Nobody on the Barrow's quest: it is left alone, one more.
+        crate::testkit::seat(&mut house, 0, &[]);
+        assert_eq!(troubles(&house)[0], Span::of(2));
+        // Someone going: a win clears it, a loss eases it by one.
+        let garrick = crate::testkit::id(&house.heroes, "Garrick");
+        crate::testkit::seat(&mut house, 0, &[garrick]);
+        assert_eq!(troubles(&house)[0], Span { lo: 0, hi: 0 });
+        // A place with no quest on the board keeps its trouble.
+        house.places[Place::Deepwood.index()].trouble = 2;
+        assert_eq!(troubles(&house)[5], Span::of(2));
+    }
+
     #[test]
     fn a_span_prints_one_value_or_a_range() {
         assert_eq!(Span::of(3).text(), "3");

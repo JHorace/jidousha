@@ -22,7 +22,7 @@ use crate::outlook::Span;
 use crate::screen::Target;
 use crate::scripted::{Pointer, card_lines, center_of, drag, lines_in};
 use crate::summer::SHEET;
-use crate::verify::{SEEDS, hero_named, page_of, point_at, session};
+use crate::verify::{SEEDS, hero_named, page_of, point_at, scroll_dock, session};
 use crate::w5::recorded;
 
 /// Year 1's forced quests, by place, and what their cards say of what is left: the
@@ -85,7 +85,7 @@ pub fn check_telegraph(checks: &mut Checks) -> String {
     let (mut cards, mut dealt) = (0, 0);
     for seed in recorded() {
         let mut sim = session(seed);
-        for year in 1..=2 {
+        for year in 1..=3 {
             let board = told(&sim);
             cards += board.len();
             for (index, quest) in board.iter().enumerate() {
@@ -93,6 +93,37 @@ pub fn check_telegraph(checks: &mut Checks) -> String {
                     quest.left.is_some(),
                     "a year's card does not tell what its place's next quest could be if left alone",
                     format!("seed {seed:#x}, year {year}, card {index}"),
+                );
+            }
+            for (slot, quest) in board.iter().enumerate() {
+                let trouble = sim.world().resource::<House>().board[slot].quest.trouble;
+                point_at(&mut sim, Target::Quest(slot), false);
+                let mut sheet = lines_in(&page_of(&sim), SHEET);
+                if !sheet.iter().any(|l| l.starts_with("Left alone, trouble ")) {
+                    // A troubled quest's sheet is longer than the dock: wheel to its end.
+                    scroll_dock(&mut sim, -50.0);
+                    sheet = lines_in(&page_of(&sim), SHEET);
+                }
+                let head = if trouble < 2 {
+                    format!(
+                        "Left alone, trouble rises to {}. Next quest: room ",
+                        trouble + 1
+                    )
+                } else {
+                    "Left alone, trouble stays at its worst. Next quest: room ".to_owned()
+                };
+                let told_here = sheet.iter().find(|l| l.starts_with("Left alone, trouble "));
+                let (danger, needs) = told_here
+                    .and_then(|l| l.split_once("danger "))
+                    .and_then(|(_, rest)| rest.split_once(", needs up to "))
+                    .map(|(d, n)| (read_span(d), n.trim_end_matches('.').parse::<i32>().ok()))
+                    .unwrap_or((None, None));
+                checks.require(
+                    told_here.is_some_and(|l| l.starts_with(&head))
+                        && Some((danger, needs))
+                            == quest.left.map(|(d, n)| (Some(d), Some(n))),
+                    "a quest's sheet does not tell what its card tells, with trouble rising to the right number",
+                    format!("seed {seed:#x}, year {year}, trouble {trouble}: {told_here:?} against {:?}", quest.left),
                 );
             }
             if year == 1 {
@@ -111,6 +142,10 @@ pub fn check_telegraph(checks: &mut Checks) -> String {
                         format!("seed {seed:#x}, {place}: wanted {want:?} in {card:?}"),
                     );
                 }
+            }
+            // Year 3's stay-home would close the house (renown 3 less 8): its card is read, not played.
+            if year == 3 {
+                break;
             }
             stay_home_to_next_summer(&mut sim);
             let house = sim.world().resource::<House>();
