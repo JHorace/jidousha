@@ -1395,7 +1395,7 @@ existing oracle and is its own task.
 - **Mutation round** (`mutants/outlook.txt`, 20 faults): round one 18 of 20 noticed. The two escapes were O5 (the
   demand floor's wobble — an equivalent, since a wobbled demand is never under its seats; re-cut to a fault the
   floor's test does notice) and O7 (the foresight's year — only demand reads the year, and the dock shows danger;
-  now `the_foresight_reads_the_year_after_this_one`). Both re-cut and noticed: **20 of 20**. MUTATION2
+  now `the_foresight_reads_the_year_after_this_one`). Both re-cut and noticed: **20 of 20**. The earlier lists filtered to what this session touched (`--fast --changed-since e2e1c21`, against `9eae303`; w6's U1, R9 and R10 re-cut to the rule's new site in `outlook.rs`): **145 of 146 noticed** (this list 20 of 20, `w4` 69 of 70, `w6` 37 of 37, `dock` 4 of 4, `w10` 11 of 11, `w5` 3 of 3, `w7` 1 of 1), tests alone 85, none unbuilt. The one escape is `w4:K8`, a known equivalent (sessions 3-9 classified it).
 - **The pictures** (`screens/`): `foresight.png` — year 1 with Garrick and Brannoc seated, the idle dock reading NEXT
   SUMMER (the Barrow at trouble 0, the others at 1); `telegraph.png` — year 2 after a summer at home, a troubled
   card and the sheet's end ("Left alone, trouble rises to 2 …"). Seventeen existing pictures re-taken (the help,
