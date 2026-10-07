@@ -2,17 +2,17 @@
 
 task: keifu-fixes
 variant: V1
-stage: design
+stage: implement
 tick: live
 resumes: 0
 gates-green-at: none
-updated: 2026-10-07 01:23 PDT
+updated: 2026-10-07 01:25 PDT
 
 ## Done so far
 - claimed
 
 ## Exact next step
-Read games/keifu/spec/SPEC.md, ui-text.json, SPEC-GAPS.md, FINDINGS.md, make-game skill; write DESIGN.md; set stage implement.
+Write games/keifu/src/outlook.rs (shared fn) + tests, then telegraph, foresight, tutorial text per DESIGN.md.
 
 ## Deviations
 - none
