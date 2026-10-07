@@ -30,8 +30,8 @@
 
 ### S7 a full hand still draws
 @ src/rules.rs
-- if self.hands[who].len() < HAND_LIMIT {
-+ if self.hands[who].len() <= HAND_LIMIT {
+- if self.hands[who].len() < HAND_LIMIT
++ if self.hands[who].len() <= HAND_LIMIT
 
 ### S8 the turn limit is one turn late
 @ src/rules.rs
