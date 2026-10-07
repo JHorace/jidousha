@@ -12,6 +12,7 @@ use crate::forecast::{forecast, percent};
 use crate::hero::HeroId;
 use crate::house::House;
 use crate::ids::Outcome;
+use crate::marks::{cost, personal};
 use crate::power::party_power;
 use crate::power_lines::party_lines;
 use crate::text::{count_words, fmt, signed};
@@ -105,6 +106,28 @@ pub fn quest_sheet(content: &Content, house: &House, quest: usize, party: &[Hero
         out.push(line(Ink::Body, call_line(content, heroes, id, call), None));
     }
     let aptitude = content.lore.aptitudes[q.aptitude.index()].to_uppercase();
+    // Variant: the failure's cost, for each seated hero this quest is personal to.
+    let party_power_now = party_power(heroes, party, q.facts(), house.patrons);
+    let failing = forecast(party_power_now, q.demand, !party.is_empty());
+    let price = cost(house.calendar.current_year());
+    for hero in personal(content, heroes, q.facts(), party) {
+        out.push(line(
+            Ink::Body,
+            fmt(
+                &words[W::QuestSheetPersonal],
+                &[
+                    &heroes[hero].name,
+                    &percent(failing.ways(Outcome::Setback) + failing.ways(Outcome::Disaster))
+                        .to_string(),
+                    &price.house.to_string(),
+                    &price.personal.to_string(),
+                    &price.yearly.to_string(),
+                    &price.through.to_string(),
+                ],
+            ),
+            None,
+        ));
+    }
     out.push(line(
         Ink::Heading,
         fmt(
@@ -252,6 +275,12 @@ mod tests {
                 ),
                 (
                     s("Ysolde's dream: Quest at three different places. She must go."),
+                    None
+                ),
+                (
+                    s(
+                        "PERSONAL: Garrick's dream. If it fails (28 in 100) the name is marked: -2 house renown and -2 to Garrick now, then -1 a year to the house through year 8, and the blood carries it."
+                    ),
                     None
                 ),
                 (s("NEEDS MIGHT 13"), None),

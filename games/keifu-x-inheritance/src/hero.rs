@@ -137,6 +137,8 @@ pub enum DeedKind {
     ChildBorn,
     /// Came of age and heard the Seer (SPEC §17.5).
     CameOfAge,
+    /// Failed a personal quest and marked the name (variant); weight is the quest's danger.
+    Marked,
     /// Came to the house as a wanderer (SPEC §17.2), dated the year they arrive for.
     Arrived,
     /// Bore a lock of the Sealed Door open (SPEC §16.2); weight is the lock's index.
@@ -222,6 +224,8 @@ pub struct Hero {
     pub dream: Option<Dream>,
     /// A carried, inherited dream.
     pub burden: Option<Dream>,
+    /// Black marks on the name this hero carries (variant), in the order taken.
+    pub marks: Vec<crate::marks::Mark>,
     /// Traits, at most one per aptitude, Might then Wits then Spirit (variant).
     pub traits: Vec<crate::ids::Trait>,
     /// The fear.

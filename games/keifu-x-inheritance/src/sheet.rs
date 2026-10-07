@@ -167,6 +167,7 @@ pub fn hero_sheet(content: &Content, heroes: &[Hero], id: HeroId) -> Sheet {
     dream_section(content, heroes, id, &mut out);
     fear_section(content, hero, &mut out);
     traits_section(content, hero, &mut out);
+    marks_section(content, heroes, hero, &mut out);
     let second_column = out.len();
     destiny_section(content, hero, &mut out);
     bonds_section(content, heroes, id, &mut out);
@@ -326,6 +327,30 @@ fn traits_section(content: &Content, hero: &Hero, out: &mut Vec<Line>) {
                     &content.lore.aptitudes[held.aptitude().index()],
                 ],
             ),
+        ));
+    }
+}
+
+/// The variant's MARKS section, one line per mark the hero carries; none when none.
+fn marks_section(content: &Content, heroes: &[Hero], hero: &Hero, out: &mut Vec<Line>) {
+    let words = &content.words;
+    if hero.marks.is_empty() {
+        return;
+    }
+    out.push(line(Ink::Heading, &words[W::SheetMarks]));
+    for mark in &hero.marks {
+        let place = &content.lore.places[mark.place.index()].name;
+        let (year, through) = (mark.year.to_string(), mark.through().to_string());
+        out.push(line(
+            Ink::Warning,
+            if mark.generation == 0 {
+                fmt(&words[W::SheetMarkOwn], &[place, &year, &through])
+            } else {
+                fmt(
+                    &words[W::SheetMarkInherited],
+                    &[&heroes[mark.origin].name, place, &year, &through],
+                )
+            },
         ));
     }
 }

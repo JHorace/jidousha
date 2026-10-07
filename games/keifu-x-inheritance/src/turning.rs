@@ -18,6 +18,7 @@ use crate::content::Content;
 use crate::death_page::{death_page, old_age};
 use crate::house::House;
 use crate::ids::Phase;
+use crate::marks::weigh;
 use crate::moment::Moment;
 use crate::newcomers::phase_effect;
 use crate::passage::{PageKind, Passage, TurnPage};
@@ -72,6 +73,8 @@ pub fn turn_the_year(
     pages.extend(wanderer(content, house, rng));
     // 8. The tales.
     let mut year_lines = tales(content, house);
+    // 8b. Variant: the marks on the name lapse, then weigh.
+    year_lines.extend(weigh(content, house));
     // 9. Phase lines and the year's moment, hero by hero.
     for id in 0..house.heroes.len() {
         if !house.heroes[id].is_living() {

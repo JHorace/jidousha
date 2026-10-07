@@ -316,6 +316,13 @@
       "args": [
         "items, comma-separated"
       ]
+    },
+    "personal": {
+      "text": "Marked if it fails: %",
+      "source": "keifu-x-inheritance VARIANT.md",
+      "args": [
+        "the names"
+      ]
     }
   },
   "quest_sheet": {
@@ -485,6 +492,18 @@
       "source": "keifu-x-inheritance VARIANT.md",
       "args": [
         "trait telling"
+      ]
+    },
+    "personal": {
+      "text": "PERSONAL: %1's dream. If it fails (%2 in 100) the name is marked: -%3 house renown and -%4 to %1 now, then -%5 a year to the house through year %6, and the blood carries it.",
+      "source": "keifu-x-inheritance VARIANT.md",
+      "args": [
+        "name",
+        "failure chance",
+        "house cost",
+        "personal cost",
+        "yearly",
+        "last year"
       ]
     }
   },
@@ -755,6 +774,29 @@
         "trait title",
         "signed value",
         "aptitude title"
+      ]
+    },
+    "marks": {
+      "text": "MARKS",
+      "source": "keifu-x-inheritance VARIANT.md"
+    },
+    "mark_own": {
+      "text": "Failed at % in year %. Weighs on the name through year %.",
+      "source": "keifu-x-inheritance VARIANT.md",
+      "args": [
+        "place name",
+        "year",
+        "last year"
+      ]
+    },
+    "mark_inherited": {
+      "text": "%'s failure at % in year %. Weighs on the name through year %.",
+      "source": "keifu-x-inheritance VARIANT.md",
+      "args": [
+        "origin name",
+        "place name",
+        "year",
+        "last year"
       ]
     }
   },

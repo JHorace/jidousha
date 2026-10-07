@@ -210,7 +210,11 @@ pub fn check_oracle(checks: &mut Checks) -> (String, Vec<String>) {
             "W4 oracle: the sheet's need",
             format!("seed {seed:#x}: wanted {needs_line:?}"),
         );
-        let history = lines_in(&page, history_panel(&page));
+        // Variant: the PERSONAL line makes this sheet longer than the dock, so the history
+        // panel at its foot is read with the wheel turned to the end.
+        crate::verify::scroll_dock(&mut sim, -(page.dock.total as f32));
+        let tail = page_of(&sim);
+        let history = lines_in(&tail, history_panel(&tail));
         checks.require(
             history == ["The house has not quested here yet."],
             "the Barrow's history panel: never quested",

@@ -131,7 +131,8 @@ pub fn death_page(content: &Content, house: &mut House, dead: HeroId, rng: &mut 
         Some(dream) if dream.is_fulfilled() => hero.dream_fate = DreamFate::Fulfilled,
         Some(_) => {}
     }
-    let leaves = heirloom.is_some() || undone.is_some();
+    // Variant: a mark on the dead is something to leave, so the page waits on it too.
+    let leaves = heirloom.is_some() || undone.is_some() || !hero.marks.is_empty();
     let heirs = if leaves {
         heirs(&house.heroes, dead)
     } else {
@@ -198,21 +199,30 @@ fn outsider_page(content: &Content, house: &mut House, dead: HeroId) -> TurnPage
 /// children, first found on ties — takes the promise, blood of the first promisee,
 /// whatever the Seer said to them before; with no living child it ends. The fulfilled
 /// flag it tests is never set (OQ-32). Returns the line, if any.
+/// The dead's earliest-born living child, the first found on ties (SPEC-GAPS KG-54): who
+/// takes the Door's promise, and — in the variant — who takes the marks on "No one".
+pub fn earliest_born_child(heroes: &[Hero], dead: HeroId) -> Option<HeroId> {
+    let mut firstborn: Option<HeroId> = None;
+    for bond in heroes[dead]
+        .bonds
+        .iter()
+        .filter(|b| b.kind == BondKind::Child)
+    {
+        let child = &heroes[bond.other];
+        if child.is_living() && firstborn.is_none_or(|f| child.born_year < heroes[f].born_year) {
+            firstborn = Some(bond.other);
+        }
+    }
+    firstborn
+}
+
 pub fn door_promise(content: &Content, heroes: &mut [Hero], dead: HeroId) -> Vec<String> {
     let words = &content.words;
     let hero = &heroes[dead];
     if hero.destiny.kind != Destiny::OpenTheSealedDoor || hero.destiny.fulfilled {
         return Vec::new();
     }
-    // SPEC-GAPS KG-54: the earliest born of the living children, not the firstborn only
-    // if they live.
-    let mut firstborn: Option<HeroId> = None;
-    for bond in hero.bonds.iter().filter(|b| b.kind == BondKind::Child) {
-        let child = &heroes[bond.other];
-        if child.is_living() && firstborn.is_none_or(|f| child.born_year < heroes[f].born_year) {
-            firstborn = Some(bond.other);
-        }
-    }
+    let firstborn = earliest_born_child(heroes, dead);
     let Some(child) = firstborn else {
         return vec![fmt(&words[W::PromiseNoChild], &[&hero.name])];
     };

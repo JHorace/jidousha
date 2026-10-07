@@ -1642,6 +1642,142 @@
       ],
       "when": "variant",
       "source": "keifu-x-inheritance VARIANT.md"
+    },
+    "mark.fallen": {
+      "text": "%1 fails at %2, and the name is marked: -%3 renown to the house, -%4 to %1.",
+      "args": [
+        "failer first name",
+        "place name",
+        "house cost",
+        "personal cost"
+      ],
+      "when": "variant",
+      "source": "keifu-x-inheritance VARIANT.md"
+    },
+    "mark.lapsed": {
+      "text": "%1's failure at %2 is forgotten at last.",
+      "args": [
+        "origin first name",
+        "place name"
+      ],
+      "when": "variant",
+      "source": "keifu-x-inheritance VARIANT.md"
+    },
+    "mark.weighs_one": {
+      "text": "The name carries a mark: -% renown.",
+      "args": [
+        "house renown lost"
+      ],
+      "when": "variant",
+      "source": "keifu-x-inheritance VARIANT.md"
+    },
+    "mark.weighs_many": {
+      "text": "The name carries % marks: -% renown.",
+      "args": [
+        "mark count",
+        "house renown lost"
+      ],
+      "when": "variant",
+      "source": "keifu-x-inheritance VARIANT.md"
+    },
+    "deed.marked": {
+      "text": "failed a quest that was theirs to win, and marked the name",
+      "args": [],
+      "when": "variant",
+      "source": "keifu-x-inheritance VARIANT.md"
+    },
+    "mark.buried": {
+      "text": "%1's shame goes into the ground with %2.",
+      "args": [
+        "dead first name",
+        "object pronoun"
+      ],
+      "when": "variant",
+      "source": "keifu-x-inheritance VARIANT.md"
+    },
+    "mark.passes_one": {
+      "text": "%1's mark falls to %2, blood of the name.",
+      "args": [
+        "dead first name",
+        "child first name"
+      ],
+      "when": "variant",
+      "source": "keifu-x-inheritance VARIANT.md"
+    },
+    "mark.passes_many": {
+      "text": "%1's %2 marks fall to %3, blood of the name.",
+      "args": [
+        "dead first name",
+        "mark count",
+        "child first name"
+      ],
+      "when": "variant",
+      "source": "keifu-x-inheritance VARIANT.md"
+    },
+    "heir.takes_marks_one": {
+      "text": "%1 takes the name's shame with the rest: a mark.",
+      "args": [
+        "heir first name"
+      ],
+      "when": "variant",
+      "source": "keifu-x-inheritance VARIANT.md"
+    },
+    "heir.takes_marks_many": {
+      "text": "%1 takes the name's shame with the rest: %2 marks.",
+      "args": [
+        "heir first name",
+        "mark count"
+      ],
+      "when": "variant",
+      "source": "keifu-x-inheritance VARIANT.md"
+    },
+    "heir.carries": {
+      "text": "%1, %2: %3; marks %4",
+      "args": [
+        "candidate first name",
+        "kinship to the dead",
+        "traits as a name list, or heir.no_trait",
+        "marks carried, with (+n) when n are new"
+      ],
+      "when": "variant",
+      "source": "keifu-x-inheritance VARIANT.md"
+    },
+    "heir.no_trait": {
+      "text": "no trait",
+      "args": [],
+      "when": "variant",
+      "source": "keifu-x-inheritance VARIANT.md"
+    },
+    "heir.no_one_marks_blood": {
+      "text": "No one: the marks fall to %, blood of the name.",
+      "args": [
+        "the dead's earliest-born living child"
+      ],
+      "when": "variant",
+      "source": "keifu-x-inheritance VARIANT.md"
+    },
+    "heir.no_one_marks_ground": {
+      "text": "No one: the marks go into the ground.",
+      "args": [],
+      "when": "variant",
+      "source": "keifu-x-inheritance VARIANT.md"
+    },
+    "birth.marks_one": {
+      "text": "% is born under a mark on the name.",
+      "args": [
+        "child first name"
+      ],
+      "when": "variant",
+      "source": "keifu-x-inheritance VARIANT.md"
+    },
+    "birth.marks_many": {
+      "text": "% is born under % marks on the name.",
+      "args": [
+        "child first name",
+        "mark count"
+      ],
+      "when": "variant",
+      "source": "keifu-x-inheritance VARIANT.md"
     }
   }
 }

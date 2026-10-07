@@ -340,3 +340,13 @@ pub const TRAIT_POWER: i32 = 1;
 pub const TRAIT_PASS_CHANCE: f64 = 0.5;
 /// The chance a child springs a trait neither parent passed (then a gift or a flaw evenly).
 pub const TRAIT_SPRING_CHANCE: f64 = 0.125;
+/// A lost personal quest costs the house this much renown at once.
+pub const MARK_HOUSE_COST: i32 = 2;
+/// ... and the one who failed this much personal renown (never below 0).
+pub const MARK_PERSONAL_COST: i32 = 2;
+/// Each distinct mark the living family carries weighs this much on the house a year.
+pub const MARK_YEARLY: i32 = 1;
+/// A mark is forgotten when `current_year - mark.year >= MARK_YEARS` at the turning.
+pub const MARK_YEARS: i32 = 8;
+/// Whoever takes up a mark at a death page pays this much personal renown for each.
+pub const MARK_HEIR_COST: i32 = 1;

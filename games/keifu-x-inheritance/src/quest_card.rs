@@ -13,9 +13,10 @@ use crate::fear::{fears, refuses};
 use crate::forecast::{Forecast, card_percentages, forecast};
 use crate::hero::HeroId;
 use crate::house::House;
+use crate::marks::personal;
 use crate::power::{fear_line, party_power, you_bring};
 use crate::quest::Source;
-use crate::text::fmt;
+use crate::text::{fmt, name_list};
 use crate::words::W;
 
 /// Everything one quest card says.
@@ -47,6 +48,8 @@ pub struct CardReading {
     pub unanswered: String,
     /// "Dream: Garrick, Ysolde", or on a ghost's quest "The ghost of Garrick".
     pub dream: Option<String>,
+    /// "Marked if it fails: Garrick", when the quest is personal to someone seated (variant).
+    pub personal: Option<String>,
     /// "Ysolde will not go." for a watched hero who refuses, else the fear line.
     pub warning: Option<String>,
 }
@@ -164,6 +167,14 @@ pub fn read_card(
             Source::Template(_) | Source::Door(_) => {
                 dreamers_line(content, heroes, q.facts(), party)
             }
+        },
+        personal: {
+            let names: Vec<&str> = personal(content, heroes, q.facts(), party)
+                .into_iter()
+                .map(|h| heroes[h].name.as_str())
+                .collect();
+            (!names.is_empty())
+                .then(|| fmt(&words[W::QuestCardPersonal], &[&name_list(content, &names)]))
         },
         warning,
     }

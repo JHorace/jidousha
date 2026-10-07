@@ -9,17 +9,19 @@
 //! The crowned's nearest kin (§15.3) reads the same list.
 
 use crate::bonds::{kinship_telling, steadies};
-use crate::constants::HEIRS_OFFERED;
+use crate::constants::{HEIRS_OFFERED, MARK_HEIR_COST};
 use crate::content::Content;
+use crate::death_page::earliest_born_child;
 use crate::dream::{Dream, progress};
 use crate::dream_lore::GhostPlace;
 use crate::ghost::Ghost;
 use crate::hero::{Deed, DeedKind, DreamFate, Hero, HeroId, descends_from, kin};
 use crate::house::House;
 use crate::ids::{BondKind, Place, Pronoun};
+use crate::inheritance::inherit;
 use crate::outsiders::is_family;
 use crate::rivals::dream_rivals;
-use crate::text::{capitalized, fmt};
+use crate::text::{capitalized, fmt, name_list};
 use crate::witness::Held;
 use crate::words::W;
 
@@ -188,6 +190,56 @@ pub fn heir_buttons(
     buttons
 }
 
+/// What each candidate would carry if chosen, one line per heir in the list's order,
+/// then — only when the dead carries marks — where "No one" would leave them (variant).
+/// Read now, at draw time, from `inherit`, the function the choice itself uses, so the
+/// preview is exactly what the choice does.
+pub fn heir_lines(
+    content: &Content,
+    heroes: &[Hero],
+    dead: HeroId,
+    list: &[HeroId],
+) -> Vec<String> {
+    let words = &content.words;
+    let mut lines: Vec<String> = list
+        .iter()
+        .map(|&heir| {
+            let carried = inherit(heroes, dead, heir);
+            let titles: Vec<&str> = carried
+                .traits
+                .iter()
+                .map(|t| content.lore.traits[t.index()].title.as_str())
+                .collect();
+            let traits = if titles.is_empty() {
+                words[W::HeirNoTrait].to_owned()
+            } else {
+                name_list(content, &titles)
+            };
+            let marks = if carried.taken > 0 {
+                format!("{} (+{})", carried.marks.len(), carried.taken)
+            } else {
+                carried.marks.len().to_string()
+            };
+            fmt(
+                &words[W::HeirCarries],
+                &[
+                    &heroes[heir].name,
+                    &kinship_to_dead(content, heroes, dead, heir),
+                    &traits,
+                    &marks,
+                ],
+            )
+        })
+        .collect();
+    if !heroes[dead].marks.is_empty() {
+        lines.push(match earliest_born_child(heroes, dead) {
+            Some(child) => fmt(&words[W::HeirNoOneMarksBlood], &[&heroes[child].name]),
+            None => words[W::HeirNoOneMarksGround].to_owned(),
+        });
+    }
+    lines
+}
+
 /// Choose `heir` (or no one) on turning page `page` (SPEC §15.2, `lineage/passage.jai:
 /// 250-311`): once, irrevocably. The heirloom goes to the heir — whose own is laid
 /// aside and lost (OQ-5) — or into the ground; the undone dream passes to an heir who
@@ -258,6 +310,7 @@ pub fn choose(content: &Content, house: &mut House, page: usize, heir: Option<He
             }
         }
     }
+    lines.extend(pass_marks(content, house, dead, heir));
     // SPEC §15.2: "the epitaph is recomposed with the same wording".
     crate::epitaph::recompose(content, &mut house.heroes, dead);
     let Some(page) = house.passage.as_mut().and_then(|p| p.pages.get_mut(page)) else {
@@ -267,6 +320,51 @@ pub fn choose(content: &Content, house: &mut House, page: usize, heir: Option<He
     page.lines.splice(at..at, lines);
     if let Some(b) = page.bequest.as_mut() {
         b.chosen = Some(heir);
+    }
+}
+
+/// The marks on the dead (variant): they go to the chosen heir, or on "No one" to the
+/// blood of the name — the dead's earliest-born living child — or, with none, into the
+/// ground with them. Whoever takes a mark pays `MARK_HEIR_COST` personal renown for each
+/// that is new to them. `inherit` is the one function that merges them. Returns the lines.
+fn pass_marks(
+    content: &Content,
+    house: &mut House,
+    dead: HeroId,
+    heir: Option<HeroId>,
+) -> Vec<String> {
+    let words = &content.words;
+    if house.heroes[dead].marks.is_empty() {
+        return Vec::new();
+    }
+    let dead_name = house.heroes[dead].name.clone();
+    let (to, blood) = match heir {
+        Some(h) => (h, false),
+        None => match earliest_born_child(&house.heroes, dead) {
+            Some(child) => (child, true),
+            None => {
+                let object = &content.lore.pronouns[house.heroes[dead].pronoun.index()].object;
+                return vec![fmt(&words[W::MarkBuried], &[&dead_name, object])];
+            }
+        },
+    };
+    let carried = inherit(&house.heroes, dead, to);
+    let hero = &mut house.heroes[to];
+    hero.marks = carried.marks;
+    hero.renown = (hero.renown - MARK_HEIR_COST * carried.taken as i32).max(0);
+    let (name, taken) = (hero.name.clone(), carried.taken);
+    match (taken, blood) {
+        (0, _) => Vec::new(),
+        (1, true) => vec![fmt(&words[W::MarkPassesOne], &[&dead_name, &name])],
+        (_, true) => vec![fmt(
+            &words[W::MarkPassesMany],
+            &[&dead_name, &taken.to_string(), &name],
+        )],
+        (1, false) => vec![fmt(&words[W::HeirTakesMarksOne], &[&name])],
+        (_, false) => vec![fmt(
+            &words[W::HeirTakesMarksMany],
+            &[&name, &taken.to_string()],
+        )],
     }
 }
 

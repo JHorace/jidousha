@@ -24,6 +24,7 @@ use crate::heirs::deed;
 use crate::hero::{DeedKind, HeroId};
 use crate::house::House;
 use crate::ids::{Aptitude, BondKind, Destiny, Pool, Pronoun, Tag};
+use crate::inheritance::inherit;
 use crate::newcomers::{fear_of, newcomer, roll_pronoun};
 use crate::passage::{PageKind, TurnPage};
 use crate::text::{capitalized, fmt, name_list};
@@ -162,6 +163,10 @@ fn born(
     }
     let id = house.heroes.len();
     house.heroes.push(child);
+    // Variant: the child is born under whatever marks its parents carry.
+    for parent in [first, second] {
+        house.heroes[id].marks = inherit(&house.heroes, parent, id).marks;
+    }
     form(&mut house.heroes, id, first, BondKind::Parent, year);
     form(&mut house.heroes, id, second, BondKind::Parent, year);
     let telling = fmt(&words[W::DeedChildBorn], &[&house.heroes[id].name]);
@@ -235,6 +240,14 @@ fn born(
                 &[&capitalized(&forms.subject), telling],
             ),
         });
+    }
+    match child.marks.len() {
+        0 => {}
+        1 => lines.push(fmt(&words[W::BirthMarksOne], &[&child.name])),
+        many => lines.push(fmt(
+            &words[W::BirthMarksMany],
+            &[&child.name, &many.to_string()],
+        )),
     }
     match child.blessings.as_slice() {
         [] => {}

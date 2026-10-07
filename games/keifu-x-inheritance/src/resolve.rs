@@ -20,6 +20,7 @@ use crate::harm::{burn, crown, deed, place_name, suffer_disaster, wound};
 use crate::hero::{DeedKind, HeroId};
 use crate::house::House;
 use crate::ids::Outcome;
+use crate::marks::{mark_the_name, personal};
 use crate::moment::{Moment, QuestMoment};
 use crate::power::party_power;
 use crate::quest::{Quest, Source};
@@ -248,6 +249,12 @@ pub fn resolve_party(
                 &words[W::QuestDisasterRenown],
                 &[&quest.danger.to_string()],
             ));
+        }
+    }
+    // 7b. Variant: a failed personal quest marks the name, before the fear is faced.
+    if matches!(outcome, Outcome::Setback | Outcome::Disaster) {
+        for member in personal(content, &house.heroes, quest.facts(), &members) {
+            mark_the_name(&f, house, member, &mut lines);
         }
     }
     // 8. Each member faces the fear.

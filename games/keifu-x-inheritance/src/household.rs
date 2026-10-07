@@ -143,6 +143,7 @@ fn read_hero(item: &At<'_>) -> Result<FoundingHero, SchemaError> {
         aptitudes,
         dream: None,
         burden: None,
+        marks: Vec::new(),
         traits: Vec::new(),
         fear: Fear {
             tag: id_at(&fear, "tag", Tag::find)?,

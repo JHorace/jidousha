@@ -86,6 +86,7 @@ pub fn newcomer(
         aptitudes: [0; 3],
         dream: None,
         burden: None,
+        marks: Vec::new(),
         traits: Vec::new(),
         fear,
         destiny: DestinyState {

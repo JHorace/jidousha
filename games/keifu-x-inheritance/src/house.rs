@@ -200,6 +200,21 @@ impl House {
         }
     }
 
+    /// The distinct marks on the name that the living family carries, in creation order
+    /// of their first carrier (variant): a parent and a child carrying one failure carry
+    /// one mark.
+    pub fn marks_carried(&self) -> Vec<crate::marks::Mark> {
+        let mut out: Vec<crate::marks::Mark> = Vec::new();
+        for hero in self.heroes.iter().filter(|h| h.is_living() && h.family) {
+            for mark in &hero.marks {
+                if !out.iter().any(|m| m.identity() == mark.identity()) {
+                    out.push(*mark);
+                }
+            }
+        }
+        out
+    }
+
     /// The heroes who fell at `place`.
     pub fn fallen_at(&self, place: Place) -> &[HeroId] {
         &self.fallen[place.index()]

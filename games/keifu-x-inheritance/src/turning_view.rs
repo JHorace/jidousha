@@ -16,7 +16,7 @@
 use jidousha::prelude::*;
 
 use crate::content::Content;
-use crate::heirs::heir_buttons;
+use crate::heirs::{heir_buttons, heir_lines};
 use crate::hero::Hero;
 use crate::house::House;
 use crate::passage::{PageKind, Passage, TurnPage};
@@ -43,6 +43,16 @@ const HEIR_H: f32 = 30.0;
 const HEIR_GAP: f32 = 6.0;
 /// The room an undecided death page keeps at its foot: the prompt and the buttons.
 const CHOICE_H: f32 = PITCH + PART_GAP + HEIR_ROWS as f32 * (HEIR_H + HEIR_GAP);
+
+/// The room the choice takes on `page`: the prompt, a line for each candidate (and one
+/// for "No one" when the dead carries marks) and the buttons.
+fn choice_height(page: &TurnPage, heroes: &[Hero]) -> f32 {
+    let Some(bequest) = &page.bequest else {
+        return CHOICE_H;
+    };
+    let lines = bequest.heirs.len() + usize::from(!heroes[bequest.dead].marks.is_empty());
+    CHOICE_H + lines as f32 * PITCH
+}
 
 /// One leaf: its page, whether it is the page's first and last, and which lines it holds.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -118,7 +128,11 @@ pub fn leaves(passage: &Passage, heroes: &[Hero]) -> Vec<Leaf> {
     let room = text_area().size().y;
     let mut out = Vec::new();
     for (index, page) in passage.pages.iter().enumerate() {
-        let foot = if waiting(page) { CHOICE_H } else { 0.0 };
+        let foot = if waiting(page) {
+            choice_height(page, heroes)
+        } else {
+            0.0
+        };
         let mut at = 0;
         let mut first = true;
         loop {
@@ -264,9 +278,22 @@ fn lay_out_choice(
         .possessive
         .to_uppercase();
     let prompt = fmt(&content.words[W::TurningHeirPrompt], &[&his]);
-    let top = area.max.y - CHOICE_H;
+    let top = area.max.y - choice_height(turn, &house.heroes);
     let y = y.max(top);
     text(page, &prompt, y, MIN_TEXT, ink::HEADING, None);
+    // Variant: what each candidate would carry, and where "No one" leaves the marks.
+    let lines = heir_lines(content, &house.heroes, bequest.dead, &bequest.heirs);
+    for (at, line) in lines.iter().enumerate() {
+        text(
+            page,
+            line,
+            y + PITCH + (at as f32) * PITCH,
+            MIN_TEXT,
+            ink::NOTE,
+            None,
+        );
+    }
+    let y = y + lines.len() as f32 * PITCH;
     let width = (area.size().x - HEIR_GAP) * 0.5;
     let buttons = heir_buttons(content, &house.heroes, bequest.dead, &bequest.heirs);
     for (at, choice) in buttons.iter().enumerate() {
