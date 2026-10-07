@@ -3,7 +3,7 @@
 task: brolf
 variant: V2
 model-as-configured: claude-fable-5-1
-date: 2026-10-07 09:23 PDT
+date: 2026-10-07 09:34 PDT
 
 Read with: the spec `tools/yakin/tasks/brolf.md` (the decision table there is
 binding; this file elaborates its rows and adds none), `docs/api/` all five,
@@ -219,6 +219,8 @@ the draw systems all call the same one.
      an item, or `Some(Strike)` and their ball is nearer the hole than mine →
      `swing`.
   4. Hunter: a rival body within 5.0 units → walk toward it.
+  4b. a pickup whose slot I do not hold within 3.0 units (6.0 for an
+     Extractor) → walk to it; nearest first.
   5. Extractor: I hold ≥ 1 item and the pad is `Open` → if my ball is not on
      the pad and I am within reach of it: `shoot = Some(pad)`; else walk to my
      ball, or to the pad once the ball is on it; `extract` when my body and
@@ -239,8 +241,8 @@ the draw systems all call the same one.
   from `npc_intent` over one `snap_players` taken at the top of the tick) ·
   `walk` (`pos += walk * WALK_SPEED * effects.walk * fixed_dt`, `WALK_SPEED =
   4.0`, clamped to the course; dazed or extracting players do not move) ·
-  `swing` (for each `swing` intent, `contact_target` again on this tick's
-  snaps; `Club` sets the victim's `dazed_until = tick + daze_ticks`, cancels
+  `swing` (for each `swing` intent, `contact_target` again on snaps
+  re-taken after `walk`, in player-index order; `Club` sets the victim's `dazed_until = tick + daze_ticks`, cancels
   their extraction, drops `drops` as a `Pickup` at `victim + (me -
   victim).normalize_or_zero() * 1.0`; `Strike` gives the ball a `Flight` to
   `lands_at`; either sets my `swing_ready_at = tick + round(SWING_COOLDOWN *
@@ -364,16 +366,29 @@ sweeps. Literal expectations are written as literals in the check, never as
 arithmetic over the constant under test. Each `--verify` failure prints the
 numbers it judged.
 
+**Staging.** Sessions A–D are about one rule each, so every NPC a session
+does not name is **frozen** after `Startup` — `dazed_until = u64::MAX` — and
+**parked** with its ball where no zone ever excludes it and no ball can hole
+out: body `hole + ((k - 3) * 0.4, 0.6)`, ball `hole + ((k - 3) * 0.4, 0.75)`
+for `k = 1..5` (all within 1.2 of the hole, none within 0.35). A frozen
+NPC draws as dazed, which is what the staged frames show. "Teleport" means
+writing `Transform::pos` (and the ball's) through `world_mut()` between two
+ticks, the testing document's "arranging a test's starting state"; "after
+tick N" means after `sim.tick()` has returned for tick N. Only Session E
+runs the live population.
+
 **Session A — the zone row (spec row 1).** The `Idle` player, 9300 ticks, a
 frame every tick.
 - A1 · asserts: `first_out` = the first tick at which `zone_at(schedule,
-  tick)` (called by the check on the `Course` resource read from the world)
-  excludes the human's body or ball, is found and lies in `1201..=7500`
-  (the start ellipse may or may not sit inside S1; the final zone excludes
-  every start); it is printed;
-  the human is alive on tick `first_out + 298` and eliminated on
-  `first_out + 299` exactly, with `MatchState::Over { outcome: Eliminated,
-  kept: empty }` on that tick — the literal `299` in the check. · covers
+  tick)` (called by the check on the `Course` resource read from the world,
+  against the body's and ball's positions on that tick) excludes the human's
+  body or ball, is found and lies in `1201..=3900` (the start ellipse may or
+  may not sit inside S1; S2 excludes every start); it is printed; the
+  human's body and ball are still outside on every tick after it (nothing
+  moves them: the NPCs are frozen); the human is alive on tick `first_out +
+  298` and eliminated on `first_out + 299` exactly, with `MatchState::Over {
+  outcome: Eliminated, kept: empty, placing: Out { place: 6 } }` on that
+  tick — the literal `299` in the check. · covers
   Done-when: "a scripted --verify run reaches its result screen"; spec row 1
   "eliminated on the tick the function says".
 - A2 · the frame drawn on `first_out + 60`: `status_line_1` contains
@@ -384,9 +399,11 @@ frame every tick.
 - A3 · the staged aiming frame, a separate session: after `Startup`,
   teleport the human's ball to `S1.center + (2.0, 0)` and the human to
   `S1.center + (2.8, 0)` (inside S1 whatever seed 7 says), put the pointer
-  at `camera.world_to_screen(ball + (4.0, -3.0))` through the script, and
-  run to tick `3000` with no other input; on the frame of tick 3000 assert: ≥ 24 `ZONE_NOW`-tinted dots whose centres lie within `0.12` of
-  distance `8.0` from `zone_at(3000).center` (literal `8.0`); ≥ 18
+  at `camera.world_to_screen(ball + (4.0, -3.0))` through the script
+  (`pointer_at(2, ..)`), and run to tick `2900` (inside S1's hold, `2100..
+  3000`) with no other input; on the frame of tick 2900 assert: ≥ 24
+  `ZONE_NOW`-tinted dots whose centres lie within `0.12` of distance `8.0`
+  from `zone_at(2900).center` (literal `8.0`); ≥ 18
   white dots at distance `5.0` (literal) from the next stop's centre; one
   line quad whose bounds span from the ball to within `0.1` of
   `aim_point(ball, pointer, 7.0)` (literal reach `7.0`); a disc of diameter
@@ -397,35 +414,43 @@ frame every tick.
   `lands in zone` or `lands OUTSIDE the zone` exactly as `landing_safe(..)`
   answers for `tick + flight_ticks(5.0) + walk_ticks`.
 
-**Session B — the contact row (spec row 2).** Scripted: after `Startup`,
-teleport NPC `P1` (a Golfer) to `human + (1.0, 0)` and set its kit to `Kit
-{ ball: Some(HeavyBall), last_taken: Some(Slot::Ball), .. }` so `drops` is
-`Some(HeavyBall)`; `P1`'s ball stays where it spawned, far from the human;
-run to tick `200` with no input; then `press(Key::Space, 200)`.
+**Session B — the contact row (spec row 2).** `P1` (a Golfer) is live; the
+rest are frozen. After `Startup`, teleport the human to `(-2.0, 0)` and its
+ball to `(-2.0, 0.8)`, `P1`'s ball to `(10.0, 0)`, and set `P1`'s kit to
+`Kit { ball: Some(HeavyBall), last_taken: Some(Slot::Ball), .. }` so `drops`
+is `Some(HeavyBall)`. After tick 198 teleport `P1` to `(-1.0, 0)` — one unit
+from the human; a Golfer walking to its ball moves 0.07 a tick, so it is
+still within 1.5 on ticks 199 and 200. Script: `press(Key::Space, 200)`.
 - B1 · the frame of tick 199: `cue_line` == `SPACE: club P1 (dazes 3.0s,
   drops heavy ball)` (literal string); its char count equals the font quads in
   the bottom band's first line; 12 orange dots ring `P1`. · spec row 2 "the
   reach cue is in the transcript first".
-- B2 · after tick 200: `P1.dazed_until == 380` (literal; `200 + 180`);
-  `P1`'s `Transform` is identical on ticks 200 and 379 (a dazed Golfer
+- B2 · after tick 200: `P1.dazed_until == 380` (literal; `200 + 180`) and
+  `P1.kit.ball == None`; the drop landed at `P1 + (human - P1).normalize()
+  * 1.0`, which is the human's own position, and `pickup` runs after
+  `swing` in the same tick, so by the end of tick 200 the human holds
+  `kit.ball == Some(HeavyBall)` and no `Pickup(HeavyBall)` exists; `P1`'s
+  `Transform` is identical at the end of ticks 200 and 379 (a dazed Golfer
   cannot walk to its ball) and differs by tick 420 (an undazed one does);
-  `P1` is alive and has a `Transform` on tick 1200; on tick 200 a
-  `Pickup(HeavyBall)` exists at `P1 + (human - P1).normalize() * 1.0`, and
-  by tick 201 the human — standing within `0.6` of it — holds `kit.ball ==
-  Some(HeavyBall)` and the pickup is gone. · spec row 2 "disabled for
-  exactly the stated time and never permanently removed".
-- B3 · the strike half: a second scripted session, `P1` teleported to `human +
-  (3.0, 0)` and `P1`'s ball to `human + (1.0, 0)`; Space on tick 200;
-  assert `P1`'s ball has a `Flight` to exactly `strike_landing(human, ball,
-  4.0)` (literal `4.0`) and rests there on `200 + flight_ticks(4.0)`.
+  `P1` is alive and has a `Transform` on tick 1200. · spec row 2 "disabled
+  for exactly the stated time and never permanently removed".
+- B3 · the strike half: a second session with the same freezing; after
+  `Startup` the human to `(-2.0, 0)` with its ball at `(-2.0, 0.8)`, `P1` to
+  `(1.0, 0)` and `P1`'s ball to `(-1.0, 0)`; Space on tick 200 (no body
+  within 1.5, one rival ball at 1.0); assert `P1`'s ball has a `Flight`
+  from `(-1.0, 0)` to `(3.0, 0)` (literal: four units straight away from
+  the striker) and rests there on `200 + flight_ticks(4.0)`.
 
-**Session C — the equipment row (spec row 3).** Scripted: after `Startup`,
-teleport a `Pickup(HeavyBall)` (the first one in query order) to `human +
-(2.0, 0)`; drive the human with `hold(Key::D, 2..200)`.
-- C1 · the first frame at which `|human - pickup| <= 2.5`: `pickup_line` ==
-  `TAKE heavy ball: strikes on it x0.5, your reach x0.75` (literal, no
-  "replaces" since the slot is empty); char count == font quads on the
-  bottom band's second line. Then on a frame before it, the line is empty.
+**Session C — the equipment row (spec row 3).** `P1` live, the rest
+frozen. After `Startup`, teleport the human to `(-4.0, 0)` with its ball at
+`(-3.2, 0)`, one `Pickup(HeavyBall)` (the first in query order) to `(0, 0)`
+and the other seven pickups to `(-13.5, -7.2)` (stacked, out of the way);
+drive the human with `hold(Key::D, 2..200)`.
+- C1 · the frame of tick 2: `pickup_line` is empty (the nearest pickup is
+  4.0 away). The first frame at which `|human - pickup| <= 2.5`:
+  `pickup_line` == `TAKE heavy ball: strikes on it x0.5, your reach x0.75`
+  (literal, no "replaces" since the slot is empty); char count == font quads
+  on the bottom band's second line.
 - C2 · on the first tick `|human - pickup| <= 0.6`: `human.kit.ball ==
   Some(HeavyBall)` and the pickup is gone.
 - C3 · the stated effect is what the sim does. On tick 220 (the human now
@@ -436,8 +461,9 @@ teleport a `Pickup(HeavyBall)` (the first one in query order) to `human +
   nothing in the opening zone is unsafe), so by tick 222 the human's ball
   carries a `Flight` whose `to - from` has length `2.0` (literal: `4.0 *
   0.5`), and it rests there on `start + flight_ticks(2.0)`. Then on tick 390
-  teleport the human's ball to `(0, 0)` and the human to `(0.5, 0)`, move
-  the pointer to `camera.world_to_screen((20.0, 0))` and click on 400:
+  teleport `P1` and its ball to `(-13.0, -7.0)`, the human's ball to
+  `(0, 0)` and the human to `(0.5, 0)`, move the pointer to
+  `camera.world_to_screen((20.0, 0))` and click on 400:
   the `Flight`'s `|to - from|` lies in `5.25 * (1 ± 0.12)` (literal `7.0 *
   0.75`, scatter allowed for). · spec row 3.
 - C4 · `Item::describe` round trip: for each of the four items,
@@ -445,8 +471,9 @@ teleport a `Pickup(HeavyBall)` (the first one in query order) to `human +
   (a unit test named `an item's label names every effect it has and none it
   lacks`).
 
-**Session D — the extract row (spec row 4).** Scripted: after `Startup`, set
-the human's `Kit { ball: Some(HeavyBall), body: Some(Helmet) }`, teleport
+**Session D — the extract row (spec row 4).** All NPCs frozen. After
+`Startup`, set the human's `Kit { ball: Some(HeavyBall), body: Some(Helmet)
+}`, teleport
 human and ball onto the pad (`pad + (0.2, 0)` and `pad - (0.2, 0)`); run idle
 to tick 2800 (the zone excludes the pad only after 3900 — assert
 `pad_state(2800) == Open`); frame on 2799; `press(Key::E, 2800)`.
@@ -473,9 +500,6 @@ one verdict line each, and the three numbers per player.
 - E1 · `Golfer` reaches `Over` with an outcome other than `Eliminated` (the
   middle line: a first-try player survives the zone; `Lost` to an NPC's
   hole-out counts as surviving it) and takes ≥ 6 shots.
-- E6 · no `HoledOut` or `Lost` outcome in any session settles before tick
-  `5700` (literal), and the unit test `a ball in the hole before the hole
-  opens does not end the match` calls `settle` on ticks 5699 and 5700.
 - E2 · `Full` reaches `Over`; its report prints `shots N, M in zone at
   arrival`, `aimed X from the hole`, `landed Y from plan`; asserts `M >=
   N * 0.8` and `Y <= 0.12 * mean shot length + 0.01`.
@@ -488,6 +512,9 @@ one verdict line each, and the three numbers per player.
   least one NPC extracts or is eliminated by the zone before `MATCH_END` —
   the "NPCs good enough to make the zone, contact and extraction matter"
   line of the spec. If a count is zero the message prints all three counts.
+- E6 · no `HoledOut` or `Lost` outcome in any session settles before tick
+  `5700` (literal), and the unit test `a ball in the hole before the hole
+  opens does not end the match` calls `settle` on ticks 5699 and 5700.
 · covers Done-when: "One full match loop against NPC opponents plays end to
 end".
 
@@ -506,7 +533,8 @@ end".
 - F7 · staged screens: one frame for each of the six `Outcome`s, the dazed
   human, the `pad gone` status, the open hole, and the `final` zone status
   (`tick 9100`), all under F1–F5.
-- F8 · the capture: the Session A3 aiming frame to `target/verify/brolf.png`,
+- F8 · the capture: the Session A3 aiming frame (tick 2900) to
+  `target/verify/brolf.png`,
   the `capture:` line in the summary, aspect `480/270 == 1280/720`.
 
 **Unit tests** (`cargo test -p brolf`, named as sentences):
