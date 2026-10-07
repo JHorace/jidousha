@@ -6,14 +6,15 @@ stage: implement
 tick: live
 resumes: 0
 gates-green-at: none
-updated: 2026-10-07 03:10 PDT
+updated: 2026-10-07 03:29 PDT
 
 ## Done so far
 - claimed
 - design note written (games/stack-card-game/DESIGN.md)
+- rules, cards, npc, players, game, ui, main compile (skilled 71% vs NPC, power 0%, blind 0% over 200 seeds)
 
 ## Exact next step
-Write games/stack-card-game/{Cargo.toml,src/rules.rs,cards.rs,npc.rs,main.rs}; cargo check.
+Write src/verify.rs, checks.rs, capture.rs (decision rows 1-3 scenarios, rule checks, three players, determinism); then mutants/*.txt, tools/mutate, capture PNG, full gate.
 
 ## Deviations
 - none
