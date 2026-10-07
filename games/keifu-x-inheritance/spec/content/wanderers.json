@@ -1,0 +1,42 @@
+{
+  "_source": "generation/hero-context/templates-hero.jai:20-54",
+  "age_low": 17,
+  "age_high": 36,
+  "standings": [
+    {
+      "renown_at_least": 0,
+      "gift_low": 3,
+      "gift_high": 5,
+      "other_low": 1,
+      "other_high": 3,
+      "telling": "The house has little name, and draws who it can."
+    },
+    {
+      "renown_at_least": 12,
+      "gift_low": 4,
+      "gift_high": 6,
+      "other_low": 2,
+      "other_high": 3,
+      "telling": "The house has a fair name, and drew a fair hand."
+    },
+    {
+      "renown_at_least": 30,
+      "gift_low": 5,
+      "gift_high": 7,
+      "other_low": 2,
+      "other_high": 4,
+      "telling": "The house has a great name. The best come looking for it."
+    }
+  ],
+  "dreams": [
+    "SEE_THE_SEA",
+    "ROOF_OF_THE_WORLD",
+    "FORGE_A_BLADE",
+    "WORTHY_STUDENT",
+    "KNOWN_AT_COURT",
+    "WALK_EVERY_ROAD",
+    "QUIET_THE_BARROW",
+    "SEE_A_CHILD_GROWN"
+  ],
+  "teacher_dream_minimum_age": 35
+}

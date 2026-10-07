@@ -1,0 +1,291 @@
+#! X1 — Keifu X Inheritance (the variant): one fault per rule line. The ten constants; the personal rule
+#! (the call it needs, family only, burdens never, the failure it needs); the mark's identity, its lapse,
+#! its weight and its cost; outsiders (the reward, the table, the garden's order and threshold, marrying in:
+#! the dowry, the name, the family flag, the epitaphs; the heir list, the crowned heirloom, the death page);
+#! the four trait branches and the power line; the one inheritance function (dedup, generation, traits, the
+#! ground, the preview's count, what an heir pays, birth); and the three new surfaces.
+
+### C1 MARRY_IN_RENOWN 5 -> 4
+@ src/constants.rs
+- pub const MARRY_IN_RENOWN: i32 = 5;
++ pub const MARRY_IN_RENOWN: i32 = 4;
+
+### C2 DOWRY_SHARE 2 -> 1
+@ src/constants.rs
+- pub const DOWRY_SHARE: i32 = 2;
++ pub const DOWRY_SHARE: i32 = 1;
+
+### C3 TRAIT_POWER 1 -> 2
+@ src/constants.rs
+- pub const TRAIT_POWER: i32 = 1;
++ pub const TRAIT_POWER: i32 = 2;
+
+### C4 TRAIT_PASS_CHANCE 0.5 -> 0.25
+@ src/constants.rs
+- pub const TRAIT_PASS_CHANCE: f64 = 0.5;
++ pub const TRAIT_PASS_CHANCE: f64 = 0.25;
+
+### C5 TRAIT_SPRING_CHANCE 0.125 -> 0.25
+@ src/constants.rs
+- pub const TRAIT_SPRING_CHANCE: f64 = 0.125;
++ pub const TRAIT_SPRING_CHANCE: f64 = 0.25;
+
+### C6 MARK_HOUSE_COST 2 -> 1
+@ src/constants.rs
+- pub const MARK_HOUSE_COST: i32 = 2;
++ pub const MARK_HOUSE_COST: i32 = 1;
+
+### C7 MARK_PERSONAL_COST 2 -> 1
+@ src/constants.rs
+- pub const MARK_PERSONAL_COST: i32 = 2;
++ pub const MARK_PERSONAL_COST: i32 = 1;
+
+### C8 MARK_YEARLY 1 -> 2
+@ src/constants.rs
+- pub const MARK_YEARLY: i32 = 1;
++ pub const MARK_YEARLY: i32 = 2;
+
+### C9 MARK_YEARS 8 -> 7
+@ src/constants.rs
+- pub const MARK_YEARS: i32 = 8;
++ pub const MARK_YEARS: i32 = 7;
+
+### C10 MARK_HEIR_COST 1 -> 0
+@ src/constants.rs
+- pub const MARK_HEIR_COST: i32 = 1;
++ pub const MARK_HEIR_COST: i32 = 0;
+
+### P1 a "must succeed" or "must triumph" call is personal -> only a "go" call
+@ src/marks.rs
+- Telling::Succeed | Telling::Triumph
++ Telling::Go
+
+### P2 an outsider can have a personal quest
+@ src/marks.rs
+-         .filter(|&member| is_family(&heroes[member]))
++         .filter(|_| true)
+
+### P3 a burden makes a quest personal
+@ src/marks.rs
+- !call.burden && matches!
++ true && matches!
+
+### P4 a mark is only the same failure in the same year, not the same place
+@ src/marks.rs
+- (self.origin, self.year, self.place)
++ (self.origin, self.year, Place::Barrow)
+
+### P5 a mark is the same failure whatever the year
+@ src/marks.rs
+- (self.origin, self.year, self.place)
++ (self.origin, 0, self.place)
+
+### P6 a mark lapses a year late
+@ src/marks.rs
+- let spent = year - mark.year >= MARK_YEARS;
++ let spent = year - mark.year > MARK_YEARS;
+
+### P7 the yearly drain is one per carrier, not per distinct mark
+@ src/marks.rs
+- house.add_renown(-carried * MARK_YEARLY);
++ house.add_renown(-MARK_YEARLY);
+
+### P8 the dead and outsiders lapse silently only -> the lapse line names the living outsiders too
+@ src/marks.rs
+- let carried_by_the_living = hero.is_living() && is_family(hero);
++ let carried_by_the_living = true;
+
+### P9 a failure pays personal renown unfloored
+@ src/marks.rs
+- hero.renown = (hero.renown - price.personal).max(0);
++ hero.renown -= price.personal;
+
+### P10 a failure takes its house cost from the personal cost
+@ src/marks.rs
+- house.add_renown(-price.house);
++ house.add_renown(-price.personal);
+
+### H1 the house counts a mark once per carrier
+@ src/house.rs
+- if !out.iter().any(|m| m.identity() == mark.identity()) {
++ if true {
+
+### H2 outsiders carry marks for the house
+@ src/house.rs
+- .filter(|h| h.is_living() && h.family)
++ .filter(|h| h.is_living())
+
+### R1 only a disaster fails a personal quest
+@ src/resolve.rs
+- if matches!(outcome, Outcome::Setback | Outcome::Disaster) {
++ if matches!(outcome, Outcome::Disaster) {
+
+### R2 a success also fails a personal quest
+@ src/resolve.rs
+- if matches!(outcome, Outcome::Setback | Outcome::Disaster) {
++ if outcome < Outcome::Triumph {
+
+### W1 the reward goes to the house only when no family went
+@ src/reward.rs
+-     if family_went {⏎        house.add_renown(
++     if !family_went {⏎        house.add_renown(
+
+### W2 carriers are counted over outsiders too
+@ src/reward.rs
+-         .filter(|&m| is_family(&house.heroes[m]))⏎
++ 
+
+### W3 the page always reads the house reward
+@ src/reward.rs
+-         let line = if family_went {
++         let line = if true {
+
+### T1 an outsider can tell the tale for the house
+@ src/plans.rs
+- Some(if is_family(&heroes[hero]) && !house_told {
++ Some(if !house_told {
+
+### T2 the first adult, family or not, tells it for the house
+@ src/plans.rs
+- Some(if is_family(&heroes[hero]) && !house_told {
++ Some(if is_family(&heroes[hero]) {
+
+### G1 unproven is judged before an existing marriage
+@ src/plans.rs
+-     if has_living_spouse(heroes, a) || has_living_spouse(heroes, b) {⏎        return Courtship::WedAlready;⏎    }⏎    if let Some((outsider, renown)) = may_marry_in(heroes, a, b) {⏎        return Courtship::Unproven { outsider, renown };⏎    }
++     if let Some((outsider, renown)) = may_marry_in(heroes, a, b) {⏎        return Courtship::Unproven { outsider, renown };⏎    }⏎    if has_living_spouse(heroes, a) || has_living_spouse(heroes, b) {⏎        return Courtship::WedAlready;⏎    }
+
+### G2 the threshold admits the renown below it
+@ src/outsiders.rs
+- (renown < MARRY_IN_RENOWN)
++ (renown <= MARRY_IN_RENOWN)
+
+### G3 the dowry goes to the outsider, not the house
+@ src/winter.rs
+- house.add_renown(dowry);
++ house.heroes[outsider].renown += dowry;
+
+### G4 the name is not taken
+@ src/winter.rs
+- hero.house = name.clone();
++ let _ = name.clone();
+
+### G5 marrying in does not make them family
+@ src/winter.rs
+- hero.family = true;
++ hero.family = false;
+
+### G6 the dead's epitaphs are not composed again for the new name
+@ src/winter.rs
+- if house.heroes[dead].wording.is_some() {
++ if false {
+
+### E1 an outsider is offered as an heir
+@ src/heirs.rs
+- .filter(|&id| id != dead && heroes[id].is_living() && is_family(&heroes[id]))
++ .filter(|&id| id != dead && heroes[id].is_living())
+
+### E2 a crowned outsider leaves the heirloom to the nearest kin
+@ src/heirs.rs
+- if !is_family(&heroes[dead]) {
++ if false {
+
+### E3 an outsider's death page waits
+@ src/death_page.rs
+-             leaves: false,
++             leaves: true,
+
+### E4 a marked death page does not wait
+@ src/death_page.rs
+- || !hero.marks.is_empty();
++ || false;
+
+### E5 an outsider's death page is a family's
+@ src/death_page.rs
+-     if !is_family(hero) {
++     if false {
+
+### N1 two parents with one trait roll a coin for it
+@ src/traits.rs
+- (Some(a), Some(b)) if a == b => Some((a, Source::Parent(1))),
++ (Some(a), Some(b)) if a == b => chance(rng, 0.5).then_some((a, Source::Parent(1))),
+
+### N2 a gift and a flaw always give the first parent's
+@ src/traits.rs
+- let from = index(rng, 2);
++ let from = 0;
+
+### N3 a trait only one parent has always passes
+@ src/traits.rs
+- (Some(a), None) => chance(rng, TRAIT_PASS_CHANCE as f32).then_some((a, Source::Parent(0))),
++ (Some(a), None) => Some((a, Source::Parent(0))),
+
+### N4 a spring is always a gift
+@ src/traits.rs
+- let held = Trait::of(aptitude, index(rng, 2) == 0);
++ let held = Trait::of(aptitude, true);
+
+### N5 a flaw adds like a gift
+@ src/traits.rs
+-         if self.gift() {⏎            TRAIT_POWER
++         if true {⏎            TRAIT_POWER
+
+### N6 the heirloom line is left out of the breakdown
+@ src/power_lines.rs
+-     if let Some(heirloom) = &hero.heirloom⏎        && heirloom.aptitude == quest.aptitude⏎    {⏎        add(⏎            fmt(&words[W::PowerLineCarries], &[&heirloom.name]),⏎            heirloom.bonus,⏎            false,⏎        );⏎    }⏎
++     {⏎    }⏎
+
+### N7 the trait power is not in the sum
+@ src/power.rs
+- sum += crate::traits::power(hero, quest.aptitude);
++ sum += 0;
+
+### I1 an heir takes a mark they already carry again
+@ src/inheritance.rs
+- if !marks.iter().any(|m| m.identity() == mark.identity()) {
++ if true {
+
+### I2 a passed mark keeps its generation
+@ src/inheritance.rs
+- generation: mark.generation + 1,
++ generation: mark.generation,
+
+### I3 succession passes the dead's traits
+@ src/inheritance.rs
+- traits: heroes[to].traits.clone(),
++ traits: heroes[from].traits.clone(),
+
+### I4 no one's marks always go into the ground
+@ src/heirs.rs
+- None => match earliest_born_child(&house.heroes, dead) {
++ None => match None::<HeroId> {
+
+### I5 the candidate line's (+n) is the total
+@ src/heirs.rs
+- format!("{} (+{})", carried.marks.len(), carried.taken)
++ format!("{} (+{})", carried.marks.len(), carried.marks.len())
+
+### I6 an heir pays once for all the marks
+@ src/heirs.rs
+- MARK_HEIR_COST * carried.taken as i32
++ MARK_HEIR_COST
+
+### I7 a child is born under its first parent's marks only
+@ src/births.rs
+-     for parent in [first, second] {⏎        house.heroes[id].marks
++     for parent in [first] {⏎        house.heroes[id].marks
+
+### S1 the outsider line is left off an outsider's sheet
+@ src/sheet.rs
+- if !hero.family && hero.is_living() {
++ if false {
+
+### S2 the PERSONAL line is left off the sheet
+@ src/quest_sheet.rs
+- for hero in personal(content, heroes, q.facts(), party) {
++ for hero in Vec::<usize>::new() {
+
+### S3 the card does not say who is marked
+@ src/quest_card.rs
+- (!names.is_empty())⏎                .then(|| fmt(&words[W::QuestCardPersonal]
++ (false && !names.is_empty())⏎                .then(|| fmt(&words[W::QuestCardPersonal]

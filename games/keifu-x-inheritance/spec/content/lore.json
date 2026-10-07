@@ -1,0 +1,419 @@
+{
+  "_source": "lineage/lore.jai, lineage/writing.jai, calendar.jai",
+  "aptitudes": [
+    {
+      "id": "MIGHT",
+      "title": "Might"
+    },
+    {
+      "id": "WITS",
+      "title": "Wits"
+    },
+    {
+      "id": "SPIRIT",
+      "title": "Spirit"
+    }
+  ],
+  "tags": [
+    {
+      "id": "DARK",
+      "title": "Dark",
+      "noun": "the dark"
+    },
+    {
+      "id": "UNDEAD",
+      "title": "Undead",
+      "noun": "the walking dead"
+    },
+    {
+      "id": "WATER",
+      "title": "Water",
+      "noun": "deep water"
+    },
+    {
+      "id": "BEASTS",
+      "title": "Beasts",
+      "noun": "beasts"
+    },
+    {
+      "id": "HEIGHTS",
+      "title": "Heights",
+      "noun": "high places"
+    },
+    {
+      "id": "COLD",
+      "title": "Cold",
+      "noun": "the cold"
+    },
+    {
+      "id": "FIRE",
+      "title": "Fire",
+      "noun": "fire"
+    },
+    {
+      "id": "CROWDS",
+      "title": "Crowds",
+      "noun": "crowds"
+    }
+  ],
+  "places": [
+    {
+      "id": "BARROW",
+      "questing": true,
+      "title": "The Barrow",
+      "name": "the Barrow",
+      "sprite": "dungeon-cemetary",
+      "tags": [
+        "DARK",
+        "UNDEAD"
+      ],
+      "tint": "#9aa0b8",
+      "trouble_line": "The Barrow's dead have walked %1 unanswered.",
+      "_source": "lineage/lore.jai:60"
+    },
+    {
+      "id": "DROWNED_COAST",
+      "questing": true,
+      "title": "The Drowned Coast",
+      "name": "the Drowned Coast",
+      "sprite": "dungeon-sea",
+      "tags": [
+        "WATER",
+        "BEASTS"
+      ],
+      "tint": "#4fa3d8",
+      "trouble_line": "The tide has had the Drowned Coast to itself for %1.",
+      "_source": "lineage/lore.jai:61"
+    },
+    {
+      "id": "HIGH_PASS",
+      "questing": true,
+      "title": "The High Pass",
+      "name": "the High Pass",
+      "sprite": "dungeon-pyramid",
+      "tags": [
+        "HEIGHTS",
+        "COLD"
+      ],
+      "tint": "#cfe3ee",
+      "trouble_line": "The High Pass has been shut %1.",
+      "_source": "lineage/lore.jai:62"
+    },
+    {
+      "id": "EMBERFALL",
+      "questing": true,
+      "title": "Emberfall",
+      "name": "Emberfall",
+      "sprite": "dungeon-campout",
+      "tags": [
+        "FIRE"
+      ],
+      "tint": "#ff7f50",
+      "trouble_line": "Emberfall has burned %1 untended.",
+      "_source": "lineage/lore.jai:63"
+    },
+    {
+      "id": "KINGS_COURT",
+      "questing": true,
+      "title": "The King's Court",
+      "name": "the King's Court",
+      "sprite": "dungeon-palace",
+      "tags": [
+        "CROWDS"
+      ],
+      "tint": "#eca72c",
+      "trouble_line": "The Court has waited %1 for an answer, and is counting.",
+      "_source": "lineage/lore.jai:64"
+    },
+    {
+      "id": "DEEPWOOD",
+      "questing": true,
+      "title": "The Deepwood",
+      "name": "the Deepwood",
+      "sprite": "dungeon-nest",
+      "tags": [
+        "BEASTS",
+        "DARK"
+      ],
+      "tint": "#67ab7a",
+      "trouble_line": "The Deepwood has grown %1 nearer the road.",
+      "_source": "lineage/lore.jai:65"
+    },
+    {
+      "id": "SEALED_DOOR",
+      "questing": false,
+      "title": "The Sealed Door",
+      "name": "the Sealed Door",
+      "sprite": "dungeon-gate",
+      "tags": [
+        "DARK",
+        "COLD"
+      ],
+      "tint": "#d14444",
+      "trouble_line": "The Sealed Door has waited %1.",
+      "_source": "lineage/lore.jai:66"
+    }
+  ],
+  "phases": [
+    {
+      "id": "CHILD",
+      "title": "Child",
+      "telling": "a child",
+      "note": "{He} stays in the yard, and can be taught in winter.",
+      "from_age": 0,
+      "adjustment": {
+        "MIGHT": 0,
+        "WITS": 0,
+        "SPIRIT": 0
+      }
+    },
+    {
+      "id": "YOUTH",
+      "title": "Youth",
+      "telling": "a youth",
+      "note": "{He} learns fast: more from a winter's training, and something from any quest that succeeds.",
+      "from_age": 12,
+      "adjustment": {
+        "MIGHT": -1,
+        "WITS": -1,
+        "SPIRIT": -1
+      }
+    },
+    {
+      "id": "PRIME",
+      "title": "Prime",
+      "telling": "in the prime of life",
+      "note": "{He} is at full strength.",
+      "from_age": 20,
+      "adjustment": {
+        "MIGHT": 0,
+        "WITS": 0,
+        "SPIRIT": 0
+      }
+    },
+    {
+      "id": "VETERAN",
+      "title": "Veteran",
+      "telling": "a veteran",
+      "note": "{He} teaches well now.",
+      "from_age": 40,
+      "adjustment": {
+        "MIGHT": -1,
+        "WITS": 1,
+        "SPIRIT": 0
+      }
+    },
+    {
+      "id": "ELDER",
+      "title": "Elder",
+      "telling": "an elder",
+      "note": "{He} teaches well, and each winter may be {his} last.",
+      "from_age": 55,
+      "adjustment": {
+        "MIGHT": -2,
+        "WITS": 1,
+        "SPIRIT": 0
+      }
+    }
+  ],
+  "phase_effect_fragments": {
+    "uniform": "% brings % % in every aptitude",
+    "less": "less",
+    "more": "more",
+    "youth_until": " until % is %",
+    "sentence_end": ". ",
+    "and_clause": " and %",
+    "clause": "% % % by %",
+    "grows": "grows",
+    "fades": "fades",
+    "_source": "lineage/lore.jai:125-157 phase_effect_telling"
+  },
+  "vocations": [
+    {
+      "id": "KNIGHT",
+      "title": "Knight",
+      "aptitude": "MIGHT",
+      "sprite": "character-knight",
+      "elder_sprite": "character-grandpa"
+    },
+    {
+      "id": "WARRIOR",
+      "title": "Warrior",
+      "aptitude": "MIGHT",
+      "sprite": "character-warrior",
+      "elder_sprite": "character-grandpa"
+    },
+    {
+      "id": "RANGER",
+      "title": "Ranger",
+      "aptitude": "WITS",
+      "sprite": "character-guard",
+      "elder_sprite": "character-grandpa"
+    },
+    {
+      "id": "SCHOLAR",
+      "title": "Scholar",
+      "aptitude": "WITS",
+      "sprite": "character-scholar",
+      "elder_sprite": "character-hermit"
+    },
+    {
+      "id": "PRIEST",
+      "title": "Priest",
+      "aptitude": "SPIRIT",
+      "sprite": "character-priest",
+      "elder_sprite": "character-hermit"
+    },
+    {
+      "id": "SAGE",
+      "title": "Sage",
+      "aptitude": "SPIRIT",
+      "sprite": "character-sage",
+      "elder_sprite": "character-hermit"
+    }
+  ],
+  "child_sprite": "character-boy",
+  "pronouns": {
+    "HE": {
+      "subject": "he",
+      "object": "him",
+      "possessive": "his"
+    },
+    "SHE": {
+      "subject": "she",
+      "object": "her",
+      "possessive": "her"
+    }
+  },
+  "outcomes": [
+    {
+      "id": "DISASTER",
+      "title": "Disaster"
+    },
+    {
+      "id": "SETBACK",
+      "title": "Setback"
+    },
+    {
+      "id": "SUCCESS",
+      "title": "Success"
+    },
+    {
+      "id": "TRIUMPH",
+      "title": "Triumph"
+    }
+  ],
+  "seasons": [
+    "Spring",
+    "Summer",
+    "Autumn",
+    "Winter"
+  ],
+  "year_counts": [
+    "no time",
+    "a year",
+    "two years",
+    "three years"
+  ],
+  "count_words": [
+    "never",
+    "once",
+    "twice",
+    "three times",
+    "four times",
+    "five times",
+    "six times",
+    "seven times",
+    "eight times",
+    "nine times",
+    "ten times",
+    "eleven times",
+    "twelve times"
+  ],
+  "count_words_beyond": "% times",
+  "year_tellings": {
+    "before_first_year": "before the first year",
+    "last_summer": "in the last summer",
+    "in_year": "in year %",
+    "_source": "lineage/writing.jai:181-185 tell_year"
+  },
+  "age_at_death": "% was %.",
+  "party_of_no_one": "No one",
+  "name_list_empty": "no one yet",
+  "name_list_last_separator": " and ",
+  "name_list_separator": ", ",
+  "colors": {
+    "aptitudes": {
+      "MIGHT": "orange",
+      "WITS": "teal",
+      "SPIRIT": "pink"
+    },
+    "outcomes": {
+      "DISASTER": "red",
+      "SETBACK": "orange",
+      "SUCCESS": "seafoam",
+      "TRIUMPH": "yellow"
+    },
+    "ink_dim": "#55555f",
+    "ink_faint": "#2a2a30",
+    "panel_fill": "#101014",
+    "panel_edge": "#3a3a44",
+    "dream": "yellow",
+    "fear": "#a98be0",
+    "destiny": "teal",
+    "bond": "#e58fb0",
+    "heirloom": "#d8c06a",
+    "tree_line": "#6a6a78",
+    "_note": "Presentation only; the port is visually free. Named colors are engine palette entries."
+  },
+  "traits": [
+    {
+      "id": "STRONG",
+      "aptitude": "MIGHT",
+      "gift": true,
+      "title": "Strong",
+      "telling": "strong",
+      "source": "keifu-x-inheritance VARIANT.md"
+    },
+    {
+      "id": "FRAIL",
+      "aptitude": "MIGHT",
+      "gift": false,
+      "title": "Frail",
+      "telling": "frail",
+      "source": "keifu-x-inheritance VARIANT.md"
+    },
+    {
+      "id": "SHARP",
+      "aptitude": "WITS",
+      "gift": true,
+      "title": "Sharp",
+      "telling": "sharp",
+      "source": "keifu-x-inheritance VARIANT.md"
+    },
+    {
+      "id": "DULL",
+      "aptitude": "WITS",
+      "gift": false,
+      "title": "Dull",
+      "telling": "dull",
+      "source": "keifu-x-inheritance VARIANT.md"
+    },
+    {
+      "id": "STEADFAST",
+      "aptitude": "SPIRIT",
+      "gift": true,
+      "title": "Steadfast",
+      "telling": "steadfast",
+      "source": "keifu-x-inheritance VARIANT.md"
+    },
+    {
+      "id": "FAINT",
+      "aptitude": "SPIRIT",
+      "gift": false,
+      "title": "Faint",
+      "telling": "faint",
+      "source": "keifu-x-inheritance VARIANT.md"
+    }
+  ]
+}

@@ -1,0 +1,1432 @@
+{
+  "_note": "Presentation text. The port is visually free; these are the original words, kept so the port can stay word-identical where it shows the same information. Labels after \"&&\" in the source (widget ids) are not included.",
+  "title": {
+    "program_title": "Lineage",
+    "subtitle": {
+      "text": "Twenty-five years. One door.",
+      "source": "modal-screens/title-screen.jai:21"
+    },
+    "start_buttons": {
+      "text": "Press any button to start",
+      "source": "modal-screens/title-screen.jai:51"
+    },
+    "start_tap": {
+      "text": "Tap to start",
+      "source": "modal-screens/title-screen.jai:63"
+    },
+    "start_click": {
+      "text": "Click to start",
+      "source": "modal-screens/title-screen.jai:63"
+    }
+  },
+  "guide": {
+    "title": {
+      "text": "How to play, %1 of %2",
+      "source": "modal-screens/guide.jai:38",
+      "args": [
+        "page number",
+        "page count"
+      ]
+    },
+    "entries_per_page": 8,
+    "entries": [
+      {
+        "heading": "THE HOUSE",
+        "telling": "You keep a house of heroes for 25 years, a turn a year: a summer of quests, a winter at the hearth, then the turn of the year. After the last summer the Sealed Door opens. Everything before it is raising a family that can walk through it.",
+        "source": "modal-screens/guide.jai:75",
+        "telling_template": "You keep a house of heroes for % years, a turn a year: a summer of quests, a winter at the hearth, then the turn of the year. After the last summer the Sealed Door opens. Everything before it is raising a family that can walk through it."
+      },
+      {
+        "heading": "SUMMER",
+        "telling": "Four quests are posted. Drag heroes onto their seats. A quest tests one aptitude: what the party brings, plus two dice less 7, against what it needs. Beat it by 4 for a triumph; miss it by more than 4 for a disaster. Anyone left at home heals a wound.",
+        "source": "modal-screens/guide.jai:77",
+        "telling_template": "Four quests are posted. Drag heroes onto their seats. A quest tests one aptitude: what the party brings, plus two dice less %, against what it needs. Beat it by % for a triumph; miss it by more than % for a disaster. Anyone left at home heals a wound."
+      },
+      {
+        "heading": "RENOWN",
+        "telling": "The house lives on its renown. Quests won earn it, and so does a tale told at the long table. A disaster costs it, and so does every quest left unanswered: more the higher the house stands, since more is expected of it. At 0 the house closes.",
+        "source": "modal-screens/guide.jai:79"
+      },
+      {
+        "heading": "TROUBLE",
+        "telling": "A place left unanswered grows troubled, up to 2. A troubled quest has room for fewer, asks more of each who goes, is more dangerous, and pays more. Answer it and it eases, however it goes. Every quest asks a little more as the years pass.",
+        "source": "modal-screens/guide.jai:81",
+        "telling_template": "A place left unanswered grows troubled, up to %. A troubled quest has room for fewer, asks more of each who goes, is more dangerous, and pays more. Answer it and it eases, however it goes. Every quest asks a little more as the years pass."
+      },
+      {
+        "heading": "DREAMS AND LEGACIES",
+        "telling": "Every hero wants one thing, in three steps. A quest that would move a dream on names the dreamer. A dream fulfilled settles the hero and leaves a legacy: an heirloom of +2, a tale that earns renown every year, or a blessing on the dreamer's line.",
+        "source": "modal-screens/guide.jai:83",
+        "telling_template": "Every hero wants one thing, in three steps. A quest that would move a dream on names the dreamer. A dream fulfilled settles the hero and leaves a legacy: an heirloom of +%, a tale that earns renown every year, or a blessing on the dreamer's line."
+      },
+      {
+        "heading": "FEARS",
+        "telling": "Against what they fear a hero brings less, and comes home with dread. At 5 dread they break, and refuse it for ever. With someone bonded beside them, a success gives courage instead; 3 courage conquers the fear, and it becomes a strength. The fire sheds dread.",
+        "source": "modal-screens/guide.jai:85",
+        "telling_template": "Against what they fear a hero brings less, and comes home with dread. At % dread they break, and refuse it for ever. With someone bonded beside them, a success gives courage instead; % courage conquers the fear, and it becomes a strength. The fire sheds dread."
+      },
+      {
+        "heading": "DESTINIES",
+        "telling": "The Seer speaks over each hero when they come of age or arrive. Under each prophecy is its doom and its gift, exactly as the game applies them. Read them before you send anyone anywhere: a crown, a fire and a bed are all kept.",
+        "source": "modal-screens/guide.jai:87"
+      },
+      {
+        "heading": "BONDS",
+        "telling": "Made on the road and by the fire. Two successes together make friends, a disaster makes rivals. Spouses, parents and children are strongest. Bonded heroes bring more together, steady each other against fear, and grieve each other's deaths.",
+        "source": "modal-screens/guide.jai:89"
+      },
+      {
+        "heading": "WINTER",
+        "telling": "Ten seats, and more hands than seats. By the fire: heal, shed dread. The training yard: learn alone, or under one who knows more. The garden: court. The long table: tell the tale. The benches: teach a child. Whoever is left in the hall gains nothing.",
+        "source": "modal-screens/guide.jai:92"
+      },
+      {
+        "heading": "TEACHING",
+        "telling": "Alone, a hero trains their calling, up to 6. A teacher passes on their best aptitude, up to their own; veterans and elders teach well and the young learn fast. A youth learns from any quest that succeeds, and the least able learns from a triumph.",
+        "source": "modal-screens/guide.jai:94",
+        "telling_template": "Alone, a hero trains their calling, up to %. A teacher passes on their best aptitude, up to their own; veterans and elders teach well and the young learn fast. A youth learns from any quest that succeeds, and the least able learns from a triumph."
+      },
+      {
+        "heading": "COURTING AND CHILDREN",
+        "telling": "Two may wed when both are 18 or older, no more than 15 years apart, and not kin. From the year after, they may have a child each winter while both are 18 to 45, up to 3. The house holds 12 in all, 6 of them children.",
+        "source": "modal-screens/guide.jai:96",
+        "telling_template": "Two may wed when both are % or older, no more than % years apart, and not kin. From the year after, they may have a child each winter while both are % to %, up to %. The house holds % in all, % of them children."
+      },
+      {
+        "heading": "GROWING UP",
+        "telling": "From 6 a child is taught on a bench, up to 4 in each aptitude; their first teacher decides their calling. At 12 they come of age, hear the Seer and may quest, 1 short in every aptitude until 20. From 40 Might fades and Wits grows; from 55 more so, and each winter may be the last.",
+        "source": "modal-screens/guide.jai:98",
+        "telling_template": "From % a child is taught on a bench, up to % in each aptitude; their first teacher decides their calling. At % they come of age, hear the Seer and may quest, 1 short in every aptitude until %. From % Might fades and Wits grows; from % more so, and each winter may be the last."
+      },
+      {
+        "heading": "HERITAGE",
+        "telling": "A child takes a share of both parents' aptitudes, may take a parent's fear, likelier if that parent broke, or be born brave where a parent conquered it, and inherits every blessing on the line. A child whose parent fell on a quest dreams of avenging them.",
+        "source": "modal-screens/guide.jai:100"
+      },
+      {
+        "heading": "DEATH, HEIRS AND GHOSTS",
+        "telling": "A second wound kills. When someone dies with an heirloom or a dream undone, you choose the heir, kin first. The heir takes the heirloom and carries the dream on. Left to no one, the dream walks as a ghost, and a quest to lay it returns until it is won.",
+        "source": "modal-screens/guide.jai:102"
+      },
+      {
+        "heading": "THE SEALED DOOR",
+        "telling": "Three locks, of Might, Wits and Spirit, tried in turn by the same four. Each lock weighs all the four bring: aptitude, heirlooms, blessings, conquered fears, every bond between them, and the Seer's promise. Fear of the dark or the cold counts against them.",
+        "source": "modal-screens/guide.jai:104"
+      },
+      {
+        "heading": "READING",
+        "telling": "Point at a hero for their sheet, at a quest for its odds in full, at headings for how they work. On a card, red is wounded, grey is old, purple pips are dread, a gold pip is settled. The family shows everyone who ever lived here, and what was said of them.",
+        "source": "modal-screens/guide.jai:106"
+      }
+    ]
+  },
+  "top_bar": {
+    "year": {
+      "text": "Year % of %",
+      "source": "lineage/panels.jai:337",
+      "args": [
+        "current year",
+        "DOOR_YEARS (25)"
+      ]
+    },
+    "last_summer": {
+      "text": "The last summer",
+      "source": "lineage/panels.jai:337"
+    },
+    "house_renown": {
+      "text": "House renown %",
+      "source": "lineage/panels.jai:340",
+      "args": [
+        "house renown"
+      ],
+      "note": "drawn red at renown <= 4 (RENOWN_WARNING)"
+    },
+    "renown_help": {
+      "text": "The house's standing, and its life. A quest answered well earns it. A quest left unanswered costs it, and more the higher the house stands, since more is expected of it. So does a disaster. At 0 the house closes. It draws wanderers, % in a hundred each winter, and better ones the higher it stands.",
+      "source": "lineage/panels.jai:342",
+      "args": [
+        "wanderer chance, percent"
+      ]
+    },
+    "door_countdown": {
+      "text": "The Sealed Door opens in % %. It will ask for four.",
+      "source": "lineage/panels.jai:354",
+      "args": [
+        "years until the Door",
+        "year/years"
+      ]
+    },
+    "door_open": {
+      "text": "The Sealed Door stands open. It asks for four.",
+      "source": "lineage/panels.jai:357"
+    },
+    "door_tags": {
+      "text": "%, %. Locks: Might %, Wits %, Spirit %.",
+      "source": "lineage/panels.jai:360",
+      "args": [
+        "tag 1 title",
+        "tag 2 title",
+        "lock demands x3"
+      ]
+    },
+    "door_outlook": {
+      "text": "Your best four today bring %, %, %: all three open % in 100.",
+      "source": "lineage/panels.jai:366",
+      "args": [
+        "best-four Might power",
+        "Wits power",
+        "Spirit power",
+        "chance all three open, percent"
+      ]
+    },
+    "door_help": {
+      "text": "Each lock is a quest: the four bring their power in that aptitude against the lock's number, and the same four try all three in turn. Fears of Dark or Cold count against them. Bonds between the four count at every lock, and so does the Seer's promise. Best four today: %.",
+      "source": "lineage/panels.jai:370",
+      "args": [
+        "names of the best four"
+      ]
+    },
+    "roster_seat": {
+      "text": "The household of renown %",
+      "source": "lineage/panels.jai:320",
+      "args": [
+        "house renown"
+      ],
+      "note": "seat telling of the household slots"
+    }
+  },
+  "summer": {
+    "household": {
+      "text": "THE HOUSEHOLD",
+      "source": "scene/scenes/summer.jai:60"
+    },
+    "yard": {
+      "text": "THE YARD",
+      "source": "scene/scenes/summer.jai:61"
+    },
+    "no_children": {
+      "text": "No children yet.",
+      "source": "scene/scenes/summer.jai:72"
+    },
+    "help": {
+      "text": "Point at a hero to read their sheet. Point at a quest to read its odds in full. Drag heroes onto quests, then set out. A quest nobody answers costs the house renown, and is worse when it comes again.",
+      "source": "scene/scenes/summer.jai:95"
+    },
+    "button_set_out": "Set out",
+    "button_stay_home": "Stay home",
+    "button_door": "Try the Door"
+  },
+  "quest_card": {
+    "danger": {
+      "text": "Danger",
+      "source": "lineage/quest-card.jai:93"
+    },
+    "needs": {
+      "text": "Needs % %",
+      "source": "lineage/quest-card.jai:96",
+      "args": [
+        "aptitude title",
+        "demand"
+      ]
+    },
+    "you_bring": {
+      "text": "you bring %",
+      "source": "lineage/quest-card.jai:98",
+      "args": [
+        "power"
+      ]
+    },
+    "succeed": {
+      "text": "Succeed %\\%",
+      "source": "lineage/quest-card.jai:107"
+    },
+    "triumph": {
+      "text": "triumph %\\%",
+      "source": "lineage/quest-card.jai:108"
+    },
+    "setback": {
+      "text": "Setback %\\%",
+      "source": "lineage/quest-card.jai:111"
+    },
+    "disaster": {
+      "text": "disaster %\\%",
+      "source": "lineage/quest-card.jai:112"
+    },
+    "no_one": {
+      "text": "No one is going.",
+      "source": "lineage/quest-card.jai:120"
+    },
+    "room_for": {
+      "text": "Room for %.",
+      "source": "lineage/quest-card.jai:121",
+      "args": [
+        "seats"
+      ]
+    },
+    "renown": {
+      "text": "Renown +%",
+      "source": "lineage/quest-card.jai:125",
+      "args": [
+        "quest renown"
+      ]
+    },
+    "unanswered": {
+      "text": "unanswered -%",
+      "source": "lineage/quest-card.jai:126",
+      "args": [
+        "unanswered cost"
+      ]
+    },
+    "ghost": {
+      "text": "The ghost of %",
+      "source": "lineage/quest-card.jai:136",
+      "args": [
+        "ghost first name"
+      ]
+    },
+    "dreamers": {
+      "text": "Dream: %",
+      "source": "lineage/quest-card.jai:139",
+      "args": [
+        "called dreamers, comma-separated"
+      ]
+    },
+    "fearful_item": {
+      "text": "% -%",
+      "source": "lineage/quest-card.jai:148",
+      "args": [
+        "name",
+        "fear penalty"
+      ]
+    },
+    "steadied": {
+      "text": "steadied",
+      "source": "lineage/quest-card.jai:149"
+    },
+    "will_not_go": {
+      "text": "% will not go.",
+      "source": "lineage/quest-card.jai:153",
+      "args": [
+        "watched hero name"
+      ]
+    },
+    "fear": {
+      "text": "Fear: %",
+      "source": "lineage/quest-card.jai:156",
+      "args": [
+        "items, comma-separated"
+      ]
+    },
+    "personal": {
+      "text": "Marked if it fails: %",
+      "source": "keifu-x-inheritance VARIANT.md",
+      "args": [
+        "the names"
+      ]
+    }
+  },
+  "quest_sheet": {
+    "dream_call": {
+      "text": "%'s %: %. % must %.",
+      "source": "lineage/quest-card.jai:195",
+      "args": [
+        "dreamer first name",
+        "burden/dream",
+        "current stage task (untold, as authored)",
+        "He/She",
+        "call telling"
+      ]
+    },
+    "needs": {
+      "text": "NEEDS % %",
+      "source": "lineage/quest-card.jai:201",
+      "args": [
+        "APTITUDE",
+        "demand"
+      ]
+    },
+    "no_one": {
+      "text": "No one is going.",
+      "source": "lineage/quest-card.jai:209"
+    },
+    "you_bring": {
+      "text": "You bring",
+      "source": "lineage/quest-card.jai:213"
+    },
+    "dice": {
+      "text": "Two dice, less %, are added to that.",
+      "source": "lineage/quest-card.jai:216",
+      "args": [
+        "DICE_MIDPOINT (7)"
+      ]
+    },
+    "triumph": {
+      "text": "Beat it by %: +% renown. The least able learns.",
+      "source": "lineage/quest-card.jai:220",
+      "args": [
+        "TRIUMPH_MARGIN (4)",
+        "quest renown + 1"
+      ]
+    },
+    "success": {
+      "text": "Meet it: +% renown.",
+      "source": "lineage/quest-card.jai:222",
+      "args": [
+        "quest renown"
+      ]
+    },
+    "setback": {
+      "text": "Miss by up to %: one is wounded.",
+      "source": "lineage/quest-card.jai:224",
+      "args": [
+        "SETBACK_MARGIN (4)"
+      ]
+    },
+    "disaster": {
+      "text": "Miss by more: -% renown, all wounded, each dies % in 100.",
+      "source": "lineage/quest-card.jai:226",
+      "args": [
+        "danger",
+        "death chance percent"
+      ]
+    },
+    "unanswered": {
+      "text": "UNANSWERED: -% renown, and it grows worse.",
+      "source": "lineage/quest-card.jai:227",
+      "args": [
+        "unanswered cost"
+      ]
+    },
+    "not_quested": {
+      "text": "The house has not quested here yet.",
+      "source": "lineage/quest-card.jai:232"
+    },
+    "history": {
+      "text": "Quested here %: % in triumph, % in disaster.",
+      "source": "lineage/quest-card.jai:235",
+      "args": [
+        "count words of visits",
+        "triumphs",
+        "disasters"
+      ]
+    },
+    "fallen": {
+      "text": "% %.",
+      "source": "lineage/quest-card.jai:238",
+      "args": [
+        "full name",
+        "fate telling"
+      ]
+    },
+    "fewer_seats": {
+      "text": " Room for % where there was room for %.",
+      "source": "lineage/quest-card.jai:244",
+      "args": [
+        "seats",
+        "calm seats"
+      ]
+    },
+    "trouble_stakes": {
+      "text": "%1%2 Each who goes must bring %3 more, the danger is %4 higher, and it pays %5 more renown. Answer it, however it goes, and it eases.",
+      "source": "lineage/quest-card.jai:246",
+      "args": [
+        "trouble line",
+        "fewer_seats or \"\"",
+        "trouble x 1",
+        "danger - calm danger",
+        "renown - calm danger"
+      ]
+    },
+    "power_line_member": {
+      "text": "%, % %",
+      "source": "lineage/quest.jai:159",
+      "args": [
+        "name",
+        "aptitude title",
+        "aptitude value"
+      ]
+    },
+    "power_line_carries": {
+      "text": "  carries %",
+      "source": "lineage/quest.jai:163"
+    },
+    "power_line_fears": {
+      "text": "  fears %",
+      "source": "lineage/quest.jai:167"
+    },
+    "power_line_conquered": {
+      "text": "  has conquered %",
+      "source": "lineage/quest.jai:171"
+    },
+    "power_line_wounded": {
+      "text": "  is wounded",
+      "source": "lineage/quest.jai:175"
+    },
+    "power_line_door": {
+      "text": "  was promised to the Door",
+      "source": "lineage/quest.jai:179"
+    },
+    "power_line_blessed": {
+      "text": "  blessed: %",
+      "source": "lineage/quest.jai:183"
+    },
+    "power_line_floor": {
+      "text": "  can do no worse than nothing",
+      "source": "lineage/quest.jai:188"
+    },
+    "power_line_bond": {
+      "text": "% and %, %",
+      "source": "lineage/quest.jai:204",
+      "args": [
+        "first name",
+        "second name",
+        "bond pair telling"
+      ]
+    },
+    "power_line_patron": {
+      "text": "A patron at Court",
+      "source": "lineage/quest.jai:210"
+    },
+    "power_line_trait": {
+      "text": "  is %",
+      "source": "keifu-x-inheritance VARIANT.md",
+      "args": [
+        "trait telling"
+      ]
+    },
+    "personal": {
+      "text": "PERSONAL: %1's dream. If it fails (%2 in 100) the name is marked: -%3 house renown and -%4 to %1 now, then -%5 a year to the house through year %6, and the blood carries it.",
+      "source": "keifu-x-inheritance VARIANT.md",
+      "args": [
+        "name",
+        "failure chance",
+        "house cost",
+        "personal cost",
+        "yearly",
+        "last year"
+      ]
+    }
+  },
+  "door_sheet": {
+    "empty": {
+      "text": "Drag four onto the Door. Each lock weighs what they bring in one aptitude: their own, heirlooms, the Seer's promise, conquered fears, and every bond between them. Fear of the dark or the cold counts against them.",
+      "source": "lineage/quest-card.jai:272"
+    },
+    "all_three": {
+      "text": "All three open: % in 100.",
+      "source": "lineage/quest-card.jai:277",
+      "args": [
+        "percent"
+      ]
+    },
+    "lock": {
+      "text": "bring %, open % in 100",
+      "source": "lineage/quest-card.jai:286",
+      "args": [
+        "power",
+        "percent"
+      ]
+    },
+    "bonds": {
+      "text": "Bonds between them",
+      "source": "lineage/quest-card.jai:299"
+    },
+    "patron": {
+      "text": "A patron at Court",
+      "source": "lineage/quest-card.jai:300"
+    },
+    "card_tags": {
+      "text": "%, %. It asks for four.",
+      "source": "lineage/quest-card.jai:331",
+      "args": [
+        "tag 1",
+        "tag 2"
+      ]
+    },
+    "card_text": {
+      "text": "Three locks, tried in turn by the same four. Whoever falls at one lock does not reach the next. There is no summer after this one.",
+      "source": "lineage/quest-card.jai:335"
+    },
+    "card_all_three": {
+      "text": "All three locks open: % in 100.",
+      "source": "lineage/quest-card.jai:340",
+      "args": [
+        "percent"
+      ]
+    },
+    "card_lock": {
+      "text": "%: needs % %",
+      "source": "lineage/quest-card.jai:351",
+      "args": [
+        "lock title",
+        "aptitude title",
+        "demand"
+      ]
+    },
+    "card_odds": {
+      "text": "Succeed %\\%, triumph %\\%. Setback %\\%, disaster %\\%.",
+      "source": "lineage/quest-card.jai:362"
+    },
+    "card_empty": {
+      "text": "No one stands before it.",
+      "source": "lineage/quest-card.jai:369"
+    }
+  },
+  "hero_sheet": {
+    "dream": {
+      "text": "DREAM",
+      "source": "lineage/sheet.jai:32"
+    },
+    "burden": {
+      "text": "BURDEN",
+      "source": "lineage/sheet.jai:33"
+    },
+    "heirloom": {
+      "text": "HEIRLOOM",
+      "source": "lineage/sheet.jai:50"
+    },
+    "blessed": {
+      "text": "BLESSED",
+      "source": "lineage/sheet.jai:55"
+    },
+    "leaves": {
+      "text": "LEAVES",
+      "source": "lineage/sheet.jai:59"
+    },
+    "scar": {
+      "text": "SCAR",
+      "source": "lineage/sheet.jai:62"
+    },
+    "child_station": {
+      "text": "Child of house %, aged %",
+      "source": "lineage/sheet.jai:67",
+      "args": [
+        "house",
+        "age"
+      ]
+    },
+    "station": {
+      "text": "%, %, aged %",
+      "source": "lineage/sheet.jai:68",
+      "args": [
+        "vocation title",
+        "phase title lowercased",
+        "age"
+      ]
+    },
+    "died": {
+      "text": "Died %, aged %",
+      "source": "lineage/sheet.jai:72",
+      "args": [
+        "year telling",
+        "age"
+      ]
+    },
+    "left": {
+      "text": "Left %, aged %",
+      "source": "lineage/sheet.jai:73",
+      "args": [
+        "year telling",
+        "age"
+      ]
+    },
+    "renown_wounded": {
+      "text": "Renown %. Wounded: -% power.",
+      "source": "lineage/sheet.jai:75",
+      "args": [
+        "renown",
+        "WOUND_PENALTY (2)"
+      ]
+    },
+    "renown_settled": {
+      "text": "Renown %. Settled.",
+      "source": "lineage/sheet.jai:76",
+      "args": [
+        "renown"
+      ]
+    },
+    "renown": {
+      "text": "Renown %",
+      "source": "lineage/sheet.jai:77",
+      "args": [
+        "renown"
+      ]
+    },
+    "aptitude_note": {
+      "text": "% % of %.",
+      "source": "lineage/sheet.jai:101",
+      "args": [
+        "aptitude",
+        "base",
+        "APTITUDE_LIMIT (9)"
+      ]
+    },
+    "aptitude_note_adjusted": {
+      "text": "%1 %2 of %3, %4%5 for being %6.",
+      "source": "lineage/sheet.jai:105",
+      "args": [
+        "aptitude",
+        "base",
+        "limit",
+        "sign",
+        "adjustment",
+        "phase telling"
+      ]
+    },
+    "wounded_warning": {
+      "text": "Another wound will kill. Rest to heal.",
+      "source": "lineage/sheet.jai:112"
+    },
+    "too_young": {
+      "text": "Too young to know it yet.",
+      "source": "lineage/sheet.jai:118"
+    },
+    "taken_up": {
+      "text": "Taken up from %.",
+      "source": "lineage/sheet.jai:126",
+      "args": [
+        "owner full name"
+      ]
+    },
+    "fulfilled": {
+      "text": "Fulfilled.",
+      "source": "lineage/sheet.jai:130"
+    },
+    "settled": {
+      "text": "Settled. Dread has no hold.",
+      "source": "lineage/sheet.jai:165"
+    },
+    "dread": {
+      "text": "Dread",
+      "source": "lineage/sheet.jai:170"
+    },
+    "courage": {
+      "text": "Courage",
+      "source": "lineage/sheet.jai:172"
+    },
+    "penalty": {
+      "text": "-% power",
+      "source": "lineage/sheet.jai:174",
+      "args": [
+        "fear penalty"
+      ]
+    },
+    "fear_help": {
+      "text": "-% power against %. Dread rises by 1 on any quest against it, and by 1 more if it goes badly. Someone bonded beside them takes 1 off. At % dread they break. A success with someone bonded beside them adds courage instead, and % courage conquers the fear. A winter by the fire sheds 1 dread.",
+      "source": "lineage/sheet.jai:177",
+      "args": [
+        "fear penalty",
+        "tag title",
+        "DREAD_LIMIT (5)",
+        "COURAGE_TO_CONQUER (3)"
+      ]
+    },
+    "destiny_come": {
+      "text": "DESTINY, COME",
+      "source": "lineage/sheet.jai:183"
+    },
+    "destiny": {
+      "text": "DESTINY",
+      "source": "lineage/sheet.jai:183"
+    },
+    "bond_gone": {
+      "text": "% %, gone",
+      "source": "lineage/sheet.jai:197",
+      "args": [
+        "bond title",
+        "name"
+      ]
+    },
+    "bonds": {
+      "text": "BONDS",
+      "source": "lineage/sheet.jai:209"
+    },
+    "no_bonds": {
+      "text": "None yet.",
+      "source": "lineage/sheet.jai:205"
+    },
+    "bonds_help": {
+      "text": "The number is the power two bonded heroes add when they quest together. Anyone bonded, but a rival, steadies against fear. A death grieves everyone bonded to the dead.",
+      "source": "lineage/sheet.jai:211"
+    },
+    "more_bonds": {
+      "text": "and % more",
+      "source": "lineage/sheet.jai:233",
+      "args": [
+        "count"
+      ]
+    },
+    "outsider": {
+      "text": "An outsider: nothing won here goes to the house. May marry in at % renown.",
+      "source": "keifu-x-inheritance VARIANT.md",
+      "args": [
+        "MARRY_IN_RENOWN (5)"
+      ]
+    },
+    "traits": {
+      "text": "TRAITS",
+      "source": "keifu-x-inheritance VARIANT.md"
+    },
+    "trait_line": {
+      "text": "%: % % on quests.",
+      "source": "keifu-x-inheritance VARIANT.md",
+      "args": [
+        "trait title",
+        "signed value",
+        "aptitude title"
+      ]
+    },
+    "marks": {
+      "text": "MARKS",
+      "source": "keifu-x-inheritance VARIANT.md"
+    },
+    "mark_own": {
+      "text": "Failed at % in year %. Weighs on the name through year %.",
+      "source": "keifu-x-inheritance VARIANT.md",
+      "args": [
+        "place name",
+        "year",
+        "last year"
+      ]
+    },
+    "mark_inherited": {
+      "text": "%'s failure at % in year %. Weighs on the name through year %.",
+      "source": "keifu-x-inheritance VARIANT.md",
+      "args": [
+        "origin name",
+        "place name",
+        "year",
+        "last year"
+      ]
+    }
+  },
+  "telling": {
+    "help": {
+      "text": "Point at anyone who went, or at a line about them, to read what they are now.",
+      "source": "scene/scenes/telling.jai:88"
+    },
+    "quiet_title": {
+      "text": "A quiet summer",
+      "source": "scene/scenes/telling.jai:222"
+    },
+    "quiet_text": {
+      "text": "No one left the house, and nothing was asked of it.",
+      "source": "scene/scenes/telling.jai:224"
+    },
+    "meanwhile": {
+      "text": "Meanwhile",
+      "source": "scene/scenes/telling.jai:229"
+    },
+    "meanwhile_more": {
+      "text": "Meanwhile, continued",
+      "source": "scene/scenes/telling.jai:229"
+    },
+    "house_closed": {
+      "text": "The house's name is spent. No one will send to it again.",
+      "source": "scene/scenes/telling.jai:237"
+    },
+    "door_heading": {
+      "text": "The last summer",
+      "source": "scene/scenes/telling.jai:250"
+    },
+    "door_intro": {
+      "text": "It asked for four. These are the four who went, and what they carried.",
+      "source": "scene/scenes/telling.jai:251"
+    },
+    "door_intro_more": {
+      "text": "Who went, continued.",
+      "source": "scene/scenes/telling.jai:251"
+    },
+    "quest_more": {
+      "text": "What it did to them, continued.",
+      "source": "scene/scenes/telling.jai:276"
+    },
+    "roll": {
+      "text": "Needed % %. Brought %. Dice % and %, less %: %.",
+      "source": "scene/scenes/telling.jai:294",
+      "args": [
+        "aptitude",
+        "demand",
+        "power",
+        "die 1",
+        "die 2",
+        "DICE_MIDPOINT (7)",
+        "margin telling"
+      ]
+    },
+    "margin_exact": {
+      "text": "met it exactly",
+      "source": "scene/scenes/telling.jai:306"
+    },
+    "margin_beat": {
+      "text": "beat it by %",
+      "source": "scene/scenes/telling.jai:307"
+    },
+    "margin_missed": {
+      "text": "missed by %",
+      "source": "scene/scenes/telling.jai:308"
+    },
+    "buttons": {
+      "next": "Go on",
+      "to_winter": "Winter comes",
+      "after_door": "After the Door",
+      "closed": "The last of it",
+      "skip": "Skip ahead"
+    }
+  },
+  "winter": {
+    "hall": {
+      "text": "THE HALL",
+      "source": "scene/scenes/winter.jai:54"
+    },
+    "children": {
+      "text": "THE CHILDREN",
+      "source": "scene/scenes/winter.jai:55"
+    },
+    "hall_help": {
+      "text": "There are more hands than seats. Whoever is left in the hall keeps the house through the winter and gains nothing by it.",
+      "source": "scene/scenes/winter.jai:57"
+    },
+    "fire": {
+      "text": "BY THE FIRE",
+      "source": "scene/scenes/winter.jai:59"
+    },
+    "fire_text": {
+      "text": "Rest. A wound heals, % dread is shed.",
+      "source": "scene/scenes/winter.jai:59",
+      "args": [
+        "REST_DREAD_SHED (1)"
+      ]
+    },
+    "training": {
+      "text": "THE TRAINING YARD",
+      "source": "scene/scenes/winter.jai:64"
+    },
+    "training_text": {
+      "text": "Learn alone, or under one who knows more.",
+      "source": "scene/scenes/winter.jai:64"
+    },
+    "learner": {
+      "text": "learner",
+      "source": "scene/scenes/winter.jai:65"
+    },
+    "teacher": {
+      "text": "teacher",
+      "source": "scene/scenes/winter.jai:66"
+    },
+    "no_learner": {
+      "text": "no learner",
+      "source": "scene/scenes/winter.jai:72"
+    },
+    "garden": {
+      "text": "THE GARDEN",
+      "source": "scene/scenes/winter.jai:75"
+    },
+    "garden_text": {
+      "text": "Two who walk here are wed by spring.",
+      "source": "scene/scenes/winter.jai:75"
+    },
+    "table": {
+      "text": "THE LONG TABLE",
+      "source": "scene/scenes/winter.jai:80"
+    },
+    "table_text": {
+      "text": "Tell the tale, for renown.",
+      "source": "scene/scenes/winter.jai:80"
+    },
+    "a_child": {
+      "text": "a child",
+      "source": "scene/scenes/winter.jai:85"
+    },
+    "house_plus": {
+      "text": "house +",
+      "source": "scene/scenes/winter.jai:89"
+    },
+    "own_plus": {
+      "text": "own +",
+      "source": "scene/scenes/winter.jai:89"
+    },
+    "benches": {
+      "text": "THE BENCHES IN THE YARD",
+      "source": "scene/scenes/winter.jai:93"
+    },
+    "benches_text": {
+      "text": "A child, and one to teach them their best aptitude.",
+      "source": "scene/scenes/winter.jai:93"
+    },
+    "child": {
+      "text": "child",
+      "source": "scene/scenes/winter.jai:98"
+    },
+    "bench_teacher": {
+      "text": "teacher",
+      "source": "scene/scenes/winter.jai:99"
+    },
+    "no_child": {
+      "text": "no child",
+      "source": "scene/scenes/winter.jai:106"
+    },
+    "table_help": {
+      "text": "Tell the tale: +% renown to the teller, and +% to the house, once a winter however many tell it. It is also the last step of many dreams.",
+      "source": "scene/scenes/winter.jai:110",
+      "args": [
+        "1",
+        "1"
+      ]
+    },
+    "garden_help": {
+      "text": "Two may wed when both are % or older and no more than % years apart. Kin cannot wed. From the year after they wed, a pair may have a child, % times in a hundred each winter, while both are % to %. Rivals who walk here a winter make peace.",
+      "source": "scene/scenes/winter.jai:111",
+      "args": [
+        "18",
+        "15",
+        "60",
+        "18",
+        "45"
+      ]
+    },
+    "training_help": {
+      "text": "Alone, a hero trains their own calling, up to %. A teacher passes on their best aptitude, up to their own. Veterans and elders teach well. The young learn fast.",
+      "source": "scene/scenes/winter.jai:112",
+      "args": [
+        "6"
+      ]
+    },
+    "benches_help": {
+      "text": "From the age of %, a child learns 1 a winter from whoever sits beside them, up to %. Their first teacher decides their calling. Drag the child from the yard, and an adult beside them.",
+      "source": "scene/scenes/winter.jai:113",
+      "args": [
+        "6",
+        "4"
+      ]
+    },
+    "fire_help": {
+      "text": "Only the fire heals. A wounded hero left in the hall goes into summer wounded.",
+      "source": "scene/scenes/winter.jai:114"
+    },
+    "help": {
+      "text": "Winter. There are ten seats and one winter. Drag a hero to a seat to give them that winter. Whoever is left in the hall gains nothing. Point at anyone to read their sheet.",
+      "source": "scene/scenes/winter.jai:131"
+    },
+    "rest_notes": {
+      "heals": {
+        "text": "heals",
+        "source": "lineage/hearth.jai:185"
+      },
+      "calms": {
+        "text": "calms",
+        "source": "lineage/hearth.jai:186"
+      },
+      "rests": {
+        "text": "rests",
+        "source": "lineage/hearth.jai:187"
+      }
+    },
+    "courtship_notes": {
+      "NOBODY": {
+        "text": "",
+        "source": "lineage/hearth.jai:173"
+      },
+      "WAITING": {
+        "text": "waits alone",
+        "source": "lineage/hearth.jai:174"
+      },
+      "KIN": {
+        "text": "they are kin",
+        "source": "lineage/hearth.jai:175"
+      },
+      "RIVALS": {
+        "text": "will make peace",
+        "source": "lineage/hearth.jai:176"
+      },
+      "WED_ALREADY": {
+        "text": "one is wed",
+        "source": "lineage/hearth.jai:177"
+      },
+      "TOO_YOUNG": {
+        "text": "under %",
+        "source": "lineage/hearth.jai:178",
+        "args": [
+          "MARRYING_AGE (18)"
+        ]
+      },
+      "TOO_FAR_APART": {
+        "text": "too far apart",
+        "source": "lineage/hearth.jai:179"
+      },
+      "WILL_WED": {
+        "text": "will wed",
+        "source": "lineage/hearth.jai:180"
+      },
+      "UNPROVEN": {
+        "text": "% unproven: renown % of %",
+        "source": "keifu-x-inheritance VARIANT.md",
+        "args": [
+          "the outsider's first name",
+          "their personal renown",
+          "MARRY_IN_RENOWN (5)"
+        ]
+      }
+    },
+    "lesson_excuses": {
+      "child_teacher": {
+        "text": "a child cannot teach",
+        "source": "lineage/hearth.jai:41"
+      },
+      "child_teacher_wasted": {
+        "text": "%1 spent the winter beside %2, who is too young to teach anyone anything.",
+        "source": "lineage/hearth.jai:42",
+        "args": [
+          "learner",
+          "teacher"
+        ]
+      },
+      "learns_nothing": {
+        "text": "learns nothing more",
+        "source": "lineage/hearth.jai:48"
+      },
+      "learns_nothing_wasted": {
+        "text": "%1 trained all winter and learned nothing. The Seer said as much.",
+        "source": "lineage/hearth.jai:49",
+        "args": [
+          "learner"
+        ]
+      },
+      "needs_teacher": {
+        "text": "needs a teacher",
+        "source": "lineage/hearth.jai:55"
+      },
+      "needs_teacher_wasted": {
+        "text": "%1 sat on the bench alone all winter. A child needs someone to learn from.",
+        "source": "lineage/hearth.jai:56",
+        "args": [
+          "learner"
+        ]
+      },
+      "needs_teacher_now": {
+        "text": "needs a teacher now",
+        "source": "lineage/hearth.jai:63"
+      },
+      "needs_teacher_now_wasted": {
+        "text": "%1 trained alone all winter and got no better. There is nothing left to find alone.",
+        "source": "lineage/hearth.jai:64",
+        "args": [
+          "learner"
+        ]
+      },
+      "teacher_knows_no_more": {
+        "text": "teacher knows no more",
+        "source": "lineage/hearth.jai:82"
+      },
+      "teacher_knows_no_more_wasted": {
+        "text": "%1 trained under %2 all winter, but %2 had nothing left to teach.",
+        "source": "lineage/hearth.jai:83",
+        "args": [
+          "learner",
+          "teacher"
+        ]
+      },
+      "too_young": {
+        "text": "too young to learn",
+        "source": "lineage/hearth.jai:89"
+      },
+      "too_young_wasted": {
+        "text": "%1 is too young for the benches yet, and spent the winter underfoot.",
+        "source": "lineage/hearth.jai:90",
+        "args": [
+          "learner"
+        ]
+      },
+      "child_limit": {
+        "text": "is a child yet",
+        "source": "lineage/hearth.jai:94"
+      },
+      "child_limit_wasted": {
+        "text": "%1 has learned all a child can. The rest waits for coming of age.",
+        "source": "lineage/hearth.jai:95",
+        "args": [
+          "learner"
+        ]
+      },
+      "belongs_on_bench": {
+        "text": "belongs on a bench",
+        "source": "lineage/hearth.jai:115"
+      },
+      "belongs_on_bench_wasted": {
+        "text": "%1 belongs on a bench, not in the training yard.",
+        "source": "lineage/hearth.jai:116",
+        "args": [
+          "learner"
+        ]
+      },
+      "is_no_child": {
+        "text": "is no child",
+        "source": "lineage/hearth.jai:125"
+      },
+      "is_no_child_wasted": {
+        "text": "%1 is grown, and the benches are for children.",
+        "source": "lineage/hearth.jai:126",
+        "args": [
+          "learner"
+        ]
+      },
+      "bench_needs_teacher": {
+        "text": "needs a teacher",
+        "source": "lineage/hearth.jai:130"
+      },
+      "bench_needs_teacher_wasted": {
+        "text": "%1 sat on the bench alone all winter. A child needs someone to learn from.",
+        "source": "lineage/hearth.jai:131",
+        "args": [
+          "learner"
+        ]
+      },
+      "_note": "The \"_wasted\" lines are winter-page lines (lines.json-style); the others are seat notes. Positional %1 = learner first name, %2 = teacher first name."
+    },
+    "button": "Let the winter pass"
+  },
+  "turning": {
+    "continued": {
+      "text": "%, continued",
+      "source": "scene/scenes/turning.jai:92",
+      "args": [
+        "page title"
+      ]
+    },
+    "heir_prompt": {
+      "text": "WHO IS % HEIR? One choice. It cannot be unmade.",
+      "source": "scene/scenes/turning.jai:120",
+      "args": [
+        "possessive pronoun, upper case"
+      ]
+    },
+    "help": {
+      "text": "The year turns. Everyone is a year older. Point at a line to read who it is about.",
+      "source": "scene/scenes/turning.jai:129"
+    },
+    "page_kinds": {
+      "WINTER": {
+        "text": "What the winter did",
+        "source": "scene/scenes/turning.jai:242"
+      },
+      "DEATH": {
+        "text": "The house is one fewer",
+        "source": "scene/scenes/turning.jai:243"
+      },
+      "BIRTH": {
+        "text": "The house is one more",
+        "source": "scene/scenes/turning.jai:244"
+      },
+      "COMING_OF_AGE": {
+        "text": "The Seer speaks",
+        "source": "scene/scenes/turning.jai:245"
+      },
+      "ARRIVAL": {
+        "text": "A wanderer at the door",
+        "source": "scene/scenes/turning.jai:246"
+      },
+      "YEAR": {
+        "text": "The year turns",
+        "source": "scene/scenes/turning.jai:247"
+      }
+    },
+    "death_portrait_sprite": {
+      "text": "skull",
+      "source": "scene/scenes/turning.jai:231"
+    },
+    "buttons": {
+      "next": "Go on",
+      "last": "Summer comes",
+      "skip": "Skip ahead",
+      "no_heir": "No one. Let it lie."
+    }
+  },
+  "ending": {
+    "tree_heading_door": {
+      "text": "Everyone who lived under this roof",
+      "source": "scene/scenes/ending.jai:48"
+    },
+    "tree_heading_closed": {
+      "text": "Everyone who lived under this roof, before it closed",
+      "source": "scene/scenes/ending.jai:48"
+    },
+    "tree_subline": {
+      "text": "% Point at anyone to read what was said of them.",
+      "source": "scene/scenes/ending.jai:49",
+      "args": [
+        "house tally"
+      ]
+    },
+    "closed_when": {
+      "text": "It was year %, with the Door still % years off.",
+      "source": "scene/scenes/ending.jai:78",
+      "args": [
+        "year",
+        "years until the Door"
+      ]
+    },
+    "lived_here": {
+      "text": "% lived under this roof. %",
+      "source": "scene/scenes/ending.jai:82",
+      "args": [
+        "hero count",
+        "house tally"
+      ]
+    },
+    "buttons": {
+      "tree": "The family",
+      "verdict": "The verdict",
+      "again": "Begin another house"
+    }
+  },
+  "family": {
+    "heading": {
+      "text": "The house, and everyone who has lived in it",
+      "source": "modal-screens/family.jai:28"
+    },
+    "subline": {
+      "text": "Year %. %",
+      "source": "modal-screens/family.jai:29",
+      "args": [
+        "year",
+        "house tally"
+      ]
+    },
+    "tally_none_ending": {
+      "text": "No tale of the house is told.",
+      "source": "lineage/family-tree.jai:316"
+    },
+    "tally_none": {
+      "text": "No tale of the house is told yet.",
+      "source": "lineage/family-tree.jai:316"
+    },
+    "tally_one": {
+      "text": "One tale of the house is told.",
+      "source": "lineage/family-tree.jai:317"
+    },
+    "tally_many": {
+      "text": "% tales of the house are told.",
+      "source": "lineage/family-tree.jai:318",
+      "args": [
+        "count"
+      ]
+    },
+    "tally": {
+      "text": "% living, % gone. % House renown %.",
+      "source": "lineage/family-tree.jai:320",
+      "args": [
+        "living",
+        "gone",
+        "tales sentence",
+        "house renown"
+      ]
+    },
+    "remembrance_help": {
+      "text": "Point at anyone in the tree. The dead have their epitaphs. The living have what they are still trying to do.",
+      "source": "lineage/family-tree.jai:329"
+    },
+    "departed": {
+      "text": "% %, in year %, aged %. The house has had a patron at Court since.",
+      "source": "lineage/family-tree.jai:345",
+      "args": [
+        "He/She",
+        "fate telling",
+        "year",
+        "age"
+      ]
+    },
+    "living_station": {
+      "text": "%. Living.",
+      "source": "lineage/family-tree.jai:350",
+      "args": [
+        "station telling"
+      ]
+    },
+    "living_too_young": {
+      "text": "% is too young to know what % wants.",
+      "source": "lineage/family-tree.jai:361",
+      "args": [
+        "He/She",
+        "subject"
+      ]
+    },
+    "living_done": {
+      "text": "% wanted % and has done it.",
+      "source": "lineage/family-tree.jai:364",
+      "args": [
+        "He/She",
+        "dream title"
+      ]
+    },
+    "living_wants": {
+      "text": "% wants %. Still to do: %.",
+      "source": "lineage/family-tree.jai:367",
+      "args": [
+        "He/She",
+        "dream title",
+        "stage progress"
+      ]
+    },
+    "living_burden": {
+      "text": " % carries %'s dream besides: %.",
+      "source": "lineage/family-tree.jai:372",
+      "args": [
+        "He/She",
+        "owner name",
+        "title"
+      ]
+    },
+    "living_no_fear": {
+      "text": " % has no fear of %.",
+      "source": "lineage/family-tree.jai:375",
+      "args": [
+        "He/She",
+        "tag noun"
+      ]
+    },
+    "living_broken": {
+      "text": " % was broken by %.",
+      "source": "lineage/family-tree.jai:376",
+      "args": [
+        "He/She",
+        "tag noun"
+      ]
+    },
+    "living_fears": {
+      "text": " % fears %.",
+      "source": "lineage/family-tree.jai:377",
+      "args": [
+        "He/She",
+        "tag noun"
+      ]
+    },
+    "living_seer": {
+      "text": " The Seer said: \"%\"",
+      "source": "lineage/family-tree.jai:380",
+      "args": [
+        "prophecy"
+      ]
+    },
+    "buttons": {
+      "open": "The family",
+      "close": "Back to the house",
+      "earlier": "<",
+      "later": ">"
+    }
+  },
+  "guide_buttons": {
+    "open": "How to play",
+    "close": "Close",
+    "next": "Next page",
+    "first": "First page"
+  },
+  "pause_menu_rows": [
+    "Resume",
+    "Scale: %x (desktop windowed only)",
+    "Fullscreen / Windowed (desktop only)",
+    "Sfx (slider)",
+    "Music (slider)",
+    "Demos (debug builds only)",
+    "Quit (desktop only)"
+  ]
+}

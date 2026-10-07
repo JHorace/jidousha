@@ -1,0 +1,12 @@
+[package]
+name = "keifu-x-inheritance"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+jidousha = { path = "../../crates/jidousha" }
+
+[lints]
+workspace = true

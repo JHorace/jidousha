@@ -1,0 +1,394 @@
+{
+  "_source": "lineage/household.jai:55-225",
+  "house_renown_at_start": 15,
+  "start_year": 1,
+  "_years": "born_year and fate_year are absolute years where the first summer is year 1 (household.jai uses year - N with year = 1).",
+  "heroes": [
+    {
+      "key": "elsbeth",
+      "name": "Elsbeth",
+      "house": "Thorne",
+      "pronoun": "SHE",
+      "vocation": "RANGER",
+      "age": 41,
+      "born_year": -59,
+      "aptitudes": {
+        "MIGHT": 3,
+        "WITS": 6,
+        "SPIRIT": 4
+      },
+      "fear": {
+        "tag": "HEIGHTS",
+        "dread": 0
+      },
+      "destiny": "UNSPOKEN",
+      "dream": {
+        "kind": "SEE_THE_SEA",
+        "stage": 1
+      },
+      "renown": 5,
+      "quests_faced": 11,
+      "fears_faced": 2,
+      "roads_walked": [],
+      "fate": "DEAD",
+      "fate_year": -18,
+      "fate_age": 41,
+      "fate_telling": "was lost at the Drowned Coast",
+      "fallen_at": "DROWNED_COAST",
+      "parents": [],
+      "_source": "lineage/household.jai:62",
+      "trait": "SHARP"
+    },
+    {
+      "key": "garrick",
+      "name": "Garrick",
+      "house": "Thorne",
+      "pronoun": "HE",
+      "vocation": "KNIGHT",
+      "age": 62,
+      "born_year": -61,
+      "aptitudes": {
+        "MIGHT": 7,
+        "WITS": 4,
+        "SPIRIT": 4
+      },
+      "fear": {
+        "tag": "WATER",
+        "dread": 2
+      },
+      "destiny": "CHILD_WILL_SURPASS_YOU",
+      "destiny_fulfilled": true,
+      "dream": {
+        "kind": "QUIET_THE_BARROW",
+        "stage": 2
+      },
+      "heirloom": {
+        "name": "Thornfall",
+        "sprite": "reward-sword",
+        "aptitude": "MIGHT",
+        "bonus": 1,
+        "provenance": "Carried by every Thorne since the first. Nobody remembers who made it."
+      },
+      "renown": 6,
+      "quests_faced": 30,
+      "fears_faced": 0,
+      "roads_walked": [
+        "BARROW",
+        "HIGH_PASS",
+        "DEEPWOOD",
+        "KINGS_COURT"
+      ],
+      "scars": [
+        "A Barrow-blade across the ribs"
+      ],
+      "fate": "LIVING",
+      "parents": [],
+      "_source": "lineage/household.jai:82",
+      "trait": "STRONG"
+    },
+    {
+      "key": "maren",
+      "name": "Maren",
+      "house": "Thorne",
+      "pronoun": "SHE",
+      "vocation": "RANGER",
+      "age": 38,
+      "born_year": -37,
+      "aptitudes": {
+        "MIGHT": 4,
+        "WITS": 6,
+        "SPIRIT": 3
+      },
+      "fear": {
+        "tag": "WATER",
+        "dread": 1
+      },
+      "destiny": "BREAK_AND_BE_MENDED",
+      "dream": {
+        "kind": "AVENGE_THE_LOST",
+        "setup": {
+          "place": "DROWNED_COAST",
+          "tag": "WATER",
+          "lost": "elsbeth"
+        },
+        "stage": 1
+      },
+      "renown": 4,
+      "quests_faced": 14,
+      "fears_faced": 0,
+      "roads_walked": [
+        "DEEPWOOD",
+        "HIGH_PASS"
+      ],
+      "fate": "LIVING",
+      "parents": [
+        "garrick",
+        "elsbeth"
+      ],
+      "_source": "lineage/household.jai:101",
+      "trait": "SHARP"
+    },
+    {
+      "key": "pip",
+      "name": "Pip",
+      "house": "Thorne",
+      "pronoun": "HE",
+      "vocation": "KNIGHT",
+      "_vocation_note": "Never assigned in household.jai; the enum default (KNIGHT) stands until coming of age replaces it.",
+      "age": 10,
+      "born_year": -9,
+      "aptitudes": {
+        "MIGHT": 1,
+        "WITS": 2,
+        "SPIRIT": 2
+      },
+      "fear": {
+        "tag": "DARK",
+        "dread": 0
+      },
+      "destiny": "UNSPOKEN",
+      "dream": {
+        "kind": "SEE_THE_SEA",
+        "stage": 0
+      },
+      "renown": 0,
+      "quests_faced": 0,
+      "fears_faced": 0,
+      "roads_walked": [],
+      "fate": "LIVING",
+      "parents": [
+        "maren",
+        null
+      ],
+      "_source": "lineage/household.jai:118"
+    },
+    {
+      "key": "ysolde",
+      "name": "Ysolde",
+      "house": "Vane",
+      "pronoun": "SHE",
+      "vocation": "SCHOLAR",
+      "age": 24,
+      "born_year": -23,
+      "aptitudes": {
+        "MIGHT": 2,
+        "WITS": 5,
+        "SPIRIT": 4
+      },
+      "fear": {
+        "tag": "DARK",
+        "dread": 0
+      },
+      "destiny": "OPEN_THE_SEALED_DOOR",
+      "dream": {
+        "kind": "WALK_EVERY_ROAD",
+        "stage": 0
+      },
+      "renown": 1,
+      "quests_faced": 2,
+      "fears_faced": 0,
+      "roads_walked": [
+        "KINGS_COURT",
+        "DEEPWOOD"
+      ],
+      "fate": "LIVING",
+      "parents": [],
+      "_source": "lineage/household.jai:129"
+    },
+    {
+      "key": "brannoc",
+      "name": "Brannoc",
+      "house": "Hale",
+      "pronoun": "HE",
+      "vocation": "WARRIOR",
+      "age": 31,
+      "born_year": -30,
+      "aptitudes": {
+        "MIGHT": 6,
+        "WITS": 2,
+        "SPIRIT": 3
+      },
+      "fear": {
+        "tag": "HEIGHTS",
+        "dread": 0
+      },
+      "destiny": "FIRE_WILL_END_YOU",
+      "dream": {
+        "kind": "FORGE_A_BLADE",
+        "stage": 0
+      },
+      "renown": 2,
+      "quests_faced": 6,
+      "fears_faced": 0,
+      "roads_walked": [
+        "DEEPWOOD"
+      ],
+      "fate": "LIVING",
+      "parents": [],
+      "_source": "lineage/household.jai:144",
+      "trait": "STRONG"
+    },
+    {
+      "key": "odo",
+      "name": "Odo",
+      "house": "Fenn",
+      "pronoun": "HE",
+      "vocation": "PRIEST",
+      "age": 47,
+      "born_year": -46,
+      "aptitudes": {
+        "MIGHT": 3,
+        "WITS": 3,
+        "SPIRIT": 6
+      },
+      "fear": {
+        "tag": "CROWDS",
+        "dread": 0
+      },
+      "destiny": "OUTLIVE_THOSE_YOU_LOVE",
+      "dream": {
+        "kind": "WORTHY_STUDENT",
+        "stage": 0
+      },
+      "renown": 3,
+      "quests_faced": 17,
+      "fears_faced": 0,
+      "roads_walked": [
+        "BARROW",
+        "HIGH_PASS"
+      ],
+      "fate": "LIVING",
+      "parents": [],
+      "_source": "lineage/household.jai:159",
+      "trait": "STEADFAST"
+    },
+    {
+      "key": "aud",
+      "name": "Aud",
+      "house": "Hale",
+      "pronoun": "SHE",
+      "vocation": "PRIEST",
+      "age": 27,
+      "born_year": -32,
+      "aptitudes": {
+        "MIGHT": 2,
+        "WITS": 3,
+        "SPIRIT": 5
+      },
+      "fear": {
+        "tag": "COLD",
+        "dread": 0
+      },
+      "destiny": "UNSPOKEN",
+      "dream": {
+        "kind": "SEE_A_CHILD_GROWN",
+        "stage": 2
+      },
+      "renown": 1,
+      "quests_faced": 3,
+      "fears_faced": 0,
+      "roads_walked": [],
+      "fate": "DEAD",
+      "fate_year": -5,
+      "fate_age": 27,
+      "fate_telling": "died of a fever, the winter Wren was two",
+      "parents": [],
+      "_source": "lineage/household.jai:174"
+    },
+    {
+      "key": "wren",
+      "name": "Wren",
+      "house": "Hale",
+      "pronoun": "SHE",
+      "vocation": "KNIGHT",
+      "_vocation_note": "Never assigned; enum default (KNIGHT) until coming of age.",
+      "age": 8,
+      "born_year": -7,
+      "aptitudes": {
+        "MIGHT": 2,
+        "WITS": 1,
+        "SPIRIT": 2
+      },
+      "fear": {
+        "tag": "FIRE",
+        "dread": 0
+      },
+      "destiny": "UNSPOKEN",
+      "dream": null,
+      "renown": 0,
+      "quests_faced": 0,
+      "fears_faced": 0,
+      "roads_walked": [],
+      "fate": "LIVING",
+      "parents": [
+        "brannoc",
+        "aud"
+      ],
+      "_source": "lineage/household.jai:192"
+    }
+  ],
+  "creation_order_note": "Heroes are created in the order listed (elsbeth first). Creation order is the order of every roster, list and roll that walks the household; ids are 0..8 in this order.",
+  "bonds": [
+    {
+      "hero": "brannoc",
+      "other": "aud",
+      "kind": "SPOUSE",
+      "since": -9
+    },
+    {
+      "hero": "wren",
+      "other": "brannoc",
+      "kind": "PARENT",
+      "since": -7
+    },
+    {
+      "hero": "wren",
+      "other": "aud",
+      "kind": "PARENT",
+      "since": -7
+    },
+    {
+      "hero": "garrick",
+      "other": "elsbeth",
+      "kind": "SPOUSE",
+      "since": -39
+    },
+    {
+      "hero": "maren",
+      "other": "garrick",
+      "kind": "PARENT",
+      "since": -37
+    },
+    {
+      "hero": "maren",
+      "other": "elsbeth",
+      "kind": "PARENT",
+      "since": -37
+    },
+    {
+      "hero": "pip",
+      "other": "maren",
+      "kind": "PARENT",
+      "since": -11
+    },
+    {
+      "hero": "garrick",
+      "other": "odo",
+      "kind": "FRIEND",
+      "since": -19
+    },
+    {
+      "hero": "brannoc",
+      "other": "ysolde",
+      "kind": "RIVAL",
+      "since": 0,
+      "_note": "formed as COMPANION then changed to RIVAL in the same year"
+    }
+  ],
+  "bonds_note": "Each bond is formed in this order and mirrored (hero gets kind, other gets the mirror kind: PARENT<->CHILD, MENTOR<->STUDENT, others symmetric). \"hero ... PARENT ... other\" means other is the hero's parent.",
+  "dead_at_start": [
+    "elsbeth",
+    "aud"
+  ],
+  "dead_at_start_note": "Both are grieved=true, bequest decided, dream fate UNDECIDED, and get an epitaph composed at founding (one epitaph wording roll each, elsbeth first)."
+}

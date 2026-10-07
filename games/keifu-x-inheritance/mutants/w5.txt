@@ -1,0 +1,294 @@
+### G1 ANSWERABLE_CHANCE 0.5 -> 0.45
+@ src/constants.rs
+- pub const ANSWERABLE_CHANCE: f64 = 0.5;
++ pub const ANSWERABLE_CHANCE: f64 = 0.45;
+
+### G2 DREAM_CALL_CHANCE 0.35 -> 0.45
+@ src/constants.rs
+- pub const DREAM_CALL_CHANCE: f64 = 0.35;
++ pub const DREAM_CALL_CHANCE: f64 = 0.45;
+
+### G3 BOARD_ATTEMPTS 16 -> 15
+@ src/constants.rs
+- pub const BOARD_ATTEMPTS: usize = 16;
++ pub const BOARD_ATTEMPTS: usize = 15;
+
+### G4 EASING_LIMIT 30 -> 29
+@ src/constants.rs
+- pub const EASING_LIMIT: usize = 30;
++ pub const EASING_LIMIT: usize = 29;
+
+### G5 the score's answerability weight 2 -> 3
+@ src/constants.rs
+- pub const ANSWERABLE_SCORE: f64 = 2.0;
++ pub const ANSWERABLE_SCORE: f64 = 3.0;
+
+### G6 the score's call term 1 -> 2
+@ src/constants.rs
+- pub const CALL_SCORE: f64 = 1.0;
++ pub const CALL_SCORE: f64 = 2.0;
+
+### G7 GHOST_SEATS 2 -> 3
+@ src/constants.rs
+- pub const GHOST_SEATS: i32 = 2;
++ pub const GHOST_SEATS: i32 = 3;
+
+### G8 GHOST_DANGER 2 -> 3
+@ src/constants.rs
+- pub const GHOST_DANGER: i32 = 2;
++ pub const GHOST_DANGER: i32 = 3;
+
+### G9 the ghost quest needs Wits
+@ src/constants.rs
+- pub const GHOST_APTITUDE: Aptitude = Aptitude::Spirit;
++ pub const GHOST_APTITUDE: Aptitude = Aptitude::Wits;
+
+### G10 the score uncapped at one half
+@ src/generation.rs
+- (reading.answerability() / ANSWERABLE_CHANCE).min(1.0) * ANSWERABLE_SCORE;
++ (reading.answerability() / ANSWERABLE_CHANCE) * ANSWERABLE_SCORE;
+
+### G11 the score reads answerability raw, not over one half
+@ src/generation.rs
+- (reading.answerability() / ANSWERABLE_CHANCE).min(1.0) * ANSWERABLE_SCORE;
++ reading.answerability().min(1.0) * ANSWERABLE_SCORE;
+
+### P1 the opening quests are forced every year
+@ src/generation.rs
+- if year == 1 {
++ if year >= 1 {
+
+### P2 an opening quest's place stays available
+@ src/generation.rs
+-             available.retain(|&p| p != place);
++             available.retain(|_| true);
+
+### P3 a ghost's place stays available
+@ src/generation.rs
+- available.retain(|&p| p != ghost.place);
++ available.retain(|_| true);
+
+### P4 a ghost is posted even where its place is taken
+@ src/generation.rs
+-         && available.contains(&ghost.place)⏎
++ ⏎
+
+### P5 the last ghost is offered, not the first
+@ src/generation.rs
+- if let Some(ghost) = house.ghosts.first()
++ if let Some(ghost) = house.ghosts.last()
+
+### P6 places are drawn with replacement
+@ src/generation.rs
+- let place = available.remove(index(rng, available.len()));
++ let place = available[index(rng, available.len())];
+
+### P7 the template memory is ignored
+@ src/generation.rs
+- Some(prev) => fresh_index(rng, templates.len(), prev),
++ Some(_) => index(rng, templates.len()),
+
+### P8 the wrong template is excluded
+@ src/generation.rs
+- Some(prev) => fresh_index(rng, templates.len(), prev),
++ Some(prev) => fresh_index(rng, templates.len(), (prev + 1) % templates.len()),
+
+### P9 a later equal score replaces the kept board
+@ src/generation.rs
+- .is_none_or(|(_, _, best, _)| this > *best)
++ .is_none_or(|(_, _, best, _)| this >= *best)
+
+### P10 the loop never stops at a welcome board
+@ src/generation.rs
+- .is_some_and(|(_, reading, _, _)| reading.welcome())
++ .is_some_and(|(_, reading, _, _)| reading.welcome() && false)
+
+### P11 welcome without a call
+@ src/reading.rs
+- answerable(self.ways) && self.call.is_some()
++ answerable(self.ways)
+
+### P12 the memory is not written
+@ src/generation.rs
+- memory_after[quest.place.index()] = Some(template);
++ let _ = template;
+
+### P13 the memory is replaced, not overwritten
+@ src/generation.rs
+- let mut memory_after = memory.clone();
++ let mut memory_after = vec![None; memory.len()];
+
+### P14 a ghost's quest writes the memory (re-cut s10)
+@ src/quest.rs
+- Source::Ghost(_) | Source::Door(_) => None,
++ Source::Ghost(_) => Some(0),⏎            Source::Door(_) => None,
+
+### P15 the board sorted by demand
+@ src/generation.rs
+- order.sort_by_key(|&at| quests[at].place.index());
++ order.sort_by_key(|&at| quests[at].demand);
+
+### P16 the board left in planning order
+@ src/generation.rs
+- order.sort_by_key(|&at| quests[at].place.index());
++ order.sort_by_key(|_| 0);
+
+### R1 the likely party takes the wounded
+@ src/reading.rs
+- if hero.wounded || refuses(hero, &quest.tags) || party.contains(&candidate) {
++ if refuses(hero, &quest.tags) || party.contains(&candidate) {
+
+### R2 the likely party takes refusers
+@ src/reading.rs
+- if hero.wounded || refuses(hero, &quest.tags) || party.contains(&candidate) {
++ if hero.wounded || party.contains(&candidate) {
+
+### R3 a tie in the likely party keeps the last
+@ src/reading.rs
+- if best.is_none_or(|(_, power)| solo > power) {
++ if best.is_none_or(|(_, power)| solo >= power) {
+
+### R4 the likely party judged with bonds, not solo
+@ src/reading.rs
+- let solo = party_power(heroes, &[candidate], quest.facts(), 0);
++ let solo = party_power(heroes, &[party.as_slice(), &[candidate]].concat(), quest.facts(), 0);
+
+### R5 the likely party overfills its seats
+@ src/reading.rs
+- while party.len() < quest.seats as usize {
++ while party.len() <= quest.seats as usize {
+
+### R6 the leader is dropped
+@ src/reading.rs
+- let mut party: Vec<HeroId> = leader.into_iter().collect();
++ let mut party: Vec<HeroId> = leader.into_iter().take(0).collect();
+
+### R7 success counts triumphs only
+@ src/reading.rs
+- odds.ways(Outcome::Success) + odds.ways(Outcome::Triumph)
++ odds.ways(Outcome::Triumph)
+
+### R8 the second of a pair chooses from everyone
+@ src/reading.rs
+- let rest: Vec<HeroId> = everyone.into_iter().filter(|h| !a.contains(h)).collect();
++ let rest: Vec<HeroId> = everyone;
+
+### R9 a pair is judged by its stronger chance
+@ src/reading.rs
+- let weaker = a.min(b);
++ let weaker = a.max(b);
+
+### R10 the last pair at the best is remembered
+@ src/reading.rs
+- if best.is_none_or(|(ways, _)| weaker > ways) {
++ if best.is_none_or(|(ways, _)| weaker >= ways) {
+
+### R11 the reading ignores the house's patrons
+@ src/reading.rs
+- let (a, b) = pair_chances(heroes, &quests[i], &quests[j], patrons);
++ let (a, b) = pair_chances(heroes, &quests[i], &quests[j], 0);
+
+### R12 a stay-behind call counts as one who could go
+@ src/reading.rs
+- .is_some_and(|call| call.telling != Telling::StayBehind);
++ .is_some();
+
+### R13 a wounded dreamer could go
+@ src/reading.rs
+- if !goes || hero.wounded || refuses(hero, &quest.tags) {
++ if !goes || refuses(hero, &quest.tags) {
+
+### R14 a refusing dreamer could go
+@ src/reading.rs
+- if !goes || hero.wounded || refuses(hero, &quest.tags) {
++ if !goes || hero.wounded {
+
+### R15 the could-go party has no leader
+@ src/reading.rs
+- let party = likely_party(heroes, &adults(heroes), quest, Some(dreamer));
++ let party = likely_party(heroes, &adults(heroes), quest, None);
+
+### R16 a threshold met exactly does not count
+@ src/reading.rs
+- f64::from(ways) / f64::from(DICE_OUTCOMES) >= chance
++ f64::from(ways) / f64::from(DICE_OUTCOMES) > chance
+
+### R17 only the first quest can call a dreamer
+@ src/reading.rs
+- let call = quests.iter().enumerate().find_map(|(at, quest)| {
++ let call = quests.iter().enumerate().take(1).find_map(|(at, quest)| {
+
+### E1 an answerable board is eased
+@ src/easing.rs
+- if answerable(reading.ways) || quests.len() < 2 {
++ if quests.len() < 2 {
+
+### E2 easing stops when either is answerable
+@ src/easing.rs
+- if answerable(a) && answerable(b) {
++ if answerable(a) || answerable(b) {
+
+### E3 a tie eases the first of the pair
+@ src/easing.rs
+- let weaker = if a < b { first } else { second };
++ let weaker = if a <= b { first } else { second };
+
+### E4 easing lowers the stronger
+@ src/easing.rs
+- let weaker = if a < b { first } else { second };
++ let weaker = if a > b { first } else { second };
+
+### E5 easing goes one below the seats
+@ src/easing.rs
+- if quests[weaker].demand <= quests[weaker].seats {
++ if quests[weaker].demand < quests[weaker].seats {
+
+### E6 easing steps by two
+@ src/easing.rs
+- quests[weaker].demand -= 1;
++ quests[weaker].demand -= 2;
+
+### E7 easing is not recorded
+@ src/easing.rs
+- eased[weaker] += 1;
++ eased[weaker] += 0;
+
+### H1 the ghost's title takes the full name
+@ src/ghost.rs
+- title: fmt(&content.ghost.title, &[&dead.name]),
++ title: fmt(&content.ghost.title, &[&dead.full_name()]),
+
+### H2 the ghost premise's {He} is lower-case
+@ src/ghost.rs
+- .replace("{He}", &capitalized(&pronoun.subject))
++ .replace("{He}", &pronoun.subject)
+
+### H3 the ghost quest ignores its place's trouble
+@ src/ghost.rs
+- stakes(making, GHOST_SEATS, GHOST_DANGER, trouble, year)
++ stakes(making, GHOST_SEATS, GHOST_DANGER, 0, year)
+
+### H4 the ghost quest carries no tags
+@ src/ghost.rs
+- tags: content.lore.places[ghost.place.index()].tags.clone(),
++ tags: Vec::new(),
+
+### H5 the card names the ghost by house
+@ src/quest_card.rs
+- Source::Ghost(dead) => Some(fmt(&words[W::QuestCardGhost], &[&heroes[dead].name])),
++ Source::Ghost(dead) => Some(fmt(&words[W::QuestCardGhost], &[&heroes[dead].house])),
+
+### H6 the ghost quest shows a Dream: line
+@ src/quest_card.rs
+- Source::Ghost(dead) => Some(fmt(&words[W::QuestCardGhost], &[&heroes[dead].name])),
++ Source::Ghost(_) => dreamers_line(content, heroes, q.facts(), party),
+
+### D1 the Door's summer generates a board
+@ src/generation.rs
+- !house.calendar.door_stands_open(),
++ true || !house.calendar.door_stands_open(),
+
+### D2 a place's templates read as another's
+@ src/generation.rs
+- .filter(|&t| content.quest_templates[t].place == place)
++ .filter(|&t| content.quest_templates[t].place != place)
