@@ -1,0 +1,229 @@
+### rules RIGHT_EXTRA 1 -> 2
+@ src/rules.rs
+- pub const RIGHT_EXTRA: i32 = 1;
++ pub const RIGHT_EXTRA: i32 = 2;
+
+### rules STEP 1 -> 0
+@ src/rules.rs
+- pub const STEP: i32 = 1;
++ pub const STEP: i32 = 0;
+
+### rules INSULT_DRAINS 2 -> 1: anger costs no more than the drain
+@ src/rules.rs
+- pub const INSULT_DRAINS: i32 = 2;
++ pub const INSULT_DRAINS: i32 = 1;
+
+### rules HANGUP_DRAINS 8 -> 4
+@ src/rules.rs
+- pub const HANGUP_DRAINS: i32 = 8;
++ pub const HANGUP_DRAINS: i32 = 4;
+
+### rules WRATH_MULTIPLE 2 -> 1
+@ src/rules.rs
+- pub const WRATH_MULTIPLE: i32 = 2;
++ pub const WRATH_MULTIPLE: i32 = 1;
+
+### rules COMPOSURE_MAX 2 -> 3
+@ src/rules.rs
+- pub const COMPOSURE_MAX: i32 = 2;
++ pub const COMPOSURE_MAX: i32 = 3;
+
+### rules START_SANITY 60 -> 50
+@ src/rules.rs
+- pub const START_SANITY: i32 = 60;
++ pub const START_SANITY: i32 = 50;
+
+### rules REST_GAIN 8 -> 4
+@ src/rules.rs
+- pub const REST_GAIN: i32 = 8;
++ pub const REST_GAIN: i32 = 4;
+
+### rules APPEASE_COST 4 -> 2
+@ src/rules.rs
+- pub const APPEASE_COST: i32 = 4;
++ pub const APPEASE_COST: i32 = 2;
+
+### rules STUDY_FACTS 3 -> 2
+@ src/rules.rs
+- pub const STUDY_FACTS: usize = 3;
++ pub const STUDY_FACTS: usize = 2;
+
+### rules SOUND_AT 12 -> 20
+@ src/rules.rs
+- pub const SOUND_AT: i32 = 12;
++ pub const SOUND_AT: i32 = 20;
+
+### rules DAYS 5 -> 4
+@ src/rules.rs
+- pub const DAYS: usize = 5;
++ pub const DAYS: usize = 4;
+
+### rules CALLS_PER_NIGHT 2 -> 1
+@ src/rules.rs
+- pub const CALLS_PER_NIGHT: usize = 2;
++ pub const CALLS_PER_NIGHT: usize = 1;
+
+### rules a right answer raises temper
+@ src/rules.rs
+-             remaining_delta: -(STEP + RIGHT_EXTRA),⏎            temper_delta: -1,
++             remaining_delta: -(STEP + RIGHT_EXTRA),⏎            temper_delta: 1,
+
+### rules an insult does not anger
+@ src/rules.rs
+-             remaining_delta: being.guess_penalty() - STEP,⏎            temper_delta: 1,
++             remaining_delta: being.guess_penalty() - STEP,⏎            temper_delta: 0,
+
+### rules a hang-up does not end the call
+@ src/rules.rs
+-             sanity_cost: hang_up_cost(being, temper),⏎            ends_call: true,
++             sanity_cost: hang_up_cost(being, temper),⏎            ends_call: false,
+
+### rules wrath threshold off by one
+@ src/rules.rs
+-     if temper >= being.wrath_at() {⏎        drain * WRATH_MULTIPLE
++     if temper > being.wrath_at() {⏎        drain * WRATH_MULTIPLE
+
+### rules composure may take the drain to zero
+@ src/rules.rs
+- let drain = (being.drain() - composure).max(1);
++ let drain = (being.drain() - composure).max(0);
+
+### rules a grudge starts calm
+@ src/rules.rs
+-         callers.push((grudge, 1));
++         callers.push((grudge, 0));
+
+### rules an appeased being keeps its grudge call
+@ src/rules.rs
+-         && !game.appeased[grudge.index()]⏎
++         && true⏎
+
+### rules the studied facts go last
+@ src/rules.rs
+-                     order.insert(place, fact);
++                     order.push(fact);
+
+### rules appeasing costs nothing
+@ src/rules.rs
+-             game.sanity -= APPEASE_COST;
++             game.sanity -= 0;
+
+### rules training adds two
+@ src/rules.rs
+-             game.composure += 1;
++             game.composure += 2;
+
+### rules resting is refused below full
+@ src/rules.rs
+-             if game.sanity >= START_SANITY {⏎                return Err(Refused("You are as rested
++             if game.sanity >= START_SANITY - 1 {⏎                return Err(Refused("You are as rested
+
+### rules the last day does not end the run
+@ src/rules.rs
+-     if game.day >= DAYS {
++     if game.day > DAYS {
+
+### rules sanity zero is survivable
+@ src/rules.rs
+-     if game.sanity <= 0 {
++     if game.sanity < 0 {
+
+### rules a call left in wrath leaves no grudge
+@ src/rules.rs
+-         if outcome.ends_call || temper >= being.wrath_at() {
++         if outcome.ends_call {
+
+### rules a settled grudge stays
+@ src/rules.rs
+-         } else if game.grudge == Some(being) {⏎            game.grudge = None;
++         } else if game.grudge == Some(being) {⏎            game.grudge = game.grudge;
+
+### rules the night's appeasements carry over
+@ src/rules.rs
+-     game.appeased = [false; BEINGS];⏎    if game.day >= DAYS
++     if game.day >= DAYS
+
+### rules the morning's study carries over
+@ src/rules.rs
+-     game.studied_today = None;⏎    game.appeased
++     game.appeased
+
+### rules temper may go negative
+@ src/rules.rs
+- .clamp(0, being.wrath_at() + 1);
++ .clamp(-5, being.wrath_at() + 1);
+
+### lore Yog's call length 4 -> 3
+@ src/lore.rs
+- [4, 6, 4][self.index()]
++ [3, 6, 4][self.index()]
+
+### lore Dagon's drain 1 -> 2
+@ src/lore.rs
+- [2, 1, 2][self.index()]
++ [2, 2, 2][self.index()]
+
+### lore Nyarlathotep's wrath 3 -> 4
+@ src/lore.rs
+- [2, 4, 3][self.index()]
++ [2, 4, 4][self.index()]
+
+### lore a wrong answer adds a step to Nyarlathotep
+@ src/lore.rs
+- [1, 1, 1][self.index()]
++ [1, 1, 2][self.index()]
+
+### screens the sanity bar is full at any sanity
+@ src/screens.rs
+- let filled = (game.sanity.max(0) as f32 / START_SANITY as f32).min(1.0);
++ let filled = 1.0_f32;
+
+### screens the temper pips ignore the temper
+@ src/screens.rs
+-             let color = if pip < call.temper {⏎                palette::WARN
++             let color = if pip < 1 {⏎                palette::WARN
+
+### screens the temper word breaks one early
+@ src/screens.rs
+-     } else if temper >= being.wrath_at() {⏎        "IN WRATH"
++     } else if temper >= being.wrath_at() - 1 {⏎        "IN WRATH"
+
+### screens a known right answer states the wrong sanity cost
+@ src/screens.rs
+-         Kind::Right => format!("Right. {length} It calms. Costs {} sanity.", o.sanity_cost),
++         Kind::Right => format!("Right. {length} It calms. Costs {} sanity.", o.sanity_cost + 1),
+
+### screens the call screen hides the lore of the being
+@ src/screens.rs
+-     let known = game.known_facts(being);⏎    let mut y = 78.0;
++     let known: Vec<usize> = Vec::new();⏎    let mut y = 78.0;
+
+### screens the call screen shows the lore as unknown
+@ src/screens.rs
+-     let knows = game.known[being.index()][call.fact_index()];
++     let knows = false;
+
+### screens the drain line forgets composure
+@ src/screens.rs
+-     let cost = exchange_cost(being, game.composure, call.temper);
++     let cost = exchange_cost(being, 0, call.temper);
+
+### input a click lands one row down
+@ src/input.rs
+-             .find(|(rect, _)| rect.contains(at))
++             .find(|(rect, _)| rect.contains(at + Vec2::new(0.0, 40.0)))
+
+### input the Over screen cannot begin again
+@ src/input.rs
+-     let restart = matches!(game.stage, Stage::Over(_)) && input.just_pressed(Key::R);
++     let restart = false && input.just_pressed(Key::R);
+
+### input a refusal is silent
+@ src/input.rs
+-         game.note = why;
++         let _ = why;
+
+### game the second run does not take the next seed
+@ src/input.rs
+- let seed = game.seed.wrapping_add(1);
++ let seed = game.seed;
