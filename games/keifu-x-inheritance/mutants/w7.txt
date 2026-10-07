@@ -431,8 +431,8 @@
 
 ### L2 the house hears the tale twice
 @ src/plans.rs
--         Some(if adults == 1 {
-+         Some(if adults >= 1 {
+- Some(if is_family(&heroes[hero]) && !house_told {
++ Some(if is_family(&heroes[hero]) {
 
 ### L3 a child at the table counts as the first teller
 @ src/plans.rs

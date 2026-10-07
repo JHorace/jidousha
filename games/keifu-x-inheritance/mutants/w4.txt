@@ -515,8 +515,8 @@
 
 ### V3 the dream line is not drawn
 @ src/board_view.rs
-- for (text, color) in [(&card.dream, ink::GOLD), (&card.warning, ink::WARN)] {
-+ for (text, color) in [(&card.warning, ink::GOLD), (&card.warning, ink::WARN)] {
+-         (&card.dream, ink::GOLD),
++         (&card.warning, ink::GOLD),
 
 ### V4 the history panel is empty
 @ src/dock_lines.rs
@@ -655,13 +655,13 @@
 
 ### TO1 the oracle row 1 as verify ships it
 @ src/w4.rs
--         ["Succeed 72%",
-+         ["Succeed 1%",
+- ["Succeed 92%",
++ ["Succeed 1%",
 
 ### TO2 the oracle row 2 as verify ships it
 @ src/w4.rs
--         ["Succeed 83%",
-+         ["Succeed 1%",
+- ["Succeed 97%",
++ ["Succeed 1%",
 
 ### TO3 the oracle row 3 as verify ships it
 @ src/w4.rs

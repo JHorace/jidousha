@@ -263,13 +263,13 @@
 
 ### R10 the dead among their own heirs
 @ src/heirs.rs
--         .filter(|&id| id != dead && heroes[id].is_living())
-+         .filter(|&id| heroes[id].is_living())
+- .filter(|&id| id != dead && heroes[id].is_living() && is_family(&heroes[id]))
++ .filter(|&id| heroes[id].is_living() && is_family(&heroes[id]))
 
 ### R11 the dead of the house among the heirs
 @ src/heirs.rs
--         .filter(|&id| id != dead && heroes[id].is_living())
-+         .filter(|&id| id != dead)
+- .filter(|&id| id != dead && heroes[id].is_living() && is_family(&heroes[id]))
++ .filter(|&id| id != dead && is_family(&heroes[id]))
 
 ### R12 the heir list cut at seven
 @ src/heirs.rs
@@ -378,13 +378,13 @@
 
 ### B7 the buried heirloom's name not capitalised
 @ src/heirs.rs
--                     &[&capitalized(&heirloom.name), object],
-+                     &[&heirloom.name, object],
+- &[&capitalized(&heirloom.name), object],
++ &[&heirloom.name, object],
 
 ### B8 the dead keep the heirloom
 @ src/heirs.rs
--     if let Some(heirloom) = house.heroes[dead].heirloom.take() {
-+     if let Some(heirloom) = house.heroes[dead].heirloom.clone() {
+-     if let Some(heirloom) = house.heroes[dead].heirloom.take() {⏎        match heir {
++     if let Some(heirloom) = house.heroes[dead].heirloom.clone() {⏎        match heir {
 
 ### B9 the dream passes to whoever is chosen
 @ src/heirs.rs
@@ -478,28 +478,28 @@
 
 ### D4 no grief on the page
 @ src/death_page.rs
--     lines.extend(grieve(content, &mut house.heroes, dead, year));
-+     let _ = (grieve, year);
+-     lines.extend(door_promise(content, &mut house.heroes, dead));⏎    lines.extend(grieve(content, &mut house.heroes, dead, year));⏎    let hero = &mut house.heroes[dead];⏎    match &hero.dream {
++     lines.extend(door_promise(content, &mut house.heroes, dead));⏎    let _ = (grieve, year);⏎    let hero = &mut house.heroes[dead];⏎    match &hero.dream {
 
 ### D5 never dreamt is fulfilled
 @ src/death_page.rs
--         None => hero.dream_fate = DreamFate::NeverDreamt,
-+         None => hero.dream_fate = DreamFate::Fulfilled,
+-     let hero = &mut house.heroes[dead];⏎    match &hero.dream {⏎        None => hero.dream_fate = DreamFate::NeverDreamt,
++     let hero = &mut house.heroes[dead];⏎    match &hero.dream {⏎        None => hero.dream_fate = DreamFate::Fulfilled,
 
 ### D6 a fulfilled dream's fate undecided
 @ src/death_page.rs
--         Some(dream) if dream.is_fulfilled() => hero.dream_fate = DreamFate::Fulfilled,
-+         Some(dream) if dream.is_fulfilled() => hero.dream_fate = DreamFate::Undecided,
+-     let hero = &mut house.heroes[dead];⏎    match &hero.dream {⏎        None => hero.dream_fate = DreamFate::NeverDreamt,⏎        Some(dream) if dream.is_fulfilled() => hero.dream_fate = DreamFate::Fulfilled,
++     let hero = &mut house.heroes[dead];⏎    match &hero.dream {⏎        None => hero.dream_fate = DreamFate::NeverDreamt,⏎        Some(dream) if dream.is_fulfilled() => hero.dream_fate = DreamFate::Undecided,
 
 ### D7 only an heirloom waits for an heir
 @ src/death_page.rs
--     let leaves = heirloom.is_some() || undone.is_some();
-+     let leaves = heirloom.is_some();
+- let leaves = heirloom.is_some() || undone.is_some() || !hero.marks.is_empty();
++ let leaves = heirloom.is_some() || !hero.marks.is_empty();
 
 ### D8 only a dream waits for an heir
 @ src/death_page.rs
--     let leaves = heirloom.is_some() || undone.is_some();
-+     let leaves = undone.is_some();
+- let leaves = heirloom.is_some() || undone.is_some() || !hero.marks.is_empty();
++ let leaves = undone.is_some() || !hero.marks.is_empty();
 
 ### D9 a page with nothing to leave is not decided
 @ src/death_page.rs
@@ -698,8 +698,8 @@
 
 ### Y19 a newborn of the second parent's house
 @ src/births.rs
--     let family = house.heroes[first].house.clone();
-+     let family = house.heroes[second].house.clone();
+-     let family = if house.heroes[first].family || !house.heroes[second].family {⏎        house.heroes[first].house.clone()
++     let family = if house.heroes[first].family || !house.heroes[second].family {⏎        house.heroes[second].house.clone()
 
 ### Y20 the second parent's blessings not inherited
 @ src/births.rs
