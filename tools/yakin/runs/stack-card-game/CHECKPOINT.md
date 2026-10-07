@@ -2,17 +2,18 @@
 
 task: stack-card-game
 variant: V1
-stage: design
+stage: implement
 tick: live
 resumes: 0
 gates-green-at: none
-updated: 2026-10-07 03:09 PDT
+updated: 2026-10-07 03:10 PDT
 
 ## Done so far
 - claimed
+- design note written (games/stack-card-game/DESIGN.md)
 
 ## Exact next step
-Read the make-game skill, write games/stack-card-game/DESIGN.md, set stage: implement.
+Write games/stack-card-game/{Cargo.toml,src/rules.rs,cards.rs,npc.rs,main.rs}; cargo check.
 
 ## Deviations
 - none
