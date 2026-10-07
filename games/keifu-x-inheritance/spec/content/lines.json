@@ -1622,6 +1622,26 @@
       ],
       "when": "variant",
       "source": "keifu-x-inheritance VARIANT.md"
+    },
+    "birth.trait_like": {
+      "text": "%1 is %2, like %3 %4.",
+      "args": [
+        "capitalized subject pronoun of the child",
+        "trait telling",
+        "possessive pronoun of the child",
+        "birth.father or birth.mother"
+      ],
+      "when": "variant",
+      "source": "keifu-x-inheritance VARIANT.md"
+    },
+    "birth.trait_sprung": {
+      "text": "%1 is %2, and neither parent is.",
+      "args": [
+        "capitalized subject pronoun",
+        "trait telling"
+      ],
+      "when": "variant",
+      "source": "keifu-x-inheritance VARIANT.md"
     }
   }
 }

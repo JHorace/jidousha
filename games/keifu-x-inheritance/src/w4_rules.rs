@@ -200,7 +200,8 @@ pub fn check_rules(checks: &mut Checks) -> String {
     house.patrons = 2;
     {
         let q = &mut house.board[0].quest;
-        q.demand = 14;
+        // 12 + 2 (two Strong traits, the variant) + 2 patrons: demand 16 keeps the margin at 0.
+        q.demand = 16;
         q.renown = 5;
         q.danger = 4;
     }
@@ -214,11 +215,11 @@ pub fn check_rules(checks: &mut Checks) -> String {
             card.renown.as_str(),
             card.unanswered.as_str(),
         ),
-        (Some("you bring 14"), "Renown +5", "unanswered -3"),
+        (Some("you bring 16"), "Renown +5", "unanswered -3"),
     );
     expect(
         checks,
-        "the card's odds at 14 against 14 are CONSTANTS §3's at 0",
+        "the card's odds at 16 against 16 are CONSTANTS §3's at 0",
         card.odds.clone(),
         Some(["Succeed 58%", "triumph 8%", "Setback 42%", "disaster 3%"].map(String::from)),
     );
@@ -231,7 +232,7 @@ pub fn check_rules(checks: &mut Checks) -> String {
             && sheet
                 .lines
                 .iter()
-                .any(|l| l.text == "You bring" && l.value.as_deref() == Some("14")),
+                .any(|l| l.text == "You bring" && l.value.as_deref() == Some("16")),
         "the sheet's breakdown ends with the patrons and adds up to the card",
         format!(
             "{:?}",

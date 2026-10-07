@@ -222,6 +222,8 @@ pub struct Hero {
     pub dream: Option<Dream>,
     /// A carried, inherited dream.
     pub burden: Option<Dream>,
+    /// Traits, at most one per aptitude, Might then Wits then Spirit (variant).
+    pub traits: Vec<crate::ids::Trait>,
     /// The fear.
     pub fear: Fear,
     /// The prophecy.

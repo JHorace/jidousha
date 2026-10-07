@@ -290,16 +290,13 @@ fn refusal(checks: &mut Checks, sim: &mut HeadlessSim, seed: u64) {
 fn stirred(checks: &mut Checks, seed: u64, burdened: bool, vector: &mut Vec<String>) {
     let mut sim = session(seed);
     stage_garricks_winter(&mut sim);
-    let wanderer = stir(&mut sim, burdened);
+    let _wanderer = stir(&mut sim, burdened);
     point_at(&mut sim, Target::LetWinterPass, true);
     go_to_the_choice(&mut sim);
     let labels: Vec<String> = heir_labels(&page_of(&sim))
         .into_iter()
         .map(|(_, l)| l)
         .collect();
-    let name = sim.world().resource::<House>().heroes[wanderer]
-        .name
-        .clone();
     // Variant: a wanderer is an outsider, so they are never offered, burdened or not.
     let want = [
         "Maren, daughter".to_owned(),
@@ -311,7 +308,7 @@ fn stirred(checks: &mut Checks, seed: u64, burdened: bool, vector: &mut Vec<Stri
         "No one. Let it lie.".to_owned(),
     ];
     checks.require(
-        labels == want && !labels.iter().any(|l| l.starts_with(&name)),
+        labels == want,
         "stirred, Garrick's heirs are not marked by the rule: \"(not the dream)\" on an undone burden only, \"(lays one aside)\" on an heirloom, and the outsider is never offered",
         format!("seed {seed:#x}: {labels:?}"),
     );

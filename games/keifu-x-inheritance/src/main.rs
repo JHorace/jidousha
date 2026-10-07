@@ -201,6 +201,9 @@ mod telling_view;
 #[cfg(test)]
 mod testkit;
 mod text;
+mod traits;
+#[cfg(test)]
+mod traits_tests;
 mod tree;
 mod turning;
 mod turning_lore;

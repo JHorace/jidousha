@@ -166,6 +166,7 @@ pub fn hero_sheet(content: &Content, heroes: &[Hero], id: HeroId) -> Sheet {
     }
     dream_section(content, heroes, id, &mut out);
     fear_section(content, hero, &mut out);
+    traits_section(content, hero, &mut out);
     let second_column = out.len();
     destiny_section(content, hero, &mut out);
     bonds_section(content, heroes, id, &mut out);
@@ -303,6 +304,29 @@ fn dream_lines(content: &Content, heroes: &[Hero], dream: &Dream, out: &mut Vec<
     };
     if !promise.is_empty() {
         out.push(line(Ink::Note, promise));
+    }
+}
+
+/// The variant's TRAITS section, one line per trait; none when the hero has none.
+fn traits_section(content: &Content, hero: &Hero, out: &mut Vec<Line>) {
+    let words = &content.words;
+    if hero.traits.is_empty() {
+        return;
+    }
+    out.push(line(Ink::Heading, &words[W::SheetTraits]));
+    for held in &hero.traits {
+        let sign = if held.gift() { "+" } else { "-" };
+        out.push(line(
+            Ink::Body,
+            fmt(
+                &words[W::SheetTraitLine],
+                &[
+                    &content.lore.traits[held.index()].title,
+                    &format!("{sign}{}", crate::constants::TRAIT_POWER),
+                    &content.lore.aptitudes[held.aptitude().index()],
+                ],
+            ),
+        ));
     }
 }
 

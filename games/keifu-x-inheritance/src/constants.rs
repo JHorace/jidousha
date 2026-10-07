@@ -334,3 +334,9 @@ pub const BONDS_SHOWN: usize = 6;
 pub const MARRY_IN_RENOWN: i32 = 5;
 /// The house takes `renown / DOWRY_SHARE` of a spouse who marries in (integer division).
 pub const DOWRY_SHARE: i32 = 2;
+/// A trait's effect on a quest of its aptitude: a gift adds it, a flaw takes it off.
+pub const TRAIT_POWER: i32 = 1;
+/// The chance a trait only one parent has comes down to the child.
+pub const TRAIT_PASS_CHANCE: f64 = 0.5;
+/// The chance a child springs a trait neither parent passed (then a gift or a flaw evenly).
+pub const TRAIT_SPRING_CHANCE: f64 = 0.125;

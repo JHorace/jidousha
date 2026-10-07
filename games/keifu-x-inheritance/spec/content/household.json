@@ -36,7 +36,8 @@
       "fate_telling": "was lost at the Drowned Coast",
       "fallen_at": "DROWNED_COAST",
       "parents": [],
-      "_source": "lineage/household.jai:62"
+      "_source": "lineage/household.jai:62",
+      "trait": "SHARP"
     },
     {
       "key": "garrick",
@@ -82,7 +83,8 @@
       ],
       "fate": "LIVING",
       "parents": [],
-      "_source": "lineage/household.jai:82"
+      "_source": "lineage/household.jai:82",
+      "trait": "STRONG"
     },
     {
       "key": "maren",
@@ -123,7 +125,8 @@
         "garrick",
         "elsbeth"
       ],
-      "_source": "lineage/household.jai:101"
+      "_source": "lineage/household.jai:101",
+      "trait": "SHARP"
     },
     {
       "key": "pip",
@@ -222,7 +225,8 @@
       ],
       "fate": "LIVING",
       "parents": [],
-      "_source": "lineage/household.jai:144"
+      "_source": "lineage/household.jai:144",
+      "trait": "STRONG"
     },
     {
       "key": "odo",
@@ -255,7 +259,8 @@
       ],
       "fate": "LIVING",
       "parents": [],
-      "_source": "lineage/household.jai:159"
+      "_source": "lineage/household.jai:159",
+      "trait": "STEADFAST"
     },
     {
       "key": "aud",

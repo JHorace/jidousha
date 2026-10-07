@@ -231,7 +231,9 @@ mod tests {
     fn grave_goods_with_garrick_and_brannoc_reads_line_by_line() {
         let (content, mut house) = house();
         let (garrick, brannoc) = (id(&house.heroes, "Garrick"), id(&house.heroes, "Brannoc"));
-        house.board[0].quest.demand = 11;
+        // Mainline's 12 plus 1 Strong each (the variant's traits): demand 13 keeps the
+        // margin at +1.
+        house.board[0].quest.demand = 13;
         let sheet = quest_sheet(&content, &house, 0, &[garrick, brannoc]);
         let s = |t: &str| t.to_owned();
         let v = |t: &str| Some(t.to_owned());
@@ -252,11 +254,13 @@ mod tests {
                     s("Ysolde's dream: Quest at three different places. She must go."),
                     None
                 ),
-                (s("NEEDS MIGHT 11"), None),
-                (s("You bring"), v("12")),
+                (s("NEEDS MIGHT 13"), None),
+                (s("You bring"), v("14")),
                 (s("Garrick, Might 5"), None),
                 (s("  carries Thornfall"), v("+1")),
+                (s("  is strong"), v("+1")),
                 (s("Brannoc, Might 6"), None),
+                (s("  is strong"), v("+1")),
                 (s("Two dice, less 7, are added to that."), None),
                 // CONSTANTS §3 at +1: 0, 10, 20, 6 of 36.
                 (

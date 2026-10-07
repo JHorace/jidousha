@@ -50,6 +50,10 @@ pub fn member_power(hero: &Hero, quest: QuestFacts<'_>) -> i32 {
     {
         sum += heirloom.bonus;
     }
+    // Variant: a trait of the quest's aptitude, a gift or a flaw (not at the Door).
+    if !quest.door_lock {
+        sum += crate::traits::power(hero, quest.aptitude);
+    }
     sum += fear_power(hero, quest.tags);
     if hero.wounded {
         sum -= WOUND_PENALTY;
@@ -245,11 +249,12 @@ mod tests {
             tags: &[],
             door_lock: false,
         };
-        // Garrick: Might 7 - 2 (elder) + 1 Thornfall; Wits 4 + 1 (elder), no heirloom.
-        assert_eq!(member_power(&heroes[garrick], might), 6);
+        // Garrick: Might 7 - 2 (elder) + 1 Thornfall + 1 Strong (the variant's trait);
+        // Wits 4 + 1 (elder), no heirloom, no trait there.
+        assert_eq!(member_power(&heroes[garrick], might), 7);
         assert_eq!(member_power(&heroes[garrick], wits), 5);
         heroes[garrick].wounded = true;
-        assert_eq!(member_power(&heroes[garrick], might), 4);
+        assert_eq!(member_power(&heroes[garrick], might), 5);
         let lock = QuestFacts {
             place: Place::SealedDoor,
             aptitude: Aptitude::Wits,
@@ -284,9 +289,10 @@ mod tests {
             .iter()
             .find(|t| t.title == "Grave goods")
             .expect("the opening Barrow quest");
-        // Garrick: Spirit 4 on the lamps (Dark, Undead); Might 7 - 2 + 1 on grave goods.
+        // Garrick: Spirit 4 on the lamps (Dark, Undead); Might 7 - 2 + 1 + 1 Strong on
+        // grave goods (the variant's trait).
         assert_eq!(member_power(&heroes[garrick], QuestFacts::of(lamps)), 4);
-        assert_eq!(member_power(&heroes[garrick], QuestFacts::of(grave)), 6);
+        assert_eq!(member_power(&heroes[garrick], QuestFacts::of(grave)), 7);
         let rest = crate::hero::Blessing {
             title: "Garrick's rest".into(),
             scope: crate::hero::Scope::AgainstTag(Tag::Undead),
@@ -296,8 +302,8 @@ mod tests {
         assert_eq!(member_power(&heroes[garrick], QuestFacts::of(lamps)), 6);
         assert_eq!(
             member_power(&heroes[garrick], QuestFacts::of(grave)),
-            6,
-            "grave goods carries no Undead"
+            7,
+            "grave goods carries no Undead (7 with the variant's Strong)"
         );
         // A child of twelve, wounded, afraid of the dark: -1 + 1... the blessing counts before the floor.
         heroes[pip].age = 12;

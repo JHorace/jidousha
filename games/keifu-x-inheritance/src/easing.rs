@@ -59,7 +59,7 @@ mod tests {
     use super::*;
     use crate::content::Content;
     use crate::quest::post;
-    use crate::testkit::house;
+    use crate::testkit::{house, house_without_traits};
     use jidousha::prelude::Rng;
 
     /// Two quests at fixed demands, by title, posted in year 1 at no trouble.
@@ -89,7 +89,7 @@ mod tests {
 
     #[test]
     fn easing_lowers_the_weaker_quest_until_both_reach_one_half() {
-        let (content, house) = house();
+        let (content, house) = house_without_traits();
         // Garrick and Brannoc bring 12 to Grave goods: at 14 they have 28 in 100; at
         // 12, 58. The feast at 0 is answerable from the start.
         let mut quests = crafted(&content, [("Grave goods", 14), ("The long feast", 0)]);
@@ -128,7 +128,7 @@ mod tests {
 
     #[test]
     fn easing_stops_at_thirty_points() {
-        let (content, house) = house();
+        let (content, house) = house_without_traits();
         let mut quests = crafted(&content, [("Grave goods", 50), ("The long feast", 0)]);
         let mut eased = vec![0; 2];
         let stop = ease(&house, &mut quests, &unanswerable(), &mut eased);
@@ -138,7 +138,7 @@ mod tests {
 
     #[test]
     fn an_answerable_board_is_not_eased() {
-        let (content, house) = house();
+        let (content, house) = house_without_traits();
         let mut quests = crafted(&content, [("Grave goods", 60), ("The long feast", 0)]);
         let mut eased = vec![0; 2];
         let answered = Reading {

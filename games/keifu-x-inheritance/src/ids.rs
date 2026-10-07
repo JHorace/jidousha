@@ -46,6 +46,19 @@ macro_rules! ids {
 }
 
 ids!(
+    /// The six traits of the variant's rudimentary genetics: a gift and a flaw per
+    /// aptitude (`traits` in `lore.json`).
+    Trait {
+        Strong = "STRONG",
+        Frail = "FRAIL",
+        Sharp = "SHARP",
+        Dull = "DULL",
+        Steadfast = "STEADFAST",
+        Faint = "FAINT",
+    }
+);
+
+ids!(
     /// Might, Wits, Spirit.
     Aptitude { Might = "MIGHT", Wits = "WITS", Spirit = "SPIRIT" }
 );

@@ -186,7 +186,7 @@ pub fn could_go(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testkit::{house, id};
+    use crate::testkit::{house, house_without_traits, id};
 
     fn quest_titled(content: &Content, title: &str, demand: i32) -> Quest {
         let template = content
@@ -282,7 +282,7 @@ mod tests {
 
     #[test]
     fn grave_goods_calls_garrick_as_a_dreamer_who_could_go_at_a_fair_demand() {
-        let (content, mut house) = house();
+        let (content, mut house) = house_without_traits();
         let garrick = id(&house.heroes, "Garrick");
         // Garrick and Brannoc bring 12: at demand 13 they have 42 in 100 (>= 35).
         let grave = quest_titled(&content, "Grave goods", 13);
@@ -310,7 +310,7 @@ mod tests {
 
     #[test]
     fn the_houses_patrons_count_in_the_board_reading() {
-        let (content, house) = house();
+        let (content, house) = house_without_traits();
         // Grave goods at 13 against Garrick and Brannoc's 12: 42 in 100, 15 of 36.
         // With a patron they bring 13: 58 in 100, 21 of 36.
         let quests = [

@@ -8,7 +8,7 @@ use jidousha::prelude::Rng;
 use crate::hero::{DeedKind, Fate};
 use crate::ids::{BondKind, Destiny, Outcome, Place, Pool};
 use crate::resolve::{resolve_rolled, set_out};
-use crate::testkit::{aim, house, id, pooled, seat};
+use crate::testkit::{aim, house, house_without_traits, id, pooled, seat};
 
 #[test]
 fn staying_home_in_year_one_costs_four_renown_and_troubles_four_places() {
@@ -90,7 +90,7 @@ fn a_wounded_hero_who_stays_home_mends_and_one_who_goes_does_not() {
 
 #[test]
 fn garrick_and_brannoc_triumphing_on_grave_goods_are_rewarded_taught_and_garrick_settles() {
-    let (content, mut house) = house();
+    let (content, mut house) = house_without_traits();
     let (garrick, brannoc) = (id(&house.heroes, "Garrick"), id(&house.heroes, "Brannoc"));
     seat(&mut house, 0, &[garrick, brannoc]);
     house.places[Place::Barrow.index()].trouble = 2;
@@ -237,7 +237,7 @@ fn a_youth_learns_twice_from_one_triumph_and_only_below_five() {
 
 #[test]
 fn the_roll_counts_the_houses_patrons() {
-    let (content, mut house) = house();
+    let (content, mut house) = house_without_traits();
     let (garrick, brannoc) = (id(&house.heroes, "Garrick"), id(&house.heroes, "Brannoc"));
     house.patrons = 2;
     seat(&mut house, 0, &[garrick, brannoc]);

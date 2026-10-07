@@ -2,7 +2,7 @@
 //!
 //! MODULES.md's W4 oracle is the first played one: seat Garrick and Brannoc on
 //! "Grave goods" in year 1 — by dragging them — and read the card. The fixed parts
-//! are shipped literals ("Needs Might", "you bring 12", the §6 lines behind it). The
+//! are shipped literals ("Needs Might", "you bring 14", the §6 lines behind it). The
 //! rolled part is asserted as a shape: the demand within 9..11 on every seed, and
 //! the card's percentages equal to CONSTANTS §3's table at the margin the card
 //! shows — the mapping, over many seeds, not one sample. Then the drags that do
@@ -21,15 +21,19 @@ use crate::verify::{SEEDS, hero_named, page_of, point_at, session};
 
 /// MODULES.md W4: the card's need, and what Garrick and Brannoc bring.
 pub const W4_NEEDS: &str = "Needs Might";
-/// MODULES.md W4: "you bring 12".
-pub const W4_YOU_BRING: &str = "you bring 12";
+/// MODULES.md W4 says "you bring 12"; the variant's two Strong traits (+1 each on a
+/// Might quest) make it 14 (VARIANT.md, a rewritten oracle).
+pub const W4_YOU_BRING: &str = "you bring 14";
 /// SPEC §6 behind it, as the quest sheet prints it: Garrick's Might 5 (7, -2 an
-/// elder), Thornfall +1, Brannoc's Might 6; no fear, no bond, no patron.
-pub const W4_LINES: [(&str, Option<&str>); 4] = [
-    ("You bring", Some("12")),
+/// elder), Thornfall +1, Strong +1, Brannoc's Might 6 and Strong +1; no fear, no bond,
+/// no patron.
+pub const W4_LINES: [(&str, Option<&str>); 6] = [
+    ("You bring", Some("14")),
     ("Garrick, Might 5", None),
     ("  carries Thornfall", Some("+1")),
+    ("  is strong", Some("+1")),
     ("Brannoc, Might 6", None),
+    ("  is strong", Some("+1")),
 ];
 
 /// CONSTANTS §3, the rows the oracle can land on, as the card and sheet print them:
@@ -37,19 +41,19 @@ pub const W4_LINES: [(&str, Option<&str>); 4] = [
 /// The card's "Succeed" is the table's "as shown" column (SPEC-GAPS KG-25).
 pub const W4_ODDS: [(i32, [&str; 4], [&str; 4]); 3] = [
     (
-        1,
-        ["Succeed 72%", "triumph 17%", "Setback 28%", "disaster 0%"],
-        ["17%", "56%", "28%", "0%"],
-    ),
-    (
-        2,
-        ["Succeed 83%", "triumph 28%", "Setback 17%", "disaster 0%"],
-        ["28%", "56%", "17%", "0%"],
-    ),
-    (
         3,
         ["Succeed 92%", "triumph 42%", "Setback 8%", "disaster 0%"],
         ["42%", "50%", "8%", "0%"],
+    ),
+    (
+        4,
+        ["Succeed 97%", "triumph 58%", "Setback 3%", "disaster 0%"],
+        ["58%", "39%", "3%", "0%"],
+    ),
+    (
+        5,
+        ["Succeed 100%", "triumph 72%", "Setback 0%", "disaster 0%"],
+        ["72%", "28%", "0%", "0%"],
     ),
 ];
 
@@ -153,12 +157,12 @@ pub fn check_oracle(checks: &mut Checks) -> (String, Vec<String>) {
         );
         checks.require(
             lines.iter().any(|l| l == W4_YOU_BRING),
-            "W4 oracle: the card says \"you bring 12\"",
+            "W4 oracle: the card says \"you bring 14\" (the variant's traits)",
             format!("seed {seed:#x}: {lines:?}"),
         );
         let Some(demand) = demand else { continue };
         demands.push(demand);
-        let row = W4_ODDS.iter().find(|(gap, _, _)| *gap == 12 - demand);
+        let row = W4_ODDS.iter().find(|(gap, _, _)| *gap == 14 - demand);
         let shown: Vec<&String> = lines.iter().filter(|l| l.ends_with('%')).collect();
         checks.require(
             row.is_some_and(|(_, card, _)| shown == card.iter().collect::<Vec<_>>()),

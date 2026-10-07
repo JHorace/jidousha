@@ -264,9 +264,10 @@ pub fn check_played(checks: &mut Checks) -> (String, Vec<String>) {
         let read = telling_lines(&sim);
         let [a, b] = page.dice;
         let demand = page.quest.demand;
-        let margin = 12 + a + b - 7 - demand;
+        // 12 as mainline, plus the variant's Strong on each of the two.
+        let margin = 14 + a + b - 7 - demand;
         let roll = format!(
-            "Needed Might {demand}. Brought 12. Dice {a} and {b}, less 7: {}.",
+            "Needed Might {demand}. Brought 14. Dice {a} and {b}, less 7: {}.",
             margin_telling(margin)
         );
         let premise = "Robbers went in at dusk. Bring them out, or what is left.";
@@ -281,7 +282,7 @@ pub fn check_played(checks: &mut Checks) -> (String, Vec<String>) {
             && read.contains(&outcome_word.to_owned())
             && read.contains(&roll);
         checks.require(
-            head_ok && page.power == 12 && page.margin == margin && page.outcome == band(margin) && page.members == [garrick, brannoc],
+            head_ok && page.power == 14 && page.margin == margin && page.outcome == band(margin) && page.members == [garrick, brannoc],
             "the played summer's page does not read place, title, premise, story, outcome and roll as the roll made them",
             format!("seed {seed:#x}: {read:?}, page power {} margin {} {:?}", page.power, page.margin, page.outcome),
         );

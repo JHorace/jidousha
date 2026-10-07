@@ -26,6 +26,14 @@ pub struct PlaceLore {
     pub trouble_line: String,
 }
 
+/// A trait's words and what it is (`traits` in `lore.json`).
+pub struct TraitLore {
+    /// "Strong".
+    pub title: String,
+    /// "strong".
+    pub telling: String,
+}
+
 /// A phase's words.
 pub struct PhaseLore {
     /// "Elder".
@@ -56,6 +64,8 @@ pub struct Lore {
     pub places: Vec<PlaceLore>,
     /// By `Phase`.
     pub phases: Vec<PhaseLore>,
+    /// By `Trait`.
+    pub traits: Vec<TraitLore>,
     /// Vocation titles, by `Vocation`.
     pub vocations: Vec<String>,
     /// The original's sprite names per vocation (its own, its elder's), by `Vocation`.
@@ -138,6 +148,24 @@ pub fn read_lore(at: &At<'_>) -> Result<Lore, SchemaError> {
                     name: text(p, "name")?,
                     tags,
                     trouble_line: text(p, "trouble_line")?,
+                })
+            })
+            .collect::<Result<_, SchemaError>>()?,
+        traits: table(at, "traits", crate::ids::Trait::ALL, crate::ids::Trait::id)?
+            .iter()
+            .map(|t| {
+                let tr = id_at(t, "id", crate::ids::Trait::find)?;
+                if id_at(t, "aptitude", Aptitude::find)? != tr.aptitude()
+                    || t.key("gift")?.bool()? != tr.gift()
+                {
+                    return Err(t.reject(format!(
+                        "{}: aptitude or gift disagree with the variant's trait table",
+                        tr.id()
+                    )));
+                }
+                Ok(TraitLore {
+                    title: text(t, "title")?,
+                    telling: text(t, "telling")?,
                 })
             })
             .collect::<Result<_, SchemaError>>()?,

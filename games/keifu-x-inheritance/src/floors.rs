@@ -265,7 +265,11 @@ pub fn look(
     let frame = frame_at(recorder, sim, tally.size);
     let page = page_of(sim);
     judge(checks, tally, name, &page, &frame, overlay);
-    if overlay || page.dock.max_first == 0 {
+    // Variant: a wheel turned over the dock lets go of the hero in hand, so a held hero's
+    // sheet is judged as it stands and not scrolled (the TRAITS section can make it
+    // longer than the dock; the same sheet is scrolled whole when it is pointed at).
+    let in_hand = sim.world().resource::<UiState>().drag.is_some();
+    if overlay || in_hand || page.dock.max_first == 0 {
         return;
     }
     let total = page.dock.total;

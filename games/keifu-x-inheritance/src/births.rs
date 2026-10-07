@@ -27,6 +27,7 @@ use crate::ids::{Aptitude, BondKind, Destiny, Pool, Pronoun, Tag};
 use crate::newcomers::{fear_of, newcomer, roll_pronoun};
 use crate::passage::{PageKind, TurnPage};
 use crate::text::{capitalized, fmt, name_list};
+use crate::traits::{Source, birth_traits};
 use crate::words::W;
 
 /// `hero`'s first living spouse, in bond order, and the year they wed.
@@ -144,7 +145,11 @@ fn born(
             break;
         }
     }
+    // Variant: the traits, after every mainline roll, so a mainline seed's pronoun, name,
+    // aptitudes and fear are the same in the fork.
+    let traits = birth_traits(&house.heroes[first], &house.heroes[second], rng);
     let mut child = newcomer(name, family, pronoun, 0, year, fear);
+    child.traits = traits.iter().map(|(t, _)| *t).collect();
     child.aptitudes = aptitudes;
     child.parents = [Some(first), Some(second)];
     child.family = house.heroes[first].family || house.heroes[second].family;
@@ -209,6 +214,28 @@ fn born(
         ),
         (None, None) => fmt(&words[W::BirthOwnFear], &[&forms.subject, &tag.noun]),
     });
+    for &(held, source) in &traits {
+        let telling = &content.lore.traits[held.index()].telling;
+        lines.push(match source {
+            Source::Parent(from) => fmt(
+                &words[W::BirthTraitLike],
+                &[
+                    &capitalized(&forms.subject),
+                    telling,
+                    &forms.possessive,
+                    &words[if heroes[[first, second][from]].pronoun == Pronoun::He {
+                        W::BirthFather
+                    } else {
+                        W::BirthMother
+                    }],
+                ],
+            ),
+            Source::Sprung => fmt(
+                &words[W::BirthTraitSprung],
+                &[&capitalized(&forms.subject), telling],
+            ),
+        });
+    }
     match child.blessings.as_slice() {
         [] => {}
         [one] => lines.push(fmt(

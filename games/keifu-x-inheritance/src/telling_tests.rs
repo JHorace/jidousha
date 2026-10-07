@@ -5,11 +5,11 @@ use jidousha::prelude::Rng;
 
 use crate::resolve::resolve_rolled;
 use crate::telling_view::{about, roll_line};
-use crate::testkit::{aim, house, id, seat};
+use crate::testkit::{aim, house_without_traits, id, seat};
 
 #[test]
 fn the_roll_line_tells_an_exact_a_beaten_and_a_missed_margin() {
-    let (content, founded) = house();
+    let (content, founded) = house_without_traits();
     let brannoc = id(&founded.heroes, "Brannoc");
     for (margin, telling) in [
         (0, "met it exactly"),

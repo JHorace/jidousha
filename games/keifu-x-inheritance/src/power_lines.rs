@@ -12,6 +12,7 @@ use crate::fear::fear_power;
 use crate::hero::{Hero, HeroId};
 use crate::power::{QuestFacts, party_power};
 use crate::text::fmt;
+use crate::traits::trait_in;
 use crate::words::W;
 
 /// One line of the quest sheet's power breakdown (SPEC §6).
@@ -57,6 +58,18 @@ pub fn member_lines(content: &Content, hero: &Hero, quest: QuestFacts<'_>) -> Ve
         add(
             fmt(&words[W::PowerLineCarries], &[&heirloom.name]),
             heirloom.bonus,
+            false,
+        );
+    }
+    if !quest.door_lock
+        && let Some(held) = trait_in(hero, quest.aptitude)
+    {
+        add(
+            fmt(
+                &words[W::PowerLineTrait],
+                &[&content.lore.traits[held.index()].telling],
+            ),
+            held.power(),
             false,
         );
     }
@@ -195,7 +208,9 @@ mod tests {
             [
                 ("Garrick, Might 5".to_owned(), 5),
                 ("  carries Thornfall".to_owned(), 1),
+                ("  is strong".to_owned(), 1),
                 ("Brannoc, Might 6".to_owned(), 6),
+                ("  is strong".to_owned(), 1),
             ]
         );
     }

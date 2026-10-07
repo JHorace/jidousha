@@ -201,10 +201,12 @@ mod tests {
             ("Renown +2", "unanswered -1")
         );
         house.board[0].seats = vec![Some(garrick), Some(brannoc)];
-        house.board[0].quest.demand = 10;
+        // Mainline's 12 plus 1 Strong each (the variant's traits): demand 12 keeps the
+        // margin at +2.
+        house.board[0].quest.demand = 12;
         let card = read_card(&content, &house, 0, &house.party(0), None);
-        assert_eq!(card.needs, "Needs Might 10");
-        assert_eq!(card.you_bring.as_deref(), Some("you bring 12"));
+        assert_eq!(card.needs, "Needs Might 12");
+        assert_eq!(card.you_bring.as_deref(), Some("you bring 14"));
         // CONSTANTS §3 at +2: 0, 6, 20, 10 of 36.
         assert_eq!(
             card.odds,

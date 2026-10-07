@@ -27,7 +27,7 @@ pub const W0_TOP_BAR: [&str; 5] = [
 /// W1's oracle, Garrick's sheet, in the order the sheet must show it.
 ///
 /// The two living bonds are checked apart from this order (SPEC-GAPS KG-1).
-pub const W1_GARRICK_IN_ORDER: [&str; 20] = [
+pub const W1_GARRICK_IN_ORDER: [&str; 22] = [
     "Garrick Thorne",
     "Might 5 (-2)",
     "Wits 5 (+1)",
@@ -41,6 +41,9 @@ pub const W1_GARRICK_IN_ORDER: [&str; 20] = [
     "Water (deep water)",
     "Dread",
     "-3 power",
+    // The variant's TRAITS section, between FEAR and DESTINY.
+    "TRAITS",
+    "Strong: +1 Might on quests.",
     "DESTINY, COME",
     "Your child will surpass you.",
     "BONDS",

@@ -18,6 +18,14 @@ pub fn founded() -> (Content, Vec<Hero>) {
     (content, heroes)
 }
 
+/// A founded house in year 1's summer with every trait taken off: for the mainline rules
+/// whose literals count a party's power without the variant's traits (`VARIANT.md`).
+pub fn house_without_traits() -> (Content, House) {
+    let (content, mut house) = house();
+    house.heroes.iter_mut().for_each(|h| h.traits.clear());
+    (content, house)
+}
+
 /// The id of the founding hero named `name`.
 pub fn id(heroes: &[Hero], name: &str) -> HeroId {
     heroes

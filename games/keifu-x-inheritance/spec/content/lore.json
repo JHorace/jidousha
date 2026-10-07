@@ -365,5 +365,55 @@
     "heirloom": "#d8c06a",
     "tree_line": "#6a6a78",
     "_note": "Presentation only; the port is visually free. Named colors are engine palette entries."
-  }
+  },
+  "traits": [
+    {
+      "id": "STRONG",
+      "aptitude": "MIGHT",
+      "gift": true,
+      "title": "Strong",
+      "telling": "strong",
+      "source": "keifu-x-inheritance VARIANT.md"
+    },
+    {
+      "id": "FRAIL",
+      "aptitude": "MIGHT",
+      "gift": false,
+      "title": "Frail",
+      "telling": "frail",
+      "source": "keifu-x-inheritance VARIANT.md"
+    },
+    {
+      "id": "SHARP",
+      "aptitude": "WITS",
+      "gift": true,
+      "title": "Sharp",
+      "telling": "sharp",
+      "source": "keifu-x-inheritance VARIANT.md"
+    },
+    {
+      "id": "DULL",
+      "aptitude": "WITS",
+      "gift": false,
+      "title": "Dull",
+      "telling": "dull",
+      "source": "keifu-x-inheritance VARIANT.md"
+    },
+    {
+      "id": "STEADFAST",
+      "aptitude": "SPIRIT",
+      "gift": true,
+      "title": "Steadfast",
+      "telling": "steadfast",
+      "source": "keifu-x-inheritance VARIANT.md"
+    },
+    {
+      "id": "FAINT",
+      "aptitude": "SPIRIT",
+      "gift": false,
+      "title": "Faint",
+      "telling": "faint",
+      "source": "keifu-x-inheritance VARIANT.md"
+    }
+  ]
 }

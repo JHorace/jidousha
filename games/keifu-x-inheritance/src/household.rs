@@ -131,7 +131,7 @@ fn read_hero(item: &At<'_>) -> Result<FoundingHero, SchemaError> {
             None => String::new(),
         })
     };
-    let hero = Hero {
+    let mut hero = Hero {
         key: text(item, "key")?,
         name: text(item, "name")?,
         house: text(item, "house")?,
@@ -143,6 +143,7 @@ fn read_hero(item: &At<'_>) -> Result<FoundingHero, SchemaError> {
         aptitudes,
         dream: None,
         burden: None,
+        traits: Vec::new(),
         fear: Fear {
             tag: id_at(&fear, "tag", Tag::find)?,
             dread: fear.key("dread")?.int()?,
@@ -191,6 +192,9 @@ fn read_hero(item: &At<'_>) -> Result<FoundingHero, SchemaError> {
         fears_faced: count("fears_faced")?,
         winters_taught: 0,
     };
+    if item.find("trait")?.is_some() {
+        hero.traits = vec![id_at(item, "trait", crate::ids::Trait::find)?];
+    }
     let parents = item
         .key("parents")?
         .items()?

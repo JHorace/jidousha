@@ -479,6 +479,13 @@
     "power_line_patron": {
       "text": "A patron at Court",
       "source": "lineage/quest.jai:210"
+    },
+    "power_line_trait": {
+      "text": "  is %",
+      "source": "keifu-x-inheritance VARIANT.md",
+      "args": [
+        "trait telling"
+      ]
     }
   },
   "door_sheet": {
@@ -735,6 +742,19 @@
       "source": "keifu-x-inheritance VARIANT.md",
       "args": [
         "MARRY_IN_RENOWN (5)"
+      ]
+    },
+    "traits": {
+      "text": "TRAITS",
+      "source": "keifu-x-inheritance VARIANT.md"
+    },
+    "trait_line": {
+      "text": "%: % % on quests.",
+      "source": "keifu-x-inheritance VARIANT.md",
+      "args": [
+        "trait title",
+        "signed value",
+        "aptitude title"
       ]
     }
   },

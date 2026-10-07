@@ -234,7 +234,8 @@ pub fn check_oracle(checks: &mut Checks) -> (String, Vec<String>) {
                 member_power(hero, QuestFacts::of(lamps)) - lamps_before,
                 member_power(hero, QuestFacts::of(grave)),
             ),
-            (2, 6),
+            // 6 as mainline, plus the variant's Strong.
+            (2, 7),
         );
         expect(
             checks,
