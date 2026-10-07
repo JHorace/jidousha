@@ -15,27 +15,30 @@ same run, and a morning preview can ask "what would tonight be?" without spendin
 
 | being | voice | call | drain | temper |
 |---|---|---|---|---|
-| Yog-Sothoth, the Gate | cold, exact, bored by mortals | 3 exchanges | 3 a line | wrath at temper 2 |
-| Dagon, the Deep | patient, wet, nostalgic | 5 exchanges | 2 a line | wrath at temper 3 |
-| Nyarlathotep, the Crawling Chaos | charming, a liar's questions | 4 exchanges | 2 a line | wrath at temper 3; a wrong answer adds 2 |
+| Yog-Sothoth, the Gate | cold, exact, bored by mortals | 4 exchanges | 2 a line | wrath at temper 2 |
+| Dagon, the Deep | patient, wet, nostalgic | 6 exchanges | 1 a line | wrath at temper 4 |
+| Nyarlathotep, the Crawling Chaos | charming, a liar's questions | 4 exchanges | 2 a line | wrath at temper 3 |
 
 Each being has **five lore facts**, and each fact has **one question** with three
-answers: the one the fact makes true, a plausible wrong guess, and an insult. A fact is
-*known* once studied or learned; the player sees all of a being's known facts on the
-call screen while choosing.
+answers: the one the fact makes true, a plausible wrong guess, and a presumptuous
+answer that offends it (worded politely enough that only lore tells it from the guess).
+A fact is *known* once studied; the call screen shows every known fact of the caller.
 
-## The sanity arithmetic (`model::answer_outcome`, `model::exchange_cost`)
+## The sanity arithmetic (`rules::answer_outcome`, `rules::exchange_cost`)
 
-- `drain` = the being's drain less your **Composure** (0-2), never under 1.
-- An exchange costs `drain`, doubled once the being is in **wrath**.
-- **Correct** (the fact is known, or you guessed right): the call has 2 fewer exchanges
-  left, the being's temper falls by 1. **Wrong guess**: 1 more exchange left (Nyarlathotep: 2).
-  **Insult**: as a wrong guess, temper +1, and **3 x drain** instead of 1 x drain — anger
-  costs three times the drain. At wrath (temper at the being's limit) every exchange costs double.
-- **Hang up** ends the call at once for **3 x drain** and leaves a grudge: that being
-  calls again tonight's next slot (tomorrow's first) at temper +1.
+- `drain` = the being's drain less your **Composure** (0-2), never under 1; an exchange
+  costs `drain`, doubled once the being is in **wrath** (temper at its limit).
+- Every answer takes one exchange off the call by itself (the being gets its way in time).
+  **Right**: one more off (the call is 2 shorter), temper -1. **Wrong guess**: no extra —
+  the call gets no shorter. **Insult**: as a wrong guess, temper +1, and **2 x drain**
+  instead of 1 x drain: anger costs double the drain, and wrath doubles that.
+- **Hang up** ends the call at once for **8 x the being's own drain** (Composure does not
+  steady a rudeness) and leaves a grudge: that being calls first tomorrow, already irked.
+  A call that ends with the being in wrath leaves a grudge too.
 - The call ends when no exchanges are left. Sanity 0 ends the run: you lose.
-- Start at **36 sanity**, five days, two calls a night; surviving wins ("sound" at 15+, else "frayed").
+- Start at **60 sanity**, five days, two calls a night; surviving wins ("sound" at 12+,
+  else "frayed"). The measured balance (100 seeds each): the reader of lore wins about 7
+  in 10, the player who never studies about 1 in 6, the one who only hangs up never.
 
 ## The day loop
 
@@ -43,14 +46,16 @@ call screen while choosing.
 computed by diffing `plan_night` before and after it, so the stated effect cannot differ
 from what happens:
 
-1. Study a being's lore: learn its next unknown fact; if it calls, its first question is that fact.
-2. Appease a being's cult (x3): that being does not call tonight; costs 4 sanity.
+1. Study a being's lore (x3): learn its next three unknown facts; if it calls, those are its
+   first questions.
+2. Appease a being's cult (x3): that being does not call tonight; costs 4 sanity. If it was
+   not due tonight the option says so: it buys nothing today.
 3. Train Composure: -1 to every drain from now on (max 2).
-4. Rest: +6 sanity.
+4. Rest: +8 sanity.
 
 **Evening** — `plan_night(game)` lists tonight's callers: a grudge first, then a seeded
 pick from the beings not appeased, two calls in all. Each call asks a being's questions in a
-seeded order, the studied fact first. Keys 1-3 answer, 4 hangs up.
+seeded order, the studied facts first. Keys 1-3 answer, 4 hangs up; "R" begins again at the end.
 
 ## Decision surfaces
 

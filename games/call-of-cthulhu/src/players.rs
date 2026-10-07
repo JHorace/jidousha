@@ -8,9 +8,7 @@
 
 use crate::game::{Choice, Game, Stage};
 use crate::lore::{Being, FACTS_PER_BEING};
-use crate::rules::{
-    ACTIONS, Action, COMPOSURE_MAX, Kind, START_SANITY, option_kinds, plan_night,
-};
+use crate::rules::{ACTIONS, Action, COMPOSURE_MAX, Kind, START_SANITY, option_kinds, plan_night};
 
 /// A way of choosing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -40,7 +38,10 @@ impl Player {
 
 /// The index of `action` in the morning list.
 fn morning_index(action: Action) -> usize {
-    ACTIONS.iter().position(|a| *a == action).unwrap_or(ACTIONS.len() - 1)
+    ACTIONS
+        .iter()
+        .position(|a| *a == action)
+        .unwrap_or(ACTIONS.len() - 1)
 }
 
 /// What `player` chooses now.
@@ -55,18 +56,11 @@ pub fn choose(player: Player, game: &Game) -> Choice {
 /// The reader rests when it is low, otherwise studies whichever caller tonight it knows
 /// least about; failing that it trains, then rests. The others only rest.
 fn morning(player: Player, game: &Game) -> Action {
-    if player == Player::HangUp {
-        return Action::Rest;
+    if player == Player::HangUp || player == Player::Chaser {
+        return idle_morning(player, game);
     }
     if game.sanity <= LOW_SANITY {
         return Action::Rest;
-    }
-    if player == Player::Chaser {
-        return if game.composure < COMPOSURE_MAX {
-            Action::Train
-        } else {
-            Action::Rest
-        };
     }
     let due = plan_night(game);
     let mut best: Option<(Being, usize)> = None;
@@ -90,6 +84,25 @@ fn morning(player: Player, game: &Game) -> Action {
 
 /// Below this the reader rests instead of studying.
 const LOW_SANITY: i32 = 10;
+
+/// The morning of a player that never studies: rests when it can, trains when it is rested,
+/// and when there is nothing left of either appeases whoever is due first.
+fn idle_morning(player: Player, game: &Game) -> Action {
+    let low = player == Player::HangUp || game.sanity <= LOW_SANITY;
+    if game.sanity < START_SANITY && low {
+        return Action::Rest;
+    }
+    if game.composure < COMPOSURE_MAX {
+        return Action::Train;
+    }
+    if game.sanity < START_SANITY {
+        return Action::Rest;
+    }
+    match plan_night(game).first() {
+        Some(call) => Action::Appease(call.being),
+        None => Action::Rest,
+    }
+}
 
 /// What to say on the line.
 fn on_the_line(player: Player, game: &Game) -> usize {
@@ -128,27 +141,23 @@ pub struct Report {
     pub insults: usize,
     /// Calls ended by hanging up.
     pub hang_ups: usize,
+    /// Choices the game refused: a player that only makes valid choices has none.
+    pub refused: usize,
 }
 
 /// Play a whole run from `seed` with `player`, through `Game::choose` alone.
 pub fn play(seed: u64, player: Player) -> Report {
     let mut game = Game::new(seed);
-    // Five days of at most a handful of exchanges each; a bound so a fault cannot spin.
+    let mut refused = 0;
+    // Five days of at most a few dozen exchanges each; a bound so a fault cannot spin.
     for _ in 0..2000 {
         if matches!(game.stage, Stage::Over(_)) {
             break;
         }
         let choice = choose(player, &game);
-        if let Err(crate::game::Refused(why)) = game.choose(choice) {
-            // A refused choice leaves the game as it was; the player rests instead.
-            if matches!(game.stage, Stage::Morning) {
-                let rest = Choice::Option(morning_index(Action::Rest));
-                if game.choose(rest).is_err() {
-                    // Fully rested: train, or study, whichever is left.
-                    let _ = game.choose(Choice::Option(morning_index(Action::Train)));
-                }
-            }
-            game.note = why;
+        if game.choose(choice).is_err() {
+            refused += 1;
+            break;
         }
     }
     let ending = match game.stage {
@@ -161,8 +170,17 @@ pub fn play(seed: u64, player: Player) -> Report {
         sanity: game.sanity,
         answers: game.record.len(),
         right: game.record.iter().filter(|r| r.kind == Kind::Right).count(),
-        insults: game.record.iter().filter(|r| r.kind == Kind::Insult).count(),
-        hang_ups: game.record.iter().filter(|r| r.kind == Kind::HangUp).count(),
+        insults: game
+            .record
+            .iter()
+            .filter(|r| r.kind == Kind::Insult)
+            .count(),
+        hang_ups: game
+            .record
+            .iter()
+            .filter(|r| r.kind == Kind::HangUp)
+            .count(),
+        refused,
     }
 }
 
@@ -179,8 +197,13 @@ pub fn sweep(player: Player, seeds: std::ops::Range<u64>) -> (usize, usize, f64)
             sanity += report.sanity;
         }
     }
-    (won, total, if won == 0 { 0.0 } else { f64::from(sanity) / won as f64 })
+    (
+        won,
+        total,
+        if won == 0 {
+            0.0
+        } else {
+            f64::from(sanity) / won as f64
+        },
+    )
 }
-
-/// The sanity a run starts with, for a report line.
-pub const OPENING: i32 = START_SANITY;

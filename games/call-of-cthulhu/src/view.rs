@@ -28,6 +28,11 @@ impl UiMap {
         (world - self.origin) / self.scale
     }
 
+    /// A design point in the world (the `Mapping` method, callable without the trait).
+    pub fn to_world_point(&self, ui: Vec2) -> Vec2 {
+        self.origin + ui * self.scale
+    }
+
     /// A design rectangle in the world.
     pub fn rect_to_world(&self, rect: Rect) -> Rect {
         Rect::from_min_size(self.to_world(rect.min), rect.size() * self.scale)

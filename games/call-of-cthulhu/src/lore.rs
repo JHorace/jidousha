@@ -34,11 +34,6 @@ impl Being {
         }
     }
 
-    /// The being whose row is `index`, if there is one.
-    pub fn find(index: usize) -> Option<Being> {
-        Being::ALL.get(index).copied()
-    }
-
     /// What the caller id says.
     pub fn name(self) -> &'static str {
         ["Yog-Sothoth", "Dagon", "Nyarlathotep"][self.index()]

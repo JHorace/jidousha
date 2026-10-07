@@ -9,6 +9,7 @@
 mod capture;
 mod checks;
 mod decisions;
+mod driver;
 mod game;
 mod input;
 mod lore;

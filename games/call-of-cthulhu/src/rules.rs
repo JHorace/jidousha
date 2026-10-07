@@ -81,7 +81,13 @@ pub fn exchange_cost(being: Being, composure: i32, temper: i32) -> i32 {
 /// What hanging up costs: the being's own drain, not reduced by Composure (a rudeness
 /// nothing steadies you against), times `HANGUP_DRAINS`, doubled in wrath.
 fn hang_up_cost(being: Being, temper: i32) -> i32 {
-    being.drain() * HANGUP_DRAINS * if temper >= being.wrath_at() { WRATH_MULTIPLE } else { 1 }
+    being.drain()
+        * HANGUP_DRAINS
+        * if temper >= being.wrath_at() {
+            WRATH_MULTIPLE
+        } else {
+            1
+        }
 }
 
 /// What `kind` does to a call with `being` at `temper`, for someone with `composure`.
@@ -140,7 +146,12 @@ fn shuffled(n: usize, rng: &mut Rng) -> Vec<usize> {
 
 /// Which of the three answer slots holds which kind for this question, from the seed.
 pub fn option_kinds(seed: u64, day: usize, slot: usize, exchange: usize) -> [Kind; 3] {
-    let mut rng = Rng::from_seed(mix(seed, day as u64, slot as u64 * 64 + exchange as u64, 0xA115));
+    let mut rng = Rng::from_seed(mix(
+        seed,
+        day as u64,
+        slot as u64 * 64 + exchange as u64,
+        0xA115,
+    ));
     let order = shuffled(3, &mut rng);
     let kinds = [Kind::Right, Kind::Guess, Kind::Insult];
     [kinds[order[0]], kinds[order[1]], kinds[order[2]]]
@@ -177,7 +188,12 @@ pub fn plan_night(game: &Game) -> Vec<CallPlan> {
         .map(|(slot, (being, temper))| {
             let mut order = shuffled(
                 FACTS_PER_BEING,
-                &mut Rng::from_seed(mix(game.seed, game.day as u64, slot as u64, 0x0DE4 + being.index() as u64)),
+                &mut Rng::from_seed(mix(
+                    game.seed,
+                    game.day as u64,
+                    slot as u64,
+                    0x0DE4 + being.index() as u64,
+                )),
             );
             if let Some((studied, facts)) = &game.studied_today
                 && *studied == being
@@ -252,7 +268,9 @@ pub fn apply_action(game: &mut Game, action: Action) -> Result<(), Refused> {
         }
         Action::Train => {
             if game.composure >= COMPOSURE_MAX {
-                return Err(Refused("Your composure cannot be trained further.".to_owned()));
+                return Err(Refused(
+                    "Your composure cannot be trained further.".to_owned(),
+                ));
             }
             game.composure += 1;
         }
@@ -329,7 +347,11 @@ pub fn describe_action(game: &Game, action: Action) -> Effect {
                 .find(|p| p.being == being)
                 .is_some_and(|p| p.order.starts_with(facts));
             let asks = if first {
-                format!("{} asks about {} first.", being.name(), if facts.len() > 1 { "them" } else { "it" })
+                format!(
+                    "{} asks about {} first.",
+                    being.name(),
+                    if facts.len() > 1 { "them" } else { "it" }
+                )
             } else {
                 format!("{} is not due tonight.", being.name())
             };
@@ -341,7 +363,10 @@ pub fn describe_action(game: &Game, action: Action) -> Effect {
             let change = if was_due && !now_due {
                 format!("{} will not call tonight.", being.name())
             } else {
-                format!("{} was not due tonight; this buys nothing today.", being.name())
+                format!(
+                    "{} was not due tonight; this buys nothing today.",
+                    being.name()
+                )
             };
             format!("Costs {APPEASE_COST} sanity. {change} {tonight}")
         }
@@ -364,7 +389,10 @@ pub fn describe_action(game: &Game, action: Action) -> Effect {
 fn begin_night(game: &mut Game) {
     game.night = plan_night(game);
     if game.night.is_empty() {
-        end_night(game, "Every cult kept its being busy. The phone stayed silent.");
+        end_night(
+            game,
+            "Every cult kept its being busy. The phone stayed silent.",
+        );
         return;
     }
     game.stage = Stage::Call;

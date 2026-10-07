@@ -7,14 +7,13 @@
 //! camera (`main.rs`). This is the prototype answer: one aspect, letterboxed on others.
 
 use jidousha::prelude::*;
-use jidousha::ui::{Floors, Icon, Panel, TextRun, wrap};
+use jidousha::ui::{Floors, Icon, Panel, TextRun, clipped, wrap};
 
 use crate::game::{Choice, Ending, Game, Stage};
 use crate::lore::{Being, FACTS, FACTS_PER_BEING};
 use crate::palette;
 use crate::rules::{
-    ACTIONS, DAYS, Kind, START_SANITY, answer_outcome, describe_action, exchange_cost,
-    option_kinds,
+    ACTIONS, DAYS, Kind, START_SANITY, answer_outcome, describe_action, exchange_cost, option_kinds,
 };
 
 /// The design space's width.
@@ -93,6 +92,8 @@ pub fn call_row(i: usize) -> Rect {
 /// Where the right-hand status block starts on the call screen.
 const STATUS_X: f32 = 596.0;
 const STATUS_Y: f32 = 318.0;
+/// How wide the right-hand column is.
+const SIDE_W: f32 = 340.0;
 
 /// The temper as a word.
 pub fn temper_word(being: Being, temper: i32) -> &'static str {
@@ -136,7 +137,7 @@ pub fn bars(game: &Game) -> Vec<(Rect, Color)> {
             };
             out.push((
                 Rect::from_min_size(
-                    Vec2::new(STATUS_X + 130.0 + pip as f32 * 18.0, STATUS_Y + 2.0),
+                    Vec2::new(STATUS_X + 200.0 + pip as f32 * 18.0, STATUS_Y + 2.0),
                     Vec2::new(12.0, 12.0),
                 ),
                 color,
@@ -148,19 +149,25 @@ pub fn bars(game: &Game) -> Vec<(Rect, Color)> {
 
 /// The header every stage opens with: title, day, sanity as a number.
 fn header(panel: &mut Screen, game: &Game, what: &str) {
-    let title = format!("CALL OF CTHULHU    Day {} of {DAYS} - {what}", game.day.min(DAYS));
+    let title = format!(
+        "CALL OF CTHULHU    Day {} of {DAYS} - {what}",
+        game.day.min(DAYS)
+    );
     panel.text(TextRun::new(
         Vec2::new(MARGIN, 10.0),
         title,
         style(HEAD, palette::GOLD),
     ));
     let sanity = format!("Sanity {} / {START_SANITY}", game.sanity.max(0));
-    let sty = style(BODY, if game.sanity <= 10 { palette::WARN } else { palette::TEXT });
-    panel.text(TextRun::new(
-        Vec2::new(MARGIN + 316.0, 34.0),
-        sanity,
-        sty,
-    ));
+    let sty = style(
+        BODY,
+        if game.sanity <= 10 {
+            palette::WARN
+        } else {
+            palette::TEXT
+        },
+    );
+    panel.text(TextRun::new(Vec2::new(MARGIN + 316.0, 34.0), sanity, sty));
 }
 
 /// The panel for the game as it stands.
@@ -176,9 +183,19 @@ pub fn panel(game: &Game) -> Screen {
 pub fn known_line(game: &Game) -> String {
     let mut parts: Vec<String> = Being::ALL
         .iter()
-        .map(|b| format!("{} {}/{FACTS_PER_BEING}", b.name(), game.known_facts(*b).len()))
+        .map(|b| {
+            format!(
+                "{} {}/{FACTS_PER_BEING}",
+                b.name(),
+                game.known_facts(*b).len()
+            )
+        })
         .collect();
-    parts.push(format!("Composure {}/{}", game.composure, crate::rules::COMPOSURE_MAX));
+    parts.push(format!(
+        "Composure {}/{}",
+        game.composure,
+        crate::rules::COMPOSURE_MAX
+    ));
     format!("You know: {}", parts.join("   "))
 }
 
@@ -187,7 +204,12 @@ fn morning(game: &Game) -> Screen {
     header(&mut panel, game, "Morning");
     let note = style(BODY, palette::NOTE);
     let at = Vec2::new(MARGIN, 58.0);
-    panel.block(at, &wrapped(&note, &game.note, DESIGN_W - 2.0 * MARGIN), note, 3.0);
+    panel.block(
+        at,
+        &wrapped(&note, &game.note, DESIGN_W - 2.0 * MARGIN),
+        note,
+        3.0,
+    );
     panel.text(TextRun::new(
         Vec2::new(MARGIN, 96.0),
         known_line(game),
@@ -201,7 +223,11 @@ fn morning(game: &Game) -> Screen {
     for (i, action) in ACTIONS.iter().enumerate() {
         let cell = morning_cell(i);
         let effect = describe_action(game, *action);
-        let head_color = if effect.available { palette::TEXT } else { palette::NOTE };
+        let head_color = if effect.available {
+            palette::TEXT
+        } else {
+            palette::NOTE
+        };
         panel.text(TextRun::new(
             cell.min,
             format!("[{}] {}", i + 1, effect.label),
@@ -270,7 +296,14 @@ fn call(game: &Game) -> Screen {
         } else {
             "? You have no lore on this. It could be right, a guess, or an insult.".to_owned()
         };
-        let small = style(MIN_TEXT, if knows && *kind == Kind::Right { palette::GOOD } else { palette::NOTE });
+        let small = style(
+            MIN_TEXT,
+            if knows && *kind == Kind::Right {
+                palette::GOOD
+            } else {
+                palette::NOTE
+            },
+        );
         panel.block(
             row.min + Vec2::new(0.0, 18.0),
             &wrapped(&small, &hint, CALL_W),
@@ -279,7 +312,11 @@ fn call(game: &Game) -> Screen {
         );
     }
     let row = call_row(3);
-    panel.text(TextRun::new(row.min, "[4] Hang up", style(BODY, palette::TEXT)));
+    panel.text(TextRun::new(
+        row.min,
+        "[4] Hang up",
+        style(BODY, palette::TEXT),
+    ));
     let small = style(MIN_TEXT, palette::NOTE);
     let hang = hint_for(game, being, call.temper, Kind::HangUp);
     panel.block(
@@ -340,31 +377,42 @@ fn side(panel: &mut Screen, game: &Game, call: &crate::game::Call) {
         ));
     }
     for fact in known {
-        let text = wrapped(&small, &format!("- {}", FACTS[being.index()][fact].lore), 330.0);
+        let text = wrapped(
+            &small,
+            &format!("- {}", FACTS[being.index()][fact].lore),
+            330.0,
+        );
         y = panel.block(Vec2::new(STATUS_X, y), &text, small, 1.0) + 3.0;
     }
     let body = style(BODY, palette::TEXT);
-    panel.text(TextRun::new(
-        Vec2::new(STATUS_X, STATUS_Y),
-        format!("Temper: {}", temper_word(being, call.temper)),
-        body,
-    ));
-    panel.text(TextRun::new(
-        Vec2::new(STATUS_X, STATUS_Y + 24.0),
-        format!("The call has about {} exchanges left.", call.remaining.max(1)),
-        body,
-    ));
     let cost = exchange_cost(being, game.composure, call.temper);
-    panel.text(TextRun::new(
-        Vec2::new(STATUS_X, STATUS_Y + 48.0),
-        format!("Every exchange costs {cost} sanity."),
-        style(BODY, if call.temper >= being.wrath_at() { palette::WARN } else { palette::TEXT }),
-    ));
-    panel.text(TextRun::new(
-        Vec2::new(STATUS_X, STATUS_Y + 72.0),
-        format!("Composure {}/{}.", game.composure, crate::rules::COMPOSURE_MAX),
-        style(MIN_TEXT, palette::NOTE),
-    ));
+    let wrath = call.temper >= being.wrath_at();
+    let lines = [
+        (format!("Temper: {}", temper_word(being, call.temper)), body),
+        (
+            format!("About {} exchanges left.", call.remaining.max(1)),
+            body,
+        ),
+        (
+            format!("Every exchange costs {cost} sanity."),
+            style(BODY, if wrath { palette::WARN } else { palette::TEXT }),
+        ),
+        (
+            format!(
+                "Composure {}/{}.",
+                game.composure,
+                crate::rules::COMPOSURE_MAX
+            ),
+            style(MIN_TEXT, palette::NOTE),
+        ),
+    ];
+    for (i, (text, sty)) in lines.into_iter().enumerate() {
+        panel.text(TextRun::new(
+            Vec2::new(STATUS_X, STATUS_Y + i as f32 * 24.0),
+            clipped(&sty, &text, SIDE_W),
+            sty,
+        ));
+    }
 }
 
 fn over(game: &Game, ending: Ending) -> Screen {
