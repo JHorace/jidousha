@@ -412,6 +412,15 @@ fn start_call(game: &mut Game, slot: usize) {
     });
 }
 
+/// How a survived run ends: sound at `SOUND_AT` sanity or more, frayed below it.
+pub fn ending_for(sanity: i32) -> Ending {
+    if sanity >= SOUND_AT {
+        Ending::Sound
+    } else {
+        Ending::Frayed
+    }
+}
+
 /// The night is over: the next day's morning, or the run's end.
 fn end_night(game: &mut Game, note: &str) {
     game.call = None;
@@ -419,12 +428,7 @@ fn end_night(game: &mut Game, note: &str) {
     game.studied_today = None;
     game.appeased = [false; BEINGS];
     if game.day >= DAYS {
-        let ending = if game.sanity >= SOUND_AT {
-            Ending::Sound
-        } else {
-            Ending::Frayed
-        };
-        game.stage = Stage::Over(ending);
+        game.stage = Stage::Over(ending_for(game.sanity));
         game.note = format!("{note} The fifth night ends. You are still here.");
         return;
     }

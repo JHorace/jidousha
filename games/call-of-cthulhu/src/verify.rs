@@ -19,7 +19,9 @@ use crate::game::{Ending, Game, Stage};
 use crate::lore::{BEINGS, Being, FACTS, FACTS_PER_BEING};
 use crate::palette;
 use crate::players::{Player, choose as player_choose, play, sweep};
-use crate::rules::{ACTIONS, Action, Kind, answer_outcome, exchange_cost, plan_night};
+use crate::rules::{
+    ACTIONS, Action, Kind, answer_outcome, exchange_cost, option_kinds, plan_night,
+};
 use crate::screens::{FLOORS, MIN_TEXT, NoArt, controls, panel};
 use crate::view::UiMap;
 use crate::{DEFAULT_SEED, camera};
@@ -586,6 +588,180 @@ fn check_input(checks: &mut Checks) -> String {
     "input: a click is its key, hang up by click, a refusal is aloud, a click on nothing is nothing, R begins again".to_owned()
 }
 
+/// What a morning does to the state, the end of a night, a grudge, the bars and the temper words.
+fn check_state(checks: &mut Checks) -> String {
+    // The endings split at 12 sanity.
+    checks.require(
+        crate::rules::ending_for(12) == Ending::Sound
+            && crate::rules::ending_for(11) == Ending::Frayed,
+        "a survived run does not end sound at 12 sanity and frayed at 11",
+        format!(
+            "{:?} {:?}",
+            crate::rules::ending_for(12),
+            crate::rules::ending_for(11)
+        ),
+    );
+    // Each morning option does what it stated: appeasing costs 4, resting gives 8 up to 60,
+    // training adds one composure, studying teaches three facts.
+    let seed = DEFAULT_SEED;
+    let key = |action: Action| ACTIONS.iter().position(|a| *a == action).unwrap_or(0);
+    let mut appease = Driver::new(seed);
+    let spared = plan_night(appease.game())[0].being;
+    appease.option(key(Action::Appease(spared)));
+    checks.require(
+        appease.game().sanity == 56 && appease.game().appeased[spared.index()],
+        "appeasing a cult does not cost 4 sanity and keep its being off tonight",
+        format!("sanity {}", appease.game().sanity),
+    );
+    for (start, want) in [(50, 58), (56, 60)] {
+        let mut rest = Driver::new(seed);
+        let mut game = rest.game().clone();
+        game.sanity = start;
+        rest.stage(game);
+        rest.option(key(Action::Rest));
+        checks.require(
+            rest.game().sanity == want,
+            "resting does not give 8 sanity up to the most there is",
+            format!("from {start}: {}", rest.game().sanity),
+        );
+    }
+    let mut train = Driver::new(seed);
+    train.option(key(Action::Train));
+    checks.require(
+        train.game().composure == 1,
+        "training does not add a point of composure",
+        format!("{}", train.game().composure),
+    );
+    let mut study = Driver::new(seed);
+    let target = plan_night(study.game())[0].being;
+    study.option(key(Action::Study(target)));
+    checks.require(
+        study.game().known_facts(target) == vec![0, 1, 2],
+        "a morning's study does not teach the first three unknown facts",
+        format!("{:?}", study.game().known_facts(target)),
+    );
+    // A night ends clean: the next morning has nothing appeased or studied, and it is day 2.
+    let mut night = Driver::new(seed);
+    night.option(key(Action::Appease(spared)));
+    for _ in 0..200 {
+        if matches!(night.game().stage, Stage::Morning) {
+            break;
+        }
+        night.option(0);
+    }
+    checks.require(
+        matches!(night.game().stage, Stage::Morning)
+            && night.game().day == 2
+            && night.game().appeased == [false; BEINGS]
+            && night.game().studied_today.is_none(),
+        "a night does not end in a clean second morning",
+        format!(
+            "day {} stage {:?} appeased {:?}",
+            night.game().day,
+            night.game().stage,
+            night.game().appeased
+        ),
+    );
+    // Grudges: hanging up leaves one, a call left in wrath leaves one, a clean call leaves none.
+    let mut grudge = Driver::new(seed);
+    grudge.option(key(Action::Train));
+    let first = grudge.game().night[0].being;
+    grudge.option(3);
+    checks.require(
+        grudge.game().grudge == Some(first),
+        "hanging up does not leave a grudge",
+        format!("{:?}", grudge.game().grudge),
+    );
+    let mut wrath = Driver::new(seed);
+    let being = Being::YogSothoth;
+    wrath.stage(staged_call(seed, being, 0, true, being.wrath_at() + 1));
+    let mut game = wrath.game().clone();
+    if let Some(call) = game.call.as_mut() {
+        call.remaining = 1;
+    }
+    wrath.stage(game);
+    let right = option_kinds(
+        seed,
+        wrath.game().day,
+        wrath.game().call.as_ref().map_or(0, |c| c.slot),
+        0,
+    )
+    .iter()
+    .position(|k| *k == Kind::Right)
+    .unwrap_or(0);
+    wrath.option(right);
+    checks.require(
+        wrath.game().grudge == Some(being),
+        "a call that ends with the being still in wrath leaves no grudge",
+        format!("{:?}", wrath.game().grudge),
+    );
+    let mut calm = Driver::new(seed);
+    calm.stage(staged_call(seed, being, 0, true, 0));
+    let mut game = calm.game().clone();
+    if let Some(call) = game.call.as_mut() {
+        call.remaining = 1;
+    }
+    game.grudge = Some(being);
+    calm.stage(game);
+    let right = option_kinds(
+        seed,
+        calm.game().day,
+        calm.game().call.as_ref().map_or(0, |c| c.slot),
+        0,
+    )
+    .iter()
+    .position(|k| *k == Kind::Right)
+    .unwrap_or(0);
+    calm.option(right);
+    checks.require(
+        calm.game().grudge.is_none(),
+        "a call that ends calm does not settle the being's grudge",
+        format!("{:?}", calm.game().grudge),
+    );
+    // The bars: sanity as a share of 60, the temper pips lit as the temper.
+    let mut shown = Game::new(seed);
+    shown.sanity = 30;
+    let bars = crate::screens::bars(&shown);
+    checks.require(
+        bars.len() == 2 && (bars[1].0.size().x - 150.0).abs() < 0.01,
+        "the sanity bar is not half full at 30 of 60",
+        format!(
+            "{:?}",
+            bars.iter().map(|b| b.0.size().x).collect::<Vec<_>>()
+        ),
+    );
+    let on_call = staged_call(seed, Being::Nyarlathotep, 0, true, 2);
+    let lit = crate::screens::bars(&on_call)
+        .iter()
+        .filter(|b| b.1 == palette::WARN)
+        .count();
+    checks.require(
+        lit == 2,
+        "the temper pips do not light as many as the temper",
+        format!("{lit} lit at temper 2"),
+    );
+    // The temper in words: calm, irked below the break, IN WRATH at it.
+    for (being, words) in [
+        (Being::YogSothoth, ["calm", "irked", "IN WRATH"]),
+        (Being::Dagon, ["calm", "irked", "irked"]),
+        (Being::Nyarlathotep, ["calm", "irked", "irked"]),
+    ] {
+        for (temper, want) in words.iter().enumerate() {
+            checks.require(
+                crate::screens::temper_word(being, temper as i32) == *want,
+                "the temper is not put into the shipped word",
+                format!(
+                    "{} temper {temper}: {}",
+                    being.name(),
+                    crate::screens::temper_word(being, temper as i32)
+                ),
+            );
+        }
+    }
+    "state: morning effects applied as stated, a clean night, grudges, bars and temper words"
+        .to_owned()
+}
+
 /// The order the systems run in is the order they were added.
 fn check_schedule(checks: &mut Checks) -> String {
     let driver = Driver::new(DEFAULT_SEED);
@@ -614,6 +790,7 @@ pub fn run() -> ExitCode {
         check_call_decision(&mut checks, DEFAULT_SEED),
         check_morning_decision(&mut checks, DEFAULT_SEED),
         check_input(&mut checks),
+        check_state(&mut checks),
         check_replay(&mut checks),
     ];
     summary.extend(check_players(&mut checks));
