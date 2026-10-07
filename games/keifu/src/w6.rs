@@ -180,7 +180,7 @@ fn margin_telling(margin: i32) -> String {
     match margin {
         0 => "met it exactly".to_owned(),
         m if m > 0 => format!("beat it by {m}"),
-        m => format!("missed by {}", -m),
+        m => format!("fell short by {}", -m),
     }
 }
 
@@ -266,7 +266,12 @@ pub fn check_played(checks: &mut Checks) -> (String, Vec<String>) {
         let demand = page.quest.demand;
         let margin = 12 + a + b - 7 - demand;
         let roll = format!(
-            "Needed Might {demand}. Brought 12. Dice {a} and {b}, less 7: {}.",
+            "It needed Might {demand} and you brought 12. The dice came up {a} and {b}; less 7, that is {}. So you {}.",
+            if a + b - 7 > 0 {
+                format!("+{}", a + b - 7)
+            } else {
+                (a + b - 7).to_string()
+            },
             margin_telling(margin)
         );
         let premise = "Robbers went in at dusk. Bring them out, or what is left.";

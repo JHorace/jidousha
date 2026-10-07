@@ -1,0 +1,99 @@
+### O1 unanswered raises trouble by two, not one
+@ src/outlook.rs
+- (trouble + 1).min(TROUBLE_LIMIT)
++ (trouble + 2).min(TROUBLE_LIMIT)
+
+### O2 a loss leaves trouble as it was, not one less
+@ src/outlook.rs
+- if win { 0 } else { (trouble - 1).max(0) }
++ if win { 0 } else { trouble }
+
+### O3 the pool keeps the remembered template
+@ src/outlook.rs
+- .filter(|&t| Some(t) != remembered)
++ .filter(|&t| t != usize::MAX)
+
+### O4 the demand ceiling forgets the wobble
+@ src/outlook.rs
+- all.push(Next::of(&quest, least, quest.demand + DEMAND_WOBBLE));
++ all.push(Next::of(&quest, least, quest.demand));
+
+### O5 the demand floor is one over the seats
+@ src/outlook.rs
+- let least = quest.seats;
++ let least = quest.seats + 1;
+
+### O6 the telegraph reads this year, not next
+@ src/outlook.rs
+- let year = house.calendar.current_year() + 1;⏎    let at = Span::of(trouble_after);
++ let year = house.calendar.current_year();⏎    let at = Span::of(trouble_after);
+
+### O7 the foresight reads this year, not next
+@ src/outlook.rs
+- let year = house.calendar.current_year() + 1;⏎    let first_ghost
++ let year = house.calendar.current_year();⏎    let first_ghost
+
+### O8 the telegraph is told of the summer before the Door's
+@ src/outlook.rs
+- if quest.is_door_lock() || house.calendar.years_until_door() <= 1 {
++ if quest.is_door_lock() || house.calendar.years_until_door() <= 0 {
+
+### O9 the foresight is told of the summer before the Door's
+@ src/outlook.rs
+- if house.calendar.years_until_door() <= 1 {⏎        return None;⏎    }⏎    let year
++ if house.calendar.years_until_door() <= 0 {⏎        return None;⏎    }⏎    let year
+
+### O10 the foresight takes a seated quest for a left one
+@ src/outlook.rs
+- Some((slot, p)) if house.party(slot).is_empty() => (
++ Some((slot, p)) if !house.party(slot).is_empty() => (
+
+### O11 the foresight never names the ghost
+@ src/outlook.rs
+- let ghost = first_ghost.filter(|g| g.place == place);
++ let ghost = first_ghost.filter(|_| false);
+
+### O12 the telegraph never says trouble is already at its worst
+@ src/outlook.rs
+- already_worst: trouble_after == trouble,
++ already_worst: false,
+
+### O13 the telegraph remembers no template at the quest's place
+@ src/outlook.rs
+- Source::Template(template) => next_quest(content, quest.place, Some(template), at, year),
++ Source::Template(_) => next_quest(content, quest.place, None, at, year),
+
+### O14 the resolution no longer raises trouble on an unanswered quest
+@ src/resolve.rs
+- record.trouble = crate::outlook::trouble_if_unanswered(record.trouble);
++ record.trouble = record.trouble;
+
+### O15 the card shows the danger floor as the ceiling
+@ src/quest_card.rs
+- &[&t.next.danger.text(), &t.next.demand.hi.to_string()],
++ &[&t.next.danger.lo.to_string(), &t.next.demand.hi.to_string()],
+
+### O16 the card shows the demand floor as the ceiling
+@ src/quest_card.rs
+- &[&t.next.danger.text(), &t.next.demand.hi.to_string()],
++ &[&t.next.danger.text(), &t.next.demand.lo.to_string()],
+
+### O17 the foresight lists the pool without its last template
+@ src/dock_lines.rs
+- .map(|&t| content.quest_templates[t].title.as_str())
++ .skip(1).map(|&t| content.quest_templates[t].title.as_str())
+
+### O18 the foresight shows the danger floor as the range
+@ src/dock_lines.rs
+- let danger = outlook.next.danger.text();
++ let danger = outlook.next.danger.lo.to_string();
+
+### O19 the foresight shows only the first place's trouble
+@ src/dock_lines.rs
+- let trouble = outlook.trouble.text();
++ let trouble = "0".to_owned();
+
+### O20 the sheet's telegraph shows the danger range as the seats range
+@ src/quest_sheet.rs
+- let (seats, danger, needs) = (n.seats.text(), n.danger.text(), n.demand.hi.to_string());
++ let (seats, danger, needs) = (n.danger.text(), n.danger.text(), n.demand.hi.to_string());

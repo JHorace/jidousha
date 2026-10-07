@@ -101,7 +101,7 @@ pub fn w5_surfaces(
 }
 
 /// The help is the idle dock's and only the dock's: with nothing pointed at, the
-/// dock reads the help alone, every card is drawn, and no row outside the dock
+/// dock reads the help, then next summer's foresight, every card is drawn, and no row outside the dock
 /// carries the help or the old empty-slot copy.
 fn help_stays_in_the_dock(checks: &mut Checks, sim: &jidousha::prelude::HeadlessSim, name: &str) {
     let page = page_of(sim);
@@ -119,7 +119,7 @@ fn help_stays_in_the_dock(checks: &mut Checks, sim: &jidousha::prelude::Headless
         .map(|row| row.text.as_str())
         .collect();
     checks.require(
-        crate::scripted::lines_in(&page, SHEET) == [help.clone()]
+        crate::scripted::lines_in(&page, SHEET).first() == Some(&help)
             && cards == 4
             && elsewhere.is_empty(),
         "a full board crowds the dock, loses a card, or carries the help outside the dock",

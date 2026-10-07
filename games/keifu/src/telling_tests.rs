@@ -14,7 +14,7 @@ fn the_roll_line_tells_an_exact_a_beaten_and_a_missed_margin() {
     for (margin, telling) in [
         (0, "met it exactly"),
         (3, "beat it by 3"),
-        (-2, "missed by 2"),
+        (-2, "fell short by 2"),
     ] {
         let mut house = founded.clone();
         seat(&mut house, 0, &[brannoc]);
@@ -23,7 +23,9 @@ fn the_roll_line_tells_an_exact_a_beaten_and_a_missed_margin() {
         let demand = page.quest.demand;
         assert_eq!(
             roll_line(&content, &page),
-            format!("Needed Might {demand}. Brought 6. Dice 4 and 5, less 7: {telling}.")
+            format!(
+                "It needed Might {demand} and you brought 6. The dice came up 4 and 5; less 7, that is +2. So you {telling}."
+            )
         );
     }
 }

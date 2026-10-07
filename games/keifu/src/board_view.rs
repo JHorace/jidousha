@@ -304,7 +304,11 @@ fn draw_card(page: &mut Page, card: &CardReading, rect: Rect, hot: bool) {
         rect,
     );
     right_aligned(page, &card.unanswered, right, y, MIN_TEXT, ink::NOTE, rect);
-    y += PITCH + 4.0;
+    y += PITCH;
+    if let Some(left) = &card.left_alone {
+        y = paragraph(page, left, line(y), MIN_TEXT, ink::NOTE, rect);
+    }
+    y += 4.0;
     for (text, color) in [(&card.dream, ink::GOLD), (&card.warning, ink::WARN)] {
         if let Some(text) = text {
             y = paragraph(page, text, line(y), MIN_TEXT, color, rect);

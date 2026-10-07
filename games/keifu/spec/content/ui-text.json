@@ -209,8 +209,36 @@
       "source": "scene/scenes/summer.jai:72"
     },
     "help": {
-      "text": "Point at a hero to read their sheet. Point at a quest to read its odds in full. Drag heroes onto quests, then set out. A quest nobody answers costs the house renown, and is worse when it comes again.",
+      "text": "Drag heroes onto quests, then set out. Point at a hero for their sheet, or at a quest for its full odds. A quest nobody takes costs renown, and comes back harder.",
       "source": "scene/scenes/summer.jai:95"
+    },
+    "next_heading": {
+      "text": "NEXT SUMMER",
+      "source": "yakin keifu-fixes (new): foresight"
+    },
+    "next_intro": {
+      "text": "Four of these six places post a quest.",
+      "source": "yakin keifu-fixes (new): foresight"
+    },
+    "next_place": {
+      "text": "%1, trouble %2: one of %3. Danger %4.",
+      "source": "yakin keifu-fixes (new): foresight",
+      "args": [
+        "place title",
+        "trouble range",
+        "template titles, comma-separated",
+        "danger range"
+      ]
+    },
+    "next_ghost": {
+      "text": "%1, trouble %2: the ghost of %3 walks here, unless it is laid. Danger %4.",
+      "source": "yakin keifu-fixes (new): foresight",
+      "args": [
+        "place title",
+        "trouble range",
+        "ghost first name",
+        "danger range"
+      ]
     },
     "button_set_out": "Set out",
     "button_stay_home": "Stay home",
@@ -275,6 +303,14 @@
       "source": "lineage/quest-card.jai:126",
       "args": [
         "unanswered cost"
+      ]
+    },
+    "left_alone": {
+      "text": "Left alone: danger %, needs up to %",
+      "source": "yakin keifu-fixes (new): SPEC §7.2 telegraph",
+      "args": [
+        "next quest's danger range",
+        "most its demand could be"
       ]
     },
     "ghost": {
@@ -347,14 +383,14 @@
       "source": "lineage/quest-card.jai:213"
     },
     "dice": {
-      "text": "Two dice, less %, are added to that.",
+      "text": "Then roll two dice, take %1 off, and add that: %2 to +%3.",
       "source": "lineage/quest-card.jai:216",
       "args": [
         "DICE_MIDPOINT (7)"
       ]
     },
     "triumph": {
-      "text": "Beat it by %: +% renown. The least able learns.",
+      "text": "Beat it by %1 or more: +%2 renown; the least able learns.",
       "source": "lineage/quest-card.jai:220",
       "args": [
         "TRIUMPH_MARGIN (4)",
@@ -362,21 +398,21 @@
       ]
     },
     "success": {
-      "text": "Meet it: +% renown.",
+      "text": "Make it, by up to %1: +%2 renown.",
       "source": "lineage/quest-card.jai:222",
       "args": [
         "quest renown"
       ]
     },
     "setback": {
-      "text": "Miss by up to %: one is wounded.",
+      "text": "Fall short by up to %: one is wounded.",
       "source": "lineage/quest-card.jai:224",
       "args": [
         "SETBACK_MARGIN (4)"
       ]
     },
     "disaster": {
-      "text": "Miss by more: -% renown, all wounded, each dies % in 100.",
+      "text": "Fall short by more: -%1 renown, all wounded, each dies %2 in 100.",
       "source": "lineage/quest-card.jai:226",
       "args": [
         "danger",
@@ -384,10 +420,29 @@
       ]
     },
     "unanswered": {
-      "text": "UNANSWERED: -% renown, and it grows worse.",
+      "text": "IF NOBODY GOES: -% renown, and trouble grows.",
       "source": "lineage/quest-card.jai:227",
       "args": [
         "unanswered cost"
+      ]
+    },
+    "left_rises": {
+      "text": "Left alone, trouble rises to %. Next quest: room %, danger %, needs up to %.",
+      "source": "yakin keifu-fixes (new): SPEC §7.2 telegraph",
+      "args": [
+        "trouble after",
+        "seats range",
+        "danger range",
+        "most its demand could be"
+      ]
+    },
+    "left_stays": {
+      "text": "Left alone, trouble stays at its worst. Next quest: room %, danger %, needs up to %.",
+      "source": "yakin keifu-fixes (new): SPEC §7.2 telegraph",
+      "args": [
+        "seats range",
+        "danger range",
+        "most its demand could be"
       ]
     },
     "not_quested": {
@@ -412,7 +467,7 @@
       ]
     },
     "fewer_seats": {
-      "text": " Room for % where there was room for %.",
+      "text": " It has room for % instead of %.",
       "source": "lineage/quest-card.jai:244",
       "args": [
         "seats",
@@ -420,7 +475,7 @@
       ]
     },
     "trouble_stakes": {
-      "text": "%1%2 Each who goes must bring %3 more, the danger is %4 higher, and it pays %5 more renown. Answer it, however it goes, and it eases.",
+      "text": "%1%2 Whoever goes must bring %3 more each, the danger is %4 higher, and it pays %5 more renown. Send someone and the trouble eases; win, and it clears.",
       "source": "lineage/quest-card.jai:246",
       "args": [
         "trouble line",
@@ -773,7 +828,7 @@
       "source": "scene/scenes/telling.jai:276"
     },
     "roll": {
-      "text": "Needed % %. Brought %. Dice % and %, less %: %.",
+      "text": "It needed % % and you brought %. The dice came up % and %; less %, that is %. So you %.",
       "source": "scene/scenes/telling.jai:294",
       "args": [
         "aptitude",
@@ -782,6 +837,7 @@
         "die 1",
         "die 2",
         "DICE_MIDPOINT (7)",
+        "dice net of the midpoint, signed",
         "margin telling"
       ]
     },
@@ -794,7 +850,7 @@
       "source": "scene/scenes/telling.jai:307"
     },
     "margin_missed": {
-      "text": "missed by %",
+      "text": "fell short by %",
       "source": "scene/scenes/telling.jai:308"
     },
     "buttons": {
@@ -936,7 +992,7 @@
       "source": "scene/scenes/winter.jai:114"
     },
     "help": {
-      "text": "Winter. There are ten seats and one winter. Drag a hero to a seat to give them that winter. Whoever is left in the hall gains nothing. Point at anyone to read their sheet.",
+      "text": "Winter: ten seats, and one winter to spend them on. Drag a hero onto a seat to give them that winter's work. Anyone left in the hall gets nothing from it. Point at anyone to read their sheet.",
       "source": "scene/scenes/winter.jai:131"
     },
     "rest_notes": {

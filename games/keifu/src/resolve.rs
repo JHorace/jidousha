@@ -10,7 +10,7 @@
 use jidousha::prelude::Rng;
 
 use crate::chance::{between, index};
-use crate::constants::{DICE_SIDES, TROUBLE_LIMIT};
+use crate::constants::DICE_SIDES;
 use crate::content::Content;
 use crate::destiny::{crown_claims, fire_claims};
 use crate::facing::face_the_fear;
@@ -108,7 +108,7 @@ fn unanswered(content: &Content, house: &mut House, slot: usize, out: &mut Vec<S
     let cost = quest.unanswered_cost(house.renown);
     let place = quest.place;
     let record = &mut house.places[place.index()];
-    record.trouble = (record.trouble + 1).min(TROUBLE_LIMIT);
+    record.trouble = crate::outlook::trouble_if_unanswered(record.trouble);
     let lore = &content.lore;
     let trouble = fmt(
         &lore.places[place.index()].trouble_line,
@@ -239,7 +239,7 @@ pub fn resolve_party(
     }
     // 6. Trouble eases: gone on a win, one less on a loss.
     let record = &mut house.places[quest.place.index()];
-    record.trouble = if won { 0 } else { (record.trouble - 1).max(0) };
+    record.trouble = crate::outlook::trouble_if_answered(record.trouble, won);
     // 7. A disaster costs the house its danger (and tells it, but not at the Door).
     if outcome == Outcome::Disaster {
         house.add_renown(-quest.danger);

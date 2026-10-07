@@ -96,7 +96,8 @@ pub fn meanwhile_lines(content: &Content, house: &House, telling: &Telling) -> V
     lines
 }
 
-/// "Needed Might 10. Brought 12. Dice 3 and 5, less 7: beat it by 3." (SPEC §8).
+/// "It needed Might 10 and you brought 12. The dice came up 3 and 5; less 7, that is +1.
+/// So you beat it by 3." (SPEC §8).
 pub fn roll_line(content: &Content, page: &QuestPage) -> String {
     let words = &content.words;
     let telling = match page.margin {
@@ -113,6 +114,7 @@ pub fn roll_line(content: &Content, page: &QuestPage) -> String {
             &page.dice[0].to_string(),
             &page.dice[1].to_string(),
             &DICE_MIDPOINT.to_string(),
+            &crate::text::signed(page.dice[0] + page.dice[1] - DICE_MIDPOINT),
             &telling,
         ],
     )

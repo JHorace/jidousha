@@ -14,6 +14,7 @@ use crate::house::House;
 use crate::quest_sheet::{Ink as QuestInk, quest_sheet};
 use crate::screen::{MIN_TEXT, PAD, ink, wrap};
 use crate::sheet::{Ink, hero_sheet};
+use crate::text::fmt;
 use crate::words::W;
 
 /// The space a value is kept on the quest sheet's right.
@@ -35,7 +36,53 @@ pub fn help_lines(content: &Content, house: &House, width: f32) -> Vec<Line> {
     } else {
         W::SummerHelp
     };
-    vec![paragraph(&content.words[help], width, MIN_TEXT, ink::NOTE)]
+    let mut lines = vec![paragraph(&content.words[help], width, MIN_TEXT, ink::NOTE)];
+    if help == W::SummerHelp {
+        lines.extend(foresight_lines(content, house, width));
+    }
+    lines
+}
+
+/// Next summer, as the summer's help closes (`outlook::foresight`): a heading, how far
+/// the foresight reaches, and a line for each questing place.
+fn foresight_lines(content: &Content, house: &House, width: f32) -> Vec<Line> {
+    let Some(places) = crate::outlook::foresight(content, house) else {
+        return Vec::new();
+    };
+    let words = &content.words;
+    let mut heading = paragraph(&words[W::SummerNextHeading], width, MIN_TEXT, ink::HEADING);
+    heading.space = 10.0;
+    let mut lines = vec![
+        heading,
+        paragraph(&words[W::SummerNextIntro], width, MIN_TEXT, ink::NOTE),
+    ];
+    for outlook in places {
+        let place = &content.lore.places[outlook.place.index()].title;
+        let trouble = outlook.trouble.text();
+        let danger = outlook.next.danger.text();
+        let text = match outlook.ghost {
+            Some(dead) => fmt(
+                &words[W::SummerNextGhost],
+                &[place, &trouble, &house.heroes[dead].name, &danger],
+            ),
+            None => {
+                let titles: Vec<&str> = outlook
+                    .next
+                    .pool
+                    .iter()
+                    .map(|&t| content.quest_templates[t].title.as_str())
+                    .collect();
+                fmt(
+                    &words[W::SummerNextPlace],
+                    &[place, &trouble, &titles.join(", "), &danger],
+                )
+            }
+        };
+        let mut line = paragraph(&text, width, MIN_TEXT, ink::BODY);
+        line.space = 6.0;
+        lines.push(line);
+    }
+    lines
 }
 
 /// The Door's help (SPEC §5.4, the top bar's Door hover), naming the best four.
