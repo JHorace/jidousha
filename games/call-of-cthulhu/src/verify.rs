@@ -511,6 +511,12 @@ fn check_players(checks: &mut Checks) -> Vec<String> {
             "a scripted run did not end the way it was meant to",
             format!("{} seed {seed}: {ended:?}", player.name()),
         );
+        // Surviving means five days: the run that is won ends on the fifth.
+        checks.require(
+            !want_win || run.game().day == 5,
+            "a won run does not end on day 5",
+            format!("{} seed {seed}: day {}", player.name(), run.game().day),
+        );
         lines.push(format!(
             "scripted by keys: {} seed {seed} ends {ended:?} on day {}",
             player.name(),

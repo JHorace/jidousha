@@ -444,7 +444,7 @@ pub fn choose(game: &mut Game, choice: Choice) -> Result<(), Refused> {
             let Some(&action) = ACTIONS.get(n) else {
                 return Err(Refused(format!("There is no morning option {}.", n + 1)));
             };
-            apply_action(game, action).inspect_err(|Refused(why)| game.note.clone_from(why))?;
+            apply_action(game, action)?;
             game.note = format!("You chose: {}.", action_label(action));
             begin_night(game);
             Ok(())
