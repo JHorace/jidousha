@@ -287,5 +287,5 @@
 
 ### S3 the card does not say who is marked
 @ src/quest_card.rs
-- (!names.is_empty()).then(|| {
-+ (false && !names.is_empty()).then(|| {
+- (!names.is_empty())⏎                .then(|| fmt(&words[W::QuestCardPersonal]
++ (false && !names.is_empty())⏎                .then(|| fmt(&words[W::QuestCardPersonal]
