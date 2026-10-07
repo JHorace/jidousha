@@ -160,9 +160,10 @@ pub fn next_quest(
         for trouble in troubles.lo..=troubles.hi {
             for calm in t.seats_low..=t.seats_high {
                 let quest = stakes(making_of(content, template), calm, t.danger, trouble, year);
-                // The wobble moves the demand and nothing else; easing may take it down
-                // as far as the seats, so that is the floor.
-                let least = (quest.demand - DEMAND_WOBBLE).min(quest.seats);
+                // Easing takes a demand down a point at a time and stops at its seats
+                // (SPEC §5.2), and the wobbled demand is never under its seats: so the
+                // floor is the seats.
+                let least = quest.seats;
                 all.push(Next::of(&quest, least, quest.demand + DEMAND_WOBBLE));
             }
         }
@@ -482,6 +483,32 @@ mod tests {
         // A place with no quest on the board keeps its trouble.
         house.places[Place::Deepwood.index()].trouble = 2;
         assert_eq!(troubles(&house)[5], Span::of(2));
+    }
+
+    #[test]
+    fn the_demand_floor_is_the_seats_where_easing_stops() {
+        let (content, _) = crate::testkit::house();
+        for trouble in 0..=TROUBLE_LIMIT {
+            let next = next_quest(&content, Place::Barrow, None, Span::of(trouble), 1);
+            assert_eq!(next.demand.lo, next.seats.lo, "trouble {trouble}");
+        }
+    }
+
+    #[test]
+    fn the_foresight_reads_the_year_after_this_one() {
+        let (content, mut house) = crate::testkit::house();
+        let first = |house: &House| {
+            foresight(&content, house).expect("a foresight")[0]
+                .next
+                .demand
+                .hi
+        };
+        // Year 5's summer looks at year 6, year 6's at year 7, where demand creeps up.
+        house.calendar.year_index = 4;
+        let year_six = first(&house);
+        house.calendar.year_index = 5;
+        let year_seven = first(&house);
+        assert!(year_seven > year_six, "{year_six} then {year_seven}");
     }
 
     #[test]

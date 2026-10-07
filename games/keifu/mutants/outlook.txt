@@ -18,10 +18,10 @@
 - all.push(Next::of(&quest, least, quest.demand + DEMAND_WOBBLE));
 + all.push(Next::of(&quest, least, quest.demand));
 
-### O5 the demand floor forgets the wobble
+### O5 the demand floor is one over the seats
 @ src/outlook.rs
-- let least = (quest.demand - DEMAND_WOBBLE).min(quest.seats);
-+ let least = quest.demand.min(quest.seats);
+- let least = quest.seats;
++ let least = quest.seats + 1;
 
 ### O6 the telegraph reads this year, not next
 @ src/outlook.rs
