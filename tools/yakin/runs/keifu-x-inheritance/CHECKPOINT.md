@@ -6,7 +6,7 @@ stage: implement
 tick: live
 resumes: 0
 gates-green-at: none
-updated: 2026-10-07 09:56 PDT
+updated: 2026-10-07 10:11 PDT
 
 ## Done so far
 - branch claimed (32c3d1d); mainline Keifu read; DESIGN.md written and released by the designer
@@ -14,9 +14,10 @@ updated: 2026-10-07 09:56 PDT
 - S1 landed: Hero.family, src/outsiders.rs (`may_marry_in`, `marrying_in`), Courtship::Unproven, marrying in (winter::court), reward/tellers/heirs/nearest_kin/legacy::heir/death page for outsiders, sheet + arrival lines; unit tests in outsiders_tests.rs; W8 stirred oracle rewritten (seven buttons); W9 battery tolerates a renamed spouse's epitaph being recomposed; verify passes, fast gate clean
 - S2 landed: ids::Trait + src/traits.rs (`trait_from`, `birth_traits`, power), lore.json `traits`, household.json `trait` keys, births rolls + lines, power/power_lines trait line (not at the Door), sheet TRAITS; rewritten mainline oracles (W1 sheet, W3 power line 7, W4 you bring 14 + odds + lines, w4_rules patrons, W6 played page) and unit tests; verify passes, fast gate clean
 - S3+S4 landed: src/marks.rs (`personal`, `cost`, `mark_the_name`, `weigh`), Hero.marks, DeedKind::Marked, House::marks_carried, resolve step 7b, turning step 8b, card `Marked if it fails:` row, sheet `PERSONAL:` line and MARKS section; src/inheritance.rs (`inherit`), heirs::choose/pass_marks, heirs::heir_lines + turning_view candidate lines (choice_height), death page waits on marks, births under marks; unit tests marks_tests/inheritance_tests; W4 history read with the wheel at the end; verify passes, fast gate clean
+- S5 (part): src/x1.rs (the three decision checks + weighing, wired into verify.rs), src/x1_rules.rs, src/x1_tests.rs, src/floors_x1.rs (G11), four pictures in capture.rs (G12), mutants/x1.txt (G13, 57 faults) written; verify passes
 
 ## Exact next step
-S5: src/x1.rs + src/x1_stages.rs (the three decision checks G1/G4/G8 played through the scripted pointer, plus G2, G3 `check_weighing`, G5, G9, wired into verify.rs), choose `X1_SEED` by an off-screen sweep, src/floors_x1.rs (G11, counted into floors::battery), four pictures in capture.rs (G12), mutants/x1.txt and `python3 tools/mutate keifu-x-inheritance mutants/x1.txt --fast` (G13), VARIANT.md at the crate root, FINDINGS.md/SPEC-GAPS.md continued, the battery numbers for the PR; then the full gate (doctor, tools/test in the background, check-claude-md, yakin check), web build + serve-web --check, PR.
+Run the mutation round in the background (`python3 tools/mutate keifu-x-inheritance mutants/x1.txt --fast --jobs 4`, log target/yakin/mutate.log; it runs on HEAD, so commit first) and fix every escape (a check that is looser than it reads, or a fault list entry that does not build); then `--changed-since <S0 commit 075ff00>` over mutants/w*.txt for the files changed; then VARIANT.md at the crate root, FINDINGS.md/SPEC-GAPS.md continued under `## Keifu X Inheritance`, the battery numbers (W6/W8/W10 lines of target/verify/keifu-x-inheritance.json) for the PR; then the full gate (doctor, tools/test in the background, check-claude-md, yakin check), build-web + serve-web --check, PR.
 
 ## Deviations
 - DESIGN.md names a new `src/family.rs`; mainline already has `family.rs` (the family screen), so the one eligibility function lives in `src/outsiders.rs` (`is_family`, `may_marry_in`, `marrying_in`). A FINDINGS entry will be filed (design misled).

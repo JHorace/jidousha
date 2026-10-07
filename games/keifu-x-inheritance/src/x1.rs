@@ -229,8 +229,8 @@ pub fn check_marrying_in(checks: &mut Checks) -> String {
         wed_renown[index] = renown_after;
         if renown == 4 {
             checks.require(
-                !family && house_name != "Vane" && !married.1,
-                "an unproven outsider is refused: still an outsider, no new name, no dowry",
+                !family && house_name != "Vane" && !married.1 && married.0,
+                "an unproven outsider is refused: still an outsider (their sheet says so), no new name, no dowry",
                 format!("{family} {house_name} {page:?}"),
             );
         } else {
@@ -365,4 +365,39 @@ pub fn check_heir_inheritance(checks: &mut Checks) -> String {
         format!("{ground} {:?}", house.marks_carried()),
     );
     "X1 row 3: Garrick's death page shows each candidate's traits and marks and where \"No one\" leaves them; Maren's choice, no one, and the ground give exactly that".to_owned()
+}
+
+/// The variant's pictures, each staged in a session of its own: the card and sheet of a
+/// personal quest before "Set out"; the garden refusing an unproven outsider; the marked
+/// death page at the choice; and Maren's sheet after taking the shame.
+pub fn stage_picture(which: &str) -> HeadlessSim {
+    match which {
+        "personal" => {
+            let mut sim = session(X1_SEED);
+            crate::w4::seat(&mut sim, "Garrick", Slot::Quest { quest: 0, seat: 0 });
+            point_at(&mut sim, Target::Quest(0), false);
+            sim
+        }
+        "unproven" => {
+            let mut sim = session(SEEDS[0]);
+            stay_home_into_winter(&mut sim);
+            let outsider = stage_outsider(&mut sim, 4);
+            seat_at(&mut sim, "Ysolde", Seat::Garden(0));
+            seat_hero(&mut sim, outsider, Seat::Garden(1));
+            point_at(&mut sim, Target::Hero(outsider), false);
+            sim
+        }
+        "heirs" => marked_choice(false),
+        _ => {
+            let mut sim = marked_choice(false);
+            if let Some((target, _)) = heir_labels(&page_of(&sim)).into_iter().next() {
+                point_at(&mut sim, target, true);
+            }
+            let maren = hero_named(&sim, "Maren");
+            point_at(&mut sim, Target::Hero(maren), false);
+            // The sheet scrolled to its end, where TRAITS and MARKS are.
+            crate::verify::scroll_dock(&mut sim, -100.0);
+            sim
+        }
+    }
 }

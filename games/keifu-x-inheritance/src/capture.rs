@@ -178,6 +178,10 @@ pub fn capture_all(checks: &mut Checks) -> Vec<String> {
             "keifu-x-inheritance-w10-played-family.png",
         ),
         (&["w10:reset"][..], "keifu-x-inheritance-w10-reset.png"),
+        (&["x1-personal"][..], "keifu-x-inheritance-x1-personal.png"),
+        (&["x1-unproven"][..], "keifu-x-inheritance-x1-unproven.png"),
+        (&["x1-heirs"][..], "keifu-x-inheritance-x1-heirs.png"),
+        (&["x1-sheet"][..], "keifu-x-inheritance-x1-sheet.png"),
     ]
     .into_iter()
     .enumerate()
@@ -235,7 +239,9 @@ pub fn capture_all(checks: &mut Checks) -> Vec<String> {
                 crate::verify::point(&mut sim, jidousha::prelude::Vec2::new(4.0, 700.0), false);
                 continue;
             }
-            if let Some(w10) = name.strip_prefix("w10:") {
+            if let Some(x1) = name.strip_prefix("x1-") {
+                sim = crate::x1::stage_picture(x1);
+            } else if let Some(w10) = name.strip_prefix("w10:") {
                 crate::w10_stages::stage(&mut sim, w10);
             } else if name.is_empty() {
                 point_at(&mut sim, Target::OpenFamily, true);
