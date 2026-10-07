@@ -34,7 +34,7 @@ pub const LAND_SAFE: Color = Color::rgba(0.2, 1.0, 0.3, 0.35);
 /// The preview's landing disc when it will not.
 pub const LAND_UNSAFE: Color = Color::rgba(1.0, 0.25, 0.2, 0.35);
 /// The ring of the longest shot.
-const REACH_RING: Color = Color::rgba(0.85, 0.85, 0.85, 0.6);
+pub const REACH_RING: Color = Color::rgba(0.85, 0.85, 0.85, 0.6);
 /// The size of a zone ring's dots, in world units.
 pub const ZONE_DOT: f32 = 0.18;
 /// How many dots the current zone's ring is drawn with.

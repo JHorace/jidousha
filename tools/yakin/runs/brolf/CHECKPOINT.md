@@ -6,17 +6,18 @@ stage: implement
 tick: live
 resumes: 0
 gates-green-at: none
-updated: 2026-10-07 11:22 PDT
+updated: 2026-10-07 11:31 PDT
 
 ## Done so far
 - claimed (d21cb8f)
 - DESIGN.md drafted whole: every section filled (fe9658f)
 - DESIGN.md re-read against the spec's four rows; staged sessions freeze unnamed NPCs, NPCs gather items, the hole opens late (this commit) — design released
 
-- game rules, systems, text and draw written; `cargo check` and 18 unit tests green; verify modules are stubs (this commit)
+- game rules, systems, text and draw written; unit tests green (3e98b1b)
+- --verify written (sessions A-F, three players, capture); `tools/verify brolf` verified, clippy clean (this commit)
 
 ## Exact next step
-Replace the stubs in games/brolf/src/{verify,checks,gates,gates_play,gates_end,gates_frames,players,capture}.rs with the real --verify (DESIGN.md "Gates to add": sessions A-F), then mutants/m0.txt, then build-web/serve-web check and the PR (WORKER.md §4).
+Write games/brolf/mutants/m0.txt (DESIGN.md "Mutation round") and run `python3 tools/mutate brolf mutants/m0.txt` (background), file games/brolf/FINDINGS.md, then the full gate (WORKER.md §2), `python3 tools/build-web brolf && python3 tools/serve-web brolf --check`, then the PR (WORKER.md §4).
 
 ## Deviations
-- none
+- (to be filled from the list in the PR body; see git log for this branch)

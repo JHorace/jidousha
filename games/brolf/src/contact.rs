@@ -75,8 +75,8 @@ pub enum Contact {
 
 /// What `me` would do by swinging now: the one contact-resolution function.
 ///
-/// The nearest rival body in reach wins; failing that, the nearest rival resting
-/// ball in the same reach. Ties go to the lower player index.
+/// The nearest rival body in reach that is on its feet wins; failing that, the nearest
+/// rival resting ball in the same reach. Ties go to the lower player index.
 pub fn contact_target(me: &PlayerSnap, all: &[PlayerSnap], tick: u64) -> Option<Contact> {
     if me.dazed(tick) || me.extracting || tick < me.swing_ready_at {
         return None;
@@ -86,7 +86,9 @@ pub fn contact_target(me: &PlayerSnap, all: &[PlayerSnap], tick: u64) -> Option<
     let mut ball: Option<(f32, &PlayerSnap)> = None;
     for rival in all.iter().filter(|p| p.index != me.index) {
         let to_body = (rival.pos - me.pos).length();
-        if to_body <= reach && body.is_none_or(|(best, _)| to_body < best) {
+        // A body already on the ground is not clubbed again: a 3 s daze against a 2 s swing
+        // wait would be a stunlock. Its ball is fair game instead.
+        if to_body <= reach && !rival.dazed(tick) && body.is_none_or(|(best, _)| to_body < best) {
             body = Some((to_body, rival));
         }
         let to_ball = (rival.ball - me.pos).length();
@@ -179,6 +181,21 @@ mod tests {
         assert!(matches!(
             contact_target(&me, &all, 10),
             Some(Contact::Strike { whose: 1, .. })
+        ));
+    }
+
+    #[test]
+    fn a_dazed_body_is_not_clubbed_again_but_its_ball_is_struck() {
+        let me = snap(0, Vec2::ZERO, Vec2::new(0.0, 5.0));
+        let mut rival = snap(1, Vec2::new(1.0, 0.0), Vec2::new(0.5, 0.5));
+        rival.dazed_until = 100;
+        assert!(matches!(
+            contact_target(&me, &[me, rival], 50),
+            Some(Contact::Strike { whose: 1, .. })
+        ));
+        assert!(matches!(
+            contact_target(&me, &[me, rival], 100),
+            Some(Contact::Club { who: 1, .. })
         ));
     }
 

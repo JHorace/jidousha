@@ -7,7 +7,7 @@
 
 use jidousha::prelude::*;
 
-use crate::contact::{Contact, PlayerSnap, contact_target};
+use crate::contact::{Contact, PlayerSnap, SWING_REACH, contact_target};
 use crate::items::Item;
 use crate::outcome::{HOLE_OPENS, PAD_RADIUS, PadState};
 use crate::shots::{MAX_SHOT, REACH_BALL, aim_point, flight_ticks};
@@ -137,10 +137,12 @@ pub fn npc_intent(
     if ball_unsafe || !zone.contains(me.pos) {
         return play_ball(me, safe_aim(me, course, tick), tick);
     }
-    // 3. A swing that pays.
+    // 3. A swing that pays: a club on someone holding something, a strike on a ball nearer
+    // the hole than mine. A hunter swings at anything in reach: a daze costs a rival time.
+    let hunter = me.persona == Persona::Hunter;
     match contact_target(me, all, tick) {
         Some(Contact::Club { who, .. })
-            if all.iter().any(|p| p.index == who && p.kit.count() > 0) =>
+            if hunter || all.iter().any(|p| p.index == who && p.kit.count() > 0) =>
         {
             return Intent {
                 swing: true,
@@ -149,8 +151,10 @@ pub fn npc_intent(
         }
         Some(Contact::Strike { whose, .. }) => {
             let theirs = all.iter().find(|p| p.index == whose);
-            if theirs
-                .is_some_and(|p| (p.ball - course.hole).length() < (me.ball - course.hole).length())
+            if hunter
+                || theirs.is_some_and(|p| {
+                    (p.ball - course.hole).length() < (me.ball - course.hole).length()
+                })
             {
                 return Intent {
                     swing: true,
@@ -160,21 +164,30 @@ pub fn npc_intent(
         }
         _ => {}
     }
-    // 4. Hunters close on a rival body within five units.
-    if me.persona == Persona::Hunter {
+    // 4. Hunters close on a rival body within five units, or else on a rival's resting
+    // ball its owner has left more than a swing's reach behind.
+    if hunter {
+        let nearest = |a: Vec2, b: Vec2| (a - me.pos).length().total_cmp(&(b - me.pos).length());
         let prey = all
             .iter()
             .filter(|p| p.index != me.index && !p.extracted)
             .filter(|p| (p.pos - me.pos).length() <= 5.0)
-            .min_by(|a, b| {
-                (a.pos - me.pos)
-                    .length()
-                    .total_cmp(&(b.pos - me.pos).length())
-                    .then(a.index.cmp(&b.index))
-            });
+            .min_by(|a, b| nearest(a.pos, b.pos).then(a.index.cmp(&b.index)));
         if let Some(prey) = prey {
             return Intent {
                 walk: toward(me.pos, prey.pos),
+                ..Intent::NONE
+            };
+        }
+        let exposed = all
+            .iter()
+            .filter(|p| p.index != me.index && !p.extracted && p.ball_resting)
+            .filter(|p| (p.ball - p.pos).length() > SWING_REACH)
+            .filter(|p| (p.ball - me.pos).length() <= 5.0)
+            .min_by(|a, b| nearest(a.ball, b.ball).then(a.index.cmp(&b.index)));
+        if let Some(prey) = exposed {
+            return Intent {
+                walk: toward(me.pos, prey.ball),
                 ..Intent::NONE
             };
         }

@@ -335,10 +335,7 @@ pub fn extract(world: &mut World) {
             && (*ball - course.pad).length() <= PAD_RADIUS
             && tick >= player.dazed_until;
         match player.extracting_since {
-            Some(since) if !on_pad => {
-                let _ = since;
-                player.extracting_since = None;
-            }
+            Some(_) if !on_pad => player.extracting_since = None,
             Some(since) => {
                 if tick - since >= EXTRACT_TICKS {
                     player.extracted = true;

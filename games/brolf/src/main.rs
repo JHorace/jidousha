@@ -83,14 +83,19 @@ pub fn config() -> GameConfig {
     }
 }
 
-/// Camera and the dealt match.
-fn set_up(world: &mut World) {
-    world.insert_resource(Camera {
+/// The camera the window and the checks share: the whole course and its bands, fixed.
+pub fn camera() -> Camera {
+    Camera {
         center: Vec2::ZERO,
         height: 2.0 * HALF_H,
         clear_color: COURT,
         viewport: WINDOW,
-    });
+    }
+}
+
+/// Camera and the dealt match.
+fn set_up(world: &mut World) {
+    world.insert_resource(camera());
     world::reset_match(world);
 }
 
