@@ -36,8 +36,8 @@ pub fn session_d(checks: &mut Checks, gallery: &mut Gallery) {
     place(
         run.sim.world_mut(),
         0,
-        pad + Vec2::new(0.2, 0.0),
-        pad - Vec2::new(0.2, 0.0),
+        pad + Vec2::new(1.1, 0.0),
+        pad - Vec2::new(1.1, 0.0),
     );
     run.script = InputScript::new().press(Key::E, 2800);
     let mut recorder = FrameRecorder::new(crate::verify::HEADLESS_VIEWPORT);
