@@ -10,6 +10,56 @@
       "spec": "tools/yakin/tasks/m0-canary.md",
       "status": "queued",
       "window": "any"
+    },
+    {
+      "id": "keifu-fixes",
+      "title": "Keifu: clearer tutorial, next-summer foresight, trouble telegraphs",
+      "kind": "game",
+      "variant": "V1",
+      "size": "M",
+      "spec": "tools/yakin/tasks/keifu-fixes.md",
+      "status": "queued",
+      "window": "burn-down"
+    },
+    {
+      "id": "keifu-x-inheritance",
+      "title": "Keifu X Inheritance: fork Keifu and deepen what a family inherits",
+      "kind": "game",
+      "variant": "V2",
+      "size": "L",
+      "spec": "tools/yakin/tasks/keifu-x-inheritance.md",
+      "status": "queued",
+      "window": "burn-down"
+    },
+    {
+      "id": "brolf",
+      "title": "Brolf: battle-royale golf prototype against NPC opponents",
+      "kind": "game",
+      "variant": "V2",
+      "size": "M",
+      "spec": "tools/yakin/tasks/brolf.md",
+      "status": "queued",
+      "window": "burn-down"
+    },
+    {
+      "id": "stack-card-game",
+      "title": "Stack card game: a two-player duel fought over the stack",
+      "kind": "game",
+      "variant": "V1",
+      "size": "M",
+      "spec": "tools/yakin/tasks/stack-card-game.md",
+      "status": "queued",
+      "window": "burn-down"
+    },
+    {
+      "id": "call-of-cthulhu",
+      "title": "Call of Cthulhu: hang up on eldritch callers before sanity runs out",
+      "kind": "game",
+      "variant": "V1",
+      "size": "M",
+      "spec": "tools/yakin/tasks/call-of-cthulhu.md",
+      "status": "queued",
+      "window": "burn-down"
     }
   ]
 }
