@@ -1,0 +1,104 @@
+{
+  "_source": "lineage/legacy.jai",
+  "blade_names": [
+    "Emberwake",
+    "Last Word",
+    "Coldharbor",
+    "The Long Answer",
+    "Widow's Patience",
+    "Morning",
+    "Kept Promise",
+    "Second Thought",
+    "Hearthward",
+    "Undertow"
+  ],
+  "heirlooms": {
+    "FORGE_A_BLADE": {
+      "name": "next blade name, in order, cycling",
+      "sprite": "reward-sword",
+      "aptitude": "MIGHT",
+      "bonus": 2,
+      "provenance": "Forged by % at Emberfall, and named in year % after a triumph.",
+      "provenance_args": [
+        "full name of the hero who fulfilled it",
+        "year"
+      ]
+    },
+    "WALK_EVERY_ROAD": {
+      "name": "%'s road-book",
+      "name_args": [
+        "first name of the dreamer (dream owner, else the fulfiller)"
+      ],
+      "sprite": "reward-guidebook",
+      "aptitude": "WITS",
+      "bonus": 2,
+      "provenance": "Every road there is, written down by % and finished in year %.",
+      "provenance_args": [
+        "full name of the hero who fulfilled it",
+        "year"
+      ]
+    },
+    "otherwise": {
+      "name": "the % cradle-ring",
+      "name_args": [
+        "house of the hero who fulfilled it"
+      ],
+      "sprite": "reward-ring",
+      "aptitude": "SPIRIT",
+      "bonus": 2,
+      "provenance": "Made by % in year %, the year a child of the house came of age.",
+      "provenance_args": [
+        "full name of the hero who fulfilled it",
+        "year"
+      ],
+      "_applies_to": "SEE_A_CHILD_GROWN (the only other HEIRLOOM dream)"
+    }
+  },
+  "blessings": {
+    "QUIET_THE_BARROW": {
+      "title": "%'s rest",
+      "scope": "AGAINST_TAG",
+      "tag": "UNDEAD",
+      "power": 2
+    },
+    "AVENGE_THE_LOST": {
+      "title": "%'s debt, paid",
+      "scope": "AT_PLACE",
+      "place": "SETUP_PLACE",
+      "power": 2
+    },
+    "otherwise": {
+      "title": "%'s patience",
+      "scope": "EVERYWHERE",
+      "power": 1,
+      "_applies_to": "WORTHY_STUDENT"
+    },
+    "_title_argument": "first name of the dreamer (dream owner, else the fulfiller)"
+  },
+  "blessing_effects": {
+    "AGAINST_TAG": "+% against %",
+    "AT_PLACE": "+% at %",
+    "EVERYWHERE": "+% on every quest"
+  },
+  "tale_titles": {
+    "SEE_THE_SEA": "The tale of % and the sea",
+    "ROOF_OF_THE_WORLD": "The tale of % on the roof of the world",
+    "KNOWN_AT_COURT": "The tale of % at Court",
+    "otherwise": "The tale of %",
+    "_argument": "first name of the dreamer"
+  },
+  "ghost_tale_title": "The laying of %'s ghost",
+  "promises": {
+    "NONE": "",
+    "HEIRLOOM": "If it is ever done, it will leave an heirloom worth +%.",
+    "TALE": "If it is ever done, it will leave a tale, worth % renown a year for ever.",
+    "BLESSING": "If it is ever done, it will leave a blessing on the line."
+  },
+  "legacy_nouns": {
+    "NONE": "nothing",
+    "HEIRLOOM": "an heirloom",
+    "TALE": "a tale",
+    "BLESSING": "a blessing"
+  },
+  "heirloom_effect": "+% % on quests."
+}

@@ -1,0 +1,62 @@
+{
+  "_source": "lineage/door.jai, scene/scenes/ending.jai",
+  "years": 25,
+  "seats": 4,
+  "danger": 3,
+  "renown": 5,
+  "locks": [
+    {
+      "aptitude": "MIGHT",
+      "demand": 34,
+      "title": "The lock of iron",
+      "name": "the lock of iron",
+      "premise": "The first lock is a bar of black iron as thick as a man. Might moves it.",
+      "endings": {
+        "DISASTER": "%1 came down the last steps to the lock of iron. It did not move. It pushed back, once, and threw them all down the steps, %2 first.",
+        "SETBACK": "%1 came down the last steps to the lock of iron. %2 strained at the bar until something tore. It shifted a hand's width, and no more.",
+        "SUCCESS": "%1 came down the last steps to the lock of iron. %2 set a shoulder to the bar, and it gave, groaning, an inch at a time, until it lay in the dust.",
+        "TRIUMPH": "%1 came down the last steps to the lock of iron. %2 took hold of the bar and lifted it as if it had been waiting to be asked."
+      }
+    },
+    {
+      "aptitude": "WITS",
+      "demand": 34,
+      "title": "The lock of riddles",
+      "name": "the lock of riddles",
+      "premise": "The second lock is a riddle cut into the lintel. Wits answer it.",
+      "endings": {
+        "DISASTER": "At the second lock a riddle older than the house was cut into the lintel. %2 answered it wrongly, aloud. The Door remembers who spoke, and it answered back.",
+        "SETBACK": "At the second lock a riddle older than the house was cut into the lintel. %2 answered it in part. The Door took the part, and took a price for the rest.",
+        "SUCCESS": "At the second lock a riddle older than the house was cut into the lintel. %1 argued over it half the night, and at dawn %2 gave it back, word for word, turned around. The lock of riddles turned.",
+        "TRIUMPH": "At the second lock a riddle older than the house was cut into the lintel. %2 answered it before the others had finished reading it. There was a sound in the stone like laughter, and the lock of riddles turned."
+      }
+    },
+    {
+      "aptitude": "SPIRIT",
+      "demand": 34,
+      "title": "The lock of breath",
+      "name": "the lock of breath",
+      "premise": "The last lock is sealed with a frost that has never melted. Spirit warms it.",
+      "endings": {
+        "DISASTER": "At the last lock the cold came up out of the dark like water. %2 could not draw breath against it, and neither could anyone.",
+        "SETBACK": "At the last lock the cold came up out of the dark like water. %2 breathed on the lock until the frost began to crack, and then could breathe no more. It held.",
+        "SUCCESS": "At the last lock the cold came up out of the dark like water. %1 stood in it together, and %2 sang the lock warm, and it turned.",
+        "TRIUMPH": "At the last lock the cold came up out of the dark like water. %2 breathed once on the lock of breath, and it opened like a hand."
+      }
+    }
+  ],
+  "verdict_titles": [
+    "The Door stayed shut",
+    "The Door opened a hand's breadth",
+    "The Door stood half open",
+    "The Door is open"
+  ],
+  "verdicts": [
+    "The house came to the Door with the wrong four, or too few, or too late. It is sealed again, and will not open in the lifetime of anyone now living. What the house has instead is its names.",
+    "One lock gave. Through the gap came cold air and a smell of rain on stone, and then the Door closed on it. It was enough to know there is another side. It was not enough to reach it.",
+    "Two locks gave, and the Door stood half open for a night and a day. Those who were there saw lamps on the far side, and someone carrying one. The house will be ready next time, if there is a house.",
+    "All three locks gave, and the Door stayed open. Everyone in the house had a hand on it: the ones who taught, the ones who bore children, the ones who died so the rest would know the road."
+  ],
+  "closed_title": "The house closed its doors",
+  "closed_verdict": "Too many roads went unanswered. The villages stopped sending, and then the Court did. The fire was let go out one spring, and those who were left took other names in other houses."
+}
