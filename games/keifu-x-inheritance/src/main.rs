@@ -137,6 +137,7 @@ mod floors_w6;
 mod floors_w7;
 mod floors_w8;
 mod floors_w9;
+mod floors_x1;
 mod forecast;
 mod foundations;
 mod generation;
@@ -243,6 +244,10 @@ mod winter;
 mod winter_tests;
 mod witness;
 mod words;
+mod x1;
+mod x1_rules;
+#[cfg(test)]
+mod x1_tests;
 
 use std::process::ExitCode;
 

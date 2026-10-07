@@ -380,6 +380,11 @@ pub fn run() -> ExitCode {
         &mut checks,
         &content,
     ));
+    summary.push(crate::x1::check_personal(&mut checks));
+    summary.push(crate::x1::check_weighing(&mut checks));
+    summary.push(crate::x1::check_marrying_in(&mut checks));
+    summary.push(crate::x1::check_heir_inheritance(&mut checks));
+    summary.push(crate::x1_rules::check_rules(&mut checks));
     summary.push(crate::sessions::check_family(&mut checks, &mut recorder));
     summary.push(crate::sessions::check_seeds(&mut checks, &content));
     summary.push(crate::sessions::check_staged_sheets(&mut checks));
