@@ -3,10 +3,10 @@
 task: brolf
 variant: V2
 stage: implement
-tick: released
+tick: live
 resumes: 0
 gates-green-at: none
-updated: 2026-10-07 09:34 PDT
+updated: 2026-10-07 11:09 PDT
 
 ## Done so far
 - claimed (d21cb8f)
