@@ -1323,3 +1323,81 @@ reset) earlier sessions had read and used. The documents were asked nothing new.
   `tools/mutate keifu mutants/*.txt` runs the same lists, unchanged. Both scored `w9.txt` on the same tree, 120 of
   120 with every per-fault verdict and both columns identical, and `--fast` agreed on every verdict. On warm
   worktrees the full pair took 47m45s and `--fast` 9m22s on this machine's four cores; the old harness took 54m41s.
+
+---
+
+## keifu-fixes (yakin task, 2026-10-07)
+
+Three usability fixes on mainline Keifu (`tools/yakin/tasks/keifu-fixes.md`). **Reading discipline:** `CLAUDE.md`,
+the `make-game` skill, `games/keifu/` (spec, source, ledgers); `docs/api/` not opened — nothing here asked the
+engine anything new. **Engine source (`crates/*/src/`): not opened.**
+
+### G-070 — a dock line costs a history panel: the sheet's budget is nowhere written
+
+Class: docs · Session: keifu-fixes · Owner: `games/keifu/` (the dock's own header, `src/dock.rs`)
+
+**Doing:** adding one paragraph — "Left alone, trouble rises to 1 …" — to the quest sheet.
+
+**Expected:** a longer sheet scrolls, as `dock.rs` says it does, and nothing else notices.
+
+**Happened:** W4's oracle (`w4.rs`, "the Barrow's history panel: never quested") found the history panel on the
+first page of the sheet and failed on 27 seeds when it moved below the fold; and the idle dock's help, with the
+foresight added, pushed the sixth place off the first page. Neither limit is written anywhere: the dock has about
+41 rows of 17 px, a 14 px line wraps near 28 characters, and a first-page oracle quietly depends on both.
+**What I did:** on nobody's authority — measured it, then wrote the new text to fit (the sheet's dice and outcome
+lines shortened, the telegraph kept to three rows, the foresight's intro to one line, `summer.help` shortened).
+
+**Fix:** state the dock's row budget in `dock.rs`'s header, and have the oracle read the history panel through
+`dock_pages` rather than the first page.
+
+### G-071 — "the tutorial" is not a screen in this port
+
+Class: process · Session: keifu-fixes · Owner: the keifu-fixes handoff
+
+**Doing:** "Rewrite the tutorial and help text for clarity, above all the dice-roll explanations."
+
+**Expected:** a how-to-play screen in the port, as `ui-text.json`'s `guide` block (sixteen entries) implies.
+
+**Happened:** no `W` key reads `guide.*` or `top_bar.renown_help`: the guide modal is not ported. The text a
+player meets is the dock's help (`summer.help`, `winter.help`, the group helps), the quest sheet's dice and
+outcome lines, the trouble stakes, and the telling's roll line. **What I did:** rewrote the strings the game
+shows (listed under Deviations in the PR) and left the unread `guide` entries in their original words, so the
+file now has two voices — the unread one is the original's.
+
+**Fix:** the handoff could name the strings; or the port could decide whether the guide returns.
+
+### G-072 — next summer's board cannot be shown, only what it is drawn from
+
+Class: game design (the game's own) · Session: keifu-fixes · Owner: Keifu
+
+**Doing:** "let the player see next round's incoming dungeons."
+
+**Happened:** next summer's board is drawn from the run's one generator when that summer begins, from the
+heroes alive then (SPEC §5.2), so a faithful preview of *which* quests exist does not exist yet, and drawing it
+early would move every later draw. The design is therefore partial on purpose: the foresight shows what is
+already fixed — each place's trouble *given the current seating* (left alone: +1; someone going: 0 on a win, one
+less on a loss; no quest there: unchanged), the exact pool of templates the place can draw (its four less the one
+remembered), the danger range, and the first ghost's certain place. Which four of the six places post is not
+shown. **What I did:** `outlook.rs` evaluates `quest::stakes`, the function `post` and `ghost_quest` call, over
+every roll; `outlook_checks.rs` holds both surfaces to what the sim then deals on 27 seeds.
+
+**Fix:** none needed; a future change could derive next summer's board from a per-year seed, which moves every
+existing oracle and is its own task.
+
+### The game's own (keifu-fixes)
+
+- **Demand is shown as a ceiling only** ("needs up to 15"): board easing (SPEC §5.2) lowers a demand a point at a
+  time down to its seats, so the least it can be is the seats. `outlook::Span` keeps the floor (the seats) and the
+  tests hold it, but the player is shown the number that cannot be exceeded.
+- **The telegraph omits renown** on the card and the sheet: it equals calm danger plus trouble, so it moves with the
+  danger range; the sheet's room for the line was needed for the history panel (G-070).
+- **The telegraph is silent in the Door's summer and the one before it:** there is no next board to draw.
+- **Mutation round** (`mutants/outlook.txt`, 20 faults): round one 18 of 20 noticed. The two escapes were O5 (the
+  demand floor's wobble — an equivalent, since a wobbled demand is never under its seats; re-cut to a fault the
+  floor's test does notice) and O7 (the foresight's year — only demand reads the year, and the dock shows danger;
+  now `the_foresight_reads_the_year_after_this_one`). Both re-cut and noticed: **20 of 20**. MUTATION2
+- **The pictures** (`screens/`): `foresight.png` — year 1 with Garrick and Brannoc seated, the idle dock reading NEXT
+  SUMMER (the Barrow at trouble 0, the others at 1); `telegraph.png` — year 2 after a summer at home, a troubled
+  card and the sheet's end ("Left alone, trouble rises to 2 …"). Seventeen existing pictures re-taken (the help,
+  the sheet's lines, the telling's roll line and every board's card moved), each opened.
+- **Web:** `tools/build-web keifu` and `tools/serve-web keifu --check` pass.
