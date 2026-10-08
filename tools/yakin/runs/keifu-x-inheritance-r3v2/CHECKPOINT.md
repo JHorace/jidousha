@@ -2,8 +2,8 @@
 
 task: keifu-x-inheritance-r3v2
 variant: V2
-stage: implement
-tick: live
+stage: done
+tick: released
 resumes: 0
 gates-green-at: 6d08146
 updated: 2026-10-07 22:45 PDT
@@ -19,7 +19,7 @@ updated: 2026-10-07 22:45 PDT
 - full gate green at 6d08146: doctor ENV_OK, tools/test pass (1860/0/0, verify keifu and the variant pass), check-claude-md ok, yakin check ok; build-web + serve-web --check pass
 
 ## Exact next step
-Open the PR (WORKER.md §4), then stage: done, tick: released.
+None — PR https://github.com/JHorace/jidousha/pull/145 is open.
 
 ## Deviations
 - 5 mainline unit tests rewritten to variant rules (births_tests x3: lean bonus; quest_sheet grave goods: stake line; resolve_tests disaster: Ysolde's mark) - DESIGN.md said no other mainline check moves
