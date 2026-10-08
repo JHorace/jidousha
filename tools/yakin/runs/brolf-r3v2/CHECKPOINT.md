@@ -2,19 +2,20 @@
 
 task: brolf-r3v2
 variant: V2
-stage: design
-tick: live
+stage: implement
+tick: released
 resumes: 0
 gates-green-at: none
-updated: 2026-10-07 21:23 PDT
+updated: 2026-10-07 21:24 PDT
 
 ## Done so far
 - branch claimed (claim commit)
 - make-game §D check on the spec: the decision-surface table is present with four rows; well-formed
-- DESIGN.md drafted whole, every template section filled; literals under final numeric review
+- DESIGN.md drafted whole, every template section filled (597d906)
+- shipped literals verified numerically against the specified ball_step and ZONE_TABLE (roll 3.04/9.98/20.91/19.63, t_out 3335, gate excluded 2722); design released
 
 ## Exact next step
-Re-check DESIGN.md's shipped literals (roll distances 9.98/3.04/20.91/19.63, t_out 3335, gate 2722), fix any that are off, then set stage: implement and tick: released in the `yakin(brolf-r3v2): design` commit and push.
+Worker (WORKER.md §3, V2): read tools/yakin/tasks/brolf-r3v2.md, tools/yakin/tasks/brolf.md and tools/yakin/runs/brolf-r3v2/DESIGN.md whole, then create games/brolf-r3v2/Cargo.toml and src/main.rs per DESIGN.md §Systems, building in the listed order starting with src/rules.rs (zone_at, ball_step, roll_out).
 
 ## Deviations
 - none
