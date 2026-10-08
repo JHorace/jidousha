@@ -31,7 +31,7 @@ All lore is written for this game, drawing on Lovecraft's public-domain mythos.
   | answer | interest | temper | sanity cost |
   |---|---|---|---|
   | lore | -3 | 0 | drain |
-  | wrong | -1 | 0 | drain |
+  | wrong | +1 | 0 | drain |
   | insult | 0 | +1 | drain + 6 (the shock) |
 
 - **drain** = base drain + temper - composure, never below 1.
@@ -53,12 +53,13 @@ Each day is a **morning** (one action) and a **night** (the calls).
 
 Morning actions:
 
-- **Train composure** (max 2): every exchange drains 1 less, for the rest of
-  the run.
+- **Train composure** (once; max 1): every exchange drains 1 less, for the
+  rest of the run.
 - **Study a being** (one per being with facts left): learn its next fact. If it
   calls tonight it asks about that fact first.
 - **Disrupt a being's cult**: it will not call tonight, and its temper rises by
-  1 (it notices).
+  1 (it notices). A being at temper 2 or more cannot be held back, so the
+  option is gone — each cult can be disrupted at most twice in a run.
 
 Tonight's calls come from one function, `rules::tonight(&Run)`: two of the
 three beings by the seed (three on the fifth night), minus a disrupted one,
@@ -72,10 +73,15 @@ function.
 ## Sanity arithmetic
 
 Sanity starts at 100 and only falls. A call answered entirely from lore costs
-2 exchanges; entirely wrong, 5; each insult adds an exchange-less 6 plus 1
-drain for the rest of the run. At base drain 3, a call costs 6 sanity known
-and 15 guessed; ten or eleven calls over five nights are 66-165 — survivable
-only with preparation. A run surviving with sanity 50 or more gets the better
+2 exchanges. A wrong answer *prolongs* the call (+1 interest), so a call met
+by guessing between the lore and the wrong answer is a random walk that
+drifts down by 1 an exchange — about 5 exchanges, with a long tail; each
+insult adds 6 and spends an exchange for nothing, plus 1 drain for the rest of
+the run. At drain 3, a call costs 6 sanity known and ~15 guessed; eleven calls
+over five nights are 66-165 — survivable only with preparation. Tuned against
+the verify players over twenty-four seeds: a prepared player survives 22 of
+24 (mean sanity ~28), a first try about a quarter, silence dies on night
+one. A run surviving with sanity 50 or more gets the better
 ending ("you sleep through the sixth night"); below that, "the phone still
 rings in your dreams".
 
