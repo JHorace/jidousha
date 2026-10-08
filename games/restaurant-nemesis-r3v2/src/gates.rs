@@ -56,6 +56,7 @@ pub(crate) fn spawn_row(checks: &mut Checks) {
     let check = "G5 capacity";
     let mut session = day_one_closing(checks, Key::S);
     let (_, panel) = look(checks, "day 1 at the close", &mut session);
+    let before_panel = panel.clone();
     let game = session.game().clone();
     let risky: Vec<(usize, u32, Theme)> = game
         .queue
@@ -104,7 +105,8 @@ pub(crate) fn spawn_row(checks: &mut Checks) {
             && title_for(theme, 0) == SPAWN_TITLE
             && panel_has(&panel, &line)
             && after.money == before + previewed
-            && previewed == -REFUND_ORDINARY * unmet,
+            && previewed == -8 * unmet
+            && panel_has(&before_panel, "SPAWN, -$8 -"),
         "the spawn is not the one the row previewed",
         format!(
             "{check}: {} nemeses, money {before} -> {} (previewed {previewed} for {unmet} unmet); \
@@ -360,6 +362,56 @@ pub(crate) fn at_the_cap(checks: &mut Checks) {
     );
     checks.note(format!(
         "{check}: fed The Lukewarm Baron +20 at three active"
+    ));
+}
+
+/// A nemesis left unmet grows by 30, comes back two days on, and — trending
+/// now — costs 3 reputation that night (the arithmetic, as literals).
+pub(crate) fn nemesis_unmet(checks: &mut Checks) {
+    let check = "nemesis unmet";
+    let mut session = Session::new(SEED_SPAWN);
+    let game = session.game_mut();
+    game.nemeses = vec![Nemesis {
+        id: NemesisId(1),
+        theme: Theme::Wait,
+        title_index: 0,
+        followers: 30,
+        tally: 0,
+        spawned_day: 1,
+        next_visit: 1,
+    }];
+    game.next_id = 2;
+    game.money = 40;
+    game.rep = 30;
+    game.queue = vec![Order {
+        kind: Kind::Nemesis(NemesisId(1)),
+        customer: Customer {
+            theme: Theme::Wait,
+            need: 3,
+            temper: 3,
+        },
+        served: false,
+    }];
+    let (_, panel) = look(checks, check, &mut session);
+    session.press(Key::Enter);
+    let game = session.game();
+    let after = game
+        .nemeses
+        .first()
+        .map(|n| (n.followers, n.next_visit, tier_of(n.followers)));
+    checks.require(
+        panel_has(&panel, "unmet: +30 fol -$20 -5 rep")
+            && after == Some((60, 3, Tier::TrendingTerror))
+            && (game.money, game.rep) == (20, 22),
+        "an unmet nemesis did not grow, return and trend as the row said",
+        format!(
+            "{check}: (followers, next visit, tier) {after:?}, want (60, 3, TrendingTerror); \
+             money {} rep {}, want 20 and 22",
+            game.money, game.rep
+        ),
+    );
+    checks.note(format!(
+        "{check}: +30 fol to 60, Trending Terror, -3 rep that night, back on day 3"
     ));
 }
 

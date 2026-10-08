@@ -36,6 +36,7 @@ pub(crate) fn run() -> ExitCode {
     crate::gates::card_runs(&mut checks);
     crate::gates::ledger_runs(&mut checks);
     crate::gates::at_the_cap(&mut checks);
+    crate::gates::nemesis_unmet(&mut checks);
 
     let (picture, transcript) = match card {
         Some(frame) => (
