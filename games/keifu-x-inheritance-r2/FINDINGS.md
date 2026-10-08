@@ -1323,3 +1323,92 @@ reset) earlier sessions had read and used. The documents were asked nothing new.
   `tools/mutate keifu mutants/*.txt` runs the same lists, unchanged. Both scored `w9.txt` on the same tree, 120 of
   120 with every per-fault verdict and both columns identical, and `--fast` agreed on every verdict. On warm
   worktrees the full pair took 47m45s and `--fast` 9m22s on this machine's four cores; the old harness took 54m41s.
+
+---
+
+## Keifu X Inheritance r2 (yakin task `keifu-x-inheritance-r2`)
+
+This file was copied with the game from `games/keifu/`; everything above is mainline's, kept as copied. What
+follows is the variant's: the fork built from `tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md` (a V2
+design, written by a designer tick) in one implement tick, 2026-10-07.
+
+**Reading discipline.** Read: `CLAUDE.md`, the `make-game` skill, the yakin doctrine and worker files, the
+task's spec and its original, DESIGN.md, and the copied game's source and content (mainline Keifu, in-fence to
+read). `docs/api/`: not opened — every engine surface the variant touches is one mainline already uses, as the
+design said. `tools/mutate`'s usage header was read to run the round. **Engine source (`crates/*/src/`): not
+opened.** Night one's branch, PR #129 and `games/keifu-x-inheritance/`: not opened (the r2 spec's comparison
+hygiene) — so these numbers continue from this file's G-069 and may collide with night one's (G-068's fork,
+again; its fix is G-039's).
+
+### G-070 — "src/family.rs (new)" names a file mainline already has
+
+Class: doc misled · Origin: design stage (`tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md`, Systems,
+"family") · Owner: the yakin designer routine
+
+**Doing:** building the design's first system, "who is family", in the file it names.
+
+**Expected:** a new file, as the design marks it.
+
+**Happened:** `src/family.rs` is mainline's top bar and family screen (SPEC §5.4, §19.2), copied with the game;
+the design's own reading list names neither. **What I did on its authority:** nothing was overwritten — the
+collision showed at the first `ls`. The module is `src/outsiders.rs` (`marry_in`, `join`); every other name the
+design gives is kept. Cost: a minute. **Fix:** a delta design names a new file only after listing the copy's
+`src/`.
+
+### G-071 — the design's oath card did not fit the card
+
+Class: doc misled · Origin: design stage (DESIGN.md, the oath system, decision 13 and "Open calls") · Owner:
+the yakin designer routine
+
+**Doing:** drawing the oath on the quest card as the design gives it: a sworn line and a stakes line on the
+card, the button "drawn with `summer::button`" inside the card clear of the seats.
+
+**Expected:** room — the design's open call puts the button's place to the implementer but takes the two lines
+as given.
+
+**Happened:** the floors (`floors::look`, all three sizes) found the two lines lying across the seat tiles —
+a card holds about a line and a half below its dream line before its seats — and the "Withdraw the oath" plate
+at the foot over Brannoc's tile. `summer::button` sets its label at `layer + 2`, so on a card (`MARK`) the label
+lands in the family overlay's band. **What I did:** one card line — "Sworn by Garrick: triumph, or a mark of 2 on
+the name. Fails 72 in 100." — that keeps row 1's "must know" (the chance it fails, the mark a failure leaves) on
+the card; the stakes in full stay on the quest sheet's SWORN BY block; the button ("Swear it" / "Withdraw") at
+the card's top right, across from the place's name, drawn by `board_view` (plate at `MARK`, label at `TEXT`).
+The design's literals for WOULD INHERIT ("Thornfall (+1 Might)") likewise did not match the content's own
+effect wording ("+1 Might on quests."); the section reads "Thornfall: +1 Might on quests.". Cost: one verify
+cycle. **Fix:** a design that puts type on an existing panel measures the panel's free rows first (the
+floors' clearance line prints them).
+
+### G-072 — `tools/mutate <game>` takes the crate, and the fork's folder is not its crate
+
+Class: doc imprecise · Owner: make-game §A.6 / `tools/mutate`
+
+**Doing:** `tools/mutate keifu-x-inheritance-r2 mutants/*.txt …`, the folder's name, as §A.6 writes
+`tools/mutate <game> <list>`.
+
+**Expected:** the game by its folder, as `games/<game>/mutants/` names it in the same sentence.
+
+**Happened:** "there is no game called 'keifu-x-inheritance-r2' under games/ (games: keifu,
+keifu_x_inheritance_r2, ninjo)". Mainline's folder and crate share a name, so nothing showed the difference
+until a fork whose crate takes underscores. **What I did:** named the crate; the error said how. **Fix:** §A.6
+could say `<game>` is the binary `tools/verify --list` prints.
+
+### G-073 — a copied mutation list names code the fork rewrote
+
+Class: process (the game's own) · Owner: this game / make-game §A.6
+
+**Doing:** the round §A.6 prescribes for a later session — the earlier lists filtered with `--changed-since`
+the copy commit.
+
+**Expected:** every kept fault still finds its line.
+
+**Happened:** twelve faults named lines the variant rewrote (the reward's door gate, the quest pointer, the
+table's teller, the newborn's share, the heir filter, the bequest's dream match, the death page's wait), and
+one a constant it removed (`NEWBORN_APTITUDE_SHARE`). `tools/mutate` refuses a find that does not match once.
+**What I did:** re-cut each to the same fault at the variant's site, label marked "(re-cut
+keifu-x-inheritance-r2: the variant moved the rule)" — mainline session 10's "re-cut s10" precedent;
+`NEWBORN_APTITUDE_SHARE 4 -> 3` became `DOMINANT_SHARE 2 -> 4`. No fault was dropped.
+
+### docs/api: 0 findings
+
+The variant adds rules over the game's own state and type on screens mainline already draws; it asked the
+engine documents nothing (the design said as much, and it held).

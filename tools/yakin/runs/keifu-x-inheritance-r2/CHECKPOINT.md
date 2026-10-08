@@ -6,7 +6,7 @@ stage: implement
 tick: live
 resumes: 0
 gates-green-at: none
-updated: 2026-10-07 19:34 PDT
+updated: 2026-10-07 19:55 PDT
 
 ## Done so far
 - branch claimed; design stage started (designer tick)
@@ -16,10 +16,11 @@ updated: 2026-10-07 19:34 PDT
 - implement stage: copy-and-rename commit (games/keifu -> games/keifu-x-inheritance-r2, crate keifu_x_inheritance_r2); tools/verify keifu_x_inheritance_r2 pass on it (2375505 checks) — 87f1ddf
 - the variant's rules (family, outsiders, courtship, family renown, heirs/bequeath, marks, oath, inheritance, sheet) — 2aaae99; cargo test -p keifu_x_inheritance_r2 green (356)
 - XI checks (xi.rs, xi_heirs.rs, xi_stages.rs, xi_tests.rs), three floors surfaces, three pictures, mutants/xi.txt; mainline oracles rewritten (w8 stirred, floors_w8 count, w7_controls garden help) — cbf43e4; tools/verify keifu_x_inheritance_r2 pass (2423836 checks)
+- FINDINGS G-070..G-073 in games/keifu-x-inheritance-r2/FINDINGS.md (G-070, G-071 attributed to the design stage)
 - 12 mainline faults re-cut to the variant's sites (labels marked "re-cut keifu-x-inheritance-r2")
 
 ## Exact next step
-Mutation round, in the background: `python3 tools/mutate keifu-x-inheritance-r2 mutants/*.txt --fast --changed-since 87f1ddf` (log target/yakin/mutate.log); tighten any escape with a check; then FINDINGS entries (G-070+) in games/keifu-x-inheritance-r2/FINDINGS.md, full gate (doctor, tools/test, check-claude-md, yakin check), build-web + serve-web --check, PR.
+Mutation round (running at this commit, in the background; rerun if lost): `python3 tools/mutate keifu-x-inheritance-r2 mutants/*.txt --fast --changed-since 87f1ddf` (log target/yakin/mutate.log); tighten any escape with a check; then FINDINGS entries (G-070+) in games/keifu-x-inheritance-r2/FINDINGS.md, full gate (doctor, tools/test, check-claude-md, yakin check), build-web + serve-web --check, PR.
 
 ## Deviations
 - the outsider module is `src/outsiders.rs`, not `src/family.rs`: mainline already has a family.rs (the top bar and family screen)
