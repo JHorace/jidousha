@@ -1,0 +1,143 @@
+#! Round 1 (r3v1): the rules' constants and branches, the rival, the screen's
+#! surfaces and the input path. Expectations in verify.rs and scenarios.rs are
+#! shipped literals, so a constant moving is a check failing.
+
+### R1 Ward gives 2 shield, not 3
+@ src/rules.rs
+- pub(crate) const WARD_SHIELD: i32 = 3;
++ pub(crate) const WARD_SHIELD: i32 = 2;
+
+### R2 the hand limit is 8
+@ src/rules.rs
+- pub(crate) const HAND_LIMIT: usize = 7;
++ pub(crate) const HAND_LIMIT: usize = 8;
+
+### R3 exhaustion costs nothing
+@ src/rules.rs
+- pub(crate) const EXHAUSTION: i32 = 1;
++ pub(crate) const EXHAUSTION: i32 = 0;
+
+### R4 Bury may target the bottom item
+@ src/rules.rs
+- Card::Bury => *at > 0,
++ Card::Bury => *at >= 0,
+
+### R5 Turn may target your own payloads
+@ src/rules.rs
+- Card::Turn => item.card.is_payload() && item.controller != caster,
++ Card::Turn => item.card.is_payload(),
+
+### R6 Echo may copy a manipulation
+@ src/rules.rs
+- Card::Echo => item.card.is_payload(),
++ Card::Echo => true,
+
+### R7 after a resolution priority goes to the non-leader
+@ src/rules.rs
+-         let _ = resolve_top(duel);⏎        duel.priority = duel.leader;
++         let _ = resolve_top(duel);⏎        duel.priority = duel.leader.opponent();
+
+### R8 Bury puts its target on top instead of the bottom
+@ src/rules.rs
+- duel.stack.insert(0, target);
++ duel.stack.push(target);
+
+### R9 shield soaks nothing
+@ src/rules.rs
+- let soaked = damage.min(hit.shield);
++ let soaked = 0.min(hit.shield);
+
+### R10 leadership never alternates
+@ src/rules.rs
+- duel.leader = duel.leader.opponent();
++ duel.leader = duel.leader;
+
+### R11 shield survives the round
+@ src/rules.rs
+- duelist.shield = 0;
++ duelist.shield += 0;
+
+### R12 damage hits its own controller
+@ src/rules.rs
+- let to = item.controller.opponent();
++ let to = item.controller;
+
+### R13 Turn does nothing to the target
+@ src/rules.rs
+- duel.stack[at].controller = item.controller;
++ duel.stack[at].controller = duel.stack[at].controller;
+
+### R14 an Echo copy works for the original's controller
+@ src/rules.rs
+- controller: item.controller,⏎                target: None,
++ controller: target.controller,⏎                target: None,
+
+### C1 Strike deals 3
+@ src/cards.rs
+- Card::Strike => 2,
++ Card::Strike => 3,
+
+### C2 Haymaker costs 2
+@ src/cards.rs
+- Card::Haymaker => 3,
++ Card::Haymaker => 2,
+
+### C3 Haymaker deals 4
+@ src/cards.rs
+- Card::Haymaker => 5,
++ Card::Haymaker => 4,
+
+### V1 the rival scores the margin the wrong way round
+@ src/rival.rs
+- (mine - theirs + settled) * 10
++ (theirs - mine + settled) * 10
+
+### V2 the rival never plays a card
+@ src/rival.rs
+- if score > best_score {
++ if score > best_score + 100_000 {
+
+### S1 the panel shows the wrong step's effect
+@ src/screen.rs
+- ahead.steps[place].describe()
++ ahead.steps[0].describe()
+
+### S2 the outcome line swaps the two lives
+@ src/screen.rs
+- ahead.you_life, ahead.rival_life
++ ahead.rival_life, ahead.you_life
+
+### S3 slots are lettered from B
+@ src/screen.rs
+- char::from(b'A' + slot as u8)
++ char::from(b'B' + slot as u8)
+
+### S4 ordinals start at 2nd
+@ src/screen.rs
+- let n = place + 1;
++ let n = place + 2;
+
+### S5 the target marks are never drawn
+@ src/main.rs
+- for rect in screen::marks(table) {
++ for rect in screen::marks(table).into_iter().take(0) {
+
+### S6 the table clears to a light grey
+@ src/main.rs
+- clear_color: palette::TABLE,
++ clear_color: palette::FAINT,
+
+### I1 a stack letter never plays the aimed card
+@ src/main.rs
+- if let Some(id) = item_at_slot(duel, slot)
++ if let Some(id) = item_at_slot(duel, slot + 99)
+
+### I2 the rival acts at once
+@ src/main.rs
+- if table.rival_clock < RIVAL_THINK {
++ if table.rival_clock < 1 {
+
+### I3 the pass button is not a pass
+@ src/screen.rs
+- if PASS_BUTTON.contains(at) {
++ if PASS_BUTTON.contains(at) && false {

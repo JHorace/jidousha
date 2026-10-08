@@ -1,0 +1,13 @@
+[package]
+name = "stack_card_game_r3v1"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+# The facade is the whole API a game gets (ADR-0038).
+[dependencies]
+jidousha = { path = "../../crates/jidousha" }
+
+[lints]
+workspace = true
