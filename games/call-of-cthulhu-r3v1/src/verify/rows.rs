@@ -17,7 +17,7 @@ use super::{FLOORS, SEED, digit, drawn_camera, judge, press, run_of, start};
 use crate::capture::capture_a_frame;
 use crate::checks::{Checks, fail};
 use crate::lore::{Being, Kind};
-use crate::play::{Command, Run, Screen};
+use crate::play::{Command, Ending, Run, Screen};
 use crate::players::{Player, play};
 use crate::rules::{self, Action, Change, answer_outcome, effect_of, kind_at, text_at};
 use crate::screen::{
@@ -32,6 +32,10 @@ const ROW1_CALLER: Being = Being::Cthulhu;
 const ROW1_LORE_COST: i32 = 2;
 /// What an insult then costs: the drain plus the surcharge for anger 1.
 const ROW1_INSULT_COST: i32 = 4;
+/// Cthulhu's temper is 3: the second further insult (anger 2) costs 2 + 4,
+/// and the third is wrath — 2 + 6 + 10 — and ends the call.
+const ROW1_SECOND_INSULT_COST: i32 = 6;
+const ROW1_WRATH_COST: i32 = 18;
 
 /// The seed row 2 is asserted on, and what its morning states for a bargain.
 const ROW2_SEED: u64 = 11;
@@ -175,6 +179,28 @@ pub(super) fn row_answer(checks: &mut Checks, summary: &mut Vec<String>) {
             "paid {paid} (stated {}, shipped {ROW1_INSULT_COST}), temper {} -> {anger}",
             expected.sanity_cost, next.anger
         ),
+    );
+    // Keep insulting: the call ends in wrath exactly when anger reaches its temper.
+    let mut paid = Vec::new();
+    let mut ended = None;
+    for _ in 0..4 {
+        let now = run_of(&sim);
+        let Screen::Calling(call) = now.screen else {
+            ended = Some(now.screen);
+            break;
+        };
+        let id = now.night.calls[0].question(call.asked);
+        let row = (0..3)
+            .find(|row| kind_at(id, *row) == Kind::Insult)
+            .unwrap_or(0);
+        press(&mut sim, digit(row));
+        paid.push(now.sanity - run_of(&sim).sanity);
+    }
+    checks.require(
+        paid == [ROW1_SECOND_INSULT_COST, ROW1_WRATH_COST]
+            && matches!(ended, Some(Screen::CallOver { ending: Ending::Wrath, call, .. }) if call.anger == ROW1_CALLER.spec().temper),
+        "row 1: wrath did not come when anger reached the caller's temper",
+        format!("paid {paid:?}, want [{ROW1_SECOND_INSULT_COST}, {ROW1_WRATH_COST}]; ended {ended:?}"),
     );
     summary.push(format!("row 1 (answer): facts on screen before answering; lore paid {ROW1_LORE_COST}, insult paid {ROW1_INSULT_COST} and temper +1"));
 }
