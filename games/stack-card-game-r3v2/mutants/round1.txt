@@ -1,0 +1,58 @@
+#! Round 1 — DESIGN.md G12's ten faults, plus the Rival passing inside the game's
+#! own system rather than in its rule. Every expectation they break is a shipped
+#! literal in decisions.rs, sweep.rs or verify.rs.
+
+### M1 the forecast resolves bottom-first
+@ src/rules.rs
+- while let Some(top) = stack.pop() {
++ while let Some(top) = (!stack.is_empty()).then(|| stack.remove(0)) {
+
+### M2 Bolt deals 4
+@ src/cards.rs
+- Card::Bolt => -3,
++ Card::Bolt => -4,
+
+### M3 starting life is 20
+@ src/duel.rs
+- pub const STARTING_LIFE: i32 = 15;
++ pub const STARTING_LIFE: i32 = 20;
+
+### M4 energy refills to 4
+@ src/duel.rs
+- seat.energy = ENERGY;
++ seat.energy = 4;
+
+### M5 one pass resolves
+@ src/duel.rs
+- if self.passes >= 2 {
++ if self.passes >= 1 {
+
+### M6 Delay moves its target to the top
+@ src/rules.rs
+- stack.insert(0, moved);
++ stack.push(moved);
+
+### M7 Redirect may aim at stack cards
+@ src/rules.rs
+- Card::Redirect => item.card.is_effect(),
++ Card::Redirect => true,
+
+### M8 the Rival's rule always passes
+@ src/players.rs
+- let me = Side::Rival;⏎    if duel.phase
++ let me = Side::Rival;⏎    if true || duel.phase
+
+### M9 the Rival's system always passes
+@ src/main.rs
+- let action = rival_action(&flow.duel);
++ let action = Action::Pass;
+
+### M10 the stack panel lists bottom-first
+@ src/screen.rs
+- for (row, (item, fate)) in duel.stack.iter().rev().zip(&fates).enumerate() {
++ for (row, (item, fate)) in duel.stack.iter().zip(&fates).enumerate() {
+
+### M11 the priority line always says the Rival passed
+@ src/screen.rs
+- let pass = match (duel.passes, duel.stack.last()) {
++ let pass = match (1, duel.stack.last()) {
