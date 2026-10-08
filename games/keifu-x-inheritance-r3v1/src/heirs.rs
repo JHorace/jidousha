@@ -60,6 +60,8 @@ fn heir_rank(heroes: &[Hero], dead: HeroId, other: HeroId) -> usize {
 pub fn heirs(heroes: &[Hero], dead: HeroId) -> Vec<HeroId> {
     let mut list: Vec<(usize, HeroId)> = (0..heroes.len())
         .filter(|&id| id != dead && heroes[id].is_living())
+        // Variant (outsiders.rs): an outsider is never anyone's heir.
+        .filter(|&id| heroes[id].is_family())
         .map(|id| (heir_rank(heroes, dead, id), id))
         .collect();
     list.sort();
@@ -137,6 +139,9 @@ pub struct HeirButton {
     pub heir: Option<HeroId>,
     /// "Maren, daughter", "Ysolde, of the house (not the dream)", "No one. Let it lie."
     pub label: String,
+    /// Variant (inheritance.rs): what the heir holds once chosen — "Strong, Bold;
+    /// marks 2" — set under the label; `None` on "No one".
+    pub holds: Option<String>,
 }
 
 /// The death page's buttons (SPEC §15.1): one per heir, in the list's order, each
@@ -173,12 +178,17 @@ pub fn heir_buttons(
             HeirButton {
                 heir: Some(heir),
                 label,
+                // Variant (inheritance.rs): what the heir holds once chosen.
+                holds: Some(crate::inheritance::reading(crate::inheritance::bequeathed(
+                    heroes, dead, heir,
+                ))),
             }
         })
         .collect();
     buttons.push(HeirButton {
         heir: None,
         label: words[W::TurningNoHeir].to_owned(),
+        holds: None,
     });
     buttons
 }
@@ -215,6 +225,12 @@ pub fn choose(content: &Content, house: &mut House, page: usize, heir: Option<He
     let mut lines = Vec::new();
     house.heroes[dead].bequest_decided = true;
     house.heroes[dead].bequest_heir = heir;
+    // Variant (inheritance.rs): the heir takes on what their button showed.
+    if let Some(h) = heir {
+        let inherited = crate::inheritance::bequeathed(&house.heroes, dead, h);
+        house.heroes[h].marks = inherited.marks;
+        house.heroes[h].genes = inherited.genes;
+    }
     if let Some(heirloom) = house.heroes[dead].heirloom.take() {
         match heir {
             Some(h) => {

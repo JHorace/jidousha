@@ -39,7 +39,8 @@ const NAV_BUTTON: Vec2 = Vec2::new(36.0, 34.0);
 const NAV_WIDE: f32 = 140.0;
 /// The heir buttons: two columns of five rows (CONSTANTS §14).
 const HEIR_ROWS: usize = 5;
-const HEIR_H: f32 = 30.0;
+/// Variant: two lines, the label and what the heir holds once chosen.
+const HEIR_H: f32 = 46.0;
 const HEIR_GAP: f32 = 6.0;
 /// The room an undecided death page keeps at its foot: the prompt and the buttons.
 const CHOICE_H: f32 = PITCH + PART_GAP + HEIR_ROWS as f32 * (HEIR_H + HEIR_GAP);
@@ -278,14 +279,42 @@ fn lay_out_choice(
             ),
             Vec2::new(width, HEIR_H),
         );
-        button(
-            page,
-            rect,
-            &choice.label,
-            Target::Heir(index, choice.heir),
-            layers::PANEL,
-        );
+        match &choice.holds {
+            None => button(
+                page,
+                rect,
+                &choice.label,
+                Target::Heir(index, choice.heir),
+                layers::PANEL,
+            ),
+            Some(holds) => heir_button(page, rect, &choice.label, holds, index, choice.heir),
+        }
     }
+}
+
+/// Variant: an heir's button in two lines — mainline's label, then what they will
+/// hold (`inheritance::reading`) — each centred.
+fn heir_button(
+    page: &mut Page,
+    rect: Rect,
+    label: &str,
+    holds: &str,
+    index: usize,
+    heir: Option<crate::hero::HeroId>,
+) {
+    page.shape(rect, ink::HOT, layers::PANEL);
+    let style = TextStyle {
+        size: MIN_TEXT,
+        ..TextStyle::default()
+    };
+    for (text, y, color) in [
+        (label, rect.min.y + 6.0, ink::BODY),
+        (holds, rect.min.y + 25.0, ink::NOTE),
+    ] {
+        let at = Vec2::new(rect.center().x - style.width_of(text) * 0.5, y);
+        page.text(layers::PANEL + 2, at, text, MIN_TEXT, color, rect);
+    }
+    page.targets.push((rect, Target::Heir(index, heir)));
 }
 
 /// One logical line, wrapped into the text area from `y`; pointing at it points at the

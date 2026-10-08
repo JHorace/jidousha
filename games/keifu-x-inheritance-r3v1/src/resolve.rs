@@ -200,6 +200,9 @@ pub fn resolve_party(
     let at_door = quest.is_door_lock();
     // 1-2. Forecast with the party and the patrons; band the margin the dice make.
     let power = party_power(&house.heroes, &members, quest.facts(), house.patrons);
+    // Variant (marks.rs): whose personal quest this is, read before anything this
+    // quest changes — the same reading the card showed at Set out.
+    let at_stake = crate::marks::personal(content, &house.heroes, quest.facts(), &members);
     let margin = margin(power, dice[0], dice[1], quest.demand);
     let outcome = outcome(margin);
     let f = Afield {
@@ -250,6 +253,14 @@ pub fn resolve_party(
             ));
         }
     }
+    // Variant (marks.rs): a failed personal quest marks the name.
+    crate::marks::apply(
+        &mut house.heroes,
+        &mut house.renown,
+        &at_stake,
+        outcome,
+        &mut lines,
+    );
     // 8. Each member faces the fear.
     for &member in &members {
         face_the_fear(&f, house, rng, &members, member, &mut lines);

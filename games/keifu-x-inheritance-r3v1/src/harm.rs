@@ -197,7 +197,7 @@ pub fn die(f: &Afield<'_>, house: &mut House, id: HeroId, fate: String, out: &mu
     hero.fate_telling = fate;
     hero.death_place = Some(f.quest.place);
     hero.death_tag = f.quest.tags.first().copied();
-    let carrier = hero.destiny.kind == Destiny::CarryTheHouse;
+    let carrier = hero.destiny.kind == Destiny::CarryTheHouse && hero.is_family();
     let name = hero.name.clone();
     house.fallen[f.quest.place.index()].push(id);
     house.unseat(id);

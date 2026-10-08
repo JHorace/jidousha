@@ -119,6 +119,9 @@ pub fn newcomer(
         quests_faced: 0,
         fears_faced: 0,
         winters_taught: 0,
+        blood: crate::hero::Blood::Family,
+        genes: [None, None],
+        marks: 0,
     }
 }
 

@@ -72,6 +72,14 @@ pub fn turn_the_year(
     pages.extend(wanderer(content, house, rng));
     // 8. The tales.
     let mut year_lines = tales(content, house);
+    // Variant (marks.rs): the toll the name pays for the marks its living family carry.
+    let toll = crate::marks::toll(&house.heroes);
+    if toll > 0 {
+        house.add_renown(-toll);
+        year_lines.push(format!(
+            "The black marks on the name cost the house {toll} renown this year."
+        ));
+    }
     // 9. Phase lines and the year's moment, hero by hero.
     for id in 0..house.heroes.len() {
         if !house.heroes[id].is_living() {

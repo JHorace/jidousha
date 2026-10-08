@@ -49,6 +49,9 @@ pub struct CardReading {
     pub dream: Option<String>,
     /// "Ysolde will not go." for a watched hero who refuses, else the fear line.
     pub warning: Option<String>,
+    /// Variant (marks.rs): "Fail 31%: mark Maren +1/+2, house -1/-2" when the quest is
+    /// personal for someone seated.
+    pub mark: Option<String>,
 }
 
 /// The seats board slot `quest` shows while `hand` (a hero, and where they would
@@ -166,6 +169,12 @@ pub fn read_card(
             }
         },
         warning,
+        mark: {
+            // The card's "Setback" percentage already counts the disasters (SPEC §5.4).
+            let [_, _, failing, _] = card_percentages(&odds_of);
+            let at_stake = crate::marks::personal(content, heroes, q.facts(), party);
+            crate::marks::mark_line(heroes, &at_stake, failing)
+        },
     }
 }
 

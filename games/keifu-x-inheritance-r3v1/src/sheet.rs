@@ -149,6 +149,17 @@ pub fn hero_sheet(content: &Content, heroes: &[Hero], id: HeroId) -> Sheet {
             fmt(&words[W::SheetRenown], &[&hero.renown.to_string()]),
         ),
     });
+    // Variant: the name, the blood and the marks (outsiders.rs, genes.rs, marks.rs).
+    if let Some(blood) = crate::marks::sheet_blood(hero) {
+        out.push(line(
+            if hero.marks > 0 {
+                Ink::Warning
+            } else {
+                Ink::Note
+            },
+            blood,
+        ));
+    }
     for aptitude in Aptitude::ALL {
         out.push(line(Ink::Body, aptitude_row(content, hero, *aptitude)));
     }

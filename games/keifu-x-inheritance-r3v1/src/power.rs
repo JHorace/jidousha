@@ -54,6 +54,8 @@ pub fn member_power(hero: &Hero, quest: QuestFacts<'_>) -> i32 {
     if hero.wounded {
         sum -= WOUND_PENALTY;
     }
+    // Variant (genes.rs): the blood's traits.
+    sum += crate::genes::trait_power(hero, quest);
     sum += door_power(hero, quest.door_lock);
     sum += blessing_power(hero, quest.place, quest.tags);
     sum.max(0)

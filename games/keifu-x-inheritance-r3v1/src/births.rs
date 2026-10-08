@@ -150,6 +150,20 @@ fn born(
         }
     }
     let id = house.heroes.len();
+    // Variant: the blood (genes.rs), the name (family if either parent is) and the
+    // marks a child is born under (marks.rs).
+    child.genes = crate::genes::child_genes(
+        house.seed,
+        id,
+        &house.heroes[first].genes,
+        &house.heroes[second].genes,
+    );
+    child.blood = if house.heroes[first].is_family() || house.heroes[second].is_family() {
+        crate::hero::Blood::Family
+    } else {
+        crate::hero::Blood::Outsider
+    };
+    child.marks = crate::marks::born_marks(&house.heroes[first], &house.heroes[second]);
     house.heroes.push(child);
     form(&mut house.heroes, id, first, BondKind::Parent, year);
     form(&mut house.heroes, id, second, BondKind::Parent, year);
@@ -235,6 +249,8 @@ fn born(
             ));
         }
     }
+    // Variant: the newborn's blood, after mainline's lines (marks.rs).
+    lines.extend(crate::marks::blood_lines(child));
     TurnPage {
         kind: PageKind::Birth,
         title: fmt(&words[W::BirthTitle], &[&child.name, &child.house]),

@@ -54,9 +54,19 @@ pub fn reward(
         .iter()
         .copied()
         .filter(|&m| house.heroes[m].destiny.kind == Destiny::CarryTheHouse)
+        // Variant (outsiders.rs): only the family carries the house.
+        .filter(|&m| house.heroes[m].is_family())
         .collect();
-    house.add_renown(renown + carriers.len() as i32 * CARRIED_RENOWN);
-    if !at_door {
+    // Variant (outsiders.rs): outsiders confer no family renown — a party with no
+    // family member wins renown for themselves alone.
+    let for_the_name = crate::outsiders::family_in(&house.heroes, members);
+    if for_the_name {
+        house.add_renown(renown + carriers.len() as i32 * CARRIED_RENOWN);
+    }
+    if !at_door && !for_the_name {
+        out.push(crate::outsiders::no_family_renown_line(renown));
+    }
+    if !at_door && for_the_name {
         let whom = match members {
             [one] => house.heroes[*one].name.clone(),
             _ => words[W::QuestRewardEach].to_owned(),

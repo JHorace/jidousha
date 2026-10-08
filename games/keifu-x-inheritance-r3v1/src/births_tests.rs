@@ -235,7 +235,8 @@ fn a_child_takes_a_quarter_of_both_parents_the_first_parents_house_both_bonds_an
         "She"
     };
     assert_eq!(
-        page.lines.last().map(String::as_str),
+        // Variant: mainline's last line comes before the blood line (marks.rs).
+        page.lines.iter().rev().nth(1).map(String::as_str),
         Some(format!("{he} is born under 2 blessings: Garrick's rest (+2 against Undead) and Odo's patience (+1 on every quest).").as_str())
     );
 }

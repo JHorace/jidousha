@@ -189,6 +189,9 @@ fn read_hero(item: &At<'_>) -> Result<FoundingHero, SchemaError> {
         quests_faced: count("quests_faced")?,
         fears_faced: count("fears_faced")?,
         winters_taught: 0,
+        blood: crate::hero::Blood::Family,
+        genes: crate::genes::founding_genes(&text(item, "name")?),
+        marks: 0,
     };
     let parents = item
         .key("parents")?

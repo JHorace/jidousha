@@ -100,6 +100,9 @@ pub fn arrive(content: &Content, house: &mut House, rng: &mut Rng) -> TurnPage {
     hero.dream = Some(dream.clone());
     hero.renown = renown;
     let id = house.heroes.len();
+    // Variant: a wanderer is an outsider, with rolled genes (genes.rs).
+    hero.blood = crate::hero::Blood::Outsider;
+    hero.genes = crate::genes::wanderer_genes(house.seed, id);
     house.heroes.push(hero);
     speak(content, &mut house.heroes, id, rng);
     deed(
@@ -152,6 +155,7 @@ pub fn arrive(content: &Content, house: &mut House, rng: &mut Rng) -> TurnPage {
         &[&forms.object, &prophecy(content, hero)],
     ));
     lines.extend(seer_lines(&content.destinies[hero.destiny.kind.index()]));
+    lines.extend(crate::marks::blood_lines(hero));
     TurnPage {
         kind: PageKind::Arrival,
         title: fmt(&words[W::ArrivalTitle], &[&hero.full_name()]),

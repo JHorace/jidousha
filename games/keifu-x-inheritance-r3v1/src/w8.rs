@@ -57,9 +57,20 @@ pub fn heir_labels(page: &Page) -> Vec<(Target, String)> {
         .iter()
         .filter(|(_, t)| matches!(t, Target::Heir(..)))
         .map(|(rect, t)| {
-            let label = lines_in(page, *rect).join(" ");
+            // Variant: the first line is mainline's label; the second, what the heir
+            // holds (`heir_holds`).
+            let label = lines_in(page, *rect).first().cloned().unwrap_or_default();
             (*t, label)
         })
+        .collect()
+}
+
+/// Variant: each heir button's second line — what the heir holds once chosen.
+pub fn heir_holds(page: &Page) -> Vec<(Target, Option<String>)> {
+    page.targets
+        .iter()
+        .filter(|(_, t)| matches!(t, Target::Heir(..)))
+        .map(|(rect, t)| (*t, lines_in(page, *rect).get(1).cloned()))
         .collect()
 }
 
@@ -82,6 +93,9 @@ pub fn stir(sim: &mut HeadlessSim, burdened: bool) -> usize {
     let house = sim.world_mut().resource_mut::<House>();
     let _ = crate::wanderer::arrive(&content, house, &mut rng);
     let wanderer = house.heroes.len() - 1;
+    // Variant: staged as married into the name, so mainline's heir oracle still has a
+    // burdened stranger to mark "(not the dream)" (outsiders are never heirs).
+    house.heroes[wanderer].blood = crate::hero::Blood::Family;
     let undone = |kind| Dream::build(&content, kind, None, None).ok();
     house.heroes[ysolde].burden = undone(DreamKind::SeeTheSea);
     let mut done = undone(DreamKind::RoofOfTheWorld);

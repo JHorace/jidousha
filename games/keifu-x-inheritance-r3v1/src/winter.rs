@@ -279,8 +279,19 @@ fn court(
     let words = &content.words;
     let year = house.calendar.current_year();
     match (verdict, pair) {
-        (Courtship::WillWed, [Some(a), Some(b)]) => {
+        (Courtship::WillWed | Courtship::MarriesIn { .. }, [Some(a), Some(b)]) => {
             form(&mut house.heroes, a, b, BondKind::Spouse, year);
+            // Variant (outsiders.rs): the outsider takes the name, and half their renown
+            // comes to the house.
+            if let Courtship::MarriesIn { outsider, transfer } = verdict {
+                let gained =
+                    crate::outsiders::take_into_the_name(&mut house.heroes, outsider, transfer);
+                house.add_renown(gained);
+                lines.push(format!(
+                    "{} marries into the name; the house gains {gained} renown.",
+                    house.heroes[outsider].name
+                ));
+            }
             let (an, bn) = (house.heroes[a].name.clone(), house.heroes[b].name.clone());
             lines.push(fmt(
                 house.writing.pick(content, Pool::Weddings, rng),
@@ -309,7 +320,7 @@ fn court(
             ));
         }
         (Courtship::Nobody, _) => {}
-        (Courtship::WillWed | Courtship::Rivals, _) => panic!(
+        (Courtship::WillWed | Courtship::MarriesIn { .. } | Courtship::Rivals, _) => panic!(
             "[keifu_x_inheritance_r3v1] the garden's verdict {verdict:?} came with an empty seat\n  likely \
              cause: courtship() judged a pair it was not given\n  fix: SPEC §11.6 checks \
              the empty seats first"

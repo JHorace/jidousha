@@ -242,6 +242,19 @@ pub enum Courtship {
     WedAlready,
     /// They wed.
     WillWed,
+    /// Variant (outsiders.rs): an outsider below the marrying-in renown, or two
+    /// outsiders.
+    Unproven {
+        /// The outsider's personal renown.
+        renown: i32,
+    },
+    /// Variant (outsiders.rs): they wed, and the outsider marries into the name.
+    MarriesIn {
+        /// The outsider.
+        outsider: HeroId,
+        /// The renown the house gains.
+        transfer: i32,
+    },
 }
 
 impl Courtship {
@@ -259,6 +272,11 @@ impl Courtship {
             Courtship::Rivals => words[W::CourtRivals].to_owned(),
             Courtship::WedAlready => words[W::CourtWedAlready].to_owned(),
             Courtship::WillWed => words[W::CourtWillWed].to_owned(),
+            Courtship::Unproven { renown } => format!(
+                "outsider: renown {renown} of {}",
+                crate::outsiders::MARRY_IN_RENOWN
+            ),
+            Courtship::MarriesIn { transfer, .. } => format!("marries in: house +{transfer}"),
         }
     }
 }
@@ -288,7 +306,13 @@ pub fn courtship(heroes: &[Hero], a: Option<HeroId>, b: Option<HeroId>) -> Court
     if has_living_spouse(heroes, a) || has_living_spouse(heroes, b) {
         return Courtship::WedAlready;
     }
-    Courtship::WillWed
+    match crate::outsiders::marry_in(heroes, a, b) {
+        crate::outsiders::MarryIn::Family => Courtship::WillWed,
+        crate::outsiders::MarryIn::Refused { renown, .. } => Courtship::Unproven { renown },
+        crate::outsiders::MarryIn::Accepted { outsider, transfer } => {
+            Courtship::MarriesIn { outsider, transfer }
+        }
+    }
 }
 
 /// A living spouse: widowed heroes may remarry (SPEC §11.6). SPEC-GAPS KG-45: living is
@@ -365,7 +389,8 @@ pub fn tellers<const N: usize>(heroes: &[Hero], table: [Option<HeroId>; N]) -> [
             return Some(Teller::Child);
         }
         adults += 1;
-        Some(if adults == 1 {
+        // Variant (outsiders.rs): an outsider's tale is their own, never the house's.
+        Some(if adults == 1 && heroes[hero].is_family() {
             Teller::House
         } else {
             Teller::Own

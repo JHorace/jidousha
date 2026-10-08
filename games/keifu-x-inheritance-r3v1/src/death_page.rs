@@ -64,7 +64,7 @@ pub fn old_age(content: &Content, house: &mut House, rng: &mut Rng) {
         hero.fate_year = year;
         hero.fate_age = hero.age;
         hero.fate_telling = telling;
-        let carrier = hero.destiny.kind == Destiny::CarryTheHouse;
+        let carrier = hero.destiny.kind == Destiny::CarryTheHouse && hero.is_family();
         house.unseat(id);
         house.mourned.push(id);
         if carrier {

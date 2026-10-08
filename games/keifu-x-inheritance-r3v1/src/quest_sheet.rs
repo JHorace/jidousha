@@ -101,8 +101,14 @@ pub fn quest_sheet(content: &Content, house: &House, quest: usize, party: &[Hero
             None,
         ));
     }
+    // Variant (marks.rs): a call that makes the quest personal says what failing costs.
+    let at_stake = crate::marks::personal(content, heroes, q.facts(), party);
     for (id, call) in called(content, heroes, q.facts(), party) {
-        out.push(line(Ink::Body, call_line(content, heroes, id, call), None));
+        let mut text = call_line(content, heroes, id, call);
+        if at_stake.contains(&id) {
+            text.push_str(crate::marks::SHEET_SUFFIX);
+        }
+        out.push(line(Ink::Body, text, None));
     }
     let aptitude = content.lore.aptitudes[q.aptitude.index()].to_uppercase();
     out.push(line(
@@ -244,8 +250,11 @@ mod tests {
                     s("Robbers went in at dusk. Bring them out, or what is left."),
                     None
                 ),
+                // Variant (marks.rs): Garrick must triumph, so the quest is his own.
                 (
-                    s("Garrick's dream: Win a triumph at the Barrow. He must triumph."),
+                    s(
+                        "Garrick's dream: Win a triumph at the Barrow. He must triumph. Failing marks the name."
+                    ),
                     None
                 ),
                 (

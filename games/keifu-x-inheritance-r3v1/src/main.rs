@@ -137,6 +137,7 @@ mod floors_w9;
 mod forecast;
 mod foundations;
 mod generation;
+mod genes;
 mod ghost;
 mod grief;
 mod harm;
@@ -152,15 +153,18 @@ mod hero;
 mod house;
 mod household;
 mod ids;
+mod inheritance;
 mod json;
 mod legacy;
 mod legacy_lore;
 mod lore;
+mod marks;
 mod moment;
 #[cfg(test)]
 mod newcomer_tests;
 mod newcomers;
 mod oracles;
+mod outsiders;
 mod passage;
 mod plans;
 #[cfg(test)]

@@ -71,6 +71,12 @@ pub fn member_lines(content: &Content, hero: &Hero, quest: QuestFacts<'_>) -> Ve
     if hero.wounded {
         add(words[W::PowerLineWounded].to_owned(), -WOUND_PENALTY, false);
     }
+    // Variant (genes.rs): the blood's traits, one line.
+    add(
+        format!("  blood: {}", crate::genes::traits_word(&hero.genes)),
+        crate::genes::trait_power(hero, quest),
+        false,
+    );
     add(
         words[W::PowerLineDoor].to_owned(),
         door_power(hero, quest.door_lock),

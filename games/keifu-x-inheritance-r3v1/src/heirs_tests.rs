@@ -13,7 +13,7 @@ use crate::heirs::{choose, heir_buttons, heirs};
 use crate::hero::{DeedKind, DreamFate, Heirloom, HeroId};
 use crate::house::House;
 use crate::ids::{BondKind, Destiny, DreamKind, Place};
-use crate::testkit::{house, id};
+use crate::testkit::{founded, house, id};
 use crate::turning::turn_the_year;
 use crate::winter::WinterPlan;
 
@@ -556,4 +556,36 @@ fn a_dream_left_undone_is_told_about_the_dead_who_carried_it() {
         lines[0],
         "She leaves a dream undone: to find a worthy student. Still to do: see a student succeed without her."
     );
+}
+
+#[test]
+fn each_heir_button_reads_what_the_heir_will_hold() {
+    let (content, mut heroes) = founded();
+    let garrick = id(&heroes, "Garrick");
+    let maren = id(&heroes, "Maren");
+    heroes[garrick].marks = 3;
+    heroes[maren].marks = 1;
+    heroes[maren].genes = [
+        Some(crate::genes::Trait::Strong),
+        Some(crate::genes::Trait::Strong),
+    ];
+    let list = heirs(&heroes, garrick);
+    let maren_button = heir_buttons(&content, &heroes, garrick, &list)
+        .into_iter()
+        .find(|b| b.heir == Some(maren))
+        .expect("Maren is an heir");
+    assert_eq!(maren_button.label, "Maren, daughter");
+    assert_eq!(
+        maren_button.holds.as_deref(),
+        Some("holds Strong x2; marks 2")
+    );
+}
+
+#[test]
+fn an_outsider_is_never_on_the_heir_list() {
+    let (_content, mut heroes) = founded();
+    let garrick = id(&heroes, "Garrick");
+    let odo = id(&heroes, "Odo");
+    heroes[odo].blood = crate::hero::Blood::Outsider;
+    assert!(!heirs(&heroes, garrick).contains(&odo));
 }

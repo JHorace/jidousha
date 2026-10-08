@@ -185,6 +185,15 @@ pub struct Deed {
     pub telling: String,
 }
 
+/// Whether a hero carries the family's name (the variant's outsiders, DESIGN.md).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Blood {
+    /// Born to the house, or married into it.
+    Family,
+    /// A wanderer who has not married in: their renown is their own.
+    Outsider,
+}
+
 /// Living, dead, or departed (crowned).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Fate {
@@ -279,12 +288,23 @@ pub struct Hero {
     pub fears_faced: i32,
     /// Winters taught.
     pub winters_taught: i32,
+    /// Family or outsider (variant).
+    pub blood: Blood,
+    /// Two trait slots (variant, `genes.rs`).
+    pub genes: crate::genes::Genes,
+    /// Black marks carried (variant, `marks.rs`).
+    pub marks: i32,
 }
 
 impl Hero {
     /// "Name House".
     pub fn full_name(&self) -> String {
         format!("{} {}", self.name, self.house)
+    }
+
+    /// Carries the family's name (variant).
+    pub fn is_family(&self) -> bool {
+        self.blood == Blood::Family
     }
 
     /// Living iff fate is LIVING.
