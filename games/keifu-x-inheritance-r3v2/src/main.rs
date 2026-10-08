@@ -230,6 +230,9 @@ mod winter;
 mod winter_tests;
 mod witness;
 mod words;
+mod xi_inheritance;
+mod xi_marks;
+mod xi_outsiders;
 
 use std::process::ExitCode;
 

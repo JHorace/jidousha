@@ -380,6 +380,11 @@ pub fn run() -> ExitCode {
         &mut checks,
         &content,
     ));
+    // The variant's three decision rows (DESIGN.md S8).
+    summary.push(crate::xi_marks::check_personal_quest(&mut checks));
+    summary.push(crate::xi_outsiders::check_marry_in(&mut checks));
+    summary.push(crate::xi_inheritance::check_succession(&mut checks));
+    summary.push(crate::xi_inheritance::check_birth(&mut checks));
     summary.push(crate::sessions::check_family(&mut checks, &mut recorder));
     summary.push(crate::sessions::check_seeds(&mut checks, &content));
     summary.push(crate::sessions::check_staged_sheets(&mut checks));

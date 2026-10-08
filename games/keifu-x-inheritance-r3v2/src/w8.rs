@@ -287,34 +287,50 @@ fn refusal(checks: &mut Checks, sim: &mut HeadlessSim, seed: u64) {
 }
 
 /// The stirred page: a wanderer, burdens, a blade.
+///
+/// Rewritten for the variant (DESIGN.md S8). The wanderer is an
+/// outsider and outsiders are never heirs (S2), so the list is mainline's seven
+/// whether or not the wanderer is burdened; the wanderer made family by hand
+/// brings mainline's eighth label back, marked by the same rule.
 fn stirred(checks: &mut Checks, seed: u64, burdened: bool, vector: &mut Vec<String>) {
-    let mut sim = session(seed);
-    stage_garricks_winter(&mut sim);
-    let wanderer = stir(&mut sim, burdened);
-    point_at(&mut sim, Target::LetWinterPass, true);
-    go_to_the_choice(&mut sim);
-    let labels: Vec<String> = heir_labels(&page_of(&sim))
-        .into_iter()
-        .map(|(_, l)| l)
-        .collect();
-    let name = sim.world().resource::<House>().heroes[wanderer]
-        .name
-        .clone();
-    let mark = if burdened { " (not the dream)" } else { "" };
-    let want = [
+    let stirred_labels = |family: bool| {
+        let mut sim = session(seed);
+        stage_garricks_winter(&mut sim);
+        let wanderer = stir(&mut sim, burdened);
+        sim.world_mut().resource_mut::<House>().heroes[wanderer].is_family = family;
+        point_at(&mut sim, Target::LetWinterPass, true);
+        go_to_the_choice(&mut sim);
+        let labels: Vec<String> = heir_labels(&page_of(&sim))
+            .into_iter()
+            .map(|(_, l)| l)
+            .collect();
+        let name = sim.world().resource::<House>().heroes[wanderer]
+            .name
+            .clone();
+        (labels, name)
+    };
+    let (labels, _) = stirred_labels(false);
+    let mut want = vec![
         "Maren, daughter".to_owned(),
         "Pip, grandson".to_owned(),
         "Odo, friend".to_owned(),
         "Ysolde, of the house (not the dream)".to_owned(),
         "Brannoc, of the house (lays one aside)".to_owned(),
         "Wren, of the house".to_owned(),
-        format!("{name}, of the house{mark}"),
         "No one. Let it lie.".to_owned(),
     ];
     checks.require(
         labels == want,
-        "stirred, Garrick's heirs are not marked by the rule: \"(not the dream)\" on an undone burden only, \"(lays one aside)\" on an heirloom",
+        "stirred, Garrick's heirs are not marked by the rule: \"(not the dream)\" on an undone burden only, \"(lays one aside)\" on an heirloom, and no outsider",
         format!("seed {seed:#x}: {labels:?}"),
+    );
+    let (family, name) = stirred_labels(true);
+    let mark = if burdened { " (not the dream)" } else { "" };
+    want.insert(6, format!("{name}, of the house{mark}"));
+    checks.require(
+        family == want,
+        "stirred, a wanderer made family is not offered as an heir by mainline's rule",
+        format!("seed {seed:#x}: {family:?}"),
     );
     if seed == recorded()[0] || seed == recorded()[1] {
         vector.push(format!(

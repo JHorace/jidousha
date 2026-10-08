@@ -74,7 +74,10 @@ pub fn w8_surfaces(
     }
     let mut sim = session(SEEDS[0]);
     stage_garricks_winter(&mut sim);
-    let _ = stir(&mut sim, true);
+    let wanderer = stir(&mut sim, true);
+    // The variant's wanderer is an outsider and no heir (DESIGN.md S2);
+    // made family here so the floor still judges the longest list, eight buttons.
+    sim.world_mut().resource_mut::<crate::house::House>().heroes[wanderer].is_family = true;
     point_at(&mut sim, Target::LetWinterPass, true);
     go_to_the_choice(&mut sim);
     let heirs = heir_labels(&page_of(&sim)).len();

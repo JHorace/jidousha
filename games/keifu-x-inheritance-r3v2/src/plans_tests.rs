@@ -477,3 +477,59 @@ fn the_first_adult_at_the_table_tells_it_for_the_house_a_second_for_themselves_a
         .collect();
     assert_eq!(notes, ["house +", "own +", "a child"]);
 }
+
+/// Pip, eighteen and of no one's blood, as an outsider beside Ysolde (variant,
+/// DESIGN.md S6).
+fn outsider_beside_ysolde(renown: i32) -> (Vec<Hero>, HeroId, HeroId) {
+    let (_, mut heroes) = founded();
+    let (pip, maren, ysolde) = (
+        id(&heroes, "Pip"),
+        id(&heroes, "Maren"),
+        id(&heroes, "Ysolde"),
+    );
+    heroes[pip].age = 18;
+    heroes[pip].parents = [None, None];
+    heroes[pip].bonds.clear();
+    heroes[maren].bonds.retain(|b| b.other != pip);
+    heroes[pip].is_family = false;
+    heroes[pip].renown = renown;
+    (heroes, pip, ysolde)
+}
+
+#[test]
+fn an_outsider_below_four_renown_is_unproven_and_at_four_marries_in() {
+    let (heroes, pip, ysolde) = outsider_beside_ysolde(3);
+    assert_eq!(
+        courtship(&heroes, Some(pip), Some(ysolde)),
+        Courtship::Unproven { renown: 3 }
+    );
+    assert_eq!(
+        courtship(&heroes, Some(ysolde), Some(pip)),
+        Courtship::Unproven { renown: 3 }
+    );
+    let (heroes, pip, ysolde) = outsider_beside_ysolde(4);
+    assert_eq!(
+        courtship(&heroes, Some(pip), Some(ysolde)),
+        Courtship::MarriesIn
+    );
+}
+
+#[test]
+fn two_outsiders_wed_each_other_at_any_renown_and_stay_outsiders() {
+    let (mut heroes, pip, ysolde) = outsider_beside_ysolde(0);
+    heroes[ysolde].is_family = false;
+    assert_eq!(
+        courtship(&heroes, Some(pip), Some(ysolde)),
+        Courtship::WillWed
+    );
+}
+
+#[test]
+fn the_unproven_note_says_the_outsiders_renown_and_the_houses_ask() {
+    let (content, _) = founded();
+    assert_eq!(
+        Courtship::Unproven { renown: 1 }.note(&content),
+        "renown 1 of 4"
+    );
+    assert_eq!(Courtship::MarriesIn.note(&content), "marries in");
+}

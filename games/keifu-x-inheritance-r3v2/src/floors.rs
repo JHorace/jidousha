@@ -450,13 +450,15 @@ fn w4_surfaces(checks: &mut Checks, tally: &mut Tally, recorder: &mut FrameRecor
     let before = tally.surfaces;
     let mut sim = session(crate::verify::SEEDS[0]);
     stage_mid_drag(&mut sim);
-    look(
+    // `look_held`, not `look` — the variant's lean note makes Brannoc's
+    // sheet one line longer than the dock, and the wheel cannot page a held hand's
+    // sheet (DESIGN.md S4; the PR's Deviations).
+    look_held(
         checks,
         tally,
         recorder,
         &mut sim,
         "W4, Brannoc in hand over Grave goods",
-        false,
     );
     mid_drag(checks, &sim);
     let mut sim = session(crate::verify::SEEDS[0]);
