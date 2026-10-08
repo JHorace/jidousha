@@ -5,8 +5,8 @@ variant: V1
 stage: implement
 tick: live
 resumes: 0
-gates-green-at: none
-updated: 2026-10-07 22:18 PDT
+gates-green-at: fb74e5d
+updated: 2026-10-07 22:30 PDT
 
 ## Done so far
 - claimed
@@ -17,9 +17,10 @@ updated: 2026-10-07 22:18 PDT
 - rule tests (outsiders.rs), three captures, mutants/inherit.txt (34 faults), FINDINGS G-070
 
 - mutation round: 34 of 34 noticed over three passes (escapes fixed with tests); verify keifu + fork pass; build-web/serve-web --check pass; fast gate clean
+- full gate green at fb74e5d: doctor ENV_OK, tools/test pass (1865/0/0), check-claude-md ok, yakin check ok
 
 ## Exact next step
-Full gate: python3 tools/doctor; python3 tools/test in background (verdict target/verify/report.json); tools/check-claude-md; yakin check. Then open the PR (WORKER.md §4) and set stage: done.
+Open the PR (WORKER.md §4; body in the PR) and set stage: done, tick: released.
 
 ## Deviations
-- none
+- see the PR body Deviations (sheet blood line only when non-empty; personal-quest word on the call line; two-line heir buttons; card fail % from the card's setback figure; mainline oracles rewritten)
