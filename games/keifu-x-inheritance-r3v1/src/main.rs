@@ -154,6 +154,8 @@ mod house;
 mod household;
 mod ids;
 mod inherit_checks;
+#[cfg(test)]
+mod inherit_tests;
 mod inheritance;
 mod json;
 mod legacy;

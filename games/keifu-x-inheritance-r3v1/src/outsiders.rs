@@ -151,6 +151,22 @@ mod tests {
     }
 
     #[test]
+    fn an_outsider_at_the_long_table_tells_a_tale_of_their_own() {
+        use crate::plans::{Teller, tellers};
+        let (_content, mut heroes) = founded();
+        let (odo, maren) = (id(&heroes, "Odo"), id(&heroes, "Maren"));
+        heroes[odo].blood = Blood::Outsider;
+        assert_eq!(
+            tellers(&heroes, [Some(odo), Some(maren)]),
+            [Some(Teller::Own), Some(Teller::Own)]
+        );
+        assert_eq!(
+            tellers(&heroes, [Some(maren), Some(odo)]),
+            [Some(Teller::House), Some(Teller::Own)]
+        );
+    }
+
+    #[test]
     fn the_turning_toll_is_the_living_familys_marks_over_four_and_ignores_outsiders() {
         let (_content, mut heroes) = founded();
         let (odo, maren, ysolde) = (

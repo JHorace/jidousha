@@ -41,6 +41,8 @@ pub const ORACLE_MARKS: i32 = 2;
 /// Row 2: the garden's note below and at the threshold.
 pub const ORACLE_REFUSED: &str = "outsider: renown 5 of 6";
 pub const ORACLE_ACCEPTED: &str = "marries in: house +3";
+/// Row 2: what marrying in at renown 6 brings the house.
+pub const ORACLE_TRANSFER: i32 = 3;
 /// Row 2: the winter page's line on the wedding.
 pub const ORACLE_MARRIED_IN: &str = "Odo marries into the name; the house gains 3 renown.";
 /// Row 3: what Pip's button says he will hold, and what he holds after.
@@ -161,7 +163,24 @@ fn check_marry_in(checks: &mut Checks) -> String {
         "row 2: an outsider at the threshold is not shown accepted, or does not marry in",
         format!("garden {at:?}; wed {}; winter {winter:?}", wed(&sim)),
     );
-    format!("inheritance row 2: {ORACLE_REFUSED:?} refused, {ORACLE_ACCEPTED:?} wed")
+    // The same wedding with Odo family all along: the house's renown differs by the
+    // transfer alone.
+    let married_in = house_of(&sim).renown;
+    let mut control = session(SEEDS[0]);
+    stay_home_into_winter(&mut control);
+    control.world_mut().resource_mut::<House>().heroes[odo].renown = 6;
+    seat_at(&mut control, "Odo", Seat::Garden(0));
+    seat_at(&mut control, "Maren", Seat::Garden(1));
+    point_at(&mut control, Target::LetWinterPass, true);
+    let gained = married_in - house_of(&control).renown;
+    checks.require(
+        gained == ORACLE_TRANSFER,
+        "row 2: marrying in does not bring the house the renown the garden showed",
+        format!("house renown {married_in} against {} wed as family: +{gained}, want +{ORACLE_TRANSFER}", house_of(&control).renown),
+    );
+    format!(
+        "inheritance row 2: {ORACLE_REFUSED:?} refused, {ORACLE_ACCEPTED:?} wed, house +{gained}"
+    )
 }
 
 /// Row 3. Returns its summary line.
