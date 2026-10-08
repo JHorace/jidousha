@@ -237,6 +237,11 @@ mod winter;
 mod winter_tests;
 mod witness;
 mod words;
+mod xi;
+mod xi_heirs;
+mod xi_stages;
+#[cfg(test)]
+mod xi_tests;
 
 use std::process::ExitCode;
 

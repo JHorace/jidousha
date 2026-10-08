@@ -138,15 +138,14 @@ fn need_word(content: &Content, need: Outcome) -> &str {
     }
 }
 
-/// What the card says of its oath: the sworn line and the stakes once sworn, and the
+/// What the card says of its oath: the sworn line once sworn — the need, the mark a
+/// failure leaves and the chance of it; the sheet spells out the rest — and the
 /// button's label.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct OathReading {
-    /// "Sworn by Garrick: he must triumph. Fails 72 in 100."
+    /// "Sworn by Garrick: triumph, or a mark of 2 on the name. Fails 72 in 100."
     pub sworn: Option<String>,
-    /// "Kept: +2 renown, his and the house's. Failed: a mark of 2 on the name."
-    pub stakes: Option<String>,
-    /// "Swear it" or "Withdraw the oath".
+    /// "Swear it" or "Withdraw".
     pub button: String,
 }
 
@@ -157,26 +156,19 @@ pub fn read_oath(content: &Content, house: &House, slot: usize) -> Option<OathRe
     let Some(oath) = house.board[slot].sworn else {
         return swearer(content, house, slot).map(|_| OathReading {
             sworn: None,
-            stakes: None,
             button: words[W::QuestCardSwear].to_owned(),
         });
     };
-    let hero = &house.heroes[oath.by];
-    let forms = &content.lore.pronouns[hero.pronoun.index()];
     let weight = consequence(&house.board[slot].quest).weight.to_string();
     Some(OathReading {
         sworn: Some(fmt(
             &words[W::QuestCardSworn],
             &[
-                &hero.name,
-                &forms.subject,
+                &house.heroes[oath.by].name,
                 need_word(content, oath.need),
+                &weight,
                 &fail_percent(house, slot, oath.need).to_string(),
             ],
-        )),
-        stakes: Some(fmt(
-            &words[W::QuestCardOathStakes],
-            &[&weight, &forms.possessive, &weight],
         )),
         button: words[W::QuestCardWithdraw].to_owned(),
     })

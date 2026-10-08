@@ -427,7 +427,6 @@ words! {
     QuestCardSwear = Ui "quest_card.swear",
     QuestCardWithdraw = Ui "quest_card.withdraw",
     QuestCardSworn = Ui "quest_card.sworn",
-    QuestCardOathStakes = Ui "quest_card.oath_stakes",
     QuestSheetSwornBy = Ui "quest_sheet.sworn_by",
     QuestSheetOathNeed = Ui "quest_sheet.oath_need",
     QuestSheetOathFails = Ui "quest_sheet.oath_fails",

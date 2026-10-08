@@ -190,6 +190,12 @@ pub fn capture_all(checks: &mut Checks) -> Vec<String> {
             "keifu-x-inheritance-r2-w10-played-family.png",
         ),
         (&["w10:reset"][..], "keifu-x-inheritance-r2-w10-reset.png"),
+        (&["xi:sworn"][..], "keifu-x-inheritance-r2-xi-sworn.png"),
+        (&["xi:garden"][..], "keifu-x-inheritance-r2-xi-garden.png"),
+        (
+            &["xi:succession", "end"][..],
+            "keifu-x-inheritance-r2-xi-succession.png",
+        ),
     ]
     .into_iter()
     .enumerate()
@@ -249,6 +255,8 @@ pub fn capture_all(checks: &mut Checks) -> Vec<String> {
             }
             if let Some(w10) = name.strip_prefix("w10:") {
                 crate::w10_stages::stage(&mut sim, w10);
+            } else if let Some(xi) = name.strip_prefix("xi:") {
+                crate::xi_stages::stage(&mut sim, xi);
             } else if name.is_empty() {
                 point_at(&mut sim, Target::OpenFamily, true);
             } else if *name == "w3" {

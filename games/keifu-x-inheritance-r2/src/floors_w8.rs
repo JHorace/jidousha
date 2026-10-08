@@ -78,9 +78,11 @@ pub fn w8_surfaces(
     point_at(&mut sim, Target::LetWinterPass, true);
     go_to_the_choice(&mut sim);
     let heirs = heir_labels(&page_of(&sim)).len();
+    // The variant's (rewritten from mainline's eight): the wanderer is an outsider and no
+    // heir, so six heirs and no one.
     checks.require(
-        heirs == 8,
-        "the stirred page does not show seven heirs and no one",
+        heirs == 7,
+        "the stirred page does not show six heirs and no one",
         format!("{label}: {heirs} buttons"),
     );
     look(

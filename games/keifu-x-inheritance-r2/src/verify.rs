@@ -380,6 +380,22 @@ pub fn run() -> ExitCode {
         &mut checks,
         &content,
     ));
+    // The variant's (DESIGN.md "Gates to add"): a check for each decision row, then the
+    // rules beside them.
+    let (xi_oath, xi_oath_vector) = crate::xi::check_oath(&mut checks);
+    summary.push(xi_oath);
+    summary.extend(xi_oath_vector);
+    summary.push(crate::xi::check_oath_eligibility(&mut checks));
+    let (xi_marry, xi_marry_vector) = crate::xi::check_marry_in(&mut checks);
+    summary.push(xi_marry);
+    summary.extend(xi_marry_vector);
+    summary.push(crate::xi::check_neither_family(&mut checks));
+    let (xi_heir, xi_heir_vector) = crate::xi_heirs::check_succession(&mut checks);
+    summary.push(xi_heir);
+    summary.extend(xi_heir_vector);
+    summary.push(crate::xi_heirs::check_outsider_death(&mut checks));
+    summary.push(crate::xi_heirs::check_family_renown(&mut checks));
+    summary.push(crate::xi_heirs::check_drain(&mut checks));
     summary.push(crate::sessions::check_family(&mut checks, &mut recorder));
     summary.push(crate::sessions::check_seeds(&mut checks, &content));
     summary.push(crate::sessions::check_staged_sheets(&mut checks));
@@ -394,7 +410,7 @@ pub fn run() -> ExitCode {
     let (passed, failed) = checks.counts();
     if failed == 0 {
         println!(
-            "verified keifu_x_inheritance_r2: W0, W1, W2, W3, W4, W5, W6, W7, W8, W9 and W10 oracles hold on {} seeds, {passed} checks",
+            "verified keifu_x_inheritance_r2: W0, W1, W2, W3, W4, W5, W6, W7, W8, W9 and W10 oracles and the variant's XI checks hold on {} seeds, {passed} checks",
             SEEDS.len()
         );
     } else {

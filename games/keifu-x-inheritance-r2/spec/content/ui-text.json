@@ -322,25 +322,16 @@
       "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
     },
     "withdraw": {
-      "text": "Withdraw the oath",
+      "text": "Withdraw",
       "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
     },
     "sworn": {
-      "text": "Sworn by %: % must %. Fails % in 100.",
+      "text": "Sworn by %: %, or a mark of % on the name. Fails % in 100.",
       "args": [
         "swearer first name",
-        "subject pronoun",
         "the call's telling word",
-        "fail percent"
-      ],
-      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
-    },
-    "oath_stakes": {
-      "text": "Kept: +% renown, % and the house's. Failed: a mark of % on the name.",
-      "args": [
         "weight",
-        "swearer possessive",
-        "weight"
+        "fail percent"
       ],
       "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
     }
@@ -832,7 +823,7 @@
       "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
     },
     "inherit_heirloom": {
-      "text": "% (%)",
+      "text": "%: %",
       "args": [
         "heirloom name",
         "its effect"
@@ -847,7 +838,7 @@
       "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
     },
     "inherit_blessing": {
-      "text": "% (%)",
+      "text": "%: %",
       "args": [
         "blessing title",
         "its effect"

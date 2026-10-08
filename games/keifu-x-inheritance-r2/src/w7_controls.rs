@@ -34,10 +34,12 @@ pub const GROUP_HELP: [(Group, &str, &str); 6] = [
         "THE TRAINING YARD",
         "Alone, a hero trains their own calling, up to 6. A teacher passes on their best aptitude, up to their own. Veterans and elders teach well. The young learn fast.",
     ),
+    // The variant's (rewritten from mainline): the garden's help ends with the outsider's
+    // threshold (DESIGN decision 14).
     (
         Group::Garden,
         "THE GARDEN",
-        "Two may wed when both are 18 or older and no more than 15 years apart. Kin cannot wed. From the year after they wed, a pair may have a child, 60 times in a hundred each winter, while both are 18 to 45. Rivals who walk here a winter make peace.",
+        "Two may wed when both are 18 or older and no more than 15 years apart. Kin cannot wed. From the year after they wed, a pair may have a child, 60 times in a hundred each winter, while both are 18 to 45. Rivals who walk here a winter make peace. An outsider weds in only at renown 4, takes the family's name, brings half their renown to the house, and may be named an heir from then. Two outsiders cannot wed under this roof.",
     ),
     (
         Group::Table,

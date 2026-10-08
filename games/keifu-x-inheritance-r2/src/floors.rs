@@ -432,9 +432,21 @@ fn battery(checks: &mut Checks, tally: &mut Tally, recorder: &mut FrameRecorder,
     let w8 = crate::floors_w8::w8_surfaces(checks, tally, recorder, label);
     let w9 = crate::floors_w9::w9_surfaces(checks, tally, recorder, label);
     let w10 = crate::floors_w10::w10_surfaces(checks, tally, recorder, label);
+    let xi = crate::xi_stages::xi_surfaces(checks, tally, recorder, label);
     checks.require(
         tally.surfaces
-            == 2 + seated.len() + everyone + staged.len() + 1 + w4 + w5 + w6 + w7 + w8 + w9 + w10,
+            == 2 + seated.len()
+                + everyone
+                + staged.len()
+                + 1
+                + w4
+                + w5
+                + w6
+                + w7
+                + w8
+                + w9
+                + w10
+                + xi,
         "a surface was not judged",
         format!("{label}: {} surfaces", tally.surfaces),
     );

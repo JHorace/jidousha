@@ -99,8 +99,7 @@ pub fn lay_out_board(page: &mut Page, content: &Content, house: &House, ui: &UiS
         let reading = read_card(content, house, quest, &party, watched);
         draw_card(page, &reading, card, hot);
         if let Some(oath) = &reading.oath {
-            let foot = seat_rect(card, house.board[quest].seats.len());
-            oath_button(page, &oath.button, card, foot, quest);
+            oath_button(page, &oath.button, card, quest);
         }
         page.targets.push((card, Target::Quest(quest)));
     }
@@ -314,26 +313,23 @@ fn draw_card(page: &mut Page, card: &CardReading, rect: Rect, hot: bool) {
             y = paragraph(page, text, line(y), MIN_TEXT, color, rect);
         }
     }
-    // The variant's oath, once sworn: who swore and what it needs, then its stakes.
-    if let Some(oath) = &card.oath {
-        for text in [&oath.sworn, &oath.stakes].into_iter().flatten() {
-            y = paragraph(page, text, line(y), MIN_TEXT, ink::HEADING, rect);
-        }
+    // The variant's oath, once sworn: who swore, what it needs, the mark a failure
+    // leaves and the chance of it.
+    if let Some(sworn) = card.oath.as_ref().and_then(|oath| oath.sworn.as_ref()) {
+        paragraph(page, sworn, line(y), MIN_TEXT, ink::HEADING, rect);
     }
 }
 
-/// The variant's oath button (DESIGN decision 10): at the card's foot, right of its
-/// seats, set right; shaped as "Set out" is, a band up, and absent when nobody may swear.
-fn oath_button(page: &mut Page, label: &str, card: Rect, foot: Rect, quest: usize) {
+/// The variant's oath button (DESIGN decision 10): at the card's top right, across
+/// from the place's name and clear of the seats and the tags; shaped as "Set out" is, a
+/// band up, and absent when nobody may swear.
+fn oath_button(page: &mut Page, label: &str, card: Rect, quest: usize) {
     let style = TextStyle {
         size: MIN_TEXT,
         ..TextStyle::default()
     };
-    let size = Vec2::new(style.width_of(label) + 16.0, 26.0);
-    let at = Vec2::new(
-        card.max.x - CARD_PAD - size.x,
-        foot.center().y - size.y * 0.5,
-    );
+    let size = Vec2::new(style.width_of(label) + 16.0, 20.0);
+    let at = Vec2::new(card.max.x - CARD_PAD - size.x, card.min.y + 4.0);
     let rect = Rect::from_min_size(at, size);
     // On the card, so a band above `summer::button`'s: the plate a mark, the label type.
     page.shape(rect, ink::HOT, layers::MARK);
