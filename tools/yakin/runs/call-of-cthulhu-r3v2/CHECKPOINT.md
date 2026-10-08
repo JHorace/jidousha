@@ -3,10 +3,10 @@
 task: call-of-cthulhu-r3v2
 variant: V2
 stage: implement
-tick: released
+tick: live
 resumes: 0
 gates-green-at: none
-updated: 2026-10-07 21:21 PDT
+updated: 2026-10-07 21:25 PDT
 
 ## Done so far
 - claimed the branch (designer tick, mode start)
