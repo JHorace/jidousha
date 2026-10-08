@@ -103,6 +103,15 @@ pub fn run() -> ExitCode {
         _ => "skipped, the decision-row photo was not taken".to_owned(),
     };
 
+    // A second picture, of the first morning, for a person to look at; the
+    // `capture:` line above is the one `tools/verify` reports.
+    let morning = match (recorded.shots.first(), recorded.font) {
+        (Some(shot), Some(font)) => {
+            crate::capture::capture(&mut checks, &shot.frame, font, "call_of_cthulhu_r2-morning")
+        }
+        _ => "skipped, no morning was photographed".to_owned(),
+    };
+
     let verdict = checks.verdict();
     println!(
         "verified call_of_cthulhu_r2: {} checks passed, {} failed",
@@ -121,6 +130,7 @@ pub fn run() -> ExitCode {
         margins.clearance
     );
     println!("  capture: {captured}");
+    println!("  morning picture: {morning}");
     println!();
     println!("transcript of the recorded run:");
     for line in &recorded.game.log {

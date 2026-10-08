@@ -144,8 +144,8 @@ pub fn morning_row(index: usize) -> Rect {
 /// Answer `index` of the call screen.
 pub fn answer_row(index: usize) -> Rect {
     Rect::from_min_size(
-        Vec2::new(MARGIN, 262.0 + 40.0 * index as f32),
-        Vec2::new(DESIGN_W - 2.0 * MARGIN, 34.0),
+        Vec2::new(MARGIN, 236.0 + 44.0 * index as f32),
+        Vec2::new(DESIGN_W - 2.0 * MARGIN, 38.0),
     )
 }
 
