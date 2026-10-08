@@ -5,8 +5,8 @@ variant: V2
 stage: implement
 tick: live
 resumes: 0
-gates-green-at: none
-updated: 2026-10-07 19:55 PDT
+gates-green-at: 23dd109
+updated: 2026-10-07 20:48 PDT
 
 ## Done so far
 - branch claimed; design stage started (designer tick)
@@ -17,10 +17,12 @@ updated: 2026-10-07 19:55 PDT
 - the variant's rules (family, outsiders, courtship, family renown, heirs/bequeath, marks, oath, inheritance, sheet) — 2aaae99; cargo test -p keifu_x_inheritance_r2 green (356)
 - XI checks (xi.rs, xi_heirs.rs, xi_stages.rs, xi_tests.rs), three floors surfaces, three pictures, mutants/xi.txt; mainline oracles rewritten (w8 stirred, floors_w8 count, w7_controls garden help) — cbf43e4; tools/verify keifu_x_inheritance_r2 pass (2423836 checks)
 - FINDINGS G-070..G-073 in games/keifu-x-inheritance-r2/FINDINGS.md (G-070, G-071 attributed to the design stage)
+- mutation round: 519 of 527 noticed (--fast, --changed-since 87f1ddf); escapes w4 K8, w7 E21, w8 B3, Y3 known equivalents; w8 C16, xi R1, R9, F8 tightened — 23dd109, rerun 4 of 4 noticed
+- full gate at 23dd109: doctor ENV_OK, tools/test pass (1849/0/0), check-claude-md ok, yakin check ok; verify keifu and keifu_x_inheritance_r2 pass; build-web + serve-web --check pass
 - 12 mainline faults re-cut to the variant's sites (labels marked "re-cut keifu-x-inheritance-r2")
 
 ## Exact next step
-Mutation round (running at this commit, in the background; rerun if lost): `python3 tools/mutate keifu-x-inheritance-r2 mutants/*.txt --fast --changed-since 87f1ddf` (log target/yakin/mutate.log); tighten any escape with a check; then FINDINGS entries (G-070+) in games/keifu-x-inheritance-r2/FINDINGS.md, full gate (doctor, tools/test, check-claude-md, yakin check), build-web + serve-web --check, PR.
+Open the PR (WORKER.md §4) with the body in target/yakin/pr-body.md (regenerate it from this checkpoint's Deviations if lost), then set stage: done, tick: released.
 
 ## Deviations
 - the outsider module is `src/outsiders.rs`, not `src/family.rs`: mainline already has a family.rs (the top bar and family screen)
