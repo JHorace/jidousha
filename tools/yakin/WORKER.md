@@ -97,7 +97,7 @@ failed; rerun it in the background. Never `#[ignore]`, delete or weaken a test t
   V3 is identical on the worker side — the review routine comments on its PR
   by itself.
 
-Game tasks follow DOCTRINE §6 at both stages.
+Game tasks follow DOCTRINE §6 at both stages, and §5 below when they need art.
 
 ## 4. Done — the PR
 
@@ -124,5 +124,30 @@ Design: <V1: "inline" · V2/V3: <R>/DESIGN.md, designer model as configured: <it
 Deviations:
 - <one line each, or "none"; V2/V3: every departure from DESIGN.md, one line each>
 Findings: <n> in <path> — or "0 findings: <why>"
+Assets created: <game tasks: one line each, `<path>` — <what it is> (WORKER.md §5), or "none">
 Owner actions: <game tasks: make-game §E's five lines · system tasks: "none" or the list>
 ```
+
+## 5. Assets — game tasks
+
+The depot supplies availability, not curation — and it is currently thin.
+When a game task needs an asset (sprite, tile, icon, sound) and nothing
+appropriate exists, **create one** rather than shipping a placeholder or
+stalling:
+
+- **Generate programmatically where feasible** — a script run in-session
+  (Python/PIL and similar are available on the VM). Commit the output under
+  the game's asset root per convention (`games/<name>/assets/`, ADR-0040);
+  committing the generator script beside it is encouraged — a regenerable
+  asset is an editable asset. Both stay inside the spec's Fence.
+- **Simple, legible, stylistically consistent within the game.** Functional
+  beats beautiful; a readable colored shape with intent is the bar, not art.
+- **Never download or copy third-party assets from the network** —
+  provenance and licensing cannot be reviewed unattended. The depot and your
+  own generation are the only sources; no spec widens this.
+- **Time-boxed in service of the task:** gameplay and gates come first. If
+  art is eating the window, ship the honest placeholder, note it in the PR
+  (Deviations), and move on.
+- **List every created asset in the PR body** (§4's `Assets created:` line —
+  path and a one-line description) so the owner can skim the night's art
+  debt.
