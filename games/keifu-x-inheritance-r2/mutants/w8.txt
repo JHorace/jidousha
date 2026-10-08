@@ -71,10 +71,10 @@
 - pub const WANDERER_RENOWN_HIGH: i32 = 2;
 + pub const WANDERER_RENOWN_HIGH: i32 = 3;
 
-### C14 NEWBORN_APTITUDE_SHARE 4 -> 3
+### C14 NEWBORN_APTITUDE_SHARE 4 -> 3 (re-cut keifu-x-inheritance-r2: the variant moved the rule)
 @ src/constants.rs
-- pub const NEWBORN_APTITUDE_SHARE: i32 = 4;
-+ pub const NEWBORN_APTITUDE_SHARE: i32 = 3;
+- pub const DOMINANT_SHARE: i32 = 2;
++ pub const DOMINANT_SHARE: i32 = 4;
 
 ### C15 NEWBORN_APTITUDE_LEAST 1 -> 2
 @ src/constants.rs
@@ -261,15 +261,15 @@
 -     list.sort();
 +     list.sort_by_key(|(_, id)| *id);
 
-### R10 the dead among their own heirs
+### R10 the dead among their own heirs (re-cut keifu-x-inheritance-r2: the variant moved the rule)
 @ src/heirs.rs
--         .filter(|&id| id != dead && heroes[id].is_living())
-+         .filter(|&id| heroes[id].is_living())
+-         .filter(|&id| id != dead && heroes[id].is_living() && heroes[id].family)
++         .filter(|&id| heroes[id].is_living() && heroes[id].family)
 
-### R11 the dead of the house among the heirs
+### R11 the dead of the house among the heirs (re-cut keifu-x-inheritance-r2: the variant moved the rule)
 @ src/heirs.rs
--         .filter(|&id| id != dead && heroes[id].is_living())
-+         .filter(|&id| id != dead)
+-         .filter(|&id| id != dead && heroes[id].is_living() && heroes[id].family)
++         .filter(|&id| id != dead && heroes[id].family)
 
 ### R12 the heir list cut at seven
 @ src/heirs.rs
@@ -386,10 +386,10 @@
 -     if let Some(heirloom) = house.heroes[dead].heirloom.take() {
 +     if let Some(heirloom) = house.heroes[dead].heirloom.clone() {
 
-### B9 the dream passes to whoever is chosen
+### B9 the dream passes to whoever is chosen (re-cut keifu-x-inheritance-r2: the variant moved the rule)
 @ src/heirs.rs
--         match heir.filter(|&h| can_take_dream(&house.heroes[h])) {
-+         match heir {
+-             Some((h, taking)) if taking.dream.is_some() => {
++             Some((h, _)) => {
 
 ### B10 a passed dream's fate is left to no one
 @ src/heirs.rs
@@ -491,20 +491,20 @@
 -         Some(dream) if dream.is_fulfilled() => hero.dream_fate = DreamFate::Fulfilled,
 +         Some(dream) if dream.is_fulfilled() => hero.dream_fate = DreamFate::Undecided,
 
-### D7 only an heirloom waits for an heir
+### D7 only an heirloom waits for an heir (re-cut keifu-x-inheritance-r2: the variant moved the rule)
 @ src/death_page.rs
--     let leaves = heirloom.is_some() || undone.is_some();
-+     let leaves = heirloom.is_some();
+-     let leaves = house.heroes[dead].family && (heirloom.is_some() || undone.is_some());
++     let leaves = house.heroes[dead].family && heirloom.is_some();
 
-### D8 only a dream waits for an heir
+### D8 only a dream waits for an heir (re-cut keifu-x-inheritance-r2: the variant moved the rule)
 @ src/death_page.rs
--     let leaves = heirloom.is_some() || undone.is_some();
-+     let leaves = undone.is_some();
+-     let leaves = house.heroes[dead].family && (heirloom.is_some() || undone.is_some());
++     let leaves = house.heroes[dead].family && undone.is_some();
 
-### D9 a page with nothing to leave is not decided
+### D9 a page with nothing to leave is not decided (re-cut keifu-x-inheritance-r2: the variant moved the rule)
 @ src/death_page.rs
--         house.heroes[dead].bequest_decided = true;⏎        Vec::new()
-+         Vec::new()
+-         let left = bequeath(content, house, dead, None);⏎        lines.splice
++         let left = bequeath(content, house, dead, None);⏎        house.heroes[dead].bequest_decided = false;⏎        lines.splice
 
 ### D10 the bequest records no heirloom
 @ src/death_page.rs
@@ -651,15 +651,15 @@
 -         .find(|b| b.kind == BondKind::Spouse && house.heroes[b.other].is_living())
 +         .find(|b| b.kind == BondKind::Spouse)
 
-### Y10 a newborn's share is the larger parent's
-@ src/births.rs
--         let shared = house.heroes[first].base(*aptitude) + house.heroes[second].base(*aptitude);
-+         let shared = 2 * house.heroes[first].base(*aptitude).max(house.heroes[second].base(*aptitude));
+### Y10 a newborn's share is the larger parent's (re-cut keifu-x-inheritance-r2: the variant moved the rule)
+@ src/inheritance.rs
+-         let dominant = if index(rng, 2) == 0 { first } else { second };
++         let _ = index(rng, 2);⏎        let dominant = if first.base(*aptitude) >= second.base(*aptitude) { first } else { second };
 
-### Y11 a newborn's share never rolls up
-@ src/births.rs
--             (shared / NEWBORN_APTITUDE_SHARE + between(rng, 0, 1)).max(NEWBORN_APTITUDE_LEAST);
-+             (shared / NEWBORN_APTITUDE_SHARE + between(rng, 0, 0)).max(NEWBORN_APTITUDE_LEAST);
+### Y11 a newborn's share never rolls up (re-cut keifu-x-inheritance-r2: the variant moved the rule)
+@ src/inheritance.rs
+-             + between(rng, 0, 1))
++             + between(rng, 0, 0))
 
 ### Y12 the surpassing child of a parent with children
 @ src/births.rs

@@ -429,10 +429,10 @@
 -     me.renown += TALE_RENOWN;
 +     me.renown += 0;
 
-### L2 the house hears the tale twice
+### L2 the house hears the tale twice (re-cut keifu-x-inheritance-r2: the variant moved the rule)
 @ src/plans.rs
--         Some(if adults == 1 {
-+         Some(if adults >= 1 {
+-             told_for_the_house = true;
++             told_for_the_house = false;
 
 ### L3 a child at the table counts as the first teller
 @ src/plans.rs

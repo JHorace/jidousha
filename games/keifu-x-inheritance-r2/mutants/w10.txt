@@ -294,10 +294,10 @@
 - let at_door = f.quest.is_door_lock();
 + let at_door = false;
 
-### W2 the Door's reward is told
+### W2 the Door's reward is told (re-cut keifu-x-inheritance-r2: the variant moved the rule)
 @ src/reward.rs
--     if !at_door {⏎        let whom
-+     if true {⏎        let whom
+-     if !at_door && family {⏎        let whom
++     if family {⏎        let whom
 
 ### W3 a triumph deed at the Door
 @ src/reward.rs

@@ -498,10 +498,10 @@
 -                 over: target,⏎                ..drag
 +                 over: drag.over,⏎                ..drag
 
-### U5 a quest is never pointed at
+### U5 a quest is never pointed at (re-cut keifu-x-inheritance-r2: the variant moved the rule)
 @ src/pointer.rs
-- Some(Target::Quest(quest)) if !ui.family_open => Some(quest),
-+ Some(Target::Quest(_)) if !ui.family_open => None,
+- Some(Target::Quest(quest) | Target::Swear(quest)) if !ui.family_open => Some(quest),
++ Some(Target::Quest(_) | Target::Swear(_)) if !ui.family_open => None,
 
 ### V1 the hand previews nowhere
 @ src/board_view.rs
