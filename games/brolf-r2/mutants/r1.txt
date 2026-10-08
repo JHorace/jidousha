@@ -1,0 +1,96 @@
+#! brolf_r2 round 1 — the implement stage's faults: DESIGN.md "Gates to add" list, plus the survival rule this build changed.
+
+### M1 the grace period is five seconds, not six
+@ src/rules.rs
+- pub const GRACE_TICKS: u64 = 360;
++ pub const GRACE_TICKS: u64 = 300;
+
+### M2 a club stuns for two seconds
+@ src/rules/contact.rs
+- pub const STUN_TICKS: u64 = 180;
++ pub const STUN_TICKS: u64 = 120;
+
+### M3 a Helmet protects nothing
+@ src/rules/contact.rs
+- pub const HELMET_STUN_TICKS: u64 = 60;
++ pub const HELMET_STUN_TICKS: u64 = 180;
+
+### M4 zone 1 is wider than designed
+@ src/rules.rs
+- pub const ZONE_RADII: [f32; 5] = [7.8, 5.0, 3.2, 1.8, 0.0];
++ pub const ZONE_RADII: [f32; 5] = [7.8, 5.5, 3.2, 1.8, 0.0];
+
+### M5 the Driver is weaker than its row says
+@ src/rules/contact.rs
+- pub const DRIVER_SHOT_SCALE: f32 = 1.5;
++ pub const DRIVER_SHOT_SCALE: f32 = 1.2;
+
+### M6 a hole pays three
+@ src/rules/contact.rs
+- pub const HOLE_POINTS: u32 = 2;
++ pub const HOLE_POINTS: u32 = 3;
+
+### M7 a sledge pays one
+@ src/rules/contact.rs
+- pub const SLEDGE_POINTS: u32 = 2;
++ pub const SLEDGE_POINTS: u32 = 1;
+
+### M8 surviving pays nothing extra
+@ src/rules/contact.rs
+- pub const SURVIVOR_BONUS: u32 = 6;
++ pub const SURVIVOR_BONUS: u32 = 0;
+
+### M9 the pad opens a phase late
+@ src/rules.rs
+- pub const PAD_OPENS_TICK: u64 = 1921;
++ pub const PAD_OPENS_TICK: u64 = 3421;
+
+### M10 the turf is stickier
+@ src/rules.rs
+- pub const FRICTION: f32 = 8.0;
++ pub const FRICTION: f32 = 9.0;
+
+### M11 a full charge is slower
+@ src/rules.rs
+- pub const MAX_SHOT_SPEED: f32 = 18.0;
++ pub const MAX_SHOT_SPEED: f32 = 15.0;
+
+### M12 the club reaches further
+@ src/rules/contact.rs
+- pub const CLUB_REACH: f32 = 1.2;
++ pub const CLUB_REACH: f32 = 2.0;
+
+### M13 a club drops nothing
+@ src/sim/resolve.rs
+- drops.push((*drop_at, item));
++ let _ = (drop_at, item);
+
+### M14 the next zone is the current zone
+@ src/rules.rs
+- (k, _) => Some(course.zones[k + 1]),
++ (k, _) => Some(course.zones[k]),
+
+### M15 the landing disc's colours are swapped
+@ src/screen.rs
+-             LANDING_IN⏎        } else {⏎            LANDING_OUT
++             LANDING_OUT⏎        } else {⏎            LANDING_IN
+
+### M16 strikes resolve after the roll
+@ src/main.rs
+- app.add_system(Update, sim::act);⏎    app.add_system(Update, sim::roll_balls);
++ app.add_system(Update, sim::roll_balls);⏎    app.add_system(Update, sim::act);
+
+### M17 the X row promises the points alone
+@ src/screen.rs
+- &format!("X: extract, keeps {}", snap.banked(seat)),
++ &format!("X: extract, keeps {}", me.points),
+
+### M18 the result row keeps the points alone
+@ src/screen.rs
+- format!("{}  {word}  {}", NAMES[seat], snap.banked(seat)),
++ format!("{}  {word}  {}", NAMES[seat], snap.golfer(seat).points),
+
+### M19 a golfer whose rivals extracted is crowned survivor
+@ src/sim/resolve.rs
+- if alive.len() > 1 || (alive.len() == 1 && !all_eliminated) {
++ if alive.len() > 1 {
