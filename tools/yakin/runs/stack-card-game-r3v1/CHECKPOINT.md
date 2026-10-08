@@ -5,8 +5,8 @@ variant: V1
 stage: implement
 tick: live
 resumes: 0
-gates-green-at: none
-updated: 2026-10-07 21:32 PDT
+gates-green-at: 6fb32f6
+updated: 2026-10-07 21:47 PDT
 
 ## Done so far
 - claimed
@@ -15,9 +15,10 @@ updated: 2026-10-07 21:32 PDT
 - --verify: three players, four decision-row checks, floors, capture; rules tests (d13f1b9)
 - mutation list mutants/round1.txt (632d386); FINDINGS.md G-070..G-074 (cb361fb)
 - mutation round: 23/27 first pass, escapes closed, rerun 28 of 28 noticed (eded35a); web build + serve-web --check PASS
+- full gate green at 6fb32f6: doctor ENV_OK, tools/test pass 1495/0/0, check-claude-md ok, yakin check ok, fast gate clean
 
 ## Exact next step
-Run the full gate (WORKER.md §2: doctor, tools/test in background, check-claude-md, yakin check) and the fast gate; then open the PR (WORKER.md §4).
+Open the PR (WORKER.md §4) with body target/yakin/pr-body.md's shape; then stage: done, tick: released.
 
 ## Deviations
 - none
