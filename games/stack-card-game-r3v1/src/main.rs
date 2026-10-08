@@ -20,6 +20,7 @@ use std::process::ExitCode;
 use jidousha::prelude::*;
 
 mod capture;
+mod cards;
 mod checks;
 mod players;
 mod rival;

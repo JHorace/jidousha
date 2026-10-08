@@ -12,6 +12,8 @@
 
 use jidousha::prelude::*;
 
+pub(crate) use crate::cards::{Card, DECK};
+
 /// Life a duellist starts the match with.
 pub(crate) const STARTING_LIFE: i32 = 12;
 /// Focus every duellist has to spend each round.
@@ -26,24 +28,6 @@ pub(crate) const HAND_LIMIT: usize = 7;
 pub(crate) const EXHAUSTION: i32 = 1;
 /// Shield a Ward gives.
 pub(crate) const WARD_SHIELD: i32 = 3;
-
-/// The deck both duellists shuffle, before the shuffle.
-pub(crate) const DECK: [Card; 14] = [
-    Card::Strike,
-    Card::Strike,
-    Card::Strike,
-    Card::Haymaker,
-    Card::Haymaker,
-    Card::Ward,
-    Card::Ward,
-    Card::Cancel,
-    Card::Cancel,
-    Card::Bury,
-    Card::Bury,
-    Card::Turn,
-    Card::Turn,
-    Card::Echo,
-];
 
 /// Which duellist.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -66,72 +50,6 @@ impl Side {
             Side::You => "you",
             Side::Rival => "rival",
         }
-    }
-}
-
-/// The seven cards.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Card {
-    Strike,
-    Haymaker,
-    Ward,
-    Cancel,
-    Bury,
-    Turn,
-    Echo,
-}
-
-impl Card {
-    pub(crate) fn cost(self) -> i32 {
-        match self {
-            Card::Strike | Card::Ward | Card::Bury => 1,
-            Card::Cancel | Card::Turn | Card::Echo => 2,
-            Card::Haymaker => 3,
-        }
-    }
-
-    pub(crate) fn name(self) -> &'static str {
-        match self {
-            Card::Strike => "Strike",
-            Card::Haymaker => "Haymaker",
-            Card::Ward => "Ward",
-            Card::Cancel => "Cancel",
-            Card::Bury => "Bury",
-            Card::Turn => "Turn",
-            Card::Echo => "Echo",
-        }
-    }
-
-    /// The card's effect in a dozen characters, for the hand.
-    pub(crate) fn blurb(self) -> &'static str {
-        match self {
-            Card::Strike => "2 dmg to foe",
-            Card::Haymaker => "5 dmg to foe",
-            Card::Ward => "+3 shield",
-            Card::Cancel => "remove item",
-            Card::Bury => "item to base",
-            Card::Turn => "flip a hit",
-            Card::Echo => "copy payload",
-        }
-    }
-
-    /// Damage a payload deals when it resolves.
-    pub(crate) fn damage(self) -> i32 {
-        match self {
-            Card::Strike => 2,
-            Card::Haymaker => 5,
-            _ => 0,
-        }
-    }
-
-    /// A payload changes life or shield; everything else changes the stack.
-    pub(crate) fn is_payload(self) -> bool {
-        matches!(self, Card::Strike | Card::Haymaker | Card::Ward)
-    }
-
-    /// Whether playing it names a stack item.
-    pub(crate) fn needs_target(self) -> bool {
-        !self.is_payload()
     }
 }
 
@@ -542,106 +460,5 @@ pub(crate) fn preview(duel: &Duel) -> Preview {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn duel_with(stack: &[(Card, Side, Option<u32>)]) -> Duel {
-        let mut duel = deal(&mut Rng::from_seed(3));
-        duel.stack = stack
-            .iter()
-            .enumerate()
-            .map(|(at, &(card, controller, target))| Item {
-                id: ItemId(at as u32 + 1),
-                card,
-                controller,
-                target: target.map(ItemId),
-                copy: false,
-            })
-            .collect();
-        duel.next_id = stack.len() as u32 + 1;
-        duel
-    }
-
-    #[test]
-    fn the_same_seed_deals_the_same_hands() {
-        assert_eq!(deal(&mut Rng::from_seed(9)), deal(&mut Rng::from_seed(9)));
-    }
-
-    #[test]
-    fn a_ward_resolving_after_the_hit_saves_nothing() {
-        let mut duel = duel_with(&[
-            (Card::Ward, Side::You, None),
-            (Card::Strike, Side::Rival, None),
-        ]);
-        let ahead = preview(&duel);
-        while resolve_top(&mut duel).is_some() {}
-        assert_eq!(duel.you.life, 10);
-        assert_eq!(ahead.you_life, 10);
-    }
-
-    #[test]
-    fn a_turned_haymaker_hits_its_caster() {
-        let mut duel = duel_with(&[
-            (Card::Haymaker, Side::Rival, None),
-            (Card::Turn, Side::You, Some(1)),
-        ]);
-        while resolve_top(&mut duel).is_some() {}
-        assert_eq!((duel.you.life, duel.rival.life), (12, 7));
-    }
-
-    #[test]
-    fn a_manipulation_whose_target_left_the_stack_fizzles() {
-        let mut duel = duel_with(&[
-            (Card::Strike, Side::Rival, None),
-            (Card::Bury, Side::You, Some(1)),
-            (Card::Cancel, Side::Rival, Some(1)),
-        ]);
-        let _ = resolve_top(&mut duel);
-        assert_eq!(
-            resolve_top(&mut duel).map(|step| step.effect),
-            Some(Effect::Fizzled)
-        );
-    }
-
-    #[test]
-    fn echo_puts_a_copy_for_its_caster_on_top() {
-        let mut duel = duel_with(&[
-            (Card::Strike, Side::Rival, None),
-            (Card::Echo, Side::You, Some(1)),
-        ]);
-        let _ = resolve_top(&mut duel);
-        let top = duel.stack.last().copied();
-        assert_eq!(
-            top.map(|item| (item.card, item.controller, item.copy)),
-            Some((Card::Strike, Side::You, true))
-        );
-    }
-
-    #[test]
-    fn bury_cannot_target_the_bottom_item_and_turn_cannot_target_your_own() {
-        let duel = duel_with(&[
-            (Card::Strike, Side::You, None),
-            (Card::Haymaker, Side::Rival, None),
-        ]);
-        assert_eq!(legal_targets(&duel, Side::You, Card::Bury), vec![ItemId(2)]);
-        assert_eq!(legal_targets(&duel, Side::You, Card::Turn), vec![ItemId(2)]);
-        assert_eq!(
-            legal_targets(&duel, Side::You, Card::Cancel),
-            vec![ItemId(1), ItemId(2)]
-        );
-    }
-
-    #[test]
-    fn two_passes_resolve_the_top_and_return_priority_to_the_leader() {
-        let mut duel = duel_with(&[(Card::Strike, Side::Rival, None)]);
-        duel.leader = Side::Rival;
-        duel.priority = Side::You;
-        assert_eq!(pass(&mut duel, Side::You), Ok(()));
-        assert_eq!(pass(&mut duel, Side::Rival), Ok(()));
-        assert!(duel.stack.is_empty());
-        assert_eq!(
-            (duel.you.life, duel.priority, duel.passed),
-            (10, Side::Rival, false)
-        );
-    }
-}
+#[path = "rules_tests.rs"]
+mod tests;
