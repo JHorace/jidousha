@@ -2,11 +2,11 @@
 
 task: keifu-fixes-r2
 variant: V1
-stage: implement
-tick: live
+stage: done
+tick: released
 resumes: 0
 gates-green-at: d75e306
-updated: 2026-10-07 22:48 PDT
+updated: 2026-10-07 22:49 PDT
 
 ## Done so far
 - claimed; DESIGN.md written (inline V1)
@@ -16,9 +16,10 @@ updated: 2026-10-07 22:48 PDT
 - mutation: r2 19/19, filtered round 175/176 (K8 known equivalent); screens recaptured (495653b)
 - full gate green at d75e306: doctor ENV_OK, tools/test pass 1494/0/0, check-claude-md ok, yakin check ok, build-web + serve-web --check keifu PASS
 - w6 U1/R9/R10 re-cut at resolve::risen_trouble/eased_trouble (22454f1)
+- PR opened: https://github.com/JHorace/jidousha/pull/146
 
 ## Exact next step
-Open the PR (WORKER.md §4), then set stage: done, tick: released.
+None: PR https://github.com/JHorace/jidousha/pull/146 is open; the owner decides between it and #126.
 
 ## Deviations
 - The port has no tutorial screen (lineage's guide never ported): rewrote the shown help/dice/stakes strings instead (G-070).
