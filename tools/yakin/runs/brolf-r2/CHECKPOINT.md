@@ -2,11 +2,11 @@
 
 task: brolf-r2
 variant: V2
-stage: implement
-tick: live
+stage: done
+tick: released
 resumes: 0
 gates-green-at: 5bd8da0
-updated: 2026-10-07 20:45 PDT
+updated: 2026-10-07 20:55 PDT
 
 ## Done so far
 - claimed the branch (design stage)
@@ -16,8 +16,10 @@ updated: 2026-10-07 20:45 PDT
 
 - mutation round r1: 19 of 19 noticed (3 escapes closed with gates); FINDINGS G-070..G-075; build-web + serve-web --check pass
 
+- full gate green at 5bd8da0; PR opened: https://github.com/JHorace/jidousha/pull/133
+
 ## Exact next step
-Full gate: `python3 tools/doctor`, `python3 tools/test` in the background (report target/verify/report.json), `python3 tools/check-claude-md`, `python3 tools/yakin/yakin check`; then open the PR (WORKER.md §4) naming #128 as baseline.
+None: the task is done; the PR awaits review.
 
 ## Deviations
 - end_match: Survived needs every rival Eliminated (design crowned a survivor whose rivals had extracted; Idle then won by doing nothing)
