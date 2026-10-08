@@ -88,7 +88,11 @@ file already touches, by `docs/api/` item; the variant adds no engine use of its
   outsider in seat order below the threshold), then `WillWedIn { outsider }` when exactly
   one is an outsider at or above it, else WILL_WED. `winter::court` carries out
   `WillWedIn` as a wedding (§11.3 step 4) followed by `family::join` and the dowry; the
-  hearth's garden note and the garden help quote the same `MarryIn` · `src/plans.rs`,
+  hearth's garden note and the garden help quote the same `MarryIn`; `Unproven` writes
+  `lines.winter.unproven` and `NeitherFamily` `lines.winter.neither_family` in place of
+  `lines.winter.courting_failed`, and the COURT moment is still offered to each adult
+  occupant (§11.3 step 4); `Courtship::note` renders UNPROVEN with the renown and the
+  threshold and WILL_WED_IN with the family spouse's house name · `src/plans.rs`,
   `src/winter.rs`, `src/hearth_view.rs`, `src/hearth_help.rs`, `src/words.rs`,
   `spec/content/ui-text.json`, `spec/content/lines.json` · touches nothing new.
 - **family renown** — mainline `reward::reward` credits the house `renown + carriers` on
@@ -100,7 +104,9 @@ file already touches, by `docs/api/` item; the variant adds no engine use of its
 - **heirs** — mainline `heirs::heirs` lists every living hero but the dead; the variant
   lists living *family* only, so an outsider is never offered and an outsider dead has an
   empty list (their heirloom is buried, their undone dream raised as a ghost, the page
-  decided on making — `death_page::death_page` sets `leaves = false` for an outsider).
+  decided on making — `death_page::death_page` sets `leaves = false` for an outsider and
+  applies the choice of no one there, through the same code `heirs::choose` runs for
+  "No one", so the burial and the ghost read as they do on a chosen page).
   `nearest_kin` (crowning) reads the same list · `src/heirs.rs`, `src/death_page.rs`.
 - **marks** — `Mark { title: String, place: Place, year: i32, by: HeroId, weight: i32 }`;
   `Hero.marks: Vec<Mark>`; `house_marks(house) -> Vec<(HeroId, &Mark)>` = marks carried by
@@ -200,8 +206,8 @@ mainline's `w5::recorded` seed set; staging reuses mainline's helpers by name.
   is exactly `[(garrick, Mark { title: "Grave goods", place: Barrow, year: 1, by:
   garrick, weight: 2 })]`, house renown 13, Garrick's renown 4, the page's lines contain
   the `lines.oath.failed` literal; on a fresh session the same staging with dice `[6, 6]`
-  (margin 7, TRIUMPH) → no mark, house renown 19 (15 + 2 reward + 2 oath), Garrick 10
-  (6 + 2 + 2), the `lines.oath.kept` literal · covers Done-when: "a check for each
+  (margin 7, TRIUMPH) → no mark, house renown 20 (15 + 3 reward, the triumph's +1
+  included, + 2 oath), Garrick 11 (6 + 3 + 2), the `lines.oath.kept` literal · covers Done-when: "a check for each
   decision row" (row 1: the mark consequence in the transcript before the commit, the
   failed quest on a fixed seed, the house carrying exactly that mark).
 - **xi::check_oath_eligibility** — input: staged boards · asserts: the Door's lock and a
