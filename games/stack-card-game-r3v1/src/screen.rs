@@ -423,10 +423,12 @@ pub(crate) fn aim_targets(table: &Table) -> Vec<usize> {
     let Some(card) = table.choosing.and_then(|index| duel.you.hand.get(index)) else {
         return Vec::new();
     };
-    legal_targets(duel, Side::You, *card)
+    let mut slots: Vec<usize> = legal_targets(duel, Side::You, *card)
         .into_iter()
         .filter_map(|id| slot_of(duel, id))
-        .collect()
+        .collect();
+    slots.sort_unstable();
+    slots
 }
 
 /// Every box under the text: panels, stack rows, cards, the pass button.
