@@ -307,3 +307,33 @@ pub fn night(checks: &mut Checks) -> String {
         game.money
     )
 }
+
+/// The spends cost what the ledger says and buy what it says: a takedown
+/// and a temp cook take $35 between them, and the temp cook makes the
+/// kitchen 5 a round.
+pub fn spends_paid(checks: &mut Checks) -> String {
+    let mut game = Game::new(5);
+    stage_nemesis(&mut game, Theme::Wait, 70, 0);
+    let mut sim = staged(game);
+    let mut typist = Typist::default();
+    type_command(&mut sim, &mut typist, Command::Digit(1));
+    type_command(&mut sim, &mut typist, Command::Temp);
+    let before = sim.world().resource::<Game>().money;
+    let text = screen_text(sim.world().resource::<Game>());
+    type_command(&mut sim, &mut typist, Command::Go);
+    let game = sim.world().resource::<Game>();
+    let (capacity, _) = game.kitchen();
+    checks.require(
+        text.contains("spends $35") && game.money == before - 35 && capacity == 5,
+        "the night's spends did not cost or buy what the ledger said",
+        format!(
+            "ledger said spends $35: {}; money {before} -> {} (want -35); kitchen {capacity} (want 5)",
+            text.contains("spends $35"),
+            game.money
+        ),
+    );
+    format!(
+        "takedown + temp: money {before} -> {}, kitchen {capacity}",
+        game.money
+    )
+}

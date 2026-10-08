@@ -296,3 +296,60 @@ pub fn forecast(game: &Game, spends: &Spends) -> Vec<Forecast> {
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::content::Theme;
+    use crate::sim::Nemesis;
+
+    fn with_nemeses(followers: &[i32]) -> Game {
+        let mut game = Game::new(1);
+        for &count in followers {
+            game.nemeses.push(Nemesis {
+                title: "Mustard Monster".to_owned(),
+                theme: Theme::Condiment,
+                severity: 4,
+                followers: count,
+                tally: 0,
+                born: (0, 0),
+                defeated: None,
+            });
+        }
+        game
+    }
+
+    #[test]
+    fn tiers_step_at_ten_fifty_and_a_hundred_followers() {
+        assert_eq!(
+            [tier(9), tier(10), tier(49), tier(50), tier(99), tier(100)],
+            [0, 1, 1, 2, 2, 3]
+        );
+    }
+
+    #[test]
+    fn a_skipped_level_three_order_spawns_and_a_short_one_does_not() {
+        let game = Game::new(1);
+        let order = Order {
+            who: Who::Diner(0),
+            demands: [3, 0, 0, 0],
+            serve: Serve::Skip,
+        };
+        let skipped = outcome(&game, &order, Serve::Skip);
+        assert_eq!(skipped.failure, Some((Theme::Condiment, 4)));
+        assert_eq!(skipped.consequence, Consequence::Spawn);
+        let short = outcome(&game, &order, Serve::Standard);
+        assert_eq!(short.failure, Some((Theme::Condiment, 1)));
+        assert_eq!(short.consequence, Consequence::None);
+    }
+
+    #[test]
+    fn followers_never_fill_more_than_eight_of_a_day() {
+        let game = with_nemeses(&[150, 150, 150]);
+        let total: usize = forecast(&game, &Spends::default())
+            .iter()
+            .map(|f| f.count)
+            .sum();
+        assert_eq!(total, 8);
+    }
+}

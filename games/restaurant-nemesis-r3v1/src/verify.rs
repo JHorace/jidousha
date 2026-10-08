@@ -316,6 +316,7 @@ pub fn run() -> ExitCode {
     let following = scenes::following(&mut checks);
     let spend = scenes::spend(&mut checks);
     let night = scenes::night(&mut checks);
+    let paid = scenes::spends_paid(&mut checks);
 
     let mut shots: Vec<(FrameRecord, Panel<Art>)> = good.shots.clone();
     shots.extend(idle.shots.iter().cloned());
@@ -365,6 +366,7 @@ pub fn run() -> ExitCode {
     println!("  row 2 following: {following}");
     println!("  row 3 spend: {spend}");
     println!("  overnight: {night}");
+    println!("  spends: {paid}");
     println!("  screens judged: {}", shots.len());
     println!("  closest quad to the edge: {clearance:.2} design units");
     println!("  capture: {captured}");
