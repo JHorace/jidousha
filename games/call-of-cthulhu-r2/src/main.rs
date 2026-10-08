@@ -21,6 +21,7 @@ mod decisions;
 mod lore;
 mod play;
 mod players;
+mod rule_checks;
 mod rules;
 mod screen_checks;
 mod screens;

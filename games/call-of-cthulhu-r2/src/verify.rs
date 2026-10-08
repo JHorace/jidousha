@@ -95,6 +95,7 @@ pub fn run() -> ExitCode {
     screen_checks::content_is_printable(&mut checks);
     screen_checks::staged(&mut checks, &mut margins);
     screen_checks::floor_bites(&mut checks);
+    crate::rule_checks::all(&mut checks);
 
     let captured = match (&call_photo, recorded.font) {
         (Some(photo), Some(font)) => {
