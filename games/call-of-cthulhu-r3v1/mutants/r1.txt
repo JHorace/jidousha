@@ -1,0 +1,105 @@
+#! call-of-cthulhu-r3v1, round 1: every rule, the two decision functions, the screens' facts, the taps.
+### C1 a lore answer shortens the call by one, not two
+@ src/rules.rs
+- Kind::Lore => (-2, 0),
++ Kind::Lore => (-1, 0),
+
+### C2 an insult does not anger
+@ src/rules.rs
+- Kind::Insult => (0, 1),
++ Kind::Insult => (0, 0),
+
+### C3 the anger surcharge reads the anger before the answer
+@ src/rules.rs
+- + ANGER_SURCHARGE * anger_after;
++ + ANGER_SURCHARGE * anger;
+
+### C4 wrath comes one point of anger late
+@ src/rules.rs
+- let wrath = anger_after >= id.being.spec().temper;
++ let wrath = anger_after > id.being.spec().temper;
+
+### C5 composure does not lower the drain
+@ src/rules.rs
+- (being.spec().drain - composure).max(1)
++ (being.spec().drain - composure * 0).max(1)
+
+### C6 a bargain keeps nobody silent
+@ src/rules.rs
+- *caller = silent;
++ *caller = kept_silent;
+
+### C7 the studied being does not open with what was studied
+@ src/rules.rs
+- questions.sort_by_key(|id| id.fact != fresh);
++ questions.sort_by_key(|id| id.fact == fresh);
+
+### C8 study teaches nothing
+@ src/rules.rs
+- next.known[being.index()] = (next.known[being.index()] + 1).min(3);
++ next.known[being.index()] = next.known[being.index()].min(3);
+
+### C9 training does nothing
+@ src/rules.rs
+- Action::Train => next.composure = (next.composure + 1).min(MAX_COMPOSURE),
++ Action::Train => next.composure = next.composure.min(MAX_COMPOSURE),
+
+### C10 every day draws the same night
+@ src/rules.rs
+- ^ u64::from(state.day).wrapping_mul(0xD1B5_4A32_D192_ED03),
++ ^ u64::from(state.day * 0).wrapping_mul(0xD1B5_4A32_D192_ED03),
+
+### C11 the hint shows outcomes only for answers whose lore is unknown
+@ src/screen.rs
+- if !run.state.knows(id) {
++ if run.state.knows(id) {
+
+### C12 the call screen shows no lore
+@ src/screen.rs
+- being.spec().facts[..known]
++ being.spec().facts[..0]
+
+### C13 the sanity readout never falls
+@ src/screen.rs
+- format!("sanity {}/{}", run.sanity, SANITY_START)
++ format!("sanity {}/{}", SANITY_START, SANITY_START)
+
+### C14 the morning states no option's effect
+@ src/screen.rs
+- let changes = effect_of(&run.state, &rules::apply(&run.state, action));
++ let changes = effect_of(&run.state, &run.state);
+
+### C15 the room is lit grey
+@ src/screen.rs
+- pub(crate) const NIGHT: Color = Color::rgb(0.03, 0.05, 0.06);
++ pub(crate) const NIGHT: Color = Color::rgb(0.3, 0.3, 0.3);
+
+### C16 the sanity readout hangs off the right edge
+@ src/screen.rs
+- Vec2::new(DESIGN.x - LEFT - small.width_of(&sanity), 18.0),
++ Vec2::new(DESIGN.x - LEFT, 18.0),
+
+### C17 a run is lost only below zero
+@ src/play.rs
+- self.screen = if self.sanity <= 0 {
++ self.screen = if self.sanity < 0 {
+
+### C18 a call ends a line early
+@ src/play.rs
+- } else if call.line <= 0 {
++ } else if call.line <= 1 {
+
+### C19 the run ends a day early
+@ src/play.rs
+- } else if self.state.day >= DAYS {
++ } else if self.state.day + 1 >= DAYS {
+
+### C20 a caller starts already angry
+@ src/play.rs
+- anger: 0,
++ anger: 1,
+
+### C21 a tap chooses the row below the one it lands on
+@ src/main.rs
+- .map(Command::Choose);
++ .map(|row| Command::Choose(row + 1));
