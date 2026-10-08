@@ -174,6 +174,9 @@ pub fn the_match(checks: &mut Checks, album: &mut Album) -> String {
     let mut driver = Driver::new(None, MATCH_SEED);
     let mut thinking_shot = false;
     let mut keys_pressed = 0;
+    // Every Rival item seen on the stack: the Rival's own system playing, which
+    // nothing else in the run drives (the sweep calls its rule directly).
+    let mut rival_items = std::collections::BTreeSet::new();
     while driver.ticks < MATCH_TICKS {
         let duel = driver.flow().duel.clone();
         if duel.phase != Phase::Live {
@@ -191,7 +194,22 @@ pub fn the_match(checks: &mut Checks, album: &mut Album) -> String {
             }
             driver.step();
         }
+        let stack = &driver.flow().duel.stack;
+        rival_items.extend(
+            stack
+                .iter()
+                .filter(|item| item.owner == Side::Rival)
+                .map(|item| item.id),
+        );
     }
+    checks.require(
+        rival_items.len() >= 5,
+        "the match: the Rival barely played through its own system",
+        format!(
+            "{} Rival items reached the stack in the keyboard match",
+            rival_items.len()
+        ),
+    );
     let ended = driver.flow().clone();
     driver.shoot(album, "the match: the result");
     let banner = banner_line(&ended.duel);
@@ -217,8 +235,10 @@ pub fn the_match(checks: &mut Checks, album: &mut Album) -> String {
         ),
     );
     format!(
-        "the match: seed {MATCH_SEED}, {} ticks, {keys_pressed} keys, turn {}, ended {:?}",
+        "the match: seed {MATCH_SEED}, {} ticks, {keys_pressed} keys, {} Rival plays seen, turn {}, \
+         ended {:?}",
         driver.ticks,
+        rival_items.len(),
         ended.duel.turn,
         banner.unwrap_or_default()
     )
