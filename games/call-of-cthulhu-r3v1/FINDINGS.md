@@ -91,6 +91,22 @@ lengthen the line, surcharge 4 -> 2, wrath 20 -> 10, drains 3/3/4 -> 2/2/3.
 Result over forty seeds: scholar 38, novice 11, mute 0. DESIGN.md records both
 sets of numbers.
 
+### G-074 — round 1 found three checks that read the game's own answer back (the game's own)
+
+Class: game decision · Session: call-of-cthulhu-r3v1 · Owner: this game's `src/verify/rows.rs`
+
+**Doing:** `tools/mutate call_of_cthulhu_r3v1 mutants/r1.txt` — 21 faults.
+
+**Happened:** 18 of 21 noticed. Escaped: C4 (wrath one anger late — no check
+drove a caller to its temper), C13 (the sanity readout frozen — row 1 compared
+the screen against `sanity_line`, the function under test; the testing doc's
+"a check that reads the game's own answer back" exactly), C17 (lost only
+below zero — no run is staged at exactly zero). **What I did:** row 1 now
+insults Cthulhu to wrath and requires the shipped costs `[6, 18]` and a wrath
+ending at anger 3; requires the literal `sanity 98/100` after the lore
+answer; `zero_is_lost` stages a call with exactly the lore answer's cost left.
+Rerun of the three: 3 of 3 noticed.
+
 ### docs/api: 3 findings above
 
 G-070 (misled), G-071 and G-072 (gaps). Everything else this game needed —
