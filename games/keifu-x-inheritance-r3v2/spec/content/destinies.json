@@ -1,0 +1,108 @@
+{
+  "_source": "lineage/destiny.jai:39-81",
+  "destinies": [
+    {
+      "id": "UNSPOKEN",
+      "speakable": false,
+      "prophecy": "Not yet spoken.",
+      "doom": "The Seer speaks at the coming of age.",
+      "gift": "",
+      "_source": "lineage/destiny.jai:40"
+    },
+    {
+      "id": "FIRE_WILL_END_YOU",
+      "speakable": true,
+      "prophecy": "Fire will be the end of you.",
+      "doom": "Doom: a failed Fire quest kills.",
+      "gift": "Gift: nothing else can. Not wounds, not age.",
+      "_source": "lineage/destiny.jai:43"
+    },
+    {
+      "id": "OUTLIVE_THOSE_YOU_LOVE",
+      "speakable": true,
+      "prophecy": "You will outlive those you love.",
+      "doom": "Doom: every grief strikes 2 dread deeper.",
+      "gift": "Gift: old age comes half as often.",
+      "_source": "lineage/destiny.jai:46",
+      "doom_template": "Doom: every grief strikes % dread deeper."
+    },
+    {
+      "id": "WEAR_A_CROWN",
+      "speakable": true,
+      "prophecy": "You will wear a crown.",
+      "doom": "Doom: a triumph at Court, at 8 renown, takes them.",
+      "gift": "Gift: a patron after. +1 on every quest.",
+      "_source": "lineage/destiny.jai:49",
+      "doom_template": "Doom: a triumph at Court, at % renown, takes them.",
+      "gift_template": "Gift: a patron after. +% on every quest."
+    },
+    {
+      "id": "OPEN_THE_SEALED_DOOR",
+      "speakable": false,
+      "prophecy": "You will open the Sealed Door.",
+      "doom": "Doom: if they die, it falls to their firstborn.",
+      "gift": "Gift: +5 at every lock of the Door.",
+      "_source": "lineage/destiny.jai:52",
+      "gift_template": "Gift: +% at every lock of the Door."
+    },
+    {
+      "id": "CHILD_WILL_SURPASS_YOU",
+      "speakable": true,
+      "prophecy": "Your child will surpass you.",
+      "doom": "Doom: once the firstborn is of age, they learn no more.",
+      "gift": "Gift: the firstborn is born with +2 in all.",
+      "_source": "lineage/destiny.jai:55",
+      "gift_template": "Gift: the firstborn is born with +% in all."
+    },
+    {
+      "id": "BREAK_AND_BE_MENDED",
+      "speakable": true,
+      "prophecy": "You will break and be mended.",
+      "doom": "Doom: the first disaster wounds, and brings 2 dread.",
+      "gift": "Gift: it cannot kill. +1 in all after.",
+      "_source": "lineage/destiny.jai:58",
+      "doom_template": "Doom: the first disaster wounds, and brings % dread.",
+      "gift_template": "Gift: it cannot kill. +% in all after."
+    },
+    {
+      "id": "DIE_IN_YOUR_BED",
+      "speakable": true,
+      "prophecy": "You will die in your bed.",
+      "doom": "Doom: old age comes twice as often.",
+      "gift": "Gift: no quest can kill. Not a disaster, not a wound.",
+      "_source": "lineage/destiny.jai:61"
+    },
+    {
+      "id": "CARRY_THE_HOUSE",
+      "speakable": true,
+      "prophecy": "You will carry the house.",
+      "doom": "Doom: when they die the house loses 4 renown.",
+      "gift": "Gift: +1 renown from every quest they win.",
+      "_source": "lineage/destiny.jai:64",
+      "doom_template": "Doom: when they die the house loses % renown.",
+      "gift_template": "Gift: +% renown from every quest they win."
+    },
+    {
+      "id": "TEACH_A_GREATER",
+      "speakable": true,
+      "prophecy": "You will teach a greater than yourself.",
+      "doom": "Doom: they learn nothing more themselves.",
+      "gift": "Gift: those they teach learn 1 more, and may pass them.",
+      "_source": "lineage/destiny.jai:67",
+      "gift_template": "Gift: those they teach learn % more, and may pass them."
+    }
+  ],
+  "speakable_order": [
+    "FIRE_WILL_END_YOU",
+    "OUTLIVE_THOSE_YOU_LOVE",
+    "WEAR_A_CROWN",
+    "CHILD_WILL_SURPASS_YOU",
+    "BREAK_AND_BE_MENDED",
+    "DIE_IN_YOUR_BED",
+    "CARRY_THE_HOUSE",
+    "TEACH_A_GREATER"
+  ],
+  "blood_of_prophecy": "Blood of %: %",
+  "shielded_bed": "% should have died there. The Seer promised % a bed, so % did not.",
+  "shielded_fire": "% should have died there. It was not fire, so % did not."
+}
