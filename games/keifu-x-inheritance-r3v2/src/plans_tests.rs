@@ -533,3 +533,18 @@ fn the_unproven_note_says_the_outsiders_renown_and_the_houses_ask() {
     );
     assert_eq!(Courtship::MarriesIn.note(&content), "marries in");
 }
+
+#[test]
+fn an_outsider_at_the_long_table_tells_it_for_themselves_wherever_they_sit() {
+    let (_, mut heroes) = founded();
+    let (odo, garrick) = (id(&heroes, "Odo"), id(&heroes, "Garrick"));
+    heroes[odo].is_family = false;
+    assert_eq!(
+        tellers(&heroes, [Some(odo), Some(garrick)]),
+        [Some(Teller::Own), Some(Teller::House)]
+    );
+    assert_eq!(
+        tellers(&heroes, [Some(garrick), Some(odo)]),
+        [Some(Teller::House), Some(Teller::Own)]
+    );
+}

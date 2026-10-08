@@ -458,3 +458,39 @@ fn only_a_youth_takes_the_youth_lesson() {
     );
     assert_eq!(house.heroes[ysolde].aptitudes[0], 2);
 }
+
+#[test]
+fn a_quest_won_by_outsiders_alone_earns_the_house_nothing_and_them_their_renown() {
+    let (content, mut house) = house();
+    let odo = id(&house.heroes, "Odo");
+    house.heroes[odo].is_family = false;
+    house.heroes[odo].destiny.kind = Destiny::DieInYourBed;
+    let renown = house.heroes[odo].renown;
+    house.board[0].quest.demand = 1;
+    seat(&mut house, 0, &[odo]);
+    let page = resolve_rolled(&content, &mut house, &mut Rng::from_seed(5), 0, [6, 6]);
+    assert!(page.outcome >= Outcome::Success, "{:?}", page.outcome);
+    // Variant, DESIGN.md S2: the house at its founding 15, untouched.
+    assert_eq!(house.renown, 15);
+    assert!(
+        page.lines.contains(
+            &"Odo came home with it, and the house gained nothing: no Thorne went.".to_owned()
+        ),
+        "{:?}",
+        page.lines
+    );
+    assert!(house.heroes[odo].renown > renown);
+}
+
+#[test]
+fn a_quest_won_with_a_family_member_beside_an_outsider_earns_the_house_its_renown() {
+    let (content, mut house) = house();
+    let (odo, garrick) = (id(&house.heroes, "Odo"), id(&house.heroes, "Garrick"));
+    house.heroes[odo].is_family = false;
+    house.heroes[odo].destiny.kind = Destiny::DieInYourBed;
+    house.board[0].quest.demand = 1;
+    seat(&mut house, 0, &[odo, garrick]);
+    let page = resolve_rolled(&content, &mut house, &mut Rng::from_seed(5), 0, [6, 6]);
+    assert!(page.outcome >= Outcome::Success, "{:?}", page.outcome);
+    assert!(house.renown > 15, "{}", house.renown);
+}
