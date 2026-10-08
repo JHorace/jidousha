@@ -112,6 +112,10 @@ pub fn capture_all(checks: &mut Checks) -> Vec<String> {
         (&["w10:played"][..], "xi-w10-played.png"),
         (&["w10:played-family"][..], "xi-w10-played-family.png"),
         (&["w10:reset"][..], "xi-w10-reset.png"),
+        // The variant's three surfaces (DESIGN.md S8).
+        (&["w4-sheet"][..], "xi-marks-sheet.png"),
+        (&["xi-garden"][..], "xi-garden-unproven.png"),
+        (&["xi-death"][..], "xi-death-marks.png"),
     ]
     .into_iter()
     .enumerate()
@@ -155,6 +159,16 @@ pub fn capture_all(checks: &mut Checks) -> Vec<String> {
                 }
                 point_at(&mut sim, Target::LetWinterPass, true);
                 crate::w8::go_to_the_choice(&mut sim);
+                continue;
+            } else if *name == "xi-garden" {
+                let Ok(content) = crate::content::load() else {
+                    crate::checks::fail("the content did not load", "capturing the garden");
+                };
+                let _ = crate::xi_outsiders::stage_garden(&mut sim, &content, 1);
+                continue;
+            } else if *name == "xi-death" {
+                let _ = crate::xi_inheritance::stage_marked_death(&mut sim, 3, false);
+                crate::xi_inheritance::turn_to_the_marks(&mut sim);
                 continue;
             } else if *name == "w8-turned" {
                 crate::w8::stage_turned_year(&mut sim);

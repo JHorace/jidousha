@@ -1323,3 +1323,62 @@ reset) earlier sessions had read and used. The documents were asked nothing new.
   `tools/mutate keifu mutants/*.txt` runs the same lists, unchanged. Both scored `w9.txt` on the same tree, 120 of
   120 with every per-fault verdict and both columns identical, and `--fast` agreed on every verdict. On warm
   worktrees the full pair took 47m45s and `--fast` 9m22s on this machine's four cores; the old harness took 54m41s.
+
+---
+
+## Keifu X Inheritance (variant, yakin task keifu-x-inheritance-r3v2)
+
+Entries below are this fork's; everything above was copied from mainline with the
+fork and is mainline's history. Numbers continue past G-074, which another yakin
+run of the same night took on its own branch (G-068's fork, still unfixed).
+
+**Reading discipline.** Read: `CLAUDE.md`, the `make-game` skill, the task specs,
+`tools/yakin/runs/keifu-x-inheritance-r3v2/DESIGN.md` whole, and the variant's own
+copy of mainline's source where DESIGN.md names it (a module session's readable
+set: the game is ours to read). `docs/api/` was read earlier the same night for
+another game; nothing new was asked of it. **Engine source, `docs/internal/`,
+`docs/adr/`: not opened.** No other round's keifu-x-inheritance output opened.
+
+### G-075 — the design said no other mainline check moves; seven did (design stage)
+
+Class: design misled · Session: keifu-x-inheritance-r3v2 implement · Owner: the design stage (`tools/yakin/runs/keifu-x-inheritance-r3v2/DESIGN.md` S8, Decisions 14)
+
+**Doing:** building S1-S7, expecting only `w8::stirred` and `w7_battery`'s verdict
+match to need rewriting.
+
+**Expected:** "No other mainline check moves: founders are all family, so W0-W10's
+oracles read as before."
+
+**Happened:** seven more moved, each because a variant rule reached a copied
+oracle the design did not trace: three `births_tests` (the lean's +1 lands in
+the shares they state), `quest_sheet`'s Grave goods line-by-line (the stake is a
+new line under Garrick's call), `resolve_tests`' disaster (Ysolde alone on the
+Barrow is on a personal quest, so the house loses 2 more), `floors.rs`'s W4
+mid-drag (Brannoc's held sheet grows a lean line past the dock, and the wheel
+cannot page a held hand), and `floors_w8`'s stirred page (eight buttons needs a
+family wanderer). **What I did:** on the design's authority I built first and
+met them at the first test run; each was rewritten to the variant's rule (the
+unit tests subtract the lean before mainline's ranges, add the stake, add the
+mark's cost; the floors use mainline's own `look_held`, and make the wanderer
+family to keep judging eight buttons). About twenty minutes. Every one is a
+Deviations line in the PR.
+
+**Fix:** a design that claims "no other check moves" can grep for every oracle
+touching the state it changes (`aptitudes`, a sheet's line list, house renown on
+a Barrow failure) before saying so.
+
+### G-076 — `birthright`'s fallback needs the child's own aptitudes (design stage)
+
+Class: design gap · Session: keifu-x-inheritance-r3v2 implement · Owner: DESIGN.md S4
+
+**Doing:** writing `inheritance::birthright(heroes, first, second, coin)` as named.
+
+**Happened:** its last fallback is "the child's best aptitude", and the child is
+not in `heroes` yet when the lean is rolled (the lean's bonus is part of the
+aptitudes being built). **What I did:** added an `own_best: Aptitude` parameter,
+computed by `born` from the shares. Never reached in play.
+
+### docs/api: 0 findings
+
+The variant is rules over the game's own state and lines on panels mainline
+already draws; it asked the engine documents nothing mainline had not.

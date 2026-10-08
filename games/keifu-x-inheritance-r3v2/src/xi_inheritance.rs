@@ -35,8 +35,16 @@ const MAREN_LEAN: &str = "Leans to Wits.";
 /// and his dream first, so only the marks can hold the page.
 fn death_page(seed: u64, marks: i32, bare: bool) -> (HeadlessSim, HeroId) {
     let mut sim = session(seed);
-    stage_garricks_winter(&mut sim);
-    let garrick = hero_named(&sim, "Garrick");
+    let garrick = stage_marked_death(&mut sim, marks, bare);
+    (sim, garrick)
+}
+
+/// Garrick aged to his death at the winter with `marks` on him (and, if `bare`,
+/// neither heirloom nor dream), the winter let pass, at the heir choice. Returns
+/// Garrick.
+pub fn stage_marked_death(sim: &mut HeadlessSim, marks: i32, bare: bool) -> HeroId {
+    stage_garricks_winter(sim);
+    let garrick = hero_named(sim, "Garrick");
     {
         let house = sim.world_mut().resource_mut::<House>();
         house.heroes[garrick].marks = marks;
@@ -45,9 +53,33 @@ fn death_page(seed: u64, marks: i32, bare: bool) -> (HeadlessSim, HeroId) {
             house.heroes[garrick].dream = None;
         }
     }
-    point_at(&mut sim, Target::LetWinterPass, true);
-    go_to_the_choice(&mut sim);
-    (sim, garrick)
+    point_at(sim, Target::LetWinterPass, true);
+    go_to_the_choice(sim);
+    garrick
+}
+
+/// On the open turning, the leaf whose panel tells the dead's black marks — for the
+/// picture of the line the heir choice turns on.
+pub fn turn_to_the_marks(sim: &mut HeadlessSim) {
+    let count = {
+        let house = sim.world().resource::<House>();
+        house.passage.as_ref().map_or(0, |passage| {
+            crate::turning_view::leaves(passage, &house.heroes).len()
+        })
+    };
+    for leaf in 0..count {
+        let mut ui = *sim.world().resource::<crate::screen::UiState>();
+        ui.leaf = leaf;
+        crate::verify::set_ui(sim, ui);
+        let shown = crate::scripted::lines_in(&page_of(sim), crate::telling_view::PANEL);
+        if shown.iter().any(|line| line.contains("black marks")) {
+            return;
+        }
+    }
+    fail(
+        "no leaf of the turning tells the black marks",
+        "staged with three",
+    );
 }
 
 /// Every line of turning page 1 (the death page), every leaf.

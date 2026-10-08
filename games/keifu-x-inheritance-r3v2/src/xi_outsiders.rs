@@ -36,19 +36,18 @@ struct Garden {
     wed: bool,
 }
 
-/// Year 1 at home into the winter; a wanderer of `renown` arrives and is seated in
-/// the garden beside Ysolde; Garrick is aged to his death; the winter is let pass.
-fn garden(seed: u64, renown: i32) -> Garden {
-    let content = match crate::content::load() {
-        Ok(content) => content,
-        Err(error) => fail("the content did not load", &error.to_string()),
-    };
-    let mut sim = session(seed);
-    stay_home_into_winter(&mut sim);
+/// Year 1 at home into the winter; a wanderer of `renown`, aged 30, arrives and is
+/// seated in the garden beside Ysolde by drag. Returns the wanderer.
+pub fn stage_garden(
+    sim: &mut HeadlessSim,
+    content: &crate::content::Content,
+    renown: i32,
+) -> usize {
+    stay_home_into_winter(sim);
     let mut rng = sim.world().resource::<Rng>().clone();
     let wanderer = {
         let house = sim.world_mut().resource_mut::<House>();
-        let _ = crate::wanderer::arrive(&content, house, &mut rng);
+        let _ = crate::wanderer::arrive(content, house, &mut rng);
         let wanderer = house.heroes.len() - 1;
         house.heroes[wanderer].age = 30;
         house.heroes[wanderer].renown = renown;
@@ -59,8 +58,23 @@ fn garden(seed: u64, renown: i32) -> Garden {
     let name = sim.world().resource::<House>().heroes[wanderer]
         .name
         .clone();
-    seat_at(&mut sim, &name, Seat::Garden(0));
-    seat_at(&mut sim, "Ysolde", Seat::Garden(1));
+    seat_at(sim, &name, Seat::Garden(0));
+    seat_at(sim, "Ysolde", Seat::Garden(1));
+    wanderer
+}
+
+/// Year 1 at home into the winter; a wanderer of `renown` arrives and is seated in
+/// the garden beside Ysolde; Garrick is aged to his death; the winter is let pass.
+fn garden(seed: u64, renown: i32) -> Garden {
+    let content = match crate::content::load() {
+        Ok(content) => content,
+        Err(error) => fail("the content did not load", &error.to_string()),
+    };
+    let mut sim = session(seed);
+    let wanderer = stage_garden(&mut sim, &content, renown);
+    let name = sim.world().resource::<House>().heroes[wanderer]
+        .name
+        .clone();
     let notes = group_lines(&sim, Group::Garden);
     point_at(&mut sim, Target::Hero(wanderer), false);
     let pages = dock_pages(&mut sim, &mut FrameRecorder::new(WINDOW));
