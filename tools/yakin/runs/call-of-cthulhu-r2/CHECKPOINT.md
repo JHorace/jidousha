@@ -5,8 +5,8 @@ variant: V1
 stage: implement
 tick: live
 resumes: 0
-gates-green-at: none
-updated: 2026-10-07 20:49 PDT
+gates-green-at: 1219f19
+updated: 2026-10-07 20:59 PDT
 
 ## Done so far
 - claimed
@@ -15,9 +15,11 @@ updated: 2026-10-07 20:49 PDT
 - mutants/r2.txt (27 faults), FINDINGS.md G-070..G-074
 - mutation round: 19/27 first pass; rule_checks.rs closes the 8 escapes; 27/27
 - tools/verify pass; build-web + serve-web --check pass
+- full gate green at 1219f19: doctor ENV_OK, tools/test pass 1487/0/0, fast gate clean
 
 ## Exact next step
-Full gate (doctor, tools/test in background, check-claude-md, yakin check), set gates-green-at, open the PR per WORKER.md §4.
+Open the PR per WORKER.md §4 (none exists yet), then set stage: done, tick: released.
 
 ## Deviations
-- none
+- run DESIGN.md's file list grew: play.rs, conductor.rs, decisions.rs, screen_checks.rs, rule_checks.rs (verify split under the ~500-line rule)
+- tuning moved from the first design note: wrong answers +1 (not -1), composure max 1 (not 2), cults unheld at temper 2 (G-073, G-074)
