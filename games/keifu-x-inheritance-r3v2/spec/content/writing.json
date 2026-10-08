@@ -1,0 +1,149 @@
+{
+  "_source": "lineage/writing.jai:1-163",
+  "pools": {
+    "WOUNDS": {
+      "lines": [
+        "%1 broke a wrist, and will not hold a blade for a season.",
+        "%1 cracked three ribs, and breathes carefully now.",
+        "%1 took a fever there that would not lift.",
+        "%1 broke a leg, and has to be carried.",
+        "%1 took a blow that swelled one eye shut.",
+        "%1 wrenched a knee, and walks with a stick.",
+        "%1 took a cough from deep in the chest.",
+        "%1 took a cut across the hand, and it will not close."
+      ],
+      "args": [
+        "hero first name"
+      ]
+    },
+    "DREADS": {
+      "lines": [
+        "%1 will not talk about %2.",
+        "%1 wakes at night from dreams of %2.",
+        "%1 faced %2, and it cost something.",
+        "%1 went quiet at the first sight of %2, and has stayed quiet.",
+        "%1 sleeps with a lamp lit now. It was %2."
+      ],
+      "args": [
+        "hero first name",
+        "tag noun of the fear"
+      ]
+    },
+    "QUEST_DEATHS": {
+      "lines": [
+        "%1 did not come home from %2.",
+        "%1 lies at %2 now.",
+        "%2 kept %1.",
+        "They carried %1 home from %2 under a cloak."
+      ],
+      "args": [
+        "hero full name",
+        "place name"
+      ]
+    },
+    "LESSONS": {
+      "lines": [
+        "%1 learned from it.",
+        "%1 came back knowing more than went out.",
+        "%1 watched the others closely, and it shows.",
+        "%1 saw how it was done, and will do it again."
+      ],
+      "args": [
+        "hero first name"
+      ]
+    },
+    "SLEEP_DEATHS": {
+      "lines": [
+        "died in the night, in the first hard frost",
+        "did not come down to breakfast one morning in midwinter",
+        "sat down by the fire after supper and did not get up again",
+        "died at midwinter, with the house asleep",
+        "went out to look at the snow, came in, and died before the fire was lit",
+        "died in bed at the turn of the year, with the window open",
+        "fell asleep over a book in the last week of winter",
+        "died on the longest night, and was found smiling"
+      ],
+      "args": [],
+      "_note": "Used verbatim as a fate telling (a predicate phrase, no subject)."
+    },
+    "BIRTHS": {
+      "lines": [
+        "A child was born to %1 and %2 in the last week of winter.",
+        "%1 and %2 have a child, born on a night of heavy snow.",
+        "The midwife was sent for at dusk. By morning %1 and %2 had a child.",
+        "A child for %1 and %2, born at the thaw."
+      ],
+      "args": [
+        "first parent first name",
+        "second parent first name"
+      ]
+    },
+    "ARRIVALS": {
+      "lines": [
+        "%1 came up the road with the first thaw and asked for a place at the fire.",
+        "%1 had heard of the house three valleys away, and walked.",
+        "%1 arrived with one bag and a letter nobody could read, and was let in.",
+        "%1 came to the door in the rain and has not been asked to leave."
+      ],
+      "args": [
+        "wanderer full name"
+      ]
+    },
+    "WEDDINGS": {
+      "lines": [
+        "%1 and %2 were wed at midwinter. The whole house stood witness.",
+        "%1 and %2 were wed by the hearth, with snow at the windows.",
+        "%1 and %2 walked in the garden until it was decided. They are wed."
+      ],
+      "args": [
+        "first garden seat first name",
+        "second garden seat first name"
+      ]
+    },
+    "TALES_TOLD": {
+      "lines": [
+        "%1 told the tale at the long table. People will repeat it.",
+        "%1 told it plainly, and the hall was silent to the end.",
+        "%1 told the tale three nights running, and it grew a little each night."
+      ],
+      "args": [
+        "teller first name"
+      ]
+    },
+    "RESTS": {
+      "lines": [
+        "%1 rested by the fire.",
+        "%1 slept late and mended.",
+        "%1 kept to the hearth all winter."
+      ],
+      "args": [
+        "hero first name"
+      ]
+    },
+    "COURAGES": {
+      "lines": [
+        "%1 stood in front of %2 and did not run",
+        "%1 looked at %2 for a long moment, and then went on",
+        "%1 walked into %2 with both hands shaking, and walked out again",
+        "%1 went first, into %2, without being asked"
+      ],
+      "args": [
+        "hero first name",
+        "tag noun of the fear"
+      ],
+      "_note": "A sentence fragment without a full stop; see lines.json fear.courage."
+    },
+    "FRIENDSHIPS": {
+      "lines": [
+        "%1 and %2 talked the whole road home. They are friends.",
+        "%1 and %2 have been through two good days together now. They are friends.",
+        "%1 carried the pack of %2 the last ten miles, and was let. They are friends.",
+        "%1 and %2 finish each other's stories already. They are friends."
+      ],
+      "args": [
+        "first hero first name",
+        "second hero first name"
+      ]
+    }
+  }
+}

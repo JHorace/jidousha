@@ -1,0 +1,15 @@
+{
+  "_source": "lineage/ghost.jai",
+  "title": "Lay %'s ghost",
+  "aptitude": "SPIRIT",
+  "seats": 2,
+  "danger": 2,
+  "premise": "{name} died with a thing undone: {task}. {He} has not gone far.",
+  "endings": {
+    "TRIUMPH": "%1 found {name} on the road, walking the same mile over and over, and walked it with {him} to the end. {He} did not look back.",
+    "SUCCESS": "%1 said aloud what {name} had meant to do, in the place {he} had meant to do it. It was enough. {He} is at rest.",
+    "SETBACK": "%1 spoke to {name}, and {he} answered. It was not a kind answer.",
+    "DISASTER": "{name} did not know {he} was dead, and took the news badly. %1 should not have been the ones to bring it."
+  },
+  "tags": "the tags of the ghost place (lore.json places[].tags)"
+}

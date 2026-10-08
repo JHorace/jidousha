@@ -1,0 +1,861 @@
+{
+  "_source": "lineage/epitaph.jai",
+  "parts": [
+    "ORIGIN",
+    "ROADS",
+    "TRIUMPH",
+    "FEAR",
+    "DREAM",
+    "PROPHECY",
+    "LOVE",
+    "END",
+    "LEFT"
+  ],
+  "frames": [
+    [
+      "ORIGIN",
+      "ROADS",
+      "TRIUMPH",
+      "FEAR",
+      "DREAM",
+      "PROPHECY",
+      "LOVE",
+      "END",
+      "LEFT"
+    ],
+    [
+      "END",
+      "ORIGIN",
+      "PROPHECY",
+      "ROADS",
+      "TRIUMPH",
+      "DREAM",
+      "FEAR",
+      "LOVE",
+      "LEFT"
+    ],
+    [
+      "DREAM",
+      "ORIGIN",
+      "ROADS",
+      "FEAR",
+      "TRIUMPH",
+      "PROPHECY",
+      "LOVE",
+      "END",
+      "LEFT"
+    ]
+  ],
+  "priorities": [
+    "ORIGIN",
+    "END",
+    "DREAM",
+    "PROPHECY",
+    "LEFT",
+    "LOVE",
+    "TRIUMPH",
+    "FEAR",
+    "ROADS"
+  ],
+  "sentence_limit": 6,
+  "templates": {
+    "origin.arrived_1": {
+      "text": "% was not born here. % came in year %, at %, and stayed.",
+      "args": [
+        "He/She",
+        "He/She",
+        "arrival year",
+        "arrival age"
+      ],
+      "when": "ORIGIN, arrived as a wanderer, variant 1",
+      "source": "lineage/epitaph.jai:160"
+    },
+    "origin.arrived_0": {
+      "text": "% came up the road in year %, aged %, and was let in.",
+      "args": [
+        "He/She",
+        "arrival year",
+        "arrival age"
+      ],
+      "when": "ORIGIN, arrived, variant 0",
+      "source": "lineage/epitaph.jai:161"
+    },
+    "origin.born_1": {
+      "text": "% was born under this roof in year %, the child of %.",
+      "args": [
+        "He/She",
+        "born year",
+        "parent names"
+      ],
+      "when": "ORIGIN, born in play (born_year >= 1) with parents, variant 1",
+      "source": "lineage/epitaph.jai:169"
+    },
+    "origin.born_0": {
+      "text": "% was born in the house in year %, to %.",
+      "args": [
+        "He/She",
+        "born year",
+        "parent names"
+      ],
+      "when": "ORIGIN, born in play with parents, variant 0",
+      "source": "lineage/epitaph.jai:170"
+    },
+    "origin.child_of_old": {
+      "text": "% was the child of %, and was of the house before its years were counted.",
+      "args": [
+        "He/She",
+        "parent names"
+      ],
+      "when": "ORIGIN, has parents, born before year 1",
+      "source": "lineage/epitaph.jai:173"
+    },
+    "origin.founder_1": {
+      "text": "% was here when the counting of years began.",
+      "args": [
+        "He/She"
+      ],
+      "when": "ORIGIN, no parents, variant 1",
+      "source": "lineage/epitaph.jai:175"
+    },
+    "origin.founder_0": {
+      "text": "% was of the house before anyone counted its years.",
+      "args": [
+        "He/She"
+      ],
+      "when": "ORIGIN, no parents, variant 0",
+      "source": "lineage/epitaph.jai:176"
+    },
+    "roads.never_old_enough": {
+      "text": "% was never old enough for the roads.",
+      "args": [
+        "He/She"
+      ],
+      "when": "ROADS, never quested, dead child",
+      "source": "lineage/epitaph.jai:194"
+    },
+    "roads.kept_house_1": {
+      "text": "% kept the house, and never went out from it.",
+      "args": [
+        "He/She"
+      ],
+      "when": "ROADS, never quested, adult, variant 1",
+      "source": "lineage/epitaph.jai:195"
+    },
+    "roads.never_went_0": {
+      "text": "% never went out on the roads.",
+      "args": [
+        "He/She"
+      ],
+      "when": "ROADS, never quested, adult, variant 0",
+      "source": "lineage/epitaph.jai:196"
+    },
+    "roads.count_only": {
+      "text": "% went out % in all.",
+      "args": [
+        "He/She",
+        "count words for quests_faced"
+      ],
+      "when": "ROADS, quested but no FIRST_QUEST deed",
+      "source": "lineage/epitaph.jai:199"
+    },
+    "roads.once": {
+      "text": "% went out once, at %, to %.",
+      "args": [
+        "He/She",
+        "age at first quest",
+        "place name of first quest"
+      ],
+      "when": "ROADS, exactly one quest",
+      "source": "lineage/epitaph.jai:202"
+    },
+    "roads.many_1": {
+      "text": "% first road was to %, at %. % went out % in all.",
+      "args": [
+        "His/Her",
+        "first place name",
+        "first age",
+        "He/She",
+        "count words"
+      ],
+      "when": "ROADS, several, variant 1",
+      "source": "lineage/epitaph.jai:205"
+    },
+    "roads.many_0": {
+      "text": "% first went out at %, to %, and went out % in all.",
+      "args": [
+        "He/She",
+        "first age",
+        "first place name",
+        "count words"
+      ],
+      "when": "ROADS, several, variant 0",
+      "source": "lineage/epitaph.jai:208"
+    },
+    "roads.childhood_teachers": {
+      "text": "% taught % on the bench in the yard.",
+      "args": [
+        "names of MENTOR bonds (name list)",
+        "object pronoun"
+      ],
+      "when": "ROADS, never quested, living child with teachers",
+      "source": "lineage/epitaph.jai:218"
+    },
+    "triumph.spoken_of_1": {
+      "text": "% did something at % % that is still spoken of.",
+      "args": [
+        "He/She",
+        "place name",
+        "year telling"
+      ],
+      "when": "TRIUMPH, variant 1",
+      "source": "lineage/epitaph.jai:226"
+    },
+    "triumph.best_day_0": {
+      "text": "% best day was at %, %.",
+      "args": [
+        "His/Her",
+        "place name",
+        "year telling"
+      ],
+      "when": "TRIUMPH, variant 0",
+      "source": "lineage/epitaph.jai:228"
+    },
+    "fear.born_brave": {
+      "text": "% was born unafraid of %, which was a gift from those before %.",
+      "args": [
+        "He/She",
+        "tag noun",
+        "object pronoun"
+      ],
+      "when": "FEAR, born brave",
+      "source": "lineage/epitaph.jai:238"
+    },
+    "fear.conquered_1": {
+      "text": "% conquered % fear of % %.",
+      "args": [
+        "He/She",
+        "possessive",
+        "tag noun",
+        "year telling of conquest"
+      ],
+      "when": "FEAR, conquered, variant 1",
+      "source": "lineage/epitaph.jai:243"
+    },
+    "fear.conquered_0": {
+      "text": "% was afraid of % until %, and then % was not.",
+      "args": [
+        "He/She",
+        "tag noun",
+        "year telling without a leading \"in \"",
+        "subject pronoun"
+      ],
+      "when": "FEAR, conquered, variant 0",
+      "source": "lineage/epitaph.jai:244"
+    },
+    "fear.broken_by_grief": {
+      "text": "The year % died, grief broke %, and % would never face % again.",
+      "args": [
+        "first name of the one mourned",
+        "object pronoun",
+        "subject pronoun",
+        "tag noun"
+      ],
+      "when": "FEAR, broken by grief",
+      "source": "lineage/epitaph.jai:249"
+    },
+    "fear.broken_1": {
+      "text": "% % broke %, and % never faced % again.",
+      "args": [
+        "year telling, capitalized",
+        "tag noun",
+        "object pronoun",
+        "subject pronoun",
+        "tag noun"
+      ],
+      "when": "FEAR, broken, variant 1",
+      "source": "lineage/epitaph.jai:252"
+    },
+    "fear.broken_0": {
+      "text": "% went against % once too often. After % % would not.",
+      "args": [
+        "He/She",
+        "tag noun",
+        "year telling without a leading \"in \"",
+        "subject pronoun"
+      ],
+      "when": "FEAR, broken, variant 0",
+      "source": "lineage/epitaph.jai:253"
+    },
+    "fear.faced_1": {
+      "text": "% never stopped being afraid of %. % went % against it all the same.",
+      "args": [
+        "He/She",
+        "tag noun",
+        "He/She",
+        "count words of fears_faced"
+      ],
+      "when": "FEAR, faced it, variant 1",
+      "source": "lineage/epitaph.jai:257"
+    },
+    "fear.faced_0": {
+      "text": "% was afraid of % all % life, and went anyway.",
+      "args": [
+        "He/She",
+        "tag noun",
+        "possessive"
+      ],
+      "when": "FEAR, faced it, variant 0",
+      "source": "lineage/epitaph.jai:259"
+    },
+    "fear.child": {
+      "text": "Even small, % was afraid of %.",
+      "args": [
+        "subject pronoun",
+        "tag noun"
+      ],
+      "when": "FEAR, never faced, child",
+      "source": "lineage/epitaph.jai:262"
+    },
+    "fear.kept_from": {
+      "text": "% was afraid of %, and was kept from it.",
+      "args": [
+        "He/She",
+        "tag noun"
+      ],
+      "when": "FEAR, never faced, adult",
+      "source": "lineage/epitaph.jai:263"
+    },
+    "dream.inherited_suffix": {
+      "text": ", as % had before %",
+      "args": [
+        "dream owner first name",
+        "object pronoun"
+      ],
+      "when": "inserted after the dream title when the dream has an owner",
+      "source": "lineage/epitaph.jai:280"
+    },
+    "dream.fulfilled_1": {
+      "text": "% dream was %. % lived to see it done.",
+      "args": [
+        "His/Her",
+        "dream title (told)",
+        "He/She"
+      ],
+      "when": "DREAM, fulfilled, variant 1",
+      "source": "lineage/epitaph.jai:283"
+    },
+    "dream.fulfilled_0": {
+      "text": "% wanted one thing, %%, and did it.",
+      "args": [
+        "He/She",
+        "dream title (told)",
+        "inherited suffix or \"\""
+      ],
+      "when": "DREAM, fulfilled, variant 0",
+      "source": "lineage/epitaph.jai:284"
+    },
+    "dream.passed_1": {
+      "text": "% dream, %, was left to %.",
+      "args": [
+        "His/Her",
+        "dream title (told)",
+        "heir first name"
+      ],
+      "when": "DREAM, passed on, variant 1",
+      "source": "lineage/epitaph.jai:288"
+    },
+    "dream.passed_0": {
+      "text": "% wanted %%, and died before it was done. % carries it now.",
+      "args": [
+        "He/She",
+        "dream title (told)",
+        "inherited suffix or \"\"",
+        "heir first name"
+      ],
+      "when": "DREAM, passed on, variant 0",
+      "source": "lineage/epitaph.jai:289"
+    },
+    "dream.left": {
+      "text": "% wanted %%. It was left to no one, and it has not left the house.",
+      "args": [
+        "He/She",
+        "dream title (told)",
+        "inherited suffix or \"\""
+      ],
+      "when": "DREAM, left to no one (ghost still walking)",
+      "source": "lineage/epitaph.jai:293"
+    },
+    "dream.laid": {
+      "text": "% wanted %%. It was left to no one, and walked until year %, when the house laid it to rest.",
+      "args": [
+        "He/She",
+        "dream title (told)",
+        "inherited suffix or \"\"",
+        "year laid"
+      ],
+      "when": "DREAM, ghost laid",
+      "source": "lineage/epitaph.jai:297"
+    },
+    "dream.living": {
+      "text": "% wanted %%, and %.",
+      "args": [
+        "He/She",
+        "dream title (told)",
+        "inherited suffix or \"\"",
+        "progress telling (dreams.progress_tellings[min(current,2)])"
+      ],
+      "when": "DREAM, still living",
+      "source": "lineage/epitaph.jai:302"
+    },
+    "dream.crowned": {
+      "text": "% wanted %%, and left it undone for a crown.",
+      "args": [
+        "He/She",
+        "dream title (told)",
+        "inherited suffix or \"\""
+      ],
+      "when": "DREAM, departed for a crown",
+      "source": "lineage/epitaph.jai:306"
+    },
+    "dream.died": {
+      "text": "% wanted %%, and died before it was done.",
+      "args": [
+        "He/She",
+        "dream title (told)",
+        "inherited suffix or \"\""
+      ],
+      "when": "DREAM, otherwise",
+      "source": "lineage/epitaph.jai:309"
+    },
+    "prophecy.fire_came": {
+      "text": "The Seer said fire would be the end of %, and it was.",
+      "args": [
+        "object"
+      ],
+      "when": "PROPHECY",
+      "source": "lineage/epitaph.jai:342"
+    },
+    "prophecy.fire": {
+      "text": "The Seer said fire would be the end of %, and nothing else could touch %.",
+      "args": [
+        "object",
+        "object"
+      ],
+      "when": "PROPHECY",
+      "source": "lineage/epitaph.jai:343"
+    },
+    "prophecy.outlive": {
+      "text": "The Seer said % would outlive those % loved, and every grave the house dug weighed on %.",
+      "args": [
+        "subject",
+        "subject",
+        "object"
+      ],
+      "when": "PROPHECY",
+      "source": "lineage/epitaph.jai:346"
+    },
+    "prophecy.crown_came": {
+      "text": "The Seer said % would wear a crown, and % did.",
+      "args": [
+        "subject",
+        "subject"
+      ],
+      "when": "PROPHECY",
+      "source": "lineage/epitaph.jai:349"
+    },
+    "prophecy.crown": {
+      "text": "The Seer said % would wear a crown. It never came.",
+      "args": [
+        "subject"
+      ],
+      "when": "PROPHECY",
+      "source": "lineage/epitaph.jai:350"
+    },
+    "prophecy.door_blood_stood": {
+      "text": "The Door was promised to %, and % answered it as %'s blood.",
+      "args": [
+        "promised-to name",
+        "subject",
+        "promised-to name"
+      ],
+      "when": "PROPHECY",
+      "source": "lineage/epitaph.jai:355"
+    },
+    "prophecy.door_blood": {
+      "text": "The Door was promised to %, and fell to % as %'s blood.",
+      "args": [
+        "promised-to name",
+        "object",
+        "promised-to name"
+      ],
+      "when": "PROPHECY",
+      "source": "lineage/epitaph.jai:356"
+    },
+    "prophecy.door_stood": {
+      "text": "The Seer promised % the Door, and % kept the appointment.",
+      "args": [
+        "object",
+        "subject"
+      ],
+      "when": "PROPHECY",
+      "source": "lineage/epitaph.jai:358"
+    },
+    "prophecy.door": {
+      "text": "The Seer promised % the Door, and % did not live to reach it.",
+      "args": [
+        "object",
+        "subject"
+      ],
+      "when": "PROPHECY",
+      "source": "lineage/epitaph.jai:359"
+    },
+    "prophecy.surpass_came": {
+      "text": "The Seer said % child would surpass %, and % firstborn was born stronger than % had ever been.",
+      "args": [
+        "possessive",
+        "object",
+        "possessive",
+        "subject"
+      ],
+      "when": "PROPHECY",
+      "source": "lineage/epitaph.jai:362"
+    },
+    "prophecy.surpass": {
+      "text": "The Seer said % child would surpass %.",
+      "args": [
+        "possessive",
+        "object"
+      ],
+      "when": "PROPHECY",
+      "source": "lineage/epitaph.jai:363"
+    },
+    "prophecy.mended_came": {
+      "text": "The Seer said % would break and be mended, and % was.",
+      "args": [
+        "subject",
+        "subject"
+      ],
+      "when": "PROPHECY",
+      "source": "lineage/epitaph.jai:366"
+    },
+    "prophecy.mended": {
+      "text": "The Seer said % would break and be mended. % never broke.",
+      "args": [
+        "subject",
+        "He/She"
+      ],
+      "when": "PROPHECY",
+      "source": "lineage/epitaph.jai:367"
+    },
+    "prophecy.bed": {
+      "text": "The Seer promised % a death in % bed, and no road could take % first.",
+      "args": [
+        "object",
+        "possessive",
+        "object"
+      ],
+      "when": "PROPHECY",
+      "source": "lineage/epitaph.jai:370"
+    },
+    "prophecy.carry": {
+      "text": "The Seer said % would carry the house, and % carried it.",
+      "args": [
+        "subject",
+        "subject"
+      ],
+      "when": "PROPHECY",
+      "source": "lineage/epitaph.jai:373"
+    },
+    "prophecy.reflexive_HE": {
+      "text": "himself",
+      "args": [],
+      "when": "",
+      "source": "lineage/epitaph.jai:376"
+    },
+    "prophecy.reflexive_SHE": {
+      "text": "herself",
+      "args": [],
+      "when": "",
+      "source": "lineage/epitaph.jai:376"
+    },
+    "prophecy.greater_came": {
+      "text": "The Seer said % would teach a greater than %, and % did: % learned from % and went past %.",
+      "args": [
+        "subject",
+        "reflexive",
+        "subject",
+        "greater student first name",
+        "object",
+        "object"
+      ],
+      "when": "PROPHECY",
+      "source": "lineage/epitaph.jai:378"
+    },
+    "prophecy.greater": {
+      "text": "The Seer said % would teach a greater than %, and % never learned another thing.",
+      "args": [
+        "subject",
+        "reflexive",
+        "subject"
+      ],
+      "when": "PROPHECY",
+      "source": "lineage/epitaph.jai:379"
+    },
+    "love.spouses_children": {
+      "text": "% loved %, and %.",
+      "args": [
+        "He/She",
+        "spouse full names (name list)",
+        "children first names (name list)"
+      ],
+      "when": "LOVE",
+      "source": "lineage/epitaph.jai:401"
+    },
+    "love.spouses": {
+      "text": "% loved %.",
+      "args": [
+        "He/She",
+        "spouse full names"
+      ],
+      "when": "LOVE",
+      "source": "lineage/epitaph.jai:404"
+    },
+    "love.children": {
+      "text": "% loved % %, %.",
+      "args": [
+        "He/She",
+        "possessive",
+        "love.child or love.children_word",
+        "children first names"
+      ],
+      "when": "LOVE",
+      "source": "lineage/epitaph.jai:407"
+    },
+    "love.child": {
+      "text": "child",
+      "args": [],
+      "when": "",
+      "source": "lineage/epitaph.jai:407"
+    },
+    "love.children_word": {
+      "text": "children",
+      "args": [],
+      "when": "",
+      "source": "lineage/epitaph.jai:407"
+    },
+    "love.sibling_friend": {
+      "text": "% was closest to % %, %.",
+      "args": [
+        "He/She",
+        "possessive",
+        "love.brother or love.sister (by the friend)",
+        "friend first name"
+      ],
+      "when": "LOVE",
+      "source": "lineage/epitaph.jai:410"
+    },
+    "love.brother": {
+      "text": "brother",
+      "args": [],
+      "when": "",
+      "source": "lineage/epitaph.jai:410"
+    },
+    "love.sister": {
+      "text": "sister",
+      "args": [],
+      "when": "",
+      "source": "lineage/epitaph.jai:410"
+    },
+    "love.friend_1": {
+      "text": "% friend was %.",
+      "args": [
+        "His/Her",
+        "friend full name"
+      ],
+      "when": "LOVE, variant 1",
+      "source": "lineage/epitaph.jai:413"
+    },
+    "love.friend_0": {
+      "text": "% had one friend, %, and it was enough.",
+      "args": [
+        "He/She",
+        "friend full name"
+      ],
+      "when": "LOVE, variant 0",
+      "source": "lineage/epitaph.jai:414"
+    },
+    "end.before_first_year": {
+      "text": "% %, before the first year. % was %.",
+      "args": [
+        "He/She",
+        "fate telling",
+        "He/She",
+        "fate age"
+      ],
+      "when": "END, died before year 1",
+      "source": "lineage/epitaph.jai:425"
+    },
+    "end.dead_1": {
+      "text": "% % %. % was %.",
+      "args": [
+        "year telling, capitalized",
+        "subject",
+        "fate telling",
+        "He/She",
+        "fate age"
+      ],
+      "when": "END, variant 1",
+      "source": "lineage/epitaph.jai:429"
+    },
+    "end.dead_0": {
+      "text": "% % %, aged %.",
+      "args": [
+        "He/She",
+        "fate telling",
+        "year telling",
+        "fate age"
+      ],
+      "when": "END, variant 0",
+      "source": "lineage/epitaph.jai:431"
+    },
+    "end.door_opened": {
+      "text": "% went down to the Sealed Door at %, opened %, and came home.",
+      "args": [
+        "He/She",
+        "age at the Door",
+        "lock names opened (name list)"
+      ],
+      "when": "END, living, stood at the Door and bore locks open",
+      "source": "lineage/epitaph.jai:443"
+    },
+    "end.door": {
+      "text": "% went down to the Sealed Door at %, and came home.",
+      "args": [
+        "He/She",
+        "age at the Door"
+      ],
+      "when": "END, living, stood at the Door",
+      "source": "lineage/epitaph.jai:444"
+    },
+    "end.child": {
+      "text": "% was % when the story ended, and not yet grown.",
+      "args": [
+        "He/She",
+        "age"
+      ],
+      "when": "END, living child",
+      "source": "lineage/epitaph.jai:446"
+    },
+    "end.living": {
+      "text": "% was % when the story ended, and still living.",
+      "args": [
+        "He/She",
+        "age"
+      ],
+      "when": "END, living adult",
+      "source": "lineage/epitaph.jai:447"
+    },
+    "left.departed": {
+      "text": "The house has had a patron at Court since.",
+      "args": [],
+      "when": "LEFT, crowned",
+      "source": "lineage/epitaph.jai:454"
+    },
+    "left.legacy_and_heirloom": {
+      "text": "% left %, %, and % to %.",
+      "args": [
+        "He/She",
+        "legacy noun (legacies.legacy_nouns)",
+        "legacy telling",
+        "bequeathed heirloom name",
+        "heir first name"
+      ],
+      "when": "LEFT",
+      "source": "lineage/epitaph.jai:457"
+    },
+    "left.tale": {
+      "text": "% left a tale behind: %.",
+      "args": [
+        "He/She",
+        "legacy telling"
+      ],
+      "when": "LEFT",
+      "source": "lineage/epitaph.jai:459"
+    },
+    "left.blessing": {
+      "text": "% left a blessing on those who come after: %.",
+      "args": [
+        "He/She",
+        "legacy telling"
+      ],
+      "when": "LEFT",
+      "source": "lineage/epitaph.jai:460"
+    },
+    "left.heirloom_made": {
+      "text": "% made %, and it went to %.",
+      "args": [
+        "He/She",
+        "own making (legacy telling with \"<name>'s \" replaced by \"<possessive> own \")",
+        "heir first name"
+      ],
+      "when": "LEFT",
+      "source": "lineage/epitaph.jai:461"
+    },
+    "left.heirloom_went": {
+      "text": "% went to %.",
+      "args": [
+        "heirloom name, capitalized",
+        "heir first name"
+      ],
+      "when": "LEFT",
+      "source": "lineage/epitaph.jai:464"
+    },
+    "left.buried_with": {
+      "text": "% was buried with %.",
+      "args": [
+        "heirloom name, capitalized",
+        "object pronoun"
+      ],
+      "when": "LEFT",
+      "source": "lineage/epitaph.jai:465"
+    },
+    "living.made_heirloom": {
+      "text": "% made %, and it will be handed down.",
+      "args": [
+        "He/She",
+        "own making"
+      ],
+      "when": "LEFT, living",
+      "source": "lineage/epitaph.jai:476"
+    },
+    "living.made_tale": {
+      "text": "% made a tale that will outlast %: %.",
+      "args": [
+        "He/She",
+        "object pronoun",
+        "legacy telling"
+      ],
+      "when": "LEFT, living",
+      "source": "lineage/epitaph.jai:477"
+    },
+    "living.made_blessing": {
+      "text": "% laid a blessing on those who come after: %.",
+      "args": [
+        "He/She",
+        "legacy telling"
+      ],
+      "when": "LEFT, living",
+      "source": "lineage/epitaph.jai:478"
+    },
+    "living.carried_heirloom": {
+      "text": "% carried % to the end.",
+      "args": [
+        "He/She",
+        "heirloom name"
+      ],
+      "when": "LEFT, living, no legacy, holds an heirloom",
+      "source": "lineage/epitaph.jai:482"
+    }
+  },
+  "_note": "\"He/She\" = capitalized subject pronoun; \"His/Her\" = capitalized possessive; \"subject\"/\"object\"/\"possessive\" = lowercase pronouns of the hero the epitaph is for. Selection logic: SPEC.md, Epitaphs."
+}

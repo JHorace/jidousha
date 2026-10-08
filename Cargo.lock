@@ -784,6 +784,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "keifu_x_inheritance_r3v2"
+version = "0.1.0"
+dependencies = [
+ "jidousha",
+]
+
+[[package]]
 name = "khronos-egl"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

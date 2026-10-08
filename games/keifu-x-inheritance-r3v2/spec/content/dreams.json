@@ -1,0 +1,411 @@
+{
+  "_source": "lineage/dream.jai:1-415, lineage/legacy.jai:43-55, lineage/ghost.jai:16-29, generation/hero-context/templates-hero.jai:20-29",
+  "dreams": [
+    {
+      "id": "SEE_THE_SEA",
+      "title": "To see the sea",
+      "legacy": "TALE",
+      "ghost_place": "DROWNED_COAST",
+      "wanderer_dream": true,
+      "stages": [
+        {
+          "task": "Reach the Drowned Coast",
+          "goal": 1,
+          "requirement": {
+            "predicate": "went_to_place",
+            "parameter": "DROWNED_COAST"
+          }
+        },
+        {
+          "task": "Succeed against Water",
+          "goal": 1,
+          "requirement": {
+            "all": [
+              {
+                "predicate": "faced_tag",
+                "parameter": "WATER"
+              },
+              {
+                "predicate": "fared_at_least",
+                "parameter": "SUCCESS"
+              }
+            ]
+          }
+        },
+        {
+          "task": "Tell the tale at the hearth",
+          "goal": 1,
+          "requirement": {
+            "predicate": "spent_the_winter",
+            "parameter": "TELL_THE_TALE"
+          }
+        }
+      ],
+      "_source": "lineage/dream.jai:202"
+    },
+    {
+      "id": "ROOF_OF_THE_WORLD",
+      "title": "To stand on the roof of the world",
+      "legacy": "TALE",
+      "ghost_place": "HIGH_PASS",
+      "wanderer_dream": true,
+      "stages": [
+        {
+          "task": "Reach the High Pass",
+          "goal": 1,
+          "requirement": {
+            "predicate": "went_to_place",
+            "parameter": "HIGH_PASS"
+          }
+        },
+        {
+          "task": "Succeed against Heights",
+          "goal": 1,
+          "requirement": {
+            "all": [
+              {
+                "predicate": "faced_tag",
+                "parameter": "HEIGHTS"
+              },
+              {
+                "predicate": "fared_at_least",
+                "parameter": "SUCCESS"
+              }
+            ]
+          }
+        },
+        {
+          "task": "Tell the tale at the hearth",
+          "goal": 1,
+          "requirement": {
+            "predicate": "spent_the_winter",
+            "parameter": "TELL_THE_TALE"
+          }
+        }
+      ],
+      "_source": "lineage/dream.jai:211"
+    },
+    {
+      "id": "FORGE_A_BLADE",
+      "title": "To forge a blade worth a name",
+      "legacy": "HEIRLOOM",
+      "ghost_place": "EMBERFALL",
+      "wanderer_dream": true,
+      "stages": [
+        {
+          "task": "Succeed at Emberfall",
+          "goal": 1,
+          "requirement": {
+            "all": [
+              {
+                "predicate": "went_to_place",
+                "parameter": "EMBERFALL"
+              },
+              {
+                "predicate": "fared_at_least",
+                "parameter": "SUCCESS"
+              }
+            ]
+          }
+        },
+        {
+          "task": "Train a winter at the forge",
+          "goal": 1,
+          "requirement": {
+            "predicate": "spent_the_winter",
+            "parameter": "TRAIN"
+          }
+        },
+        {
+          "task": "Carry it to a triumph",
+          "goal": 1,
+          "requirement": {
+            "predicate": "fared_at_least",
+            "parameter": "TRIUMPH"
+          }
+        }
+      ],
+      "_source": "lineage/dream.jai:220"
+    },
+    {
+      "id": "WORTHY_STUDENT",
+      "title": "To find a worthy student",
+      "legacy": "BLESSING",
+      "ghost_place": "WHERE_THE_DREAMER_DIED",
+      "wanderer_dream": true,
+      "stages": [
+        {
+          "task": "Teach the young two winters",
+          "goal": 2,
+          "requirement": {
+            "predicate": "taught_the_young"
+          }
+        },
+        {
+          "task": "Stand beside a student on a quest",
+          "goal": 1,
+          "requirement": {
+            "predicate": "stood_beside_a_student"
+          }
+        },
+        {
+          "task": "See a student succeed without you",
+          "goal": 1,
+          "requirement": {
+            "predicate": "student_fared_alone"
+          }
+        }
+      ],
+      "_source": "lineage/dream.jai:229"
+    },
+    {
+      "id": "AVENGE_THE_LOST",
+      "title": "To avenge %",
+      "title_is_template": true,
+      "title_argument": {
+        "no_lost_hero": "the lost",
+        "lost_hero_HE": "my father",
+        "lost_hero_SHE": "my mother"
+      },
+      "legacy": "BLESSING",
+      "ghost_place": "SETUP_PLACE",
+      "wanderer_dream": false,
+      "setup": [
+        "place",
+        "tag",
+        "lost"
+      ],
+      "stages": [
+        {
+          "task": "Train a winter",
+          "goal": 1,
+          "requirement": {
+            "predicate": "spent_the_winter",
+            "parameter": "TRAIN"
+          }
+        },
+        {
+          "task": "Return to %",
+          "task_is_template": true,
+          "task_argument": "setup place name (lore place.name)",
+          "goal": 1,
+          "requirement": {
+            "predicate": "went_to_place",
+            "parameter": "SETUP_PLACE"
+          }
+        },
+        {
+          "task": "Succeed there against %",
+          "task_is_template": true,
+          "task_argument": "setup tag title (lore tag.title)",
+          "goal": 1,
+          "requirement": {
+            "all": [
+              {
+                "predicate": "went_to_place",
+                "parameter": "SETUP_PLACE"
+              },
+              {
+                "predicate": "faced_tag",
+                "parameter": "SETUP_TAG"
+              },
+              {
+                "predicate": "fared_at_least",
+                "parameter": "SUCCESS"
+              }
+            ]
+          }
+        }
+      ],
+      "_source": "lineage/dream.jai:238"
+    },
+    {
+      "id": "KNOWN_AT_COURT",
+      "title": "To be known at Court",
+      "legacy": "TALE",
+      "ghost_place": "KINGS_COURT",
+      "wanderer_dream": true,
+      "stages": [
+        {
+          "task": "Earn 4 renown",
+          "task_template": "Earn % renown",
+          "goal": 1,
+          "requirement": {
+            "predicate": "renown_is_at_least",
+            "parameter": 4
+          }
+        },
+        {
+          "task": "Succeed at the King's Court",
+          "goal": 1,
+          "requirement": {
+            "all": [
+              {
+                "predicate": "went_to_place",
+                "parameter": "KINGS_COURT"
+              },
+              {
+                "predicate": "fared_at_least",
+                "parameter": "SUCCESS"
+              }
+            ]
+          }
+        },
+        {
+          "task": "Tell the tale at the hearth",
+          "goal": 1,
+          "requirement": {
+            "predicate": "spent_the_winter",
+            "parameter": "TELL_THE_TALE"
+          }
+        }
+      ],
+      "_source": "lineage/dream.jai:253"
+    },
+    {
+      "id": "WALK_EVERY_ROAD",
+      "title": "To walk every road",
+      "legacy": "HEIRLOOM",
+      "ghost_place": "WHERE_THE_DREAMER_DIED",
+      "wanderer_dream": true,
+      "stages": [
+        {
+          "task": "Quest at three different places",
+          "goal": 3,
+          "requirement": {
+            "predicate": "walked_a_new_road"
+          }
+        },
+        {
+          "task": "Quest at every place not yet walked",
+          "goal": 1,
+          "requirement": {
+            "predicate": "walked_every_road"
+          }
+        },
+        {
+          "task": "Tell the tale at the hearth",
+          "goal": 1,
+          "requirement": {
+            "predicate": "spent_the_winter",
+            "parameter": "TELL_THE_TALE"
+          }
+        }
+      ],
+      "_source": "lineage/dream.jai:262"
+    },
+    {
+      "id": "QUIET_THE_BARROW",
+      "title": "To lay the Barrow's dead to rest",
+      "legacy": "BLESSING",
+      "ghost_place": "BARROW",
+      "wanderer_dream": true,
+      "stages": [
+        {
+          "task": "Reach the Barrow",
+          "goal": 1,
+          "requirement": {
+            "predicate": "went_to_place",
+            "parameter": "BARROW"
+          }
+        },
+        {
+          "task": "Succeed against the Undead twice",
+          "goal": 2,
+          "requirement": {
+            "all": [
+              {
+                "predicate": "faced_tag",
+                "parameter": "UNDEAD"
+              },
+              {
+                "predicate": "fared_at_least",
+                "parameter": "SUCCESS"
+              }
+            ]
+          }
+        },
+        {
+          "task": "Win a triumph at the Barrow",
+          "goal": 1,
+          "requirement": {
+            "all": [
+              {
+                "predicate": "went_to_place",
+                "parameter": "BARROW"
+              },
+              {
+                "predicate": "fared_at_least",
+                "parameter": "TRIUMPH"
+              }
+            ]
+          }
+        }
+      ],
+      "_source": "lineage/dream.jai:271"
+    },
+    {
+      "id": "SEE_A_CHILD_GROWN",
+      "title": "To see my child grown",
+      "legacy": "HEIRLOOM",
+      "ghost_place": "WHERE_THE_DREAMER_DIED",
+      "wanderer_dream": true,
+      "stages": [
+        {
+          "task": "Court a winter and wed",
+          "goal": 1,
+          "requirement": {
+            "predicate": "is_wed"
+          }
+        },
+        {
+          "task": "Have a child",
+          "goal": 1,
+          "requirement": {
+            "predicate": "has_a_child"
+          }
+        },
+        {
+          "task": "See a child come of age",
+          "goal": 1,
+          "requirement": {
+            "predicate": "has_a_grown_child"
+          }
+        }
+      ],
+      "_source": "lineage/dream.jai:280"
+    }
+  ],
+  "wanderer_dream_order": [
+    "SEE_THE_SEA",
+    "ROOF_OF_THE_WORLD",
+    "FORGE_A_BLADE",
+    "WORTHY_STUDENT",
+    "KNOWN_AT_COURT",
+    "WALK_EVERY_ROAD",
+    "QUIET_THE_BARROW",
+    "SEE_A_CHILD_GROWN"
+  ],
+  "call_tellings": {
+    "apart": "stay behind",
+    "TRIUMPH": "triumph",
+    "SUCCESS": "succeed",
+    "any": "go"
+  },
+  "title_pronoun_swap": {
+    "find": " my ",
+    "replace_with": " % ",
+    "_note": "In a lowered title, \" my \" is replaced by \" <possessive pronoun of the dream owner, else bearer> \"."
+  },
+  "task_object_swap": {
+    "suffix": " you",
+    "format": "% %",
+    "_note": "A lowered task ending in \" you\" has that suffix replaced by \" <object pronoun of the hero it is told about>\"."
+  },
+  "progress_format": "% (%/%)",
+  "progress_tellings": [
+    "had not yet begun it",
+    "had come one step of three",
+    "had come two steps of three"
+  ]
+}
