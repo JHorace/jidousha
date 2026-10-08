@@ -1,0 +1,136 @@
+#! call-of-cthulhu-r2, round 1: every rule constant, the two decision functions, the screens' load-bearing lines.
+
+### C1 a call opens with interest 6, not 5
+@ src/rules.rs
+- pub const START_INTEREST: i32 = 5;
++ pub const START_INTEREST: i32 = 6;
+
+### C2 lore shortens the call by 2, not 3
+@ src/rules.rs
+- pub const LORE_INTEREST: i32 = -3;
++ pub const LORE_INTEREST: i32 = -2;
+
+### C3 a wrong answer no longer prolongs the call
+@ src/rules.rs
+- pub const WRONG_INTEREST: i32 = 1;
++ pub const WRONG_INTEREST: i32 = 0;
+
+### C4 the insult's shock is 5, not 6
+@ src/rules.rs
+- pub const ANGER_SHOCK: i32 = 6;
++ pub const ANGER_SHOCK: i32 = 5;
+
+### C5 composure trains to 2
+@ src/rules.rs
+- pub const MAX_COMPOSURE: i32 = 1;
++ pub const MAX_COMPOSURE: i32 = 2;
+
+### C6 silence costs after ten seconds, not eight
+@ src/rules.rs
+- pub const SILENCE_TICKS: u32 = 480;
++ pub const SILENCE_TICKS: u32 = 600;
+
+### C7 a cult can hold its being back at temper 2
+@ src/rules.rs
+- pub const UNHELD_TEMPER: i32 = 2;
++ pub const UNHELD_TEMPER: i32 = 3;
+
+### C8 an insult angers by 2
+@ src/rules.rs
+- temper_change: if temper < MAX_TEMPER { 1 } else { 0 },
++ temper_change: if temper < MAX_TEMPER { 2 } else { 0 },
+
+### C9 composure adds to the drain
+@ src/rules.rs
+- (being.lore().base_drain + temper - composure).max(MIN_DRAIN)
++ (being.lore().base_drain + temper + composure).max(MIN_DRAIN)
+
+### C10 the studied fact is asked last, not first
+@ src/rules.rs
+- questions.insert(0, fact);
++ questions.push(fact);
+
+### C11 a disrupted cult's being calls anyway
+@ src/rules.rs
+- .filter(|being| run.disrupted != Some(*being))
++ .filter(|being| run.disrupted != Some(*being) || true)
+
+### C12 the last night has two callers
+@ src/rules.rs
+- pub const LAST_NIGHT_CALLERS: usize = 3;
++ pub const LAST_NIGHT_CALLERS: usize = 2;
+
+### C13 the run is four days
+@ src/rules.rs
+- pub const DAYS: u32 = 5;
++ pub const DAYS: u32 = 4;
+
+### C14 training gives nothing
+@ src/rules.rs
+- next.composure = (next.composure + 1).min(MAX_COMPOSURE);
++ next.composure = (next.composure + 0).min(MAX_COMPOSURE);
+
+### C15 the better ending needs 60
+@ src/rules.rs
+- pub const SOUND_SLEEP: i32 = 50;
++ pub const SOUND_SLEEP: i32 = 60;
+
+### P1 the being repeats the same question forever
+@ src/play.rs
+- call.asked += 1;
++ call.asked += 0;
+
+### P2 the call ends at interest 1
+@ src/play.rs
+- if call.interest > 0 {
++ if call.interest > 1 {
+
+### P3 an answer does not reset the silence
+@ src/play.rs
+- call.quiet = 0;⏎        call.spent += outcome.sanity_cost;
++ call.spent += outcome.sanity_cost;
+
+### P4 yesterday's study is still asked first today
+@ src/play.rs
+- self.run.studied = None;
++ self.run.studied = self.run.studied;
+
+### P5 a hang-up skips the next call
+@ src/play.rs
+- let next = hangup.slot + 1;
++ let next = hangup.slot + 2;
+
+### S1 every answer is hinted, known or not
+@ src/screens.rs
+- let (line, tone) = if known {
++ let (line, tone) = if true {
+
+### S2 the answers are drawn on top of each other
+@ src/screens.rs
+- Vec2::new(MARGIN, 236.0 + 44.0 * index as f32),
++ Vec2::new(MARGIN, 236.0 + 12.0 * index as f32),
+
+### S3 the sanity figure is off by one
+@ src/screens.rs
+- let figure = format!("SANITY {sanity}");
++ let figure = format!("SANITY {}", sanity + 1);
+
+### S4 the known lore is not listed on the call
+@ src/screens.rs
+- .filter(|each| run.knows(call.being, *each))
++ .filter(|each| run.knows(call.being, *each) && false)
+
+### M1 the silence is counted before the answer is taken
+@ src/main.rs
+- app.add_system(Update, take_input);⏎    app.add_system(Update, count_the_silence);
++ app.add_system(Update, count_the_silence);⏎    app.add_system(Update, take_input);
+
+### M2 a tap lands nowhere
+@ src/main.rs
+- .then(|| camera.screen_to_world(pointer.screen));
++ .then(|| Vec2::new(-1.0, -1.0));
+
+### M3 the night is grey
+@ src/main.rs
+- clear_color: palette::NIGHT,
++ clear_color: Color::rgb(0.3, 0.3, 0.3),
