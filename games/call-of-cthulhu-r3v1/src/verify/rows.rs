@@ -384,6 +384,33 @@ pub(super) fn taps_and_order(checks: &mut Checks, summary: &mut Vec<String>) {
     summary.push("a tap chooses its row; schedule, dark room and replay hold".to_owned());
 }
 
+/// The run is lost the moment sanity reaches zero, not only below it: a
+/// call staged with exactly one lore answer's sanity left (round 1, C17).
+pub(super) fn zero_is_lost(checks: &mut Checks) {
+    let mut sim = start(ROW1_SEED);
+    let morning = run_of(&sim);
+    let study = morning
+        .options()
+        .iter()
+        .position(|option| *option == Action::Study(ROW1_CALLER))
+        .unwrap_or(0);
+    press(&mut sim, digit(study));
+    let mut run = run_of(&sim);
+    run.sanity = ROW1_LORE_COST;
+    let Some(row) = (0..3).find(|row| hint_line(&run, *row).starts_with("ends sooner")) else {
+        fail(
+            "no hint says which answer ends the call sooner",
+            &format!("{:?}", run.screen),
+        );
+    };
+    run.step(Command::Choose(row));
+    checks.require(
+        run.sanity == 0 && matches!(run.screen, Screen::End(crate::play::Fate::Lost { day: 1 })),
+        "sanity reached zero and the run went on",
+        format!("sanity {}, screen {:?}", run.sanity, run.screen),
+    );
+}
+
 /// The floors bite from this game's own layout: a row too small, two rows atop each other.
 pub(super) fn floors_bite(checks: &mut Checks) {
     let small = TextStyle {

@@ -362,6 +362,7 @@ pub(crate) fn run() -> ExitCode {
     rows::row_morning(&mut checks, &mut summary);
     rows::taps_and_order(&mut checks, &mut summary);
     rows::floors_bite(&mut checks);
+    rows::zero_is_lost(&mut checks);
 
     let picture = rows::picture(&mut checks);
     summary.push(format!("capture: {picture}"));
