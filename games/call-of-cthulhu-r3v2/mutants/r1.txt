@@ -1,0 +1,102 @@
+#! r1 — the first full round (r3v2 implement tick): the twenty faults named in
+#! tools/yakin/runs/call-of-cthulhu-r3v2/DESIGN.md §Gates "the mutation round".
+
+### M1 Cthulhu's drain 6 -> 5
+@ src/beings.rs
+- drain: 6,
++ drain: 5,
+
+### M2 a lore reply costs 2, not 1
+@ src/rules.rs
+- pub const LINE_NOISE: u32 = 1;
++ pub const LINE_NOISE: u32 = 2;
+
+### M3 an offending reply costs one exchange, not two
+@ src/rules.rs
+- pub const ANGER_MULT: u32 = 2;
++ pub const ANGER_MULT: u32 = 1;
+
+### M4 a scream costs 5, not 25
+@ src/rules.rs
+- pub const WRATH: u32 = 25;
++ pub const WRATH: u32 = 5;
+
+### M5 the temper limit is 4, not 3
+@ src/rules.rs
+- pub const TEMPER_LIMIT: u8 = 3;
++ pub const TEMPER_LIMIT: u8 = 4;
+
+### M6 hanging up adds 1 temper, not 2
+@ src/rules.rs
+- pub const HANG_UP_TEMPER: u8 = 2;
++ pub const HANG_UP_TEMPER: u8 = 1;
+
+### M7 patience 5, not 4
+@ src/rules.rs
+- pub const PATIENCE: u8 = 4;
++ pub const PATIENCE: u8 = 5;
+
+### M8 the run starts at 120 sanity
+@ src/rules.rs
+- pub const START_SANITY: u32 = 90;
++ pub const START_SANITY: u32 = 120;
+
+### M9 a lore reply makes progress 1, not 2
+@ src/rules.rs
+- progress: 2,
++ progress: 1,
+
+### M10 steadied nerves change nothing
+@ src/rules.rs
+- .saturating_sub(steady)
++ .saturating_sub(0 * steady)
+
+### M11 a cult visit does not draw its being's call
+@ src/rules.rs
+- callers[0] = drawn;
++ let _ = drawn;
+
+### M12 the second caller is the wrong being
+@ src/rules.rs
+- callers.push(rotation[d % 3]);
++ callers.push(rotation[(d - 1) % 3]);
+
+### M13 the lore reply is listed whether or not its secret is known
+@ src/flow.rs
+- if game.known[being.index()][q]
++ if true
+
+### M14 the lore reply carries no star
+@ src/flow.rs
+- let star = if kind == AnswerKind::Lore { "* " } else { "" };
++ let star = if kind == AnswerKind::Lore { "" } else { "" };
+
+### M15 the bar is always full
+@ src/main.rs
+- BAR_W * sanity.clamp(0, rules::START_SANITY as i32) as f32 / rules::START_SANITY as f32
++ BAR_W * (rules::START_SANITY as i32) as f32 / rules::START_SANITY as f32
+
+### M16 the night is not dark
+@ src/screen.rs
+- pub const NIGHT: Color = Color::rgb(0.05, 0.04, 0.09);
++ pub const NIGHT: Color = Color::rgb(0.5, 0.5, 0.5);
+
+### M17 an offending reply does not raise temper
+@ src/rules.rs
+- temper_delta: 1,
++ temper_delta: 0,
+
+### M18 exactly zero sanity does not lose
+@ src/flow.rs
+- if game.sanity <= 0 {
++ if game.sanity < 0 {
+
+### M19 the run is won after night 4
+@ src/flow.rs
+- if game.day >= DAYS {
++ if game.day >= 4 {
+
+### M20 studying always teaches the second secret
+@ src/flow.rs
+- if let Some(slot) = row.iter_mut().find(|known| !**known) {
++ if let Some(slot) = row.iter_mut().nth(1) {
