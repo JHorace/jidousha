@@ -42,6 +42,7 @@ pub fn group_words(content: &Content, group: Group) -> (String, String, String) 
                     &n(BIRTH_CHANCE_PERCENT),
                     &n(MARRYING_AGE),
                     &n(PARENT_AGE_HIGH),
+                    &n(crate::constants::MARRY_IN_RENOWN),
                 ],
             ),
         ),

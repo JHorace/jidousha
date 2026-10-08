@@ -98,6 +98,10 @@ pub fn lay_out_board(page: &mut Page, content: &Content, house: &House, ui: &UiS
         let hot = ui.pointing_quest == Some(quest) || landing_here;
         let reading = read_card(content, house, quest, &party, watched);
         draw_card(page, &reading, card, hot);
+        if let Some(oath) = &reading.oath {
+            let foot = seat_rect(card, house.board[quest].seats.len());
+            oath_button(page, &oath.button, card, foot, quest);
+        }
         page.targets.push((card, Target::Quest(quest)));
     }
 }
@@ -310,6 +314,35 @@ fn draw_card(page: &mut Page, card: &CardReading, rect: Rect, hot: bool) {
             y = paragraph(page, text, line(y), MIN_TEXT, color, rect);
         }
     }
+    // The variant's oath, once sworn: who swore and what it needs, then its stakes.
+    if let Some(oath) = &card.oath {
+        for text in [&oath.sworn, &oath.stakes].into_iter().flatten() {
+            y = paragraph(page, text, line(y), MIN_TEXT, ink::HEADING, rect);
+        }
+    }
+}
+
+/// The variant's oath button (DESIGN decision 10): at the card's foot, right of its
+/// seats, set right; shaped as "Set out" is, a band up, and absent when nobody may swear.
+fn oath_button(page: &mut Page, label: &str, card: Rect, foot: Rect, quest: usize) {
+    let style = TextStyle {
+        size: MIN_TEXT,
+        ..TextStyle::default()
+    };
+    let size = Vec2::new(style.width_of(label) + 16.0, 26.0);
+    let at = Vec2::new(
+        card.max.x - CARD_PAD - size.x,
+        foot.center().y - size.y * 0.5,
+    );
+    let rect = Rect::from_min_size(at, size);
+    // On the card, so a band above `summer::button`'s: the plate a mark, the label type.
+    page.shape(rect, ink::HOT, layers::MARK);
+    let label_at = Vec2::new(
+        rect.center().x - style.width_of(label) * 0.5,
+        rect.center().y - MIN_TEXT * 0.5,
+    );
+    page.text(layers::TEXT, label_at, label, MIN_TEXT, ink::BODY, rect);
+    page.targets.push((rect, Target::Swear(quest)));
 }
 
 /// The hero in hand, under the pointer, kept on screen.

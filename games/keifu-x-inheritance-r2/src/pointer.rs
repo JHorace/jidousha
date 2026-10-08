@@ -40,7 +40,8 @@ fn resting(ui: UiState, target: Option<Target>) -> UiState {
             _ => None,
         },
         pointing_quest: match target {
-            Some(Target::Quest(quest)) if !ui.family_open => Some(quest),
+            // The variant's oath button sits on its card, whose sheet it keeps open.
+            Some(Target::Quest(quest) | Target::Swear(quest)) if !ui.family_open => Some(quest),
             _ => None,
         },
         pointing_group: match target {
@@ -48,6 +49,10 @@ fn resting(ui: UiState, target: Option<Target>) -> UiState {
             _ => None,
         },
         pointing_door: target == Some(Target::DoorHelp) && !ui.family_open,
+        pointing_heir: match target {
+            Some(Target::Heir(page, Some(id))) if !ui.family_open => Some((page, id)),
+            _ => None,
+        },
         drag: None,
         ..ui
     }
@@ -75,9 +80,13 @@ pub fn follow_the_pointer(world: &mut World) {
     let next = match ui.drag {
         Some(_) if lost || (!held && !released) => resting(ui, target),
         Some(drag) if released => {
-            let house = world.resource_mut::<House>();
-            let onto = house.landing(drag.hero, target);
-            house.drop_hero(drag.from, onto);
+            with_house(world, |content, house, _| {
+                let onto = house.landing(drag.hero, target);
+                house.drop_hero(drag.from, onto);
+                // The variant's: an oath whose swearer left the card, or whose call the
+                // new party changed, is withdrawn.
+                crate::oath::keep_oaths(content, house);
+            });
             resting(ui, target)
         }
         Some(drag) => UiState {
@@ -101,7 +110,8 @@ pub fn follow_the_pointer(world: &mut World) {
                 | Target::Skip
                 | Target::BeginAgain
                 | Target::LetWinterPass
-                | Target::Heir(..)),
+                | Target::Heir(..)
+                | Target::Swear(_)),
             ) if !ui.family_open => press(world, ui, control),
             // Only the summer and the hearth seat heroes: on the telling and the turning a
             // card is read, never lifted.
@@ -193,6 +203,12 @@ fn press(world: &mut World, ui: UiState, control: Target) -> UiState {
         Target::SetOut if in_summer(house) && crate::summer::may_set_out(house) => {
             with_house(world, set_out);
             fresh
+        }
+        Target::Swear(slot) if in_summer(house) => {
+            with_house(world, |content, house, _| {
+                crate::oath::toggle(content, house, slot)
+            });
+            ui
         }
         Target::LetWinterPass if at_the_hearth(house) => {
             with_house(world, let_the_winter_pass);

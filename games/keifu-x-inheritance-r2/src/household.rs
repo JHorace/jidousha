@@ -189,6 +189,9 @@ fn read_hero(item: &At<'_>) -> Result<FoundingHero, SchemaError> {
         quests_faced: count("quests_faced")?,
         fears_faced: count("fears_faced")?,
         winters_taught: 0,
+        // DESIGN decision 1: every founder is family.
+        family: true,
+        marks: Vec::new(),
     };
     let parents = item
         .key("parents")?

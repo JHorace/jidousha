@@ -255,7 +255,16 @@ pub fn try_the_door(
                 &[&name_list(content, &names), &house.heroes[bearer].name],
             )
         };
-        let page = resolve_party(content, house, rng, quest, standing.clone(), dice, &told);
+        let page = resolve_party(
+            content,
+            house,
+            rng,
+            quest,
+            standing.clone(),
+            None,
+            dice,
+            &told,
+        );
         let opened = page.outcome >= Outcome::Success;
         if opened && house.heroes[bearer].is_living() {
             let telling = fmt(&content.words[W::DeedOpenedALock], &[&words.name]);

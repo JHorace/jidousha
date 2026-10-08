@@ -119,6 +119,9 @@ pub fn newcomer(
         quests_faced: 0,
         fears_faced: 0,
         winters_taught: 0,
+        // DESIGN decision 1: a newcomer is an outsider until born or wed into the family.
+        family: false,
+        marks: Vec::new(),
     }
 }
 

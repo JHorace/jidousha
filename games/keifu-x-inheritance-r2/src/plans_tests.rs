@@ -409,7 +409,7 @@ fn the_garden_judges_empty_seats_kin_age_distance_rivalry_and_marriage_in_that_o
         Courtship::WillWed,
     ]
     .iter()
-    .map(|c| c.note(&content))
+    .map(|c| c.note(&content, &[]))
     .collect();
     assert_eq!(
         notes,

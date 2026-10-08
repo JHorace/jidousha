@@ -149,6 +149,8 @@ impl House {
         self.hearth.clear();
         for posted in &mut self.board {
             posted.seats.iter_mut().for_each(|seat| *seat = None);
+            // The variant's (DESIGN decision 10): reseating withdraws every oath.
+            posted.sworn = None;
         }
         let adults: Vec<HeroId> = (0..self.heroes.len())
             .filter(|&id| self.heroes[id].is_living() && self.heroes[id].is_adult())

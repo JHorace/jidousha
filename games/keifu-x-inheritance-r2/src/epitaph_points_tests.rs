@@ -129,6 +129,7 @@ fn a_dream_left_to_no_one_is_told_so_and_its_ghost_laid_recomposes_the_epitaph()
     house.board[0] = crate::board::Posted {
         seats: vec![None; 2],
         quest,
+        sworn: None,
     };
     seat(&mut house, 0, &[ysolde]);
     aim(&mut house, 0, [5, 5], 2);

@@ -9,7 +9,7 @@
 //! The crowned's nearest kin (§15.3) reads the same list.
 
 use crate::bonds::{kinship_telling, steadies};
-use crate::constants::HEIRS_OFFERED;
+use crate::constants::{HEIRS_OFFERED, MARK_DRAIN};
 use crate::content::Content;
 use crate::dream::{Dream, progress};
 use crate::dream_lore::GhostPlace;
@@ -17,8 +17,10 @@ use crate::ghost::Ghost;
 use crate::hero::{Deed, DeedKind, DreamFate, Hero, HeroId, descends_from, kin};
 use crate::house::House;
 use crate::ids::{BondKind, Place, Pronoun};
+use crate::inheritance::succession;
+use crate::marks::{Mark, Passing, mark_list};
 use crate::rivals::dream_rivals;
-use crate::text::{capitalized, fmt};
+use crate::text::{capitalized, fmt, name_list};
 use crate::witness::Held;
 use crate::words::W;
 
@@ -57,9 +59,15 @@ fn heir_rank(heroes: &[Hero], dead: HeroId, other: HeroId) -> usize {
 
 /// The heir list (SPEC §15.1, `lineage/passage.jai:186-217`): the living other than
 /// the dead, by rank, then creation order, at most eight.
+///
+/// The variant's (DESIGN decision 6): living *family* only — an outsider is never an
+/// heir, and an outsider's own list is empty.
 pub fn heirs(heroes: &[Hero], dead: HeroId) -> Vec<HeroId> {
+    if !heroes[dead].family {
+        return Vec::new();
+    }
     let mut list: Vec<(usize, HeroId)> = (0..heroes.len())
-        .filter(|&id| id != dead && heroes[id].is_living())
+        .filter(|&id| id != dead && heroes[id].is_living() && heroes[id].family)
         .map(|id| (heir_rank(heroes, dead, id), id))
         .collect();
     list.sort();
@@ -189,7 +197,6 @@ pub fn heir_buttons(
 /// can take it, or its ghost is raised. The choice's lines go right after the bequest
 /// lines, and the dead's epitaph is recomposed with the wording their page rolled.
 pub fn choose(content: &Content, house: &mut House, page: usize, heir: Option<HeroId>) {
-    let year = house.calendar.current_year();
     let Some(bequest) = house
         .passage
         .as_ref()
@@ -211,13 +218,42 @@ pub fn choose(content: &Content, house: &mut House, page: usize, heir: Option<He
         heir,
         house.heroes[dead].name
     );
+    let lines = bequeath(content, house, dead, heir);
+    // SPEC §15.2: "the epitaph is recomposed with the same wording".
+    crate::epitaph::recompose(content, &mut house.heroes, dead);
+    let Some(page) = house.passage.as_mut().and_then(|p| p.pages.get_mut(page)) else {
+        return;
+    };
+    let at = bequest.bequest_end;
+    page.lines.splice(at..at, lines);
+    if let Some(b) = page.bequest.as_mut() {
+        b.chosen = Some(heir);
+    }
+}
+
+/// Carry out `dead`'s bequest to `heir`, or to no one (SPEC §15.2, and the variant's
+/// DESIGN decisions 9 and 12): exactly what `inheritance::succession` says the heir
+/// takes — the heirloom (their own laid aside and lost, OQ-5), the undone dream if they
+/// can take it, the blessings they lack, the marks at half their weight — and with no
+/// one, the heirloom and the marks into the ground and the dream's ghost raised.
+/// Returns the lines. The death page runs it for no one where there is no choice to
+/// make (an outsider's page, or one that leaves only marks).
+pub fn bequeath(
+    content: &Content,
+    house: &mut House,
+    dead: HeroId,
+    heir: Option<HeroId>,
+) -> Vec<String> {
+    let year = house.calendar.current_year();
     let words = &content.words;
     let mut lines = Vec::new();
+    let taking = heir.map(|h| (h, succession(content, &house.heroes, dead, h)));
     house.heroes[dead].bequest_decided = true;
     house.heroes[dead].bequest_heir = heir;
     if let Some(heirloom) = house.heroes[dead].heirloom.take() {
-        match heir {
-            Some(h) => {
+        match &taking {
+            Some((h, taking)) if taking.heirloom.is_some() => {
+                let h = *h;
                 if let Some(old) = house.heroes[h].heirloom.take() {
                     lines.push(fmt(
                         &words[W::HeirLaysAside],
@@ -237,7 +273,7 @@ pub fn choose(content: &Content, house: &mut House, page: usize, heir: Option<He
                 );
                 house.heroes[h].heirloom = Some(heirloom);
             }
-            None => {
+            _ => {
                 let object = &content.lore.pronouns[house.heroes[dead].pronoun.index()].object;
                 lines.push(fmt(
                     &words[W::HeirBuriedWith],
@@ -248,27 +284,65 @@ pub fn choose(content: &Content, house: &mut House, page: usize, heir: Option<He
     }
     if let Some((_, dream)) = undone_dream(&house.heroes[dead]) {
         let dream = dream.clone();
-        match heir.filter(|&h| can_take_dream(&house.heroes[h])) {
-            Some(h) => {
-                lines.extend(pass_dream(content, house, dead, h, &dream, year));
+        match &taking {
+            Some((h, taking)) if taking.dream.is_some() => {
+                lines.extend(pass_dream(content, house, dead, *h, &dream, year));
                 house.heroes[dead].dream_fate = DreamFate::PassedOn;
             }
-            None => {
+            _ => {
                 lines.push(raise_ghost(content, house, dead, &dream));
                 house.heroes[dead].dream_fate = DreamFate::LeftToNoOne;
             }
         }
     }
-    // SPEC §15.2: "the epitaph is recomposed with the same wording".
-    crate::epitaph::recompose(content, &mut house.heroes, dead);
-    let Some(page) = house.passage.as_mut().and_then(|p| p.pages.get_mut(page)) else {
-        return;
-    };
-    let at = bequest.bequest_end;
-    page.lines.splice(at..at, lines);
-    if let Some(b) = page.bequest.as_mut() {
-        b.chosen = Some(heir);
+    let marks = std::mem::take(&mut house.heroes[dead].marks);
+    match taking {
+        Some((h, taking)) => {
+            let blessings: Vec<_> = house.heroes[dead]
+                .blessings
+                .iter()
+                .filter(|b| taking.blessings.contains(&b.title))
+                .cloned()
+                .collect();
+            if !blessings.is_empty() {
+                let titles: Vec<&str> = blessings.iter().map(|b| b.title.as_str()).collect();
+                lines.push(fmt(
+                    &words[W::HeirTakesBlessings],
+                    &[&house.heroes[h].name, &name_list(content, &titles)],
+                ));
+                house.heroes[h].blessings.extend(blessings);
+            }
+            let mut taken = Vec::new();
+            let mut struck = Vec::new();
+            for (mark, arrives) in taking.marks {
+                match arrives {
+                    Passing::Arrives(weight) => taken.push(Mark { weight, ..mark }),
+                    Passing::Struck => struck.push(mark),
+                }
+            }
+            if !taken.is_empty() {
+                let shown: Vec<&Mark> = taken.iter().collect();
+                lines.push(fmt(
+                    &words[W::HeirTakesMarks],
+                    &[&house.heroes[h].name, &mark_list(content, &shown)],
+                ));
+                house.heroes[h].marks.extend(taken);
+            }
+            for mark in struck {
+                lines.push(fmt(&words[W::HeirMarkStruck], &[&mark.title]));
+            }
+        }
+        None if !marks.is_empty() => {
+            let object = &content.lore.pronouns[house.heroes[dead].pronoun.index()].object;
+            let lighter = marks.len() as i32 * MARK_DRAIN;
+            lines.push(fmt(
+                &words[W::HeirMarksBuried],
+                &[object, &lighter.to_string()],
+            ));
+        }
+        None => {}
     }
+    lines
 }
 
 /// A deed of the turning, dated now (SPEC-GAPS KG-48: no place, weight 0, the other

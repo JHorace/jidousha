@@ -179,21 +179,25 @@ pub fn resolve_rolled(
 ) -> QuestPage {
     let quest = house.board[slot].quest.clone();
     let members = house.party(slot);
+    let sworn = house.board[slot].sworn;
     let (q, m) = (quest.clone(), members.clone());
     let told = move |house: &House, outcome: Outcome| story(content, house, &q, outcome, &m);
-    resolve_party(content, house, rng, quest, members, dice, &told)
+    resolve_party(content, house, rng, quest, members, sworn, dice, &told)
 }
 
 /// Resolve `quest` for `members` with `dice` thrown (SPEC §7.1), in exactly the stated
 /// order — a posted quest's, or a lock of the Sealed Door's (§16.2), whose `told` story
 /// names its bearer. At the Door there are no reward or disaster lines, no triumph deeds
-/// or lessons, and no sharing of the road; everything else applies.
+/// or lessons, and no sharing of the road; everything else applies. `sworn` is the
+/// variant's oath on it (DESIGN decision 10), judged at step 5b.
+#[allow(clippy::too_many_arguments)]
 pub fn resolve_party(
     content: &Content,
     house: &mut House,
     rng: &mut Rng,
     quest: Quest,
     members: Vec<HeroId>,
+    sworn: Option<crate::oath::Oath>,
     dice: [i32; 2],
     told: &dyn Fn(&House, Outcome) -> String,
 ) -> QuestPage {
@@ -236,6 +240,10 @@ pub fn resolve_party(
     let won = outcome >= Outcome::Success;
     if won {
         reward(&f, house, rng, &members, &mut lines);
+    }
+    // 5b. The variant's: the oath is kept or failed, on the living and the dead alike.
+    if let Some(oath) = sworn {
+        crate::oath::judge(&f, house, oath, &mut lines);
     }
     // 6. Trouble eases: gone on a win, one less on a loss.
     let record = &mut house.places[quest.place.index()];

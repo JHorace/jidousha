@@ -104,6 +104,11 @@ pub fn quest_sheet(content: &Content, house: &House, quest: usize, party: &[Hero
     for (id, call) in called(content, heroes, q.facts(), party) {
         out.push(line(Ink::Body, call_line(content, heroes, id, call), None));
     }
+    // The variant's oath, once sworn (DESIGN decision 10): SWORN BY and its stakes.
+    if let Some([heading, rest @ ..]) = crate::oath::sheet_lines(content, house, quest) {
+        out.push(line(Ink::Heading, heading, None));
+        out.extend(rest.into_iter().map(|text| line(Ink::Body, text, None)));
+    }
     let aptitude = content.lore.aptitudes[q.aptitude.index()].to_uppercase();
     out.push(line(
         Ink::Heading,

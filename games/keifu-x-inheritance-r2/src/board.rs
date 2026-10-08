@@ -26,6 +26,8 @@ pub struct Posted {
     pub quest: Quest,
     /// Exactly `quest.seats` slots.
     pub seats: Vec<Option<HeroId>>,
+    /// The variant's: the oath sworn on it, if any (DESIGN decision 10) — one value.
+    pub sworn: Option<crate::oath::Oath>,
 }
 
 /// Where a hero can sit: in summer the roster and the quests, in winter the roster
@@ -72,6 +74,7 @@ impl House {
                 .map(|quest| Posted {
                     seats: vec![None; quest.seats as usize],
                     quest,
+                    sworn: None,
                 })
                 .collect();
             self.board_report = None;
@@ -84,6 +87,7 @@ impl House {
             .map(|quest| Posted {
                 seats: vec![None; quest.seats as usize],
                 quest,
+                sworn: None,
             })
             .collect();
         self.board_report = Some(report);
@@ -183,7 +187,8 @@ impl House {
         match over? {
             Target::Seat(slot) => Some(slot),
             Target::Hero(id) => self.slot_of(id),
-            Target::Quest(quest) => self.board[quest]
+            // The variant's oath button is part of its card (DESIGN decision 10).
+            Target::Quest(quest) | Target::Swear(quest) => self.board[quest]
                 .seats
                 .iter()
                 .position(|seat| seat.is_none() || *seat == Some(hero))

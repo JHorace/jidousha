@@ -18,7 +18,7 @@ use crate::constants::{
 use crate::content::Content;
 use crate::dream::{progress, told_title};
 use crate::grief::grieve;
-use crate::heirs::{heirs, undone_dream};
+use crate::heirs::{bequeath, heirs, undone_dream};
 use crate::hero::{DreamFate, Fate, Hero, HeroId};
 use crate::house::House;
 use crate::ids::{BondKind, Destiny, Pool};
@@ -116,6 +116,8 @@ pub fn death_page(content: &Content, house: &mut House, dead: HeroId, rng: &mut 
             ],
         ));
     }
+    // The variant's (DESIGN decision 9): the marks the dead leaves on the name.
+    lines.extend(crate::marks::leaves_marks(content, hero));
     let bequest_end = lines.len();
     let heirloom = hero.heirloom.as_ref().map(|h| h.name.clone());
     house.heroes[dead].bequest_heirloom = heirloom.clone();
@@ -127,11 +129,15 @@ pub fn death_page(content: &Content, house: &mut House, dead: HeroId, rng: &mut 
         Some(dream) if dream.is_fulfilled() => hero.dream_fate = DreamFate::Fulfilled,
         Some(_) => {}
     }
-    let leaves = heirloom.is_some() || undone.is_some();
+    // The variant's (DESIGN decisions 6 and 9): an outsider's page gathers no heirs, and
+    // a page that leaves only marks waits for no one; either is decided on making, by
+    // the same bequest "No one" carries out.
+    let leaves = house.heroes[dead].family && (heirloom.is_some() || undone.is_some());
     let heirs = if leaves {
         heirs(&house.heroes, dead)
     } else {
-        house.heroes[dead].bequest_decided = true;
+        let left = bequeath(content, house, dead, None);
+        lines.splice(bequest_end..bequest_end, left);
         Vec::new()
     };
     // 8. The epitaph, composed with the wording step 1 rolled.

@@ -46,6 +46,7 @@ pub fn stage(content: &Content, house: &mut House, slot: usize, title: &str) {
     house.board[slot] = Posted {
         seats: vec![None; quest.seats as usize],
         quest,
+        sworn: None,
     };
 }
 

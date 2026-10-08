@@ -304,6 +304,7 @@ pub fn stage_board(sim: &mut jidousha::prelude::HeadlessSim, templates: &[usize;
             crate::board::Posted {
                 seats: vec![None; quest.seats as usize],
                 quest,
+                sworn: None,
             }
         })
         .collect();

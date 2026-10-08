@@ -75,6 +75,42 @@ fn paragraph(text: &str, width: f32, size: f32, color: Color) -> Line {
     }
 }
 
+/// The variant's WOULD INHERIT section (DESIGN decision 12), for `heir` on turning page
+/// `page`'s death page: `inheritance::would_inherit`, its heading set as a heading.
+/// Nothing when the page is no death page waiting for an heir.
+pub fn would_inherit_lines(
+    content: &Content,
+    house: &House,
+    page: usize,
+    heir: HeroId,
+    width: f32,
+) -> Vec<Line> {
+    let Some(bequest) = house
+        .passage
+        .as_ref()
+        .and_then(|p| p.pages.get(page))
+        .and_then(|p| p.bequest.as_ref())
+        .filter(|b| b.undecided())
+    else {
+        return Vec::new();
+    };
+    crate::inheritance::would_inherit(content, &house.heroes, bequest.dead, heir)
+        .into_iter()
+        .enumerate()
+        .map(|(index, text)| {
+            let mut line = if index == 0 {
+                paragraph(&text, width, MIN_TEXT, ink::HEADING)
+            } else {
+                paragraph(&text, width, MIN_TEXT, ink::BODY)
+            };
+            if index == 0 {
+                line.space = 6.0;
+            }
+            line
+        })
+        .collect()
+}
+
 /// The hero sheet: one column, a line of the sheet to a line of the dock.
 pub fn hero_lines(content: &Content, heroes: &[Hero], id: HeroId, width: f32) -> Vec<Line> {
     let sheet = hero_sheet(content, heroes, id);

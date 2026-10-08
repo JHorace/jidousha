@@ -169,6 +169,7 @@ fn winning_a_ghosts_quest_lays_it_and_swap_removes_it_from_the_list() {
     house.board[0] = crate::board::Posted {
         seats: vec![None; 2],
         quest,
+        sworn: None,
     };
     seat(&mut house, 0, &[ysolde]);
     aim(&mut house, 0, [4, 4], 1);
@@ -286,6 +287,7 @@ fn ghost_on_the_board(content: &crate::content::Content, house: &mut House, plac
     house.board[0] = crate::board::Posted {
         seats: vec![None; 2],
         quest,
+        sworn: None,
     };
 }
 

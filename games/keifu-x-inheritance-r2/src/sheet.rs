@@ -144,6 +144,17 @@ pub fn hero_sheet(content: &Content, heroes: &[Hero], id: HeroId) -> Sheet {
             Ink::Body,
             fmt(&words[W::SheetRenownSettled], &[&hero.renown.to_string()]),
         ),
+        // The variant's (DESIGN decision 2): an outsider's renown, toward wedding in.
+        Fate::Living if !hero.family => line(
+            Ink::Body,
+            fmt(
+                &words[W::SheetRenownOutsider],
+                &[
+                    &hero.renown.to_string(),
+                    &crate::constants::MARRY_IN_RENOWN.to_string(),
+                ],
+            ),
+        ),
         Fate::Living => line(
             Ink::Body,
             fmt(&words[W::SheetRenown], &[&hero.renown.to_string()]),
@@ -188,6 +199,25 @@ pub fn hero_sheet(content: &Content, heroes: &[Hero], id: HeroId) -> Sheet {
     for scar in &hero.scars {
         out.push(line(Ink::Heading, &words[W::SheetScar]));
         out.push(line(Ink::Body, scar.clone()));
+    }
+    // The variant's black marks on the name (DESIGN decision 9).
+    if !hero.marks.is_empty() {
+        out.push(line(Ink::Heading, &words[W::SheetMarks]));
+    }
+    for mark in &hero.marks {
+        out.push(line(
+            Ink::Warning,
+            fmt(
+                &words[W::SheetMark],
+                &[
+                    &mark.title,
+                    &content.lore.places[mark.place.index()].name,
+                    &mark.year.to_string(),
+                    &heroes[mark.by].name,
+                    &mark.weight.to_string(),
+                ],
+            ),
+        ));
     }
     Sheet {
         lines: out,

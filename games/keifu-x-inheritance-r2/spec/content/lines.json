@@ -1584,6 +1584,131 @@
       "args": [],
       "when": "",
       "source": "scene/scenes/ending.jai:145"
+    },
+    "oath.kept": {
+      "text": "% swore it in the family's name and kept the oath: +% renown to % and +% to the house.",
+      "args": [
+        "swearer first name",
+        "weight",
+        "object pronoun",
+        "weight"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "oath.failed": {
+      "text": "% swore it in the family's name and failed: -% renown to %, -% to the house, and a mark of % on the name.",
+      "args": [
+        "swearer first name",
+        "weight",
+        "object pronoun",
+        "weight",
+        "weight"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "marks.drain_one": {
+      "text": "The name carries a mark: -% renown.",
+      "args": [
+        "MARK_DRAIN"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "marks.drain_many": {
+      "text": "The name carries % marks: -% renown.",
+      "args": [
+        "count",
+        "count x MARK_DRAIN"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "death.leaves_marks": {
+      "text": "% leaves marks on the name: %.",
+      "args": [
+        "subject pronoun, capitalised",
+        "title (weight) list"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "heir.takes_marks": {
+      "text": "% takes up the marks: %.",
+      "args": [
+        "heir first name",
+        "title (weight) list"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "heir.mark_struck": {
+      "text": "The mark of % is struck from the name.",
+      "args": [
+        "title"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "heir.marks_buried": {
+      "text": "The marks go into the ground with %: the name is lighter by %.",
+      "args": [
+        "object pronoun",
+        "count x MARK_DRAIN"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "heir.takes_blessings": {
+      "text": "% takes up %.",
+      "args": [
+        "heir first name",
+        "blessing title list"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "winter.unproven": {
+      "text": "% is unproven: renown % of %. The house will not have % yet.",
+      "args": [
+        "outsider first name",
+        "renown",
+        "MARRY_IN_RENOWN",
+        "object pronoun"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "winter.neither_family": {
+      "text": "% and % are neither of the house. They may not wed under this roof.",
+      "args": [
+        "first garden seat first name",
+        "second"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "winter.wed_in": {
+      "text": "% weds into the house and takes the name %: renown +% to the house.",
+      "args": [
+        "outsider first name",
+        "house name",
+        "dowry"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "winter.tale_told_outsider": {
+      "text": "% told the tale; an outsider's telling adds nothing to the name.",
+      "args": [
+        "teller first name"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "quest.reward_outsiders": {
+      "text": "+% renown to each who went. Outsiders bring the house nothing.",
+      "args": [
+        "renown"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "birth.bred_true": {
+      "text": "% has the line's gift: +% %.",
+      "args": [
+        "child first name",
+        "BRED_TRUE_BONUS",
+        "aptitude"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
     }
   }
 }

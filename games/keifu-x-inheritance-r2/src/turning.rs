@@ -70,8 +70,10 @@ pub fn turn_the_year(
     pages.extend(births(content, house, rng));
     pages.extend(comings_of_age(content, house, rng));
     pages.extend(wanderer(content, house, rng));
-    // 8. The tales.
+    // 8. The tales, and beside them the variant's drain of the name's marks (DESIGN
+    // decision 9).
     let mut year_lines = tales(content, house);
+    year_lines.extend(crate::marks::drain(content, house));
     // 9. Phase lines and the year's moment, hero by hero.
     for id in 0..house.heroes.len() {
         if !house.heroes[id].is_living() {

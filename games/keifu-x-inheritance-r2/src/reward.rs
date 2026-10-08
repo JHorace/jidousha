@@ -1,5 +1,6 @@
 //! The reward for a won quest (SPEC §7.3, `lineage/tale.jai:171-232`): renown for the
-//! house and for each who went, the carriers' extra, the triumph deeds, and the two
+//! house — in the variant, only when a family member went (DESIGN decision 5) — and for
+//! each who went, the carriers' extra, the triumph deeds, and the two
 //! lessons a quest can teach.
 
 use jidousha::prelude::Rng;
@@ -55,8 +56,15 @@ pub fn reward(
         .copied()
         .filter(|&m| house.heroes[m].destiny.kind == Destiny::CarryTheHouse)
         .collect();
-    house.add_renown(renown + carriers.len() as i32 * CARRIED_RENOWN);
-    if !at_door {
+    // The variant's (DESIGN decision 5): only the family earns for the name.
+    let family = members.iter().any(|&m| house.heroes[m].family);
+    if family {
+        house.add_renown(renown + carriers.len() as i32 * CARRIED_RENOWN);
+    }
+    if !at_door && !family {
+        out.push(fmt(&words[W::QuestRewardOutsiders], &[&renown.to_string()]));
+    }
+    if !at_door && family {
         let whom = match members {
             [one] => house.heroes[*one].name.clone(),
             _ => words[W::QuestRewardEach].to_owned(),

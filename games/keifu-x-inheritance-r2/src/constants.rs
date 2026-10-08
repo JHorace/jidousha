@@ -250,8 +250,6 @@ pub const WANDERER_CHANCE_LIMIT: f64 = 0.6;
 pub const FEWEST_ADULTS: usize = 5;
 /// The most personal renown a wanderer arrives with, from 0 (CONSTANTS §10).
 pub const WANDERER_RENOWN_HIGH: i32 = 2;
-/// `NEWBORN_APTITUDE_SHARE`: a newborn's base is `max((p1 + p2) / 4 + U{0,1}, 1)` (CONSTANTS §10).
-pub const NEWBORN_APTITUDE_SHARE: i32 = 4;
 /// The least a newborn's base aptitude can be (CONSTANTS §10, the `max(.., 1)`).
 pub const NEWBORN_APTITUDE_LEAST: i32 = 1;
 /// `INHERITED_FEAR_CHANCE`: a parent's unconquered, unbroken fear passes (CONSTANTS §10).
@@ -327,3 +325,20 @@ pub const TYPEWRITER_LETTERS_PER_SECOND: f32 = 90.0;
 
 /// Bonds shown on the hero sheet before "and N more" (CONSTANTS §14).
 pub const BONDS_SHOWN: usize = 6;
+
+/// The variant's (Keifu X Inheritance, `tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md`
+/// decision 2): the personal renown an outsider needs to wed into the family.
+pub const MARRY_IN_RENOWN: i32 = 4;
+/// The variant's (decision 3): an outsider wedding in brings `renown / DOWRY_SHARE` to
+/// the house, in integer division.
+pub const DOWRY_SHARE: i32 = 2;
+/// The variant's (decision 9): house renown each mark on the name drains at the turning.
+pub const MARK_DRAIN: i32 = 1;
+/// The variant's (decision 9): a mark arrives at an heir at `weight / MARK_HALVING`;
+/// a mark that reaches 0 is struck.
+pub const MARK_HALVING: i32 = 2;
+/// The variant's (decision 11): a newborn's aptitude is `dominant / DOMINANT_SHARE +
+/// U{0,1}`, at least `NEWBORN_APTITUDE_LEAST`.
+pub const DOMINANT_SHARE: i32 = 2;
+/// The variant's (decision 11): the bonus to an aptitude both parents have as their best.
+pub const BRED_TRUE_BONUS: i32 = 1;

@@ -130,6 +130,9 @@ pub enum Target {
     Heir(usize, Option<HeroId>),
     /// The top bar's Door lines: pointing at them opens the Door's help in the dock.
     DoorHelp,
+    /// The variant's oath button on board slot `.0`'s card: swear it, or withdraw it
+    /// (DESIGN decision 10).
+    Swear(usize),
 }
 
 /// A hero in hand: picked up from a seat and not yet released.
@@ -158,6 +161,9 @@ pub struct UiState {
     pub pointing_group: Option<crate::hearth::Group>,
     /// The pointer rests on the top bar's Door lines.
     pub pointing_door: bool,
+    /// The variant's: the heir button the pointer rests on, as (turning page, heir),
+    /// so the dock adds what they would inherit to their sheet (DESIGN decision 12).
+    pub pointing_heir: Option<(usize, HeroId)>,
     /// The hero in hand, if a drag is under way.
     pub drag: Option<Drag>,
     /// The first line the sheet dock shows: how far its sheet is scrolled.

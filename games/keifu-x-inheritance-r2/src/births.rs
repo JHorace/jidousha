@@ -4,26 +4,26 @@
 //!
 //! Each pair is asked once, from the partner created first, over the household as it
 //! stood before any birth; the house's room and the yard's are asked before each roll,
-//! and a full house stops every birth after it. The child takes a share of both
-//! parents' base aptitudes, the house of the parent created first [emergent] (OQ-12),
+//! and a full house stops every birth after it. The child takes each base aptitude
+//! from one parent or the other (the variant's, `inheritance::conceive`), the house of the parent created first [emergent] (OQ-12),
 //! maybe a parent's fear, and both parents' blessings.
 
 use jidousha::prelude::Rng;
 
 use crate::blessing::blessing_effect;
 use crate::bonds::form;
-use crate::chance::{between, chance, index};
+use crate::chance::{chance, index};
 use crate::constants::{
-    BIRTH_CHANCE_PERCENT, BORN_BRAVE_CHANCE, BROKEN_FEAR_CHANCE, CHILDREN_PER_PAIR,
-    CONQUERED_FEAR_BONUS, HOUSEHOLD_LIMIT, INHERITED_FEAR_CHANCE, MARRYING_AGE,
-    NEWBORN_APTITUDE_LEAST, NEWBORN_APTITUDE_SHARE, PARENT_AGE_HIGH, SURPASSING_CHILD_BONUS,
-    YARD_SPOTS,
+    BIRTH_CHANCE_PERCENT, BORN_BRAVE_CHANCE, BRED_TRUE_BONUS, BROKEN_FEAR_CHANCE,
+    CHILDREN_PER_PAIR, CONQUERED_FEAR_BONUS, HOUSEHOLD_LIMIT, INHERITED_FEAR_CHANCE, MARRYING_AGE,
+    PARENT_AGE_HIGH, SURPASSING_CHILD_BONUS, YARD_SPOTS,
 };
 use crate::content::Content;
 use crate::heirs::deed;
 use crate::hero::{DeedKind, HeroId};
 use crate::house::House;
-use crate::ids::{Aptitude, BondKind, Destiny, Pool, Pronoun, Tag};
+use crate::ids::{BondKind, Destiny, Pool, Pronoun, Tag};
+use crate::inheritance::conceive;
 use crate::newcomers::{fear_of, newcomer, roll_pronoun};
 use crate::passage::{PageKind, TurnPage};
 use crate::text::{capitalized, fmt, name_list};
@@ -99,12 +99,8 @@ fn born(
     let pronoun = roll_pronoun(rng);
     let name = house.bags.name(pronoun, rng);
     let family = house.heroes[first].house.clone();
-    let mut aptitudes = [0; 3];
-    for aptitude in Aptitude::ALL {
-        let shared = house.heroes[first].base(*aptitude) + house.heroes[second].base(*aptitude);
-        aptitudes[aptitude.index()] =
-            (shared / NEWBORN_APTITUDE_SHARE + between(rng, 0, 1)).max(NEWBORN_APTITUDE_LEAST);
-    }
+    // The variant's (DESIGN decision 11): bred from one parent or the other, per aptitude.
+    let (mut aptitudes, bred_true) = conceive(&house.heroes[first], &house.heroes[second], rng);
     for parent in [first, second] {
         let hero = &mut house.heroes[parent];
         let childless = !hero.bonds.iter().any(|b| b.kind == BondKind::Child);
@@ -141,6 +137,8 @@ fn born(
     }
     let mut child = newcomer(name, family, pronoun, 0, year, fear);
     child.aptitudes = aptitudes;
+    // DESIGN decision 1: everyone born under the roof is family.
+    child.family = true;
     child.parents = [Some(first), Some(second)];
     for parent in [first, second] {
         for blessing in &house.heroes[parent].blessings {
@@ -203,6 +201,16 @@ fn born(
         ),
         (None, None) => fmt(&words[W::BirthOwnFear], &[&forms.subject, &tag.noun]),
     });
+    if let Some(aptitude) = bred_true {
+        lines.push(fmt(
+            &words[W::BirthBredTrue],
+            &[
+                &child.name,
+                &BRED_TRUE_BONUS.to_string(),
+                &content.lore.aptitudes[aptitude.index()],
+            ],
+        ));
+    }
     match child.blessings.as_slice() {
         [] => {}
         [one] => lines.push(fmt(

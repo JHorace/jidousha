@@ -316,6 +316,33 @@
       "args": [
         "items, comma-separated"
       ]
+    },
+    "swear": {
+      "text": "Swear it",
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "withdraw": {
+      "text": "Withdraw the oath",
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "sworn": {
+      "text": "Sworn by %: % must %. Fails % in 100.",
+      "args": [
+        "swearer first name",
+        "subject pronoun",
+        "the call's telling word",
+        "fail percent"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "oath_stakes": {
+      "text": "Kept: +% renown, % and the house's. Failed: a mark of % on the name.",
+      "args": [
+        "weight",
+        "swearer possessive",
+        "weight"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
     }
   },
   "quest_sheet": {
@@ -479,6 +506,49 @@
     "power_line_patron": {
       "text": "A patron at Court",
       "source": "lineage/quest.jai:210"
+    },
+    "sworn_by": {
+      "text": "SWORN BY %",
+      "args": [
+        "swearer first name, upper case"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "oath_need": {
+      "text": "% must %, or the name is marked.",
+      "args": [
+        "swearer first name",
+        "the call's telling word"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "oath_fails": {
+      "text": "Fails % in 100.",
+      "args": [
+        "fail percent"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "oath_kept": {
+      "text": "Kept: +% renown to % and +% to the house.",
+      "args": [
+        "weight",
+        "swearer first name",
+        "weight"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "oath_failed": {
+      "text": "Failed: -% renown to % and -% to the house, and a mark of % on the name: -% renown a year while it stands, passed to % heir at half its weight, buried with the last to carry it.",
+      "args": [
+        "weight",
+        "swearer first name",
+        "weight",
+        "weight",
+        "MARK_DRAIN",
+        "swearer possessive"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
     }
   },
   "door_sheet": {
@@ -729,6 +799,77 @@
       "args": [
         "count"
       ]
+    },
+    "renown_outsider": {
+      "text": "Renown %, an outsider: % to wed into the house",
+      "args": [
+        "renown",
+        "MARRY_IN_RENOWN"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "marks": {
+      "text": "MARKS",
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "mark": {
+      "text": "%, %, year %, by % (%)",
+      "args": [
+        "title",
+        "place name",
+        "year",
+        "who took it",
+        "weight"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "would_inherit": {
+      "text": "WOULD INHERIT",
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "inherit_nothing": {
+      "text": "Nothing but the name.",
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "inherit_heirloom": {
+      "text": "% (%)",
+      "args": [
+        "heirloom name",
+        "its effect"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "inherit_dream": {
+      "text": "The dream: %",
+      "args": [
+        "told title"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "inherit_blessing": {
+      "text": "% (%)",
+      "args": [
+        "blessing title",
+        "its effect"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "inherit_mark": {
+      "text": "A mark of %: %, year %",
+      "args": [
+        "weight it arrives at",
+        "title",
+        "year"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "inherit_mark_struck": {
+      "text": "A mark struck: %, year %",
+      "args": [
+        "title",
+        "year"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
     }
   },
   "telling": {
@@ -906,14 +1047,15 @@
       ]
     },
     "garden_help": {
-      "text": "Two may wed when both are % or older and no more than % years apart. Kin cannot wed. From the year after they wed, a pair may have a child, % times in a hundred each winter, while both are % to %. Rivals who walk here a winter make peace.",
+      "text": "Two may wed when both are % or older and no more than % years apart. Kin cannot wed. From the year after they wed, a pair may have a child, % times in a hundred each winter, while both are % to %. Rivals who walk here a winter make peace. An outsider weds in only at renown %, takes the family's name, brings half their renown to the house, and may be named an heir from then. Two outsiders cannot wed under this roof.",
       "source": "scene/scenes/winter.jai:111",
       "args": [
         "18",
         "15",
         "60",
         "18",
-        "45"
+        "45",
+        "MARRY_IN_RENOWN (4), the variant's"
       ]
     },
     "training_help": {
@@ -988,6 +1130,25 @@
       "WILL_WED": {
         "text": "will wed",
         "source": "lineage/hearth.jai:180"
+      },
+      "NEITHER_FAMILY": {
+        "text": "neither is family",
+        "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+      },
+      "UNPROVEN": {
+        "text": "unproven, renown % of %",
+        "args": [
+          "the outsider's renown",
+          "MARRY_IN_RENOWN"
+        ],
+        "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+      },
+      "WILL_WED_IN": {
+        "text": "will wed, and take the name %",
+        "args": [
+          "the family spouse's house name"
+        ],
+        "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
       }
     },
     "lesson_excuses": {

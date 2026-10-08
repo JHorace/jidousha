@@ -19,6 +19,7 @@ use crate::hero::{Deed, DeedKind, HeroId};
 use crate::house::House;
 use crate::ids::{BondKind, Pool, WinterAction};
 use crate::moment::Moment;
+use crate::outsiders::join;
 use crate::plans::{
     Courtship, Lesson, Rest, Teller, bench_lesson, courtship, rest, tellers, yard_lesson,
 };
@@ -279,7 +280,7 @@ fn court(
     let words = &content.words;
     let year = house.calendar.current_year();
     match (verdict, pair) {
-        (Courtship::WillWed, [Some(a), Some(b)]) => {
+        (Courtship::WillWed | Courtship::WillWedIn { .. }, [Some(a), Some(b)]) => {
             form(&mut house.heroes, a, b, BondKind::Spouse, year);
             let (an, bn) = (house.heroes[a].name.clone(), house.heroes[b].name.clone());
             lines.push(fmt(
@@ -300,6 +301,19 @@ fn court(
                     telling: fmt(&words[W::DeedWed], &[&other_name]),
                 });
             }
+            // The variant's (DESIGN decision 3): the outsider joins the family.
+            if let Courtship::WillWedIn { outsider, spouse } = verdict {
+                let dowry = join(&mut house.heroes, outsider, spouse);
+                house.add_renown(dowry);
+                lines.push(fmt(
+                    &words[W::WinterWedIn],
+                    &[
+                        &house.heroes[outsider].name,
+                        &house.heroes[outsider].house,
+                        &dowry.to_string(),
+                    ],
+                ));
+            }
         }
         (Courtship::Rivals, [Some(a), Some(b)]) => {
             change(&mut house.heroes, a, b, BondKind::Friend, year);
@@ -309,7 +323,36 @@ fn court(
             ));
         }
         (Courtship::Nobody, _) => {}
-        (Courtship::WillWed | Courtship::Rivals, _) => panic!(
+        (
+            Courtship::Unproven {
+                who,
+                renown,
+                threshold,
+            },
+            _,
+        ) => {
+            let hero = &house.heroes[who];
+            lines.push(fmt(
+                &words[W::WinterUnproven],
+                &[
+                    &hero.name,
+                    &renown.to_string(),
+                    &threshold.to_string(),
+                    &content.lore.pronouns[hero.pronoun.index()].object,
+                ],
+            ));
+        }
+        (Courtship::NeitherFamily, [Some(a), Some(b)]) => lines.push(fmt(
+            &words[W::WinterNeitherFamily],
+            &[&house.heroes[a].name, &house.heroes[b].name],
+        )),
+        (
+            Courtship::WillWed
+            | Courtship::WillWedIn { .. }
+            | Courtship::Rivals
+            | Courtship::NeitherFamily,
+            _,
+        ) => panic!(
             "[keifu_x_inheritance_r2] the garden's verdict {verdict:?} came with an empty seat\n  likely \
              cause: courtship() judged a pair it was not given\n  fix: SPEC §11.6 checks \
              the empty seats first"
@@ -365,6 +408,10 @@ fn tell_the_tale(
             house.add_renown(TALE_RENOWN);
             let told = fmt(house.writing.pick(content, Pool::TalesTold, rng), &[&name]);
             lines.push(fmt(&words[W::WinterTaleTold], &[&told, &renown, &name]));
+        }
+        // The variant's (DESIGN decision 5): an outsider's telling is their own.
+        Teller::Own if !house.heroes[hero].family => {
+            lines.push(fmt(&words[W::WinterTaleToldOutsider], &[&name]))
         }
         Teller::Own => lines.push(fmt(
             &words[W::WinterTaleToldAgain],

@@ -279,6 +279,12 @@ pub struct Hero {
     pub fears_faced: i32,
     /// Winters taught.
     pub winters_taught: i32,
+    /// The variant's: family, not an outsider (DESIGN decision 1) — the founders and
+    /// everyone born under the roof, and an outsider once they wed in.
+    pub family: bool,
+    /// The variant's: the black marks this hero carries on the family name, in the
+    /// order they were taken (DESIGN decisions 8-9).
+    pub marks: Vec<crate::marks::Mark>,
 }
 
 impl Hero {

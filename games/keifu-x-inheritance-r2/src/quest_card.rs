@@ -49,6 +49,9 @@ pub struct CardReading {
     pub dream: Option<String>,
     /// "Ysolde will not go." for a watched hero who refuses, else the fear line.
     pub warning: Option<String>,
+    /// The variant's oath: its lines once sworn, and its button (DESIGN decision 10);
+    /// `None` when nobody is sworn and nobody may swear.
+    pub oath: Option<crate::oath::OathReading>,
 }
 
 /// The seats board slot `quest` shows while `hand` (a hero, and where they would
@@ -166,6 +169,7 @@ pub fn read_card(
             }
         },
         warning,
+        oath: crate::oath::read_oath(content, house, quest),
     }
 }
 

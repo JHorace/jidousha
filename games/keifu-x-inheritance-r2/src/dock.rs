@@ -125,7 +125,17 @@ pub fn lay_out(page: &mut Page, content: &Content, house: &House, ui: &UiState) 
     let width = area.size().x;
     let lines = match subject(ui) {
         Subject::Help => help_lines(content, house, width),
-        Subject::Hero(id) => hero_lines(content, &house.heroes, id, width),
+        Subject::Hero(id) => {
+            let mut lines = hero_lines(content, &house.heroes, id, width);
+            // The variant's (DESIGN decision 12): pointing at an heir button, what that
+            // heir would inherit.
+            if let Some((page, heir)) = ui.pointing_heir.filter(|(_, heir)| *heir == id) {
+                lines.extend(crate::dock_lines::would_inherit_lines(
+                    content, house, page, heir, width,
+                ));
+            }
+            lines
+        }
         Subject::Quest(quest) => quest_lines(content, house, quest, width),
         Subject::Group(group) => group_lines(content, group, width),
         Subject::Door => crate::dock_lines::door_help_lines(content, house, width),

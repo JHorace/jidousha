@@ -174,7 +174,8 @@ fn no_child_is_born_to_a_house_of_twelve_or_a_yard_of_six() {
 }
 
 #[test]
-fn a_child_takes_a_quarter_of_both_parents_the_first_parents_house_both_bonds_and_both_blessings() {
+fn a_child_takes_half_of_one_parent_per_aptitude_the_first_parents_house_both_bonds_and_both_blessings()
+ {
     let (content, mut house, maren, brannoc) = wed_house();
     let rest = crate::hero::Blessing {
         title: "Garrick's rest".to_owned(),
@@ -191,8 +192,11 @@ fn a_child_takes_a_quarter_of_both_parents_the_first_parents_house_both_bonds_an
     let (born, pages) = a_birth(&content, &house);
     let child = born.heroes.len() - 1;
     let hero = &born.heroes[child];
-    // Maren 4/6/3 and Brannoc 6/2/3: 10/4, 8/4, 6/4, each + 0 or 1.
-    assert!([2, 3].contains(&hero.aptitudes[0]) && [2, 3].contains(&hero.aptitudes[1]));
+    // The variant's (DESIGN decision 11, rewritten from mainline's quarter of both):
+    // Maren 4/6/3 and Brannoc 6/2/3, half of one parent's each + 0 or 1 — Might 4/2 or
+    // 6/2, Wits 6/2 or 2/2, Spirit 3/2; their bests differ, so nothing breeds true.
+    assert!([2, 3, 4].contains(&hero.aptitudes[0]));
+    assert!([1, 2, 3, 4].contains(&hero.aptitudes[1]));
     assert!([1, 2].contains(&hero.aptitudes[2]));
     assert_eq!(
         (hero.house.as_str(), hero.age, hero.born_year),
@@ -252,9 +256,11 @@ fn a_child_will_surpass_a_childless_parent_by_two_in_every_aptitude_and_the_dest
     house.calendar.begin_winter();
     let (born, _) = a_birth(&content, &house);
     let child = &born.heroes[born.heroes.len() - 1];
-    // Ysolde 2/5/4, Brannoc 6/2/3: 8/4, 7/4, 7/4 + 0 or 1, then + 2.
-    assert!([4, 5].contains(&child.aptitudes[0]) && [3, 4].contains(&child.aptitudes[1]));
-    assert!([3, 4].contains(&child.aptitudes[2]));
+    // The variant's (rewritten): Ysolde 2/5/4, Brannoc 6/2/3, half of one parent's each
+    // + 0 or 1 — Might 1..2 or 3..4, Wits 2..3 or 1..2, Spirit 2..3 or 1..2 — then + 2.
+    assert!([3, 4, 5, 6].contains(&child.aptitudes[0]));
+    assert!([3, 4, 5].contains(&child.aptitudes[1]));
+    assert!([3, 4, 5].contains(&child.aptitudes[2]));
     assert!(born.heroes[ysolde].destiny.fulfilled);
     assert!(
         !born.heroes[brannoc].destiny.fulfilled,
@@ -330,7 +336,8 @@ fn the_birth_fear_line_names_the_parent_whose_fear_it_is_the_second_first() {
 #[test]
 fn a_newborn_never_has_less_than_one_and_takes_each_roll_of_zero_or_one() {
     let (content, mut house, maren, brannoc) = wed_house();
-    // Spirit 1 and 1: 2 / 4 is 0, + 0 or 1, at least 1 — always 1.
+    // The variant's (rewritten): Spirit 1 and 1: 1 / 2 is 0, + 0 or 1, at least 1 —
+    // always 1.
     house.heroes[maren].aptitudes[2] = 1;
     house.heroes[brannoc].aptitudes[2] = 1;
     let mut might = std::collections::BTreeSet::new();
@@ -343,8 +350,8 @@ fn a_newborn_never_has_less_than_one_and_takes_each_roll_of_zero_or_one() {
         assert_eq!(child.aptitudes[2], 1);
         might.insert(child.aptitudes[0]);
     }
-    // Might 4 and 6: 10 / 4 is 2, + 0 or 1.
-    assert_eq!(might.into_iter().collect::<Vec<_>>(), [2, 3]);
+    // Might 4 or 6: 4 / 2 is 2 or 6 / 2 is 3, + 0 or 1.
+    assert_eq!(might.into_iter().collect::<Vec<_>>(), [2, 3, 4]);
 }
 
 #[test]
