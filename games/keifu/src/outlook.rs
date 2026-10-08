@@ -281,6 +281,40 @@ mod tests {
     }
 
     #[test]
+    fn a_remembered_barrow_king_is_left_out_of_the_barrows_telegraph() {
+        // The other three at trouble 1 in year 2: lamps (2-3 seats, danger 2) -> room
+        // 1-2, danger 3, need 6 * 2 + 1; a name (1-2, danger 1) -> room 1, danger 2;
+        // Grave goods (2, danger 2) -> room 1, danger 3, need 6 + 1.
+        let (content, mut house) = house();
+        let king = templates_at(&content, Place::Barrow)
+            .into_iter()
+            .find(|&t| content.quest_templates[t].title == "The Barrow-king wakes")
+            .expect("the Barrow-king is a Barrow template");
+        house.templates_last[Place::Barrow.index()] = Some(king);
+        let telegraph = telegraph(&content, &house, 0).expect("year 1 has a next summer");
+        assert_eq!(
+            sheet_line(&content, &telegraph),
+            "Left: trouble 1 here. Next time: danger 2-3, room 1-2, needs up to 13, pays 2-3."
+        );
+    }
+
+    #[test]
+    fn leaving_a_quest_in_year_six_telegraphs_year_sevens_need() {
+        // Year 7 asks one more per seat: the Barrow-king at trouble 1 has room 2 and
+        // needs 2 * (3 + 3 + 1 + 1) + 1 = 17.
+        let (content, mut house) = house();
+        while house.calendar.current_year() < 6 {
+            house.calendar.begin_winter();
+            house.calendar.begin_summer();
+        }
+        let grave = house.board[0].quest.template();
+        house.templates_last[Place::Barrow.index()] = grave;
+        let telegraph = telegraph(&content, &house, 0).expect("year 6 has a next summer");
+        assert_eq!(telegraph.demand_most, 17);
+        assert_eq!(card_line(&content, &telegraph), "Left: danger 2-4, room 1-2");
+    }
+
+    #[test]
     fn seating_a_party_turns_a_rising_place_into_one_that_may_ease() {
         let (_, mut house) = house();
         let barrow = Place::Barrow.index();

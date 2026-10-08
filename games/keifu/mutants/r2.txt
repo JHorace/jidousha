@@ -1,0 +1,101 @@
+#! keifu-fixes-r2 — the telegraph, the foresight and the rewritten dice text. One fault per
+#! rule the new surfaces state: the trouble a left or answered place will have, the
+#! templates the telegraph ranges over (the remembered one left out), next year's stakes,
+#! the wobble, the card and sheet lines, the seated card's silence, the foresight's three
+#! cases, the ghost's promise, the year before the Door, the demand step, the dice swing,
+#! and the label, the dock subject and the card line that put them on screen.
+
+### R1 risen trouble uncapped
+@ src/resolve.rs
+-     (trouble + 1).min(TROUBLE_LIMIT)
++     trouble + 1
+
+### R2 a win leaves trouble as it was
+@ src/resolve.rs
+-     if won { 0 } else { (trouble - 1).max(0) }
++     if won { trouble } else { (trouble - 1).max(0) }
+
+### R3 the telegraph forgets the trouble rises
+@ src/outlook.rs
+-     let trouble = risen_trouble(house.places[place.index()].trouble);
++     let trouble = house.places[place.index()].trouble;
+
+### R4 the telegraph reads this year's stakes, not next year's
+@ src/outlook.rs
+-     let year = house.calendar.current_year() + 1;
++     let year = house.calendar.current_year();
+
+### R5 the remembered template is not left out
+@ src/outlook.rs
+-         if Some(template) == remembered {
++         if Some(template) == remembered && template > usize::MAX - 1 {
+
+### R6 the need is the wobble down, not up
+@ src/outlook.rs
+-             let most = next.demand + DEMAND_WOBBLE;
++             let most = next.demand - DEMAND_WOBBLE;
+
+### R7 the card line swaps danger and room
+@ src/outlook.rs
+-         &[&telegraph.danger.told(), &telegraph.seats.told()],
++         &[&telegraph.seats.told(), &telegraph.danger.told()],
+
+### R8 the foresight leaves an unanswered place as it is
+@ src/outlook.rs
+-                 Some(slot) if house.party(slot).is_empty() => Span::point(risen_trouble(now)),
++                 Some(slot) if house.party(slot).is_empty() => Span::point(now),
+
+### R9 the foresight raises an answered place too
+@ src/outlook.rs
+-                 Some(_) => Span::point(eased_trouble(now, true)).widen(eased_trouble(now, false)),
++                 Some(_) => Span::point(risen_trouble(now)),
+
+### R10 the foresight raises a place off the board
+@ src/outlook.rs
+-                 None => Span::point(now),
++                 None => Span::point(risen_trouble(now)),
+
+### R11 the last ghost, not the first
+@ src/outlook.rs
+-     let ghost = house.ghosts.first()?;
++     let ghost = house.ghosts.last()?;
+
+### R12 the ghost's "unless laid" inverted
+@ src/outlook.rs
+-         house.board[s].quest.source == Source::Ghost(ghost.hero) && !house.party(s).is_empty()
++         house.board[s].quest.source == Source::Ghost(ghost.hero) && house.party(s).is_empty()
+
+### R13 the demand step a year early
+@ src/outlook.rs
+-     year / YEARS_PER_DEMAND_STEP > (year - 1) / YEARS_PER_DEMAND_STEP
++     (year + 1) / YEARS_PER_DEMAND_STEP > year / YEARS_PER_DEMAND_STEP
+
+### R14 the telegraph on in the Door's year
+@ src/outlook.rs
+-     if quest.is_door_lock() || house.calendar.years_until_door() <= 1 {
++     if quest.is_door_lock() || house.calendar.years_until_door() <= 0 {
+
+### R15 the dice swing reads one die
+@ src/quest_sheet.rs
+-                 &signed(2 * DICE_SIDES - DICE_MIDPOINT),
++                 &signed(DICE_SIDES - DICE_MIDPOINT),
+
+### R16 a seated card telegraphs too
+@ src/quest_card.rs
+-         telegraph: if anyone {
++         telegraph: if anyone && false {
+
+### R17 the card never draws its telegraph
+@ src/board_view.rs
+-             if let Some(telegraph) = &card.telegraph {
++             if let Some(telegraph) = card.telegraph.as_ref().filter(|_| false) {
+
+### R18 NEXT SUMMER opens the help, not the foresight
+@ src/dock.rs
+-         Subject::Outlook => crate::dock_lines::outlook_lines(content, house, width),
++         Subject::Outlook => help_lines(content, house, width),
+
+### R19 the label is drawn but cannot be pointed at
+@ src/summer.rs
+-         page.targets.push((OUTLOOK_LABEL, Target::Outlook));
++         page.targets.push((OUTLOOK_LABEL, Target::Dock));
