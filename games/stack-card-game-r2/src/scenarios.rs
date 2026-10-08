@@ -269,6 +269,12 @@ pub(crate) fn decision_rows(checks: &mut Checks) -> Rows {
         "row 3: the marked targets are not the legal ones",
         format!("marked {marked:?}, legal {legal:?}, {marks_drawn} marks drawn"),
     );
+    let cursor = screen::aimed(&aiming.duel, &aiming.ui);
+    checks.require(
+        cursor == Some(3),
+        "row 3: the aim cursor does not start on the top of the stack",
+        format!("cursor on {cursor:?}, the top is #3 (Bolt over Surge #2 over Bolt #1)"),
+    );
     judge(checks, "row 3, aiming", &aiming);
     driver.key(Key::ArrowDown);
     driver.key(Key::Enter);
