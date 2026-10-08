@@ -177,6 +177,16 @@ pub(crate) fn contracts(checks: &mut Checks) {
         "the Weaver played while the Brute held priority".to_owned(),
     );
 
+    // An unaffordable card is not offered, and a hand of only those has no play.
+    let mut duel = quiet();
+    duel.seat_mut(Side::You).hand = vec![Card::Blast];
+    duel.seat_mut(Side::You).energy = 2;
+    checks.require(
+        !duel.playable(Side::You, 0) && !duel.has_play(Side::You),
+        "a card the player cannot afford is offered",
+        "Blast at 3 energy offered with 2".to_owned(),
+    );
+
     // A turn ends on two passes over an empty stack; the last turn ends the match.
     let mut duel = quiet();
     let turn = duel.turn;

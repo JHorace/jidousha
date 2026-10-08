@@ -75,7 +75,7 @@ first-timer's power alone does not reliably do it.
 
 The Brute's choice is the free function `npc::choose(&Duel, Side)`: for every
 legal action (each affordable card at each legal target, and pass) it runs
-the stack forward with `duel::preview` and scores the result (its life minus
+the stack forward with `resolve::preview` and scores the result (its life minus
 yours, a little against energy spent); it takes the best, preferring pass on
 ties. So it responds when a response pays — it counters your Cancel, mirrors
 your Bolt, cancels your Surge — and it plays its Blasts into an empty stack.
@@ -86,9 +86,11 @@ see what it did.
 
 | decision | surface | one function | asserted by (`--verify`) |
 |---|---|---|---|
-| respond, and with which card | the stack panel (top first, each item with what it will do and the order it resolves in) beside the hand row | `duel::preview` — the panel prints it, and the real resolution commits `preview(..)`'s first step | `stack of three`: three or more items, every item and its resolution order found in the panel and on the frame at the priority window; then resolved and compared with the preview |
-| pass and let it resolve | the stack panel, plus the PRIORITY line saying whether the opponent can still respond | `duel::preview` | `pass resolves as previewed`: passes at a window and asserts the resolution log equals the preview exactly |
-| where to aim a counter / reorder / redirect | the stack panel with legal targets marked `>` while choosing | `duel::legal` — the marking, the play and the resolution check all read it | `targeting`: on a fixed seed a Cancel and a Sink are aimed, the marked rows equal `legal`, and the new order shown equals the order that resolves |
+| respond, and with which card | the stack panel (top first, each item with what it will do and the order it resolves in) beside the hand row | `resolve::resolve_top`, the one resolution step: `resolve::preview` folds it over a copy for the panel, the real resolution runs it on the duel | `row 1 respond` (`scenarios.rs`): three or more items, every item and its resolution order found in the panel and on the frame at the priority window; then resolved and compared with the preview |
+| pass and let it resolve | the stack panel, plus the PRIORITY line saying whether the opponent can still respond | the same step and fold | `row 2 pass`: passes at a window and asserts the resolution log equals the preview exactly |
+| where to aim a counter / reorder / redirect | the stack panel with legal targets marked `>` while choosing | `duel::legal` — the marking, the play and the resolution check all read it | `row 3 aim`: on fixed hands a Sink is aimed by keys and a Cancel by taps, the marked rows equal `legal_targets`, and the new order shown equals the order that resolves |
 
 Layout: a 960x540 design space mapped 1:1 onto a 540-unit-tall camera at
 16:9 (`jidousha::ui` `Panel` for every row of text; boxes drawn beside it).
+Every match the verify run plays also checks each resolution against the
+preview taken at the priority window before it (`N of N resolutions matched`).

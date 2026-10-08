@@ -3,6 +3,9 @@
 #! turn's refill and limit, the end on life, the Brute's choice, the stack
 #! panel's order and marks, the pass line, aiming, refusals, the table colour,
 #! the layout.
+#! L3 is equivalent: `apply` answers a missing target with Fizzled itself, and no
+#! target on the stack can stop being legal, so the guard only names the rule
+#! (decision row 3's "the resolution reads `legal`"). Expected to escape.
 
 ### P1 one pass resolves the top item
 @ src/duel.rs

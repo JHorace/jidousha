@@ -463,6 +463,7 @@ pub(crate) fn run() -> ExitCode {
         );
     }
     let rows = scenarios::decision_rows(&mut checks);
+    scenarios::small_screens(&mut checks);
     let staged = scenarios::result_screens(&mut checks);
     clearance = clearance.min(staged.1);
 

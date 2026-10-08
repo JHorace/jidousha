@@ -10,7 +10,7 @@ use jidousha::prelude::*;
 use crate::Game;
 use crate::cards::Card;
 use crate::checks::{Checks, fail};
-use crate::contracts::effects;
+use crate::contracts::{effects, force};
 use crate::duel::{Duel, Effect, Event, Outcome, Side, Step, legal_targets};
 use crate::resolve::preview;
 use crate::screen::{self, card_box, stack_row};
@@ -209,6 +209,7 @@ pub(crate) fn decision_rows(checks: &mut Checks) -> Rows {
     let amounts: Vec<Effect> = resolved.iter().map(|step| step.effect).collect();
     checks.require(
         resolved == ahead
+            && pass_says == "pass: top item resolves"
             && amounts.len() == 4
             && amounts[1]
                 == Effect::Damage {
@@ -227,11 +228,13 @@ pub(crate) fn decision_rows(checks: &mut Checks) -> Rows {
         resolved.len()
     ));
 
-    // Row 3 — aim: a Sink by keys, then a Cancel by taps; the marked rows are
-    // the legal ones, and the order shown is the order that resolves.
+    // Row 3 — aim: a Sink by keys (one step down, onto the Surge under a Bolt),
+    // then a Cancel by taps; the marked rows are the legal ones, and the order
+    // shown is the order that resolves.
     let hand = [
         Card::Bolt,
         Card::Surge,
+        Card::Bolt,
         Card::Sink,
         Card::Bolt,
         Card::Surge,
@@ -240,7 +243,7 @@ pub(crate) fn decision_rows(checks: &mut Checks) -> Rows {
     let mut sim = stage(&hand, 12, &[], 0);
     let mut driver = Driver::new();
     settle(&mut sim, &mut driver);
-    for _ in 0..2 {
+    for _ in 0..3 {
         let duel = duel_of(&sim);
         driver.act(
             &duel,
@@ -262,11 +265,12 @@ pub(crate) fn decision_rows(checks: &mut Checks) -> Rows {
         .filter(|run| run.text == ">")
         .count();
     checks.require(
-        marked == legal && legal.len() == 2 && marks_drawn == 2,
+        marked == legal && legal.len() == 3 && marks_drawn == 3,
         "row 3: the marked targets are not the legal ones",
         format!("marked {marked:?}, legal {legal:?}, {marks_drawn} marks drawn"),
     );
     judge(checks, "row 3, aiming", &aiming);
+    driver.key(Key::ArrowDown);
     driver.key(Key::Enter);
     settle(&mut sim, &mut driver);
     let window = shoot(&mut sim);
@@ -275,9 +279,9 @@ pub(crate) fn decision_rows(checks: &mut Checks) -> Rows {
     let resolved = pass_out(&mut sim, &mut driver);
     let went: Vec<u32> = resolved.iter().map(|step| step.item).collect();
     checks.require(
-        order == went && went == vec![3, 1, 2],
+        order == went && went == vec![4, 3, 1, 2],
         "row 3: the Sink's order shown is not the order that resolved",
-        format!("shown {order:?}, resolved {went:?}, want [3, 1, 2]"),
+        format!("shown {order:?}, resolved {went:?}, want [4, 3, 1, 2]"),
     );
     let sink_line = format!("Sink: shown {order:?} resolved {went:?}");
 
@@ -307,12 +311,12 @@ pub(crate) fn decision_rows(checks: &mut Checks) -> Rows {
     let resolved = pass_out(&mut sim, &mut driver);
     let went: Vec<u32> = resolved.iter().map(|step| step.item).collect();
     checks.require(
-        top == Some((Card::Cancel, Some(4))) && order == went && went == vec![6, 5],
+        top == Some((Card::Cancel, Some(5))) && order == went && went == vec![7, 6],
         "row 3: a tapped Cancel did not land on the tapped row, or resolved off its shown order",
-        format!("top {top:?}, shown {order:?}, resolved {went:?}, want [6, 5]"),
+        format!("top {top:?}, shown {order:?}, resolved {went:?}, want [7, 6]"),
     );
     lines.push(format!(
-        "row 3 aim: marks == legal ({} of 2); {sink_line}; Cancel by tap: shown {order:?} \
+        "row 3 aim: marks == legal ({} of 3); {sink_line}; Cancel by tap: shown {order:?} \
          resolved {went:?}",
         marks_drawn
     ));
@@ -356,4 +360,80 @@ pub(crate) fn result_screens(checks: &mut Checks) -> (String, f32) {
         format!("{titles:?}"),
     );
     (titles.join(" / "), clearance)
+}
+
+/// The small promises of the screen, each staged where it bites: marks only on
+/// legal rows, what a pass says, an unaffordable card refused out loud, and a
+/// player with nothing to play passed for.
+pub(crate) fn small_screens(checks: &mut Checks) {
+    // A Mirror aimed over a Bolt and a Cancel: one mark, on the Bolt's row.
+    let mut sim = stage(&[Card::Mirror, Card::Blast], 2, &[], 0);
+    sim.tick();
+    {
+        let duel = &mut sim.world_mut().resource_mut::<Game>().duel;
+        let bolt = force(duel, Side::Npc, Card::Bolt, None);
+        force(duel, Side::Npc, Card::Cancel, Some(bolt));
+        duel.priority = Side::You;
+        duel.passes = 0;
+        duel.seat_mut(Side::You).energy = 2;
+        duel.seat_mut(Side::Npc).hand.clear();
+        duel.seat_mut(Side::Npc).energy = 0;
+    }
+    let mut driver = Driver::new();
+    driver.key(Key::Digit1);
+    drain(&mut sim, &mut driver);
+    let shot = shoot(&mut sim);
+    let panel = screen::panel(&shot.duel, &shot.ui);
+    let marks: Vec<f32> = panel
+        .runs
+        .iter()
+        .filter(|run| run.text == ">")
+        .map(|run| run.at.y)
+        .collect();
+    let bolt_row = stack_row(1).min.y;
+    checks.require(
+        marks.len() == 1 && marks[0] >= bolt_row && marks[0] < bolt_row + screen::ROW,
+        "a mark is drawn on a row the card may not aim at",
+        format!("marks at y {marks:?}; the Bolt's row starts at {bolt_row}"),
+    );
+    let says = screen::pass_line(&shot.duel);
+    checks.require(
+        says == "pass: BRUTE may respond",
+        "the pass line does not say the Brute may still respond",
+        format!(
+            "{says:?} with {} on the stack and no pass yet",
+            shot.duel.stack.len()
+        ),
+    );
+
+    // An unaffordable Blast, picked and played: refused, and said.
+    driver.key(Key::Escape);
+    driver.key(Key::Digit2);
+    driver.key(Key::Enter);
+    drain(&mut sim, &mut driver);
+    let shot = shoot(&mut sim);
+    let said = screen::panel(&shot.duel, &shot.ui)
+        .all_strings()
+        .any(|text| text == "Blast costs 3, you have 2 energy");
+    checks.require(
+        said && !shot.duel.playable(Side::You, 1),
+        "an unaffordable card is offered, or its refusal is not said",
+        format!("notice {:?}", shot.ui.notice),
+    );
+    judge(checks, "a refusal on screen", &shot);
+
+    // Nothing playable: the Weaver is passed for within a second.
+    let mut sim = stage(&[Card::Blast], 2, &[], 0);
+    let mut driver = Driver::new();
+    for _ in 0..60 {
+        driver.tick(&mut sim);
+    }
+    let passed = duel_of(&sim)
+        .log
+        .contains(&Event::Passed { side: Side::You });
+    checks.require(
+        passed,
+        "a player with nothing playable is left waiting",
+        format!("log {:?}", duel_of(&sim).log),
+    );
 }
