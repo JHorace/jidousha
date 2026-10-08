@@ -69,6 +69,22 @@ pub(super) fn players(checks: &mut Checks, runs: &Runs, summary: &mut Vec<String
         "the chaser never holed a cup",
         format!("best points {chaser_best}; {}", runs.reports[1]),
     );
+    // What one hole pays: the Chaser only putts, so its first rise is a hole.
+    let rises: Vec<u32> = runs
+        .c
+        .snaps
+        .windows(2)
+        .map(|w| w[1].golfer(0).points.saturating_sub(w[0].golfer(0).points))
+        .filter(|rise| *rise > 0)
+        .collect();
+    checks.require(
+        rises.first() == Some(&2),
+        "a hole does not pay 2",
+        format!(
+            "the chaser's first point rises {:?}",
+            &rises[..rises.len().min(5)]
+        ),
+    );
     let bank = |s: &Session| s.at(s.ticks()).banked(0);
     checks.require(
         bank(&runs.p) > 0 && bank(&runs.p) >= bank(&runs.c),
@@ -113,6 +129,39 @@ pub(super) fn players(checks: &mut Checks, runs: &Runs, summary: &mut Vec<String
 // --- the contracts play never exercises -------------------------------------------
 
 pub(super) fn contracts(checks: &mut Checks, a: &Session) {
+    // Club reach, both sides of 1.2: a rival at 1.1 is in reach, at 1.3 not.
+    let me = a.at(1).golfer(0).clone();
+    let rival_at = |d: f32| {
+        let mut rival = a.at(1).golfer(1).clone();
+        rival.pos = me.pos + Vec2::new(d, 0.0);
+        rival.fate = Fate::Playing;
+        crate::rules::in_reach(&me, &[me.clone(), rival], &[], &[]).club
+    };
+    checks.require(
+        rival_at(1.1) == Some(1) && rival_at(1.3).is_none(),
+        "the club does not reach exactly 1.2",
+        format!("at 1.1 {:?}, at 1.3 {:?}", rival_at(1.1), rival_at(1.3)),
+    );
+    // The last golfer standing banks its points, its items and 6: no run
+    // reaches it, since the NPCs extract, so stage it.
+    let mut sim = headless(config(), register);
+    sim.tick();
+    for seat in 1..4 {
+        with_golfer(sim.world_mut(), seat, |g, _| {
+            g.fate = Fate::Eliminated { at: 1 }
+        });
+    }
+    with_golfer(sim.world_mut(), 0, |g, _| {
+        g.points = 4;
+        g.held = vec![Item::Driver];
+    });
+    sim.tick();
+    let fate = read_snapshot(&sim.world().view()).map(|s| s.golfer(0).fate);
+    checks.require(
+        fate == Some(Fate::Survived { banked: 13 }),
+        "the last golfer standing does not bank points + items + 6",
+        format!("4 points and a Driver, rivals eliminated: {fate:?}, want 13"),
+    );
     let fence = crate::rules::course();
     let hit = landing_of(Vec2::new(5.0, 0.0), Vec2::X, 18.0, fence, dt());
     checks.require(
