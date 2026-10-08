@@ -2,8 +2,8 @@
 
 task: keifu-x-inheritance-r2
 variant: V2
-stage: implement
-tick: live
+stage: done
+tick: released
 resumes: 0
 gates-green-at: 23dd109
 updated: 2026-10-07 20:48 PDT
@@ -19,10 +19,11 @@ updated: 2026-10-07 20:48 PDT
 - FINDINGS G-070..G-073 in games/keifu-x-inheritance-r2/FINDINGS.md (G-070, G-071 attributed to the design stage)
 - mutation round: 519 of 527 noticed (--fast, --changed-since 87f1ddf); escapes w4 K8, w7 E21, w8 B3, Y3 known equivalents; w8 C16, xi R1, R9, F8 tightened — 23dd109, rerun 4 of 4 noticed
 - full gate at 23dd109: doctor ENV_OK, tools/test pass (1849/0/0), check-claude-md ok, yakin check ok; verify keifu and keifu_x_inheritance_r2 pass; build-web + serve-web --check pass
+- PR opened: https://github.com/JHorace/jidousha/pull/132
 - 12 mainline faults re-cut to the variant's sites (labels marked "re-cut keifu-x-inheritance-r2")
 
 ## Exact next step
-Open the PR (WORKER.md §4) with the body in target/yakin/pr-body.md (regenerate it from this checkpoint's Deviations if lost), then set stage: done, tick: released.
+None — the task is done; the PR (#132) waits on the owner. Never merge.
 
 ## Deviations
 - the outsider module is `src/outsiders.rs`, not `src/family.rs`: mainline already has a family.rs (the top bar and family screen)
