@@ -134,10 +134,10 @@ line per gate, and the three decision-row gates are named `decision 1`,
 - G2 floors — input: the live frame of G3 and the result frame of G6 ·
   asserts: `judge_panel(screen, FLOORS, &[], &[])` returns no breach;
   `judge_frame` finds every row of `screen(&flow)` on the frame; `frame_text_floor(.., 12.0)` is empty; every string of `all_strings()` is printable ASCII (`' '..='~'`); no live-screen row ends in `...` (a clipped forecast is a hidden fact) · plus one staged panel with two rows two units apart, whose `judge_panel` breach is `"two rows of chrome text overlap"` by name · covers Done-when: verify pass.
-- G3 decision 1 (respond, and with what) — input: staged, seed irrelevant: turn 3, You active and holding priority, Rival energy 0, hand You = [Counter, Bolt, Redirect, Mend], stack top-first = #3 Counter (Rival, target #1), #2 Blast (Rival, affects You), #1 Bolt (You, affects Rival); life 15 / 15 · asserts: `forecast` has two steps in the order #3 then #2 (`Counter: voids #1`, `Blast: You 15 -> 10`), final life You 10, Rival 15, and its `says` column reads top-first `Counter: voids #1`, `Blast: You 15 -> 10`, `voided by #3` (shipped literals, not arithmetic over the constants); the stack panel's rows are in that order top-first, each carrying the item's id, card, owner and its `says` line, and `glyph_run` finds every character of every row on the frame; the hand panel marks all four cards playable (Counter and Redirect have targets, #2 and #1 for Redirect); then the script presses `Space` and, since the Rival at 0 energy must pass, the next resolution is exactly `steps[0]` (same item, same life after, same stack after), and so on until the stack is empty — the sequence of actual resolutions equals the forecast taken at the window, step by step · covers Done-when: "a check for each decision row" (row 1).
-- G4 decision 2 (pass) — input: the staged duel of G3 after one `Space` from You (passes = 1) and the Rival's forced pass · asserts: while passes = 1 and You hold priority the priority line reads `YOU HOLD PRIORITY - Rival passed: Space resolves #3`; while passes = 0 it reads `YOU HOLD PRIORITY - Rival may still respond`; on an empty stack with passes = 1 it reads `... Space ends the turn`; after the resolving `Space` the life totals and the stack equal `forecast.steps[0].life_after` and `.stack_after` exactly, and the log's newest line equals that step's outcome line · covers Done-when: row 2.
-- G5 decision 3 (target) — input: staged, You hold priority on your turn with Delay as slot 1 and Redirect as slot 2, stack top-first = #3 Counter (Rival, target #2), #2 Bolt (You, affects Rival), #1 Mend (Rival, affects Rival), Rival energy 0, life 15 / 15 · asserts: pressing `2` (Redirect) marks exactly the effect items #2 and #1 (their mark cells read `>` for the cursor row #2 and `+` for #1; #3 reads ` ` and is `DIM`) and the marked set equals `legal_targets(Redirect, stack)`; `Esc` clears every mark; pressing `1` (Delay) marks all three with the cursor on #3; `Down` three times wraps the cursor back to #3; `Enter` commits Delay on #3 — the forecast now reads top-first #4 `Delay: #3 to bottom`, #2 `Bolt: Rival 15 -> 12`, #1 `Mend: Rival 12 -> 15`, #3 `Counter: fizzles`; after two `Space`s (the Rival passing) Delay has resolved and the panel shows top-first #2, #1, #3, which equals `forecast.says`' order and equals the order the three then actually resolve in under further passes, with life ending You 15, Rival 15 · covers Done-when: row 3.
-- G6 the match — input: seed 7, one headless sim driven through the keyboard (`SnapshotBuilder`, one key event per tick, `keys_for(action)` translating the sequencer's `Action` into slot digit, `Down` presses and `Enter`) with the Rival playing its own seat through `let_the_rival_act` · asserts: the match reaches `Over(..)` before tick 6000; the result frame carries the banner, both life totals and `Enter: play again`; `Enter` then yields a `Live` duel at turn 1 with 4 cards in each hand · covers Done-when: "one full match against the scripted NPC plays end to end, and a scripted --verify run reaches its result screen".
+- G3 decision 1 (respond, and with what) — input: staged, seed irrelevant: turn 3, You active and holding priority, Rival energy 0, hand You = [Counter, Bolt, Redirect, Mend], stack top-first = #3 Counter (Rival, target #1), #2 Blast (Rival, affects You), #1 Bolt (You, affects Rival); life 15 / 15 · asserts: `forecast` has two steps in the order #3 then #2 (`Counter: voids #1`, `Blast: You 15>10`), final life You 10, Rival 15, and its `says` column reads top-first `Counter: voids #1`, `Blast: You 15>10`, `voided by #3` with order cells `1`, `2`, `x` (shipped literals, not arithmetic over the constants); the stack panel's rows are in that order top-first, each carrying the item's order cell, id, card, owner and its `says` line, and `glyph_run` finds every character of every row on the frame; the hand panel marks all four cards playable (Counter and Redirect have targets, #2 and #1 for Redirect); then the script presses `Space`, ticks through the Rival's 45-tick wait (it has 0 energy, so it must pass), and the resolution that follows is exactly `steps[0]` (same item, same life after, same stack after), and so on until the stack is empty — the sequence of actual resolutions equals the forecast taken at the window, step by step · covers Done-when: "a check for each decision row" (row 1).
+- G4 decision 2 (pass) — input: three staged states: (a) the G3 duel as staged (You hold priority, passes = 0); (b) the same with passes = 1 (the Rival passed last, a legal state: it arises whenever the Rival passes back to you); (c) an empty stack on your turn with passes = 1 · asserts: the priority line reads `YOU HOLD PRIORITY - Rival may still respond` in (a), `YOU HOLD PRIORITY - Rival passed: Space resolves #3` in (b), `YOU HOLD PRIORITY - Rival passed: Space ends the turn` in (c); in (b) one `Space` resolves #3 on that very tick and the life totals and the stack then equal `forecast.steps[0].life_after` and `.stack_after` exactly, the log's newest line equals that step's `says`, passes is 0 and You hold priority again; in (c) one `Space` ends the turn: turn 4, the Rival active, both energies 3, each hand one card larger · covers Done-when: row 2.
+- G5 decision 3 (target) — input: staged, You hold priority on your turn with Delay as slot 1 and Redirect as slot 2, stack top-first = #3 Counter (Rival, target #2), #2 Bolt (You, affects Rival), #1 Mend (Rival, affects Rival), Rival energy 0, life 15 / 15 · asserts: pressing `2` (Redirect) marks exactly the effect items #2 and #1 (their mark cells read `>` for the cursor row #2 and `+` for #1; #3 reads ` ` and is `DIM`) and the marked set equals `legal_targets(Redirect, stack)`; `Esc` clears every mark; pressing `1` (Delay) marks all three with the cursor on #3; `Down` three times wraps the cursor back to #3; `Enter` commits Delay on #3 and the Rival (0 energy) passes after its wait — the panel now lists the stack top-first #4 `Delay: #3 to bottom` order `1`, #3 `Counter: fizzles` order `4`, #2 `Bolt: Rival 15>12` order `2`, #1 `Mend: Rival 12>15` order `3`, and `forecast.steps` is #4, #2, #1, #3; your next `Space` resolves Delay and the panel shows top-first #2 `1`, #1 `2`, #3 `3`, which is the order the three then actually resolve in under further passes (each: your `Space`, the Rival's forced pass), with life ending You 15, Rival 15 · covers Done-when: row 3.
+- G6 the match — input: seed 7, one headless sim driven through the keyboard (`SnapshotBuilder`, one key event per tick, `keys_for(action)` translating the sequencer's `Action` into slot digit, `Down` presses and `Enter`) with the Rival playing its own seat through `let_the_rival_act` · asserts: the match reaches `Over(..)` before tick 12000; the result frame carries the banner, both life totals and `Enter: play again`; `Enter` then yields a `Live` duel at turn 1 with 4 cards in each hand · covers Done-when: "one full match against the scripted NPC plays end to end, and a scripted --verify run reaches its result screen".
 - G7 three players — input: seeds 1..=12, `Duel` driven directly by `apply` (no sim; the Rival's wait is irrelevant), each of `nothing_action`, `brute_action`, `sequencer_action` on Your seat against `rival_action` · asserts, one verdict line each, in the controllers document's shape: nothing wins 0 of 12; brute wins strictly fewer than sequencer; sequencer wins at least 7 of 12; and prints the three controller numbers for the sequencer (plays made, responses made, forecast margin at each play averaged) · covers the brief: "raw card power should lose to good sequencing".
 - G8 the screens the run never reaches — input: staged `Over(RivalWins)`, `Over(Draw)`, a full 10-item stack, a 6-card hand, and the choosing state of G5 · asserts: G1 and G2 over each; the two end banners differ from each other and from `YOU WIN` (name the pair); the banner's glyphs are what `covering(banner centre)[0]` returns (the band test) · covers Done-when: verify pass.
 - G9 order of systems — input: `schedule_debug()` · asserts: `set_the_table` is in Startup; in Update `read_player_input` precedes `let_the_rival_act`, both found (two `None`s compare equal — assert both are `Some`) · covers Done-when: verify pass.
@@ -221,16 +221,17 @@ anyway when sequenced.
 
 | card | cost | effect | hand blurb | in your deck | in the Rival's |
 |---|---|---|---|---|---|
-| Bolt | 1 | opponent loses 3 | `3 to the other seat` | 3 | 5 |
-| Blast | 2 | opponent loses 5 | `5 to the other seat` | 1 | 3 |
-| Mend | 1 | you gain 3 | `3 back to you` | 1 | 2 |
+| Bolt | 1 | opponent loses 3 | `Rival loses 3` | 3 | 5 |
+| Blast | 2 | opponent loses 5 | `Rival loses 5` | 1 | 3 |
+| Mend | 1 | you gain 3 | `you gain 3` | 1 | 2 |
 | Counter | 1 | target item leaves the stack unresolved | `voids an item` | 4 | 4 |
-| Delay | 1 | target item moves to the bottom | `sends an item to the bottom` | 3 | 0 |
-| Redirect | 1 | target effect item hits the other seat instead | `flips whom an item hits` | 2 | 2 |
-| Copy | 2 | a copy of the target, yours, on top | `copies an item, as yours` | 2 | 0 |
+| Delay | 1 | target item moves to the bottom | `to the bottom` | 3 | 0 |
+| Redirect | 1 | target effect item hits the other seat instead | `flips its target` | 2 | 2 |
+| Copy | 2 | a copy of the target, yours, on top | `copies, as yours` | 2 | 0 |
 
-`YOUR_DECK` = 3 Bolt, 1 Blast, 1 Mend, 4 Counter, 3 Delay, 2 Redirect, 2 Copy
-(16). `RIVAL_DECK` = 5 Bolt, 3 Blast, 2 Mend, 4 Counter, 2 Redirect (16).
+Blurbs are for your hand only (the Rival's hand is never shown) and are at
+most 16 characters. `YOUR_DECK` = 3 Bolt, 1 Blast, 1 Mend, 4 Counter, 3 Delay,
+2 Redirect, 2 Copy (16). `RIVAL_DECK` = 5 Bolt, 3 Blast, 2 Mend, 4 Counter, 2 Redirect (16).
 Legal targets: Counter, Delay and Copy target any item on the stack; Redirect
 targets only effect items (Bolt, Blast, Mend); effect cards have no target
 and never open choosing.
@@ -265,13 +266,13 @@ row and invents no surface.
 
 | decision | one function | the surface reads it | the sim reads it | asserted by |
 |---|---|---|---|---|
-| respond, and with which card | `rules::forecast(&Duel) -> Forecast`; `Forecast { steps: Vec<Step>, says: Vec<(ItemId, String)> }` with `Step { item: ItemId, card, says: String, life_after: [i32; 2], stack_after: Vec<ItemId> }`: the stack resolved top-first with no further plays, stopping at the step that ends the match; `says` has exactly one line per item on the stack, top-first — the item's step line, or `voided by #n`, or `not reached` | the stack panel's forecast column prints the item's `says` line beside each item, top-first; the hint row prints what the chosen card would change by calling `forecast` on a copy with that card applied | `rules::resolve_top` applies `forecast(duel).steps[0]` — same stack after, same life after, same log line | G3 |
+| respond, and with which card | `rules::forecast(&Duel) -> Forecast`; `Forecast { steps: Vec<Step>, says: Vec<(ItemId, String)> }` with `Step { item: ItemId, card, says: String, life_after: [i32; 2], stack_after: Vec<ItemId> }`: the stack resolved top-first with no further plays, stopping at the step that ends the match; `says` has exactly one line per item on the stack, top-first — the item's step line, or `voided by #n`, or `not reached` | the stack panel prints, beside each item top-first, its resolution order (its index in `steps`, or `x`/`-`) and its `says` line; the hint row prints what the chosen card would change by calling `forecast` on a copy with that card applied | `rules::resolve_top` applies `forecast(duel).steps[0]` — same stack after, same life after, same log line | G3 |
 | pass priority | the same `forecast`, plus `Duel::passes` and `Duel::priority` | the priority line: `Rival may still respond` while passes = 0; `Rival passed: Space resolves #<top id>` while passes = 1 and the stack is non-empty; `Rival passed: Space ends the turn` on an empty stack | `Duel::apply(Action::Pass)` | G4 |
 | where to aim a counter, delay, redirect or copy | `rules::legal_targets(card, &[Item]) -> Vec<ItemId>` | choosing marks every id in the list (`+`, cursor `>`), draws the rest dim, and the cursor only visits the list | play refuses a target not in the list; resolution fizzles an item whose target is not in `legal_targets(card, stack without itself)` | G5 |
 
 The hint row for a stack card while choosing: `Counter on #3: ` followed by
 the first step's `says` of the forecast with that play applied. For an effect
-card the hint row shows `Bolt: Rival 15 -> 12` (the forecast with it applied).
+card the hint row shows `Bolt: Rival 15>12` (the forecast with it applied).
 
 ### The Rival
 
@@ -346,21 +347,26 @@ usize }>` — one value, never a flag beside it (jidousha-ui.md).
   0.90, 1.0)`, `THEIRS = rgb(1.0, 0.50, 0.45)`, `MARK = rgb(1.0, 0.85, 0.25)`.
 - Header row y 12: `TURN 3 of 12 - YOUR TURN` / `- RIVAL'S TURN` at x 20,
   `TITLE`. Seat rows y 36, `ROW`: `YOU    life 15   energy 3` at x 20 in
-  `YOURS`; `RIVAL  life 15   energy 3` at x 580 in `THEIRS`.
-- Stack panel: rect x 20..560, y 64..396 in `PANEL`; title `STACK - top
-  resolves first` at (28, 70) `TITLE`; rows from y 96, cells as offsets from
-  the row: mark `Cell { at: (8, 0), width: 14 }`, id `(22, 0) w 36` (`#10`),
-  card and owner `(60, 0) w 170` (`Redirect  Rival`), target `(232, 0) w 58`
-  (`-> #10`), forecast `(292, 0) w 240` (`step.says`). Owner colours the row
+  `YOURS`; `RIVAL  life 15   energy 3` at x 590 in `THEIRS`.
+- Stack panel: rect x 20..570, y 64..396 in `PANEL`; title `STACK - top
+  resolves first` at (28, 70) `TITLE`; rows from y 96 with the row origin at
+  x 20, cells as offsets from the row (`Cell`, so every cell clips): mark
+  `Cell { at: (8, 0), width: 14 }` (` `, `+` legal, `>` cursor), order
+  `(24, 0) w 24` (`1`..`10` = the item's index in `forecast.steps` plus one,
+  `x` voided, `-` not reached), id `(50, 0) w 36` (`#10`), card and owner
+  `(90, 0) w 160` (`Redirect Rival`, one space), target `(254, 0) w 66`
+  (`-> #10`, blank for effect cards), forecast `(324, 0) w 220` (the item's
+  `says` line, at most 20 characters). Owner colours the row
   `YOURS`/`THEIRS`; while choosing, illegal rows are `DIM` and legal rows
-  `MARK`. Empty stack: one row `(empty - nothing to resolve)` in `DIM`.
+  `MARK`. Empty stack: one row `(empty - nothing to resolve)` in `DIM`. Ten
+  rows at leading 20 end at y 296, inside the panel.
 - Priority line at (28, 408), `ROW`, `INK`: the three texts of the decision
   table, or `RIVAL HOLDS PRIORITY - thinking` while it waits, or `CHOOSE A
   TARGET for Counter - Up/Down, Enter, Esc` while choosing.
-- Hand panel: rect x 580..940, y 64..396 in `PANEL`; title `HAND - 1-6 plays,
-  Space passes` at (588, 70); rows from y 96: slot `(8, 0) w 20`, name `(30,
-  0) w 90`, cost `(124, 0) w 20`, blurb `(150, 0) w 200`; playable rows `INK`,
-  others `DIM`. The hint row at (28, 500) `ROW` `MARK` while choosing or when a
+- Hand panel: rect x 590..940, y 64..396 in `PANEL`; title `HAND - 1-6 plays,
+  Space passes` at (598, 70); rows from y 96 with the row origin at x 590:
+  slot `(8, 0) w 20`, name `(30, 0) w 90`, cost `(124, 0) w 20`, blurb `(150,
+  0) w 180`; playable rows `INK`, others `DIM`. The hint row at (28, 500) `ROW` `MARK` while choosing or when a
   slot is playable-with-preview, else the controls line `1-6 play   Up/Down
   target   Enter commit   Esc cancel   Space pass` in `DIM`.
 - Log: three rows at y 432, 450, 468, x 28, `ROW`, `DIM`, newest last.
@@ -369,10 +375,11 @@ usize }>` — one value, never a flag beside it (jidousha-ui.md).
   centred by `width_of` at y 220 `BANNER`; `Enter: play again` centred at y
   284 `TITLE`; both on `BANNER` via `lifted`. The live table stays drawn
   beneath.
-- Outcome lines (`Step::says`), ASCII, at most 22 characters: `Bolt: Rival 15
-  -> 12`, `Blast: You 15 -> 10`, `Mend: You 12 -> 15`, `Counter: voids #3`,
-  `Delay: #1 to bottom`, `Redirect: #2 -> Rival` (now affects the Rival),
-  `Copy: #2 as #6`, and `<card>: fizzles` for any stack card with no target.
+- Outcome lines (`Step::says`), ASCII, at most 20 characters: `Bolt: Rival 15>12`,
+  `Blast: You 15>10`, `Mend: You 12>15`, `Counter: voids #3`, `Delay: #1 to
+  bottom`, `Redirect: #2>Rival` (now affects the Rival), `Copy: #2 as #6`, and
+  `<card>: fizzles` for any stack card with no target; the per-item lines for
+  items with no step are `voided by #3` and `not reached`.
 
 ### Determinism and the house pattern
 

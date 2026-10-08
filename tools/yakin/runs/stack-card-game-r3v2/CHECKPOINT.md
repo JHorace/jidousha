@@ -2,19 +2,20 @@
 
 task: stack-card-game-r3v2
 variant: V2
-stage: design
-tick: live
+stage: implement
+tick: released
 resumes: 0
 gates-green-at: none
-updated: 2026-10-07 21:13 PDT
+updated: 2026-10-07 21:16 PDT
 
 ## Done so far
-- claimed (commit 1)
-- DESIGN.md drafted whole: rules, pool, why manipulation dominates, systems, 13 gates, decisions, open calls (this commit)
-- FINDINGS.md entry 1: `Flat` undefined in jidousha-ui.md (this commit)
+- claimed (32f5e58)
+- DESIGN.md drafted whole: rules, pool, why manipulation dominates, systems, 13 gates, decisions, open calls (eafe24f)
+- FINDINGS.md entry 1: `Flat` undefined in jidousha-ui.md's judge_frame example (eafe24f)
+- DESIGN.md re-read and fixed: G4 restaged so passes = 1 is reachable, G5 pass count, resolution-order cell, cell widths vs string lengths, blurbs <= 16 chars, says lines <= 20 chars; design released (this commit)
 
 ## Exact next step
-Re-read tools/yakin/runs/stack-card-game-r3v2/DESIGN.md end to end for internal consistency (staged examples vs the rules; every Done-when line mapped to a gate), fix anything inconsistent, then set stage: implement and tick: released in the commit "yakin(stack-card-game-r3v2): design" and push.
+Implement stage (WORKER.md §3, V2): build games/stack-card-game-r3v2/ from tools/yakin/runs/stack-card-game-r3v2/DESIGN.md, in the Systems order there (cards.rs, rules.rs, duel.rs, players.rs, main.rs, screen.rs, verify.rs + checks.rs, capture.rs, mutants/round1.txt). First command: cp -r the crate layout from crates/jidousha/examples/prototype_kit as the shape, write Cargo.toml (package stack_card_game_r3v2, jidousha by path only, [lints] workspace = true), then `cargo check -p stack_card_game_r3v2` after each file. Do not open any other round's branches, PRs or games/ folders for this idea (spec, Comparison hygiene).
 
 ## Deviations
-- none
+- none at design stage. The game's FINDINGS.md (make-game §C) should carry the run folder's FINDINGS.md entry 1 forward.
