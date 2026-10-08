@@ -6,16 +6,20 @@ stage: implement
 tick: live
 resumes: 0
 gates-green-at: none
-updated: 2026-10-07 21:56 PDT
+updated: 2026-10-07 22:04 PDT
 
 ## Done so far
 - claimed the branch (b5d64bf)
 - read mainline Keifu (spec, constants, gaps, findings, the modules the base spec names) and docs/api; drafted DESIGN.md whole, every section filled (70fdc80)
 - reviewed DESIGN.md against the mainline source and released it: stage implement (this commit)
 - S0 fork commit 5981641: verify keifu_x_inheritance_r3v2 pass, verify keifu pass, fast gate clean
+- S1-S7 rules in (is_family, family_house, marks.rs, inheritance.rs, reward/tellers/heirs gates, step 7b and 8b, death page + choose, courtship Unproven/MarriesIn, sheets, quest-sheet stake, content words, constants); unit tests 365/365 after rewriting 5 mainline unit oracles the variant breaks
 
 ## Exact next step
-DESIGN.md S1 (is_family, family_house), then S2..S7, then S8 checks (xi_marks, xi_outsiders, xi_inheritance) per DESIGN.md "Gates to add".
+Run `python3 tools/verify keifu_x_inheritance_r3v2`; rewrite the mainline oracles the variant breaks (w8::stirred per DESIGN.md S8, any others found = Deviations); then S8 checks xi_marks / xi_outsiders / xi_inheritance per DESIGN.md "Gates to add"; VARIANT.md; plans_tests two tests.
 
 ## Deviations
-- none
+- 5 mainline unit tests rewritten to variant rules (births_tests x3: lean bonus; quest_sheet grave goods: stake line; resolve_tests disaster: Ysolde's mark) - DESIGN.md said no other mainline check moves
+- birthright takes the child's own best aptitude as a parameter (DESIGN.md's signature has no way to know it)
+- quest.outsiders_reward names the family house by argument instead of the literal "Thorne"
+- the birth page's lean line sits after the fear line, before blessings (DESIGN.md names no position)

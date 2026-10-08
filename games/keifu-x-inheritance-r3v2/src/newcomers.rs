@@ -119,6 +119,9 @@ pub fn newcomer(
         quests_faced: 0,
         fears_faced: 0,
         winters_taught: 0,
+        is_family: false,
+        marks: 0,
+        lean: None,
     }
 }
 

@@ -55,13 +55,25 @@ pub fn reward(
         .copied()
         .filter(|&m| house.heroes[m].destiny.kind == Destiny::CarryTheHouse)
         .collect();
-    house.add_renown(renown + carriers.len() as i32 * CARRIED_RENOWN);
+    // The house gains the quest's renown only if a family member went; the
+    // carriers' +1 is the Seer's and stands (variant, DESIGN.md S2). The Door is
+    // the house's whoever opens it.
+    let for_the_house = at_door || members.iter().any(|&m| house.heroes[m].is_family);
+    let gained = if for_the_house { renown } else { 0 };
+    house.add_renown(gained + carriers.len() as i32 * CARRIED_RENOWN);
     if !at_door {
         let whom = match members {
             [one] => house.heroes[*one].name.clone(),
             _ => words[W::QuestRewardEach].to_owned(),
         };
-        out.push(fmt(&words[W::QuestReward], &[&renown.to_string(), &whom]));
+        if for_the_house {
+            out.push(fmt(&words[W::QuestReward], &[&renown.to_string(), &whom]));
+        } else {
+            out.push(fmt(
+                &words[W::QuestOutsidersReward],
+                &[&whom, &house.family_house],
+            ));
+        }
         for &carrier in &carriers {
             out.push(fmt(
                 &words[W::QuestCarrierBonus],

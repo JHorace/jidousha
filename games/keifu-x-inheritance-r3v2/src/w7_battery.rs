@@ -280,7 +280,7 @@ fn effects(
         if let (Some(a), Some(b)) = (at(Seat::Garden(0)), at(Seat::Garden(1))) {
             let kind = after.heroes[a].bond_to(b).map(|bond| bond.kind);
             let ok = match verdict {
-                Courtship::WillWed => kind == Some(BondKind::Spouse),
+                Courtship::WillWed | Courtship::MarriesIn => kind == Some(BondKind::Spouse),
                 Courtship::Rivals => kind == Some(BondKind::Friend),
                 _ => kind == before.heroes[a].bond_to(b).map(|bond| bond.kind),
             };

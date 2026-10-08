@@ -1,6 +1,7 @@
 {
   "_source": "lineage/household.jai:55-225",
   "house_renown_at_start": 15,
+  "family_house": "Thorne",
   "start_year": 1,
   "_years": "born_year and fate_year are absolute years where the first summer is year 1 (household.jai uses year - N with year = 1).",
   "heroes": [

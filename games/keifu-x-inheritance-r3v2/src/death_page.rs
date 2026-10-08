@@ -116,6 +116,25 @@ pub fn death_page(content: &Content, house: &mut House, dead: HeroId, rng: &mut 
             ],
         ));
     }
+    // The black marks (variant, DESIGN.md S5): half pass to an heir, one is buried.
+    let succession = crate::inheritance::succession(&house.heroes, dead);
+    let forms = &content.lore.pronouns[hero.pronoun.index()];
+    if hero.marks >= 2 {
+        lines.push(fmt(
+            &words[W::DeathLeavesMarks],
+            &[
+                &he,
+                &hero.marks.to_string(),
+                &house.family_house,
+                &succession.marks.to_string(),
+            ],
+        ));
+    } else if hero.marks == 1 {
+        lines.push(fmt(
+            &words[W::DeathMarkBuried],
+            &[&he, &house.family_house, &forms.object],
+        ));
+    }
     let bequest_end = lines.len();
     let heirloom = hero.heirloom.as_ref().map(|h| h.name.clone());
     house.heroes[dead].bequest_heirloom = heirloom.clone();
@@ -127,7 +146,7 @@ pub fn death_page(content: &Content, house: &mut House, dead: HeroId, rng: &mut 
         Some(dream) if dream.is_fulfilled() => hero.dream_fate = DreamFate::Fulfilled,
         Some(_) => {}
     }
-    let leaves = heirloom.is_some() || undone.is_some();
+    let leaves = heirloom.is_some() || undone.is_some() || succession.marks > 0;
     let heirs = if leaves {
         heirs(&house.heroes, dead)
     } else {

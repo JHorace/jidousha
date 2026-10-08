@@ -103,6 +103,25 @@ pub fn quest_sheet(content: &Content, house: &House, quest: usize, party: &[Hero
     }
     for (id, call) in called(content, heroes, q.facts(), party) {
         out.push(line(Ink::Body, call_line(content, heroes, id, call), None));
+        // What failing it in their own name would cost (variant, DESIGN.md S3).
+        if crate::marks::personal_quest(content, heroes, id, q, party) {
+            let cost = crate::marks::consequence(house, id);
+            let object = &content.lore.pronouns[heroes[id].pronoun.index()].object;
+            out.push(line(
+                Ink::Body,
+                fmt(
+                    &words[W::QuestSheetMarkStake],
+                    &[
+                        &heroes[id].name,
+                        &house.family_house,
+                        &cost.house_renown.to_string(),
+                        object,
+                        &cost.yearly.to_string(),
+                    ],
+                ),
+                None,
+            ));
+        }
     }
     let aptitude = content.lore.aptitudes[q.aptitude.index()].to_uppercase();
     out.push(line(
@@ -246,6 +265,13 @@ mod tests {
                 ),
                 (
                     s("Garrick's dream: Win a triumph at the Barrow. He must triumph."),
+                    None
+                ),
+                // The variant's stake, under the seated dreamer only (DESIGN.md S3).
+                (
+                    s(
+                        "If Garrick fails, a black mark on the Thorne name: -2 renown to the house and to him, and -1 a year while it is carried."
+                    ),
                     None
                 ),
                 (

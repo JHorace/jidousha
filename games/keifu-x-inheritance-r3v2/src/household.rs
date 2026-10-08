@@ -45,6 +45,8 @@ pub struct Founding {
     pub bonds: Vec<(String, String, BondKind, i32)>,
     /// Keys of the dead at start.
     pub dead_at_start: Vec<String>,
+    /// The family name (variant, DESIGN.md S1): some founder's house.
+    pub family_house: String,
 }
 
 /// Read and check `household.json`.
@@ -68,10 +70,20 @@ pub fn read_household(at: &At<'_>) -> Result<Founding, SchemaError> {
             bond.key("since")?.int()?,
         ));
     }
+    let family_house = text(at, "family_house")?;
+    if !heroes
+        .iter()
+        .any(|founder| founder.hero.house == family_house)
+    {
+        return Err(at.reject(format!(
+            "family_house {family_house:?} is no founder's house (variant, DESIGN.md S1)"
+        )));
+    }
     Ok(Founding {
         heroes,
         bonds,
         dead_at_start: strings(at, "dead_at_start")?,
+        family_house,
     })
 }
 
@@ -189,7 +201,17 @@ fn read_hero(item: &At<'_>) -> Result<FoundingHero, SchemaError> {
         quests_faced: count("quests_faced")?,
         fears_faced: count("fears_faced")?,
         winters_taught: 0,
+        is_family: true,
+        marks: 0,
+        lean: None,
     };
+    // Every founder stood under the roof when the story began: family, leaning to
+    // their best aptitude (variant, DESIGN.md S1, S4).
+    let mut hero = hero;
+    hero.lean = Some(crate::inheritance::Lean {
+        aptitude: hero.best_aptitude(),
+        from: None,
+    });
     let parents = item
         .key("parents")?
         .items()?

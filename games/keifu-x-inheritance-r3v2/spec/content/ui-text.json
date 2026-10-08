@@ -479,6 +479,10 @@
     "power_line_patron": {
       "text": "A patron at Court",
       "source": "lineage/quest.jai:210"
+    },
+    "mark_stake": {
+      "text": "If % fails, a black mark on the % name: -% renown to the house and to %, and -% a year while it is carried.",
+      "source": "variant: DESIGN.md S3"
     }
   },
   "door_sheet": {
@@ -729,6 +733,30 @@
       "args": [
         "count"
       ]
+    },
+    "outsider": {
+      "text": "An outsider. Renown % of % to marry in.",
+      "source": "variant: DESIGN.md S2"
+    },
+    "outsider_proven": {
+      "text": "An outsider with renown % of %. A winter in the garden would make % one of the house.",
+      "source": "variant: DESIGN.md S2"
+    },
+    "lean": {
+      "text": "Leans to %.",
+      "source": "variant: DESIGN.md S4"
+    },
+    "lean_after": {
+      "text": "Leans to %, after %.",
+      "source": "variant: DESIGN.md S4"
+    },
+    "marks": {
+      "text": "BLACK MARKS",
+      "source": "variant: DESIGN.md S3"
+    },
+    "marks_line": {
+      "text": "% on the name. -% renown a year; an heir would take %.",
+      "source": "variant: DESIGN.md S3"
     }
   },
   "telling": {
@@ -988,6 +1016,14 @@
       "WILL_WED": {
         "text": "will wed",
         "source": "lineage/hearth.jai:180"
+      },
+      "UNPROVEN": {
+        "text": "renown % of %",
+        "source": "variant: DESIGN.md S6"
+      },
+      "MARRIES_IN": {
+        "text": "marries in",
+        "source": "variant: DESIGN.md S6"
       }
     },
     "lesson_excuses": {

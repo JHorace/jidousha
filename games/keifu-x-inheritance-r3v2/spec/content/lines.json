@@ -1584,6 +1584,149 @@
       "args": [],
       "when": "",
       "source": "scene/scenes/ending.jai:145"
+    },
+    "quest.outsiders_reward": {
+      "text": "% came home with it, and the house gained nothing: no % went.",
+      "args": [
+        "the sole member's first name, or quest.reward_each",
+        "family house"
+      ],
+      "when": "quest page, on SUCCESS/TRIUMPH, no family member in the party",
+      "source": "variant: DESIGN.md S2"
+    },
+    "quest.black_mark": {
+      "text": "% went in % own name and failed. A black mark on the % name: -% renown to the house, and to %.",
+      "args": [
+        "dreamer first name",
+        "possessive pronoun",
+        "family house",
+        "house renown cost",
+        "dreamer first name"
+      ],
+      "when": "quest page, a personal quest below SUCCESS",
+      "source": "variant: DESIGN.md S3"
+    },
+    "deed.black_mark": {
+      "text": "failed in % own name at %",
+      "args": [
+        "possessive pronoun",
+        "place name"
+      ],
+      "when": "deed telling",
+      "source": "variant: DESIGN.md S3"
+    },
+    "turning.mark_one": {
+      "text": "The % name carries a black mark: -% renown.",
+      "args": [
+        "family house",
+        "renown cost"
+      ],
+      "when": "Year N begins page",
+      "source": "variant: DESIGN.md S3"
+    },
+    "turning.marks_many": {
+      "text": "The % name carries % black marks: -% renown.",
+      "args": [
+        "family house",
+        "marks",
+        "renown cost"
+      ],
+      "when": "Year N begins page",
+      "source": "variant: DESIGN.md S3"
+    },
+    "death.leaves_marks": {
+      "text": "% carried % black marks on the % name. An heir takes %.",
+      "args": [
+        "capitalized subject pronoun",
+        "marks",
+        "family house",
+        "marks an heir takes"
+      ],
+      "when": "death page",
+      "source": "variant: DESIGN.md S5"
+    },
+    "death.mark_buried": {
+      "text": "% carried one black mark on the % name. It is buried with %.",
+      "args": [
+        "capitalized subject pronoun",
+        "family house",
+        "object pronoun"
+      ],
+      "when": "death page",
+      "source": "variant: DESIGN.md S5"
+    },
+    "heir.takes_mark": {
+      "text": "% carries one of %'s black marks now.",
+      "args": [
+        "heir first name",
+        "dead first name"
+      ],
+      "when": "death page, after the choice",
+      "source": "variant: DESIGN.md S5"
+    },
+    "heir.takes_marks": {
+      "text": "% carries % of %'s black marks now.",
+      "args": [
+        "heir first name",
+        "marks taken",
+        "dead first name"
+      ],
+      "when": "death page, after the choice",
+      "source": "variant: DESIGN.md S5"
+    },
+    "heir.marks_buried": {
+      "text": "%'s black marks go into the ground with %.",
+      "args": [
+        "dead first name",
+        "object pronoun"
+      ],
+      "when": "death page, no one chosen",
+      "source": "variant: DESIGN.md S5"
+    },
+    "winter.married_in": {
+      "text": "% is of the % name now. % renown was enough: the house asked %.",
+      "args": [
+        "outsider first name",
+        "family house",
+        "outsider renown",
+        "renown to wed"
+      ],
+      "when": "winter page, an outsider married in",
+      "source": "variant: DESIGN.md S6"
+    },
+    "winter.unproven": {
+      "text": "% walked in the garden with %. An outsider with % renown may not marry in: the house asks %.",
+      "args": [
+        "outsider first name",
+        "other first name",
+        "outsider renown",
+        "renown to wed"
+      ],
+      "when": "winter page, an unproven outsider in the garden",
+      "source": "variant: DESIGN.md S6"
+    },
+    "arrival.outsider": {
+      "text": "% is an outsider. % renown is % own, and the house takes none of it; at % renown % may marry in.",
+      "args": [
+        "first name",
+        "capitalized possessive pronoun",
+        "possessive pronoun",
+        "renown to wed",
+        "subject pronoun"
+      ],
+      "when": "arrival page",
+      "source": "variant: DESIGN.md S2"
+    },
+    "birth.lean": {
+      "text": "% takes after %: % leans to %.",
+      "args": [
+        "child first name",
+        "parent first name",
+        "subject pronoun",
+        "aptitude"
+      ],
+      "when": "birth page",
+      "source": "variant: DESIGN.md S4"
     }
   }
 }

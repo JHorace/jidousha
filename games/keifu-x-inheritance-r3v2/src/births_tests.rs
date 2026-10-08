@@ -191,9 +191,14 @@ fn a_child_takes_a_quarter_of_both_parents_the_first_parents_house_both_bonds_an
     let (born, pages) = a_birth(&content, &house);
     let child = born.heroes.len() - 1;
     let hero = &born.heroes[child];
-    // Maren 4/6/3 and Brannoc 6/2/3: 10/4, 8/4, 6/4, each + 0 or 1.
-    assert!([2, 3].contains(&hero.aptitudes[0]) && [2, 3].contains(&hero.aptitudes[1]));
-    assert!([1, 2].contains(&hero.aptitudes[2]));
+    // Maren 4/6/3 and Brannoc 6/2/3: 10/4, 8/4, 6/4, each + 0 or 1 — once the
+    // variant's lean (+1 in one parent's lean, DESIGN.md S4) is taken off again.
+    let shares = unleaned(hero);
+    assert!(
+        [2, 3].contains(&shares[0]) && [2, 3].contains(&shares[1]),
+        "{shares:?}"
+    );
+    assert!([1, 2].contains(&shares[2]), "{shares:?}");
     assert_eq!(
         (hero.house.as_str(), hero.age, hero.born_year),
         ("Thorne", 0, 2)
@@ -252,9 +257,14 @@ fn a_child_will_surpass_a_childless_parent_by_two_in_every_aptitude_and_the_dest
     house.calendar.begin_winter();
     let (born, _) = a_birth(&content, &house);
     let child = &born.heroes[born.heroes.len() - 1];
-    // Ysolde 2/5/4, Brannoc 6/2/3: 8/4, 7/4, 7/4 + 0 or 1, then + 2.
-    assert!([4, 5].contains(&child.aptitudes[0]) && [3, 4].contains(&child.aptitudes[1]));
-    assert!([3, 4].contains(&child.aptitudes[2]));
+    // Ysolde 2/5/4, Brannoc 6/2/3: 8/4, 7/4, 7/4 + 0 or 1, then + 2 — once the
+    // variant's lean is taken off again (DESIGN.md S4).
+    let shares = unleaned(child);
+    assert!(
+        [4, 5].contains(&shares[0]) && [3, 4].contains(&shares[1]),
+        "{shares:?}"
+    );
+    assert!([3, 4].contains(&shares[2]), "{shares:?}");
     assert!(born.heroes[ysolde].destiny.fulfilled);
     assert!(
         !born.heroes[brannoc].destiny.fulfilled,
@@ -340,8 +350,9 @@ fn a_newborn_never_has_less_than_one_and_takes_each_roll_of_zero_or_one() {
             continue;
         }
         let child = &copy.heroes[copy.heroes.len() - 1];
+        // Neither parent leans to Spirit (Maren Wits, Brannoc Might; DESIGN.md S4).
         assert_eq!(child.aptitudes[2], 1);
-        might.insert(child.aptitudes[0]);
+        might.insert(unleaned(child)[0]);
     }
     // Might 4 and 6: 10 / 4 is 2, + 0 or 1.
     assert_eq!(might.into_iter().collect::<Vec<_>>(), [2, 3]);
@@ -364,4 +375,16 @@ fn a_conquered_parent_whose_child_is_not_born_brave_lets_the_other_parents_fear_
     // P(heights) = 0.5 * (0.8 + 0.2 / 8) = 0.4125.
     let rate = f64::from(heights) / f64::from(n);
     assert!((0.34..0.49).contains(&rate), "heights {heights} of {n}");
+}
+
+/// A newborn's aptitudes with the variant's lean bonus taken off the aptitude it
+/// leans to (DESIGN.md S4) — the shares mainline's oracles are stated in. Every
+/// share here is below the cap, so the bonus was added whole.
+fn unleaned(child: &crate::hero::Hero) -> [i32; 3] {
+    let mut shares = child.aptitudes;
+    let Some(lean) = child.lean else {
+        panic!("a newborn has no lean: {}", child.name);
+    };
+    shares[lean.aptitude.index()] -= crate::constants::LEAN_BONUS;
+    shares
 }

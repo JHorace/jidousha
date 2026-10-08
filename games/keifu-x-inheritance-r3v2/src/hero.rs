@@ -145,6 +145,9 @@ pub enum DeedKind {
     /// Stood at the Sealed Door and lived (SPEC §16.2); weight is the locks opened.
     /// W10 writes it; the epitaph reads it (§20 PROPHECY, END).
     StoodAtTheDoor,
+    /// Failed a personal quest: a black mark on the family name (variant, DESIGN.md
+    /// S3); weight is the quest's danger. Nothing reads it but the record.
+    BlackMark,
 }
 
 /// What became of a dead hero's own dream (SPEC §3.2 `bequest`): the death page
@@ -279,6 +282,13 @@ pub struct Hero {
     pub fears_faced: i32,
     /// Winters taught.
     pub winters_taught: i32,
+    /// Of the family name (variant, DESIGN.md S1): a founder, a child of a family
+    /// parent, or an outsider who married in.
+    pub is_family: bool,
+    /// Black marks carried on the family name (variant, DESIGN.md S3).
+    pub marks: i32,
+    /// The aptitude this hero leans to, and after whom (variant, DESIGN.md S4).
+    pub lean: Option<crate::inheritance::Lean>,
 }
 
 impl Hero {

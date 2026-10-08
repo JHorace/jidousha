@@ -103,7 +103,10 @@ pub fn seat_the_winter(house: &mut House) {
     let hall: Vec<HeroId> = house.roster.iter().flatten().copied().collect();
     'pairs: for (i, &a) in hall.iter().enumerate() {
         for &b in &hall[i + 1..] {
-            if courtship(&house.heroes, Some(a), Some(b)) == Courtship::WillWed {
+            if matches!(
+                courtship(&house.heroes, Some(a), Some(b)),
+                Courtship::WillWed | Courtship::MarriesIn
+            ) {
                 house.unseat(a);
                 house.unseat(b);
                 house.hearth.put(Seat::Garden(0), Some(a));

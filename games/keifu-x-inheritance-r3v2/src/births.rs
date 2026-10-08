@@ -24,6 +24,7 @@ use crate::heirs::deed;
 use crate::hero::{DeedKind, HeroId};
 use crate::house::House;
 use crate::ids::{Aptitude, BondKind, Destiny, Pool, Pronoun, Tag};
+use crate::inheritance::{birthright, leaned};
 use crate::newcomers::{fear_of, newcomer, roll_pronoun};
 use crate::passage::{PageKind, TurnPage};
 use crate::text::{capitalized, fmt, name_list};
@@ -105,6 +106,21 @@ fn born(
         aptitudes[aptitude.index()] =
             (shared / NEWBORN_APTITUDE_SHARE + between(rng, 0, 1)).max(NEWBORN_APTITUDE_LEAST);
     }
+    // The lean (variant, DESIGN.md S4): one coin between the parents' leans, rolled
+    // after the three shares and before the fear, and +1 in the aptitude it names.
+    let coin = index(rng, 2);
+    let own_best = Aptitude::ALL
+        .iter()
+        .copied()
+        .fold(Aptitude::Might, |best, a| {
+            if aptitudes[a.index()] > aptitudes[best.index()] {
+                a
+            } else {
+                best
+            }
+        });
+    let lean = birthright(&house.heroes, first, second, coin, own_best);
+    aptitudes[lean.aptitude.index()] = leaned(aptitudes[lean.aptitude.index()]);
     for parent in [first, second] {
         let hero = &mut house.heroes[parent];
         let childless = !hero.bonds.iter().any(|b| b.kind == BondKind::Child);
@@ -142,6 +158,9 @@ fn born(
     let mut child = newcomer(name, family, pronoun, 0, year, fear);
     child.aptitudes = aptitudes;
     child.parents = [Some(first), Some(second)];
+    child.lean = Some(lean);
+    // Family by either parent (variant, DESIGN.md S1).
+    child.is_family = house.heroes[first].is_family || house.heroes[second].is_family;
     for parent in [first, second] {
         for blessing in &house.heroes[parent].blessings {
             if !child.blessings.iter().any(|b| b.title == blessing.title) {
@@ -203,6 +222,17 @@ fn born(
         ),
         (None, None) => fmt(&words[W::BirthOwnFear], &[&forms.subject, &tag.noun]),
     });
+    if let Some(parent) = lean.from {
+        lines.push(fmt(
+            &words[W::BirthLean],
+            &[
+                &child.name,
+                &heroes[parent].name,
+                &forms.subject,
+                &content.lore.aptitudes[lean.aptitude.index()],
+            ],
+        ));
+    }
     match child.blessings.as_slice() {
         [] => {}
         [one] => lines.push(fmt(

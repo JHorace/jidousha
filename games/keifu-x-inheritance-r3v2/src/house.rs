@@ -68,6 +68,8 @@ pub struct House {
     pub closed: bool,
     /// The Ending, once entered (SPEC §23): after the Door, or once the house closed.
     pub ending: Option<crate::ending::Ending>,
+    /// The family name the house keeps (variant, DESIGN.md S1): "Thorne".
+    pub family_house: String,
 }
 
 /// A house tale (SPEC §3.1): its title, whom it is about, and the year it was first told.
@@ -125,6 +127,7 @@ impl House {
             mourned: Vec::new(),
             closed: false,
             ending: None,
+            family_house: content.founding.family_house.clone(),
         };
         for key in &content.founding.dead_at_start {
             let Some(id) = house.heroes.iter().position(|hero| hero.key == *key) else {

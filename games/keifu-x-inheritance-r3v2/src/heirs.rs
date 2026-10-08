@@ -55,11 +55,12 @@ fn heir_rank(heroes: &[Hero], dead: HeroId, other: HeroId) -> usize {
     }
 }
 
-/// The heir list (SPEC §15.1, `lineage/passage.jai:186-217`): the living other than
-/// the dead, by rank, then creation order, at most eight.
+/// The heir list (SPEC §15.1, `lineage/passage.jai:186-217`): the living family other
+/// than the dead, by rank, then creation order, at most eight. Outsiders are never
+/// heirs (variant, DESIGN.md S2).
 pub fn heirs(heroes: &[Hero], dead: HeroId) -> Vec<HeroId> {
     let mut list: Vec<(usize, HeroId)> = (0..heroes.len())
-        .filter(|&id| id != dead && heroes[id].is_living())
+        .filter(|&id| id != dead && heroes[id].is_living() && heroes[id].is_family)
         .map(|id| (heir_rank(heroes, dead, id), id))
         .collect();
     list.sort();
@@ -246,6 +247,31 @@ pub fn choose(content: &Content, house: &mut House, page: usize, heir: Option<He
             }
         }
     }
+    // The black marks (variant, DESIGN.md S5): the heir takes the share the page
+    // named; with no one they go into the ground. Either way the dead carries none.
+    let share = crate::inheritance::succession(&house.heroes, dead).marks;
+    if share > 0 {
+        let dead_name = house.heroes[dead].name.clone();
+        match heir {
+            Some(h) => {
+                house.heroes[h].marks += share;
+                let heir_name = &house.heroes[h].name;
+                lines.push(if share == 1 {
+                    fmt(&words[W::HeirTakesMark], &[heir_name, &dead_name])
+                } else {
+                    fmt(
+                        &words[W::HeirTakesMarks],
+                        &[heir_name, &share.to_string(), &dead_name],
+                    )
+                });
+            }
+            None => {
+                let object = &content.lore.pronouns[house.heroes[dead].pronoun.index()].object;
+                lines.push(fmt(&words[W::HeirMarksBuried], &[&dead_name, object]));
+            }
+        }
+    }
+    house.heroes[dead].marks = 0;
     if let Some((_, dream)) = undone_dream(&house.heroes[dead]) {
         let dream = dream.clone();
         match heir.filter(|&h| can_take_dream(&house.heroes[h])) {

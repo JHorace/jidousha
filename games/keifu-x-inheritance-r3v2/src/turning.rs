@@ -72,6 +72,8 @@ pub fn turn_the_year(
     pages.extend(wanderer(content, house, rng));
     // 8. The tales.
     let mut year_lines = tales(content, house);
+    // 8b. The name's black marks (variant, DESIGN.md S3).
+    year_lines.extend(marks_cost(content, house));
     // 9. Phase lines and the year's moment, hero by hero.
     for id in 0..house.heroes.len() {
         if !house.heroes[id].is_living() {
@@ -133,6 +135,29 @@ fn tales(content: &Content, house: &mut House) -> Vec<String> {
             &[&count.to_string(), &lowered(&newest), &renown.to_string()],
         )
     }]
+}
+
+/// What the living family's black marks cost the house this turning (variant,
+/// DESIGN.md S3): `MARK_YEARLY_RENOWN` a mark, as one line; nothing with none.
+fn marks_cost(content: &Content, house: &mut House) -> Option<String> {
+    let words = &content.words;
+    let total = crate::marks::carried(house);
+    if total == 0 {
+        return None;
+    }
+    let cost = total * crate::constants::MARK_YEARLY_RENOWN;
+    house.add_renown(-cost);
+    Some(if total == 1 {
+        fmt(
+            &words[W::TurningMarkOne],
+            &[&house.family_house, &cost.to_string()],
+        )
+    } else {
+        fmt(
+            &words[W::TurningMarksMany],
+            &[&house.family_house, &total.to_string(), &cost.to_string()],
+        )
+    })
 }
 
 /// "The year turns. The Sealed Door opens in R years." with R = years until the Door,

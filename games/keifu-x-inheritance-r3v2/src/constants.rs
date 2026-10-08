@@ -327,3 +327,18 @@ pub const TYPEWRITER_LETTERS_PER_SECOND: f32 = 90.0;
 
 /// Bonds shown on the hero sheet before "and N more" (CONSTANTS §14).
 pub const BONDS_SHOWN: usize = 6;
+
+/// An outsider's personal renown at which they may marry into the family (variant,
+/// DESIGN.md S6).
+pub const FAMILY_RENOWN_TO_WED: i32 = 4;
+/// House renown a black mark costs when it is put on the name (variant, DESIGN.md S3).
+pub const MARK_HOUSE_RENOWN: i32 = 2;
+/// Personal renown a black mark costs its bearer, floored at 0 (variant, DESIGN.md S3).
+pub const MARK_PERSONAL_RENOWN: i32 = 2;
+/// House renown each carried black mark costs at every turning (variant, DESIGN.md S3).
+pub const MARK_YEARLY_RENOWN: i32 = 1;
+/// An heir takes the dead's marks divided by this, rounded down (variant, DESIGN.md S3, S5).
+pub const MARK_INHERITED_SHARE: i32 = 2;
+/// A newborn's base in the aptitude they lean to rises by this, capped (variant,
+/// DESIGN.md S4).
+pub const LEAN_BONUS: i32 = 1;

@@ -8,9 +8,9 @@
 //! winter would not give. Nothing here changes the house.
 
 use crate::constants::{
-    APTITUDE_LIMIT, CHILD_TAUGHT_LIMIT, COURTING_AGE_GAP, GREATER_LESSON, GREATER_TAUGHT,
-    MARRYING_AGE, SEASONED_TEACHER_BONUS, SELF_TAUGHT_LIMIT, TEACHABLE_AGE, WINTER_GAIN_LIMIT,
-    WINTER_LESSON, YOUNG_LEARNER_BONUS,
+    APTITUDE_LIMIT, CHILD_TAUGHT_LIMIT, COURTING_AGE_GAP, FAMILY_RENOWN_TO_WED, GREATER_LESSON,
+    GREATER_TAUGHT, MARRYING_AGE, SEASONED_TEACHER_BONUS, SELF_TAUGHT_LIMIT, TEACHABLE_AGE,
+    WINTER_GAIN_LIMIT, WINTER_LESSON, YOUNG_LEARNER_BONUS,
 };
 use crate::content::Content;
 use crate::destiny::may_still_learn;
@@ -242,6 +242,14 @@ pub enum Courtship {
     WedAlready,
     /// They wed.
     WillWed,
+    /// One is an outsider whose personal renown is below the house's ask (variant,
+    /// DESIGN.md S6); `renown` is theirs.
+    Unproven {
+        /// The outsider's personal renown.
+        renown: i32,
+    },
+    /// One is an outsider proven enough to wed into the family (variant, DESIGN.md S6).
+    MarriesIn,
 }
 
 impl Courtship {
@@ -259,6 +267,11 @@ impl Courtship {
             Courtship::Rivals => words[W::CourtRivals].to_owned(),
             Courtship::WedAlready => words[W::CourtWedAlready].to_owned(),
             Courtship::WillWed => words[W::CourtWillWed].to_owned(),
+            Courtship::Unproven { renown } => crate::text::fmt(
+                &words[W::CourtshipUnproven],
+                &[&renown.to_string(), &FAMILY_RENOWN_TO_WED.to_string()],
+            ),
+            Courtship::MarriesIn => words[W::CourtshipMarriesIn].to_owned(),
         }
     }
 }
@@ -288,7 +301,28 @@ pub fn courtship(heroes: &[Hero], a: Option<HeroId>, b: Option<HeroId>) -> Court
     if has_living_spouse(heroes, a) || has_living_spouse(heroes, b) {
         return Courtship::WedAlready;
     }
-    Courtship::WillWed
+    // Exactly one outsider asks the house's leave (variant, DESIGN.md S6).
+    match (heroes[a].is_family, heroes[b].is_family) {
+        (true, false) | (false, true) => {
+            let outsider = if heroes[a].is_family { b } else { a };
+            let renown = heroes[outsider].renown;
+            if renown < FAMILY_RENOWN_TO_WED {
+                Courtship::Unproven { renown }
+            } else {
+                Courtship::MarriesIn
+            }
+        }
+        _ => Courtship::WillWed,
+    }
+}
+
+/// The outsider of a garden pair, if exactly one of them is (variant, DESIGN.md S6).
+pub fn the_outsider(heroes: &[Hero], a: HeroId, b: HeroId) -> Option<HeroId> {
+    match (heroes[a].is_family, heroes[b].is_family) {
+        (true, false) => Some(b),
+        (false, true) => Some(a),
+        _ => None,
+    }
 }
 
 /// A living spouse: widowed heroes may remarry (SPEC §11.6). SPEC-GAPS KG-45: living is
@@ -355,14 +389,18 @@ impl Teller {
     }
 }
 
-/// Each table seat's part, in seat order: the first adult tells it for the house, a
-/// second adult for themselves, a child not at all.
+/// Each table seat's part, in seat order: the first family adult tells it for the
+/// house, any other adult for themselves, a child not at all. An outsider's tale is
+/// their own wherever they sit (variant, DESIGN.md S2).
 pub fn tellers<const N: usize>(heroes: &[Hero], table: [Option<HeroId>; N]) -> [Option<Teller>; N] {
     let mut adults = 0;
     table.map(|seat| {
         let hero = seat?;
         if !heroes[hero].is_adult() {
             return Some(Teller::Child);
+        }
+        if !heroes[hero].is_family {
+            return Some(Teller::Own);
         }
         adults += 1;
         Some(if adults == 1 {

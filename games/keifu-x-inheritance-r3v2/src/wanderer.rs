@@ -99,6 +99,11 @@ pub fn arrive(content: &Content, house: &mut House, rng: &mut Rng) -> TurnPage {
     hero.vocation = vocation;
     hero.dream = Some(dream.clone());
     hero.renown = renown;
+    // An outsider, leaning to the gift (variant, DESIGN.md S1, S4).
+    hero.lean = Some(crate::inheritance::Lean {
+        aptitude: gift,
+        from: None,
+    });
     let id = house.heroes.len();
     house.heroes.push(hero);
     speak(content, &mut house.heroes, id, rng);
@@ -123,6 +128,16 @@ pub fn arrive(content: &Content, house: &mut House, rng: &mut Rng) -> TurnPage {
                 &lowered(&content.lore.aptitudes[hero.best_aptitude().index()]),
                 &forms.possessive,
                 &standing.telling,
+            ],
+        ),
+        fmt(
+            &words[W::ArrivalOutsider],
+            &[
+                &hero.name,
+                &capitalized(&forms.possessive),
+                &forms.possessive,
+                &crate::constants::FAMILY_RENOWN_TO_WED.to_string(),
+                &forms.subject,
             ],
         ),
         fmt(

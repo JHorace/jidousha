@@ -152,10 +152,12 @@ mod hero;
 mod house;
 mod household;
 mod ids;
+mod inheritance;
 mod json;
 mod legacy;
 mod legacy_lore;
 mod lore;
+mod marks;
 mod moment;
 #[cfg(test)]
 mod newcomer_tests;

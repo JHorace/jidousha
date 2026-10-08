@@ -204,7 +204,18 @@ fn a_disaster_costs_the_house_its_danger_and_a_loss_eases_trouble_by_one() {
         page.lines
             .contains(&"Word of it got about. The house loses 2 renown.".to_owned())
     );
-    assert_eq!(house.renown, renown - 2);
+    // Ysolde went in her own name (her dream calls her to go) and failed: the
+    // variant's black mark costs the house 2 more (DESIGN.md S3).
+    assert!(
+        page.lines.contains(
+            &"Ysolde went in her own name and failed. A black mark on the Thorne name: -2 renown to the house, and to Ysolde."
+                .to_owned()
+        ),
+        "{:?}",
+        page.lines
+    );
+    assert_eq!(house.heroes[ysolde].marks, 1);
+    assert_eq!(house.renown, renown - 4);
     let barrow = house.places[Place::Barrow.index()];
     assert_eq!((barrow.visits, barrow.disasters, barrow.trouble), (1, 1, 1));
 }

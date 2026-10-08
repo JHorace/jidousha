@@ -6,8 +6,9 @@
 
 use crate::blessing::blessing_effect;
 use crate::constants::{
-    BONDS_SHOWN, CONQUERED_FEAR_BONUS, COURAGE_TO_CONQUER, DREAD_LIMIT, LEGACY_HEIRLOOM_BONUS,
-    TALE_YEARLY_RENOWN, WOUND_PENALTY, fear_penalty, phase_adjustment,
+    BONDS_SHOWN, CONQUERED_FEAR_BONUS, COURAGE_TO_CONQUER, DREAD_LIMIT, FAMILY_RENOWN_TO_WED,
+    LEGACY_HEIRLOOM_BONUS, MARK_YEARLY_RENOWN, TALE_YEARLY_RENOWN, WOUND_PENALTY, fear_penalty,
+    phase_adjustment,
 };
 use crate::content::Content;
 use crate::dream::{Dream, StageMark, told_title};
@@ -149,17 +150,57 @@ pub fn hero_sheet(content: &Content, heroes: &[Hero], id: HeroId) -> Sheet {
             fmt(&words[W::SheetRenown], &[&hero.renown.to_string()]),
         ),
     });
+    // An outsider's standing (variant, DESIGN.md S2, S6).
+    if !hero.is_family {
+        let ask = FAMILY_RENOWN_TO_WED.to_string();
+        let renown = hero.renown.to_string();
+        out.push(line(
+            Ink::Body,
+            if hero.renown < FAMILY_RENOWN_TO_WED {
+                fmt(&words[W::SheetOutsider], &[&renown, &ask])
+            } else {
+                let object = &content.lore.pronouns[hero.pronoun.index()].object;
+                fmt(&words[W::SheetOutsiderProven], &[&renown, &ask, object])
+            },
+        ));
+    }
     for aptitude in Aptitude::ALL {
         out.push(line(Ink::Body, aptitude_row(content, hero, *aptitude)));
     }
     for aptitude in Aptitude::ALL {
         out.push(line(Ink::Note, aptitude_note(content, hero, *aptitude)));
     }
+    // The lean (variant, DESIGN.md S4).
+    if let Some(lean) = hero.lean {
+        let aptitude = &content.lore.aptitudes[lean.aptitude.index()];
+        out.push(line(
+            Ink::Note,
+            match lean.from {
+                Some(parent) => fmt(&words[W::SheetLeanAfter], &[aptitude, &heroes[parent].name]),
+                None => fmt(&words[W::SheetLean], &[aptitude]),
+            },
+        ));
+    }
     if hero.wounded {
         out.push(line(Ink::Warning, &words[W::SheetWoundedWarning]));
     }
     dream_section(content, heroes, id, &mut out);
     fear_section(content, hero, &mut out);
+    // The black marks (variant, DESIGN.md S3).
+    if hero.marks > 0 {
+        out.push(line(Ink::Heading, &words[W::SheetMarks]));
+        out.push(line(
+            Ink::Body,
+            fmt(
+                &words[W::SheetMarksLine],
+                &[
+                    &hero.marks.to_string(),
+                    &(hero.marks * MARK_YEARLY_RENOWN).to_string(),
+                    &crate::inheritance::succession(heroes, id).marks.to_string(),
+                ],
+            ),
+        ));
+    }
     let second_column = out.len();
     destiny_section(content, hero, &mut out);
     bonds_section(content, heroes, id, &mut out);

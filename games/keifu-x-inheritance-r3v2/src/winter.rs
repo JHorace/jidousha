@@ -11,7 +11,9 @@
 use jidousha::prelude::Rng;
 
 use crate::bonds::{change, form};
-use crate::constants::{BENCHES, FIRE_SEATS, GARDEN_SEATS, TALE_RENOWN, TALE_SEATS};
+use crate::constants::{
+    BENCHES, FAMILY_RENOWN_TO_WED, FIRE_SEATS, GARDEN_SEATS, TALE_RENOWN, TALE_SEATS,
+};
 use crate::content::Content;
 use crate::fear::shed_dread;
 use crate::hearth::Seat;
@@ -279,7 +281,7 @@ fn court(
     let words = &content.words;
     let year = house.calendar.current_year();
     match (verdict, pair) {
-        (Courtship::WillWed, [Some(a), Some(b)]) => {
+        (Courtship::WillWed | Courtship::MarriesIn, [Some(a), Some(b)]) => {
             form(&mut house.heroes, a, b, BondKind::Spouse, year);
             let (an, bn) = (house.heroes[a].name.clone(), house.heroes[b].name.clone());
             lines.push(fmt(
@@ -300,6 +302,36 @@ fn court(
                     telling: fmt(&words[W::DeedWed], &[&other_name]),
                 });
             }
+            // The outsider is of the name now (variant, DESIGN.md S6).
+            if let (Courtship::MarriesIn, Some(outsider)) =
+                (verdict, crate::plans::the_outsider(&house.heroes, a, b))
+            {
+                house.heroes[outsider].is_family = true;
+                lines.push(fmt(
+                    &words[W::WinterMarriedIn],
+                    &[
+                        &house.heroes[outsider].name,
+                        &house.family_house,
+                        &house.heroes[outsider].renown.to_string(),
+                        &FAMILY_RENOWN_TO_WED.to_string(),
+                    ],
+                ));
+            }
+        }
+        (Courtship::Unproven { renown }, [Some(a), Some(b)]) => {
+            let (outsider, other) = match crate::plans::the_outsider(&house.heroes, a, b) {
+                Some(o) if o == a => (a, b),
+                _ => (b, a),
+            };
+            lines.push(fmt(
+                &words[W::WinterUnproven],
+                &[
+                    &house.heroes[outsider].name,
+                    &house.heroes[other].name,
+                    &renown.to_string(),
+                    &FAMILY_RENOWN_TO_WED.to_string(),
+                ],
+            ));
         }
         (Courtship::Rivals, [Some(a), Some(b)]) => {
             change(&mut house.heroes, a, b, BondKind::Friend, year);
@@ -309,7 +341,13 @@ fn court(
             ));
         }
         (Courtship::Nobody, _) => {}
-        (Courtship::WillWed | Courtship::Rivals, _) => panic!(
+        (
+            Courtship::WillWed
+            | Courtship::MarriesIn
+            | Courtship::Unproven { .. }
+            | Courtship::Rivals,
+            _,
+        ) => panic!(
             "[keifu_x_inheritance_r3v2] the garden's verdict {verdict:?} came with an empty seat\n  likely \
              cause: courtship() judged a pair it was not given\n  fix: SPEC §11.6 checks \
              the empty seats first"

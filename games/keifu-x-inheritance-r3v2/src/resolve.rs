@@ -20,6 +20,7 @@ use crate::harm::{burn, crown, deed, place_name, suffer_disaster, wound};
 use crate::hero::{DeedKind, HeroId};
 use crate::house::House;
 use crate::ids::Outcome;
+use crate::marks::{personal_quest, stain};
 use crate::moment::{Moment, QuestMoment};
 use crate::power::party_power;
 use crate::quest::{Quest, Source};
@@ -198,6 +199,13 @@ pub fn resolve_party(
     told: &dyn Fn(&House, Outcome) -> String,
 ) -> QuestPage {
     let at_door = quest.is_door_lock();
+    // Whose own name rides on it (variant, DESIGN.md S3), read while the party is
+    // as it set out: a call answered on the road must not change who went in it.
+    let dreamers: Vec<HeroId> = members
+        .iter()
+        .copied()
+        .filter(|&m| personal_quest(content, &house.heroes, m, &quest, &members))
+        .collect();
     // 1-2. Forecast with the party and the patrons; band the margin the dice make.
     let power = party_power(&house.heroes, &members, quest.facts(), house.patrons);
     let margin = margin(power, dice[0], dice[1], quest.demand);
@@ -248,6 +256,12 @@ pub fn resolve_party(
                 &words[W::QuestDisasterRenown],
                 &[&quest.danger.to_string()],
             ));
+        }
+    }
+    // 7b. A personal quest failed: a black mark for each dreamer (variant, DESIGN.md S3).
+    if outcome < Outcome::Success {
+        for &dreamer in &dreamers {
+            stain(&f, house, dreamer, &mut lines);
         }
     }
     // 8. Each member faces the fear.
