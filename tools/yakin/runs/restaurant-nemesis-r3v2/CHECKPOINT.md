@@ -6,13 +6,14 @@ stage: design
 tick: live
 resumes: 0
 gates-green-at: none
-updated: 2026-10-07 21:13 PDT
+updated: 2026-10-07 21:22 PDT
 
 ## Done so far
-- branch claimed; run folder created
+- branch claimed; run folder created (f3402c3)
+- DESIGN.md written whole (all sections filled, template comments removed); FINDINGS.md with two doc-gap entries
 
 ## Exact next step
-Read tools/yakin/tasks/restaurant-nemesis.md (the base spec) and docs/api/ (all five files), then cp tools/yakin/templates/DESIGN.md tools/yakin/runs/restaurant-nemesis-r3v2/DESIGN.md and fill every section.
+Re-read tools/yakin/runs/restaurant-nemesis-r3v2/DESIGN.md once for internal consistency (numbers in the table vs the gate strings), fix any mismatch, then set stage: implement and tick: released in the same commit as the finished DESIGN.md, commit "yakin(restaurant-nemesis-r3v2): design", check the diff names only CHECKPOINT.md/DESIGN.md/FINDINGS.md, push.
 
 ## Deviations
 - none
