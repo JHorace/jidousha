@@ -1,9 +1,12 @@
 //! The variant's rules as pure functions (DESIGN.md "Unit tests"): the garden's verdict
 //! over outsiders, the table's first family teller, and the family-only heir list.
 
+use crate::calls::Telling;
 use crate::heirs::heirs;
+use crate::ids::Outcome;
+use crate::oath::{Oath, need};
 use crate::plans::{Courtship, Teller, courtship, tellers};
-use crate::testkit::{founded, id};
+use crate::testkit::{founded, house, id};
 
 #[test]
 fn an_outsider_below_the_threshold_is_unproven_and_at_it_weds_in() {
@@ -79,4 +82,24 @@ fn outsiders_are_never_heirs() {
     heroes[odo].family = false;
     assert!(!heirs(&heroes, garrick).contains(&odo));
     assert!(heirs(&heroes, odo).is_empty());
+}
+
+#[test]
+fn an_oath_needs_what_its_call_tells_and_going_is_kept_by_anything_but_a_disaster() {
+    assert_eq!(need(Telling::Triumph), Some(Outcome::Triumph));
+    assert_eq!(need(Telling::Succeed), Some(Outcome::Success));
+    assert_eq!(need(Telling::Go), Some(Outcome::Setback));
+    assert_eq!(need(Telling::StayBehind), None);
+}
+
+#[test]
+fn reseating_the_household_withdraws_every_oath() {
+    let (_, mut house) = house();
+    let garrick = id(&house.heroes, "Garrick");
+    house.board[0].sworn = Some(Oath {
+        by: garrick,
+        need: Outcome::Triumph,
+    });
+    house.reseat();
+    assert_eq!(house.board[0].sworn, None);
 }

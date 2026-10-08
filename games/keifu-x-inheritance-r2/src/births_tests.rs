@@ -203,6 +203,8 @@ fn a_child_takes_half_of_one_parent_per_aptitude_the_first_parents_house_both_bo
         ("Thorne", 0, 2)
     );
     assert_eq!(hero.parents, [Some(maren), Some(brannoc)]);
+    // The variant's (DESIGN decision 1): born under the roof is family.
+    assert!(hero.family);
     assert_eq!(
         hero.bond_to(maren).map(|b| (b.kind, b.since)),
         Some((BondKind::Parent, 2))
@@ -290,19 +292,27 @@ fn a_child_is_born_brave_of_a_conquered_fear_half_the_time_and_takes_a_broken_on
     house.heroes[maren].fear.conquered = false;
     house.heroes[maren].fear.tag = Tag::Fire;
     house.heroes[brannoc].fear.broken = true; // Heights
-    let (mut heights, mut n) = (0, 0);
+    let (mut heights, mut fire, mut n) = (0, 0, 0);
     for seed in 0..600 {
         let mut copy = house.clone();
         if births(&content, &mut copy, &mut Rng::from_seed(seed)).is_empty() {
             continue;
         }
         n += 1;
-        heights += i32::from(copy.heroes[copy.heroes.len() - 1].fear.tag == Tag::Heights);
+        let tag = copy.heroes[copy.heroes.len() - 1].fear.tag;
+        heights += i32::from(tag == Tag::Heights);
+        fire += i32::from(tag == Tag::Fire);
     }
     // Maren's fire first at 40%; then Brannoc's broken heights at 80%; a random roll 1/8.
     // P(heights) = 0.6 * (0.8 + 0.2 / 8) = 0.495.
     let rate = f64::from(heights) / f64::from(n);
     assert!((0.42..0.58).contains(&rate), "heights {heights} of {n}");
+    // The variant's (tightened: its two draws an aptitude moved the stream, and
+    // INHERITED_FEAR_CHANCE at 0.3 slipped inside the heights bound): Maren's own fire at
+    // 40%, else a random roll's 1/8 after Brannoc's 80% fails. P(fire) = 0.4 + 0.6 * 0.2
+    // / 8 = 0.415; at 0.3 it would be 0.3175.
+    let rate = f64::from(fire) / f64::from(n);
+    assert!((0.36..0.47).contains(&rate), "fire {fire} of {n}");
 }
 
 #[test]

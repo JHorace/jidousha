@@ -69,7 +69,13 @@ pub fn may_swear(
     if call.burden {
         return None;
     }
-    match call.telling {
+    need(call.telling)
+}
+
+/// What an oath on a call told `telling` needs: triumph, succeed or go — TRIUMPH, SUCCESS,
+/// SETBACK (going is enough; only a disaster fails it); a "stay behind" call is no oath.
+pub fn need(telling: Telling) -> Option<Outcome> {
+    match telling {
         Telling::Triumph => Some(Outcome::Triumph),
         Telling::Succeed => Some(Outcome::Success),
         Telling::Go => Some(Outcome::Setback),
