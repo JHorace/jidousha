@@ -388,3 +388,32 @@ fn unleaned(child: &crate::hero::Hero) -> [i32; 3] {
     shares[lean.aptitude.index()] -= crate::constants::LEAN_BONUS;
     shares
 }
+
+#[test]
+fn over_many_births_the_coin_gives_each_parents_lean_some_of_the_time() {
+    // Variant, DESIGN.md S4: one coin between the parents' leans.
+    let (content, house, maren, brannoc) = wed_house();
+    let mut from = std::collections::BTreeSet::new();
+    for seed in 0..120 {
+        let mut copy = house.clone();
+        if births(&content, &mut copy, &mut Rng::from_seed(seed)).is_empty() {
+            continue;
+        }
+        let child = &copy.heroes[copy.heroes.len() - 1];
+        from.insert(child.lean.and_then(|lean| lean.from));
+    }
+    let both: std::collections::BTreeSet<_> = [Some(maren), Some(brannoc)].into_iter().collect();
+    assert_eq!(from, both);
+}
+
+#[test]
+fn a_child_with_one_family_parent_is_family_and_a_child_of_two_outsiders_is_not() {
+    // Variant, DESIGN.md S1: family by either parent.
+    let (content, mut house, maren, brannoc) = wed_house();
+    house.heroes[brannoc].is_family = false;
+    let (born, _) = a_birth(&content, &house);
+    assert!(born.heroes[born.heroes.len() - 1].is_family);
+    house.heroes[maren].is_family = false;
+    let (born, _) = a_birth(&content, &house);
+    assert!(!born.heroes[born.heroes.len() - 1].is_family);
+}
