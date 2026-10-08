@@ -52,15 +52,52 @@ fn house_of(sim: &HeadlessSim) -> &House {
     sim.world().resource::<House>()
 }
 
+/// Row 1's stage: Garrick alone on "Grave goods", its need past his reach.
+fn stage_mark(sim: &mut HeadlessSim) {
+    sim.world_mut().resource_mut::<House>().board[0]
+        .quest
+        .demand = 40;
+    seat(sim, "Garrick", Slot::Quest { quest: 0, seat: 0 });
+    away(sim);
+}
+
+/// Row 2's stage: Odo an outsider of `renown` beside Maren in the garden.
+fn stage_garden(sim: &mut HeadlessSim, renown: i32) {
+    stay_home_into_winter(sim);
+    let odo = hero_named(sim, "Odo");
+    {
+        let house = sim.world_mut().resource_mut::<House>();
+        house.heroes[odo].blood = Blood::Outsider;
+        house.heroes[odo].renown = renown;
+    }
+    seat_at(sim, "Odo", Seat::Garden(0));
+    seat_at(sim, "Maren", Seat::Garden(1));
+    away(sim);
+}
+
+/// Row 3's stage: Garrick carrying three marks, dead of old age; his page's choice up.
+fn stage_heir(sim: &mut HeadlessSim) {
+    stage_garricks_winter(sim);
+    let garrick = hero_named(sim, "Garrick");
+    sim.world_mut().resource_mut::<House>().heroes[garrick].marks = 3;
+    point_at(sim, Target::LetWinterPass, true);
+    go_to_the_choice(sim);
+}
+
+/// Stage a decision surface for a picture: "mark", "garden" (refusing) or "heir".
+pub fn stage(sim: &mut HeadlessSim, which: &str) {
+    match which {
+        "mark" => stage_mark(sim),
+        "garden" => stage_garden(sim, 5),
+        _ => stage_heir(sim),
+    }
+}
+
 /// Row 1. Returns its summary line.
 fn check_mark(checks: &mut Checks) -> String {
     let mut sim = session(SEEDS[0]);
     let garrick = hero_named(&sim, "Garrick");
-    sim.world_mut().resource_mut::<House>().board[0]
-        .quest
-        .demand = 40;
-    seat(&mut sim, "Garrick", Slot::Quest { quest: 0, seat: 0 });
-    away(&mut sim);
+    stage_mark(&mut sim);
     let card = card_lines(&sim, 0);
     checks.require(
         card.iter().any(|l| l == ORACLE_MARK_CARD),
@@ -88,19 +125,9 @@ fn check_mark(checks: &mut Checks) -> String {
     format!("inheritance row 1: card {ORACLE_MARK_CARD:?}; after Set out Garrick carries {marks}")
 }
 
-/// Odo staged an outsider of `renown`, Maren beside him in the garden; returns the
-/// garden's lines, and leaves the winter let pass.
+/// Row 2's stage, read: the garden's lines, and the winter let pass.
 fn court(sim: &mut HeadlessSim, renown: i32) -> Vec<String> {
-    stay_home_into_winter(sim);
-    let odo = hero_named(sim, "Odo");
-    {
-        let house = sim.world_mut().resource_mut::<House>();
-        house.heroes[odo].blood = Blood::Outsider;
-        house.heroes[odo].renown = renown;
-    }
-    seat_at(sim, "Odo", Seat::Garden(0));
-    seat_at(sim, "Maren", Seat::Garden(1));
-    away(sim);
+    stage_garden(sim, renown);
     let lines = group_lines(sim, Group::Garden);
     point_at(sim, Target::LetWinterPass, true);
     lines
@@ -140,11 +167,8 @@ fn check_marry_in(checks: &mut Checks) -> String {
 /// Row 3. Returns its summary line.
 fn check_heir(checks: &mut Checks) -> String {
     let mut sim = session(SEEDS[0]);
-    stage_garricks_winter(&mut sim);
-    let (garrick, pip) = (hero_named(&sim, "Garrick"), hero_named(&sim, "Pip"));
-    sim.world_mut().resource_mut::<House>().heroes[garrick].marks = 3;
-    point_at(&mut sim, Target::LetWinterPass, true);
-    go_to_the_choice(&mut sim);
+    let pip = hero_named(&sim, "Pip");
+    stage_heir(&mut sim);
     let page = page_of(&sim);
     let shown = heir_holds(&page)
         .into_iter()

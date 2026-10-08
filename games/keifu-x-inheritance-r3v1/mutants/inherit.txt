@@ -1,0 +1,172 @@
+#! Inheritance (keifu-x-inheritance-r3v1): every constant and rule line the variant adds —
+#! the black mark, outsiders and family, trait genetics, the heir's inheritance.
+
+### M1 SETBACK_MARK 1 -> 2
+@ src/marks.rs
+- pub const SETBACK_MARK: i32 = 1;
++ pub const SETBACK_MARK: i32 = 2;
+
+### M2 DISASTER_MARK 2 -> 3
+@ src/marks.rs
+- pub const DISASTER_MARK: i32 = 2;
++ pub const DISASTER_MARK: i32 = 3;
+
+### M3 TOLL_DIVISOR 4 -> 3
+@ src/marks.rs
+- pub const TOLL_DIVISOR: i32 = 4;
++ pub const TOLL_DIVISOR: i32 = 3;
+
+### M4 DECAY_DIVISOR 2 -> 3
+@ src/marks.rs
+- pub const DECAY_DIVISOR: i32 = 2;
++ pub const DECAY_DIVISOR: i32 = 3;
+
+### M5 an outsider's failure costs the house
+@ src/marks.rs
+- house_loss: if hero.is_family() { weight } else { 0 },
++ house_loss: weight,
+
+### M6 no personal renown lost
+@ src/marks.rs
+- personal_loss: weight.min(hero.renown.max(0)),
++ personal_loss: 0,
+
+### M7 a Go call is personal too
+@ src/marks.rs
+- Some(call) if matches!(call.telling, Telling::Succeed | Telling::Triumph)
++ Some(_)
+
+### M8 the mark not added
+@ src/marks.rs
+- hero.marks += s.weight;
++ hero.marks += 0;
+
+### M9 the house loss not taken
+@ src/marks.rs
+- *house_renown = (*house_renown - s.house_loss).max(0);
++ *house_renown = (*house_renown).max(0);
+
+### M10 newborn takes the lighter parent's marks
+@ src/marks.rs
+- first.marks.max(second.marks) / DECAY_DIVISOR
++ first.marks.min(second.marks) / DECAY_DIVISOR
+
+### M11 the toll counts outsiders
+@ src/marks.rs
+- .filter(|h| h.is_living() && h.is_family())
++ .filter(|h| h.is_living())
+
+### M12 MARRY_IN_RENOWN 6 -> 7
+@ src/outsiders.rs
+- pub const MARRY_IN_RENOWN: i32 = 6;
++ pub const MARRY_IN_RENOWN: i32 = 7;
+
+### M13 TRANSFER_DIVISOR 2 -> 1
+@ src/outsiders.rs
+- pub const TRANSFER_DIVISOR: i32 = 2;
++ pub const TRANSFER_DIVISOR: i32 = 1;
+
+### M14 the threshold is strict
+@ src/outsiders.rs
+- if renown >= MARRY_IN_RENOWN {
++ if renown > MARRY_IN_RENOWN {
+
+### M15 any party wins the house renown
+@ src/outsiders.rs
+- members.iter().any(|&m| heroes[m].is_family())
++ !members.is_empty()
+
+### M16 marrying in leaves them outside
+@ src/outsiders.rs
+- heroes[outsider].blood = Blood::Family;
++ heroes[outsider].blood = Blood::Outsider;
+
+### M17 MUTATION_CHANCE 0.15 -> 0.5
+@ src/genes.rs
+- pub const MUTATION_CHANCE: f32 = 0.15;
++ pub const MUTATION_CHANCE: f32 = 0.5;
+
+### M18 WANDERER_TRAIT_CHANCE 0.5 -> 0.25
+@ src/genes.rs
+- pub const WANDERER_TRAIT_CHANCE: f32 = 0.5;
++ pub const WANDERER_TRAIT_CHANCE: f32 = 0.25;
+
+### M19 aptitude traits add nothing
+@ src/genes.rs
+- sum += copies(hero, *t);
++ sum += 0;
+
+### M20 Bold eases nothing
+@ src/genes.rs
+- sum += copies(hero, Trait::Bold).min(-fear);
++ sum += 0;
+
+### M21 both slots from the first parent
+@ src/genes.rs
+- let mut genes = [first[index(&mut rng, 2)], second[index(&mut rng, 2)]];
++ let mut genes = [first[index(&mut rng, 2)], first[index(&mut rng, 2)]];
+
+### M22 the heir takes all the dead's marks
+@ src/inheritance.rs
+- marks: heroes[heir].marks + heroes[dead].marks / DECAY_DIVISOR,
++ marks: heroes[heir].marks + heroes[dead].marks,
+
+### M23 outsiders on the heir list
+@ src/heirs.rs
+- .filter(|&id| heroes[id].is_family())
++ .filter(|&id| id != usize::MAX)
+
+### M24 the choice applies no marks
+@ src/heirs.rs
+- house.heroes[h].marks = inherited.marks;
++ house.heroes[h].marks += 0;
+
+### M25 outsider carriers carry the house
+@ src/reward.rs
+- .filter(|&m| house.heroes[m].is_family())
++ .filter(|&m| m != usize::MAX)
+
+### M26 an outsider tells the house's tale
+@ src/plans.rs
+- Some(if adults == 1 && heroes[hero].is_family() {
++ Some(if adults == 1 {
+
+### M27 marrying in brings no renown
+@ src/winter.rs
+- house.add_renown(gained);
++ house.add_renown(0);
+
+### M28 no turning toll
+@ src/turning.rs
+- house.add_renown(-toll);
++ house.add_renown(0);
+
+### M29 wanderers come as family
+@ src/wanderer.rs
+- hero.blood = crate::hero::Blood::Outsider;
++ hero.blood = crate::hero::Blood::Family;
+
+### M30 a newborn carries no marks
+@ src/births.rs
+- child.marks = crate::marks::born_marks(&house.heroes[first], &house.heroes[second]);
++ child.marks = 0;
+
+### M31 an outsider carrier's quest death costs the house
+@ src/harm.rs
+- let carrier = hero.destiny.kind == Destiny::CarryTheHouse && hero.is_family();
++ let carrier = hero.destiny.kind == Destiny::CarryTheHouse;
+
+### M32 traits left out of the power sum
+@ src/power.rs
+- sum += crate::genes::trait_power(hero, quest);
++ sum += 0;
+
+### M33 the sheet does not say a call is personal
+@ src/quest_sheet.rs
+- text.push_str(crate::marks::SHEET_SUFFIX);
++ text.push_str("");
+
+### M34 a child of two outsiders is family
+@ src/births.rs
+- child.blood = if house.heroes[first].is_family() || house.heroes[second].is_family() {
++ child.blood = if true {

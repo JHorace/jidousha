@@ -202,6 +202,18 @@ pub fn capture_all(checks: &mut Checks) -> Vec<String> {
             "keifu_x_inheritance_r3v1-w10-played-family.png",
         ),
         (&["w10:reset"][..], "keifu_x_inheritance_r3v1-w10-reset.png"),
+        (
+            &["inherit:mark"][..],
+            "keifu_x_inheritance_r3v1-inherit-mark.png",
+        ),
+        (
+            &["inherit:garden"][..],
+            "keifu_x_inheritance_r3v1-inherit-garden.png",
+        ),
+        (
+            &["inherit:heir"][..],
+            "keifu_x_inheritance_r3v1-inherit-heir.png",
+        ),
     ]
     .into_iter()
     .enumerate()
@@ -213,6 +225,11 @@ pub fn capture_all(checks: &mut Checks) -> Vec<String> {
             session(crate::verify::SEEDS[0])
         };
         for name in stage {
+            // Variant: the three decision surfaces, staged as their checks stage them.
+            if let Some(which) = name.strip_prefix("inherit:") {
+                crate::inherit_checks::stage(&mut sim, which);
+                continue;
+            }
             if *name == "w8-grown" {
                 continue;
             } else if let Some(kind) = name.strip_prefix("kind:") {

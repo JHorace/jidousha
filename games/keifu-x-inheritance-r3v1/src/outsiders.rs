@@ -79,3 +79,102 @@ pub fn take_into_the_name(heroes: &mut [Hero], outsider: HeroId, transfer: i32) 
     heroes[outsider].blood = Blood::Family;
     transfer
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::resolve::resolve_rolled;
+    use crate::testkit::{aim, founded, house, id, seat};
+    use jidousha::prelude::Rng;
+
+    #[test]
+    fn an_outsider_below_the_threshold_is_refused_and_at_it_marries_in_with_half_their_renown() {
+        let (_content, mut heroes) = founded();
+        let (odo, maren) = (id(&heroes, "Odo"), id(&heroes, "Maren"));
+        heroes[odo].blood = Blood::Outsider;
+        heroes[odo].renown = 5;
+        assert_eq!(
+            marry_in(&heroes, odo, maren),
+            MarryIn::Refused {
+                outsider: odo,
+                renown: 5
+            }
+        );
+        heroes[odo].renown = 7;
+        assert_eq!(
+            marry_in(&heroes, maren, odo),
+            MarryIn::Accepted {
+                outsider: odo,
+                transfer: 3
+            }
+        );
+    }
+
+    #[test]
+    fn two_outsiders_cannot_wed_whatever_their_renown() {
+        let (_content, mut heroes) = founded();
+        let (odo, maren) = (id(&heroes, "Odo"), id(&heroes, "Maren"));
+        for h in [odo, maren] {
+            heroes[h].blood = Blood::Outsider;
+            heroes[h].renown = 20;
+        }
+        assert!(matches!(
+            marry_in(&heroes, odo, maren),
+            MarryIn::Refused { .. }
+        ));
+    }
+
+    #[test]
+    fn a_party_of_outsiders_wins_the_house_no_renown_and_themselves_their_own() {
+        let (content, mut house) = house();
+        let odo = id(&house.heroes, "Odo");
+        house.heroes[odo].blood = Blood::Outsider;
+        seat(&mut house, 0, &[odo]);
+        aim(&mut house, 0, [3, 3], 1);
+        let (before, own) = (house.renown, house.heroes[odo].renown);
+        resolve_rolled(&content, &mut house, &mut Rng::from_seed(5), 0, [3, 3]);
+        assert_eq!(house.renown, before);
+        assert!(house.heroes[odo].renown > own);
+    }
+
+    #[test]
+    fn the_turning_toll_is_the_living_familys_marks_over_four_and_ignores_outsiders() {
+        let (_content, mut heroes) = founded();
+        let (odo, maren, ysolde) = (
+            id(&heroes, "Odo"),
+            id(&heroes, "Maren"),
+            id(&heroes, "Ysolde"),
+        );
+        heroes[maren].marks = 5;
+        heroes[ysolde].marks = 3;
+        heroes[odo].marks = 8;
+        heroes[odo].blood = Blood::Outsider;
+        assert_eq!(crate::marks::toll(&heroes), 2);
+    }
+
+    #[test]
+    fn strong_adds_one_a_copy_on_a_might_quest_and_bold_eases_a_feared_tag() {
+        use crate::genes::{Trait, trait_power};
+        use crate::ids::{Aptitude, Place};
+        use crate::power::QuestFacts;
+        let (_content, mut heroes) = founded();
+        let maren = id(&heroes, "Maren");
+        heroes[maren].genes = [Some(Trait::Strong), Some(Trait::Strong)];
+        let might = QuestFacts {
+            aptitude: Aptitude::Might,
+            place: Place::ALL[0],
+            tags: &[],
+            door_lock: false,
+        };
+        assert_eq!(trait_power(&heroes[maren], might), 2);
+        let feared = [heroes[maren].fear.tag];
+        heroes[maren].genes = [Some(Trait::Bold), None];
+        heroes[maren].fear.conquered = false;
+        let wits = QuestFacts {
+            aptitude: Aptitude::Wits,
+            tags: &feared,
+            ..might
+        };
+        assert_eq!(trait_power(&heroes[maren], wits), 1);
+    }
+}
