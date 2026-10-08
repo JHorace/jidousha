@@ -1,0 +1,111 @@
+#! restaurant-nemesis-r3v1 round one: each decision row's function, its surface, and the numbers DESIGN.md fixes.
+
+### N1 a skipped level-3 order no longer spawns
+@ src/rules.rs
+- pub const SPAWN_SEVERITY: u8 = 4;
++ pub const SPAWN_SEVERITY: u8 = 5;
+
+### N2 the sensitivity is one, not two
+@ src/rules.rs
+- pub const SENSITIVITY: u8 = 2;
++ pub const SENSITIVITY: u8 = 1;
+
+### N3 the cap lets a fourth nemesis in
+@ src/rules.rs
+- if active.len() < MAX_NEMESES {
++ if active.len() <= MAX_NEMESES {
+
+### N4 two satisfying visits win
+@ src/rules.rs
+- pub const TALLY_TO_WIN: u8 = 3;
++ pub const TALLY_TO_WIN: u8 = 2;
+
+### N5 the tally defeats one visit late
+@ src/rules.rs
+- reading.tally.0 + 1 >= reading.tally.1
++ reading.tally.0 >= reading.tally.1
+
+### N6 an overwhelm needs a margin of four
+@ src/rules.rs
+- pub const OVERWHELM_MARGIN: u8 = 3;
++ pub const OVERWHELM_MARGIN: u8 = 4;
+
+### N7 a nemesis lasts down to five followers
+@ src/rules.rs
+- pub const FOLLOWER_FLOOR: i32 = 10;
++ pub const FOLLOWER_FLOOR: i32 = 5;
+
+### N8 a takedown cuts twenty-five
+@ src/rules.rs
+- pub const TAKEDOWN_CUT: i32 = 30;
++ pub const TAKEDOWN_CUT: i32 = 25;
+
+### N9 three followers a tier
+@ src/rules.rs
+- let count = (2 * usize::from(tier)).min(room);
++ let count = (3 * usize::from(tier)).min(room);
+
+### N10 a follower's demand is the tier, not one more
+@ src/rules.rs
+- level: 1 + tier,
++ level: tier,
+
+### N11 the day's followers carry a demand the ledger did not state
+@ src/day.rs
+- demands[game.nemeses[leader].theme.index()] = level;
++ demands[game.nemeses[leader].theme.index()] = level + 1;
+
+### N12 the card counts the tally one too far
+@ src/screens.rs
+- (None, true) => format!("tally {}/{}", reading.tally.0 + 1, reading.tally.1),
++ (None, true) => format!("tally {}/{}", reading.tally.0 + 2, reading.tally.1),
+
+### N13 the row's warning previews a standard, not an unmet order
+@ src/screens.rs
+- let unmet = rules::outcome(game, &order, Serve::Skip);
++ let unmet = rules::outcome(game, &order, Serve::Standard);
+
+### N14 the kitchen cooks everything standard whatever was chosen
+@ src/sim.rs
+- let outcome = rules::outcome(game, &order, order.serve);
++ let outcome = rules::outcome(game, &order, Serve::Standard);
+
+### N15 a skipped order is no worse than a short one
+@ src/rules.rs
+- pub const SKIP_INSULT: u8 = 1;
++ pub const SKIP_INSULT: u8 = 0;
+
+### N16 the rent is forty-five
+@ src/rules.rs
+- pub const RENT: i32 = 25;
++ pub const RENT: i32 = 45;
+
+### N17 every nemesis takes a condiment title
+@ src/sim.rs
+- let titles = theme.titles();
++ let titles = Theme::Condiment.titles();
+
+### N18 nemeses do not post overnight
+@ src/rules.rs
+- pub const NIGHT_GROWTH: i32 = 10;
++ pub const NIGHT_GROWTH: i32 = 0;
+
+### N19 the small text drops below the floor
+@ src/screens.rs
+- pub const SMALL: f32 = 12.0;
++ pub const SMALL: f32 = 11.0;
+
+### N20 the card is never shown
+@ src/screens.rs
+- Who::Nemesis(index) => card_lines(game, index, order),
++ Who::Nemesis(_) => nemeses_lines(game),
+
+### N21 spends are free
+@ src/day.rs
+- game.money -= game.spends.cost();
++ game.money -= 0;
+
+### N22 the temp cook adds nothing
+@ src/sim.rs
+- let capacity = rules::CAPACITY + u32::from(self.temp_today);
++ let capacity = rules::CAPACITY;
