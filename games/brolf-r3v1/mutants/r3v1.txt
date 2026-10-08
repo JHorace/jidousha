@@ -1,0 +1,121 @@
+#! brolf-r3v1 round one: every decision row's function, its surface and its constants.
+
+### B1 the grace lets a golfer stay out one tick longer
+@ src/sim.rs
+- if golfer.out_ticks <= GRACE_TICKS {
++ if golfer.out_ticks < GRACE_TICKS + 2 {
+
+### B2 the grace is four seconds
+@ src/rules.rs
+- pub const GRACE_TICKS: u32 = 300;
++ pub const GRACE_TICKS: u32 = 240;
+
+### B3 a ball outside the zone does not count
+@ src/sim.rs
+- && inside_at(&game.schedule, golfer.ball.pos, tick);
++ && true;
+
+### B4 the zone ring is drawn ten seconds ahead
+@ src/draw.rs
+- zone_at(&game.schedule, game.tick),
++ zone_at(&game.schedule, game.tick + 600),
+
+### B5 the next ring is drawn in the current ring's colour
+@ src/draw.rs
+- palette::NEXT_RING, zone
++ palette::ZONE_RING, zone
+
+### B6 the landing marker sits on the ball
+@ src/draw.rs
+- ctx.circle(landing, 0.32, palette::LANDING, guides);
++ ctx.circle(me.ball.pos, 0.32, palette::LANDING, guides);
+
+### B7 the aim line points at the golfer
+@ src/draw.rs
+- ctx.line(me.ball.pos, landing, 0.12, palette::AIM, guides);
++ ctx.line(me.ball.pos, me.pos, 0.12, palette::AIM, guides);
+
+### B8 the status bar names the wrong radius
+@ src/text.rs
+- zone.radius, next.radius
++ next.radius, zone.radius
+
+### B9 a club stuns for two seconds
+@ src/rules.rs
+- pub const STUN_TICKS: u32 = 180;
++ pub const STUN_TICKS: u32 = 120;
+
+### B10 a club steals two
+@ src/rules.rs
+- pub const STEAL: u32 = 1;
++ pub const STEAL: u32 = 2;
+
+### B11 the sim stuns a tick longer than the cue says
+@ src/sim.rs
+- game.golfers[target].stun = stun_ticks;
++ game.golfers[target].stun = stun_ticks + 1;
+
+### B12 the cue is drawn in the aim's colour
+@ src/draw.rs
+- palette::CUE,
++ palette::AIM,
+
+### B13 the stolen token is not taken from the target
+@ src/sim.rs
+- game.golfers[target].stash -= steal;
++ game.golfers[target].stash -= 0;
+
+### B14 HEAVY halves a strike instead of quartering it
+@ src/rules.rs
+- knock_scale: 0.25,
++ knock_scale: 0.5,
+
+### B15 a strike ignores the target's equipment
+@ src/rules.rs
+- let distance = KNOCK * effect(game.golfers[owner].item).knock_scale;
++ let distance = KNOCK * effect(None).knock_scale;
+
+### B16 extracting loses the item
+@ src/rules.rs
+- Ending::Extracted => Kept {⏎            tokens: golfer.stash,⏎            item: golfer.item,
++ Ending::Extracted => Kept {⏎            tokens: golfer.stash,⏎            item: None,
+
+### B17 extracting pays a bonus token
+@ src/rules.rs
+- Ending::Extracted => Kept {⏎            tokens: golfer.stash,
++ Ending::Extracted => Kept {⏎            tokens: golfer.stash + 1,
+
+### B18 a cup is worth two
+@ src/rules.rs
+- pub const CUP_TOKENS: u32 = 3;
++ pub const CUP_TOKENS: u32 = 2;
+
+### B19 the match steps before it reads the keys
+@ src/main.rs
+- app.add_system(Update, read_the_player);⏎    app.add_system(Update, step_the_match);
++ app.add_system(Update, step_the_match);⏎    app.add_system(Update, read_the_player);
+
+### B20 the status bar slides into the course
+@ src/draw.rs
+- pub const STATUS_TOP: f32 = -HALF_H + 0.35;
++ pub const STATUS_TOP: f32 = -HALF_H + 6.0;
+
+### B21 the rough is too bright for the rings
+@ src/draw.rs
+- pub const ROUGH: Color = Color::rgb(0.05, 0.11, 0.07);
++ pub const ROUGH: Color = Color::rgb(0.05, 0.45, 0.07);
+
+### B22 the extract input does nothing
+@ src/sim.rs
+- if intent.extract && game.pad_underfoot(who).is_some() {
++ if intent.extract && game.pad_underfoot(who).is_some() && who > 0 {
+
+### B23 the helmet does not stop the steal, but says it does
+@ src/rules.rs
+- stun_ticks: 60,⏎            steal: 0,
++ stun_ticks: 60,⏎            steal: 1,
+
+### B24 the DRIVER reaches 1.4x
+@ src/rules.rs
+- reach_scale: 1.5,
++ reach_scale: 1.4,
