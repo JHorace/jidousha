@@ -1,0 +1,133 @@
+#! Round 1 (stack-card-game-r2, the first build): one fault per rule the game
+#! rests on — priority and passing, legality, every card's resolution, the
+#! turn's refill and limit, the end on life, the Brute's choice, the stack
+#! panel's order and marks, the pass line, aiming, refusals, the table colour,
+#! the layout.
+#! L3 is equivalent: `apply` answers a missing target with Fizzled itself, and no
+#! target on the stack can stop being legal, so the guard only names the rule
+#! (decision row 3's "the resolution reads `legal`"). Expected to escape.
+
+### P1 one pass resolves the top item
+@ src/duel.rs
+- if self.passes < 2 {
++ if self.passes < 1 {
+
+### P2 playing a card keeps priority
+@ src/duel.rs
+- self.priority = side.other();⏎        self.passes = 0;⏎        Ok(id)
++ self.passes = 0;⏎        Ok(id)
+
+### L1 Mirror may aim at anything
+@ src/duel.rs
+- Aim::DamageItem => item.card.deals_damage(),
++ Aim::DamageItem => true,
+
+### L2 legal targets listed bottom first
+@ src/duel.rs
+- pub(crate) fn legal_targets(duel: &Duel, card: Card) -> Vec<u32> {⏎    duel.stack⏎        .iter()⏎        .rev()
++ pub(crate) fn legal_targets(duel: &Duel, card: Card) -> Vec<u32> {⏎    duel.stack⏎        .iter()
+
+### L3 nothing ever fizzles
+@ src/resolve.rs
+- let effect = if aimed && !item.target.is_some_and(|id| legal(duel, item.card, id)) {
++ let effect = if false && aimed && !item.target.is_some_and(|id| legal(duel, item.card, id)) {
+
+### L4 cost is not checked when offering a play
+@ src/duel.rs
+- && card.cost() <= self.seat(side).energy
++ && card.cost() <= self.seat(side).energy + 9
+
+### R1 Surge ignores the stack under it
+@ src/resolve.rs
+- let amount = SURGE_BASE + duel.stack.len() as i32;
++ let amount = SURGE_BASE;
+
+### R2 Mirror sends damage back where it was going
+@ src/resolve.rs
+- turned.hits = turned.hits.other();
++ turned.hits = turned.caster.other();
+
+### R3 Echo's copy keeps the original's aim
+@ src/resolve.rs
+- hits: lands_on(original.card, item.caster),
++ hits: original.hits,
+
+### R4 Sink moves the item to the top
+@ src/resolve.rs
+- duel.stack.insert(0, sunk);
++ duel.stack.push(sunk);
+
+### R5 Flip does nothing
+@ src/resolve.rs
+- duel.stack.reverse();
++ duel.stack.truncate(usize::MAX);
+
+### R6 Bolt deals 3
+@ src/cards.rs
+- pub(crate) const BOLT_DAMAGE: i32 = 2;
++ pub(crate) const BOLT_DAMAGE: i32 = 3;
+
+### T1 energy refills to 4
+@ src/duel.rs
+- pub(crate) const ENERGY: u32 = 3;
++ pub(crate) const ENERGY: u32 = 4;
+
+### T2 the match runs 10 turns
+@ src/duel.rs
+- pub(crate) const TURNS: u32 = 20;
++ pub(crate) const TURNS: u32 = 10;
+
+### T3 hands draw to 5
+@ src/duel.rs
+- pub(crate) const HAND: usize = 4;
++ pub(crate) const HAND: usize = 5;
+
+### T4 zero life does not end the match
+@ src/duel.rs
+- if self.seat(to).life <= 0 && self.over.is_none() {
++ if self.seat(to).life < -99 && self.over.is_none() {
+
+### N1 the Brute takes its worst option
+@ src/npc.rs
+- if value > best_score {
++ if value < best_score {
+
+### S1 the stack panel lists bottom first
+@ src/screen.rs
+- pub(crate) fn stack_lines(duel: &Duel) -> Vec<StackLine> {⏎    let steps = preview(duel);⏎    duel.stack⏎        .iter()⏎        .rev()
++ pub(crate) fn stack_lines(duel: &Duel) -> Vec<StackLine> {⏎    let steps = preview(duel);⏎    duel.stack⏎        .iter()
+
+### S2 every row is marked while aiming
+@ src/screen.rs
+- if marks.contains(&line.id) {
++ if !marks.is_empty() {
+
+### S3 the pass line says the opponent may respond when it will not
+@ src/screen.rs
+- (_, false) => "pass: top item resolves".to_owned(),
++ (_, false) => format!("pass: {other} may respond"),
+
+### S4 the aim cursor never moves down
+@ src/main.rs
+- aim: (pick.aim + 1).min(last),
++ aim: pick.aim.min(last),
+
+### S5 a refusal is dropped silently
+@ src/main.rs
+- game.ui.notice = Some(refusal.line());
++ let _ = refusal;
+
+### S6 the table is light
+@ src/layout.rs
+- pub(crate) const TABLE: Color = Color::rgb(0.06, 0.07, 0.10);
++ pub(crate) const TABLE: Color = Color::rgb(0.66, 0.67, 0.70);
+
+### S7 the hand rides up over the stack panel
+@ src/layout.rs
+- pub(crate) const HAND_TOP: f32 = 412.0;
++ pub(crate) const HAND_TOP: f32 = 312.0;
+
+### S8 a player with nothing to play is never passed for
+@ src/main.rs
+- if game.waited >= AUTO_PASS_BEAT {
++ if game.waited >= AUTO_PASS_BEAT * 1000 {
