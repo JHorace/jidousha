@@ -153,6 +153,7 @@ mod hero;
 mod house;
 mod household;
 mod ids;
+mod inherit_checks;
 mod inheritance;
 mod json;
 mod legacy;

@@ -6,16 +6,17 @@ stage: implement
 tick: live
 resumes: 0
 gates-green-at: none
-updated: 2026-10-07 21:37 PDT
+updated: 2026-10-07 21:42 PDT
 
 ## Done so far
 - claimed
 - inline DESIGN.md written (V1) (db95fcf)
 - fork: pure copy-and-rename of games/keifu, verify pass (277a44d)
-- variant rules: genes.rs, marks.rs, outsiders.rs, inheritance.rs wired into births, wanderers, power, resolve, reward, courtship, wedding, tellers, heirs, turning toll, card/sheet/heir-button surfaces; unit tests green; verify not yet green
+- variant rules: genes.rs, marks.rs, outsiders.rs, inheritance.rs wired into births, wanderers, power, resolve, reward, courtship, wedding, tellers, heirs, turning toll, card/sheet/heir-button surfaces (4dd4007)
+- inherit_checks.rs: the three decision rows; mainline oracles rewritten (W3 sheet, stir staging, heir_labels first line); verify pass
 
 ## Exact next step
-Run python3 tools/verify keifu_x_inheritance_r3v1 and fix remaining mainline-oracle breaks; then write src/inherit_checks.rs (three decision-row checks) and call it from verify::run.
+Add outsider/toll unit tests; add three captures (card mark line, garden refusal, heir buttons) in capture.rs; mutation round mutants/inherit.txt via tools/mutate; FINDINGS; then full gate.
 
 ## Deviations
 - none

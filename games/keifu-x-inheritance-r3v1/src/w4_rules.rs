@@ -341,7 +341,7 @@ pub fn check_rules(checks: &mut Checks) -> String {
 /// W2's and W3's oracles, graduated: read off the real card after real drags.
 pub fn check_inherited(checks: &mut Checks) -> (String, Vec<String>) {
     use crate::w2::{W2_FEAR_LINE, W2_YOU_BRING};
-    use crate::w3::{W3_CARD, W3_SHEET};
+    use crate::w3::{W3_CARD, W3_SHEET_PERSONAL as W3_SHEET};
     let mut vector = Vec::new();
     for seed in SEEDS {
         let mut sim = session(seed);

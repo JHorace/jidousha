@@ -383,6 +383,7 @@ pub fn run() -> ExitCode {
     summary.push(crate::sessions::check_family(&mut checks, &mut recorder));
     summary.push(crate::sessions::check_seeds(&mut checks, &content));
     summary.push(crate::sessions::check_staged_sheets(&mut checks));
+    summary.extend(crate::inherit_checks::check(&mut checks));
     summary.push(crate::cast::check_art(&mut checks, &mut recorder));
     summary.push(crate::dock_checks::check(&mut checks));
     summary.extend(crate::floors::check(&mut checks));
@@ -394,7 +395,7 @@ pub fn run() -> ExitCode {
     let (passed, failed) = checks.counts();
     if failed == 0 {
         println!(
-            "verified keifu_x_inheritance_r3v1: W0, W1, W2, W3, W4, W5, W6, W7, W8, W9 and W10 oracles hold on {} seeds, {passed} checks",
+            "verified keifu_x_inheritance_r3v1: W0-W10 oracles and the inheritance rows hold on {} seeds, {passed} checks",
             SEEDS.len()
         );
     } else {

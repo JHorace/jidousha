@@ -36,6 +36,10 @@ const LAMPS: &str = "The lamps in the Barrow";
 pub const W3_CARD: &str = "Dream: Garrick, Ysolde";
 /// MODULES.md W3: the quest sheet's line for Garrick.
 pub const W3_SHEET: &str = "Garrick's dream: Win a triumph at the Barrow. He must triumph.";
+/// Variant (marks.rs): the same call on the quest sheet, where it makes the quest
+/// Garrick's own.
+pub const W3_SHEET_PERSONAL: &str =
+    "Garrick's dream: Win a triumph at the Barrow. He must triumph. Failing marks the name.";
 /// `lines.dream.fulfilled` for Garrick and his told title.
 pub const W3_SETTLING: &str = "Garrick has done it: to lay the Barrow's dead to rest. He is settled now, and dread has no hold on him.";
 /// `lines.legacy.blessing` for Garrick's rest.
