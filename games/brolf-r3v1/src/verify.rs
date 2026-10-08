@@ -181,7 +181,10 @@ fn aiming_surface(checks: &mut Checks, frame: &FrameRecord, game: &Match) -> Str
     let landing_drawn = tinted_at(frame, landing, palette::LANDING);
     let status = status_lines(game)[0].clone();
     let next_radius = next.map_or(-1.0, |(circle, _)| circle.radius);
-    let names_next = status.contains(&format!("r{next_radius:.0}"));
+    // "to r24" or "-> r24": the radius the zone is heading for, in the place
+    // the sentence says it is heading.
+    let names_next = status.contains(&format!("to r{next_radius:.0}"))
+        || status.contains(&format!("-> r{next_radius:.0}"));
     checks.require(
         zone_drawn && next_drawn && aim_drawn && landing_drawn && names_next,
         "the aiming surface is missing something the shot decision needs",
