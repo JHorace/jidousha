@@ -26,6 +26,8 @@ struct Played {
     planned_cup: Vec<f32>,
     plan_error: Vec<f32>,
     schedule: String,
+    /// The longest any golfer stayed disabled without a free tick.
+    longest_stun: u32,
 }
 
 /// Play a whole match with `player` at the keyboard against the three NPCs.
@@ -36,6 +38,7 @@ fn play_match(player: Player, record: bool) -> Played {
     let mut in_window = false;
     let mut pending: Option<Vec2> = None;
     let mut live = None;
+    let (mut runs, mut longest_stun) = ([0u32; 4], 0);
     while driver.tick <= MATCH_END_TICK && driver.snap().result.is_none() {
         let view = driver.snap();
         let me = view.golfer(0).copied();
@@ -49,6 +52,15 @@ fn play_match(player: Player, record: bool) -> Played {
         }
         let tapped = driver.play(player);
         let after = driver.snap();
+        for golfer in &after.golfers {
+            let run = &mut runs[usize::from(golfer.idx)];
+            *run = if golfer.alive && golfer.stun_left > 0 {
+                *run + 1
+            } else {
+                0
+            };
+            longest_stun = longest_stun.max(*run);
+        }
         let moving = after.ball(0).is_some_and(|b| b.vel != Vec2::ZERO);
         if tapped
             && moving
@@ -77,6 +89,7 @@ fn play_match(player: Player, record: bool) -> Played {
         planned_cup,
         plan_error,
         schedule: driver.schedule(),
+        longest_stun,
     }
 }
 
@@ -145,6 +158,18 @@ pub fn run() -> ExitCode {
             good.plan_error.len()
         ),
     );
+    checks.require(
+        good.longest_stun <= 180,
+        "the match: a golfer was kept disabled past one club's worth without a free tick",
+        format!(
+            "longest unbroken disable {} ticks; one club is 180",
+            good.longest_stun
+        ),
+    );
+    summary.push(format!(
+        "contact in the match: longest unbroken disable {} ticks",
+        good.longest_stun
+    ));
     summary.push(layout(&mut checks, &good));
     summary.push(crate::gates_more::staged_screens(&mut checks, &mut frames));
     summary.push(crate::gates_more::contracts(&mut checks));

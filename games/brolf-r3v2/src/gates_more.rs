@@ -163,7 +163,7 @@ pub fn extraction(checks: &mut Checks, shots: &mut Vec<(String, FrameRecord)>) -
     };
     let lines = result_lines(&outcome);
     checks.require(
-        promise.starts_with("EXTRACT keeps Driver+Lead Ball = 5")
+        promise == "EXTRACT keeps Driver+Lead Ball = 5 | HOLE OUT = 12 | LAST ONE = 12"
             && outcome.kind == EndKind::Extracted
             && lines == ["EXTRACTED", "kept: Driver, Lead Ball", "points: 5"].map(str::to_owned)
             && outcome.kept == kept_on_extract(&kit),
@@ -238,6 +238,19 @@ pub fn staged_screens(checks: &mut Checks, shots: &mut Vec<(String, FrameRecord)
                 format!("{kind:?}: {line:?} drawn at {found:?}"),
             );
         }
+        let points = match kind {
+            EndKind::Holed | EndKind::LastStanding => "points: 12",
+            EndKind::Extracted => "points: 5",
+            EndKind::Eliminated | EndKind::Lost { .. } => "points: 0",
+        };
+        checks.require(
+            lines[2] == points,
+            "staged screens: an ending does not score what the rules say",
+            format!(
+                "{kind:?} with Driver, Helmet, Lead Ball: {:?}, want {points:?}",
+                lines[2]
+            ),
+        );
         firsts.push(lines[0].clone());
         shots.push((format!("staged {kind:?}"), frame));
     }
