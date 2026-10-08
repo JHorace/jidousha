@@ -78,10 +78,10 @@
 - telling⏎            .meanwhile⏎            .push(fmt(&words[W::SummerUnansweredTotal], &[&cost.to_string()]));
 + telling⏎            .meanwhile⏎            .insert(0, fmt(&words[W::SummerUnansweredTotal], &[&cost.to_string()]));
 
-### U1 an unanswered quest does not raise its place's trouble
+### U1 an unanswered quest does not raise its place's trouble (re-cut r2: resolve::risen_trouble)
 @ src/resolve.rs
-- record.trouble = (record.trouble + 1).min(TROUBLE_LIMIT);
-+ record.trouble = (record.trouble).min(TROUBLE_LIMIT);
+- (trouble + 1).min(TROUBLE_LIMIT)
++ (trouble).min(TROUBLE_LIMIT)
 
 ### U2 an unanswered quest's cost reads the starting renown
 @ src/resolve.rs
@@ -133,15 +133,15 @@
 - let won = outcome >= Outcome::Success;
 + let won = outcome >= Outcome::Triumph;
 
-### R9 a win leaves the trouble
+### R9 a win leaves the trouble (re-cut r2: resolve::eased_trouble)
 @ src/resolve.rs
-- record.trouble = if won { 0 } else { (record.trouble - 1).max(0) };
-+ record.trouble = if won { record.trouble } else { (record.trouble - 1).max(0) };
+- if won { 0 } else { (trouble - 1).max(0) }
++ if won { trouble } else { (trouble - 1).max(0) }
 
-### R10 a loss leaves the trouble
+### R10 a loss leaves the trouble (re-cut r2: resolve::eased_trouble)
 @ src/resolve.rs
-- record.trouble = if won { 0 } else { (record.trouble - 1).max(0) };
-+ record.trouble = if won { 0 } else { record.trouble };
+- if won { 0 } else { (trouble - 1).max(0) }
++ if won { 0 } else { trouble }
 
 ### R11 a disaster costs one less than its danger
 @ src/resolve.rs
