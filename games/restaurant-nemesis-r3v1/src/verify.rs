@@ -16,7 +16,7 @@ use crate::content::Theme;
 use crate::players::{Player, Typist};
 use crate::rules::{self, Consequence};
 use crate::scenes::{self, screen_text, type_command};
-use crate::screens::{Art, DESIGN, OneToOne, SMALL, palette, screen};
+use crate::screens::{Art, DESIGN, OneToOne, palette, screen};
 use crate::sim::{Event, Game, Phase, Serve, Who};
 use crate::{Command, WINDOW, camera, config, register};
 
@@ -28,7 +28,9 @@ const MAX_TICKS: u64 = 20_000;
 
 /// The floors every screen is judged against.
 pub const FLOORS: Floors = Floors {
-    min_text: SMALL,
+    // A literal, not `SMALL`: a floor that moves with the size it judges
+    // cannot see that size shrink.
+    min_text: 12.0,
     chrome: Rect {
         min: Vec2::ZERO,
         max: DESIGN,
@@ -295,6 +297,15 @@ pub fn run() -> ExitCode {
             good.most_active, first.most_active, idle.most_active
         ),
     );
+    let most = good
+        .most_active
+        .max(first.most_active)
+        .max(idle.most_active);
+    checks.require(
+        most <= 3,
+        "more than three nemeses were active at once",
+        format!("most at once: {most}"),
+    );
     let Some((last, _)) = good.shots.last() else {
         fail("the good run recorded no frames", "the recorder was on");
     };
@@ -304,6 +315,7 @@ pub fn run() -> ExitCode {
     let (overwhelm, overwhelm_frame) = scenes::overwhelm(&mut checks);
     let following = scenes::following(&mut checks);
     let spend = scenes::spend(&mut checks);
+    let night = scenes::night(&mut checks);
 
     let mut shots: Vec<(FrameRecord, Panel<Art>)> = good.shots.clone();
     shots.extend(idle.shots.iter().cloned());
@@ -352,6 +364,7 @@ pub fn run() -> ExitCode {
     println!("  row 2 overwhelm: {overwhelm}");
     println!("  row 2 following: {following}");
     println!("  row 3 spend: {spend}");
+    println!("  overnight: {night}");
     println!("  screens judged: {}", shots.len());
     println!("  closest quad to the edge: {clearance:.2} design units");
     println!("  capture: {captured}");

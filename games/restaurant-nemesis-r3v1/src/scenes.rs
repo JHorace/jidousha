@@ -282,3 +282,28 @@ pub fn spend(checks: &mut Checks) -> String {
         "no spend: {kept_count} fans at {kept_levels:?}; takedown: {cut_count} at {cut_levels:?}"
     )
 }
+
+/// The night: rent comes off and every active nemesis gains 10 followers,
+/// which is what the next ledger starts from.
+pub fn night(checks: &mut Checks) -> String {
+    let mut game = Game::new(5);
+    let index = stage_nemesis(&mut game, Theme::Condiment, 30, 0);
+    crate::day::open_day(&mut game);
+    game.round = 3;
+    game.queue.clear();
+    let money = game.money;
+    crate::sim::cook_round(&mut game);
+    let followers = game.nemeses[index].followers;
+    checks.require(
+        game.phase == Phase::Ledger && followers == 40 && game.money == money - 25,
+        "the night did not add 10 followers and take the rent",
+        format!(
+            "phase {:?}, followers 30 -> {followers} (want 40), money {money} -> {} (want -25)",
+            game.phase, game.money
+        ),
+    );
+    format!(
+        "followers 30 -> {followers}, money {money} -> {}",
+        game.money
+    )
+}
