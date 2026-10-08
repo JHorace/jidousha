@@ -2,8 +2,8 @@
 
 task: call-of-cthulhu-r3v1
 variant: V1
-stage: implement
-tick: live
+stage: done
+tick: released
 resumes: 0
 gates-green-at: 1a8e683
 updated: 2026-10-07 21:50 PDT
@@ -17,7 +17,7 @@ updated: 2026-10-07 21:50 PDT
 - full gate green at 1a8e683: doctor ENV_OK, tools/test pass (1487/0/0), check-claude-md ok, yakin check ok
 
 ## Exact next step
-Open the PR (WORKER.md §4), then set stage: done, tick: released.
+None — PR https://github.com/JHorace/jidousha/pull/138 is open.
 
 ## Deviations
 - none
