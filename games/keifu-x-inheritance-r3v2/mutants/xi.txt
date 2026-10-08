@@ -1,0 +1,130 @@
+#! keifu-x-inheritance-r3v2: the variant's rules (DESIGN.md S1-S6), one fault per rule line, for the xi_* checks.
+### X1 marrying in asks 3 renown, not 4
+@ src/constants.rs
+- pub const FAMILY_RENOWN_TO_WED: i32 = 4;
++ pub const FAMILY_RENOWN_TO_WED: i32 = 3;
+
+### X2 a mark costs the house 1, not 2
+@ src/constants.rs
+- pub const MARK_HOUSE_RENOWN: i32 = 2;
++ pub const MARK_HOUSE_RENOWN: i32 = 1;
+
+### X3 a mark costs its bearer 1, not 2
+@ src/constants.rs
+- pub const MARK_PERSONAL_RENOWN: i32 = 2;
++ pub const MARK_PERSONAL_RENOWN: i32 = 1;
+
+### X4 a carried mark costs 2 a year, not 1
+@ src/constants.rs
+- pub const MARK_YEARLY_RENOWN: i32 = 1;
++ pub const MARK_YEARLY_RENOWN: i32 = 2;
+
+### X5 an heir takes a third, not half
+@ src/constants.rs
+- pub const MARK_INHERITED_SHARE: i32 = 2;
++ pub const MARK_INHERITED_SHARE: i32 = 3;
+
+### X6 the lean adds nothing
+@ src/constants.rs
+- pub const LEAN_BONUS: i32 = 1;
++ pub const LEAN_BONUS: i32 = 0;
+
+### X7 the house gains a quest's renown whoever went
+@ src/reward.rs
+- let for_the_house = at_door || members.iter().any(|&m| house.heroes[m].is_family);
++ let for_the_house = true || members.iter().any(|&m| house.heroes[m].is_family);
+
+### X8 an outsider may tell the tale for the house
+@ src/plans.rs
+- if !heroes[hero].is_family {
++ if false && !heroes[hero].is_family {
+
+### X9 outsiders are offered as heirs
+@ src/heirs.rs
+- .filter(|&id| id != dead && heroes[id].is_living() && heroes[id].is_family)
++ .filter(|&id| id != dead && heroes[id].is_living())
+
+### X10 carrying a burden counts as going in your own name
+@ src/marks.rs
+- .is_some_and(|call| !call.burden && call.telling != Telling::StayBehind)
++ .is_some_and(|call| call.telling != Telling::StayBehind)
+
+### X11 a ghost's quest is a personal quest
+@ src/marks.rs
+- && quest.template().is_some()
++ && (quest.template().is_some() || !quest.is_door_lock())
+
+### X12 a stay-behind call is a call to go
+@ src/marks.rs
+- .is_some_and(|call| !call.burden && call.telling != Telling::StayBehind)
++ .is_some_and(|call| !call.burden)
+
+### X13 a success that falls short marks too
+@ src/resolve.rs
+- if outcome < Outcome::Success {
++ if outcome <= Outcome::Success {
+
+### X14 a disaster marks no one
+@ src/resolve.rs
+- if outcome < Outcome::Success {
++ if outcome == Outcome::Setback {
+
+### X15 a stain does not floor the bearer's renown
+@ src/marks.rs
+- bearer.renown = (bearer.renown - cost.personal_renown).max(0);
++ bearer.renown -= cost.personal_renown;
+
+### X16 the yearly cost raises renown
+@ src/turning.rs
+- house.add_renown(-cost);
++ house.add_renown(cost);
+
+### X17 the lean coin always picks the first parent
+@ src/births.rs
+- let coin = index(rng, 2);
++ let coin = index(rng, 2) * 0;
+
+### X18 the lean's bonus goes to the next aptitude
+@ src/births.rs
+- aptitudes[lean.aptitude.index()] = leaned(aptitudes[lean.aptitude.index()]);
++ aptitudes[(lean.aptitude.index() + 1) % 3] = leaned(aptitudes[(lean.aptitude.index() + 1) % 3]);
+
+### X19 a newborn is family only if both parents are
+@ src/births.rs
+- child.is_family = house.heroes[first].is_family || house.heroes[second].is_family;
++ child.is_family = house.heroes[first].is_family && house.heroes[second].is_family;
+
+### X20 succession rounds up
+@ src/inheritance.rs
+- marks: heroes[dead].marks / MARK_INHERITED_SHARE,
++ marks: (heroes[dead].marks + 1) / MARK_INHERITED_SHARE,
+
+### X21 marks alone never hold the death page
+@ src/death_page.rs
+- let leaves = heirloom.is_some() || undone.is_some() || succession.marks > 0;
++ let leaves = heirloom.is_some() || undone.is_some();
+
+### X22 the dead keep their marks after the choice
+@ src/heirs.rs
+- house.heroes[dead].marks = 0;
++ house.heroes[dead].marks += 0;
+
+### X23 marrying in does not make one family
+@ src/winter.rs
+- house.heroes[outsider].is_family = true;
++ house.heroes[outsider].is_family = false;
+
+### X24 the unproven threshold is inclusive
+@ src/plans.rs
+- if renown < FAMILY_RENOWN_TO_WED {
++ if renown <= FAMILY_RENOWN_TO_WED {
+
+### X25 the death page names one mark as passing
+@ src/death_page.rs
+- if hero.marks >= 2 {
++ if hero.marks >= 1 {
+
+### X26 the coin's sides are swapped
+@ src/inheritance.rs
+- let (chosen, other) = if coin == 0 {
++ let (chosen, other) = if coin == 1 {
