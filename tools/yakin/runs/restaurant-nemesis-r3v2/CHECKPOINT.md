@@ -2,8 +2,8 @@
 
 task: restaurant-nemesis-r3v2
 variant: V2
-stage: implement
-tick: live
+stage: done
+tick: released
 resumes: 0
 gates-green-at: 42ebee3
 updated: 2026-10-07 22:15 PDT
@@ -15,9 +15,10 @@ updated: 2026-10-07 22:15 PDT
 - worker tick (continue): game crate per DESIGN §Systems (db834cd); --verify G1-G10 + G8 tests (7dc5d9a)
 - FINDINGS G-075..G-079 in games/restaurant-nemesis-r3v2/FINDINGS.md; mutation 18/21 then 21 of 21 noticed; web build + serve-web --check PASS
 - full gate green at 42ebee3: doctor ENV_OK, tools/test pass 1495/0/0, check-claude-md ok, yakin check ok, fast gate clean
+- PR opened: https://github.com/JHorace/jidousha/pull/141
 
 ## Exact next step
-Full gate (WORKER.md §2) and fast gate; then open the PR (WORKER.md §4) listing the deviations below.
+None - done; the PR waits on the owner.
 
 ## Deviations
 - SEED_SPAWN precondition relaxed: no seed in 0..1024 keeps the first nemesis alone through day 5; now "one nemesis after day 1, $50 on night 1, first in the queue on days 3 and 5"; G6 tracks it by id (G-077)
