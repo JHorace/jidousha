@@ -71,17 +71,35 @@ impl Stage {
         self.step();
     }
 
-    /// Let the rival act until you hold priority, the stack is empty, or the
-    /// match is over. False if it never came back.
-    pub(crate) fn wait_for_priority(&mut self) -> bool {
-        for _ in 0..PATIENCE {
+    /// Click the primary button at world point `at`, for one tick.
+    pub(crate) fn click(&mut self, at: Vec2) {
+        let screen = camera().world_to_screen(at);
+        let id = PointerId::PRIMARY;
+        let button = PointerButton::Primary;
+        self.keyboard
+            .record(InputEvent::PointerMoved { id, screen });
+        self.keyboard
+            .record(InputEvent::ButtonPressed { id, button });
+        self.keyboard
+            .record(InputEvent::ButtonReleased { id, button });
+        self.step();
+    }
+
+    /// Let the rival act until you hold priority or the match is over; how
+    /// many ticks that took, or `None` if it never came back.
+    pub(crate) fn ticks_to_priority(&mut self) -> Option<u32> {
+        for waited in 0..PATIENCE {
             let duel = &self.table().duel;
             if duel.priority == Side::You || duel.outcome.is_some() {
-                return true;
+                return Some(waited);
             }
             self.step();
         }
-        false
+        None
+    }
+
+    pub(crate) fn wait_for_priority(&mut self) -> bool {
+        self.ticks_to_priority().is_some()
     }
 
     /// Pass whenever you hold priority until the stack is empty.
@@ -162,15 +180,17 @@ fn lives(table: &Table) -> (i32, i32) {
     (table.duel.you.life, table.duel.rival.life)
 }
 
-/// The marked rows on a frame: which stack slots carry a mark-coloured quad.
-fn marked_slots(frame: &FrameRecord) -> Vec<usize> {
+/// The outlined rows on a frame: which stack slots carry a mark-coloured quad
+/// that is not a glyph — the outline, not the `<- target` tag beside it.
+fn marked_slots(frame: &FrameRecord, font: BackendTextureId) -> Vec<usize> {
     (0..crate::screen::STACK_ROWS)
         .filter(|&slot| {
             let row = stack_row(slot);
-            frame
-                .quads()
-                .iter()
-                .any(|quad| quad.tint == palette::MARK && row.contains(quad.bounds().center()))
+            frame.quads().iter().any(|quad| {
+                quad.tint == palette::MARK
+                    && quad.texture != font
+                    && row.contains(quad.bounds().center())
+            })
         })
         .collect()
 }
@@ -215,7 +235,7 @@ fn respond_window(checks: &mut Checks) -> Option<FrameRecord> {
     stage.press(Key::Digit2);
     let (aiming, panel) = stage.frame();
     judge(checks, "aiming", &panel, &aiming, stage.font, view());
-    let marked = marked_slots(&aiming);
+    let marked = marked_slots(&aiming, stage.font);
     let legal = aim_targets(stage.table());
     checks.require(
         marked == vec![0, 2] && legal == marked,
@@ -225,8 +245,15 @@ fn respond_window(checks: &mut Checks) -> Option<FrameRecord> {
     on_screen(checks, "aiming", &aiming, view());
 
     stage.press(Key::C);
-    if !stage.wait_for_priority() {
-        checks.require(false, "the rival never passed back", check.to_owned());
+    // The rival reads for 45 ticks — the play's own tick and 44 more — so a
+    // person sees it think (main.rs, `RIVAL_THINK`).
+    let waited = stage.ticks_to_priority();
+    checks.require(
+        waited == Some(44),
+        "the rival did not take its time to answer",
+        format!("{check}: priority came back after {waited:?} ticks, want Some(44)"),
+    );
+    if waited.is_none() {
         return Some(aiming);
     }
     let (frame, panel) = stage.frame();
@@ -300,6 +327,14 @@ fn pass_resolves(checks: &mut Checks) {
         ],
     );
     let shown = preview(&stage.table().duel);
+    // The first pass is a click on the PASS button: it resolves the top.
+    stage.click(crate::screen::PASS_BUTTON.center());
+    let clicked = stage.table().duel.resolved.len();
+    checks.require(
+        clicked == 1,
+        "clicking PASS did not pass",
+        format!("{check}: {clicked} resolutions after the click, want 1"),
+    );
     let finished = stage.pass_it_all();
     let actual = resolved_since(stage.table(), 0);
     let order: Vec<&str> = actual.iter().map(|step| step.item.card.name()).collect();
@@ -332,7 +367,7 @@ fn target_reorder(checks: &mut Checks) {
     ));
     stage.press(Key::Digit1);
     let (frame, _) = stage.frame();
-    let marked = marked_slots(&frame);
+    let marked = marked_slots(&frame, stage.font);
     checks.require(
         marked == vec![0] && aim_targets(stage.table()) == marked,
         "Bury lights a row it cannot move",
@@ -389,10 +424,11 @@ fn target_counter(checks: &mut Checks) {
         2,
         false,
     ));
-    stage.press(Key::Digit1);
+    // By pointer this time: the hand card, then the lit row.
+    stage.click(crate::screen::hand_card(0).center());
     let (frame, _) = stage.frame();
-    let marked = marked_slots(&frame);
-    stage.press(Key::A);
+    let marked = marked_slots(&frame, stage.font);
+    stage.click(stack_row(0).center());
     let came_back = stage.wait_for_priority();
     let (frame, panel) = stage.frame();
     judge(checks, check, &panel, &frame, stage.font, view());

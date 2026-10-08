@@ -129,8 +129,8 @@
 
 ### I1 a stack letter never plays the aimed card
 @ src/main.rs
-- (Intent::Slot(slot), Some(index)) => {
-+ (Intent::Slot(slot), Some(index)) if slot > 99 => {
+- if let Some(id) = item_at_slot(duel, slot)
++ if let Some(id) = item_at_slot(duel, slot + 99)
 
 ### I2 the rival acts at once
 @ src/main.rs

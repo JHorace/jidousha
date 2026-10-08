@@ -104,3 +104,13 @@ fn two_passes_resolve_the_top_and_return_priority_to_the_leader() {
         (10, Side::Rival, false)
     );
 }
+
+#[test]
+fn echo_and_turn_cannot_target_a_manipulation() {
+    let duel = duel_with(&[
+        (Card::Strike, Side::Rival, None),
+        (Card::Bury, Side::Rival, Some(1)),
+    ]);
+    assert_eq!(legal_targets(&duel, Side::You, Card::Echo), vec![ItemId(1)]);
+    assert_eq!(legal_targets(&duel, Side::You, Card::Turn), vec![ItemId(1)]);
+}
