@@ -1,0 +1,740 @@
+#! W10 — the Sealed Door and the Ending (session 10). One fault per line of rule: every
+#! §16 constant and the Door's content read; the lock as a quest (aptitude, tags, place,
+#! danger, renown, seats, demand, the Door's promise); the outlook (each lock's chance, all
+#! three, success or better, the patrons), the best four (all of four or fewer, the first
+#! strictly best, every combination, the wounded and refusers kept, the score's two terms);
+#! the bearer rule (strongest alone, first on ties, among the standing); the locks' order,
+#! the standing, the story, what opens, the two deeds; the Door's exceptions to §7.1; the
+#! last summer and its control; the top bar's outlook and help; the card and the sheet; the
+#! prologue fragment by fragment; every §23 remembering rule, the verdict and its lines;
+#! leaving into the Ending; the reset and its chronicle; and the tree that holds a big house.
+
+### C1 DOOR_SEATS 4 -> 3
+@ src/constants.rs
+- pub const DOOR_SEATS: i32 = 4;
++ pub const DOOR_SEATS: i32 = 3;
+
+### C2 DOOR_DANGER 3 -> 2
+@ src/constants.rs
+- pub const DOOR_DANGER: i32 = 3;
++ pub const DOOR_DANGER: i32 = 2;
+
+### C3 DOOR_RENOWN 5 -> 6
+@ src/constants.rs
+- pub const DOOR_RENOWN: i32 = 5;
++ pub const DOOR_RENOWN: i32 = 6;
+
+### C4 the spirit lock asks 33
+@ src/constants.rs
+- pub const DOOR_LOCKS: [i32; 3] = [34, 34, 34];
++ pub const DOOR_LOCKS: [i32; 3] = [34, 34, 33];
+
+### C5 BEST_FOUR_DIVISOR 1000 -> 1
+@ src/constants.rs
+- pub const BEST_FOUR_DIVISOR: f64 = 1000.0;
++ pub const BEST_FOUR_DIVISOR: f64 = 1.0;
+
+### C6 DOOR_DESTINY_POWER 5 -> 4
+@ src/constants.rs
+- pub const DOOR_DESTINY_POWER: i32 = 5;
++ pub const DOOR_DESTINY_POWER: i32 = 4;
+
+### L1 a disaster's ending read as a triumph's
+@ src/door_lore.rs
+- ending(Outcome::Disaster)?,
++ ending(Outcome::Triumph)?,
+
+### L2 the verdict titles reversed
+@ src/door_lore.rs
+- let verdict_titles = strings(at, "verdict_titles")?;
++ let verdict_titles: Vec<String> = strings(at, "verdict_titles")?.into_iter().rev().collect();
+
+### L3 a lock's title read as its name
+@ src/door_lore.rs
+- title: text_at(lock, "title")?,
++ title: text_at(lock, "name")?,
+
+### L4 the closed title read as its verdict
+@ src/door_lore.rs
+- closed_title: text_at(at, "closed_title")?,
++ closed_title: text_at(at, "closed_verdict")?,
+
+### L5 the verdicts read one along
+@ src/door_lore.rs
+- let verdicts = strings(at, "verdicts")?;
++ let mut verdicts = strings(at, "verdicts")?;⏎    verdicts.rotate_left(1);
+
+### Q1 every lock asks for Might
+@ src/door.rs
+- aptitude: words.aptitude,
++ aptitude: crate::ids::Aptitude::Might,
+
+### Q2 the locks carry no tag
+@ src/door.rs
+- tags: content.lore.places[Place::SealedDoor.index()].tags.clone(),
++ tags: Vec::new(),
+
+### Q3 the locks stand at the Barrow
+@ src/door.rs
+- place: Place::SealedDoor,
++ place: Place::Barrow,
+
+### Q4 a lock's danger one higher
+@ src/door.rs
+- danger: DOOR_DANGER,⏎        renown: DOOR_RENOWN,
++ danger: DOOR_DANGER + 1,⏎        renown: DOOR_RENOWN,
+
+### Q5 a lock's renown one higher
+@ src/door.rs
+- renown: DOOR_RENOWN,
++ renown: DOOR_RENOWN + 1,
+
+### Q6 three seats on the Door
+@ src/door.rs
+- seats: DOOR_SEATS,⏎        calm_danger
++ seats: 3,⏎        calm_danger
+
+### Q7 a lock asks one less
+@ src/door.rs
+- demand: words.demand,
++ demand: words.demand - 1,
+
+### Q8 the last summer posts the Wits lock
+@ src/door.rs
+- vec![lock_quest(content, 0)]
++ vec![lock_quest(content, 1)]
+
+### Q9 the Door's promise counts nowhere
+@ src/quest.rs
+- door_lock: self.is_door_lock(),
++ door_lock: false,
+
+### Q10 a lock is not a door lock
+@ src/quest.rs
+- matches!(self.source, Source::Door(_))
++ false
+
+### O1 every lock's chance is the first's
+@ src/door.rs
+- percent(self.ways[lock])
++ percent(self.ways[0])
+
+### O2 all three truncated
+@ src/door.rs
+- (product * 100 + all / 2) / all
++ (product * 100) / all
+
+### O3 the outlook counts success, not triumph
+@ src/door.rs
+- ways[lock] = odds.ways(Outcome::Success) + odds.ways(Outcome::Triumph);
++ ways[lock] = odds.ways(Outcome::Success);
+
+### O4 the outlook forgets the patrons
+@ src/door.rs
+- powers[lock] = party_power(heroes, party, quest.facts(), patrons);
++ powers[lock] = party_power(heroes, party, quest.facts(), 0);
+
+### O5 five adults are all the best four
+@ src/door.rs
+- if living.len() <= seats {
++ if living.len() <= seats + 1 {
+
+### O6 the best four keeps the last of equals
+@ src/door.rs
+- this.score() > b.score()
++ this.score() >= b.score()
+
+### O7 the combinations stop short
+@ src/door.rs
+- .find(|&i| pick[i] < living.len() - seats + i)
++ .find(|&i| pick[i] < living.len() - seats)
+
+### O8 the best four leaves out the wounded
+@ src/door.rs
+- let living = adults(&house.heroes);
++ let living: Vec<HeroId> = adults(&house.heroes).into_iter().filter(|&h| !house.heroes[h].wounded).collect();
+
+### O9 the best four leaves out who would refuse
+@ src/door.rs
+- let living = adults(&house.heroes);
++ let living: Vec<HeroId> = adults(&house.heroes).into_iter().filter(|&h| !crate::fear::refuses(&house.heroes[h], &[crate::ids::Tag::Dark, crate::ids::Tag::Cold])).collect();
+
+### O10 the score forgets the three chances
+@ src/door.rs
+- product * BEST_FOUR_DIVISOR as i64 + sum * i64::from(DICE_OUTCOMES).pow(2)
++ product * BEST_FOUR_DIVISOR as i64
+
+### O11 the score forgets all three
+@ src/door.rs
+- product * BEST_FOUR_DIVISOR as i64 + sum * i64::from(DICE_OUTCOMES).pow(2)
++ sum * i64::from(DICE_OUTCOMES).pow(2)
+
+### O12 a combination repeats a hero
+@ src/door.rs
+- pick[i] = pick[i - 1] + 1;
++ pick[i] = pick[i - 1];
+
+### B1 the bearer is the last of equals
+@ src/door.rs
+- if best.is_none_or(|(power, _)| solo > power) {
++ if best.is_none_or(|(power, _)| solo >= power) {
+
+### B2 the bearer is the weakest
+@ src/door.rs
+- if best.is_none_or(|(power, _)| solo > power) {
++ if best.is_none_or(|(power, _)| solo < power) {
+
+### B3 the bearer may be one who no longer stands
+@ src/door.rs
+- let Some(bearer) = bearer(&house.heroes, &standing, &quest) else {
++ let Some(bearer) = bearer(&house.heroes, &party, &quest) else {
+
+### B4 the bearer is the first who stands
+@ src/door.rs
+- best.map(|(_, member)| member)
++ standing.first().copied()
+
+### T1 the locks in reverse
+@ src/door.rs
+- for (lock, words) in content.door.locks.iter().enumerate() {
++ for (lock, words) in content.door.locks.iter().enumerate().rev() {
+
+### T2 the dead stand
+@ src/door.rs
+- .filter(|&m| house.heroes[m].is_living())
++ .filter(|_| true)
+
+### T3 every lock's dice the first's
+@ src/door.rs
+- Some(dice) => dice[lock],
++ Some(dice) => dice[0],
+
+### T4 the story's bearer is the first who stands
+@ src/door.rs
+- &[&name_list(content, &names), &house.heroes[bearer].name],
++ &[&name_list(content, &names), &house.heroes[standing[0]].name],
+
+### T5 the story names the whole party
+@ src/door.rs
+- let names: Vec<String> = standing
++ let names: Vec<String> = party
+
+### T6 a setback opens a lock
+@ src/door.rs
+- let opened = page.outcome >= Outcome::Success;
++ let opened = page.outcome >= Outcome::Setback;
+
+### T7 only a triumph opens a lock
+@ src/door.rs
+- let opened = page.outcome >= Outcome::Success;
++ let opened = page.outcome == Outcome::Triumph;
+
+### T8 the opened deed weighs one more
+@ src/door.rs
+- lock as i32,
++ lock as i32 + 1,
+
+### T9 the bearer's deed is the stood one
+@ src/door.rs
+- DeedKind::OpenedALock,
++ DeedKind::StoodAtTheDoor,
+
+### T10 the stood deed weighs three
+@ src/door.rs
+-                 year,⏎                opened,⏎                telling,
++                 year,⏎                3,⏎                telling,
+
+### T11 the dead stood at the Door
+@ src/door.rs
+-     for &member in &party {⏎        if house.heroes[member].is_living() {
++     for &member in &party {⏎        if true {
+
+### T12 the Door's deeds are nowhere
+@ src/door.rs
+- place: Some(Place::SealedDoor),
++ place: None,
+
+### T13 the Door's deeds a year early
+@ src/door.rs
+- let year = house.calendar.current_year();
++ let year = house.calendar.current_year() - 1;
+
+### T14 the record forgets a lock's opening
+@ src/door.rs
+- self.tried.iter().filter(|t| t.opened).count()
++ self.tried.iter().filter(|t| t.opened).count().min(2)
+
+### T15 the party is the first standing
+@ src/door.rs
+- party: party.clone(),
++ party: party.iter().copied().take(3).collect(),
+
+### R1 the Door resolved as any quest
+@ src/resolve.rs
+- let at_door = quest.is_door_lock();
++ let at_door = false;
+
+### R2 the Door's disaster is told
+@ src/resolve.rs
+-         if !at_door {⏎            lines.push(fmt(
++         if true {⏎            lines.push(fmt(
+
+### R3 the road is shared at the Door
+@ src/resolve.rs
+- for (i, &a) in members.iter().enumerate().filter(|_| !at_door) {
++ for (i, &a) in members.iter().enumerate() {
+
+### R4 the Door's disaster costs no renown
+@ src/resolve.rs
+- house.add_renown(-quest.danger);⏎        if !at_door {
++ if !at_door {⏎            house.add_renown(-quest.danger);
+
+### W1 the reward at the Door as anywhere
+@ src/reward.rs
+- let at_door = f.quest.is_door_lock();
++ let at_door = false;
+
+### W2 the Door's reward is told
+@ src/reward.rs
+-     if !at_door {⏎        let whom
++     if true {⏎        let whom
+
+### W3 a triumph deed at the Door
+@ src/reward.rs
+- if triumph && !at_door {
++ if triumph {
+
+### W4 a lesson at the Door
+@ src/reward.rs
+-     if at_door {⏎        return;⏎    }
++     if false {⏎        return;⏎    }
+
+### W5 the Door brings the house no renown
+@ src/reward.rs
+- house.add_renown(renown + carriers.len() as i32 * CARRIED_RENOWN);
++ if !at_door {⏎        house.add_renown(renown + carriers.len() as i32 * CARRIED_RENOWN);⏎    }
+
+### W6 the Door brings the four no renown
+@ src/reward.rs
+- hero.renown += renown;
++ if !at_door {⏎            hero.renown += renown;⏎        }
+
+### S1 the last summer set out as any summer
+@ src/resolve.rs
+-     if house.calendar.door_stands_open() {⏎        telling.door
++     if false {⏎        telling.door
+
+### S2 the last summer generates a board
+@ src/board.rs
+-         if self.calendar.door_stands_open() {⏎            self.board = crate::door::door_board
++         if false {⏎            self.board = crate::door::door_board
+
+### S3 the control never reads Try the Door
+@ src/summer.rs
+-     if house.calendar.door_stands_open() {⏎        &content.words[W::SummerTryTheDoor]
++     if false {⏎        &content.words[W::SummerTryTheDoor]
+
+### S4 Try the Door always acts
+@ src/summer.rs
+- !house.calendar.door_stands_open() || (0..house.board.len()).any(|s| !house.party(s).is_empty())
++ true
+
+### S5 the press ignores whether it may act
+@ src/pointer.rs
+- Target::SetOut if in_summer(house) && crate::summer::may_set_out(house) => {
++ Target::SetOut if in_summer(house) => {
+
+### S6 the waiting control lit
+@ src/summer.rs
+-     if may_set_out(house) {⏎        button(
++     if true {⏎        button(
+
+### F1 the outlook's chance is the first lock's
+@ src/family.rs
+- .chain([best.all_percent()])
++ .chain([best.lock_percent(0)])
+
+### F2 the Door's help names no one
+@ src/family.rs
+- &[&crate::text::name_list(content, &names)],
++ &[&crate::text::name_list(content, &[])],
+
+### F3 the Ending's tally waits for a tale yet
+@ src/family.rs
+- 0 if house.ending.is_some() => words[W::FamilyTallyNoneEnding].to_owned(),
++ 0 if false => words[W::FamilyTallyNoneEnding].to_owned(),
+
+### F4 the outlook reads the first four
+@ src/family.rs
+- let best = crate::door::best_four(content, house);⏎    let numbers
++ let best = crate::door::outlook(content, &house.heroes, &crate::reading::adults(&house.heroes)[..4.min(crate::reading::adults(&house.heroes).len())], house.patrons);⏎    let numbers
+
+### V1 the card's all three is the first lock's
+@ src/door_view.rs
+-             &words[W::DoorCardAllThree],⏎            &[&seen.all_percent().to_string()],
++             &words[W::DoorCardAllThree],⏎            &[&seen.lock_percent(0).to_string()],
+
+### V2 the card brings the first lock's power to all
+@ src/door_view.rs
+- out.push((you_bring(content, seen.powers[lock]), CardInk::Number));
++ out.push((you_bring(content, seen.powers[0]), CardInk::Number));
+
+### V3 the card's odds against one less
+@ src/door_view.rs
+- let odds = card_percentages(&forecast(seen.powers[lock], words_of.demand, true));
++ let odds = card_percentages(&forecast(seen.powers[lock], words_of.demand - 1, true));
+
+### V4 the empty card reads numbers
+@ src/door_view.rs
+-     if party.is_empty() {⏎        out.push((words[W::DoorCardEmpty]
++     if false {⏎        out.push((words[W::DoorCardEmpty]
+
+### V5 the sheet forgets the bonds
+@ src/door_view.rs
+- let bonds = bonds_power(heroes, party);
++ let bonds = 0;
+
+### V6 a share counts the patrons
+@ src/door_view.rs
+- let solo = party_power(heroes, &[member], quest.facts(), 0);
++ let solo = party_power(heroes, &[member], quest.facts(), house.patrons);
+
+### V7 a patron line with no patron
+@ src/door_view.rs
+- if patrons > 0 {
++ if patrons >= 0 {
+
+### V8 the sheet's lock opens as all three
+@ src/door_view.rs
+- &seen.lock_percent(lock).to_string(),
++ &seen.all_percent().to_string(),
+
+### V9 the drawn card ignores the hand
+@ src/door_view.rs
+- let seats = preview_seats(house, 0, hand);
++ let seats = preview_seats(house, 0, None);
+
+### V10 the Door drawn as an ordinary card
+@ src/board_view.rs
+-     if house⏎        .board⏎        .first()
++     if false && house⏎        .board⏎        .first()
+
+### V11 the Door's sheet is an ordinary quest sheet
+@ src/quest_sheet.rs
+-     if q.is_door_lock() {⏎        return crate::door_view::door_sheet
++     if false {⏎        return crate::door_view::door_sheet
+
+### V12 the empty sheet reads numbers
+@ src/door_view.rs
+-     if party.is_empty() {⏎        lines.push
++     if false {⏎        lines.push
+
+### D1 the prologue sends first names
+@ src/door_prologue.rs
+- party.iter().map(|&m| heroes[m].full_name()).collect();
++ party.iter().map(|&m| heroes[m].name.clone()).collect();
+
+### D2 an arrival read as a coming of age
+@ src/door_prologue.rs
+- find(|d| d.kind == DeedKind::Arrived)
++ find(|d| d.kind == DeedKind::CameOfAge)
+
+### D3 one parent is no descent
+@ src/door_prologue.rs
+-     if parents.is_empty() {
++     if parents.len() < 2 {
+
+### D4 grandparents never told
+@ src/door_prologue.rs
+-     if grandparents.is_empty() {
++     if true {
+
+### D5 a son told as a daughter
+@ src/door_prologue.rs
+-         W::DoorDescentChildHe⏎    } else {
++         W::DoorDescentChildShe⏎    } else {
+
+### D6 a grandson told as a granddaughter
+@ src/door_prologue.rs
+-         W::DoorDescentGrandchildHe⏎    } else {
++         W::DoorDescentGrandchildShe⏎    } else {
+
+### D7 the Door's promise not told
+@ src/door_prologue.rs
+- if hero.destiny.kind == Destiny::OpenTheSealedDoor {
++ if false {
+
+### D8 the blood told with the object pronoun
+@ src/door_prologue.rs
+- &[promised, &pronouns.subject, promised, &door],
++ &[promised, &pronouns.object, promised, &door],
+
+### D9 one's own heirloom told by name
+@ src/door_prologue.rs
+- &heirloom.name.replace(&own, &mine),
++ &heirloom.name,
+
+### D10 any fear told at the Door
+@ src/door_prologue.rs
+- if tags.contains(&hero.fear.tag) {
++ if true {
+
+### D11 born brave told as conquered
+@ src/door_prologue.rs
+- line += &if hero.fear.born_brave {
++ line += &if false {
+
+### D12 the conquest year read off a break
+@ src/door_prologue.rs
+- .find(|d| d.kind == DeedKind::ConqueredFear)
++ .find(|d| d.kind == DeedKind::Broken)
+
+### D13 the fear's penalty without dread
+@ src/door_prologue.rs
+- &fear_penalty(hero.fear.dread).to_string(),
++ &fear_penalty(0).to_string(),
+
+### D14 every blessing told
+@ src/door_prologue.rs
+- .filter(|b| b.scope == Scope::Everywhere)
++ .filter(|_| true)
+
+### D15 a wound not told
+@ src/door_prologue.rs
+-     if hero.wounded {
++     if false {
+
+### D16 beside the earlier members too
+@ src/door_prologue.rs
+- let items: Vec<String> = party[at + 1..]
++ let items: Vec<String> = party[..]
+
+### D17 companions went beside
+@ src/door_prologue.rs
+-     if bond.kind == BondKind::Companion {
++     if false {
+
+### D18 a child named as a sibling
+@ src/door_prologue.rs
+- Some(kind @ (BondKind::Spouse | BondKind::Parent | BondKind::Child)) => {
++ Some(kind @ (BondKind::Spouse | BondKind::Parent)) => {
+
+### D19 every bond signed with a plus
+@ src/door_prologue.rs
+- if power > 0 { "+" } else { "" },
++ "+",
+
+### D20 the summary's Wits and Spirit swapped
+@ src/door_prologue.rs
+-             &powers[1],⏎            &powers[2],
++             &powers[2],⏎            &powers[1],
+
+### D21 the summary's dark uncapitalised
+@ src/door_prologue.rs
+- &capitalized(&noun(0)),
++ &noun(0),
+
+### D22 the summary forgets the patrons
+@ src/door_prologue.rs
+- let seen = outlook(content, heroes, party, house.patrons);
++ let seen = outlook(content, heroes, party, 0);
+
+### E1 the living remembered before the fallen
+@ src/ending.rs
+-     remember_the_fallen(content, house, rng);⏎    remember_the_living(content, house, rng);
++     remember_the_living(content, house, rng);⏎    remember_the_fallen(content, house, rng);
+
+### E2 a fallen bequest left undecided
+@ src/ending.rs
+- house.heroes[dead].bequest_decided = true;
++ house.heroes[dead].bequest_decided = false;
+
+### E3 the fallen keep their heirloom
+@ src/ending.rs
+- if let Some(heirloom) = house.heroes[dead].heirloom.take() {
++ if let Some(heirloom) = house.heroes[dead].heirloom.clone() {
+
+### E4 the heirloom to the nearest kin
+@ src/ending.rs
+- let to = heir(&house.heroes, dead);
++ let to = crate::heirs::nearest_kin(&house.heroes, dead);
+
+### E5 the heir not recorded
+@ src/ending.rs
+- house.heroes[dead].bequest_heir = to;
++ house.heroes[dead].bequest_heir = None;
+
+### E6 the heirloom not given
+@ src/ending.rs
+- house.heroes[to].heirloom = Some(heirloom);
++ let _ = (to, heirloom);
+
+### E7 no dream, no fate
+@ src/ending.rs
+- None => hero.dream_fate = DreamFate::NeverDreamt,
++ None => {}
+
+### E8 a dream done, no fate
+@ src/ending.rs
+- Some(dream) if dream.is_fulfilled() => hero.dream_fate = DreamFate::Fulfilled,
++ Some(dream) if dream.is_fulfilled() => {}
+
+### E9 the living not remembered
+@ src/ending.rs
+-         if house.heroes[id].is_living() {⏎            remember(
++         if false {⏎            remember(
+
+### E10 everyone remembered again
+@ src/ending.rs
+-         if house.heroes[id].is_living() {⏎            remember(
++         if true {⏎            remember(
+
+### E11 the remembered still mourned
+@ src/ending.rs
+- for dead in std::mem::take(&mut house.mourned) {
++ for dead in house.mourned.clone() {
+
+### E12 the verdict counts locks tried
+@ src/ending.rs
+- locks: record.locks_opened(),
++ locks: record.tried.len(),
+
+### E13 the closed year a year early
+@ src/ending.rs
+- year: house.calendar.current_year(),
++ year: house.calendar.current_year() - 1,
+
+### E14 the Door a year further off
+@ src/ending.rs
+- years_off: house.calendar.years_until_door(),
++ years_off: house.calendar.years_until_door() + 1,
+
+### E15 the closed house read as the shut Door
+@ src/ending.rs
+- Verdict::Closed { .. } => &content.door.closed_title,
++ Verdict::Closed { .. } => &content.door.verdict_titles[0],
+
+### E16 three locks read as two
+@ src/ending.rs
+- Verdict::Door { locks, .. } => &content.door.verdict_titles[*locks],
++ Verdict::Door { locks, .. } => &content.door.verdict_titles[(*locks).min(2)],
+
+### E17 a bearer opened what did not give
+@ src/ending.rs
+- .filter(|t| t.opened && t.bearer == member)
++ .filter(|t| t.bearer == member)
+
+### E18 the fallen fell at the first lock
+@ src/ending.rs
+- .rfind(|t| t.standing.contains(&member))
++ .find(|t| t.standing.contains(&member))
+
+### E19 the dead told as come home
+@ src/ending.rs
+-         if !hero.is_living() {
++         if false {
+
+### E20 a bearer home among the rest
+@ src/ending.rs
+- } else if !opened.is_empty() {
++ } else if false {
+
+### E21 too, always
+@ src/ending.rs
+- let too = if a_bearer_came_home {
++ let too = if true {
+
+### E22 too, never
+@ src/ending.rs
+- let too = if a_bearer_came_home {
++ let too = if false {
+
+### E23 the rest named in reverse
+@ src/ending.rs
+- rest.iter().map(|&m| heroes[m].name.as_str()).collect();
++ rest.iter().rev().map(|&m| heroes[m].name.as_str()).collect();
+
+### E24 one fewer lived under the roof
+@ src/ending.rs
+- &house.heroes.len().to_string(),
++ &(house.heroes.len() - 1).to_string(),
+
+### E25 the Ending entered twice
+@ src/ending.rs
+-         house.ending.is_none(),
++         true,
+
+### E26 the verdict lines lose the rest
+@ src/ending.rs
+-     if !rest.is_empty() {
++     if false {
+
+### X1 after the Door, a winter
+@ src/season.rs
+-     if let Some(door) = door {
++     if let Some(door) = door.filter(|_| false) {
+
+### X2 a closed house enters no Ending
+@ src/season.rs
+-         house.closed = true;⏎        enter_the_ending(content, house, rng, None);
++         house.closed = true;
+
+### X3 the Door's telling closes at renown 0
+@ src/telling_view.rs
+- if house.renown <= 0 && telling.door.is_none() {
++ if house.renown <= 0 {
+
+### X4 no prologue page
+@ src/telling_view.rs
+-     if let Some(door) = &telling.door {
++     if let Some(door) = telling.door.as_ref().filter(|_| false) {
+
+### X5 the Door's telling ends on Winter comes
+@ src/telling_nav.rs
+- } else if telling.door.is_some() {
++ } else if false {
+
+### H1 another house only after a close
+@ src/pointer.rs
+- Target::BeginAgain if house.ending.is_some() => {
++ Target::BeginAgain if house.closed => {
+
+### H2 another house seeded from its own seed
+@ src/house.rs
+- let seed = draw_seed(world.resource_mut::<Rng>());
++ let seed = draw_seed(&mut Rng::from_seed(old_seed));
+
+### H3 the chronicle forgets how a house ended
+@ src/house.rs
+- Some(last) if last.seed == old_seed => last.ended = ended,
++ Some(last) if last.seed == old_seed => {}
+
+### H4 the chronicle forgets the new house
+@ src/house.rs
+- chronicle.0.push(Founded { seed, ended: None });
++ let _ = seed;
+
+### G1 a generation never wraps
+@ src/tree.rs
+- if line.len() == fits {
++ if false {
+
+### G2 a spouse parted at the wrap
+@ src/tree.rs
+- Some(&last) if line.len() > 1 && married(last, id) => line.pop(),
++ Some(&last) if line.len() > 1 && married(last, last) => line.pop(),
+
+### G3 the lines never close up
+@ src/tree.rs
+- GENERATION_STEP.min((TREE_FOOT - TREE_TOP - NODE.y) / between)
++ GENERATION_STEP
+
+### G4 the Ending's tree under the family's heading
+@ src/tree.rs
+- Verdict::Door { .. } => W::EndingTreeHeadingDoor,
++ Verdict::Door { .. } => W::FamilyHeading,
+
+### G5 the Ending's tree closes to the house
+@ src/tree.rs
+-             W::EndingVerdict,
++             W::FamilyClose,
