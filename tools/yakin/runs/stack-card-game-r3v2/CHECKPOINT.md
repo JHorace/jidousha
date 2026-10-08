@@ -3,10 +3,10 @@
 task: stack-card-game-r3v2
 variant: V2
 stage: implement
-tick: released
+tick: live
 resumes: 0
 gates-green-at: none
-updated: 2026-10-07 21:16 PDT
+updated: 2026-10-07 21:17 PDT
 
 ## Done so far
 - claimed (32f5e58)
