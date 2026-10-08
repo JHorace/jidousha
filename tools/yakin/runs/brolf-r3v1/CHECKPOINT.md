@@ -6,15 +6,18 @@ stage: implement
 tick: live
 resumes: 0
 gates-green-at: none
-updated: 2026-10-07 21:34 PDT
+updated: 2026-10-07 21:40 PDT
 
 ## Done so far
 - claimed
 - inline DESIGN.md written (V1)
 - games/brolf-r3v1 builds and plays; tools/verify brolf_r3v1 passes (81 checks); fast gate clean
 
+- mutation round: 22/23 first pass (B23 helmet escaped), contract check added, B23+B24 2/2 — 24/24 overall
+- FINDINGS.md G-070..G-073; build-web + serve-web --check pass
+
 ## Exact next step
-Write games/brolf-r3v1/mutants/r3v1.txt and run `python3 tools/mutate brolf-r3v1 mutants/r3v1.txt`; then FINDINGS.md, build-web/serve-web --check, full gate, PR.
+Run the full gate (doctor, tools/test in background, check-claude-md, yakin check), then open the PR per WORKER.md §4.
 
 ## Deviations
 - cups are single-use and open one at a time (CUP_OPENS 0/12/24/36/48 s) instead of once-per-golfer: first build had a champion in 7 s
