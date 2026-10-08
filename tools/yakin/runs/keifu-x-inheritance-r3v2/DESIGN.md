@@ -125,7 +125,9 @@ own modules, which already wrap the surfaces they need; those say "none new".
   parent. **Outsider** = a wanderer (SPEC §17.2) who has not married in, and a
   child of two outsiders. · `src/hero.rs` (field), `src/house.rs` (field),
   `src/household.rs` (read the key; found every founder `is_family = true`),
-  `src/newcomers.rs` (`newcomer()` defaults `is_family: false`), `src/births.rs`
+  `src/newcomers.rs` (`newcomer()` defaults `is_family: false`; every other place that builds a
+  `Hero` literal — `household.rs`, any test fixture the compiler names — sets
+  the three new fields), `src/births.rs`
   (`child.is_family = heroes[first].is_family || heroes[second].is_family`),
   `src/wanderer.rs` (stays false), `spec/content/household.json` (new top-level
   key `"family_house": "Thorne"`, validated at load to equal some founder's
@@ -137,7 +139,7 @@ own modules, which already wrap the surfaces they need; those say "none new".
 - **Reward (mainline SPEC §7.3: house renown += quest renown (+1 triumph) +
   carriers, whoever went).** Variant: the house gains the quest renown (+1 on a
   triumph) only if **some member of the party is family**; the carriers' +1 each
-  is unchanged; every member's personal renown is unchanged. With no family
+  is unchanged; every member's personal renown rises as mainline's does. With no family
   member in the party, `lines.quest.reward` is replaced by the new
   `lines.quest.outsiders_reward` ("% came home with it, and the house gained
   nothing: no Thorne went."). · `src/reward.rs`: one gate around
@@ -189,7 +191,9 @@ own modules, which already wrap the surfaces they need; those say "none new".
   marks_after`; `hero.renown = (hero.renown - personal_renown).max(0)`;
   `house.add_renown(-house_renown)`; pushes `lines.quest.black_mark`; records a
   `DeedKind::BlackMark` deed (new variant, weight = the quest's danger, telling
-  `lines.deed.black_mark`). · `src/marks.rs` (new), `src/hero.rs` (`marks: i32`,
+  `lines.deed.black_mark`). Any exhaustive `match` on `DeedKind` the compiler
+  then names gains an arm that ignores the new kind (the epitaph reads no mark;
+  Non-goals). · `src/marks.rs` (new), `src/hero.rs` (`marks: i32`,
   `DeedKind::BlackMark`). · none new.
 - **Where in the resolution.** Mainline §7.1 steps 1-15 in `resolve::resolve_party`.
   Variant inserts **step 7b**, after step 7 (the disaster's renown line) and
@@ -303,8 +307,11 @@ own modules, which already wrap the surfaces they need; those say "none new".
   `lines.winter.unproven` ("% walked in the garden with %. An outsider with %
   renown may not marry in: the house asks %.") naming the outsider first, in
   place of mainline's `courting_failed`. Both occupants still take the COURT
-  moment. `play::seat_the_winter` (the batteries' wedding) treats `MarriesIn`
-  like `WillWed`.
+  moment. `court`'s panic arm for a verdict with an empty seat covers
+  `MarriesIn` too. `play::seat_the_winter` (the batteries' wedding) treats
+  `MarriesIn` like `WillWed`. `plans_tests.rs` gains two tests: an outsider at
+  renown 3 beside Ysolde is `Unproven`, at 4 `MarriesIn`; two outsiders at any
+  renown are `WillWed`.
 - **What marrying in changes:** from then on their won quests and told tales
   count for the house (S2), they are offered as heirs (S2), their children are
   family (S1), and their failed personal quests mark the name (S3). Their
@@ -363,9 +370,13 @@ own modules, which already wrap the surfaces they need; those say "none new".
   Pip, Odo, "Ysolde, of the house (not the dream)", "Brannoc, of the house (lays
   one aside)", Wren, "No one. Let it lie."; the `burdened` arm no longer changes
   the list (keep the parameter, assert the same seven both ways, and add one
-  more assertion: after `stir`, set the wanderer's `renown = 4`, `is_family =
-  true` by hand, rebuild the page on a fresh session the same way, and assert
-  the eighth label "<name>, of the house" is back). No other mainline check
+  more assertion: on a fresh session staged the same way, after `stir` set the
+  wanderer's `is_family = true` by hand before letting the winter pass, and
+  assert the eighth label is back as mainline had it — `"<name>, of the house"`
+  plus `" (not the dream)"` when `burdened`). `w7_battery::check_agreement`'s
+  match on the garden's verdict gains one arm, `Courtship::MarriesIn => kind ==
+  Some(BondKind::Spouse)`, beside `WillWed`'s; its `all_verdicts` coverage list
+  stays as it is (the stirred hearths need not reach the new verdicts). No other mainline check
   moves: founders are all family, so W0-W10's oracles read as before; the
   sheet additions are new lines between the W1 oracle's (it matches a
   subsequence, `oracles::check_w0_and_w1_on`).
@@ -434,12 +445,16 @@ founders' names and pronouns; copy them into the checks as literals.
   `heroes[garrick].renown == 4` (6 - 2), `house.renown == 13` (15 - 2),
   `heroes[brannoc].marks == 0`; and on a second clone `resolve_rolled(…, [6,
   6])` (margin ≥ +6, a Triumph) · asserts: no "black mark" line, `marks == 0`,
-  Garrick settled (mainline W3). Then on the first clone (the Setback), with
-  Garrick's `fear.dread` whatever it is, `let_the_winter_pass` with the hearth
-  empty and `read_to_summer`-equivalent `play::choose_every_heir` + `summer_comes`
-  · asserts: the turning's "Year 2 begins" page holds "The Thorne name carries a
-  black mark: -1 renown." and `house.renown` fell by exactly 1 more than the
-  tales' line (there are none) would give. Run on every seed of `recorded()`.
+  Garrick settled (mainline W3). Then on the first clone (the Setback): set
+  `heroes[garrick].age = 40` (so old age cannot take him and bury the mark —
+  CONSTANTS §10 rolls nothing below 55), then, since `resolve_rolled` opens no
+  telling for `season::leave_the_telling` to close, do what it does by hand —
+  `house.calendar.begin_winter(); house.open_hearth();` — then
+  `season::let_the_winter_pass`, `play::choose_every_heir(first_heir)` and
+  `season::summer_comes` · asserts: the passage's "Year 2 begins" page (read
+  before `summer_comes` clears it) holds "The Thorne name carries a black mark:
+  -1 renown." and `house.renown == 12` (13 less the mark's year; no tales). Run
+  on every seed of `recorded()`.
   · covers Done-when: "verify … with a check for each decision row" (row 1).
 - **G5 — the mark passes only in one's own name** (unit tests, `src/marks.rs`
   `#[cfg(test)]`, each named as a sentence) — input: `testkit::house()` ·
@@ -463,12 +478,13 @@ founders' names and pronouns; copy them into the checks as literals.
   with `renown = 4` · asserts: the garden reads "marries in"; after the winter
   the page holds a WEDDINGS line naming both and "<Name> is of the Thorne name
   now. 4 renown was enough: the house asked 4."; `is_family == true`; the spouse
-  bond on both sides. Third reading, on the second session before the winter:
-  set Garrick's `age = 93` first (as `stage_garricks_winter`), so his death page
-  comes in the same turning · asserts: `heir_labels` after `go_to_the_choice`
-  include "<Name>, of the house" — and in the *first* session (unproven) the
-  same page's labels do not name the wanderer at all. Run on `recorded()[0]`
-  and `recorded()[1]`. · covers Done-when: row 2 ("a below-threshold outsider
+  bond on both sides. In both sessions, set Garrick's `age = 93` before letting
+  the winter pass (as `stage_garricks_winter` does), so his death page comes in
+  the same turning, after the garden has resolved · asserts: after
+  `go_to_the_choice`, the unproven session's `heir_labels` are the W8 oracle's
+  seven and never name the wanderer; the married-in session's include
+  "<Name>, of the house" as the seventh, before "No one. Let it lie.". Run on
+  `recorded()[0]` and `recorded()[1]`. · covers Done-when: row 2 ("a below-threshold outsider
   refused and an at-threshold one accepted, with the threshold and the
   outsider's renown in the transcript").
 - **G7 — outsiders confer no renown** (unit tests in `src/reward.rs` and
@@ -598,8 +614,11 @@ Settled; the implementer does not relitigate them.
     deterministic, no content edit, and true to who they already are.
 13. **The death page waits on marks ≥ 2 alone.** Reason: half a mark passing is
     a thing the player decides; one mark is not.
-14. **The stirred W8 oracle is rewritten, no other mainline check is.** Reason:
-    it is the one check whose cast includes an outsider acting as family.
+14. **The stirred W8 oracle is rewritten and the W7 battery's verdict match
+    gains one arm; no other mainline check moves.** Reason: the first is the one
+    check whose cast includes an outsider acting as family; the second only
+    teaches an existing instrument the new verdict's outcome. Both are
+    Deviations lines in the PR.
 15. **The stake is told on the quest sheet, not the card.** Reason: Non-goals;
     the sheet already carries the per-dreamer call line it attaches to.
 16. **Content keys are objects with `text`/`args`/`when`/`source`, source
