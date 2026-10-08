@@ -141,6 +141,14 @@ pub(super) fn row_answer(checks: &mut Checks, summary: &mut Vec<String>) {
             expected.sanity_cost
         ),
     );
+    // The readout, as a shipped literal: a check built from `sanity_line`
+    // would follow the readout wherever it went (round 1, C13).
+    let readout = format!("sanity {}/100", 100 - ROW1_LORE_COST);
+    checks.require(
+        shown(&after).contains(&readout),
+        "row 1: the sanity readout does not show what was paid",
+        format!("{readout:?} not among {:?}", shown(&after)),
+    );
     let Screen::Calling(next) = after.screen else {
         fail(
             "row 1: the call ended after one lore answer",
