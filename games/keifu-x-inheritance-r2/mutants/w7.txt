@@ -1,0 +1,580 @@
+#! W7 — winter (session 7). One fault per line of rule: every W7 constant, every
+#! excuse and its order, every amount and cap, teacher credit and the rank-limited mentor
+#! bond, every courtship step, the fire, the table, the order of §11.3, the winter
+#! moments, the hearth's opening, the preview/resolve agreement on both sides, the seat
+#! notes, the seat targets and the drag, the controls and the turning's winter page.
+
+### C1 FIRE_SEATS 2 -> 1
+@ src/constants.rs
+- pub const FIRE_SEATS: usize = 2;
++ pub const FIRE_SEATS: usize = 1;
+
+### C2 TALE_SEATS 2 -> 1
+@ src/constants.rs
+- pub const TALE_SEATS: usize = 2;
++ pub const TALE_SEATS: usize = 1;
+
+### C3 BENCHES 2 -> 1
+@ src/constants.rs
+- pub const BENCHES: usize = 2;
++ pub const BENCHES: usize = 1;
+
+### C4 SELF_TAUGHT_LIMIT 6 -> 7
+@ src/constants.rs
+- pub const SELF_TAUGHT_LIMIT: i32 = 6;
++ pub const SELF_TAUGHT_LIMIT: i32 = 7;
+
+### C5 CHILD_TAUGHT_LIMIT 4 -> 5
+@ src/constants.rs
+- pub const CHILD_TAUGHT_LIMIT: i32 = 4;
++ pub const CHILD_TAUGHT_LIMIT: i32 = 5;
+
+### C6 TEACHABLE_AGE 6 -> 5
+@ src/constants.rs
+- pub const TEACHABLE_AGE: i32 = 6;
++ pub const TEACHABLE_AGE: i32 = 5;
+
+### C7 WINTER_GAIN_LIMIT 2 -> 3
+@ src/constants.rs
+- pub const WINTER_GAIN_LIMIT: i32 = 2;
++ pub const WINTER_GAIN_LIMIT: i32 = 3;
+
+### C8 WINTER_LESSON 1 -> 2
+@ src/constants.rs
+- pub const WINTER_LESSON: i32 = 1;
++ pub const WINTER_LESSON: i32 = 2;
+
+### C9 YOUNG_LEARNER_BONUS 1 -> 0
+@ src/constants.rs
+- pub const YOUNG_LEARNER_BONUS: i32 = 1;
++ pub const YOUNG_LEARNER_BONUS: i32 = 0;
+
+### C10 SEASONED_TEACHER_BONUS 1 -> 0
+@ src/constants.rs
+- pub const SEASONED_TEACHER_BONUS: i32 = 1;
++ pub const SEASONED_TEACHER_BONUS: i32 = 0;
+
+### C11 GREATER_LESSON 1 -> 2
+@ src/constants.rs
+- pub const GREATER_LESSON: i32 = 1;
++ pub const GREATER_LESSON: i32 = 2;
+
+### C12 a greater teacher counts as knowing 8, not 9
+@ src/constants.rs
+- pub const GREATER_TAUGHT: i32 = APTITUDE_LIMIT;
++ pub const GREATER_TAUGHT: i32 = APTITUDE_LIMIT - 1;
+
+### C13 TALE_RENOWN 1 -> 2
+@ src/constants.rs
+- pub const TALE_RENOWN: i32 = 1;
++ pub const TALE_RENOWN: i32 = 2;
+
+### C14 MARRYING_AGE 18 -> 17
+@ src/constants.rs
+- pub const MARRYING_AGE: i32 = 18;
++ pub const MARRYING_AGE: i32 = 17;
+
+### C15 COURTING_AGE_GAP 15 -> 14
+@ src/constants.rs
+- pub const COURTING_AGE_GAP: i32 = 15;
++ pub const COURTING_AGE_GAP: i32 = 14;
+
+### C16 the garden's help quotes 59 in a hundred
+@ src/constants.rs
+- pub const BIRTH_CHANCE_PERCENT: i32 = 60;
++ pub const BIRTH_CHANCE_PERCENT: i32 = 59;
+
+### C17 the garden's help quotes parents to 44
+@ src/constants.rs
+- pub const PARENT_AGE_HIGH: i32 = 45;
++ pub const PARENT_AGE_HIGH: i32 = 44;
+
+### C18 YARD_SPOTS 6 -> 5
+@ src/constants.rs
+- pub const YARD_SPOTS: usize = 6;
++ pub const YARD_SPOTS: usize = 5;
+
+### C19 REST_DREAD_SHED 1 -> 2
+@ src/constants.rs
+- pub const REST_DREAD_SHED: i32 = 1;
++ pub const REST_DREAD_SHED: i32 = 2;
+
+### E1 a child in the training yard is not sent to a bench
+@ src/plans.rs
+-     if !heroes[learner].is_adult() {⏎        return Lesson::Wasted(Excuse::BelongsOnBench);
++     if false {⏎        return Lesson::Wasted(Excuse::BelongsOnBench);
+
+### E2 an adult on a bench's child seat is taught anyway
+@ src/plans.rs
+-     if heroes[child].is_adult() {⏎        return Lesson::Wasted(Excuse::IsNoChild);
++     if false {⏎        return Lesson::Wasted(Excuse::IsNoChild);
+
+### E3 a child alone on a bench learns alone
+@ src/plans.rs
+-     if teacher.is_none() {⏎        return Lesson::Wasted(Excuse::BenchNeedsTeacher);
++     if false {⏎        return Lesson::Wasted(Excuse::BenchNeedsTeacher);
+
+### E4 a child can teach
+@ src/plans.rs
+-     if teacher.is_some_and(|t| !heroes[t].is_adult()) {
++     if teacher.is_some_and(|t| heroes[t].age < 0) {
+
+### E5 who may not learn learns
+@ src/plans.rs
+-     if !may_still_learn(heroes, learner) {
++     if false && !may_still_learn(heroes, learner) {
+
+### E6 "learns nothing more" judged after "a child cannot teach" is swapped in order
+@ src/plans.rs
+-     let l = &heroes[learner];⏎    if teacher.is_some_and(|t| !heroes[t].is_adult()) {⏎        return Lesson::Wasted(Excuse::ChildTeacher);⏎    }⏎    if !may_still_learn(heroes, learner) {⏎        return Lesson::Wasted(Excuse::LearnsNothing);⏎    }
++     let l = &heroes[learner];⏎    if !may_still_learn(heroes, learner) {⏎        return Lesson::Wasted(Excuse::LearnsNothing);⏎    }⏎    if teacher.is_some_and(|t| !heroes[t].is_adult()) {⏎        return Lesson::Wasted(Excuse::ChildTeacher);⏎    }
+
+### E7 alone, training stops one short of the limit
+@ src/plans.rs
+-         if known >= SELF_TAUGHT_LIMIT {
++         if known >= SELF_TAUGHT_LIMIT - 1 {
+
+### E8 alone, the best aptitude is trained, not the calling's
+@ src/plans.rs
+-         let aptitude = content.lore.vocation_aptitudes[l.vocation.index()];
++         let aptitude = l.best_aptitude();
+
+### E9 alone, the young do not learn faster
+@ src/plans.rs
+-         let amount = (WINTER_LESSON + youth(l)).min(SELF_TAUGHT_LIMIT - known);
++         let amount = WINTER_LESSON.min(SELF_TAUGHT_LIMIT - known);
+
+### E10 alone, the self-taught cap is not applied
+@ src/plans.rs
+-         let amount = (WINTER_LESSON + youth(l)).min(SELF_TAUGHT_LIMIT - known);
++         let amount = WINTER_LESSON + youth(l);
+
+### E11 a teacher passes on the learner's best aptitude
+@ src/plans.rs
+-     let aptitude = t.best_aptitude();⏎    let known = l.base(aptitude);
++     let aptitude = l.best_aptitude();⏎    let known = l.base(aptitude);
+
+### E12 a teacher who knows exactly as much still teaches
+@ src/plans.rs
+-     if taught <= known {
++     if taught < known {
+
+### E13 a greater teacher counts their own base
+@ src/plans.rs
+-     let greater = t.destiny.kind == Destiny::TeachAGreater;
++     let greater = t.destiny.kind == Destiny::CarryTheHouse;
+
+### E14 a child of any age is taught
+@ src/plans.rs
+-         if l.age < TEACHABLE_AGE {
++         if l.age < 0 {
+
+### E15 a child at the limit is still taught
+@ src/plans.rs
+-         if known >= CHILD_TAUGHT_LIMIT {
++         if known > CHILD_TAUGHT_LIMIT {
+
+### E16 a child is taught as an adult is
+@ src/plans.rs
+-     if !l.is_adult() {⏎        if l.age < TEACHABLE_AGE {
++     if l.age < 0 {⏎        if l.age < TEACHABLE_AGE {
+
+### E17 elders do not teach well
+@ src/plans.rs
+-     let seasoned = if matches!(t.phase(), Phase::Veteran | Phase::Elder) {
++     let seasoned = if matches!(t.phase(), Phase::Veteran) {
+
+### E18 veterans do not teach well
+@ src/plans.rs
+-     let seasoned = if matches!(t.phase(), Phase::Veteran | Phase::Elder) {
++     let seasoned = if matches!(t.phase(), Phase::Elder) {
+
+### E19 the cap of two is applied after the greater bonus
+@ src/plans.rs
+-     let mut amount = (WINTER_LESSON + seasoned + youth(l)).min(WINTER_GAIN_LIMIT);⏎    if greater {⏎        amount += GREATER_LESSON;⏎    }
++     let mut amount = WINTER_LESSON + seasoned + youth(l);⏎    if greater {⏎        amount += GREATER_LESSON;⏎    }⏎    let amount = amount.min(WINTER_GAIN_LIMIT);
+
+### E20 a lesson may teach past what the teacher knows
+@ src/plans.rs
+-     let amount = amount.min(taught - known).min(APTITUDE_LIMIT - known);
++     let amount = amount.min(APTITUDE_LIMIT - known);
+
+### E21 a lesson may pass 9
+@ src/plans.rs
+-     let amount = amount.min(taught - known).min(APTITUDE_LIMIT - known);
++     let amount = amount.min(taught - known);
+
+### E22 a Prime counts as a Youth
+@ src/plans.rs
+-     if hero.phase() == Phase::Youth {
++     if matches!(hero.phase(), Phase::Youth | Phase::Prime) {
+
+### E23 the two-name wasted line names the learner twice
+@ src/plans.rs
+-                 crate::text::fmt(template, &[learner, teacher])
++                 crate::text::fmt(template, &[learner, learner])
+
+### E24 "teacher knows no more" shows the excuse of "is a child yet"
+@ src/plans.rs
+-             Excuse::ChildLimit => (W::ExcuseChildLimit, W::ExcuseChildLimitWasted),
++             Excuse::ChildLimit => (W::ExcuseTooYoung, W::ExcuseChildLimitWasted),
+
+### N1 a lesson's preview gives the amount without its aptitude's title
+@ src/plans.rs
+-                     &content.lore.aptitudes[aptitude.index()],⏎                ],
++                     &content.lore.aptitudes[0],⏎                ],
+
+### K1 kin may wed
+@ src/plans.rs
+-     if kin(heroes, a, b) {
++     if kin(heroes, a, b) && a == b {
+
+### K2 only the first in the garden must be of age
+@ src/plans.rs
+-     if heroes[a].age < MARRYING_AGE || heroes[b].age < MARRYING_AGE {
++     if heroes[a].age < MARRYING_AGE {
+
+### K3 the age gap is not judged
+@ src/plans.rs
+-     if (heroes[a].age - heroes[b].age).abs() > COURTING_AGE_GAP {
++     if (heroes[a].age - heroes[b].age) > COURTING_AGE_GAP {
+
+### K4 exactly the gap apart is too far
+@ src/plans.rs
+-     if (heroes[a].age - heroes[b].age).abs() > COURTING_AGE_GAP {
++     if (heroes[a].age - heroes[b].age).abs() >= COURTING_AGE_GAP {
+
+### K5 rivals wed
+@ src/plans.rs
+-         .is_some_and(|bond| bond.kind == BondKind::Rival)
++         .is_some_and(|bond| bond.kind == BondKind::Companion)
+
+### K6 a widow may not wed
+@ src/plans.rs
+-         .any(|bond| bond.kind == BondKind::Spouse && heroes[bond.other].is_living())
++         .any(|bond| bond.kind == BondKind::Spouse)
+
+### K7 only the first's marriage is asked
+@ src/plans.rs
+-     if has_living_spouse(heroes, a) || has_living_spouse(heroes, b) {
++     if has_living_spouse(heroes, a) {
+
+### K8 one in the garden is "nobody"
+@ src/plans.rs
+-         _ => return Courtship::Waiting,
++         _ => return Courtship::Nobody,
+
+### K9 kin judged after age
+@ src/plans.rs
+-     if kin(heroes, a, b) {⏎        return Courtship::Kin;⏎    }⏎    if heroes[a].age < MARRYING_AGE || heroes[b].age < MARRYING_AGE {⏎        return Courtship::TooYoung;⏎    }
++     if heroes[a].age < MARRYING_AGE || heroes[b].age < MARRYING_AGE {⏎        return Courtship::TooYoung;⏎    }⏎    if kin(heroes, a, b) {⏎        return Courtship::Kin;⏎    }
+
+### R1 the fire's note says "calms" before "heals"
+@ src/plans.rs
+-         if self.heals {⏎            &words[W::RestHeals]⏎        } else if self.calms {⏎            &words[W::RestCalms]
++         if self.calms {⏎            &words[W::RestCalms]⏎        } else if self.heals {⏎            &words[W::RestHeals]
+
+### R2 the fire does not heal
+@ src/winter.rs
+-     let healed = std::mem::replace(&mut me.wounded, false);
++     let healed = me.wounded;
+
+### R3 the fire does not shed dread
+@ src/winter.rs
+-     let calmed = shed_dread(me);
++     let calmed = false;
+
+### R4 a broken hero sheds dread by the fire
+@ src/fear.rs
+-     !hero.fear.broken && hero.fear.dread > 0
++     hero.fear.dread > 0
+
+### R5 the healed-only rest says the dread too
+@ src/winter.rs
+-         (true, false) => Some(W::WinterRestMended),
++         (true, false) => Some(W::WinterRestBoth),
+
+### R6 a rest that did nothing still draws a line
+@ src/winter.rs
+-         (false, false) => None,
++         (false, false) => Some(W::WinterRestCalmed),
+
+### O1 the fire resolves after the training yard (re-cut s7, round 2)
+@ src/winter.rs
+-     // 1. The fire, in seat order.⏎    for i in 0..FIRE_SEATS {⏎        if let Some(hero) = at(house, Seat::Fire(i)) {⏎            done.rests[i] = Some(rest_by_the_fire(content, house, hero, rng, &mut lines));⏎        }⏎    }⏎    // 2. The training yard.⏎    let (learner, teacher) = (at(house, Seat::Learner), at(house, Seat::Teacher));⏎    match (learner, teacher) {⏎        (Some(l), _) => {⏎            let lesson = yard_lesson(content, &house.heroes, l, teacher);⏎            done.yard = Some(lesson);⏎            train(content, house, l, teacher, lesson, &mut lines);⏎            // OQ-21 [emergent]: an adult teacher is credited even for a wasted lesson.⏎            if let Some(t) = teacher.filter(|&t| house.heroes[t].is_adult()) {⏎                credit(content, house, t, l, WinterAction::Teach, &mut lines);⏎            }⏎        }⏎        (None, Some(t)) => lines.push(fmt(⏎            &content.words[W::WinterWaitsForLearner],⏎            &[&house.heroes[t].name],⏎        )),⏎        (None, None) => {}⏎    }
++     // 2. The training yard.⏎    let (learner, teacher) = (at(house, Seat::Learner), at(house, Seat::Teacher));⏎    match (learner, teacher) {⏎        (Some(l), _) => {⏎            let lesson = yard_lesson(content, &house.heroes, l, teacher);⏎            done.yard = Some(lesson);⏎            train(content, house, l, teacher, lesson, &mut lines);⏎            // OQ-21 [emergent]: an adult teacher is credited even for a wasted lesson.⏎            if let Some(t) = teacher.filter(|&t| house.heroes[t].is_adult()) {⏎                credit(content, house, t, l, WinterAction::Teach, &mut lines);⏎            }⏎        }⏎        (None, Some(t)) => lines.push(fmt(⏎            &content.words[W::WinterWaitsForLearner],⏎            &[&house.heroes[t].name],⏎        )),⏎        (None, None) => {}⏎    }⏎    // 1. The fire, in seat order.⏎    for i in 0..FIRE_SEATS {⏎        if let Some(hero) = at(house, Seat::Fire(i)) {⏎            done.rests[i] = Some(rest_by_the_fire(content, house, hero, rng, &mut lines));⏎        }⏎    }
+
+### O2 the table resolves before the garden
+@ src/winter.rs
+-     court(content, house, pair, verdict, rng, &mut lines);⏎    // 5. The long table, in seat order.⏎    let table: [Option<HeroId>; TALE_SEATS] = std::array::from_fn(|i| at(house, Seat::Table(i)));⏎    done.tellers = tellers(&house.heroes, table);⏎    for (seat, part) in table.iter().zip(done.tellers) {⏎        if let (Some(hero), Some(part)) = (*seat, part) {⏎            tell_the_tale(content, house, hero, part, rng, &mut lines);⏎        }⏎    }
++     let table: [Option<HeroId>; TALE_SEATS] = std::array::from_fn(|i| at(house, Seat::Table(i)));⏎    done.tellers = tellers(&house.heroes, table);⏎    for (seat, part) in table.iter().zip(done.tellers) {⏎        if let (Some(hero), Some(part)) = (*seat, part) {⏎            tell_the_tale(content, house, hero, part, rng, &mut lines);⏎        }⏎    }⏎    court(content, house, pair, verdict, rng, &mut lines);
+
+### O3 the benches resolve in the other order
+@ src/winter.rs
+-     for b in 0..BENCHES {
++     for b in (0..BENCHES).rev() {
+
+### Y1 a yard teacher alone is told as a bench's minder (re-cut s7, round 2)
+@ src/winter.rs
+-             &content.words[W::WinterWaitsForLearner],
++             &content.words[W::WinterBenchNoChild],
+
+### Y2 a yard teacher is credited only for a lesson that teaches (OQ-21 lost)
+@ src/winter.rs
+-             if let Some(t) = teacher.filter(|&t| house.heroes[t].is_adult()) {
++             if let Some(t) = teacher.filter(|&t| house.heroes[t].is_adult() && lesson.amount() > 0) {
+
+### Y3 a child in the yard's teacher seat is credited
+@ src/winter.rs
+-             if let Some(t) = teacher.filter(|&t| house.heroes[t].is_adult()) {
++             if let Some(t) = teacher {
+
+### B1 a bench minder is credited for a wasted lesson
+@ src/winter.rs
+-                 if let Some(m) = minder.filter(|_| lesson.amount() > 0) {
++                 if let Some(m) = minder {
+
+### B2 a bench minder alone is told as a yard teacher (re-cut s7, round 2)
+@ src/winter.rs
+-                 &content.words[W::WinterBenchNoChild],
++                 &content.words[W::WinterWaitsForLearner],
+
+### B3 a bench minder's moment is TEACH
+@ src/winter.rs
+-                     credit(content, house, m, c, WinterAction::MindAChild, &mut lines);
++                     credit(content, house, m, c, WinterAction::Rest, &mut lines);
+
+### T1 a lesson raises the base by one whatever its amount
+@ src/winter.rs
+-             me.aptitudes[aptitude.index()] += amount;
++             me.aptitudes[aptitude.index()] += amount.min(1);
+
+### T2 the trained line names no teacher
+@ src/winter.rs
+-                 Some(t) => fmt(&words[W::WinterTrainedUnder], &[t]),
++                 Some(_) => words[W::WinterTrainedAlone].to_owned(),
+
+### T3 a wasted lesson is no TRAIN moment (OQ-20 lost)
+@ src/winter.rs
+-         Lesson::Wasted(excuse) => {⏎            lines.push(excuse.wasted(content, &name, teacher_name.as_deref()));⏎        }⏎    }⏎    moment(content, house, learner, WinterAction::Train, lines);
++         Lesson::Wasted(excuse) => {⏎            lines.push(excuse.wasted(content, &name, teacher_name.as_deref()));⏎            return;⏎        }⏎    }⏎    moment(content, house, learner, WinterAction::Train, lines);
+
+### T4 a child's winter is a moment too
+@ src/winter.rs
+-     if house.heroes[hero].is_adult() {⏎        lines.extend(witness(content, house, hero, &Moment::Winter(action)));
++     if house.heroes[hero].is_living() {⏎        lines.extend(witness(content, house, hero, &Moment::Winter(action)));
+
+### M1 the mentor bond is not rank-limited: it overwrites a parent
+@ src/winter.rs
+-     form(&mut house.heroes, learner, teacher, BondKind::Mentor, year);
++     crate::bonds::form(&mut house.heroes, learner, teacher, BondKind::Mentor, year);⏎    crate::bonds::change(&mut house.heroes, learner, teacher, BondKind::Mentor, year);
+
+### M2 the bond is formed the wrong way round
+@ src/winter.rs
+-     form(&mut house.heroes, learner, teacher, BondKind::Mentor, year);
++     form(&mut house.heroes, teacher, learner, BondKind::Mentor, year);
+
+### M3 taught is set only on a new bond
+@ src/winter.rs
+-     if let Some(bond) = house.heroes[teacher]⏎        .bonds⏎        .iter_mut()⏎        .find(|bond| bond.other == learner)⏎    {
++     if let Some(bond) = house.heroes[teacher]⏎        .bonds⏎        .iter_mut()⏎        .find(|bond| bond.other == learner && newly_bound)⏎    {
+
+### M4 a winter taught is not counted
+@ src/winter.rs
+-     me.winters_taught += 1;
++     me.winters_taught += 0;
+
+### M5 every winter taught is a TAUGHT deed
+@ src/winter.rs
+-     if me.winters_taught == 1 {
++     if me.winters_taught >= 1 {
+
+### M6 "new student" said whatever bond they had
+@ src/winter.rs
+-     if newly_bound {
++     if true {
+
+### M7 a yard teacher's moment is MIND_A_CHILD
+@ src/winter.rs
+-                 credit(content, house, t, l, WinterAction::Teach, &mut lines);
++                 credit(content, house, t, l, WinterAction::Court, &mut lines);
+
+### G1 a wedding forms no bond
+@ src/winter.rs
+-             form(&mut house.heroes, a, b, BondKind::Spouse, year);
++             form(&mut house.heroes, a, b, BondKind::Friend, year);
+
+### G2 rivals in the garden stay rivals
+@ src/winter.rs
+-             change(&mut house.heroes, a, b, BondKind::Friend, year);
++             change(&mut house.heroes, a, b, BondKind::Rival, year);
+
+### G3 a failed courting is about the last occupied seat
+@ src/winter.rs
+-             if let Some(first) = pair.iter().flatten().next() {
++             if let Some(first) = pair.iter().flatten().last() {
+
+### G4 a wedding's deeds name the hero themself
+@ src/winter.rs
+-                 let other_name = house.heroes[other].full_name();
++                 let other_name = house.heroes[me].full_name();
+
+### G5 a failed courting writes nothing
+@ src/winter.rs
+-                 lines.push(fmt(⏎                    &words[W::WinterCourtingFailed],
++                 lines.truncate(lines.len());⏎                let _ = (fmt(⏎                    &words[W::WinterCourtingFailed],
+
+### L1 a teller gains no renown
+@ src/winter.rs
+-     me.renown += TALE_RENOWN;
++     me.renown += 0;
+
+### L2 the house hears the tale twice
+@ src/plans.rs
+-         Some(if adults == 1 {
++         Some(if adults >= 1 {
+
+### L3 a child at the table counts as the first teller
+@ src/plans.rs
+-         if !heroes[hero].is_adult() {⏎            return Some(Teller::Child);⏎        }
++         if heroes[hero].age < 0 {⏎            return Some(Teller::Child);⏎        }
+
+### L4 the house gains no renown from the tale
+@ src/winter.rs
+-             house.add_renown(TALE_RENOWN);
++             house.add_renown(0);
+
+### L5 a teller's moment is REST
+@ src/winter.rs
+-     moment(content, house, hero, WinterAction::TellTheTale, lines);
++     moment(content, house, hero, WinterAction::Rest, lines);
+
+### H1 the hearth opens with nobody in the yard
+@ src/hearth.rs
+-         for (spot, child) in self.yard().into_iter().enumerate() {
++         for (spot, child) in self.yard().into_iter().enumerate().skip(9) {
+
+### H2 every wounded hero is moved to the fire, past two
+@ src/hearth.rs
+-             if fire < FIRE_SEATS && self.heroes[hero].wounded {
++             if fire < FIRE_SEATS + 1 && self.heroes[hero].wounded {
+
+### H3 the unwounded go to the fire
+@ src/hearth.rs
+-             if fire < FIRE_SEATS && self.heroes[hero].wounded {
++             if fire < FIRE_SEATS && !self.heroes[hero].wounded {
+
+### H4 summer's reseat leaves the hearth seated
+@ src/house.rs
+-         self.hearth.clear();
++         self.hearth.put(crate::hearth::Seat::Fire(1), None);
+
+### H5 leaving the telling does not open the hearth
+@ src/season.rs
+-     house.calendar.begin_winter();⏎    house.open_hearth();
++     house.calendar.begin_winter();⏎    house.reseat();
+
+### P1 the preview reads the yard lesson without its teacher
+@ src/winter.rs
+-         yard: at(Seat::Learner).map(|l| yard_lesson(content, heroes, l, at(Seat::Teacher))),
++         yard: at(Seat::Learner).map(|l| yard_lesson(content, heroes, l, None)),
+
+### P2 the resolution reads the bench lesson without its teacher
+@ src/winter.rs
+-                 let lesson = bench_lesson(content, &house.heroes, c, minder);
++                 let lesson = bench_lesson(content, &house.heroes, c, minder.filter(|_| b > 0));
+
+### P3 the preview reads the garden with its seats swapped against the table
+@ src/winter.rs
+-         garden: Some(courtship(heroes, at(Seat::Garden(0)), at(Seat::Garden(1)))),
++         garden: Some(courtship(heroes, at(Seat::Garden(0)), at(Seat::Table(1)))),
+
+### P4 the preview's fire reads the wrong seat
+@ src/winter.rs
+-         rests: std::array::from_fn(|i| at(Seat::Fire(i)).map(|hero| rest(&heroes[hero]))),
++         rests: std::array::from_fn(|i| at(Seat::Fire(0)).map(|hero| rest(&heroes[hero]))),
+
+### P5 the preview's tellers read the table in reverse
+@ src/winter.rs
+-         tellers: tellers(heroes, std::array::from_fn(|i| at(Seat::Table(i)))),
++         tellers: tellers(heroes, std::array::from_fn(|i| at(Seat::Table(1 - i)))),
+
+### P6 mid-drag the preview reads the seating as it is
+@ src/hearth_view.rs
+-     let Some(drag) = ui.drag else {⏎        return Cow::Borrowed(house);⏎    };
++     let Some(_drag) = ui.drag.filter(|_| false) else {⏎        return Cow::Borrowed(house);⏎    };⏎    let drag = _drag;
+
+### V1 "no learner" never shown
+@ src/hearth_view.rs
+-         None if sat(other) => Some(words[alone].to_owned()),
++         None if sat(other) && false => Some(words[alone].to_owned()),
+
+### V2 the bench's note is drawn beside the other bench
+@ src/hearth_view.rs
+-             Group::Benches => notes.benches[r].as_deref(),
++             Group::Benches => notes.benches[1 - r].as_deref(),
+
+### V3 the table's notes are not drawn
+@ src/hearth_view.rs
+-                 Seat::Table(i) => notes.table[*i].as_deref(),
++                 Seat::Table(_) => None,
+
+### S1 a hearth seat's target is the seat even when someone sits there
+@ src/hearth_view.rs
+-             page.targets.push((rect, target(Slot::Hearth(*seat))));
++             page.targets.push((rect, Target::Seat(Slot::Hearth(*seat))));
+
+### S2 the yard's seats are not targets
+@ src/hearth_view.rs
+-         let slot = Slot::Hearth(Seat::Yard(spot));⏎        card_at(
++         let slot = Slot::Roster(spot);⏎        card_at(
+
+### S3 the hearth's cards cannot be lifted
+@ src/pointer.rs
+-     in_summer(house) || at_the_hearth(house)
++     in_summer(house)
+
+### S4 the bench seats are laid in each other's places
+@ src/hearth_view.rs
+-                 let x = panel.min.x + PANEL_PAD + i as f32 * (TILE.x + GAP);
++                 let x = panel.min.x + PANEL_PAD + (1 - i) as f32 * (TILE.x + GAP);
+
+### S5 a hearth seat is found nowhere
+@ src/board.rs
+-         if let Some(seat) = self.hearth.seat_of(hero) {⏎            return Some(Slot::Hearth(seat));⏎        }
++         if let Some(seat) = self.hearth.seat_of(hero).filter(|_| false) {⏎            return Some(Slot::Hearth(seat));⏎        }
+
+### W1 "Let the winter pass" does nothing
+@ src/pointer.rs
+-             with_house(world, let_the_winter_pass);
++             with_house(world, |_, _, _| {});
+
+### W2 the turning's "Go on" brings summer from any leaf (re-cut s8)
+@ src/pointer.rs
+-                 (Target::GoOn, _) if current < reach => return turn_to(current + 1),
++                 (Target::GoOn, _) if current < reach && false => return turn_to(current + 1),
+
+### W3 summer comes without its board
+@ src/season.rs
+-     house.passage = None;⏎    house.calendar.begin_summer();⏎    house.prepare_summer(content, rng);
++     house.passage = None;⏎    house.calendar.begin_summer();⏎    house.reseat();
+
+### W4 the quiet winter writes its line even with lines (re-cut s8)
+@ src/turning.rs
+-     let lines = if winter.is_empty() {
++     let lines = if winter.len() < 99 {
+
+### W5 the winter page's title tells the next year (re-cut s8)
+@ src/turning.rs
+-         title: fmt(&words[W::TurningWinterTitle], &[&year.to_string()]),
++         title: fmt(&words[W::TurningWinterTitle], &[&(year + 1).to_string()]),
+
+### W6 the hearth's dock help is the summer's
+@ src/dock_lines.rs
+-     } else if house.calendar.is_winter() {⏎        W::WinterHelp
++     } else if house.calendar.is_winter() {⏎        W::SummerHelp
+
+### W7 a group's help is not opened by pointing at it
+@ src/pointer.rs
+-             Some(Target::Group(group)) if !ui.family_open => Some(group),
++             Some(Target::Group(group)) if ui.family_open => Some(group),
