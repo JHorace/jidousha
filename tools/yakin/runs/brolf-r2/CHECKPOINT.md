@@ -5,7 +5,7 @@ variant: V2
 stage: implement
 tick: live
 resumes: 0
-gates-green-at: none
+gates-green-at: 5bd8da0
 updated: 2026-10-07 20:45 PDT
 
 ## Done so far
