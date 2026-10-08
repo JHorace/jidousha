@@ -138,6 +138,19 @@ mod tests {
     }
 
     #[test]
+    fn an_outsider_carrier_adds_nothing_to_the_house_beside_family() {
+        let (content, mut house) = house();
+        let (odo, maren) = (id(&house.heroes, "Odo"), id(&house.heroes, "Maren"));
+        house.heroes[odo].blood = Blood::Outsider;
+        house.heroes[odo].destiny.kind = crate::ids::Destiny::CarryTheHouse;
+        seat(&mut house, 0, &[maren, odo]);
+        aim(&mut house, 0, [3, 3], 1);
+        let (before, renown) = (house.renown, house.board[0].quest.renown);
+        resolve_rolled(&content, &mut house, &mut Rng::from_seed(5), 0, [3, 3]);
+        assert_eq!(house.renown, before + renown);
+    }
+
+    #[test]
     fn the_turning_toll_is_the_living_familys_marks_over_four_and_ignores_outsiders() {
         let (_content, mut heroes) = founded();
         let (odo, maren, ysolde) = (
@@ -146,9 +159,10 @@ mod tests {
             id(&heroes, "Ysolde"),
         );
         heroes[maren].marks = 5;
-        heroes[ysolde].marks = 3;
+        heroes[ysolde].marks = 4;
         heroes[odo].marks = 8;
         heroes[odo].blood = Blood::Outsider;
+        // 9 marks of living family, over four.
         assert_eq!(crate::marks::toll(&heroes), 2);
     }
 

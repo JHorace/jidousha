@@ -190,4 +190,23 @@ mod tests {
         );
         assert_eq!(traits_word(&[None, None]), "none");
     }
+
+    #[test]
+    fn about_fifteen_newborns_in_a_hundred_mutate() {
+        let none: Genes = [None, None];
+        let mutated = (0..1000)
+            .filter(|&id| child_genes(99, id, &none, &none) != none)
+            .count();
+        // MUTATION_CHANCE 0.15: 150 expected; the band is well over 3 sigma (~11).
+        assert!((110..=190).contains(&mutated), "{mutated} of 1000");
+    }
+
+    #[test]
+    fn about_half_a_wanderers_slots_carry_a_trait() {
+        let carried: usize = (0..1000)
+            .map(|id| wanderer_genes(99, id).iter().flatten().count())
+            .sum();
+        // WANDERER_TRAIT_CHANCE 0.5 over 2000 slots: 1000 expected, sigma ~22.
+        assert!((900..=1100).contains(&carried), "{carried} of 2000");
+    }
 }

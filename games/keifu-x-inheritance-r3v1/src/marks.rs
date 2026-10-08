@@ -247,4 +247,13 @@ mod tests {
         a.marks = 5;
         assert_eq!(born_marks(&a, &b), 2);
     }
+
+    #[test]
+    fn a_family_setback_on_a_personal_quest_costs_the_house_exactly_one() {
+        let mut heroes = vec![hero(Blood::Family, 4)];
+        let mut renown = 10;
+        let mut lines = Vec::new();
+        apply(&mut heroes, &mut renown, &[0], Outcome::Setback, &mut lines);
+        assert_eq!((renown, heroes[0].marks, heroes[0].renown), (9, 1, 3));
+    }
 }
