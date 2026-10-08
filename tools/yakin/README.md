@@ -22,8 +22,9 @@ is not stored here) · optional `window` `burn-down` (default) `|any` (size S
 only; runs outside the week — the canary). A spec carries `## Goal`, `## Fence`
 (the only paths the task may write) and `## Done when`; `tasks/m0-canary.md` is
 the model. **V1**: the worker designs inline and builds; **V2**: the designer
-routine designs, the worker builds; **V3**: V2 plus the review routine's
-FINDINGS comment. **Stage is derived, never queued:** a V2/V3 task with no
+routine designs, the worker builds; **V3**: as V2 on both stages. The review
+routine posts one FINDINGS comment on every open yakin PR, any variant
+(`REVIEW.md` §1). **Stage is derived, never queued:** a V2/V3 task with no
 branch, or whose CHECKPOINT says `stage: design`, is at design and only
 `next --role design` prints it; once the CHECKPOINT says `implement`, only
 `next --role implement` does — as it does every V1 task (V1 has no design stage).
@@ -53,7 +54,7 @@ Read tools/yakin/DESIGNER.md from the cloned repo and follow it exactly.
 It is your entire instruction.
 ```
 
-Review routine prompt (GitHub `pull_request.opened`, head branch starts with `claude/yakin`):
+Review routine prompt (GitHub `pull_request.opened`, head branch starts with `claude/yakin`; **Run now** with no PR sweeps every unreviewed one):
 
 ```
 You are a yakin review tick.

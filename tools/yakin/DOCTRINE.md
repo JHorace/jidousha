@@ -156,7 +156,9 @@ nor the line `Decisions: none new; existing surfaces unchanged.` is malformed
 (§7), and DESIGN.md may elaborate the spec's surfaces but never invent one; §E's
 closing checklist goes in the PR body under "Owner actions"; "play it at the
 preview URL" becomes `tools/serve-web <name> --check`, and the PR says nobody
-played it.
+played it. Assets: a design names the ones it assumes (`templates/DESIGN.md`,
+Systems); the implement stage creates what the depot lacks and never takes
+third-party art from the network (`WORKER.md` §5).
 
 ## 7. BLOCKED — your only way to ask anything
 

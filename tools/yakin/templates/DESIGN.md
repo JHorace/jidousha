@@ -32,6 +32,11 @@ date: <output of: TZ=America/Los_Angeles date '+%Y-%m-%d %H:%M %Z'>
 
 - <system> — <what it does> · `<path>` · touches `<docs/api file>`: <items>
 
+<!-- Assets: name the ones the design assumes (sprites, sounds, tiles), so the
+     implementer knows what to create (WORKER.md §5). "none" if none. -->
+
+- Assets: <each sprite, sound, tile the design assumes, one line each — or "none">
+
 ## Gates to add
 
 <!-- Concrete and deterministic: each names the check (a --verify assertion, a
