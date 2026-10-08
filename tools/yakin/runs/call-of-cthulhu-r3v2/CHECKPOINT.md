@@ -5,8 +5,8 @@ variant: V2
 stage: implement
 tick: live
 resumes: 0
-gates-green-at: none
-updated: 2026-10-07 21:39 PDT
+gates-green-at: 9f6b7da
+updated: 2026-10-07 21:52 PDT
 
 ## Done so far
 - claimed the branch (designer tick, mode start)
@@ -15,10 +15,10 @@ updated: 2026-10-07 21:39 PDT
 - design released: stage implement, tick released
 - worker tick: game built from DESIGN.md (beings, rules, flow, screen, main, players, checks, capture, verify, verify_screens); --verify passes 763 checks on seeds 1928 and 7 (802352e)
 - mutants/r1.txt: 20 of 20 noticed (verify alone 20); FINDINGS.md G-070, G-071
+- full gate green at 9f6b7da: doctor ENV_OK, tools/test pass (1487/0/0), check-claude-md, yakin check; verify call_of_cthulhu_r3v2 pass; build-web + serve-web --check pass
 
 ## Exact next step
-Run the full gate (tools/doctor, tools/test in the background, check-claude-md, yakin check), then
-`python3 tools/verify call_of_cthulhu_r3v2` and `python3 tools/build-web call_of_cthulhu_r3v2 && python3 tools/serve-web call_of_cthulhu_r3v2 --check`; then open the PR (WORKER.md §4).
+Open the PR (WORKER.md §4) titled `[yakin:V2:r3] Call of Cthulhu: hang up on eldritch callers before sanity runs out`, then set stage done, tick released.
 
 ## Deviations
 - the Guesser studies in the morning instead of meditating: with meditation the design's own arithmetic gives it 68-76 sanity spent, so it survives; studying (and never using the lore) costs 96-104 and it loses on night 4 (FINDINGS G-070)
