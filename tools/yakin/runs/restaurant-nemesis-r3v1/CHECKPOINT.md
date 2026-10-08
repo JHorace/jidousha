@@ -2,17 +2,18 @@
 
 task: restaurant-nemesis-r3v1
 variant: V1
-stage: design
+stage: implement
 tick: live
 resumes: 0
 gates-green-at: none
-updated: 2026-10-07 21:52 PDT
+updated: 2026-10-07 21:54 PDT
 
 ## Done so far
 - claimed
+- inline DESIGN.md written (V1), every number fixed
 
 ## Exact next step
-Read tools/yakin/tasks/restaurant-nemesis.md; write tools/yakin/runs/restaurant-nemesis-r3v1/DESIGN.md from tools/yakin/templates/DESIGN.md (variant: V1) fixing every number the base's "The design" lists.
+Create games/restaurant-nemesis-r3v1 (crate restaurant_nemesis_r3v1) per DESIGN.md Systems: content.rs, rules.rs, sim.rs, screens.rs, main.rs; then verify.
 
 ## Deviations
 - none
