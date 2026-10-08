@@ -2,11 +2,11 @@
 
 task: restaurant-nemesis-r3v1
 variant: V1
-stage: implement
-tick: live
+stage: done
+tick: released
 resumes: 0
-gates-green-at: none
-updated: 2026-10-07 22:10 PDT
+gates-green-at: 97903db
+updated: 2026-10-07 22:21 PDT
 
 ## Done so far
 - claimed
@@ -16,8 +16,10 @@ updated: 2026-10-07 22:10 PDT
 - mutation round 20/22 first pass (N21 spends, N22 temp cook escaped); spends contract added; N21+N22 2/2 — 22/22 overall
 - FINDINGS.md G-074..G-075; build-web + serve-web --check pass
 
+- full gate green at 97903db (tools/test 1490 passed); PR https://github.com/JHorace/jidousha/pull/143 opened
+
 ## Exact next step
-Run the full gate (doctor, tools/test in background, check-claude-md, yakin check), then open the PR per WORKER.md §4.
+None — done. The PR awaits review; never merge from a tick.
 
 ## Deviations
 - 5 customers a round plus a 3-customer lunch rush in one seeded round (23 a day), not 4 a round (16): with 4 a round, standard-for-everyone never failed anyone
