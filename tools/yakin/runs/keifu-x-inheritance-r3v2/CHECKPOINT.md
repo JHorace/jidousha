@@ -5,8 +5,8 @@ variant: V2
 stage: implement
 tick: live
 resumes: 0
-gates-green-at: none
-updated: 2026-10-07 22:31 PDT
+gates-green-at: 6d08146
+updated: 2026-10-07 22:45 PDT
 
 ## Done so far
 - claimed the branch (b5d64bf)
@@ -16,9 +16,10 @@ updated: 2026-10-07 22:31 PDT
 - S1-S7 rules in (is_family, family_house, marks.rs, inheritance.rs, reward/tellers/heirs gates, step 7b and 8b, death page + choose, courtship Unproven/MarriesIn, sheets, quest-sheet stake, content words, constants); unit tests 365/365 after rewriting 5 mainline unit oracles the variant breaks
 - S8 checks xi_marks / xi_outsiders / xi_inheritance wired into verify; w8::stirred rewritten; floors W4 mid-drag -> look_held; floors_w8 stirred page wanderer made family; VARIANT.md; plans_tests +3; verify keifu_x_inheritance_r3v2 pass
 - mutants/xi.txt: 21/26 first pass; G7 unit tests + birth tests added; rerun 4/5, X12 equivalent (25/26); three pictures; FINDINGS G-075..G-077
+- full gate green at 6d08146: doctor ENV_OK, tools/test pass (1860/0/0, verify keifu and the variant pass), check-claude-md ok, yakin check ok; build-web + serve-web --check pass
 
 ## Exact next step
-Full gate (doctor, tools/test in background, check-claude-md, yakin check), look at xi-death-marks.png, build-web + serve-web --check, then the PR (WORKER.md §4).
+Open the PR (WORKER.md §4), then stage: done, tick: released.
 
 ## Deviations
 - 5 mainline unit tests rewritten to variant rules (births_tests x3: lean bonus; quest_sheet grave goods: stake line; resolve_tests disaster: Ysolde's mark) - DESIGN.md said no other mainline check moves
