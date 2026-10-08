@@ -2,8 +2,8 @@
 
 task: call-of-cthulhu-r2
 variant: V1
-stage: implement
-tick: live
+stage: done
+tick: released
 resumes: 0
 gates-green-at: 1219f19
 updated: 2026-10-07 20:59 PDT
@@ -16,9 +16,10 @@ updated: 2026-10-07 20:59 PDT
 - mutation round: 19/27 first pass; rule_checks.rs closes the 8 escapes; 27/27
 - tools/verify pass; build-web + serve-web --check pass
 - full gate green at 1219f19: doctor ENV_OK, tools/test pass 1487/0/0, fast gate clean
+- PR #134 opened
 
 ## Exact next step
-Open the PR per WORKER.md §4 (none exists yet), then set stage: done, tick: released.
+None — done; PR https://github.com/JHorace/jidousha/pull/134 awaits review.
 
 ## Deviations
 - run DESIGN.md's file list grew: play.rs, conductor.rs, decisions.rs, screen_checks.rs, rule_checks.rs (verify split under the ~500-line rule)
