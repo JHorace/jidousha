@@ -6,7 +6,7 @@ stage: implement
 tick: live
 resumes: 0
 gates-green-at: none
-updated: 2026-10-07 22:15 PDT
+updated: 2026-10-07 22:31 PDT
 
 ## Done so far
 - claimed the branch (b5d64bf)
@@ -15,9 +15,10 @@ updated: 2026-10-07 22:15 PDT
 - S0 fork commit 5981641: verify keifu_x_inheritance_r3v2 pass, verify keifu pass, fast gate clean
 - S1-S7 rules in (is_family, family_house, marks.rs, inheritance.rs, reward/tellers/heirs gates, step 7b and 8b, death page + choose, courtship Unproven/MarriesIn, sheets, quest-sheet stake, content words, constants); unit tests 365/365 after rewriting 5 mainline unit oracles the variant breaks
 - S8 checks xi_marks / xi_outsiders / xi_inheritance wired into verify; w8::stirred rewritten; floors W4 mid-drag -> look_held; floors_w8 stirred page wanderer made family; VARIANT.md; plans_tests +3; verify keifu_x_inheritance_r3v2 pass
+- mutants/xi.txt: 21/26 first pass; G7 unit tests + birth tests added; rerun 4/5, X12 equivalent (25/26); three pictures; FINDINGS G-075..G-077
 
 ## Exact next step
-Write games/keifu-x-inheritance-r3v2/mutants/xi.txt (DESIGN.md S8 list), commit, run `python3 tools/mutate keifu_x_inheritance_r3v2 mutants/xi.txt --fast` in the background; then captures, FINDINGS, full gate, web, PR.
+Full gate (doctor, tools/test in background, check-claude-md, yakin check), look at xi-death-marks.png, build-web + serve-web --check, then the PR (WORKER.md §4).
 
 ## Deviations
 - 5 mainline unit tests rewritten to variant rules (births_tests x3: lean bonus; quest_sheet grave goods: stake line; resolve_tests disaster: Ysolde's mark) - DESIGN.md said no other mainline check moves

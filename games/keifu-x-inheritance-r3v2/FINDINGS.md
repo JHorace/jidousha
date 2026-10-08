@@ -1378,6 +1378,22 @@ not in `heroes` yet when the lean is rolled (the lean's bonus is part of the
 aptitudes being built). **What I did:** added an `own_best: Aptitude` parameter,
 computed by `born` from the shares. Never reached in play.
 
+### G-077 — the stay-behind exclusion cannot fire on a seated dreamer (design stage, harmless)
+
+Class: design note · Session: keifu-x-inheritance-r3v2 implement · Owner: DESIGN.md S3
+
+**Doing:** the mutation round `mutants/xi.txt` (26 faults, `--fast`).
+
+**Happened:** 21 of 26 on the first pass; four escapes were checks DESIGN.md's
+G7 asked for and I had not yet written (outsiders' reward, tellers) or rules no
+check reached (the lean coin's two sides, family by either parent) — each now
+has a unit test, rerun 4 of 4 noticed. The fifth, X12 (drop `telling !=
+StayBehind` from `personal_quest`), is **equivalent**: `calls::dream_call` only
+answers `StayBehind` for a dreamer *not* in the party, and `personal_quest`
+already requires them seated. **What I did:** kept the guard (it states the
+design's rule where a reader looks for it) and scored the round 25 of 26 with
+one equivalent mutant.
+
 ### docs/api: 0 findings
 
 The variant is rules over the game's own state and lines on panels mainline
