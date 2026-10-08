@@ -3,10 +3,10 @@
 task: brolf-r2
 variant: V2
 stage: implement
-tick: released
+tick: live
 resumes: 0
 gates-green-at: none
-updated: 2026-10-07 18:32 PDT
+updated: 2026-10-07 20:22 PDT
 
 ## Done so far
 - claimed the branch (design stage)
