@@ -1,0 +1,108 @@
+#! Round 1 (r3v2): DESIGN.md G12's fourteen faults, then the turn's own
+#! branches. Expectations are shipped literals in gates.rs, verify.rs and
+#! rules_tests.rs, so a constant moving is a check failing.
+
+### G1 the spawn threshold is 5
+@ src/sim.rs
+- pub(crate) const SPAWN_THRESHOLD: u32 = 4;
++ pub(crate) const SPAWN_THRESHOLD: u32 = 5;
+
+### G2 sensitivity is 1
+@ src/sim.rs
+- pub(crate) const SENSITIVITY: u32 = 2;
++ pub(crate) const SENSITIVITY: u32 = 1;
+
+### G3 winning over takes 3 satisfactions
+@ src/sim.rs
+- pub(crate) const REPEAT_TALLY: u32 = 2;
++ pub(crate) const REPEAT_TALLY: u32 = 3;
+
+### G4 overwhelm takes 1 extra unit
+@ src/sim.rs
+- pub(crate) const OVERWHELM_EXTRA: u32 = 2;
++ pub(crate) const OVERWHELM_EXTRA: u32 = 1;
+
+### G5 Local Menace starts at 31
+@ src/sim.rs
+- pub(crate) const T2_AT: u32 = 30;
++ pub(crate) const T2_AT: u32 = 31;
+
+### G6 a nemesis spawns with 20 followers
+@ src/sim.rs
+- pub(crate) const FOLLOWERS_AT_SPAWN: u32 = 30;
++ pub(crate) const FOLLOWERS_AT_SPAWN: u32 = 20;
+
+### G7 a spend cuts 16
+@ src/sim.rs
+- pub(crate) const SOCIAL_CUT: u32 = 15;
++ pub(crate) const SOCIAL_CUT: u32 = 16;
+
+### G8 a spend costs 20
+@ src/sim.rs
+- pub(crate) const SOCIAL_COST: i32 = 25;
++ pub(crate) const SOCIAL_COST: i32 = 20;
+
+### G9 nemeses return every day
+@ src/sim.rs
+- pub(crate) const RETURN_EVERY: u32 = 2;
++ pub(crate) const RETURN_EVERY: u32 = 1;
+
+### G10 base capacity is 6
+@ src/sim.rs
+- pub(crate) const BASE_CAPACITY: u32 = 5;
++ pub(crate) const BASE_CAPACITY: u32 = 6;
+
+### G11 an unmet order refunds 7
+@ src/sim.rs
+- pub(crate) const REFUND_ORDINARY: i32 = 8;
++ pub(crate) const REFUND_ORDINARY: i32 = 7;
+
+### G12 the top tier's share is 3
+@ src/sim.rs
+- pub(crate) const SHARE: [usize; 3] = [1, 2, 4];
++ pub(crate) const SHARE: [usize; 3] = [1, 2, 3];
+
+### G13 the restaurant survives down to -$10
+@ src/turn.rs
+- game.phase = if game.money < 0 {
++ game.phase = if game.money < -10 {
+
+### G14 the card says defeats in lower case
+@ src/lines.rs
+- tally.push_str(", DEFEATS them");
++ tally.push_str(", defeats them");
+
+### T1 serving a nemesis banks nothing
+@ src/turn.rs
+- n.tally += 1;
++ n.tally += 0;
+
+### T2 the tally serve never defeats
+@ src/turn.rs
+- if progress.defeated_if_served {
++ if progress.defeated_if_served && false {
+
+### T3 failing a nemesis grows nobody
+@ src/turn.rs
+- Kind::Nemesis(id) => grow(game, id, unmet.leader_followers),
++ Kind::Nemesis(id) => grow(game, id, 0),
+
+### T4 a visit never moves the next one
+@ src/turn.rs
+- nemesis.next_visit += RETURN_EVERY;
++ nemesis.next_visit += 0;
+
+### T5 trending costs nothing
+@ src/turn.rs
+- game.rep -= TIER3_NIGHTLY_REP;
++ game.rep -= 0;
+
+### T6 followers adopt no extra need
+@ src/rules.rs
+- customer.need += FOLLOWER_EXTRA_NEED;
++ customer.need += 0;
+
+### T7 overwhelm costs no capacity
+@ src/turn.rs
+- game.capacity_left -= cost;
++ game.capacity_left -= cost * 0;
