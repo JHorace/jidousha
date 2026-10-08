@@ -2,17 +2,18 @@
 
 task: call-of-cthulhu-r2
 variant: V1
-stage: design
+stage: implement
 tick: live
 resumes: 0
 gates-green-at: none
-updated: 2026-10-07 20:25 PDT
+updated: 2026-10-07 20:29 PDT
 
 ## Done so far
 - claimed
+- design: games/call-of-cthulhu-r2/DESIGN.md + run DESIGN.md
 
 ## Exact next step
-Read tools/yakin/tasks/call-of-cthulhu.md and the make-game skill; write tools/yakin/runs/call-of-cthulhu-r2/DESIGN.md (V1 inline design), set stage: implement.
+Write the crate games/call-of-cthulhu-r2 (Cargo.toml, src/lore.rs, src/rules.rs) per the run DESIGN.md file list.
 
 ## Deviations
 - none
