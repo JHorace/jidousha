@@ -17,12 +17,13 @@ use jidousha::ui::{frame_text_floor, judge_frame, judge_panel};
 
 use crate::cards::Card;
 use crate::checks::Checks;
-use crate::duel::{Duel, Event, Outcome, Side, legal_targets, preview};
+use crate::duel::{Duel, Event, Outcome, Side, legal_targets};
 use crate::npc::{self, Action};
+use crate::resolve::preview;
 use crate::screen::{self, Flat, Ui};
 use crate::{Game, config, register};
 
-use crate::scenarios;
+use crate::{contracts, scenarios};
 
 /// The most ticks a match may take before the run calls it stuck.
 const MATCH_TICKS: u64 = 40_000;
@@ -375,8 +376,8 @@ pub(crate) fn judge(checks: &mut Checks, label: &str, shot: &Shot) -> f32 {
 
 pub(crate) fn run() -> ExitCode {
     let mut checks = Checks::default();
-    scenarios::tables(&mut checks);
-    scenarios::contracts(&mut checks);
+    contracts::tables(&mut checks);
+    contracts::contracts(&mut checks);
 
     // The schedule: the player's input before the Brute's, as `register` says.
     let sim = headless(config(), register);

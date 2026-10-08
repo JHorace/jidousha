@@ -3,7 +3,8 @@
 //! Free so that the verify run can ask it what the NPC *will* do, and so the
 //! stack-reading controller can roll the NPC forward beside the stack.
 
-use crate::duel::{Duel, Side, legal_targets, life_after};
+use crate::duel::{Duel, Side, legal_targets};
+use crate::resolve::life_after;
 
 /// What a player does with priority.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
