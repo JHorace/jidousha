@@ -1,0 +1,470 @@
+{
+  "_source": "generation/quest-context/templates-quest.jai:17-209, lineage/passage.jai:124",
+  "templates": [
+    {
+      "place": "BARROW",
+      "title": "The lamps in the Barrow",
+      "aptitude": "SPIRIT",
+      "tags": [
+        "DARK",
+        "UNDEAD"
+      ],
+      "seats_low": 2,
+      "seats_high": 3,
+      "danger": 2,
+      "premise": "Someone has lit the old lamps. No one living holds the key.",
+      "endings": {
+        "TRIUMPH": "%1 put out the lamps one by one, and at the last lamp said the old words. The Barrow is dark again, as it should be.",
+        "SUCCESS": "%1 put the lamps out. Whoever lit them did not come to stop it.",
+        "SETBACK": "%1 reached the third lamp before the rest went out on their own. Something was walking in the dark.",
+        "DISASTER": "The lamps went out all at once. %1 had to find the door by touch."
+      },
+      "_source": "generation/quest-context/templates-quest.jai:18"
+    },
+    {
+      "place": "BARROW",
+      "title": "A name scratched out",
+      "aptitude": "WITS",
+      "tags": [
+        "UNDEAD"
+      ],
+      "seats_low": 1,
+      "seats_high": 2,
+      "danger": 1,
+      "premise": "A grave marker has been defaced. The dead man walks at night, looking for who did it.",
+      "endings": {
+        "TRIUMPH": "%1 found the name in the parish book and cut it back into the stone, deeper than before. He lay down at dawn.",
+        "SUCCESS": "%1 found the name and cut it back into the stone. He has not walked since.",
+        "SETBACK": "%1 cut a name into the stone. It was the wrong name. He was not grateful.",
+        "DISASTER": "The dead man decided it was %1 who had done it."
+      },
+      "_source": "generation/quest-context/templates-quest.jai:26"
+    },
+    {
+      "place": "BARROW",
+      "title": "The Barrow-king wakes",
+      "aptitude": "MIGHT",
+      "tags": [
+        "DARK",
+        "UNDEAD"
+      ],
+      "seats_low": 3,
+      "seats_high": 3,
+      "danger": 3,
+      "premise": "The door of the deepest mound stands open from within.",
+      "endings": {
+        "TRIUMPH": "%1 met the Barrow-king on his own stair and sent him back down it. The door is shut and the stone rolled over.",
+        "SUCCESS": "%1 held the stair until sunrise. The king went back to his bed.",
+        "SETBACK": "%1 held the stair for an hour. It was not long enough, but it was long enough to get out.",
+        "DISASTER": "The Barrow-king came up the stair faster than anything dead should move. %1 broke and ran."
+      },
+      "_source": "generation/quest-context/templates-quest.jai:34"
+    },
+    {
+      "place": "BARROW",
+      "title": "Grave goods",
+      "aptitude": "MIGHT",
+      "tags": [
+        "DARK"
+      ],
+      "seats_low": 2,
+      "seats_high": 2,
+      "danger": 2,
+      "premise": "Robbers went in at dusk. Bring them out, or what is left.",
+      "endings": {
+        "TRIUMPH": "%1 brought out all four robbers alive, and every ring they had taken went back on its finger.",
+        "SUCCESS": "%1 brought the robbers out. They were glad to be arrested.",
+        "SETBACK": "%1 found the robbers' lantern and one boot. Then the passage came down.",
+        "DISASTER": "The robbers had woken what they came to rob. %1 walked into the middle of it."
+      },
+      "_source": "generation/quest-context/templates-quest.jai:42"
+    },
+    {
+      "place": "DROWNED_COAST",
+      "title": "The bell under the tide",
+      "aptitude": "SPIRIT",
+      "tags": [
+        "WATER"
+      ],
+      "seats_low": 2,
+      "seats_high": 2,
+      "danger": 2,
+      "premise": "A church bell rings from under the water at low tide.",
+      "endings": {
+        "TRIUMPH": "%1 waded out at the ebb and rang the bell back. It tolled once in answer and has been silent since.",
+        "SUCCESS": "%1 said the office for the drowned parish from the shore. The bell stopped before the end.",
+        "SETBACK": "%1 stayed too long listening. The tide came in behind.",
+        "DISASTER": "The bell was calling, and %1 answered. The sea closed over the sandbar."
+      },
+      "_source": "generation/quest-context/templates-quest.jai:50"
+    },
+    {
+      "place": "DROWNED_COAST",
+      "title": "The wreck of the Heron",
+      "aptitude": "MIGHT",
+      "tags": [
+        "WATER"
+      ],
+      "seats_low": 2,
+      "seats_high": 3,
+      "danger": 2,
+      "premise": "A ship has broken on the Teeth. There may be living aboard.",
+      "endings": {
+        "TRIUMPH": "%1 rowed out four times and brought back eleven living, and the ship's cat.",
+        "SUCCESS": "%1 got a line to the wreck. Six came down it before the hull went.",
+        "SETBACK": "The boat turned over in the surf. %1 came ashore, but no one from the Heron did.",
+        "DISASTER": "The Teeth took the boat as they had taken the ship. %1 went into the water a mile from shore."
+      },
+      "_source": "generation/quest-context/templates-quest.jai:58"
+    },
+    {
+      "place": "DROWNED_COAST",
+      "title": "What the nets raised",
+      "aptitude": "MIGHT",
+      "tags": [
+        "WATER",
+        "BEASTS"
+      ],
+      "seats_low": 3,
+      "seats_high": 3,
+      "danger": 3,
+      "premise": "The fishers will not go out until it is dealt with.",
+      "endings": {
+        "TRIUMPH": "%1 killed it on the shingle and burned it above the tide line. The boats went out the next morning.",
+        "SUCCESS": "%1 drove it back into deep water. The fishers mend their nets and do not speak of it.",
+        "SETBACK": "It took the net, the winch, and part of the jetty, with %1 standing on it.",
+        "DISASTER": "It came up the beach after %1. No one had known it could leave the water."
+      },
+      "_source": "generation/quest-context/templates-quest.jai:66"
+    },
+    {
+      "place": "DROWNED_COAST",
+      "title": "The tide tables",
+      "aptitude": "WITS",
+      "tags": [
+        "WATER"
+      ],
+      "seats_low": 1,
+      "seats_high": 2,
+      "danger": 1,
+      "premise": "The sea is keeping a different calendar. Someone must learn it.",
+      "endings": {
+        "TRIUMPH": "%1 watched a month of tides and wrote the new tables out fair. The harbormaster wept.",
+        "SUCCESS": "%1 worked out the new tides, near enough. The boats sail by it.",
+        "SETBACK": "%1 trusted the third night's reckoning, and was cut off on the causeway until morning.",
+        "DISASTER": "The tide that caught %1 was in no table, old or new."
+      },
+      "_source": "generation/quest-context/templates-quest.jai:74"
+    },
+    {
+      "place": "HIGH_PASS",
+      "title": "The rope bridge",
+      "aptitude": "MIGHT",
+      "tags": [
+        "HEIGHTS"
+      ],
+      "seats_low": 2,
+      "seats_high": 2,
+      "danger": 2,
+      "premise": "The bridge at Hollow Gap is down, and a caravan is on the wrong side.",
+      "endings": {
+        "TRIUMPH": "%1 carried the first line across hand over hand, and had mules crossing by evening.",
+        "SUCCESS": "%1 strung a new bridge. It sways, but it holds.",
+        "SETBACK": "The anchor post pulled free. %1 hung over the Gap a long while before anyone could haul.",
+        "DISASTER": "The rope parted over the middle of the Gap, with %1 on it."
+      },
+      "_source": "generation/quest-context/templates-quest.jai:82"
+    },
+    {
+      "place": "HIGH_PASS",
+      "title": "The hermit's fire",
+      "aptitude": "SPIRIT",
+      "tags": [
+        "HEIGHTS",
+        "COLD"
+      ],
+      "seats_low": 2,
+      "seats_high": 2,
+      "danger": 2,
+      "premise": "No smoke from the high cell in nine days.",
+      "endings": {
+        "TRIUMPH": "%1 found the hermit alive, snow-blind and singing, and carried him down on a door.",
+        "SUCCESS": "%1 relit the fire and left wood for a month. The hermit did not say thank you. He has a vow.",
+        "SETBACK": "The hermit had been dead a week. %1 buried him in a storm and came down frostbitten.",
+        "DISASTER": "The storm shut the path behind %1. There was no wood in the cell."
+      },
+      "_source": "generation/quest-context/templates-quest.jai:90"
+    },
+    {
+      "place": "HIGH_PASS",
+      "title": "First snow",
+      "aptitude": "WITS",
+      "tags": [
+        "COLD"
+      ],
+      "seats_low": 2,
+      "seats_high": 3,
+      "danger": 1,
+      "premise": "The shepherds are late down the mountain.",
+      "endings": {
+        "TRIUMPH": "%1 found the shepherds and every sheep, and brought them down by a path nobody knew was there.",
+        "SUCCESS": "%1 brought the shepherds down. Half the flock followed.",
+        "SETBACK": "%1 found the shepherds, then lost the path. Two nights in a snow hole.",
+        "DISASTER": "The slope let go above %1. It was very quiet after."
+      },
+      "_source": "generation/quest-context/templates-quest.jai:98"
+    },
+    {
+      "place": "HIGH_PASS",
+      "title": "The horn in the ice",
+      "aptitude": "SPIRIT",
+      "tags": [
+        "COLD"
+      ],
+      "seats_low": 3,
+      "seats_high": 3,
+      "danger": 3,
+      "premise": "A war-horn sounds each night from inside the glacier.",
+      "endings": {
+        "TRIUMPH": "%1 cut down to the horn-blower and told him the war was over, and who had won. He put down the horn.",
+        "SUCCESS": "%1 sat a night by the ice and answered every call. At dawn the horn sounded the stand-down.",
+        "SETBACK": "%1 answered the horn wrongly. The ice cracked from one side of the valley to the other.",
+        "DISASTER": "The horn was a summons. %1 heard an army get to its feet under the ice."
+      },
+      "_source": "generation/quest-context/templates-quest.jai:106"
+    },
+    {
+      "place": "EMBERFALL",
+      "title": "The unquiet forge",
+      "aptitude": "MIGHT",
+      "tags": [
+        "FIRE"
+      ],
+      "seats_low": 2,
+      "seats_high": 2,
+      "danger": 2,
+      "premise": "The smiths have fled their own forge. It burns without them.",
+      "endings": {
+        "TRIUMPH": "%1 worked the bellows until the fire had made what it wanted to make, and then it slept.",
+        "SUCCESS": "%1 banked the forge with wet sand and patience. The smiths have come back.",
+        "SETBACK": "%1 got the doors shut. The roof did not wait.",
+        "DISASTER": "The forge was not empty. %1 opened the doors and the fire walked out."
+      },
+      "_source": "generation/quest-context/templates-quest.jai:114"
+    },
+    {
+      "place": "EMBERFALL",
+      "title": "Ash on the orchards",
+      "aptitude": "WITS",
+      "tags": [
+        "FIRE"
+      ],
+      "seats_low": 3,
+      "seats_high": 3,
+      "danger": 2,
+      "premise": "The mountain is breathing. Get the villages out.",
+      "endings": {
+        "TRIUMPH": "%1 had three villages on the road by noon, with their pigs and their grandmothers. Nobody was left.",
+        "SUCCESS": "%1 emptied the villages in time. The orchards are gone.",
+        "SETBACK": "One farm would not leave. %1 went back for them through the ashfall.",
+        "DISASTER": "The mountain did not wait for %1 to finish counting heads."
+      },
+      "_source": "generation/quest-context/templates-quest.jai:122"
+    },
+    {
+      "place": "EMBERFALL",
+      "title": "The fire-walker",
+      "aptitude": "WITS",
+      "tags": [
+        "FIRE"
+      ],
+      "seats_low": 1,
+      "seats_high": 2,
+      "danger": 1,
+      "premise": "She will quiet the vents, for a riddle answered.",
+      "endings": {
+        "TRIUMPH": "%1 answered her riddle and asked one back. She is still thinking. The vents are quiet.",
+        "SUCCESS": "%1 answered well enough. She quieted the vents and kept the change.",
+        "SETBACK": "%1 answered wrongly. She let it pass, but the walk back was across the coals.",
+        "DISASTER": "She does not like a careless answer. %1 gave one."
+      },
+      "_source": "generation/quest-context/templates-quest.jai:130"
+    },
+    {
+      "place": "EMBERFALL",
+      "title": "A light in the caldera",
+      "aptitude": "MIGHT",
+      "tags": [
+        "FIRE"
+      ],
+      "seats_low": 3,
+      "seats_high": 3,
+      "danger": 3,
+      "premise": "Something is building a nest of coals.",
+      "endings": {
+        "TRIUMPH": "%1 broke the nest and quenched the clutch. One cold egg came home as a paperweight.",
+        "SUCCESS": "%1 scattered the nest. Whatever built it has gone deeper.",
+        "SETBACK": "The builder came home with %1 still in the nest.",
+        "DISASTER": "The clutch had hatched. %1 met them on the caldera wall."
+      },
+      "_source": "generation/quest-context/templates-quest.jai:138"
+    },
+    {
+      "place": "KINGS_COURT",
+      "title": "The long feast",
+      "aptitude": "SPIRIT",
+      "tags": [
+        "CROWDS"
+      ],
+      "seats_low": 1,
+      "seats_high": 2,
+      "danger": 1,
+      "premise": "The King is counting his friends.",
+      "endings": {
+        "TRIUMPH": "%1 sat below the salt, and by the third course had been moved above it. The King remembers the house.",
+        "SUCCESS": "%1 ate what was served and laughed at the right jokes. The house is counted a friend.",
+        "SETBACK": "%1 laughed at the wrong joke. There was a duel in the yard afterward.",
+        "DISASTER": "The feast was a net. Before it ended %1 had been named in a quarrel that was waiting for a name."
+      },
+      "_source": "generation/quest-context/templates-quest.jai:146"
+    },
+    {
+      "place": "KINGS_COURT",
+      "title": "The petition",
+      "aptitude": "WITS",
+      "tags": [
+        "CROWDS"
+      ],
+      "seats_low": 2,
+      "seats_high": 2,
+      "danger": 1,
+      "premise": "Forty villages, one hearing. Speak well.",
+      "endings": {
+        "TRIUMPH": "%1 spoke for an hour without notes. The tax is lifted, and the clerks stood up when it was done.",
+        "SUCCESS": "%1 spoke, and the Court listened. The tax is halved.",
+        "SETBACK": "%1 spoke well, and then the chancellor spoke. The villages' friends were followed home.",
+        "DISASTER": "%1 said the true thing in the wrong room. The guard was called."
+      },
+      "_source": "generation/quest-context/templates-quest.jai:154"
+    },
+    {
+      "place": "KINGS_COURT",
+      "title": "The tourney",
+      "aptitude": "MIGHT",
+      "tags": [
+        "CROWDS"
+      ],
+      "seats_low": 1,
+      "seats_high": 2,
+      "danger": 2,
+      "premise": "Lances at noon, before the whole Court.",
+      "endings": {
+        "TRIUMPH": "%1 unhorsed the King's champion and handed him back his helm. The crowd has not stopped talking.",
+        "SUCCESS": "%1 rode three courses and kept the saddle. Honor is satisfied.",
+        "SETBACK": "%1 took a lance in the shoulder in front of four thousand people.",
+        "DISASTER": "The champion's lance was not blunted. %1 learned it at the gallop."
+      },
+      "_source": "generation/quest-context/templates-quest.jai:162"
+    },
+    {
+      "place": "KINGS_COURT",
+      "title": "Knives at the masque",
+      "aptitude": "WITS",
+      "tags": [
+        "CROWDS"
+      ],
+      "seats_low": 3,
+      "seats_high": 3,
+      "danger": 2,
+      "premise": "Someone means to kill the chancellor in a crowded hall.",
+      "endings": {
+        "TRIUMPH": "%1 found the knife before it was drawn, and the hand, and the purse that paid the hand.",
+        "SUCCESS": "%1 stood in the way. The chancellor lives and the music did not stop.",
+        "SETBACK": "%1 stopped the knife the hard way.",
+        "DISASTER": "There were three knives. %1 had counted one."
+      },
+      "_source": "generation/quest-context/templates-quest.jai:170"
+    },
+    {
+      "place": "DEEPWOOD",
+      "title": "The boar of Harrow Dell",
+      "aptitude": "MIGHT",
+      "tags": [
+        "BEASTS"
+      ],
+      "seats_low": 2,
+      "seats_high": 3,
+      "danger": 2,
+      "premise": "It has taken three hunters. It is not an ordinary boar.",
+      "endings": {
+        "TRIUMPH": "%1 took the boar at the ford, on foot. Its tusks hang over the hearth now.",
+        "SUCCESS": "%1 drove the boar over the ridge. Harrow Dell can gather wood again.",
+        "SETBACK": "The boar doubled back. %1 spent the night in a tree, bleeding.",
+        "DISASTER": "The boar had been hunting %1 since the tree line."
+      },
+      "_source": "generation/quest-context/templates-quest.jai:178"
+    },
+    {
+      "place": "DEEPWOOD",
+      "title": "The charcoal road",
+      "aptitude": "SPIRIT",
+      "tags": [
+        "DARK"
+      ],
+      "seats_low": 2,
+      "seats_high": 2,
+      "danger": 1,
+      "premise": "Two went in after berries. Bring lanterns.",
+      "endings": {
+        "TRIUMPH": "%1 found both children asleep in a badger sett, and carried them out singing so they would not be afraid.",
+        "SUCCESS": "%1 found the children by their crying. Both are home.",
+        "SETBACK": "%1 found one child. The search for the other went on in the dark, and went badly.",
+        "DISASTER": "The lanterns went out a mile in. %1 called, and something that was not a child called back."
+      },
+      "_source": "generation/quest-context/templates-quest.jai:186"
+    },
+    {
+      "place": "DEEPWOOD",
+      "title": "Wolves keeping sheep",
+      "aptitude": "WITS",
+      "tags": [
+        "BEASTS"
+      ],
+      "seats_low": 2,
+      "seats_high": 2,
+      "danger": 1,
+      "premise": "A flock, fenced and tended, and no shepherd in sight.",
+      "endings": {
+        "TRIUMPH": "%1 worked out who the wolves were working for, and bought the contract.",
+        "SUCCESS": "%1 watched three nights and came home with an answer nobody likes. The flock is left alone.",
+        "SETBACK": "%1 stepped over the fence to count the sheep. The wolves take that seriously.",
+        "DISASTER": "The flock was bait. %1 understood it from inside the fence."
+      },
+      "_source": "generation/quest-context/templates-quest.jai:194"
+    },
+    {
+      "place": "DEEPWOOD",
+      "title": "The heart of the wood",
+      "aptitude": "SPIRIT",
+      "tags": [
+        "BEASTS",
+        "DARK"
+      ],
+      "seats_low": 3,
+      "seats_high": 3,
+      "danger": 3,
+      "premise": "No one has been that far and said what was there.",
+      "endings": {
+        "TRIUMPH": "%1 reached the heart of the wood, and came back, and will say only that it was kind.",
+        "SUCCESS": "%1 went as far as the standing stone and left the offering. The wood gave a clear road home.",
+        "SETBACK": "The paths moved. %1 walked nine days to cover three miles.",
+        "DISASTER": "%1 reached the heart of the wood. It had been waiting a long time for company."
+      },
+      "_source": "generation/quest-context/templates-quest.jai:202"
+    }
+  ],
+  "opening_quests": [
+    "Grave goods",
+    "The bell under the tide"
+  ]
+}

@@ -1,0 +1,440 @@
+//! What is on the screen: one `Page` computed from the house, read by Draw and by verify.
+//!
+//! `page` is the projection both phases share (docs/api "A projection both phases
+//! read is written once"): the Draw system submits exactly its rows and boxes,
+//! the Update system hit-tests its targets, and the verify run judges its rows
+//! against the readability floors and the oracle strings. The camera is one world
+//! unit per pixel on a 1280x720 window, so every number here is a pixel.
+
+use jidousha::prelude::*;
+
+use crate::board::Slot;
+use crate::content::Content;
+use crate::hero::HeroId;
+use crate::house::House;
+
+/// The window, and so the world: one unit per pixel.
+pub const WINDOW: PhysicalSize = PhysicalSize::new(1280, 720);
+/// The page's height in world units.
+pub const PAGE_H: f32 = WINDOW.height as f32;
+/// The page's width, derived from the window's aspect.
+pub const PAGE_W: f32 = PAGE_H * WINDOW.aspect();
+/// The smallest type the game sets, in world units (pixels).
+pub const MIN_TEXT: f32 = 14.0;
+/// The gap kept between text and the edge of its panel.
+pub const PAD: f32 = 12.0;
+
+/// The camera every frame is drawn with, at the window the game opens at.
+pub fn camera() -> Camera {
+    Camera {
+        center: Vec2::new(PAGE_W * 0.5, PAGE_H * 0.5),
+        height: PAGE_H,
+        clear_color: ink::PAGE,
+        ..Camera::default()
+    }
+}
+
+/// The camera for a surface of `viewport`: the whole page in view, centred, at the
+/// largest scale that fits. A surface wider than the page's shape shows it at full
+/// height with the page colour beside it; a narrower one (a 4:3 browser) shows it
+/// at full width with the page colour above and below, where a fixed height would
+/// cut the household and the sheet dock off its two sides.
+pub fn fitted(viewport: PhysicalSize) -> Camera {
+    Camera {
+        height: PAGE_H.max(PAGE_W / viewport.aspect()),
+        viewport,
+        ..camera()
+    }
+}
+
+/// Draw bands.
+pub mod layers {
+    /// Panels and cards.
+    pub const PANEL: i16 = 0;
+    /// Figures, pips, tree links.
+    pub const MARK: i16 = 1;
+    /// Type.
+    pub const TEXT: i16 = 2;
+    /// The family overlay's backdrop, over the whole summer screen.
+    pub const OVERLAY: i16 = 3;
+    /// The overlay's marks.
+    pub const OVERLAY_MARK: i16 = 4;
+    /// The overlay's type.
+    pub const OVERLAY_TEXT: i16 = 5;
+    /// A hero in hand, over everything on the summer screen.
+    pub const HAND: i16 = 6;
+    /// The figure in hand.
+    pub const HAND_MARK: i16 = 7;
+}
+
+/// The palette.
+pub mod ink {
+    use jidousha::prelude::Color;
+
+    /// The page.
+    pub const PAGE: Color = Color::rgb(0.06, 0.06, 0.08);
+    /// A panel.
+    pub const PANEL: Color = Color::rgb(0.11, 0.11, 0.14);
+    /// A panel under the pointer.
+    pub const HOT: Color = Color::rgb(0.19, 0.19, 0.25);
+    /// Body type.
+    pub const BODY: Color = Color::rgb(0.92, 0.92, 0.94);
+    /// Secondary type.
+    pub const NOTE: Color = Color::rgb(0.62, 0.64, 0.70);
+    /// Headings.
+    pub const HEADING: Color = Color::rgb(0.95, 0.80, 0.42);
+    /// Warnings, and renown at 4 or below.
+    pub const WARN: Color = Color::rgb(0.95, 0.38, 0.33);
+    /// Something gone: the dead, a bond to the dead, a stage done.
+    pub const GONE: Color = Color::rgb(0.45, 0.45, 0.50);
+    /// The departed (crowned).
+    pub const GOLD: Color = Color::rgb(0.86, 0.72, 0.30);
+    /// An empty pip.
+    pub const PIP_EMPTY: Color = Color::rgb(0.30, 0.30, 0.36);
+    /// A dread pip.
+    pub const DREAD: Color = Color::rgb(0.66, 0.55, 0.88);
+    /// Tree links.
+    pub const LINK: Color = Color::rgb(0.42, 0.42, 0.50);
+}
+
+/// What a pointer can be over.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Target {
+    /// A hero's card (summer) or node (family).
+    Hero(HeroId),
+    /// An empty seat: in the household, or on a quest.
+    Seat(Slot),
+    /// A quest card, by board slot.
+    Quest(usize),
+    /// "The family".
+    OpenFamily,
+    /// "Back to the house".
+    CloseFamily,
+    /// The sheet dock: resting on it keeps its sheet open, pressing in it grabs it to scroll.
+    Dock,
+    /// "Set out" / "Stay home" (SPEC §5.3).
+    SetOut,
+    /// The telling's "Go on": complete the story, else the next leaf, else leave (SPEC §8).
+    GoOn,
+    /// One of the telling's numbered leaf buttons.
+    Leaf(usize),
+    /// "Skip ahead": leave the telling now.
+    Skip,
+    /// "Begin another house", once the house has ended (SPEC §23).
+    BeginAgain,
+    /// A group of winter seats, or the hall: pointing at it opens its help in the dock.
+    Group(crate::hearth::Group),
+    /// "Let the winter pass" (SPEC §2.1).
+    LetWinterPass,
+    /// An heir button on turning page `.0`: that heir, or no one (SPEC §15.2).
+    Heir(usize, Option<HeroId>),
+    /// The top bar's Door lines: pointing at them opens the Door's help in the dock.
+    DoorHelp,
+}
+
+/// A hero in hand: picked up from a seat and not yet released.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Drag {
+    /// Who.
+    pub hero: HeroId,
+    /// The seat they were lifted from; a release over nothing returns them there.
+    pub from: Slot,
+    /// Where the pointer holds them, in world units.
+    pub at: Vec2,
+    /// What the pointer is over.
+    pub over: Option<Target>,
+}
+
+/// Which screen is up and what the pointer is on.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct UiState {
+    /// The family overlay is open.
+    pub family_open: bool,
+    /// The hero under the pointer, on whichever screen is up.
+    pub pointing: Option<HeroId>,
+    /// The quest card under the pointer, by board slot.
+    pub pointing_quest: Option<usize>,
+    /// The group of winter seats under the pointer.
+    pub pointing_group: Option<crate::hearth::Group>,
+    /// The pointer rests on the top bar's Door lines.
+    pub pointing_door: bool,
+    /// The hero in hand, if a drag is under way.
+    pub drag: Option<Drag>,
+    /// The first line the sheet dock shows: how far its sheet is scrolled.
+    pub dock_first: usize,
+    /// Wheel travel not yet a whole line, carried to the next tick.
+    pub dock_wheel: f32,
+    /// The dock held by the pointer to scroll it, if it is.
+    pub dock_grab: Option<DockGrab>,
+    /// The telling's leaf on screen.
+    pub leaf: usize,
+    /// The tick that leaf's story began typing on (the typewriter, render-side only).
+    pub typing_from: u64,
+    /// "Go on" has completed this leaf's story.
+    pub revealed: bool,
+}
+
+/// The frame clock the typewriter reads: the tick and its length. Nothing in the
+/// house reads it, so the simulation never sees the typewriter.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Clock {
+    /// `Time::tick`.
+    pub tick: u64,
+    /// `Time::fixed_dt`, in seconds.
+    pub dt: f32,
+}
+
+/// The dock held to scroll it: where the press was, and the line shown first then.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DockGrab {
+    /// The press, in world units.
+    pub y: f32,
+    /// `UiState::dock_first` at the press.
+    pub first: usize,
+}
+
+/// How far the sheet in the dock is scrolled, as the page drew it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DockView {
+    /// The first line drawn.
+    pub first: usize,
+    /// How many lines, from `first`, were drawn whole.
+    pub shown: usize,
+    /// The lines the sheet has.
+    pub total: usize,
+    /// The largest `first` there is: past it the dock would show empty space.
+    pub max_first: usize,
+}
+
+impl UiState {
+    /// The family overlay open, nothing pointed at.
+    pub fn family() -> Self {
+        Self {
+            family_open: true,
+            ..Self::default()
+        }
+    }
+}
+
+impl Resource for UiState {}
+
+/// One line of type, with the panel it must stay inside.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Row {
+    /// Top-left of the first character's cell.
+    pub at: Vec2,
+    /// What it says.
+    pub text: String,
+    /// How it is set.
+    pub style: TextStyle,
+    /// The panel it belongs to.
+    pub panel: Rect,
+    /// Which logical line it is part of: the rows one wrapped line became share it.
+    pub logical: usize,
+    /// For a row in the sheet dock, which line of the open sheet it sets.
+    pub dock_line: Option<usize>,
+}
+
+impl Row {
+    /// The box the pen sweeps.
+    pub fn bounds(&self) -> Rect {
+        Rect::from_min_size(self.at, self.style.measure(&self.text).size)
+    }
+}
+
+/// A filled rectangle.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Shape {
+    /// Where.
+    pub rect: Rect,
+    /// In what.
+    pub color: Color,
+    /// In which band.
+    pub layer: i16,
+}
+
+/// A sprite: which role, where, tinted how.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FigureMark {
+    /// Where, in world units.
+    pub rect: Rect,
+    /// Which role's sprite.
+    pub figure: crate::art::Figure,
+    /// Multiplied into the sprite.
+    pub tint: Color,
+    /// In which band.
+    pub layer: i16,
+}
+
+/// Everything one frame draws, and where the pointer can land.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Page {
+    /// Type.
+    pub rows: Vec<Row>,
+    /// Panels, figures, pips.
+    pub shapes: Vec<Shape>,
+    /// Tree links: from, to.
+    pub links: Vec<(Vec2, Vec2)>,
+    /// Sprites.
+    pub figures: Vec<FigureMark>,
+    /// Hit targets, front first.
+    pub targets: Vec<(Rect, Target)>,
+    /// The sheet dock's scroll, as drawn.
+    pub dock: DockView,
+    /// Logical lines begun so far.
+    lines_begun: usize,
+}
+
+impl Page {
+    /// Add a line of type in band `layer`.
+    pub fn text(
+        &mut self,
+        layer: i16,
+        at: Vec2,
+        text: impl Into<String>,
+        size: f32,
+        color: Color,
+        panel: Rect,
+    ) {
+        self.lines_begun += 1;
+        self.continue_text(layer, at, text, size, color, panel);
+    }
+
+    /// Add a row that continues the last logical line (a wrapped piece of it).
+    pub fn continue_text(
+        &mut self,
+        layer: i16,
+        at: Vec2,
+        text: impl Into<String>,
+        size: f32,
+        color: Color,
+        panel: Rect,
+    ) {
+        self.rows.push(Row {
+            logical: self.lines_begun,
+            dock_line: None,
+            at,
+            text: text.into(),
+            style: TextStyle {
+                size,
+                color,
+                depth: Depth::layer(layer),
+                ..TextStyle::default()
+            },
+            panel,
+        });
+    }
+
+    /// Add a filled rectangle in band `layer`.
+    pub fn shape(&mut self, rect: Rect, color: Color, layer: i16) {
+        self.shapes.push(Shape { rect, color, layer });
+    }
+
+    /// Add a sprite of `figure` filling `rect`, tinted, in band `layer`.
+    pub fn figure(&mut self, rect: Rect, figure: crate::art::Figure, tint: Color, layer: i16) {
+        self.figures.push(FigureMark {
+            rect,
+            figure,
+            tint,
+            layer,
+        });
+    }
+
+    /// Every logical line, its wrapped rows joined back with spaces, with the
+    /// indices of the rows it was drawn as.
+    pub fn logical_lines(&self) -> Vec<(String, Vec<usize>)> {
+        let mut out: Vec<(String, Vec<usize>)> = Vec::new();
+        let mut last = None;
+        for (index, row) in self.rows.iter().enumerate() {
+            match out.last_mut() {
+                Some((line, rows)) if last == Some(row.logical) => {
+                    line.push(' ');
+                    line.push_str(&row.text);
+                    rows.push(index);
+                }
+                _ => out.push((row.text.clone(), vec![index])),
+            }
+            last = Some(row.logical);
+        }
+        out
+    }
+
+    /// What is under `point`, front first.
+    pub fn target_at(&self, point: Vec2) -> Option<Target> {
+        self.targets
+            .iter()
+            .find(|(rect, _)| rect.contains(point))
+            .map(|(_, target)| *target)
+    }
+}
+
+/// Break `text` into lines that fit `width` at `size`, at spaces. A leading
+/// indent (the power lines' "  carries %") is kept, on every line it wraps to.
+pub fn wrap(text: &str, width: f32, size: f32) -> Vec<String> {
+    let style = TextStyle {
+        size,
+        ..TextStyle::default()
+    };
+    let body = text.trim_start_matches(' ');
+    let indent = &text[..text.len() - body.len()];
+    if !indent.is_empty() {
+        return wrap(body, width - style.width_of(indent), size)
+            .into_iter()
+            .map(|line| format!("{indent}{line}"))
+            .collect();
+    }
+    let mut lines = Vec::new();
+    let mut current = String::new();
+    for word in text.split(' ') {
+        let candidate = if current.is_empty() {
+            word.to_owned()
+        } else {
+            format!("{current} {word}")
+        };
+        if style.width_of(&candidate) <= width || current.is_empty() {
+            current = candidate;
+        } else {
+            lines.push(std::mem::replace(&mut current, word.to_owned()));
+        }
+    }
+    if !current.is_empty() {
+        lines.push(current);
+    }
+    lines
+}
+
+/// The page for the screen that is up: the Ending's verdict (SPEC §23), the telling, the
+/// turning, the hearth, or the summer — each a projection of the house, so the scene
+/// cannot disagree with it.
+pub fn page(content: &Content, house: &House, ui: &UiState, clock: Clock) -> Page {
+    let mut page = Page::default();
+    match (&house.ending, &house.telling, &house.passage) {
+        (Some(ending), _, _) => crate::ending_view::lay_out(&mut page, content, house, ending),
+        (None, Some(telling), _) => {
+            crate::telling_view::lay_out(&mut page, content, house, telling, ui, clock)
+        }
+        (None, None, Some(passage)) => {
+            crate::turning_view::lay_out(&mut page, content, house, passage, ui)
+        }
+        (None, None, None) if house.calendar.is_winter() => {
+            crate::hearth_view::lay_out(&mut page, content, house, ui)
+        }
+        (None, None, None) => crate::summer::lay_out(&mut page, content, house, ui),
+    }
+    if ui.family_open {
+        // The overlay covers the summer screen, so only its targets are live.
+        let mut overlay = Page::default();
+        crate::tree::lay_out(&mut overlay, content, house, ui);
+        let offset = page.lines_begun;
+        page.rows.extend(overlay.rows.into_iter().map(|row| Row {
+            logical: row.logical + offset,
+            ..row
+        }));
+        page.lines_begun += overlay.lines_begun;
+        page.shapes.extend(overlay.shapes);
+        page.links.extend(overlay.links);
+        page.figures.extend(overlay.figures);
+        page.targets = overlay.targets;
+    }
+    page
+}

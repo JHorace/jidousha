@@ -1,0 +1,504 @@
+#! W6 — summer resolution and the telling (session 6). One fault per line of rule:
+#! the new constants, set out, the unanswered, every step of §7.1, the reward, §7.4's
+#! harms, the heir list, facing the fear, the road, the ghost laid, the telling's order
+#! and controls, the typewriter, leaving the telling, and the set-out control's room.
+
+### C1 YOUTH_QUEST_LEARNING_LIMIT 5 -> 6
+@ src/constants.rs
+- pub const YOUTH_QUEST_LEARNING_LIMIT: i32 = 5;
++ pub const YOUTH_QUEST_LEARNING_LIMIT: i32 = 6;
+
+### C2 QUEST_LESSON 1 -> 2
+@ src/constants.rs
+- pub const QUEST_LESSON: i32 = 1;
++ pub const QUEST_LESSON: i32 = 2;
+
+### C3 FRIENDSHIP_AFTER 2 -> 3
+@ src/constants.rs
+- pub const FRIENDSHIP_AFTER: i32 = 2;
++ pub const FRIENDSHIP_AFTER: i32 = 3;
+
+### C4 FAILURE_SEEN_DREAD 1 -> 2
+@ src/constants.rs
+- pub const FAILURE_SEEN_DREAD: i32 = 1;
++ pub const FAILURE_SEEN_DREAD: i32 = 2;
+
+### C5 MENDED_BONUS 1 -> 2
+@ src/constants.rs
+- pub const MENDED_BONUS: i32 = 1;
++ pub const MENDED_BONUS: i32 = 2;
+
+### C6 MENDED_DREAD 2 -> 1
+@ src/constants.rs
+- pub const MENDED_DREAD: i32 = 2;
++ pub const MENDED_DREAD: i32 = 1;
+
+### C7 CARRIED_RENOWN 1 -> 2
+@ src/constants.rs
+- pub const CARRIED_RENOWN: i32 = 1;
++ pub const CARRIED_RENOWN: i32 = 2;
+
+### C8 CARRIER_LOSS 4 -> 3
+@ src/constants.rs
+- pub const CARRIER_LOSS: i32 = 4;
++ pub const CARRIER_LOSS: i32 = 3;
+
+### C9 HEIRS_OFFERED 8 -> 2
+@ src/constants.rs
+- pub const HEIRS_OFFERED: usize = 8;
++ pub const HEIRS_OFFERED: usize = 2;
+
+### C10 the typewriter 90 letters a second -> 60
+@ src/constants.rs
+- pub const TYPEWRITER_LETTERS_PER_SECOND: f32 = 90.0;
++ pub const TYPEWRITER_LETTERS_PER_SECOND: f32 = 60.0;
+
+### S1 the unanswered cost is the last quest's, not the sum
+@ src/resolve.rs
+- cost += unanswered(content, house, slot, &mut telling.meanwhile);
++ cost = unanswered(content, house, slot, &mut telling.meanwhile);
+
+### S2 the unanswered total is not taken off the house
+@ src/resolve.rs
+- house.add_renown(-cost);
++ house.add_renown(-cost + 1);
+
+### S3 the unanswered total is told only above 4
+@ src/resolve.rs
+- if cost > 0 {
++ if cost > 4 {
+
+### S4 a wounded hero at home stays wounded
+@ src/resolve.rs
+- house.heroes[id].wounded = false;
++ house.heroes[id].wounded = true;
+
+### S5 the unanswered total is told before the unanswered lines
+@ src/resolve.rs
+- telling⏎            .meanwhile⏎            .push(fmt(&words[W::SummerUnansweredTotal], &[&cost.to_string()]));
++ telling⏎            .meanwhile⏎            .insert(0, fmt(&words[W::SummerUnansweredTotal], &[&cost.to_string()]));
+
+### U1 an unanswered quest does not raise its place's trouble
+@ src/resolve.rs
+- record.trouble = (record.trouble + 1).min(TROUBLE_LIMIT);
++ record.trouble = (record.trouble).min(TROUBLE_LIMIT);
+
+### U2 an unanswered quest's cost reads the starting renown
+@ src/resolve.rs
+- let cost = quest.unanswered_cost(house.renown);
++ let cost = quest.unanswered_cost(15);
+
+### U3 the trouble line counts the years one short
+@ src/resolve.rs
+- &[&lore.year_counts[record.trouble as usize]],
++ &[&lore.year_counts[(record.trouble - 1) as usize]],
+
+### R1 the second die is 0..5
+@ src/resolve.rs
+- let dice = [between(rng, 1, DICE_SIDES), between(rng, 1, DICE_SIDES)];
++ let dice = [between(rng, 1, DICE_SIDES), between(rng, 0, DICE_SIDES - 1)];
+
+### R2 the margin reads the first die twice
+@ src/resolve.rs
+- let margin = margin(power, dice[0], dice[1], quest.demand);
++ let margin = margin(power, dice[0], dice[0], quest.demand);
+
+### R3 the roll ignores the house's patrons
+@ src/resolve.rs
+- let power = party_power(&house.heroes, &members, quest.facts(), house.patrons);
++ let power = party_power(&house.heroes, &members, quest.facts(), 0);
+
+### R4 a visit is not counted
+@ src/resolve.rs
+- record.visits += 1;
++ record.visits += 0;
+
+### R5 a triumph is counted as a disaster
+@ src/resolve.rs
+- Outcome::Triumph => record.triumphs += 1,
++ Outcome::Triumph => record.disasters += 1,
+
+### R6 quests faced counts two
+@ src/resolve.rs
+- hero.quests_faced += 1;
++ hero.quests_faced += 2;
+
+### R7 the first quest weighs nothing
+@ src/resolve.rs
+- deed(&f, hero, DeedKind::FirstQuest, quest.danger, telling);
++ deed(&f, hero, DeedKind::FirstQuest, 0, telling);
+
+### R8 only a triumph is won
+@ src/resolve.rs
+- let won = outcome >= Outcome::Success;
++ let won = outcome >= Outcome::Triumph;
+
+### R9 a win leaves the trouble
+@ src/resolve.rs
+- record.trouble = if won { 0 } else { (record.trouble - 1).max(0) };
++ record.trouble = if won { record.trouble } else { (record.trouble - 1).max(0) };
+
+### R10 a loss leaves the trouble
+@ src/resolve.rs
+- record.trouble = if won { 0 } else { (record.trouble - 1).max(0) };
++ record.trouble = if won { 0 } else { record.trouble };
+
+### R11 a disaster costs one less than its danger
+@ src/resolve.rs
+- house.add_renown(-quest.danger);
++ house.add_renown(-(quest.danger - 1));
+
+### R12 nobody faces the fear
+@ src/resolve.rs
+- face_the_fear(&f, house, rng, &members, member, &mut lines);
++ let _ = (&f, member);
+
+### R13 the unlucky one is always the first
+@ src/resolve.rs
+- let unlucky = members[index(rng, members.len())];
++ let unlucky = members[0];
+
+### R14 the fire spares the others on a setback
+@ src/resolve.rs
+- for &member in members.iter().filter(|&&m| m != unlucky) {⏎            if fire_claims(
++ for &member in members.iter().filter(|&&m| m != unlucky) {⏎            if false && fire_claims(
+
+### R15 the fire spares the unlucky one
+@ src/resolve.rs
+- if fire_claims(&house.heroes[unlucky], &quest.tags, outcome) {
++ if false && fire_claims(&house.heroes[unlucky], &quest.tags, outcome) {
+
+### R16 only the first member suffers a disaster
+@ src/resolve.rs
+- suffer_disaster(&f, house, rng, member, &mut lines);
++ if member == members[0] { suffer_disaster(&f, house, rng, member, &mut lines); }
+
+### R17 the road is shared with the dead
+@ src/resolve.rs
+- if house.heroes[a].is_living() && house.heroes[b].is_living() {
++ if house.heroes[a].is_living() {
+
+### R18 nobody witnesses the quest
+@ src/resolve.rs
+- lines.extend(witness_all(content, house, &moment));
++ let _ = &moment;
+
+### R19 the witnesses are all absent
+@ src/resolve.rs
+- party: &members,
++ party: &[],
+
+### R20 no road is walked
+@ src/resolve.rs
+- if !roads.contains(&quest.place) {
++ if false {
+
+### R21 the crown claims at any place
+@ src/resolve.rs
+- && crown_claims(&house.heroes[member], quest.place, outcome)
++ && crown_claims(&house.heroes[member], crate::ids::Place::KingsCourt, outcome)
+
+### R22 a ghost is laid whatever the outcome
+@ src/resolve.rs
+- if let (true, Source::Ghost(dead)) = (won, quest.source) {
++ if let (true, Source::Ghost(dead)) = (true, quest.source) {
+
+### R23 every story is the triumph's
+@ src/resolve.rs
+- content.quest_templates[template].endings[outcome.index()].clone()
++ content.quest_templates[template].endings[3].clone()
+
+### W1 a triumph earns no more than a success
+@ src/reward.rs
+- let renown = f.quest.renown + if triumph { TRIUMPH_RENOWN } else { 0 };
++ let renown = f.quest.renown + if triumph { 0 } else { 0 };
+
+### W2 carriers add nothing to the house
+@ src/reward.rs
+- house.add_renown(renown + carriers.len() as i32 * CARRIED_RENOWN);
++ house.add_renown(renown);
+
+### W3 a party of one is thanked as "each who went"
+@ src/reward.rs
+- [one] => house.heroes[*one].name.clone(),
++ [_one] => words[W::QuestRewardEach].to_owned(),
+
+### W4 personal renown takes one more
+@ src/reward.rs
+- hero.renown += renown;
++ hero.renown += renown + 1;
+
+### W5 a success records a triumph (re-cut s10)
+@ src/reward.rs
+- if triumph && !at_door {⏎            let telling
++ if true && !at_door {⏎            let telling
+
+### W6 the triumph lesson goes to the highest base
+@ src/reward.rs
+- < house.heroes[l].base(aptitude)
++ > house.heroes[l].base(aptitude)
+
+### W7 a base of 9 can still grow
+@ src/reward.rs
+- house.heroes[id].base(aptitude) < APTITUDE_LIMIT
++ house.heroes[id].base(aptitude) <= APTITUDE_LIMIT
+
+### W8 the lessons ignore "may still learn"
+@ src/reward.rs
+- < APTITUDE_LIMIT && may_still_learn(&house.heroes, id)
++ < APTITUDE_LIMIT
+
+### W9 the youth lesson reaches base 5
+@ src/reward.rs
+- < YOUTH_QUEST_LEARNING_LIMIT
++ <= YOUTH_QUEST_LEARNING_LIMIT
+
+### W10 every adult takes the youth lesson
+@ src/reward.rs
+- == Phase::Youth
++ != Phase::Child
+
+### H1 a second wound kills the shielded too
+@ src/harm.rs
+- if shields_on_quests(hero) {
++ if false {
+
+### H2 a first wound does not wound
+@ src/harm.rs
+- hero.wounded = true;⏎    out.push(fmt(line
++ hero.wounded = false;⏎    out.push(fmt(line
+
+### H3 a disaster on a Fire quest does not burn the fire-doomed
+@ src/harm.rs
+- if fire_claims(&house.heroes[id], &f.quest.tags, f.outcome) {
++ if false {
+
+### H4 nobody is mended
+@ src/harm.rs
+- if mends(&house.heroes[id]) {
++ if false {
+
+### H5 the death roll is a coin
+@ src/harm.rs
+- let hit = chance(rng, f.quest.death_chance() as f32);
++ let hit = chance(rng, 0.5);
+
+### H6 a shielding destiny does not shield the death roll
+@ src/harm.rs
+- if hit && !shielded {
++ if hit {
+
+### H7 the dead record that they survived
+@ src/harm.rs
+- if house.heroes[id].is_living() {⏎        let telling = fmt(&words[W::DeedSurvivedDisaster]
++ if true {⏎        let telling = fmt(&words[W::DeedSurvivedDisaster]
+
+### H8 mending passes 9
+@ src/harm.rs
+- *aptitude = (*aptitude + MENDED_BONUS).min(APTITUDE_LIMIT);
++ *aptitude = *aptitude + MENDED_BONUS;
+
+### H9 the dead keep their seat
+@ src/harm.rs
+- house.fallen[f.quest.place.index()].push(id);⏎    house.unseat(id);
++ house.fallen[f.quest.place.index()].push(id);
+
+### H10 the dead are not mourned
+@ src/harm.rs
+- house.mourned.push(id);
++ let _ = id;
+
+### H11 the dead are not among the place's fallen
+@ src/harm.rs
+- house.fallen[f.quest.place.index()].push(id);
++ let _ = &house.fallen;
+
+### H12 a carrier's death costs nothing
+@ src/harm.rs
+- if carrier {
++ if false {
+
+### H13 a quest death is not grieved
+@ src/harm.rs
+- out.extend(grieve(f.content, &mut house.heroes, id, f.year));
++ let _ = grieve;
+
+### H14 the death's tag is the quest's last
+@ src/harm.rs
+- hero.death_tag = f.quest.tags.first().copied();
++ hero.death_tag = f.quest.tags.last().copied();
+
+### H15 a crown adds no patron
+@ src/harm.rs
+- house.patrons += 1;
++ house.patrons += 0;
+
+### H16 nearest kin is the first who holds one (re-cut s8)
+@ src/heirs.rs
+- .find(|&id| heroes[id].heirloom.is_none())
++ .find(|&id| heroes[id].heirloom.is_some())
+
+### H17 a parent ranks as a child (re-cut s8)
+@ src/heirs.rs
+- if kind == Some(BondKind::Child) {
++ if kind == Some(BondKind::Parent) {
+
+### H18 any bond ranks as a steadying one (re-cut s8)
+@ src/heirs.rs
+- } else if kind.is_some_and(steadies) {
++ } else if kind.is_some() {
+
+### H19 those taught rank as anyone (re-cut s8)
+@ src/heirs.rs
+- } else if bond.is_some_and(|b| b.taught) {
++ } else if false {
+
+### F1 a conquered fear is faced
+@ src/facing.rs
+- if fear.conquered || fear.broken || !f.quest.tags.contains(&fear.tag) {
++ if fear.broken || !f.quest.tags.contains(&fear.tag) {
+
+### F2 a setback with a companion adds courage
+@ src/facing.rs
+- let won = f.outcome >= Outcome::Success;
++ let won = f.outcome >= Outcome::Setback;
+
+### F3 a loss adds no more than a win
+@ src/facing.rs
+- let amount = 1 + i32::from(lost) - i32::from(companion.is_some());
++ let amount = 1 - i32::from(companion.is_some());
+
+### F4 a companion does not lessen the dread
+@ src/facing.rs
+- let amount = 1 + i32::from(lost) - i32::from(companion.is_some());
++ let amount = 1 + i32::from(lost);
+
+### F5 the settled are told their dread
+@ src/facing.rs
+- if !can_dread(&house.heroes[member]) {
++ if false {
+
+### F6 courage needs a fourth
+@ src/facing.rs
+- if courage >= COURAGE_TO_CONQUER {
++ if courage > COURAGE_TO_CONQUER {
+
+### D1 the road makes friends at once
+@ src/road.rs
+- form(&mut house.heroes, a, b, BondKind::Companion, f.year);
++ form(&mut house.heroes, a, b, BondKind::Friend, f.year);
+
+### D2 only one side counts the shared success
+@ src/road.rs
+- for (from, to) in [(a, b), (b, a)] {⏎            if let Some(bond)
++ for (from, to) in [(a, b)] {⏎            if let Some(bond)
+
+### D3 rivals become friends on any win
+@ src/road.rs
+- BondKind::Rival if f.outcome == Outcome::Triumph =>
++ BondKind::Rival =>
+
+### D4 companions become rivals on a setback
+@ src/road.rs
+- if f.outcome == Outcome::Disaster && kind(house) == BondKind::Companion {
++ if f.outcome == Outcome::Setback && kind(house) == BondKind::Companion {
+
+### D5 the child sees first
+@ src/road.rs
+- (parent, child, W::BondParentSawChild),⏎        (child, parent, W::BondChildSawParent),
++ (child, parent, W::BondChildSawParent),⏎        (parent, child, W::BondParentSawChild),
+
+### G1 a laid ghost is removed in order
+@ src/ghost.rs
+- house.ghosts.swap_remove(at);
++ house.ghosts.remove(at);
+
+### G2 no tale is told of a laid ghost
+@ src/ghost.rs
+- house.tales.push(crate::house::Tale {
++ std::mem::drop(crate::house::Tale {
+
+### G3 the dead lay the ghost too
+@ src/ghost.rs
+- if house.heroes[member].is_living() {⏎            crate::harm::deed(
++ if true {⏎            crate::harm::deed(
+
+### T1 the story types from the start of the run
+@ src/telling_view.rs
+- let seconds = clock.tick.saturating_sub(ui.typing_from) as f32 * clock.dt;
++ let seconds = clock.tick as f32 * clock.dt;
+
+### T2 the outcome shows before the story is typed
+@ src/telling_view.rs
+- if complete {⏎                    let outcome
++ if true {⏎                    let outcome
+
+### T3 the lines show before the story is typed
+@ src/telling_view.rs
+- if complete {⏎        for line in &lines {
++ if true {⏎        for line in &lines {
+
+### T4 the closing line needs renown below 0 (re-cut s10)
+@ src/telling_view.rs
+- if house.renown <= 0 && telling.door.is_none() {
++ if house.renown < 0 && telling.door.is_none() {
+
+### T5 the last button never reads "The last of it" (re-cut s10: the strip is telling_nav.rs)
+@ src/telling_nav.rs
+- } else if house.renown <= 0 {
++ } else if house.renown < 0 {
+
+### T6 an exact margin is told as missed
+@ src/telling_view.rs
+- 0 => words[W::TellingMarginExact].to_owned(),
++ 0 => fmt(&words[W::TellingMarginMissed], &["0"]),
+
+### T7 the roll tells the power for the demand
+@ src/telling_view.rs
+- &page.quest.demand.to_string(),⏎            &page.power.to_string(),
++ &page.power.to_string(),⏎            &page.quest.demand.to_string(),
+
+### T8 "Go on" turns the leaf with the story untyped
+@ src/pointer.rs
+- _ if !story_complete(telling, &leaves[current], &ui, clock) => {
++ _ if false => {
+
+### T9 a leaf button keeps the story whole
+@ src/pointer.rs
+- revealed: false,
++ revealed: true,
+
+### T10 "Skip ahead" stays
+@ src/pointer.rs
+- Target::Skip => true,
++ Target::Skip => false,
+
+### T11 a member's card can be lifted on the telling (re-cut s7)
+@ src/pointer.rs
+- if !ui.family_open && held && !released && seating(world.resource::<House>()) =>
++ if !ui.family_open && held && !released =>
+
+### T12 the set-out control reads "Stay home" with a party seated
+@ src/summer.rs
+- if anyone {⏎        &content.words[W::SummerSetOut]
++ if !anyone {⏎        &content.words[W::SummerSetOut]
+
+### L1 the house closes only below 0
+@ src/season.rs
+- if house.renown <= 0 {
++ if house.renown < 0 {
+
+### L2 the year does not move on
+@ src/season.rs
+- house.calendar.begin_summer();
++ house.calendar.begin_winter();
+
+### L3 the next summer's board is not prepared
+@ src/season.rs
+- house.prepare_summer(content, rng);
++ house.reseat();
+
+### L4 the set-out control crowds the Door's countdown (re-cut s10: the control is wider for "Try the Door")
+@ src/summer.rs
+- min: Vec2::new(FAMILY_BUTTON.min.x - 152.0, 12.0),
++ min: Vec2::new(FAMILY_BUTTON.min.x - 196.0, 12.0),
