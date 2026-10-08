@@ -6,7 +6,7 @@ stage: implement
 tick: live
 resumes: 0
 gates-green-at: none
-updated: 2026-10-07 20:35 PDT
+updated: 2026-10-07 20:45 PDT
 
 ## Done so far
 - claimed the branch (design stage)
@@ -14,8 +14,10 @@ updated: 2026-10-07 20:35 PDT
 - DESIGN.md written and released: tools/yakin/runs/brolf-r2/DESIGN.md (every section filled; no engine change needed, no FINDINGS owed at design time)
 - implement: games/brolf-r2/ crate built whole; `tools/verify brolf_r2` passes (all gates green), fmt + clippy + wasm check clean
 
+- mutation round r1: 19 of 19 noticed (3 escapes closed with gates); FINDINGS G-070..G-075; build-web + serve-web --check pass
+
 ## Exact next step
-Write games/brolf-r2/mutants/r1.txt (DESIGN.md Gates' 18 faults, `### label / @ file / - find / + replace`), commit it, run `python3 tools/mutate brolf_r2 mutants/r1.txt` in the background, tighten any escape. Then games/brolf-r2/FINDINGS.md, build-web/serve-web, the full gate, the PR.
+Full gate: `python3 tools/doctor`, `python3 tools/test` in the background (report target/verify/report.json), `python3 tools/check-claude-md`, `python3 tools/yakin/yakin check`; then open the PR (WORKER.md §4) naming #128 as baseline.
 
 ## Deviations
 - end_match: Survived needs every rival Eliminated (design crowned a survivor whose rivals had extracted; Idle then won by doing nothing)
