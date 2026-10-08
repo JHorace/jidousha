@@ -6,15 +6,18 @@ stage: implement
 tick: live
 resumes: 0
 gates-green-at: none
-updated: 2026-10-07 22:07 PDT
+updated: 2026-10-07 22:10 PDT
 
 ## Done so far
 - claimed
 - inline DESIGN.md written (V1), every number fixed
 - games/restaurant-nemesis-r3v1 plays end to end; tools/verify passes (188 checks): good wins, first-timer and idle lose, 3 nemeses at once; fast gate clean
 
+- mutation round 20/22 first pass (N21 spends, N22 temp cook escaped); spends contract added; N21+N22 2/2 — 22/22 overall
+- FINDINGS.md G-074..G-075; build-web + serve-web --check pass
+
 ## Exact next step
-Write mutants/r3v1.txt and run `python3 tools/mutate restaurant_nemesis_r3v1 mutants/r3v1.txt`; FINDINGS.md; build-web/serve-web --check; full gate; PR.
+Run the full gate (doctor, tools/test in background, check-claude-md, yakin check), then open the PR per WORKER.md §4.
 
 ## Deviations
 - 5 customers a round plus a 3-customer lunch rush in one seeded round (23 a day), not 4 a round (16): with 4 a round, standard-for-everyone never failed anyone
