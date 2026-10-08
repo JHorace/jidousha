@@ -79,6 +79,16 @@ pub fn card_rect(top: f32, slot: usize) -> Rect {
     )
 }
 
+/// The NEXT SUMMER label, at the foot of the household column under the yard's two
+/// rows: pointing at it opens the foresight in the dock (`outlook.rs`; not in lineage).
+pub const OUTLOOK_LABEL: Rect = Rect {
+    min: Vec2::new(LEFT_X, PAGE_H - 8.0 - 28.0),
+    max: Vec2::new(
+        LEFT_X + COLUMNS as f32 * (CARD.x + CARD_GAP) - CARD_GAP,
+        PAGE_H - 8.0,
+    ),
+};
+
 /// Where the yard's first card sits: below the roster's four rows and its label.
 pub fn yard_top() -> f32 {
     let rows = ROSTER_SEATS.div_ceil(COLUMNS) as f32;
@@ -247,6 +257,23 @@ fn lay_out_household(page: &mut Page, content: &Content, house: &House, ui: &UiS
         );
     }
 
+    if !house.calendar.door_stands_open() {
+        let color = if ui.pointing_outlook {
+            ink::HOT
+        } else {
+            ink::PANEL
+        };
+        page.shape(OUTLOOK_LABEL, color, layers::PANEL);
+        page.text(
+            layers::TEXT,
+            OUTLOOK_LABEL.min + Vec2::new(8.0, 7.0),
+            &words[W::SummerOutlookLabel],
+            MIN_TEXT,
+            ink::HEADING,
+            OUTLOOK_LABEL,
+        );
+        page.targets.push((OUTLOOK_LABEL, Target::Outlook));
+    }
     lay_out_board(page, content, house, ui);
     crate::dock::lay_out(page, content, house, ui);
     draw_hand(page, content, house, ui);

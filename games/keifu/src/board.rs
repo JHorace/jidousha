@@ -200,7 +200,8 @@ impl House {
             | Target::Group(_)
             | Target::LetWinterPass
             | Target::Heir(..)
-            | Target::DoorHelp => None,
+            | Target::DoorHelp
+            | Target::Outlook => None,
         }
     }
 }

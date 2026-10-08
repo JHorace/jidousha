@@ -101,6 +101,18 @@ pub fn set_out(content: &Content, house: &mut House, rng: &mut Rng) {
     house.telling = Some(telling);
 }
 
+/// A place's trouble after a quest there is left unanswered (SPEC §7.2): one more,
+/// at most `TROUBLE_LIMIT`. The resolution and the telegraph (`outlook.rs`) both read it.
+pub fn risen_trouble(trouble: i32) -> i32 {
+    (trouble + 1).min(TROUBLE_LIMIT)
+}
+
+/// A place's trouble after a quest there is answered (SPEC §7.1 step 6): gone on a win,
+/// one less on a loss. The resolution and the foresight (`outlook.rs`) both read it.
+pub fn eased_trouble(trouble: i32, won: bool) -> i32 {
+    if won { 0 } else { (trouble - 1).max(0) }
+}
+
 /// An unanswered quest (SPEC §7.2): its cost at the house's renown now, the place's
 /// trouble +1 (at most 2), and the place's trouble line. Returns the cost.
 fn unanswered(content: &Content, house: &mut House, slot: usize, out: &mut Vec<String>) -> i32 {
@@ -108,7 +120,7 @@ fn unanswered(content: &Content, house: &mut House, slot: usize, out: &mut Vec<S
     let cost = quest.unanswered_cost(house.renown);
     let place = quest.place;
     let record = &mut house.places[place.index()];
-    record.trouble = (record.trouble + 1).min(TROUBLE_LIMIT);
+    record.trouble = risen_trouble(record.trouble);
     let lore = &content.lore;
     let trouble = fmt(
         &lore.places[place.index()].trouble_line,
@@ -239,7 +251,7 @@ pub fn resolve_party(
     }
     // 6. Trouble eases: gone on a win, one less on a loss.
     let record = &mut house.places[quest.place.index()];
-    record.trouble = if won { 0 } else { (record.trouble - 1).max(0) };
+    record.trouble = eased_trouble(record.trouble, won);
     // 7. A disaster costs the house its danger (and tells it, but not at the Door).
     if outcome == Outcome::Disaster {
         house.add_renown(-quest.danger);

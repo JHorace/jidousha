@@ -209,12 +209,16 @@
       "source": "scene/scenes/summer.jai:72"
     },
     "help": {
-      "text": "Point at a hero to read their sheet. Point at a quest to read its odds in full. Drag heroes onto quests, then set out. A quest nobody answers costs the house renown, and is worse when it comes again.",
-      "source": "scene/scenes/summer.jai:95"
+      "text": "Drag heroes onto a quest's seats, then press Set out. Point at a hero to read about them, or at a quest to see its odds in full. A quest nobody takes costs the house renown, and its place gets worse until someone answers it. Point at NEXT SUMMER to see what is coming.",
+      "source": "keifu-fixes-r2 (port text, rewritten for clarity; lineage words in git history)"
     },
     "button_set_out": "Set out",
     "button_stay_home": "Stay home",
-    "button_door": "Try the Door"
+    "button_door": "Try the Door",
+    "outlook_label": {
+      "text": "NEXT SUMMER",
+      "source": "keifu-fixes-r2 (port-only)"
+    }
   },
   "quest_card": {
     "danger": {
@@ -316,6 +320,14 @@
       "args": [
         "items, comma-separated"
       ]
+    },
+    "telegraph": {
+      "text": "Left: danger %, room %",
+      "source": "keifu-fixes-r2 (port-only)",
+      "args": [
+        "next quest's danger range",
+        "next quest's seats range"
+      ]
     }
   },
   "quest_sheet": {
@@ -347,45 +359,47 @@
       "source": "lineage/quest-card.jai:213"
     },
     "dice": {
-      "text": "Two dice, less %, are added to that.",
-      "source": "lineage/quest-card.jai:216",
+      "text": "Then two dice, less %: luck adds % to %.",
+      "source": "keifu-fixes-r2 (port text, rewritten for clarity; lineage words in git history)",
       "args": [
-        "DICE_MIDPOINT (7)"
+        "DICE_MIDPOINT (7)",
+        "the lowest swing (-5)",
+        "the highest swing (+5)"
       ]
     },
     "triumph": {
-      "text": "Beat it by %: +% renown. The least able learns.",
-      "source": "lineage/quest-card.jai:220",
+      "text": "Beat it by % or more: a triumph, +% renown, and the least able learns.",
+      "source": "keifu-fixes-r2 (port text, rewritten for clarity; lineage words in git history)",
       "args": [
         "TRIUMPH_MARGIN (4)",
         "quest renown + 1"
       ]
     },
     "success": {
-      "text": "Meet it: +% renown.",
-      "source": "lineage/quest-card.jai:222",
+      "text": "Make it: +% renown.",
+      "source": "keifu-fixes-r2 (port text, rewritten for clarity; lineage words in git history)",
       "args": [
         "quest renown"
       ]
     },
     "setback": {
-      "text": "Miss by up to %: one is wounded.",
-      "source": "lineage/quest-card.jai:224",
+      "text": "Short by up to %: one of them is wounded.",
+      "source": "keifu-fixes-r2 (port text, rewritten for clarity; lineage words in git history)",
       "args": [
         "SETBACK_MARGIN (4)"
       ]
     },
     "disaster": {
-      "text": "Miss by more: -% renown, all wounded, each dies % in 100.",
-      "source": "lineage/quest-card.jai:226",
+      "text": "Short by more: -% renown, all wounded, and each has a % in 100 chance of dying.",
+      "source": "keifu-fixes-r2 (port text, rewritten for clarity; lineage words in git history)",
       "args": [
-        "danger",
-        "death chance percent"
+        "quest danger",
+        "death percent"
       ]
     },
     "unanswered": {
-      "text": "UNANSWERED: -% renown, and it grows worse.",
-      "source": "lineage/quest-card.jai:227",
+      "text": "LEFT ALONE: -% renown, and it gets worse.",
+      "source": "keifu-fixes-r2 (port text, rewritten for clarity; lineage words in git history)",
       "args": [
         "unanswered cost"
       ]
@@ -420,8 +434,8 @@
       ]
     },
     "trouble_stakes": {
-      "text": "%1%2 Each who goes must bring %3 more, the danger is %4 higher, and it pays %5 more renown. Answer it, however it goes, and it eases.",
-      "source": "lineage/quest-card.jai:246",
+      "text": "%1%2 Everyone who goes has to bring %3 more, it is %4 more dangerous, and it pays %5 more renown. Send anyone, win or lose, and it eases.",
+      "source": "keifu-fixes-r2 (port text, rewritten for clarity; lineage words in git history)",
       "args": [
         "trouble line",
         "fewer_seats or \"\"",
@@ -479,6 +493,17 @@
     "power_line_patron": {
       "text": "A patron at Court",
       "source": "lineage/quest.jai:210"
+    },
+    "telegraph": {
+      "text": "Left: trouble %1 here. Next time: danger %2, room %3, needs up to %4, pays %5.",
+      "source": "keifu-fixes-r2 (port-only)",
+      "args": [
+        "trouble then",
+        "danger range",
+        "seats range",
+        "most demand",
+        "renown range"
+      ]
     }
   },
   "door_sheet": {
@@ -1350,5 +1375,65 @@
     "Music (slider)",
     "Demos (debug builds only)",
     "Quit (desktop only)"
-  ]
+  ],
+  "outlook": {
+    "_note": "keifu-fixes-r2: the next-summer foresight read in the dock (port-only; not in lineage).",
+    "heading": {
+      "text": "NEXT SUMMER",
+      "source": "keifu-fixes-r2 (port-only)"
+    },
+    "door": {
+      "text": "Next summer is the last. The Sealed Door opens, and no quests are posted.",
+      "source": "keifu-fixes-r2 (port-only)"
+    },
+    "intro": {
+      "text": "Four of these six places will post a quest. How troubled each will be, going by who is seated now:",
+      "source": "keifu-fixes-r2 (port-only)"
+    },
+    "calm": {
+      "text": "%: calm",
+      "source": "keifu-fixes-r2 (port-only)",
+      "args": [
+        "place title"
+      ]
+    },
+    "troubled": {
+      "text": "%: trouble %",
+      "source": "keifu-fixes-r2 (port-only)",
+      "args": [
+        "place title",
+        "trouble range"
+      ]
+    },
+    "how": {
+      "text": "A quest you answer eases its place: calm after a success, one less after a setback or a disaster. A quest you leave adds one, up to %.",
+      "source": "keifu-fixes-r2 (port-only)",
+      "args": [
+        "TROUBLE_LIMIT (2)"
+      ]
+    },
+    "ghost": {
+      "text": "The ghost of % comes to % next summer.",
+      "source": "keifu-fixes-r2 (port-only)",
+      "args": [
+        "dead hero's name",
+        "place name"
+      ]
+    },
+    "ghost_unless": {
+      "text": "The ghost of % comes to % next summer, unless it is laid this summer.",
+      "source": "keifu-fixes-r2 (port-only)",
+      "args": [
+        "dead hero's name",
+        "place name"
+      ]
+    },
+    "step": {
+      "text": "The years ask more: every quest will need % more for each seat.",
+      "source": "keifu-fixes-r2 (port-only)",
+      "args": [
+        "1"
+      ]
+    }
+  }
 }

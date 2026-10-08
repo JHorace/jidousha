@@ -41,6 +41,9 @@ pub struct CardReading {
     pub odds: Option<[String; 4]>,
     /// With nobody going: the place's trouble line, or "No one is going. Room for 2."
     pub idle: Option<String>,
+    /// With nobody going, what leaving it does: "Left: danger 3-4, room 1-2"
+    /// (`outlook::telegraph`; not in lineage).
+    pub telegraph: Option<String>,
     /// "Renown +2".
     pub renown: String,
     /// "unanswered -1", at the house's renown now.
@@ -152,6 +155,12 @@ pub fn read_card(
         forecast: odds_of,
         odds,
         idle,
+        telegraph: if anyone {
+            None
+        } else {
+            crate::outlook::telegraph(content, house, quest)
+                .map(|t| crate::outlook::card_line(content, &t))
+        },
         renown: fmt(&words[W::QuestCardRenown], &[&q.renown.to_string()]),
         unanswered: fmt(
             &words[W::QuestCardUnanswered],

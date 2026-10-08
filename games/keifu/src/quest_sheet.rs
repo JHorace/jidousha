@@ -6,7 +6,7 @@
 //! (which asserts it adds up to the card's `party_power`), the odds the same forecast.
 
 use crate::calls::{call_line, called};
-use crate::constants::{DICE_MIDPOINT, SETBACK_MARGIN, TRIUMPH_MARGIN, TRIUMPH_RENOWN};
+use crate::constants::{DICE_MIDPOINT, DICE_SIDES, SETBACK_MARGIN, TRIUMPH_MARGIN, TRIUMPH_RENOWN};
 use crate::content::Content;
 use crate::forecast::{forecast, percent};
 use crate::hero::HeroId;
@@ -133,7 +133,14 @@ pub fn quest_sheet(content: &Content, house: &House, quest: usize, party: &[Hero
     }
     out.push(line(
         Ink::Note,
-        fmt(&words[W::QuestSheetDice], &[&DICE_MIDPOINT.to_string()]),
+        fmt(
+            &words[W::QuestSheetDice],
+            &[
+                &DICE_MIDPOINT.to_string(),
+                &signed(2 - DICE_MIDPOINT),
+                &signed(2 * DICE_SIDES - DICE_MIDPOINT),
+            ],
+        ),
         None,
     ));
     // SPEC-GAPS KG-25: on the sheet each outcome carries its own band's odds — all
@@ -177,6 +184,13 @@ pub fn quest_sheet(content: &Content, house: &House, quest: usize, party: &[Hero
         ),
         None,
     ));
+    if let Some(telegraph) = crate::outlook::telegraph(content, house, quest) {
+        out.push(line(
+            Ink::Body,
+            crate::outlook::sheet_line(content, &telegraph),
+            None,
+        ));
+    }
     QuestSheet {
         lines: out,
         history: place_history(content, house, quest),
@@ -233,6 +247,9 @@ mod tests {
         let (garrick, brannoc) = (id(&house.heroes, "Garrick"), id(&house.heroes, "Brannoc"));
         house.board[0].quest.demand = 11;
         let sheet = quest_sheet(&content, &house, 0, &[garrick, brannoc]);
+        let telegraph = crate::outlook::telegraph(&content, &house, 0)
+            .map(|t| crate::outlook::sheet_line(&content, &t))
+            .expect("year 1 has a next summer");
         let s = |t: &str| t.to_owned();
         let v = |t: &str| Some(t.to_owned());
         assert_eq!(
@@ -257,19 +274,22 @@ mod tests {
                 (s("Garrick, Might 5"), None),
                 (s("  carries Thornfall"), v("+1")),
                 (s("Brannoc, Might 6"), None),
-                (s("Two dice, less 7, are added to that."), None),
+                (s("Then two dice, less 7: luck adds -5 to +5."), None),
                 // CONSTANTS §3 at +1: 0, 10, 20, 6 of 36.
                 (
-                    s("Beat it by 4: +3 renown. The least able learns."),
+                    s("Beat it by 4 or more: a triumph, +3 renown, and the least able learns."),
                     v("17%")
                 ),
-                (s("Meet it: +2 renown."), v("56%")),
-                (s("Miss by up to 4: one is wounded."), v("28%")),
+                (s("Make it: +2 renown."), v("56%")),
+                (s("Short by up to 4: one of them is wounded."), v("28%")),
                 (
-                    s("Miss by more: -2 renown, all wounded, each dies 30 in 100."),
+                    s(
+                        "Short by more: -2 renown, all wounded, and each has a 30 in 100 chance of dying."
+                    ),
                     v("0%")
                 ),
-                (s("UNANSWERED: -1 renown, and it grows worse."), None),
+                (s("LEFT ALONE: -1 renown, and it gets worse."), None),
+                (s(&telegraph), None),
             ]
         );
         assert_eq!(sheet.history, ["The house has not quested here yet."]);
@@ -308,8 +328,8 @@ mod tests {
         let sheet = quest_sheet(&content, &house, 0, &[]);
         assert!(sheet.lines.iter().any(|l| l.text
             == "The Barrow's dead have walked a year unanswered. Room for 1 where there was \
-                room for 2. Each who goes must bring 1 more, the danger is 1 higher, and it pays \
-                1 more renown. Answer it, however it goes, and it eases."));
+                room for 2. Everyone who goes has to bring 1 more, it is 1 more dangerous, and \
+                it pays 1 more renown. Send anyone, win or lose, and it eases."));
         assert_eq!(
             sheet.history,
             ["Quested here twice: 1 in triumph, 0 in disaster."]
@@ -318,7 +338,7 @@ mod tests {
             sheet
                 .lines
                 .iter()
-                .any(|l| l.text == "UNANSWERED: -2 renown, and it grows worse.")
+                .any(|l| l.text == "LEFT ALONE: -2 renown, and it gets worse.")
         );
     }
 }

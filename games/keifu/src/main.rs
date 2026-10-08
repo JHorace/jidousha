@@ -161,6 +161,7 @@ mod moment;
 mod newcomer_tests;
 mod newcomers;
 mod oracles;
+mod outlook;
 mod passage;
 mod plans;
 #[cfg(test)]
@@ -172,6 +173,7 @@ mod power_lines;
 mod quest;
 mod quest_card;
 mod quest_sheet;
+mod r2_checks;
 mod reading;
 mod resolve;
 #[cfg(test)]

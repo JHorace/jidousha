@@ -115,6 +115,8 @@ pub fn capture_all(checks: &mut Checks) -> Vec<String> {
         (&["w10:played"][..], "keifu-w10-played.png"),
         (&["w10:played-family"][..], "keifu-w10-played-family.png"),
         (&["w10:reset"][..], "keifu-w10-reset.png"),
+        (&["r2:outlook"][..], "keifu-r2-outlook.png"),
+        (&["r2:telegraph"][..], "keifu-r2-telegraph.png"),
     ]
     .into_iter()
     .enumerate()
@@ -172,7 +174,9 @@ pub fn capture_all(checks: &mut Checks) -> Vec<String> {
                 crate::verify::point(&mut sim, jidousha::prelude::Vec2::new(4.0, 700.0), false);
                 continue;
             }
-            if let Some(w10) = name.strip_prefix("w10:") {
+            if let Some(r2) = name.strip_prefix("r2:") {
+                crate::r2_checks::stage(&mut sim, r2);
+            } else if let Some(w10) = name.strip_prefix("w10:") {
                 crate::w10_stages::stage(&mut sim, w10);
             } else if name.is_empty() {
                 point_at(&mut sim, Target::OpenFamily, true);
