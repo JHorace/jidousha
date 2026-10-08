@@ -1,0 +1,607 @@
+#! W9 — epitaphs and remembrance (session 9). One fault per line of rule: both W9
+#! constants; the wording roll (the first frame, the no-repeat frame, the run's memory, the
+#! coins and their parts, the draw order); the priority walk, the budget and its count, the
+#! frame's order and the join; the naming rule's three forms and its once; the lore read;
+#! every part's selection rule branch by branch, and its variants; every composition point
+#! (the founding and its order, the death page's roll and its step 8, the heir choice, a
+#! ghost laid, a ghost taken up, a crowning and its order); and the two surfaces.
+
+### C1 EPITAPH_SENTENCES 6 -> 5
+@ src/constants.rs
+- pub const EPITAPH_SENTENCES: usize = 6;
++ pub const EPITAPH_SENTENCES: usize = 5;
+
+### C2 EPITAPH_SENTENCES 6 -> 7
+@ src/constants.rs
+- pub const EPITAPH_SENTENCES: usize = 6;
++ pub const EPITAPH_SENTENCES: usize = 7;
+
+### C3 EPITAPH_FRAME_COUNT 3 -> 2
+@ src/constants.rs
+- pub const EPITAPH_FRAME_COUNT: usize = 3;
++ pub const EPITAPH_FRAME_COUNT: usize = 2;
+
+### R1 the first frame of the run is always frame 0
+@ src/epitaph.rs
+-         None => index(rng, EPITAPH_FRAME_COUNT),
++         None => 0,
+
+### R2 a frame may repeat the last one rolled
+@ src/epitaph.rs
+-         Some(previous) => fresh_index(rng, EPITAPH_FRAME_COUNT, previous),
++         Some(_) => index(rng, EPITAPH_FRAME_COUNT),
+
+### R3 the run forgets the last frame
+@ src/epitaph.rs
+-     writing.last_frame = Some(frame);
++     writing.last_frame = None;
+
+### R4 one coin for all nine parts
+@ src/epitaph.rs
+-     for coin in &mut coins {⏎        *coin = index(rng, 2) == 1;⏎    }
++     let one = index(rng, 2) == 1;⏎    for coin in &mut coins {⏎        *coin = one;⏎    }
+
+### R5 the coins before the frame
+@ src/epitaph.rs
+-     let frame = match writing.last_frame {
++     let _early = index(rng, 2);⏎    let frame = match writing.last_frame {
+
+### R6 a coin is a part's next part's
+@ src/epitaph.rs
+-         self.coins[part.index()]
++         self.coins[(part.index() + 1) % 9]
+
+### R7 a recomposition reads another frame
+@ src/epitaph.rs
+-     let epitaph = compose(content, heroes, id, wording);
++     let epitaph = compose(content, heroes, id, Wording { frame: (wording.frame + 1) % 3, ..wording });
+
+### B1 a part that does not fit ends the walk
+@ src/epitaph.rs
+-             chosen[part.index()] = true;⏎            total += count;⏎        }
++             chosen[part.index()] = true;⏎            total += count;⏎        } else {⏎            break;⏎        }
+
+### B2 the budget is strictly under six
+@ src/epitaph.rs
+-         if total + count <= EPITAPH_SENTENCES {
++         if total + count < EPITAPH_SENTENCES {
+
+### B3 the budget is not counted
+@ src/epitaph.rs
+-             total += count;
++             total += 0;
+
+### B4 an empty part is chosen
+@ src/epitaph.rs
+-         if text.is_empty() {⏎            continue;⏎        }
++ 
+
+### B5 sentences counted by ". "
+@ src/epitaph.rs
+-     part.matches('.').count()
++     part.matches(". ").count()
+
+### B6 the walk in the parts' order, not the priorities'
+@ src/epitaph.rs
+-     for part in lore.priorities {
++     for part in Part::ALL.iter().copied() {
+
+### B7 emitted in priority order, not the frame's
+@ src/epitaph.rs
+-     let mut emitted: Vec<String> = lore.frames[wording.frame]
++     let mut emitted: Vec<String> = lore.priorities
+
+### B8 always frame 0's order
+@ src/epitaph.rs
+-     let mut emitted: Vec<String> = lore.frames[wording.frame]
++     let mut emitted: Vec<String> = lore.frames[0]
+
+### B9 joined with no space
+@ src/epitaph.rs
+-     emitted.join(" ")
++     emitted.join("")
+
+### N1 the subject is not named
+@ src/epitaph.rs
+-         *first = name_the_subject(content, &heroes[id], first);
++         *first = first.clone();
+
+### N2 every part names the subject
+@ src/epitaph.rs
+-     if let Some(first) = emitted.first_mut() {⏎        *first = name_the_subject(content, &heroes[id], first);⏎    }
++     for first in emitted.iter_mut() {⏎        *first = name_the_subject(content, &heroes[id], first);⏎    }
+
+### N3 a leading "He " takes the first name only
+@ src/epitaph.rs
+-         format!("{full} {rest}")
++         format!("{} {rest}", hero.name)
+
+### N4 a leading "His " loses its "'s"
+@ src/epitaph.rs
+-         format!("{full}'s {rest}")
++         format!("{full} {rest}")
+
+### N5 every " he " inside is named
+@ src/epitaph.rs
+-         part.replacen(&inside, &format!(" {full} "), 1)
++         part.replace(&inside, &format!(" {full} "))
+
+### N6 no " he " inside is named
+@ src/epitaph.rs
+-     } else if part.contains(&inside) {
++     } else if part.contains(&inside) && false {
+
+### N7 the possessive is not looked for
+@ src/epitaph.rs
+-     } else if let Some(rest) = part.strip_prefix(&his) {
++     } else if let Some(rest) = part.strip_prefix("\u{0}") {
+
+### N8 named by the object pronoun
+@ src/epitaph.rs
+-     let he = format!("{} ", capitalized(&forms.subject));
++     let he = format!("{} ", capitalized(&forms.object));
+
+### L1 the priorities read as the parts' order
+@ src/epitaph_lore.rs
+-         priorities: nine_parts(&epitaph.key("priorities")?, "priorities")?,
++         priorities: nine_parts(&epitaph.key("parts")?, "priorities")?,
+
+### L2 the frames read last first
+@ src/epitaph_lore.rs
+-         frames.push(nine_parts(frame, &format!("frame {index}"))?);
++         frames.insert(0, nine_parts(frame, &format!("frame {index}"))?);
+
+### L3 a lock's name is its title
+@ src/epitaph_lore.rs
+-         .map(|lock| text_at(lock, "name"))
++         .map(|lock| text_at(lock, "title"))
+
+### O1 an arrival's variants swapped
+@ src/epitaph_parts.rs
+-         return if wording.coin(Part::Origin) {⏎            fmt(&lore[E::OriginArrived1]
++         return if !wording.coin(Part::Origin) {⏎            fmt(&lore[E::OriginArrived1]
+
+### O2 an arrival is not looked for
+@ src/epitaph_parts.rs
+-     if let Some(arrived) = first_deed(hero, DeedKind::Arrived) {
++     if let Some(arrived) = first_deed(hero, DeedKind::CameOfAge) {
+
+### O3 the dead before the first year keep an origin
+@ src/epitaph_parts.rs
+-     if !hero.is_living() && hero.fate_year < 1 {
++     if !hero.is_living() && hero.fate_year < -100 {
+
+### O4 the living before the first year lose it too
+@ src/epitaph_parts.rs
+-     if !hero.is_living() && hero.fate_year < 1 {
++     if hero.fate_year < 1 {
+
+### O5 born in play from year 2
+@ src/epitaph_parts.rs
+-     if hero.born_year >= 1 && !parents.is_empty() {
++     if hero.born_year > 1 && !parents.is_empty() {
+
+### O6 a parent named by house
+@ src/epitaph_parts.rs
+-         .map(|&p| heroes[p].name.as_str())
++         .map(|&p| heroes[p].house.as_str())
+
+### O7 a founder's variants swapped
+@ src/epitaph_parts.rs
+-     let key = variant(wording, Part::Origin, E::OriginFounder1, E::OriginFounder0);
++     let key = variant(wording, Part::Origin, E::OriginFounder0, E::OriginFounder1);
+
+### O8 a birth's variants swapped
+@ src/epitaph_parts.rs
+-         let key = variant(wording, Part::Origin, E::OriginBorn1, E::OriginBorn0);
++         let key = variant(wording, Part::Origin, E::OriginBorn0, E::OriginBorn1);
+
+### D1 a child's teachers are their students
+@ src/epitaph_parts.rs
+-                 .filter(|bond| bond.kind == BondKind::Mentor)
++                 .filter(|bond| bond.kind == BondKind::Student)
+
+### D2 a dead child kept the house
+@ src/epitaph_parts.rs
+-         if !hero.is_living() && !hero.is_adult() {⏎            return fmt(&lore[E::RoadsNeverOldEnough], &[&f.he]);
++         if !hero.is_living() && hero.is_adult() {⏎            return fmt(&lore[E::RoadsNeverOldEnough], &[&f.he]);
+
+### D3 a living child with no teachers kept the house
+@ src/epitaph_parts.rs
+-             if teachers.is_empty() {⏎                return String::new();⏎            }
++ 
+
+### D4 never went: variants swapped
+@ src/epitaph_parts.rs
+-         let key = variant(wording, Part::Roads, E::RoadsKeptHouse1, E::RoadsNeverWent0);
++         let key = variant(wording, Part::Roads, E::RoadsNeverWent0, E::RoadsKeptHouse1);
+
+### D5 once counts as many
+@ src/epitaph_parts.rs
+-     if hero.quests_faced == 1 {
++     if hero.quests_faced == 0 {
+
+### D6 many: variants swapped
+@ src/epitaph_parts.rs
+-     if wording.coin(Part::Roads) {
++     if !wording.coin(Part::Roads) {
+
+### D7 the count is of fears faced
+@ src/epitaph_parts.rs
+-     let count = count_words(content, hero.quests_faced as usize);
++     let count = count_words(content, hero.fears_faced as usize);
+
+### D8 never quested counts from one
+@ src/epitaph_parts.rs
+-     if hero.quests_faced == 0 {⏎        if hero.is_living() && !hero.is_adult() {
++     if hero.quests_faced <= 1 {⏎        if hero.is_living() && !hero.is_adult() {
+
+### T1 the earlier triumph wins a tie
+@ src/epitaph_parts.rs
+-         if best.is_none_or(|b| deed.weight >= b.weight) {
++         if best.is_none_or(|b| deed.weight > b.weight) {
+
+### T2 the lightest triumph
+@ src/epitaph_parts.rs
+-         if best.is_none_or(|b| deed.weight >= b.weight) {
++         if best.is_none_or(|b| deed.weight <= b.weight) {
+
+### T3 variants swapped
+@ src/epitaph_parts.rs
+-     if wording.coin(Part::Triumph) {
++     if !wording.coin(Part::Triumph) {
+
+### T4 the first quest counts as a triumph
+@ src/epitaph_parts.rs
+-     for deed in hero.deeds.iter().filter(|d| d.kind == DeedKind::Triumph) {
++     for deed in hero.deeds.iter().filter(|d| d.kind == DeedKind::FirstQuest) {
+
+### F1 born brave not looked for
+@ src/epitaph_parts.rs
+-     if hero.fear.born_brave {
++     if hero.fear.born_brave && false {
+
+### F2 conquered: variants swapped
+@ src/epitaph_parts.rs
+-         return if wording.coin(Part::Fear) {⏎            let year = year_telling(content, deed.year);
++         return if !wording.coin(Part::Fear) {⏎            let year = year_telling(content, deed.year);
+
+### F3 the grief's mourned is any breaker
+@ src/epitaph_parts.rs
+-     if let Some(mourned) = broken.iter().find_map(|d| d.other) {
++     if let Some(mourned) = broken.iter().find_map(|d| d.other.or(Some(0))) {
+
+### F4 broken: variants swapped
+@ src/epitaph_parts.rs
+-         return if wording.coin(Part::Fear) {⏎            let year = capitalized(&year_telling(content, deed.year));
++         return if !wording.coin(Part::Fear) {⏎            let year = capitalized(&year_telling(content, deed.year));
+
+### F5 faced from two
+@ src/epitaph_parts.rs
+-     if hero.fears_faced > 0 {
++     if hero.fears_faced > 1 {
+
+### F6 faced: the count is of quests
+@ src/epitaph_parts.rs
+-             let count = count_words(content, hero.fears_faced as usize);
++             let count = count_words(content, hero.quests_faced as usize);
+
+### F7 an adult's fear told as a child's
+@ src/epitaph_parts.rs
+-     if !hero.is_adult() {⏎        return fmt(&lore[E::FearChild]
++     if hero.is_adult() {⏎        return fmt(&lore[E::FearChild]
+
+### F8 the bare year keeps its "in "
+@ src/epitaph_parts.rs
+-     match telling.strip_prefix("in ") {
++     match telling.strip_prefix("\u{0}") {
+
+### F9 conquered after broken
+@ src/epitaph_parts.rs
+-     if let Some(deed) = first_deed(hero, DeedKind::ConqueredFear) {
++     if let Some(deed) = first_deed(hero, DeedKind::ConqueredFear).filter(|_| !hero.deeds.iter().any(|d| d.kind == DeedKind::Broken)) {
+
+### M1 a fulfilled dream not looked for
+@ src/epitaph_parts.rs
+-     if dream.is_fulfilled() {
++     if dream.is_fulfilled() && false {
+
+### M2 passed on with no heir needed
+@ src/epitaph_parts.rs
+-         (DreamFate::PassedOn, Some(heir)) => {⏎            let heir = &heroes[heir].name;
++         (DreamFate::PassedOn, heir) => {⏎            let heir = &heroes[heir.unwrap_or(id)].name;
+
+### M3 left to no one told as laid
+@ src/epitaph_parts.rs
+-             return fmt(&lore[E::DreamLeft], &[&f.he, &title, &suffix]);
++             return fmt(&lore[E::DreamDied], &[&f.he, &title, &suffix]);
+
+### M4 progress by the stage itself
+@ src/epitaph_parts.rs
+-             let telling = &lore.progress_tellings[dream.current.min(2)];
++             let telling = &lore.progress_tellings[dream.current.min(1)];
+
+### M5 the crowned died
+@ src/epitaph_parts.rs
+-         Fate::Departed => E::DreamCrowned,
++         Fate::Departed => E::DreamDied,
+
+### M6 no inherited suffix (re-cut s9, round 2)
+@ src/epitaph_parts.rs
+-     let suffix = match dream.owner {
++     let suffix = match None::<HeroId> {
+
+### M7 the title told for the bearer, not the owner
+@ src/epitaph_parts.rs
+-     let owner_pronoun = dream.owner.map_or(hero.pronoun, |o| heroes[o].pronoun);
++     let owner_pronoun = hero.pronoun;
+
+### M8 the burden is read, not the own dream
+@ src/epitaph_parts.rs
+-     let Some(dream) = &hero.dream else {⏎        return String::new();⏎    };⏎    let f = forms(content, hero.pronoun);⏎    let owner_pronoun
++     let Some(dream) = hero.burden.as_ref().or(hero.dream.as_ref()) else {⏎        return String::new();⏎    };⏎    let f = forms(content, hero.pronoun);⏎    let owner_pronoun
+
+### M9 fulfilled: variants swapped
+@ src/epitaph_parts.rs
+-         return if wording.coin(Part::Dream) {⏎            fmt(&lore[E::DreamFulfilled1]
++         return if !wording.coin(Part::Dream) {⏎            fmt(&lore[E::DreamFulfilled1]
+
+### M10 passed: variants swapped
+@ src/epitaph_parts.rs
+-             return if wording.coin(Part::Dream) {⏎                fmt(&lore[E::DreamPassed1]
++             return if !wording.coin(Part::Dream) {⏎                fmt(&lore[E::DreamPassed1]
+
+### P1 fire came read as plain
+@ src/epitaph_ends.rs
+-         Destiny::FireWillEndYou if came => fmt(&lore[E::ProphecyFireCame], &[o]),
++         Destiny::FireWillEndYou if !came => fmt(&lore[E::ProphecyFireCame], &[o]),
+
+### P2 the crown came never told
+@ src/epitaph_ends.rs
+-         Destiny::WearACrown if came => fmt(&lore[E::ProphecyCrownCame], &[s, s]),
++         Destiny::WearACrown if came && false => fmt(&lore[E::ProphecyCrownCame], &[s, s]),
+
+### P3 the Door without standing there
+@ src/epitaph_ends.rs
+-             let stood = first_deed(hero, DeedKind::StoodAtTheDoor).is_some();
++             let stood = first_deed(hero, DeedKind::OpenedALock).is_some();
+
+### P4 the Door's blood ignored
+@ src/epitaph_ends.rs
+-             match (&hero.destiny.blood_of, stood) {
++             match (&None::<String>, stood) {
+
+### P5 surpass came never told
+@ src/epitaph_ends.rs
+-         Destiny::ChildWillSurpassYou if came => fmt(&lore[E::ProphecySurpassCame], &[p, o, p, s]),
++         Destiny::ChildWillSurpassYou if !came => fmt(&lore[E::ProphecySurpassCame], &[p, o, p, s]),
+
+### P6 mended came never told
+@ src/epitaph_ends.rs
+-         Destiny::BreakAndBeMended if came => fmt(&lore[E::ProphecyMendedCame], &[s, s]),
++         Destiny::BreakAndBeMended if came && false => fmt(&lore[E::ProphecyMendedCame], &[s, s]),
+
+### P7 a greater student only equals
+@ src/epitaph_ends.rs
+-                 .find(|student| best(student) > best(hero));
++                 .find(|student| best(student) >= best(hero));
+
+### P8 any student, taught or not
+@ src/epitaph_ends.rs
+-                 .filter(|bond| bond.taught)
++                 .filter(|bond| bond.kind == BondKind::Student)
+
+### P9 the reflexive swapped
+@ src/epitaph_ends.rs
+-                 Pronoun::He => E::ProphecyReflexiveHe,⏎                Pronoun::She => E::ProphecyReflexiveShe,
++                 Pronoun::He => E::ProphecyReflexiveShe,⏎                Pronoun::She => E::ProphecyReflexiveHe,
+
+### P10 the unspoken speak
+@ src/epitaph_ends.rs
+-         Destiny::Unspoken => String::new(),
++         Destiny::Unspoken => fmt(&lore[E::ProphecyCarry], &[s, s]),
+
+### V1 spouses by first name
+@ src/epitaph_ends.rs
+-         .map(|b| heroes[b.other].full_name())
++         .map(|b| heroes[b.other].name.clone())
+
+### V2 children by full name
+@ src/epitaph_ends.rs
+-     let children: Vec<&str> = of_kind(BondKind::Child)⏎        .map(|b| heroes[b.other].name.as_str())
++     let children: Vec<&str> = of_kind(BondKind::Parent)⏎        .map(|b| heroes[b.other].name.as_str())
+
+### V3 the first friend, not the last
+@ src/epitaph_ends.rs
+-     let Some(friend) = of_kind(BondKind::Friend).next_back() else {
++     let Some(friend) = of_kind(BondKind::Friend).next() else {
+
+### V4 kin never closest
+@ src/epitaph_ends.rs
+-     if kin(heroes, id, friend.other) {
++     if kin(heroes, id, friend.other) && false {
+
+### V5 one child is children
+@ src/epitaph_ends.rs
+-             let word = if children.len() == 1 {
++             let word = if children.len() == 0 {
+
+### V6 a sister called brother
+@ src/epitaph_ends.rs
+-             Pronoun::He => E::LoveBrother,⏎            Pronoun::She => E::LoveSister,
++             Pronoun::He => E::LoveBrother,⏎            Pronoun::She => E::LoveBrother,
+
+### V7 friend: variants swapped
+@ src/epitaph_ends.rs
+-     if wording.coin(Part::Love) {
++     if !wording.coin(Part::Love) {
+
+### V8 spouses forget the children (re-cut s9, round 2)
+@ src/epitaph_ends.rs
+-     match (spouses.is_empty(), children.is_empty()) {
++     match (spouses.is_empty(), children.is_empty() || !spouses.is_empty()) {
+
+### E1 the Door's age is the hero's now
+@ src/epitaph_ends.rs
+-             let age = stood.age.to_string();
++             let age = hero.age.to_string();
+
+### E2 a lock named by the next
+@ src/epitaph_ends.rs
+-     match content.epitaph.lock_names.get(deed.weight as usize) {
++     match content.epitaph.lock_names.get(deed.weight as usize + 1) {
+
+### E3 opened locks never listed
+@ src/epitaph_ends.rs
+-             return if locks.is_empty() {
++             return if true {
+
+### E4 a living child told as grown
+@ src/epitaph_ends.rs
+-         let key = if hero.is_adult() {
++         let key = if hero.age >= 0 {
+
+### E5 year 1 is before the first year
+@ src/epitaph_ends.rs
+-     if hero.fate_year < 1 {
++     if hero.fate_year <= 1 {
+
+### E6 dead: variants swapped
+@ src/epitaph_ends.rs
+-     if wording.coin(Part::End) {
++     if !wording.coin(Part::End) {
+
+### E7 the age at death is the age now
+@ src/epitaph_ends.rs
+-     let age = hero.fate_age.to_string();
++     let age = hero.age.to_string();
+
+### E8 the living told as the dead
+@ src/epitaph_ends.rs
+-     if hero.is_living() {⏎        if let Some(stood)
++     if hero.is_living() && false {⏎        if let Some(stood)
+
+### X1 a made heirloom not of their own making
+@ src/epitaph_ends.rs
+-     hero.legacy⏎        .1⏎        .replace(&format!("{}'s ", hero.name), &format!("{possessive} own "))
++     hero.legacy.1.clone()
+
+### X2 the departed leave what the dead leave
+@ src/epitaph_ends.rs
+-     if hero.fate == Fate::Departed {
++     if hero.fate == Fate::Departed && false {
+
+### X3 a legacy beside an heirloom with no heir
+@ src/epitaph_ends.rs
+-         (_, Some(heirloom), Some(heir)) => {⏎            let noun
++         (_, Some(heirloom), heir) => {⏎            let heir = heir.unwrap_or("");⏎            let noun
+
+### X4 the legacy noun of nothing
+@ src/epitaph_ends.rs
+-             let noun = &lore.legacy_nouns[kind.index()];
++             let noun = &lore.legacy_nouns[0];
+
+### X5 a tale left as a blessing
+@ src/epitaph_ends.rs
+-         (LegacyKind::Tale, _, _) => return fmt(&lore[E::LeftTale], &[&f.he, telling]),
++         (LegacyKind::Tale, _, _) => return fmt(&lore[E::LeftBlessing], &[&f.he, telling]),
+
+### X6 a made heirloom with no heir went
+@ src/epitaph_ends.rs
+-         (LegacyKind::Heirloom, _, Some(heir)) => {
++         (LegacyKind::Heirloom, _, heir) => {⏎            let heir = heir.unwrap_or("");
+
+### X7 buried while still undecided
+@ src/epitaph_ends.rs
+-         (Some(heirloom), None) if hero.bequest_decided => fmt(
++         (Some(heirloom), None) => fmt(
+
+### X8 a buried heirloom keeps its lower case
+@ src/epitaph_ends.rs
+-             &[&capitalized(heirloom), &f.object],
++             &[heirloom, &f.object],
+
+### X9 the living's legacy forgotten
+@ src/epitaph_ends.rs
+-             LegacyKind::Tale => fmt(&lore[E::LivingMadeTale], &[&f.he, &f.object, telling]),
++             LegacyKind::Tale => String::new(),
+
+### X10 the living carry nothing
+@ src/epitaph_ends.rs
+-                 Some(heirloom) => fmt(&lore[E::LivingCarriedHeirloom], &[&f.he, &heirloom.name]),
++                 Some(_) => String::new(),
+
+### W1 the founding rolls Aud's wording first
+@ src/house.rs
+-         for key in &content.founding.dead_at_start {
++         for key in content.founding.dead_at_start.iter().rev() {
+
+### W2 the founding composes no epitaph
+@ src/house.rs
+-             crate::epitaph::remember(content, &mut house.heroes, &mut house.writing, id, rng);
++             let _ = (id, &rng);
+
+### W3 the death page rolls no wording
+@ src/death_page.rs
+-     house.heroes[dead].wording = Some(crate::epitaph::roll_wording(&mut house.writing, rng));
++     house.heroes[dead].wording = house.heroes[dead].wording.or(Some(crate::epitaph::Wording { frame: 0, coins: [true; 9] }));⏎    let _ = &rng;
+
+### W4 only a page with nothing to leave composes (re-cut s9, round 2)
+@ src/death_page.rs
+-     // 8. The epitaph, composed with the wording step 1 rolled.⏎    crate::epitaph::recompose(content, &mut house.heroes, dead);
++     // 8. The epitaph, composed with the wording step 1 rolled.⏎    if !leaves {⏎        crate::epitaph::recompose(content, &mut house.heroes, dead);⏎    }
+
+### W5 the death page composes nothing
+@ src/death_page.rs
+-     // 8. The epitaph, composed with the wording step 1 rolled.⏎    crate::epitaph::recompose(content, &mut house.heroes, dead);
++ 
+
+### W6 the heir choice does not recompose
+@ src/heirs.rs
+-     crate::epitaph::recompose(content, &mut house.heroes, dead);
++ 
+
+### W7 a ghost laid does not recompose
+@ src/ghost.rs
+-     crate::epitaph::recompose(content, &mut house.heroes, dead);
++ 
+
+### W8 a ghost taken up does not recompose
+@ src/coming_of_age.rs
+-         crate::epitaph::recompose(content, &mut house.heroes, ghost.hero);
++ 
+
+### W9 a crowning composes nothing
+@ src/harm.rs
+-     crate::epitaph::remember(f.content, &mut house.heroes, &mut house.writing, id, rng);
++     let _ = &rng;
+
+### W10 a crowning composes before its heirloom goes
+@ src/harm.rs
+-     if let Some(heirloom) = house.heroes[id].heirloom.clone() {
++     crate::epitaph::remember(f.content, &mut house.heroes, &mut house.writing, id, rng);⏎    if let Some(heirloom) = house.heroes[id].heirloom.clone() {
+
+### W11 the heir choice rolls a new wording
+@ src/heirs.rs
+-     crate::epitaph::recompose(content, &mut house.heroes, dead);
++     crate::epitaph::remember(content, &mut house.heroes, &mut house.writing, dead, &mut jidousha::prelude::Rng::from_seed(9));
+
+### S1 the remembrance shows the condition line for the dead
+@ src/family.rs
+-     if let Some(epitaph) = &hero.epitaph {
++     if let Some(epitaph) = hero.epitaph.as_ref().filter(|_| hero.is_living()) {
+
+### S2 the remembrance shows no name
+@ src/family.rs
+-         return vec![hero.full_name(), epitaph.clone()];
++         return vec![epitaph.clone()];
+
+### S3 the death page sets no epitaph
+@ src/turning_view.rs
+-             y = text(page, epitaph, y, MIN_TEXT, ink::BODY, None) + PART_GAP;
++             let _ = epitaph;
+
+### S4 the leaves keep no room for the epitaph
+@ src/turning_view.rs
+-         Some(epitaph) => height(epitaph) + PART_GAP,
++         Some(_) => 0.0,

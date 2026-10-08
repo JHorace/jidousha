@@ -1,0 +1,150 @@
+#! XI — the variant's rules (Keifu X Inheritance, tools/yakin/runs/keifu-x-inheritance-r2/
+#! DESIGN.md). One fault per rule the variant adds: every new constant, who is family,
+#! the garden's outsider rules, family renown, family-only heirs, the marks, the oath's
+#! eligibility, need, sign and weight, its withdrawal, the dominant-parent coin, and the
+#! dock's preview reading what the choice does.
+
+### C1 MARRY_IN_RENOWN 4 -> 3
+@ src/constants.rs
+- pub const MARRY_IN_RENOWN: i32 = 4;
++ pub const MARRY_IN_RENOWN: i32 = 3;
+
+### C2 DOWRY_SHARE 2 -> 1
+@ src/constants.rs
+- pub const DOWRY_SHARE: i32 = 2;
++ pub const DOWRY_SHARE: i32 = 1;
+
+### C3 MARK_DRAIN 1 -> 2
+@ src/constants.rs
+- pub const MARK_DRAIN: i32 = 1;
++ pub const MARK_DRAIN: i32 = 2;
+
+### C4 MARK_HALVING 2 -> 3
+@ src/constants.rs
+- pub const MARK_HALVING: i32 = 2;
++ pub const MARK_HALVING: i32 = 3;
+
+### C5 DOMINANT_SHARE 2 -> 3
+@ src/constants.rs
+- pub const DOMINANT_SHARE: i32 = 2;
++ pub const DOMINANT_SHARE: i32 = 3;
+
+### C6 BRED_TRUE_BONUS 1 -> 2
+@ src/constants.rs
+- pub const BRED_TRUE_BONUS: i32 = 1;
++ pub const BRED_TRUE_BONUS: i32 = 2;
+
+### R1 the need table: Go needs SUCCESS, not SETBACK
+@ src/oath.rs
+-         Telling::Go => Some(Outcome::Setback),
++         Telling::Go => Some(Outcome::Success),
+
+### R2 the need table: Triumph needs SUCCESS
+@ src/oath.rs
+-         Telling::Triumph => Some(Outcome::Triumph),
++         Telling::Triumph => Some(Outcome::Success),
+
+### R3 an outsider may swear
+@ src/oath.rs
+-         || !me.family
++         || me.age < 0
+
+### R4 a burden's call may be sworn
+@ src/oath.rs
+-     if call.burden {
++     if call.burden && false {
+
+### R5 the mark's weight is danger + 1
+@ src/oath.rs
+-         weight: quest.danger,
++         weight: quest.danger + 1,
+
+### R6 a failed oath raises house renown
+@ src/oath.rs
+-     house.add_renown(-weight);
++     house.add_renown(weight);
+
+### R7 kept at one band below the need
+@ src/oath.rs
+-     let kept = f.outcome >= oath.need;
++     let kept = f.outcome >= oath.need || f.outcome == Outcome::Setback;
+
+### R8 the fail chance counts the need's own band
+@ src/oath.rs
+-         .filter(|&&outcome| outcome < need)
++         .filter(|&&outcome| outcome <= need)
+
+### R9 reseating keeps the oath
+@ src/house.rs
+-             posted.sworn = None;
++             posted.sworn = posted.sworn.filter(|_| true);
+
+### R10 a drop keeps every oath
+@ src/pointer.rs
+-                 crate::oath::keep_oaths(content, house);
++                 let _ = content;
+
+### F1 outsiders are heirs
+@ src/heirs.rs
+-         .filter(|&id| id != dead && heroes[id].is_living() && heroes[id].family)
++         .filter(|&id| id != dead && heroes[id].is_living())
+
+### F2 an outsider's death page gathers heirs
+@ src/death_page.rs
+-     let leaves = house.heroes[dead].family && (heirloom.is_some() || undone.is_some());
++     let leaves = heirloom.is_some() || undone.is_some();
+
+### F3 an outsider's win credits the house
+@ src/reward.rs
+-     let family = members.iter().any(|&m| house.heroes[m].family);
++     let family = !members.is_empty();
+
+### F4 the table's first adult tells for the house, family or not
+@ src/plans.rs
+-         if heroes[hero].family && !told_for_the_house {
++         if !told_for_the_house {
+
+### F5 two outsiders may wed
+@ src/plans.rs
+-     if !heroes[a].family && !heroes[b].family {
++     if !heroes[a].family && !heroes[b].family && heroes[a].age < 0 {
+
+### F6 the threshold is ignored for an outsider
+@ src/outsiders.rs
+-         eligible: hero.family || hero.renown >= MARRY_IN_RENOWN,
++         eligible: hero.family || hero.renown >= 0,
+
+### F7 wedding in keeps the outsider's own house name
+@ src/outsiders.rs
+-     hero.house = name;
++     let _ = name;
+
+### F8 a newborn is no family
+@ src/births.rs
+-     child.family = true;
++     child.family = false;
+
+### M1 the dead's marks count on the name
+@ src/marks.rs
+-         .filter(|(_, hero)| hero.is_living() && hero.family)
++         .filter(|(_, hero)| hero.family)
+
+### M2 a mark reaching nothing is not struck
+@ src/marks.rs
+-         0 => Passing::Struck,
++         -1 => Passing::Struck,
+
+### M3 the turning does not drain the marks
+@ src/turning.rs
+-     year_lines.extend(crate::marks::drain(content, house));
++     let _ = crate::marks::house_marks(house);
+
+### M4 the choice gives the marks at full weight, not what the dock showed
+@ src/heirs.rs
+-                     Passing::Arrives(weight) => taken.push(Mark { weight, ..mark }),
++                     Passing::Arrives(_) => taken.push(mark),
+
+### G1 the coin's parent order reversed
+@ src/inheritance.rs
+-         let dominant = if index(rng, 2) == 0 { first } else { second };
++         let dominant = if index(rng, 2) == 0 { second } else { first };

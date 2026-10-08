@@ -1,0 +1,1714 @@
+{
+  "_format": "Jai print format: \"%\" takes the next argument in order; \"%N\" takes argument N (1-based); \"%%\" is two consecutive arguments; \"\\\\%\" (backslash-percent) is a literal percent sign. See content/README.md.",
+  "lines": {
+    "summer.unanswered": {
+      "text": "% No one went.",
+      "args": [
+        "the place trouble line (lore places[].trouble_line) filled with year_counts[new trouble]"
+      ],
+      "when": "meanwhile, one per unanswered quest, board order",
+      "source": "lineage/tale.jai:89"
+    },
+    "summer.unanswered_total": {
+      "text": "The house is thought less of for it: -% renown.",
+      "args": [
+        "total renown lost to unanswered quests"
+      ],
+      "when": "meanwhile, once, after all quests, only if total > 0",
+      "source": "lineage/tale.jai:71"
+    },
+    "summer.mended_at_home": {
+      "text": "% stayed home and mended. The wound has closed.",
+      "args": [
+        "hero first name"
+      ],
+      "when": "meanwhile, per wounded hero left in the roster",
+      "source": "lineage/tale.jai:78"
+    },
+    "quest.disaster_renown": {
+      "text": "Word of it got about. The house loses % renown.",
+      "args": [
+        "quest danger"
+      ],
+      "when": "quest page, on DISASTER, not at the Door",
+      "source": "lineage/tale.jai:123"
+    },
+    "quest.reward": {
+      "text": "% renown to the house, and to %.",
+      "args": [
+        "renown per hero (quest renown, +1 on triumph)",
+        "the sole member's first name if the party is one hero, else quest.reward_each"
+      ],
+      "when": "quest page, on SUCCESS/TRIUMPH, not at the Door",
+      "source": "lineage/tale.jai:182"
+    },
+    "quest.reward_each": {
+      "text": "each who went",
+      "args": [],
+      "when": "second argument of quest.reward for a party of two or more",
+      "source": "lineage/tale.jai:182"
+    },
+    "quest.carrier_bonus": {
+      "text": "% carries the house, as the Seer said. +% renown more.",
+      "args": [
+        "hero first name",
+        "CARRIED_RENOWN (1)"
+      ],
+      "when": "quest page, per CARRY_THE_HOUSE member, on SUCCESS/TRIUMPH, not at the Door",
+      "source": "lineage/tale.jai:187"
+    },
+    "quest.lesson": {
+      "text": "% % rises to %.",
+      "args": [
+        "a LESSONS pool line filled with the hero first name",
+        "aptitude title",
+        "new aptitude value"
+      ],
+      "when": "quest page, per +1 learned on a quest",
+      "source": "lineage/tale.jai:231"
+    },
+    "quest.wound_shielded": {
+      "text": "% was hurt again, badly. It is not the end the Seer spoke of, so it is not the end.",
+      "args": [
+        "hero first name"
+      ],
+      "when": "already-wounded hero wounded again but shielded by FIRE or BED destiny",
+      "source": "lineage/tale.jai:240"
+    },
+    "quest.second_wound": {
+      "text": "% was already hurt, and went anyway. The second wound was the last. %",
+      "args": [
+        "hero full name",
+        "common.age_at_death"
+      ],
+      "when": "already-wounded hero wounded again: death",
+      "source": "lineage/tale.jai:245"
+    },
+    "fate.died_of_wounds": {
+      "text": "died of wounds on the road home from %",
+      "args": [
+        "place name"
+      ],
+      "when": "fate telling of a second-wound death",
+      "source": "lineage/tale.jai:247"
+    },
+    "deed.wounded": {
+      "text": "was wounded at %",
+      "args": [
+        "place name"
+      ],
+      "when": "deed telling (never displayed)",
+      "source": "lineage/tale.jai:253"
+    },
+    "quest.burned": {
+      "text": "Fire was the end of %, as the Seer said. %",
+      "args": [
+        "hero full name",
+        "common.age_at_death"
+      ],
+      "when": "fire destiny claims the hero",
+      "source": "lineage/tale.jai:260"
+    },
+    "fate.burned": {
+      "text": "met the fire that was foretold, at %",
+      "args": [
+        "place name"
+      ],
+      "when": "fate telling of a fire-destiny death",
+      "source": "lineage/tale.jai:262"
+    },
+    "quest.death": {
+      "text": "% %",
+      "args": [
+        "a QUEST_DEATHS pool line filled with (hero full name, place name)",
+        "common.age_at_death"
+      ],
+      "when": "disaster death roll kills",
+      "source": "lineage/tale.jai:281"
+    },
+    "fate.fell": {
+      "text": "fell at %",
+      "args": [
+        "place name"
+      ],
+      "when": "fate telling of a disaster death",
+      "source": "lineage/tale.jai:283"
+    },
+    "deed.survived_disaster": {
+      "text": "lived through the disaster at %",
+      "args": [
+        "place name"
+      ],
+      "when": "deed telling (never displayed)",
+      "source": "lineage/tale.jai:294"
+    },
+    "common.at_place": {
+      "text": "at %",
+      "args": [
+        "place name"
+      ],
+      "when": "the \"occasion\" passed to dread/breaking: \"at <place>\"",
+      "source": "lineage/tale.jai:301"
+    },
+    "scar.mended": {
+      "text": "Broken at %, and mended",
+      "args": [
+        "place name"
+      ],
+      "when": "scar added by BREAK_AND_BE_MENDED",
+      "source": "lineage/tale.jai:307"
+    },
+    "quest.mended": {
+      "text": "% broke at %, as the Seer said, and was carried home, and mended. +% to every aptitude.",
+      "args": [
+        "hero first name",
+        "place name",
+        "MENDED_BONUS (1)"
+      ],
+      "when": "BREAK_AND_BE_MENDED shields the first disaster",
+      "source": "lineage/tale.jai:311"
+    },
+    "deed.mended": {
+      "text": "broke at % and was mended",
+      "args": [
+        "place name"
+      ],
+      "when": "deed telling (never displayed)",
+      "source": "lineage/tale.jai:314"
+    },
+    "fate.crowned": {
+      "text": "was called to a throne, and went",
+      "args": [],
+      "when": "fate telling of the crowned (DEPARTED)",
+      "source": "lineage/tale.jai:322"
+    },
+    "quest.crowned": {
+      "text": "A crown was offered to %, as the Seer said. % took it. The house has a patron at Court now.",
+      "args": [
+        "hero full name",
+        "capitalized subject pronoun"
+      ],
+      "when": "crown destiny claims the hero",
+      "source": "lineage/tale.jai:328"
+    },
+    "deed.crowned": {
+      "text": "was crowned",
+      "args": [],
+      "when": "deed telling (never displayed)",
+      "source": "lineage/tale.jai:330"
+    },
+    "crown.heir_lays_aside": {
+      "text": "% lays % aside, over the hearth.",
+      "args": [
+        "heir first name",
+        "heir's current heirloom name"
+      ],
+      "when": "crowned hero's heir already had an heirloom",
+      "source": "lineage/tale.jai:339"
+    },
+    "crown.heirloom_left": {
+      "text": "% left % with % before going. A throne has no use for it.",
+      "args": [
+        "crowned first name",
+        "heirloom name",
+        "heir first name"
+      ],
+      "when": "crowned hero leaves the heirloom",
+      "source": "lineage/tale.jai:342"
+    },
+    "crown.heirloom_taken": {
+      "text": "% took % to Court. There was no one to leave it with.",
+      "args": [
+        "crowned first name",
+        "heirloom name"
+      ],
+      "when": "crowned hero has no one to leave it with",
+      "source": "lineage/tale.jai:345"
+    },
+    "death.carrier_loss": {
+      "text": "% carried the house, and has set it down. The house loses % renown.",
+      "args": [
+        "hero first name",
+        "CARRIER_LOSS (4)"
+      ],
+      "when": "CARRY_THE_HOUSE hero dies (only when the death has a page to write to: quest deaths)",
+      "source": "lineage/tale.jai:381"
+    },
+    "dream.bearing_owned": {
+      "text": "%'s dream",
+      "args": [
+        "dream owner first name"
+      ],
+      "when": "phrase used by the dream progress lines for a carried (owned) dream",
+      "source": "lineage/tale.jai:416"
+    },
+    "dream.bearing_own": {
+      "text": "% dream",
+      "args": [
+        "possessive pronoun of the hero"
+      ],
+      "when": "phrase for the hero's own dream",
+      "source": "lineage/tale.jai:417"
+    },
+    "dream.counted": {
+      "text": "% comes one nearer %: %, % of %.",
+      "args": [
+        "hero first name",
+        "bearing phrase",
+        "stage task (told)",
+        "count so far",
+        "goal"
+      ],
+      "when": "a stage with goal > 1 counted once",
+      "source": "lineage/tale.jai:426"
+    },
+    "dream.stage_done": {
+      "text": "% is a step nearer %. What is left: %.",
+      "args": [
+        "hero first name",
+        "bearing phrase",
+        "next stage task (told)"
+      ],
+      "when": "a stage finished, dream not yet fulfilled",
+      "source": "lineage/tale.jai:431"
+    },
+    "deed.dream_step": {
+      "text": "came a step nearer: %",
+      "args": [
+        "finished stage task (told)"
+      ],
+      "when": "deed telling (never displayed)",
+      "source": "lineage/tale.jai:432"
+    },
+    "dream.fulfilled_owned": {
+      "text": "% has done what % could not: %. It is finished. % is settled now, and dread has no hold on %.",
+      "args": [
+        "hero first name",
+        "owner first name",
+        "dream title (told)",
+        "capitalized subject pronoun",
+        "object pronoun"
+      ],
+      "when": "carried dream fulfilled",
+      "source": "lineage/tale.jai:440"
+    },
+    "dream.fulfilled": {
+      "text": "% has done it: %. % is settled now, and dread has no hold on %.",
+      "args": [
+        "hero first name",
+        "dream title (told)",
+        "capitalized subject pronoun",
+        "object pronoun"
+      ],
+      "when": "own dream fulfilled",
+      "source": "lineage/tale.jai:446"
+    },
+    "deed.dream_fulfilled": {
+      "text": "fulfilled the dream: %",
+      "args": [
+        "dream title (told)"
+      ],
+      "when": "deed telling (never displayed)",
+      "source": "lineage/tale.jai:451"
+    },
+    "deed.first_quest": {
+      "text": "first quested at %, aged %",
+      "args": [
+        "place name",
+        "age"
+      ],
+      "when": "deed telling (never displayed)",
+      "source": "lineage/tale.jai:167"
+    },
+    "deed.triumph": {
+      "text": "triumphed at %",
+      "args": [
+        "place name"
+      ],
+      "when": "deed telling (never displayed)",
+      "source": "lineage/tale.jai:196"
+    },
+    "scar.broken_by_grief": {
+      "text": "Broken by grief for %",
+      "args": [
+        "first name of the dead"
+      ],
+      "when": "scar on breaking from grief",
+      "source": "lineage/fear.jai:55"
+    },
+    "deed.broken_by_grief": {
+      "text": "was broken by grief for %",
+      "args": [
+        "first name of the dead"
+      ],
+      "when": "deed telling (never displayed)",
+      "source": "lineage/fear.jai:56"
+    },
+    "scar.broken": {
+      "text": "Broken by % %",
+      "args": [
+        "tag noun",
+        "occasion (common.at_place, or grief.occasion)"
+      ],
+      "when": "scar on breaking",
+      "source": "lineage/fear.jai:59"
+    },
+    "deed.broken": {
+      "text": "was broken by % %",
+      "args": [
+        "tag noun",
+        "occasion"
+      ],
+      "when": "deed telling (never displayed)",
+      "source": "lineage/fear.jai:60"
+    },
+    "fear.broken": {
+      "text": "Something in % gave way. % will not go against % again, for anyone. It is a scar now, and % children may be born with it.",
+      "args": [
+        "hero first name",
+        "capitalized subject pronoun",
+        "tag noun",
+        "possessive pronoun"
+      ],
+      "when": "hero reaches 5 dread",
+      "source": "lineage/fear.jai:64"
+    },
+    "deed.conquered_fear": {
+      "text": "conquered the fear of % %",
+      "args": [
+        "tag noun",
+        "occasion"
+      ],
+      "when": "deed telling (never displayed)",
+      "source": "lineage/fear.jai:72"
+    },
+    "fear.conquered": {
+      "text": "% has conquered % fear of %. What was a weight is a strength: +% against % from now on. % children may be born brave.",
+      "args": [
+        "hero first name",
+        "possessive pronoun",
+        "tag noun",
+        "CONQUERED_FEAR_BONUS (2)",
+        "tag title",
+        "capitalized possessive pronoun"
+      ],
+      "when": "courage reaches 3",
+      "source": "lineage/fear.jai:75"
+    },
+    "fear.courage": {
+      "text": "%, with % beside %. Courage % of %.",
+      "args": [
+        "a COURAGES pool line filled with (hero first name, tag noun)",
+        "steadying companion first name",
+        "object pronoun of the hero",
+        "new courage",
+        "COURAGE_TO_CONQUER (3)"
+      ],
+      "when": "success against the feared tag with a steadying companion",
+      "source": "lineage/fear.jai:100"
+    },
+    "fear.steadied": {
+      "text": "% kept % close, and the dread did not grow.",
+      "args": [
+        "steadying companion first name",
+        "hero first name"
+      ],
+      "when": "dread would rise by 0",
+      "source": "lineage/fear.jai:116"
+    },
+    "fear.dread": {
+      "text": "% Dread % of %.",
+      "args": [
+        "a DREADS pool line filled with (hero first name, tag noun)",
+        "new dread",
+        "DREAD_LIMIT (5)"
+      ],
+      "when": "dread rises from facing the fear",
+      "source": "lineage/fear.jai:122"
+    },
+    "fear.effect_conquered": {
+      "text": "A strength now: +% power against %.",
+      "args": [
+        "CONQUERED_FEAR_BONUS (2)",
+        "tag title"
+      ],
+      "when": "sheet text",
+      "source": "lineage/fear.jai:130"
+    },
+    "fear.effect_broken": {
+      "text": "Will not go against %, ever. Children born after are likelier to carry it.",
+      "args": [
+        "tag title"
+      ],
+      "when": "sheet text",
+      "source": "lineage/fear.jai:133"
+    },
+    "fear.effect": {
+      "text": "-% power against %. Each such quest adds dread, unless someone bonded is beside them. Then a success adds courage.",
+      "args": [
+        "current fear penalty",
+        "tag title"
+      ],
+      "when": "sheet text",
+      "source": "lineage/fear.jai:135"
+    },
+    "fear.state_born_brave": {
+      "text": "BORN BRAVE",
+      "args": [],
+      "when": "sheet label",
+      "source": "lineage/fear.jai:140"
+    },
+    "fear.state_conquered": {
+      "text": "FEAR, CONQUERED",
+      "args": [],
+      "when": "sheet label",
+      "source": "lineage/fear.jai:141"
+    },
+    "fear.state_broken": {
+      "text": "FEAR, BROKEN",
+      "args": [],
+      "when": "sheet label",
+      "source": "lineage/fear.jai:142"
+    },
+    "fear.state": {
+      "text": "FEAR",
+      "args": [],
+      "when": "sheet label",
+      "source": "lineage/fear.jai:143"
+    },
+    "bond.rivals_to_friends": {
+      "text": "% and % went out rivals. Nobody can stay a rival through a day like that. They came home friends.",
+      "args": [
+        "first hero first name",
+        "second hero first name"
+      ],
+      "when": "rivals share a triumph",
+      "source": "lineage/bond.jai:176"
+    },
+    "deed.befriended": {
+      "text": "became the friend of %",
+      "args": [
+        "the other hero's full name"
+      ],
+      "when": "deed telling (never displayed)",
+      "source": "lineage/bond.jai:184"
+    },
+    "bond.companions_to_rivals": {
+      "text": "% and % each say the other broke first at %. They are rivals now, and weaker together.",
+      "args": [
+        "first hero first name",
+        "second hero first name",
+        "place name"
+      ],
+      "when": "companions share a disaster",
+      "source": "lineage/bond.jai:193"
+    },
+    "bond.parent_saw_child": {
+      "text": "% saw % % in the worst of it, and has not stopped seeing it. Dread % of %.",
+      "args": [
+        "parent first name",
+        "parent possessive pronoun",
+        "parent's kinship telling of the child (son/daughter)",
+        "parent dread after +1, capped at 5",
+        "DREAD_LIMIT (5)"
+      ],
+      "when": "parent and child in a party that fails",
+      "source": "lineage/bond.jai:206"
+    },
+    "bond.child_saw_parent": {
+      "text": "% saw % % go down. Dread % of %.",
+      "args": [
+        "child first name",
+        "child possessive pronoun",
+        "child's kinship telling of the parent (father/mother)",
+        "child dread after +1, capped at 5",
+        "DREAD_LIMIT (5)"
+      ],
+      "when": "parent and child in a party that fails",
+      "source": "lineage/bond.jai:213"
+    },
+    "bond.dream_rivals": {
+      "text": "% wants what % wants: %. There is only room for one of them to be first. They are rivals.",
+      "args": [
+        "hero first name",
+        "other first name",
+        "dream title (told for the hero)"
+      ],
+      "when": "two non-kin adults dream the same dream",
+      "source": "lineage/bond.jai:236"
+    },
+    "grief.occasion": {
+      "text": "the year % died",
+      "args": [
+        "first name of the dead"
+      ],
+      "when": "the \"occasion\" used if grief breaks someone (appears in scars via scar.broken only when not grief; grief uses scar.broken_by_grief)",
+      "source": "lineage/bond.jai:242"
+    },
+    "grief.rival": {
+      "text": "% has no one left to be better than.",
+      "args": [
+        "mourner first name"
+      ],
+      "when": "a rival of the dead, no dread",
+      "source": "lineage/bond.jai:258"
+    },
+    "grief.dread": {
+      "text": "% grieves for % %. Dread % of %.",
+      "args": [
+        "mourner first name",
+        "mourner possessive pronoun",
+        "mourner's kinship telling of the dead",
+        "mourner dread after grief, capped at 5",
+        "DREAD_LIMIT (5)"
+      ],
+      "when": "a mourner who can still dread",
+      "source": "lineage/bond.jai:272"
+    },
+    "grief.borne_one": {
+      "text": "% grieves for % %, and bears it.",
+      "args": [
+        "mourner first name",
+        "mourner possessive pronoun",
+        "kinship telling"
+      ],
+      "when": "exactly one mourner who cannot dread (settled/conquered/broken)",
+      "source": "lineage/bond.jai:286"
+    },
+    "grief.borne_shared_kinship": {
+      "text": "their %",
+      "args": [
+        "the shared kinship telling"
+      ],
+      "when": "object phrase when all bearers share one kinship telling",
+      "source": "lineage/bond.jai:297"
+    },
+    "grief.borne_many": {
+      "text": "% grieve for %, and bear it.",
+      "args": [
+        "bearer names joined (name list)",
+        "grief.borne_shared_kinship, else the dead's first name"
+      ],
+      "when": "two or more mourners who cannot dread",
+      "source": "lineage/bond.jai:298"
+    },
+    "winter.waits_for_learner": {
+      "text": "% waited in the yard for a learner who did not come.",
+      "args": [
+        "teacher first name"
+      ],
+      "when": "training-yard teacher with no learner",
+      "source": "lineage/hearth.jai:227"
+    },
+    "winter.bench_no_child": {
+      "text": "% sat on the bench in the yard. No child came.",
+      "args": [
+        "minder first name"
+      ],
+      "when": "bench teacher with no child",
+      "source": "lineage/hearth.jai:240"
+    },
+    "deed.wed": {
+      "text": "wed %",
+      "args": [
+        "the other's full name"
+      ],
+      "when": "deed telling (never displayed)",
+      "source": "lineage/hearth.jai:251"
+    },
+    "winter.rivals_make_peace": {
+      "text": "% and % walked in the garden all winter, arguing. They came in friends.",
+      "args": [
+        "first garden seat first name",
+        "second garden seat first name"
+      ],
+      "when": "rivals court",
+      "source": "lineage/hearth.jai:258"
+    },
+    "winter.courting_failed": {
+      "text": "% walked in the garden. Nothing came of it.",
+      "args": [
+        "first non-empty garden seat first name"
+      ],
+      "when": "any other courtship except NOBODY and WILL_WED",
+      "source": "lineage/hearth.jai:262"
+    },
+    "winter.tale_told": {
+      "text": "% +% renown to the house, and to %.",
+      "args": [
+        "a TALES_TOLD pool line filled with the teller first name",
+        "TALE_RENOWN (1)",
+        "teller first name"
+      ],
+      "when": "first adult teller",
+      "source": "lineage/hearth.jai:277"
+    },
+    "winter.tale_told_again": {
+      "text": "% told it again after, in % own way. +% renown to %. The house has heard it once already.",
+      "args": [
+        "teller first name",
+        "possessive pronoun",
+        "TALE_RENOWN (1)",
+        "teller first name"
+      ],
+      "when": "second adult teller",
+      "source": "lineage/hearth.jai:281"
+    },
+    "deed.told_the_tale": {
+      "text": "told the tale at the hearth",
+      "args": [],
+      "when": "deed telling (never displayed)",
+      "source": "lineage/hearth.jai:284"
+    },
+    "winter.trained_under": {
+      "text": "under %",
+      "args": [
+        "teacher first name"
+      ],
+      "when": "source phrase with a teacher",
+      "source": "lineage/hearth.jai:294"
+    },
+    "winter.trained_alone": {
+      "text": "alone",
+      "args": [],
+      "when": "source phrase without a teacher",
+      "source": "lineage/hearth.jai:294"
+    },
+    "winter.trained": {
+      "text": "% trained %. % rises to %.",
+      "args": [
+        "learner first name",
+        "source phrase",
+        "aptitude title",
+        "new value"
+      ],
+      "when": "a lesson with amount > 0",
+      "source": "lineage/hearth.jai:296"
+    },
+    "winter.new_student": {
+      "text": "% has taken % as a student.",
+      "args": [
+        "teacher first name",
+        "learner first name"
+      ],
+      "when": "teacher and learner had no bond before",
+      "source": "lineage/hearth.jai:315"
+    },
+    "deed.taught": {
+      "text": "first taught the young: %",
+      "args": [
+        "learner first name"
+      ],
+      "when": "deed telling (never displayed)",
+      "source": "lineage/hearth.jai:318"
+    },
+    "winter.rest_both": {
+      "text": "% The wound closed. Dread eased to %.",
+      "args": [
+        "a RESTS pool line filled with the hero first name",
+        "new dread"
+      ],
+      "when": "healed and calmed",
+      "source": "lineage/hearth.jai:332"
+    },
+    "winter.rest_mended": {
+      "text": "% The wound closed.",
+      "args": [
+        "a RESTS pool line filled with the hero first name"
+      ],
+      "when": "healed only",
+      "source": "lineage/hearth.jai:335"
+    },
+    "winter.rest_calmed": {
+      "text": "% Dread eased to %.",
+      "args": [
+        "a RESTS pool line filled with the hero first name",
+        "new dread"
+      ],
+      "when": "calmed only",
+      "source": "lineage/hearth.jai:338"
+    },
+    "lesson.amount": {
+      "text": "+% %",
+      "args": [
+        "amount",
+        "aptitude title"
+      ],
+      "when": "seat note for a useful lesson",
+      "source": "lineage/hearth.jai:138"
+    },
+    "legacy.hands_full": {
+      "text": "% has two hands and one of them is full. % passes to %.",
+      "args": [
+        "hero first name",
+        "old heirloom name",
+        "heir first name"
+      ],
+      "when": "new heirloom made by a hero already holding one; old one passes",
+      "source": "lineage/legacy.jai:119"
+    },
+    "legacy.hung_over_hearth": {
+      "text": "% is hung over the hearth. There is no one to take it.",
+      "args": [
+        "old heirloom name"
+      ],
+      "when": "as above, no heir",
+      "source": "lineage/legacy.jai:123"
+    },
+    "legacy.heirloom": {
+      "text": "It leaves an heirloom: %. % %",
+      "args": [
+        "heirloom name",
+        "heirloom effect (legacies.heirloom_effect)",
+        "provenance"
+      ],
+      "when": "dream leaves an heirloom",
+      "source": "lineage/legacy.jai:146"
+    },
+    "legacy.tale": {
+      "text": "It leaves a tale: %. It will be told as long as there is a house: +% renown every year.",
+      "args": [
+        "tale title",
+        "TALE_YEARLY_RENOWN (1)"
+      ],
+      "when": "dream leaves a tale",
+      "source": "lineage/legacy.jai:155"
+    },
+    "legacy.blessing": {
+      "text": "It leaves a blessing, %: %, for % and every child born to them.",
+      "args": [
+        "blessing title",
+        "blessing effect",
+        "names of those newly blessed (name list; \"no one yet\" if empty)"
+      ],
+      "when": "dream leaves a blessing",
+      "source": "lineage/legacy.jai:179"
+    },
+    "deed.left_legacy": {
+      "text": "left %",
+      "args": [
+        "legacy telling (heirloom name, tale title or blessing title)"
+      ],
+      "when": "deed telling (never displayed)",
+      "source": "lineage/legacy.jai:184"
+    },
+    "tales.one": {
+      "text": "% is still told in the valley. +% renown.",
+      "args": [
+        "tale title",
+        "TALE_YEARLY_RENOWN (1)"
+      ],
+      "when": "year turn, exactly one house tale",
+      "source": "lineage/legacy.jai:258"
+    },
+    "tales.many": {
+      "text": "The valley tells % tales of the house now, and the newest is %. +% renown.",
+      "args": [
+        "tale count",
+        "newest tale title lowered (first letter)",
+        "renown gained (count x 1)"
+      ],
+      "when": "year turn, two or more house tales",
+      "source": "lineage/legacy.jai:264"
+    },
+    "ghost.raised": {
+      "text": "No one takes up the dream, and it does not go into the ground with %. There will be a quest at %: lay %'s ghost.",
+      "args": [
+        "object pronoun of the dead",
+        "ghost place name",
+        "dead first name"
+      ],
+      "when": "heir choice \"No one\" (or unable heir) with a dream undone",
+      "source": "lineage/ghost.jai:40"
+    },
+    "ghost.laid": {
+      "text": "% is at rest. What % wanted is let go, not done. It leaves a tale: %. +% renown every year.",
+      "args": [
+        "dead full name",
+        "dead subject pronoun",
+        "ghost tale title",
+        "TALE_YEARLY_RENOWN (1)"
+      ],
+      "when": "ghost quest won (SUCCESS/TRIUMPH)",
+      "source": "lineage/ghost.jai:98"
+    },
+    "deed.laid_ghost": {
+      "text": "laid the ghost of %",
+      "args": [
+        "dead full name"
+      ],
+      "when": "deed telling (never displayed)",
+      "source": "lineage/ghost.jai:103"
+    },
+    "turning.winter_title": {
+      "text": "The winter of year %",
+      "args": [
+        "current year"
+      ],
+      "when": "page title",
+      "source": "lineage/passage.jai:61"
+    },
+    "turning.quiet_winter": {
+      "text": "A quiet winter. The house kept to the fire.",
+      "args": [],
+      "when": "winter page had no lines",
+      "source": "lineage/passage.jai:64"
+    },
+    "turning.year_title": {
+      "text": "Year % begins",
+      "args": [
+        "next year"
+      ],
+      "when": "page title",
+      "source": "lineage/passage.jai:99"
+    },
+    "turning.door_countdown": {
+      "text": "The year turns. The Sealed Door opens in % %.",
+      "args": [
+        "years remaining",
+        "turning.year_word or turning.years_word"
+      ],
+      "when": "closing line on the last page",
+      "source": "lineage/passage.jai:107"
+    },
+    "turning.year_word": {
+      "text": "year",
+      "args": [],
+      "when": "",
+      "source": "lineage/passage.jai:107"
+    },
+    "turning.years_word": {
+      "text": "years",
+      "args": [],
+      "when": "",
+      "source": "lineage/passage.jai:107"
+    },
+    "turning.door_open": {
+      "text": "The year turns. The Sealed Door stands open. It asks for four.",
+      "args": [],
+      "when": "closing line when the Door opens next summer",
+      "source": "lineage/passage.jai:110"
+    },
+    "death.title": {
+      "text": "In memory of %",
+      "args": [
+        "dead full name"
+      ],
+      "when": "page title",
+      "source": "lineage/passage.jai:147"
+    },
+    "death.leaves_heirloom": {
+      "text": "% leaves %. %",
+      "args": [
+        "capitalized subject pronoun",
+        "heirloom name",
+        "heirloom effect"
+      ],
+      "when": "death page",
+      "source": "lineage/passage.jai:155"
+    },
+    "death.leaves_dream": {
+      "text": "% leaves a dream undone: %. Still to do: %.",
+      "args": [
+        "capitalized subject pronoun",
+        "dream title (told)",
+        "stage progress (told)"
+      ],
+      "when": "death page",
+      "source": "lineage/passage.jai:159"
+    },
+    "heir.kinship_grandchild_HE": {
+      "text": "grandson",
+      "args": [],
+      "when": "",
+      "source": "lineage/passage.jai:201"
+    },
+    "heir.kinship_grandchild_SHE": {
+      "text": "granddaughter",
+      "args": [],
+      "when": "",
+      "source": "lineage/passage.jai:201"
+    },
+    "heir.kinship_sibling_HE": {
+      "text": "brother",
+      "args": [],
+      "when": "",
+      "source": "lineage/passage.jai:203"
+    },
+    "heir.kinship_sibling_SHE": {
+      "text": "sister",
+      "args": [],
+      "when": "",
+      "source": "lineage/passage.jai:203"
+    },
+    "heir.kinship_house": {
+      "text": "of the house",
+      "args": [],
+      "when": "",
+      "source": "lineage/passage.jai:204"
+    },
+    "heir.prospect": {
+      "text": "%, %",
+      "args": [
+        "candidate first name",
+        "kinship to the dead"
+      ],
+      "when": "heir button",
+      "source": "lineage/passage.jai:233"
+    },
+    "heir.not_the_dream": {
+      "text": " (not the dream)",
+      "args": [],
+      "when": "suffix: candidate cannot take the dream",
+      "source": "lineage/passage.jai:236"
+    },
+    "heir.lays_one_aside": {
+      "text": " (lays one aside)",
+      "args": [],
+      "when": "suffix: candidate already holds an heirloom",
+      "source": "lineage/passage.jai:239"
+    },
+    "heir.lays_aside": {
+      "text": "% lays % aside, over the hearth.",
+      "args": [
+        "heir first name",
+        "heir's old heirloom name"
+      ],
+      "when": "heir already held an heirloom",
+      "source": "lineage/passage.jai:264"
+    },
+    "deed.inherited": {
+      "text": "was given % by %",
+      "args": [
+        "heirloom name",
+        "dead first name"
+      ],
+      "when": "deed telling (never displayed)",
+      "source": "lineage/passage.jai:267"
+    },
+    "heir.buried_with": {
+      "text": "% was laid in the ground with %.",
+      "args": [
+        "heirloom name, first letter capitalized",
+        "object pronoun of the dead"
+      ],
+      "when": "\"No one\" chosen with an heirloom",
+      "source": "lineage/passage.jai:271"
+    },
+    "heir.takes_dream": {
+      "text": "% takes the dream up where % left it: %.",
+      "args": [
+        "heir first name",
+        "dead first name",
+        "stage progress (told about the dream owner)"
+      ],
+      "when": "dream passed",
+      "source": "lineage/passage.jai:305"
+    },
+    "deed.took_up_dream": {
+      "text": "took up the dream of %",
+      "args": [
+        "dream owner full name"
+      ],
+      "when": "deed telling (never displayed)",
+      "source": "lineage/passage.jai:308"
+    },
+    "promise.no_child": {
+      "text": "% was promised to the Sealed Door, and has no child living. The Door will open for no one by name.",
+      "args": [
+        "dead first name"
+      ],
+      "when": "Door destiny holder dies childless",
+      "source": "lineage/passage.jai:324"
+    },
+    "promise.passes": {
+      "text": "The Door was promised to %. It falls to % firstborn, %: blood of %. Whatever the Seer said to % before is set aside.",
+      "args": [
+        "dead first name",
+        "dead possessive pronoun",
+        "firstborn first name",
+        "promised-to name",
+        "firstborn first name"
+      ],
+      "when": "Door destiny passes",
+      "source": "lineage/passage.jai:332"
+    },
+    "birth.title": {
+      "text": "% % is born",
+      "args": [
+        "child first name",
+        "child house"
+      ],
+      "when": "page title",
+      "source": "lineage/passage.jai:369"
+    },
+    "birth.named": {
+      "text": "They have named % %.",
+      "args": [
+        "object pronoun of the child",
+        "child first name"
+      ],
+      "when": "birth page",
+      "source": "lineage/passage.jai:372"
+    },
+    "birth.blessing_one": {
+      "text": "% is born under a blessing, %: %.",
+      "args": [
+        "capitalized subject pronoun",
+        "blessing title",
+        "blessing effect"
+      ],
+      "when": "birth page",
+      "source": "lineage/passage.jai:389"
+    },
+    "birth.blessing_item": {
+      "text": "% (%)",
+      "args": [
+        "blessing title",
+        "blessing effect"
+      ],
+      "when": "item in birth.blessing_many",
+      "source": "lineage/passage.jai:395"
+    },
+    "birth.blessing_many": {
+      "text": "% is born under % blessings: %.",
+      "args": [
+        "capitalized subject pronoun",
+        "blessing count",
+        "items joined (name list)"
+      ],
+      "when": "birth page",
+      "source": "lineage/passage.jai:398"
+    },
+    "birth.born_brave": {
+      "text": "% conquered % fear of %, and the child is born brave: +% against % from the first.",
+      "args": [
+        "parent first name",
+        "parent possessive pronoun",
+        "tag noun",
+        "CONQUERED_FEAR_BONUS (2)",
+        "tag title"
+      ],
+      "when": "birth page",
+      "source": "lineage/passage.jai:408"
+    },
+    "birth.parent_fear": {
+      "text": "% has % %'s fear of %.",
+      "args": [
+        "capitalized subject pronoun",
+        "possessive pronoun of the child",
+        "birth.father or birth.mother (by that parent's pronoun)",
+        "tag noun"
+      ],
+      "when": "birth page",
+      "source": "lineage/passage.jai:415"
+    },
+    "birth.father": {
+      "text": "father",
+      "args": [],
+      "when": "",
+      "source": "lineage/passage.jai:416"
+    },
+    "birth.mother": {
+      "text": "mother",
+      "args": [],
+      "when": "",
+      "source": "lineage/passage.jai:416"
+    },
+    "birth.own_fear": {
+      "text": "Even in the cradle % is afraid of %.",
+      "args": [
+        "subject pronoun of the child",
+        "tag noun"
+      ],
+      "when": "birth page",
+      "source": "lineage/passage.jai:421"
+    },
+    "deed.child_born": {
+      "text": "had a child, %",
+      "args": [
+        "child first name"
+      ],
+      "when": "deed telling (never displayed)",
+      "source": "lineage/passage.jai:377"
+    },
+    "age.title": {
+      "text": "% comes of age",
+      "args": [
+        "hero full name"
+      ],
+      "when": "page title",
+      "source": "lineage/passage.jai:427"
+    },
+    "age.seer": {
+      "text": "The Seer took % hand and said: \"%\"",
+      "args": [
+        "possessive pronoun",
+        "prophecy (destinies prophecy, or blood_of_prophecy)"
+      ],
+      "when": "coming-of-age page, then the doom line, then the gift line",
+      "source": "lineage/passage.jai:432"
+    },
+    "deed.came_of_age": {
+      "text": "came of age and heard the Seer",
+      "args": [],
+      "when": "deed telling (never displayed)",
+      "source": "lineage/passage.jai:436"
+    },
+    "arrival.title": {
+      "text": "% arrives",
+      "args": [
+        "wanderer full name"
+      ],
+      "when": "page title",
+      "source": "lineage/passage.jai:454"
+    },
+    "arrival.who": {
+      "text": "A % of %, with % for % best gift. %",
+      "args": [
+        "vocation title, lowercased",
+        "age",
+        "best aptitude title, lowercased",
+        "possessive pronoun",
+        "wanderer standing telling"
+      ],
+      "when": "arrival page (after an ARRIVALS pool line filled with the full name)",
+      "source": "lineage/passage.jai:457"
+    },
+    "arrival.dream": {
+      "text": "% dreams: %. %",
+      "args": [
+        "capitalized subject pronoun",
+        "dream title (told)",
+        "legacy promise"
+      ],
+      "when": "arrival page; dream-rival lines may follow",
+      "source": "lineage/passage.jai:462"
+    },
+    "arrival.fear": {
+      "text": "% fears %.",
+      "args": [
+        "capitalized subject pronoun",
+        "tag noun"
+      ],
+      "when": "arrival page",
+      "source": "lineage/passage.jai:465"
+    },
+    "arrival.seer": {
+      "text": "The Seer said of %: \"%\"",
+      "args": [
+        "object pronoun",
+        "prophecy"
+      ],
+      "when": "arrival page, then the doom line, then the gift line",
+      "source": "lineage/passage.jai:467"
+    },
+    "deed.arrived": {
+      "text": "came to the house as a wanderer",
+      "args": [],
+      "when": "deed telling (never displayed)",
+      "source": "lineage/passage.jai:471"
+    },
+    "phase.changed": {
+      "text": "% is %: % now. %",
+      "args": [
+        "hero first name",
+        "new age",
+        "phase telling",
+        "phase effect telling"
+      ],
+      "when": "\"Year N begins\" page; never for YOUTH",
+      "source": "lineage/passage.jai:480"
+    },
+    "age.calling": {
+      "text": "% is %, and a % now. % may quest. %",
+      "args": [
+        "hero first name",
+        "age",
+        "vocation title, lowercased",
+        "capitalized subject pronoun",
+        "phase effect telling for YOUTH"
+      ],
+      "when": "coming-of-age page",
+      "source": "generation/hero-context/hero-context.jai:164"
+    },
+    "age.teaching_shows": {
+      "text": "%'s teaching shows in %. % rises to %.",
+      "args": [
+        "first-teacher first name",
+        "object pronoun",
+        "aptitude title",
+        "new value"
+      ],
+      "when": "coming-of-age page",
+      "source": "generation/hero-context/hero-context.jai:174"
+    },
+    "age.carried_dream": {
+      "text": "% has carried %'s dream since % was a child: %.",
+      "args": [
+        "capitalized subject pronoun",
+        "dream owner first name",
+        "subject pronoun",
+        "dream title (told)"
+      ],
+      "when": "child already carrying a passed-on dream",
+      "source": "generation/hero-context/hero-context.jai:185"
+    },
+    "age.has_dream": {
+      "text": "% has a dream: %.",
+      "args": [
+        "capitalized subject pronoun",
+        "dream title (told)"
+      ],
+      "when": "child already had their own dream",
+      "source": "generation/hero-context/hero-context.jai:189"
+    },
+    "age.avenge_dream": {
+      "text": "% has a dream, and the whole house knows why: %. % % at %. It was %.",
+      "args": [
+        "capitalized subject pronoun",
+        "dream title (told)",
+        "lost parent full name",
+        "lost parent fate telling",
+        "place name",
+        "tag noun"
+      ],
+      "when": "avenge dream assigned",
+      "source": "generation/hero-context/hero-context.jai:196"
+    },
+    "age.ghost_dream": {
+      "text": "The house's unfinished business finds %. % takes up the dream of %: %. The ghost is quiet.",
+      "args": [
+        "object pronoun",
+        "capitalized subject pronoun",
+        "ghost hero full name",
+        "dream title (told)"
+      ],
+      "when": "ancestral ghost dream assigned",
+      "source": "generation/hero-context/hero-context.jai:203"
+    },
+    "age.rolled_dream": {
+      "text": "% has a dream: %. %",
+      "args": [
+        "capitalized subject pronoun",
+        "dream title (told)",
+        "legacy promise"
+      ],
+      "when": "rolled dream assigned",
+      "source": "generation/hero-context/hero-context.jai:220"
+    },
+    "destiny.blood_of": {
+      "text": "Blood of %: %",
+      "args": [
+        "promised-to name",
+        "prophecy lowered (first letter)"
+      ],
+      "when": "prophecy of a Door heir",
+      "source": "lineage/destiny.jai:90"
+    },
+    "destiny.shielded_bed": {
+      "text": "% should have died there. The Seer promised % a bed, so % did not.",
+      "args": [
+        "hero first name",
+        "object pronoun",
+        "subject pronoun"
+      ],
+      "when": "disaster death roll hit a DIE_IN_YOUR_BED hero",
+      "source": "lineage/destiny.jai:120"
+    },
+    "destiny.shielded_fire": {
+      "text": "% should have died there. It was not fire, so % did not.",
+      "args": [
+        "hero first name",
+        "subject pronoun"
+      ],
+      "when": "disaster death roll hit a FIRE_WILL_END_YOU hero",
+      "source": "lineage/destiny.jai:123"
+    },
+    "deed.opened_a_lock": {
+      "text": "opened % at the Sealed Door",
+      "args": [
+        "lock name"
+      ],
+      "when": "deed telling (never displayed)",
+      "source": "lineage/door.jai:152"
+    },
+    "deed.stood_at_the_door": {
+      "text": "stood at the Sealed Door",
+      "args": [],
+      "when": "deed telling (never displayed)",
+      "source": "lineage/door.jai:160"
+    },
+    "door.prologue": {
+      "text": "In the last summer the Sealed Door stood open, as it had been foretold for twenty-five years. The house sent %.",
+      "args": [
+        "full names of the four, joined (name list)"
+      ],
+      "when": "prologue line 1",
+      "source": "lineage/door.jai:184"
+    },
+    "door.companion": {
+      "text": "%1 %2 %3 (%4%5)",
+      "args": [
+        "possessive pronoun of the first",
+        "kinship between them (tell_kinship_between)",
+        "second first name",
+        "\"+\" if power > 0 else \"\"",
+        "bond power"
+      ],
+      "when": "item listing a bond inside the party",
+      "source": "lineage/door.jai:201"
+    },
+    "door.went_beside": {
+      "text": "% went down beside %, at every lock.",
+      "args": [
+        "first first name",
+        "items joined (name list)"
+      ],
+      "when": "prologue, per member with any shown bond to a later member",
+      "source": "lineage/door.jai:207"
+    },
+    "door.summary": {
+      "text": "Against three locks of %, %, and %, they brought Might %, Wits %, and Spirit %. % and % lay ahead.",
+      "args": [
+        "lock 1 demand",
+        "lock 2 demand",
+        "lock 3 demand",
+        "Might power",
+        "Wits power",
+        "Spirit power",
+        "capitalized Door tag 1 noun",
+        "Door tag 2 noun"
+      ],
+      "when": "prologue, last line",
+      "source": "lineage/door.jai:212"
+    },
+    "door.brought": {
+      "text": "% was %, %.",
+      "args": [
+        "first name",
+        "age",
+        "descent phrase"
+      ],
+      "when": "prologue, one per member; the following fragments are appended in order when they apply",
+      "source": "lineage/door.jai:231"
+    },
+    "door.brought_blood": {
+      "text": " The Door was promised to %, and % went as %'s blood: +% at every lock.",
+      "args": [
+        "promised-to name",
+        "subject pronoun",
+        "promised-to name",
+        "DOOR_DESTINY_POWER (5)"
+      ],
+      "when": "appended",
+      "source": "lineage/door.jai:235"
+    },
+    "door.brought_promise": {
+      "text": " The Seer had said it: \"You will open the Sealed Door.\" +% at every lock.",
+      "args": [
+        "DOOR_DESTINY_POWER (5)"
+      ],
+      "when": "appended",
+      "source": "lineage/door.jai:239"
+    },
+    "door.brought_heirloom": {
+      "text": " % carried %. %",
+      "args": [
+        "capitalized subject pronoun",
+        "heirloom name with \"<own name>'s \" replaced by \"<possessive> own \"",
+        "provenance"
+      ],
+      "when": "appended",
+      "source": "lineage/door.jai:245"
+    },
+    "door.brought_born_brave": {
+      "text": " % was born unafraid of %, and here it counted: +%.",
+      "args": [
+        "capitalized subject pronoun",
+        "tag noun",
+        "CONQUERED_FEAR_BONUS (2)"
+      ],
+      "when": "appended",
+      "source": "lineage/door.jai:251"
+    },
+    "door.brought_conquered_year": {
+      "text": " % had conquered % fear of % in year %, and here it counted: +%.",
+      "args": [
+        "capitalized subject pronoun",
+        "possessive pronoun",
+        "tag noun",
+        "year conquered",
+        "CONQUERED_FEAR_BONUS (2)"
+      ],
+      "when": "appended",
+      "source": "lineage/door.jai:255"
+    },
+    "door.brought_conquered": {
+      "text": " % had conquered % fear of %, and here it counted: +%.",
+      "args": [
+        "capitalized subject pronoun",
+        "possessive pronoun",
+        "tag noun",
+        "CONQUERED_FEAR_BONUS (2)"
+      ],
+      "when": "appended (no conquest deed found)",
+      "source": "lineage/door.jai:256"
+    },
+    "door.brought_afraid": {
+      "text": " % had been afraid of % all % life, and went down into it anyway: -%.",
+      "args": [
+        "capitalized subject pronoun",
+        "tag noun",
+        "possessive pronoun",
+        "fear penalty"
+      ],
+      "when": "appended",
+      "source": "lineage/door.jai:259"
+    },
+    "door.brought_blessing": {
+      "text": " % went with %: +%.",
+      "args": [
+        "blessing title",
+        "object pronoun",
+        "blessing power"
+      ],
+      "when": "appended per EVERYWHERE blessing",
+      "source": "lineage/door.jai:265"
+    },
+    "door.brought_wounded": {
+      "text": " % went wounded: -%.",
+      "args": [
+        "capitalized subject pronoun",
+        "WOUND_PENALTY (2)"
+      ],
+      "when": "appended",
+      "source": "lineage/door.jai:268"
+    },
+    "door.descent_arrived": {
+      "text": "and had come up the road in year %",
+      "args": [
+        "arrival year"
+      ],
+      "when": "descent phrase",
+      "source": "lineage/door.jai:280"
+    },
+    "door.descent_none": {
+      "text": "and of the house before its years were counted",
+      "args": [],
+      "when": "descent phrase",
+      "source": "lineage/door.jai:293"
+    },
+    "door.descent_child_HE": {
+      "text": "son",
+      "args": [],
+      "when": "",
+      "source": "lineage/door.jai:295"
+    },
+    "door.descent_child_SHE": {
+      "text": "daughter",
+      "args": [],
+      "when": "",
+      "source": "lineage/door.jai:295"
+    },
+    "door.descent_parents": {
+      "text": "the % of %",
+      "args": [
+        "son/daughter",
+        "parent names (name list)"
+      ],
+      "when": "descent phrase",
+      "source": "lineage/door.jai:296"
+    },
+    "door.descent_grandchild_HE": {
+      "text": "grandson",
+      "args": [],
+      "when": "",
+      "source": "lineage/door.jai:298"
+    },
+    "door.descent_grandchild_SHE": {
+      "text": "granddaughter",
+      "args": [],
+      "when": "",
+      "source": "lineage/door.jai:298"
+    },
+    "door.descent_grandparents": {
+      "text": "the % of % and the % of %",
+      "args": [
+        "son/daughter",
+        "parent names",
+        "grandson/granddaughter",
+        "grandparent names"
+      ],
+      "when": "descent phrase",
+      "source": "lineage/door.jai:299"
+    },
+    "door.verdict_opened": {
+      "text": " opened %, and",
+      "args": [
+        "lock names this hero bore open (name list)"
+      ],
+      "when": "fragment inserted after the name",
+      "source": "scene/scenes/ending.jai:130"
+    },
+    "door.verdict_fell": {
+      "text": "%1%2 fell at %3.",
+      "args": [
+        "full name",
+        "door.verdict_opened or \"\"",
+        "name of the last lock they stood at"
+      ],
+      "when": "ending verdict line",
+      "source": "scene/scenes/ending.jai:133"
+    },
+    "door.verdict_came_home": {
+      "text": "%1%2 came home.",
+      "args": [
+        "full name",
+        "door.verdict_opened"
+      ],
+      "when": "ending verdict line",
+      "source": "scene/scenes/ending.jai:136"
+    },
+    "door.verdict_returned": {
+      "text": "%1 came home%2.",
+      "args": [
+        "names (name list)",
+        "door.verdict_too or \"\""
+      ],
+      "when": "ending verdict line",
+      "source": "scene/scenes/ending.jai:145"
+    },
+    "door.verdict_too": {
+      "text": " too",
+      "args": [],
+      "when": "",
+      "source": "scene/scenes/ending.jai:145"
+    },
+    "oath.kept": {
+      "text": "% swore it in the family's name and kept the oath: +% renown to % and +% to the house.",
+      "args": [
+        "swearer first name",
+        "weight",
+        "object pronoun",
+        "weight"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "oath.failed": {
+      "text": "% swore it in the family's name and failed: -% renown to %, -% to the house, and a mark of % on the name.",
+      "args": [
+        "swearer first name",
+        "weight",
+        "object pronoun",
+        "weight",
+        "weight"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "marks.drain_one": {
+      "text": "The name carries a mark: -% renown.",
+      "args": [
+        "MARK_DRAIN"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "marks.drain_many": {
+      "text": "The name carries % marks: -% renown.",
+      "args": [
+        "count",
+        "count x MARK_DRAIN"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "death.leaves_marks": {
+      "text": "% leaves marks on the name: %.",
+      "args": [
+        "subject pronoun, capitalised",
+        "title (weight) list"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "heir.takes_marks": {
+      "text": "% takes up the marks: %.",
+      "args": [
+        "heir first name",
+        "title (weight) list"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "heir.mark_struck": {
+      "text": "The mark of % is struck from the name.",
+      "args": [
+        "title"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "heir.marks_buried": {
+      "text": "The marks go into the ground with %: the name is lighter by %.",
+      "args": [
+        "object pronoun",
+        "count x MARK_DRAIN"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "heir.takes_blessings": {
+      "text": "% takes up %.",
+      "args": [
+        "heir first name",
+        "blessing title list"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "winter.unproven": {
+      "text": "% is unproven: renown % of %. The house will not have % yet.",
+      "args": [
+        "outsider first name",
+        "renown",
+        "MARRY_IN_RENOWN",
+        "object pronoun"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "winter.neither_family": {
+      "text": "% and % are neither of the house. They may not wed under this roof.",
+      "args": [
+        "first garden seat first name",
+        "second"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "winter.wed_in": {
+      "text": "% weds into the house and takes the name %: renown +% to the house.",
+      "args": [
+        "outsider first name",
+        "house name",
+        "dowry"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "winter.tale_told_outsider": {
+      "text": "% told the tale; an outsider's telling adds nothing to the name.",
+      "args": [
+        "teller first name"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "quest.reward_outsiders": {
+      "text": "+% renown to each who went. Outsiders bring the house nothing.",
+      "args": [
+        "renown"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    },
+    "birth.bred_true": {
+      "text": "% has the line's gift: +% %.",
+      "args": [
+        "child first name",
+        "BRED_TRUE_BONUS",
+        "aptitude"
+      ],
+      "source": "variant: tools/yakin/runs/keifu-x-inheritance-r2/DESIGN.md decision 14"
+    }
+  }
+}
