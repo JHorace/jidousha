@@ -1,0 +1,87 @@
+#! Round 1 — DESIGN.md's fourteen named faults, plus the two rules the implement
+#! stage added (the cup's opening tick, the Hunter's prey) and the swing cooldown.
+
+### Z1 a zone keyframe radius
+@ src/model.rs
+- (3600, 22.0),
++ (3600, 20.0),
+
+### Z2 the grace period
+@ src/model.rs
+- pub const GRACE_TICKS: u32 = 300;
++ pub const GRACE_TICKS: u32 = 240;
+
+### Z3 the zone's edge counts as outside
+@ src/rules.rs
+- zone.center.distance(point) <= zone.radius
++ zone.center.distance(point) < zone.radius - 0.5
+
+### C1 a club disables for longer
+@ src/model.rs
+- pub const CLUB_STUN: u32 = 180;
++ pub const CLUB_STUN: u32 = 240;
+
+### C2 the helmet does not halve the disable
+@ src/rules.rs
+- fx.stun_scale *= 0.5;
++ fx.stun_scale *= 1.0;
+
+### C3 the helmet does not keep items
+@ src/rules.rs
+- fx.drops_when_clubbed = false;
++ fx.drops_when_clubbed = true;
+
+### C4 the lead ball can be struck
+@ src/rules.rs
+- fx.strike_immune = true;
++ fx.strike_immune = false;
+
+### E1 the driver's shot scale
+@ src/rules.rs
+- Item::Driver => fx.shot_scale *= 1.4,
++ Item::Driver => fx.shot_scale *= 1.3,
+
+### E2 extraction keeps three
+@ src/model.rs
+- pub const BAG_LIMIT: usize = 2;
++ pub const BAG_LIMIT: usize = 3;
+
+### E3 the win bonus
+@ src/model.rs
+- pub const WIN_BONUS: u32 = 5;
++ pub const WIN_BONUS: u32 = 4;
+
+### E4 an item's value
+@ src/model.rs
+- Item::Driver | Item::LongClub => 3,
++ Item::Driver | Item::LongClub => 4,
+
+### Z4 arrival forgets the present tick
+@ src/rules.rs
+- now + u64::from(roll.ticks) + walk.ceil() as u64
++ u64::from(roll.ticks) + walk.ceil() as u64
+
+### Z5 elimination one tick late
+@ src/systems.rs
+- if golfer.outside_ticks >= GRACE_TICKS {
++ if golfer.outside_ticks > GRACE_TICKS {
+
+### Z6 the HUD omits the grace clause
+@ src/hud.rs
+- in {next_s}s | GRACE {grace} | GATE {gate}",
++ in {next_s}s | GATE {gate} {}", grace.len() * 0,
+
+### X1 the cup is open from the start
+@ src/model.rs
+- pub const CUP_OPENS: u64 = 7200;
++ pub const CUP_OPENS: u64 = 0;
+
+### X2 the Hunter clubs the disabled
+@ src/npc.rs
+- .filter(|other| other.alive && other.idx != me.idx && other.stun_left == 0)
++ .filter(|other| other.alive && other.idx != me.idx)
+
+### X3 no swing cooldown
+@ src/model.rs
+- pub const SWING_COOLDOWN: u32 = 60;
++ pub const SWING_COOLDOWN: u32 = 0;
