@@ -138,3 +138,28 @@ pub fn shrinking_or_starts(tick: u64) -> Result<(), u64> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_next_circle_lies_inside_the_one_before_it() {
+        for seed in 0..200 {
+            let schedule = Schedule::draw(&mut Rng::from_seed(seed));
+            for pair in schedule.circles.windows(2) {
+                let gap = (pair[1].center - pair[0].center).length() + pair[1].radius;
+                assert!(gap <= pair[0].radius + 1e-3, "seed {seed}: {pair:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_zone_holds_then_shrinks_and_closes_at_two_minutes() {
+        let schedule = Schedule::draw(&mut Rng::from_seed(3));
+        assert_eq!(zone_at(&schedule, 0), schedule.circles[0]);
+        assert_eq!(zone_at(&schedule, 20 * 60 - 1), schedule.circles[0]);
+        assert_eq!(zone_at(&schedule, 32 * 60), schedule.circles[1]);
+        assert_eq!(zone_at(&schedule, 120 * 60).radius, 0.0);
+    }
+}

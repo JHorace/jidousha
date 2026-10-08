@@ -311,6 +311,7 @@ pub fn run() -> ExitCode {
     let grace = scenes::grace(&mut checks);
     let club = scenes::club(&mut checks);
     let gear = scenes::equipment(&mut checks);
+    let contracts = scenes::equipment_contracts(&mut checks);
 
     // Three players: the good one leaves with something, the idle one loses.
     let idle_ending = idle.game.golfers[0].ending.map(|(ending, _, _)| ending);
@@ -416,6 +417,7 @@ pub fn run() -> ExitCode {
     println!("  row 1 grace: {grace}");
     println!("  row 2 club: {club}");
     println!("  row 3 equipment: {gear}");
+    println!("  equipment contracts: {contracts}");
     println!("  row 4 extract: promised {promised:?}, result {kept:?}, log says {truth:?}");
     println!("  result screen: {result_glyphs} glyphs");
     println!(

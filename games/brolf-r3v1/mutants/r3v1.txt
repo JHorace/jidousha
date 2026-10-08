@@ -114,3 +114,8 @@
 @ src/rules.rs
 - stun_ticks: 60,⏎            steal: 0,
 + stun_ticks: 60,⏎            steal: 1,
+
+### B24 the DRIVER reaches 1.4x
+@ src/rules.rs
+- reach_scale: 1.5,
++ reach_scale: 1.4,

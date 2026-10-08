@@ -406,3 +406,47 @@ pub fn settle(game: &Match, who: usize, ending: Ending) -> Kept {
         },
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_ball_launched_for_a_distance_rolls_exactly_that_far() {
+        for distance in [0.5_f32, 3.0, 9.0, 14.0] {
+            let ball = Ball {
+                pos: Vec2::ZERO,
+                vel: Vec2::new(launch_speed(distance), 0.0),
+            };
+            let rolled = rest_of(ball).length();
+            assert!(
+                (rolled - distance).abs() < 1e-3,
+                "launched for {distance}, rolled {rolled}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_ball_stops_at_the_course_edge_rather_than_leaving_it() {
+        let ball = Ball {
+            pos: Vec2::new(COURSE.max.x - 1.0, 0.0),
+            vel: Vec2::new(launch_speed(10.0), 0.0),
+        };
+        let rest = rest_of(ball);
+        assert!(rest.x <= COURSE.max.x, "rested at {rest:?}");
+    }
+
+    #[test]
+    fn a_shot_with_no_wobble_stops_on_the_aimed_landing() {
+        let aim = Radians::from_degrees(30.0);
+        let aimed = landing(Vec2::ZERO, aim, 0.7, None);
+        let played = rest_of(Ball {
+            pos: Vec2::ZERO,
+            vel: struck(aim, 0.7, None, (0.0, 0.0)),
+        });
+        assert!(
+            (aimed - played).length() < 1e-3,
+            "{aimed:?} against {played:?}"
+        );
+    }
+}

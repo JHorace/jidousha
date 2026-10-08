@@ -14,7 +14,7 @@ use crate::checks::{Checks, within};
 use crate::draw::palette;
 use crate::events::Intent;
 use crate::players::Keyboard;
-use crate::rules::Item;
+use crate::rules::{self, Contact, Item};
 use crate::sim::{Brain, Match};
 use crate::text::{hint_line, status_lines};
 use crate::zone::{inside_at, shrink_window, zone_at};
@@ -228,4 +228,33 @@ pub fn equipment(checks: &mut Checks) -> String {
         format!("bare ball rolled {bare:.3} (want 9.0), HEAVY ball rolled {heavy:.3} (want 2.25)"),
     );
     format!("strike moves a bare ball {bare:.2}, a HEAVY ball {heavy:.2}")
+}
+
+/// The other two pieces of equipment, asked their contract directly: a club
+/// on a HELMET stuns for one second and takes nothing, and a full DRIVER shot
+/// stops 21 units out. Literals, so a constant that moves is seen moving.
+pub fn equipment_contracts(checks: &mut Checks) -> String {
+    let mut game = Match::new(11);
+    game.golfers[1].pos = game.golfers[0].pos + Vec2::new(1.5, 0.0);
+    game.golfers[1].stash = 2;
+    game.golfers[1].item = Some(Item::Helmet);
+    let club = rules::contact_for(&game, 0);
+    let says = rules::describe(Item::Helmet);
+    checks.require(
+        club == Some(Contact::Club {
+            target: 1,
+            stun_ticks: 60,
+            steal: 0,
+        }) && says.contains("stun 1.0s, lose 0 tokens"),
+        "a club on a HELMET does not do what the HELMET says",
+        format!("contact {club:?}; description {says:?}"),
+    );
+    let from = Vec2::new(-10.0, 0.0);
+    let reach = (rules::landing(from, Radians::ZERO, 1.0, Some(Item::Driver)) - from).length();
+    checks.require(
+        within(reach, 21.0, 0.01),
+        "a full DRIVER shot does not stop where the DRIVER says",
+        format!("rolled {reach:.3}, want 21.0"),
+    );
+    format!("HELMET club {club:?}; DRIVER full shot {reach:.2}")
 }
