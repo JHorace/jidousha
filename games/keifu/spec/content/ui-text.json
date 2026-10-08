@@ -209,7 +209,7 @@
       "source": "scene/scenes/summer.jai:72"
     },
     "help": {
-      "text": "Drag heroes onto a quest's seats, then press Set out. Point at a hero to read about them, or at a quest to see its odds in full. A quest nobody takes costs the house renown, and its place gets worse until someone answers it. Point at NEXT SUMMER to see what is coming.",
+      "text": "Drag heroes onto a quest's seats, then press Set out. Point at a hero to read about them, or at a quest to see its odds in full. A quest nobody takes costs the house renown, and its place gets worse until someone answers it.",
       "source": "keifu-fixes-r2 (port text, rewritten for clarity; lineage words in git history)"
     },
     "button_set_out": "Set out",

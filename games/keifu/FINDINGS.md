@@ -1323,3 +1323,73 @@ reset) earlier sessions had read and used. The documents were asked nothing new.
   `tools/mutate keifu mutants/*.txt` runs the same lists, unchanged. Both scored `w9.txt` on the same tree, 120 of
   120 with every per-fault verdict and both columns identical, and `--fast` agreed on every verdict. On warm
   worktrees the full pair took 47m45s and `--fast` 9m22s on this machine's four cores; the old harness took 54m41s.
+
+## keifu-fixes-r2 (yakin A/B re-run of keifu-fixes, 2026-10-07)
+
+**Reading discipline.** Read: `CLAUDE.md`, the `make-game` skill, the yakin task specs
+(`keifu-fixes.md`, `keifu-fixes-r2.md`), `spec/SPEC.md` §5-§7, §14.4, §18, `spec/content/ui-text.json`
+and `quests.json`, and the keifu source the three fixes touch. **Engine source and `docs/internal/`: not
+opened. The night-one counterpart (PR #126, its branch) was not opened**, as the r2 spec requires. G-numbers
+continue from main's last (G-069); the A/B counterpart may have used the same numbers — at most one of the
+pair merges, so the sequence stays single on main.
+
+### G-070 — "rewrite the tutorial" where the port has no tutorial
+
+Class: handoff (game) · Session: keifu-fixes-r2 · Owner: `tools/yakin/tasks/keifu-fixes.md` (step 2)
+
+**Doing:** finding the tutorial text the task says to rewrite, "above all the dice-roll explanations".
+
+**Expected:** a tutorial screen or a guide in the port, its strings in `spec/content/ui-text.json`.
+
+**Happened:** Lineage's paged guide (`ui.guide`, "How to play, %1 of %2") was never ported — `words.rs` names
+none of its keys. What teaches the player in the port is scattered: the summer dock's idle help
+(`summer.help`) and the quest sheet's dice block (`quest_sheet.dice/triumph/success/setback/disaster/
+unanswered`), plus the trouble stakes. The guide's own SUMMER entry ("plus two dice less 7 ... Beat it by 4
+for a triumph") is the dice explanation the brief most likely meant, and it is not on any screen.
+
+**What I did:** rewrote the strings the port shows (summer help, the sheet's dice block, the trouble stakes)
+and left `ui.guide` untouched — rewriting text no screen draws would be a change nobody can see or check.
+Porting the guide is a feature, not a rewording; it is named in the PR as not done.
+
+### G-071 — the quest sheet's length is held by the W4 oracle's history check (game's own)
+
+Class: game · Session: keifu-fixes-r2 · Owner: keifu (`src/w4.rs`, "the Barrow's history panel")
+
+**Doing:** lengthening the sheet's dice text and adding the telegraph line.
+
+**Expected:** a longer sheet scrolls in the dock and every check reads it whole.
+
+**Happened:** the W4 oracle reads the history panel off the dock's *first page*; my first wording pushed the
+panel to page two and 135 checks failed (27 seeds x the four outcome lines plus the panel). Garrick and
+Brannoc on Grave goods is the sheet those checks read: 595 px of 696 before, **684 px now — 12 px of slack**.
+
+**What I did:** cut the wording back to fit (the dice line two lines, triumph three, disaster four, the
+telegraph three). The next session that adds a line to a quest sheet meets this ceiling; the honest fix is a
+history check that pages through the dock (`verify::dock_pages`) rather than shorter prose.
+
+### G-072 — the foresight cannot live in the idle dock (game's own)
+
+Class: game · Session: keifu-fixes-r2 · Owner: keifu (`src/floors.rs`, "the idle dock holds the help, and
+nothing else")
+
+**Doing:** placing next summer's foresight "on the summer board, readable while seating".
+
+**Happened:** the idle dock is the one roomy surface, and a floor asserts it holds exactly the help; the
+cards have one spare line; the left column has 64 px under a full yard. The foresight went behind a NEXT
+SUMMER label at the foot of the left column, read in the dock when pointed at — the idiom the Door's lines
+already use. Not a separate screen, but not at a glance either: a playtest question.
+
+### Session summary
+
+- **The telegraph** (`outlook::telegraph`): a quest left raises its place's trouble (`resolve::risen_trouble`,
+  the function the resolution now calls); the next quest there is one of the place's templates other than the
+  remembered one, through `quest::stakes` at that trouble in the next year. Shown on an empty card ("Left:
+  danger 2-4, room 1-2") and on its sheet ("Left: trouble 1 here. Next time: danger 2-4, room 1-2, needs up to
+  15, pays 2-4."). The need is "up to": easing (§5.2) only lowers a demand. A ghost's quest is outside it.
+- **The foresight** (`outlook::foresight`): each place's trouble next summer as seated (`eased_trouble` /
+  `risen_trouble` / unchanged), the first ghost, the demand step, the Door's year. Nothing drawn early: the
+  RNG stream and every existing oracle are untouched.
+- **The checks** (`r2_checks.rs`): on 27 recorded seeds, year 1 left, the year-2 board held against what the
+  cards, sheets and foresight said; seating on Grave goods turning the Barrow calm; a staged ghost foreseen
+  and posted. Shipped literals for year 1's two forced quests and two unit-test cases worked by hand.
+- **The mutation round:** `mutants/r2.txt`, 19 faults — see the PR for the score.

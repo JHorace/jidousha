@@ -19,7 +19,7 @@ dice explanation — "Two dice, less 7, are added to that." and the four outcome
   sim reads (`DICE_MIDPOINT`, `TRIUMPH_MARGIN`, `SETBACK_MARGIN`, the quest's renown,
   danger, `death_percent`), so no stated number can drift from the sim. The dice line
   gains the dice's swing (-5 to +5), computed from `DICE_SIDES`/`DICE_MIDPOINT`.
-- The help adds one sentence pointing at the new NEXT SUMMER label.
+- The help does not mention NEXT SUMMER: the last summer has no such label and shares the help.
 - Assertions quoting the old words are updated: `quest_sheet.rs` unit tests, `w4.rs`
   (the four outcome lines), `w4_rules.rs` (dice line, trouble stakes). Each listed in the PR.
 
