@@ -1323,3 +1323,61 @@ reset) earlier sessions had read and used. The documents were asked nothing new.
   `tools/mutate keifu mutants/*.txt` runs the same lists, unchanged. Both scored `w9.txt` on the same tree, 120 of
   120 with every per-fault verdict and both columns identical, and `--fast` agreed on every verdict. On warm
   worktrees the full pair took 47m45s and `--fast` 9m22s on this machine's four cores; the old harness took 54m41s.
+
+---
+
+## keifu-x-inheritance-r3v1 — the fork (yakin V1, round three)
+
+Everything above this rule is mainline Keifu's ledger, copied with the game. What follows is this
+fork's: one tick lineage that designed inline (`tools/yakin/runs/keifu-x-inheritance-r3v1/DESIGN.md`),
+copied `games/keifu` and renamed it, then added the black mark, outsiders and trait genetics. Reading
+discipline: mainline `games/keifu/` (spec and source) was read whole, as the task spec requires;
+`docs/api/` for engine questions; no `crates/*/src/`, `docs/internal/` or unnamed ADR.
+
+### G-070 — a forked game's pictures land on its parent's file names
+
+Class: game/tooling · Session: keifu-x-inheritance-r3v1 · Owner: `docs/api/jidousha-capture.md` (where
+a capture is written), and the `make-game` skill if forking becomes a pattern
+
+**Doing:** the fork's first commit — copy `games/keifu`, rename the crate, verify green.
+
+**Expected:** that renaming the package, binary, window title and message prefixes made the copy
+independent of mainline on disk as well as in cargo.
+
+**Happened:** Keifu's capture writes each picture to `<workspace>/target/verify/<file>` with file names
+it chooses itself (`keifu.png`, `keifu-w8-death.png`, …). A copy that keeps them overwrites mainline's
+pictures whenever both verify in one `tools/test` run — and `tools/verify`'s report for either game
+would point at a PNG the other drew. Nothing fails; the pictures are silently the wrong game's. The
+capture document says how to word the `capture:` line, not that the file name is a global namespace.
+
+**What I did:** renamed every capture file in the fork to `keifu_x_inheritance_r3v1*.png` in the
+copy-and-rename commit (the fork rule's "any asset or path string naming keifu that would collide").
+
+**Fix:** one sentence in the capture document: the picture's path is shared by every playable in the
+workspace, so name it after the playable (or have the engine prefix it).
+
+### docs/api: 0 findings beyond G-070
+
+The variant is rules over the game's own state. Every engine surface it touched — `Rng::from_seed` for
+the gene sub-generators, the scripted pointer, the page's rows and targets, the per-session recorder —
+mainline had already read and used. The documents were asked nothing new.
+
+### The game's own (the fork)
+
+- **Gene rolls never touch the run's generator.** Each hero's genes come from a sub-generator seeded
+  by the house's seed and the hero's id (`genes::gene_rng`), so mainline's roll inventory (SPEC §22.2)
+  is unchanged: a mainline seed replays the same births, deaths and arrivals here, and the copied W5–W10
+  batteries kept their meaning without a rewrite.
+- **Founding adults carry no traits**; only Pip (Strong) and Wren (Bold, Clever) do — so every founding
+  oracle's power number stands. Traits enter the house through them, wanderers and mutation.
+- **A hero sheet shows the blood line only when there is something to say** (an outsider, a trait or a
+  mark). Always showing it pushed a founder's sheet one line past the dock and broke mainline's mid-drag
+  picture (the wheel scroll dropped the held hero).
+- **The quest sheet's word on a personal quest rides on the call line** ("… He must triumph. Failing
+  marks the name.") rather than a line of its own: a line of its own pushed the place's history panel out
+  of the dock in mainline's W4 oracle. The card's mark line carries the numbers.
+- **Heir buttons are two lines** (46 px, was 30): mainline's label, then "holds <traits>; marks <n>".
+  Appended to the label it ran out of the button at 1280×720.
+- **Mainline staging rewritten to the variant:** `w8::stir`'s wanderer is staged as married into the
+  name, since an outsider is never an heir and mainline's heir oracle needs a burdened stranger on the
+  list; `w8::heir_labels` reads a button's first line (the label), `w8::heir_holds` its second.
