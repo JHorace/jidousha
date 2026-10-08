@@ -2,11 +2,11 @@
 
 task: brolf-r3v1
 variant: V1
-stage: implement
-tick: live
+stage: done
+tick: released
 resumes: 0
-gates-green-at: none
-updated: 2026-10-07 21:40 PDT
+gates-green-at: e943e29
+updated: 2026-10-07 21:52 PDT
 
 ## Done so far
 - claimed
@@ -16,8 +16,10 @@ updated: 2026-10-07 21:40 PDT
 - mutation round: 22/23 first pass (B23 helmet escaped), contract check added, B23+B24 2/2 — 24/24 overall
 - FINDINGS.md G-070..G-073; build-web + serve-web --check pass
 
+- full gate green at e943e29 (tools/test 1492 passed); PR https://github.com/JHorace/jidousha/pull/139 opened
+
 ## Exact next step
-Run the full gate (doctor, tools/test in background, check-claude-md, yakin check), then open the PR per WORKER.md §4.
+None — done. The PR awaits review; never merge from a tick.
 
 ## Deviations
 - cups are single-use and open one at a time (CUP_OPENS 0/12/24/36/48 s) instead of once-per-golfer: first build had a champion in 7 s
