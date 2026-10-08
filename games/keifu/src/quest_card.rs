@@ -222,6 +222,12 @@ mod tests {
         assert_eq!(card.tags, [("Dark".to_owned(), false)]);
         assert_eq!(card.idle, None);
         assert_eq!(card.danger, 2);
+        // A seated quest is not being left: the telegraph is for an empty card only.
+        assert_eq!(card.telegraph, None);
+        assert_eq!(
+            empty.telegraph.as_deref(),
+            Some("Left: danger 2-4, room 1-2")
+        );
     }
 
     #[test]

@@ -311,7 +311,10 @@ mod tests {
         house.templates_last[Place::Barrow.index()] = grave;
         let telegraph = telegraph(&content, &house, 0).expect("year 6 has a next summer");
         assert_eq!(telegraph.demand_most, 17);
-        assert_eq!(card_line(&content, &telegraph), "Left: danger 2-4, room 1-2");
+        assert_eq!(
+            card_line(&content, &telegraph),
+            "Left: danger 2-4, room 1-2"
+        );
     }
 
     #[test]
