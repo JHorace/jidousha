@@ -2,11 +2,11 @@
 
 task: stack-card-game-r3v2
 variant: V2
-stage: implement
-tick: live
+stage: done
+tick: released
 resumes: 0
 gates-green-at: 5693ad7
-updated: 2026-10-07 21:47 PDT
+updated: 2026-10-07 21:48 PDT
 
 ## Done so far
 - claimed (32f5e58)
@@ -15,10 +15,11 @@ updated: 2026-10-07 21:47 PDT
 - DESIGN.md re-read and fixed: G4 restaged so passes = 1 is reachable, G5 pass count, resolution-order cell, cell widths vs string lengths, blurbs <= 16 chars, says lines <= 20 chars; design released (90882b5)
 - implement: games/stack-card-game-r3v2/ built whole per DESIGN.md Systems; --verify passes all gates (G1-G11, G13), sequencer 7/12, brute 0/12, nothing 0/12; fast gate clean (6a45d1b)
 - mutation round 1: 10 of 11 first pass (M9 escaped), check added, rerun 11 of 11; games FINDINGS.md G-070..G-072 (5693ad7)
-- full gate green at 5693ad7: doctor ENV_OK, tools/test pass (1499/0/0), check-claude-md, yakin check; verify pass; build-web + serve-web --check pass; run-folder FINDINGS entry moved to the game's ledger (this commit)
+- full gate green at 5693ad7: doctor ENV_OK, tools/test pass (1499/0/0), check-claude-md, yakin check; verify pass; build-web + serve-web --check pass; run-folder FINDINGS entry moved to the game's ledger (7e718eb)
+- PR opened: https://github.com/JHorace/jidousha/pull/137 (this commit)
 
 ## Exact next step
-Open the PR (WORKER.md §4) with title `[yakin:V2:r3] Stack card game: a two-player duel fought over the stack`, then set stage: done, tick: released.
+None — done. The PR waits on the owner.
 
 ## Deviations
 - hand panel title shortened to `HAND - 1-6 plays`: DESIGN.md's `HAND - 1-6 plays, Space passes` at TITLE size runs 78 units off the right edge (floors caught it).
