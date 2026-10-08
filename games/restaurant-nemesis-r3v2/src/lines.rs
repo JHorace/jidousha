@@ -67,7 +67,7 @@ pub(crate) fn order_lines(game: &Game, row: usize) -> (String, String, Tone) {
         }
         Consequence::Nothing => ("no spawn".to_owned(), Tone::Faint),
     };
-    let mut second = format!(
+    let second = format!(
         "  served: +${} +{} rep | unmet: {} sev {} -> {consequence}, -${} -{} rep",
         served.money,
         served.rep,
@@ -76,8 +76,9 @@ pub(crate) fn order_lines(game: &Game, row: usize) -> (String, String, Tone) {
         -unmet.money,
         -unmet.rep
     );
+    let mut first = first;
     if unmet.leader_followers > 0 {
-        second.push_str(&format!(", +{} fol to leader", unmet.leader_followers));
+        first.push_str(&format!(" +{} fol if unmet", unmet.leader_followers));
     }
     (first, second, tone)
 }
