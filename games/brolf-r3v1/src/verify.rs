@@ -213,7 +213,11 @@ fn layout(
         for quad in frame.quads() {
             let bounds = quad.bounds();
             let gap = (bounds.min - view.min).min(view.max - bounds.max);
-            clearance = clearance.min(gap.x.min(gap.y));
+            // The status band is full-bleed on purpose and flush with three
+            // edges; the margin worth printing is everything else's.
+            if quad.tint != palette::PANEL {
+                clearance = clearance.min(gap.x.min(gap.y));
+            }
             if !view.contains_rect(bounds) {
                 checks.require(
                     false,
@@ -414,7 +418,9 @@ pub fn run() -> ExitCode {
     println!("  row 3 equipment: {gear}");
     println!("  row 4 extract: promised {promised:?}, result {kept:?}, log says {truth:?}");
     println!("  result screen: {result_glyphs} glyphs");
-    println!("  closest quad to the edge: {clearance:.2} world units");
+    println!(
+        "  closest quad to the edge, the full-bleed status band aside: {clearance:.2} world units"
+    );
     println!("  capture: {captured}");
     print!("{}", result.transcript());
     verdict
