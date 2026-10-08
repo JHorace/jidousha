@@ -1392,4 +1392,17 @@ already use. Not a separate screen, but not at a glance either: a playtest quest
 - **The checks** (`r2_checks.rs`): on 27 recorded seeds, year 1 left, the year-2 board held against what the
   cards, sheets and foresight said; seating on Grave goods turning the Barrow calm; a staged ghost foreseen
   and posted. Shipped literals for year 1's two forced quests and two unit-test cases worked by hand.
-- **The mutation round:** `mutants/r2.txt`, 19 faults — see the PR for the score.
+- **The mutation round.** `mutants/r2.txt`, 19 faults (the trouble functions, the telegraph's templates, year,
+  wobble and lines, the foresight's three cases, the ghost, the Door's year, the demand step, the dice swing, the
+  label, the dock subject, the card's draw). Round one on `8df7278`: **18 of 19** — R16 (a seated card's reading
+  carrying a telegraph) escaped because the board view draws it only on an empty card; `quest_card.rs` now asserts
+  the reading itself, and R16 is noticed on `22454f1`. Then every list filtered to the files this task touched
+  (`tools/mutate keifu mutants/*.txt --fast --changed-since e2e1c21`, on `22454f1`): **175 of 176 noticed**, none
+  unbuilt (tests alone 81) — `r2.txt` 19 of 19; the one escape is w4 K8, a known equivalent. Three w6 faults (U1,
+  R9, R10) named code this task moved into `resolve::risen_trouble`/`eased_trouble` and were re-cut to the same
+  fault there, marked "(re-cut r2)".
+- **The pictures** (each opened): `screens/r2-outlook.png` (the foresight open in the dock beside year 1's empty
+  cards and their telegraph lines) and `screens/r2-telegraph.png` (Grave goods' sheet with the rewritten dice block
+  and the telegraph line); `dock-idle`, `dock-scrolled`, `w0-w1-garrick`, `w1-wren-child`, `w10-reset` re-taken for
+  the NEXT SUMMER label and the card lines, `w10-door-card`/`w10-door-empty` for the help's new words (the last
+  summer has no label).
