@@ -60,8 +60,11 @@
 //!     sheet longer than the dock, at the native window and two web canvases (`floors.rs`).
 //! 13. **The sheet dock** as the player works it: resting, scrolling, a new subject,
 //!     the hero in hand, a drop on it (`dock_checks.rs`).
-//! 14. **The cast's sprites**: every role imported, every card its role's texture (`cast.rs`).
-//! 15. **A picture** of each oracle's screen (`capture.rs`).
+//! 14. **keifu-fixes-r2**: the telegraph on an empty card and its sheet, and the
+//!     foresight behind NEXT SUMMER, read at seating and held against next summer's
+//!     board (`r2_checks.rs`).
+//! 15. **The cast's sprites**: every role imported, every card its role's texture (`cast.rs`).
+//! 16. **A picture** of each oracle's screen (`capture.rs`).
 
 use std::process::ExitCode;
 
@@ -385,6 +388,8 @@ pub fn run() -> ExitCode {
     summary.push(crate::sessions::check_staged_sheets(&mut checks));
     summary.push(crate::cast::check_art(&mut checks, &mut recorder));
     summary.push(crate::dock_checks::check(&mut checks));
+    summary.push(crate::r2_checks::check_telegraph_and_foresight(&mut checks));
+    summary.push(crate::r2_checks::check_foresight_live(&mut checks));
     summary.extend(crate::floors::check(&mut checks));
     let Some(garrick_frame) = garrick_frame else {
         fail("no frame of Garrick's sheet was recorded", "SEEDS is empty");

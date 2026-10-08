@@ -48,6 +48,7 @@ fn resting(ui: UiState, target: Option<Target>) -> UiState {
             _ => None,
         },
         pointing_door: target == Some(Target::DoorHelp) && !ui.family_open,
+        pointing_outlook: target == Some(Target::Outlook) && !ui.family_open,
         drag: None,
         ..ui
     }

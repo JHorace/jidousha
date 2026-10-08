@@ -130,6 +130,9 @@ pub enum Target {
     Heir(usize, Option<HeroId>),
     /// The top bar's Door lines: pointing at them opens the Door's help in the dock.
     DoorHelp,
+    /// The summer's NEXT SUMMER label: pointing at it opens the foresight in the dock
+    /// (`outlook.rs`; not in lineage).
+    Outlook,
 }
 
 /// A hero in hand: picked up from a seat and not yet released.
@@ -158,6 +161,8 @@ pub struct UiState {
     pub pointing_group: Option<crate::hearth::Group>,
     /// The pointer rests on the top bar's Door lines.
     pub pointing_door: bool,
+    /// The pointer rests on the summer's NEXT SUMMER label.
+    pub pointing_outlook: bool,
     /// The hero in hand, if a drag is under way.
     pub drag: Option<Drag>,
     /// The first line the sheet dock shows: how far its sheet is scrolled.

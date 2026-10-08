@@ -179,7 +179,7 @@ const BANDS: [Color; 4] = [
 
 /// One quest card, top to bottom: the place; its tags, and its danger in pips; the
 /// title; what it needs and what the party brings; the odds bar and the four odds
-/// (or, with nobody going, the idle line); renown and the cost of leaving it; the
+/// (or, with nobody going, the idle line and what leaving it does); renown and the cost of leaving it; the
 /// dream and warning lines; and the seats along the foot.
 fn draw_card(page: &mut Page, card: &CardReading, rect: Rect, hot: bool) {
     page.shape(rect, if hot { ink::HOT } else { ink::PANEL }, layers::PANEL);
@@ -291,6 +291,9 @@ fn draw_card(page: &mut Page, card: &CardReading, rect: Rect, hot: bool) {
         }
         (None, Some(idle)) => {
             y = paragraph(page, idle, line(y + 4.0), MIN_TEXT, ink::NOTE, rect);
+            if let Some(telegraph) = &card.telegraph {
+                y = paragraph(page, telegraph, line(y), MIN_TEXT, ink::WARN, rect);
+            }
         }
         (None, None) => {}
     }

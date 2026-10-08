@@ -44,6 +44,20 @@ pub fn door_help_lines(content: &Content, house: &House, width: f32) -> Vec<Line
     vec![paragraph(&help, width, MIN_TEXT, ink::NOTE)]
 }
 
+/// Next summer's foresight (`outlook::foresight`): its heading, then each line under it.
+pub fn outlook_lines(content: &Content, house: &House, width: f32) -> Vec<Line> {
+    crate::outlook::foresight(content, house)
+        .into_iter()
+        .enumerate()
+        .map(|(index, text)| {
+            let color = if index == 0 { ink::HEADING } else { ink::NOTE };
+            let mut line = paragraph(&text, width, MIN_TEXT, color);
+            line.space = if index == 0 { 0.0 } else { 6.0 };
+            line
+        })
+        .collect()
+}
+
 /// A group of winter seats' help: its heading, then what its seats do.
 pub fn group_lines(content: &Content, group: crate::hearth::Group, width: f32) -> Vec<Line> {
     let (heading, help) = crate::hearth_help::group_help(content, group);

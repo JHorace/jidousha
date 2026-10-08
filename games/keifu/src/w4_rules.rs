@@ -171,7 +171,7 @@ pub fn check_rules(checks: &mut Checks) -> String {
     house.places[coast].visits = 3;
     house.places[coast].disasters = 1;
     let sheet = quest_sheet(content, &house, 1, &[]);
-    let stakes = "The tide has had the Drowned Coast to itself for a year. Room for 1 where there was room for 2. Each who goes must bring 1 more, the danger is 1 higher, and it pays 1 more renown. Answer it, however it goes, and it eases.";
+    let stakes = "The tide has had the Drowned Coast to itself for a year. Room for 1 where there was room for 2. Everyone who goes has to bring 1 more, it is 1 more dangerous, and it pays 1 more renown. Send anyone, win or lose, and it eases.";
     checks.require(
         sheet.lines.iter().any(|l| l.text == stakes),
         "the sheet tells a troubled quest's stakes",
@@ -285,7 +285,7 @@ pub fn check_rules(checks: &mut Checks) -> String {
             ("Garrick, Spirit 4", None),
             ("  fears deep water", Some("-3")),
             ("Maren and Garrick, child and parent", Some("+2")),
-            ("Two dice, less 7, are added to that.", None),
+            ("Then two dice, less 7: luck adds -5 to +5.", None),
         ],
     );
     // A call that hangs on the party: Odo, wanting to see a student he taught succeed
