@@ -12,7 +12,7 @@ use jidousha::prelude::*;
 use jidousha::testing::{InputEvent, InputScript, InputSnapshot, SnapshotBuilder};
 
 use crate::npc;
-use crate::rules::{Fate, atan_to, charge_for};
+use crate::rules::{Fate, atan_to, charge_for, course, effects, landing_of, polar, shot_speed_for};
 use crate::sim::{Aim, Intent, Snapshot};
 
 /// The aim's dead band: half of one 2.5-degree step.
@@ -107,6 +107,7 @@ pub fn signed_degrees(want: Radians, now: Radians) -> f32 {
 #[derive(Clone, Copy)]
 struct Shot {
     target: Vec2,
+    points: u32,
     planned: Vec2,
     released_at: u64,
     met: bool,
@@ -120,6 +121,7 @@ struct Tally {
     aimed_off: f32,
     landed_off: f32,
     landed: u32,
+    holed: u32,
     pending: Option<Shot>,
     spacing: bool,
 }
@@ -139,8 +141,14 @@ impl Tally {
                 }
             }
             if shot.met && ball.at_rest {
-                self.landed_off += ball.pos.distance(shot.planned);
-                self.landed += 1;
+                // A holed ball is lifted out beside the cup, so where it lies
+                // says nothing about the aim.
+                if snap.golfer(0).points > shot.points {
+                    self.holed += 1;
+                } else {
+                    self.landed_off += ball.pos.distance(shot.planned);
+                    self.landed += 1;
+                }
                 self.pending = None;
             } else if !shot.met {
                 self.pending = None;
@@ -152,10 +160,16 @@ impl Tally {
         if self.spacing && !space && golfer.charge > 0 && golfer.fate == Fate::Playing {
             self.intended += 1;
             if let Some(plan) = plan
-                && let (Some(target), Some(landing)) = (plan.target, plan.landing)
+                && let (Some(target), Aim::Set(aim)) = (plan.target, plan.intent.aim)
             {
+                // Planned at the intended angle and the charge actually held,
+                // so the gap to where it stops is the aim's dead band alone.
+                let mine = effects(&golfer.held);
+                let speed = shot_speed_for(&mine, &mine, true, golfer.charge);
+                let landing = landing_of(ball.pos, polar(1.0, aim), speed, course(), snap.dt);
                 self.pending = Some(Shot {
                     target,
+                    points: golfer.points,
                     planned: landing.at,
                     released_at: tick,
                     met: false,
@@ -168,11 +182,12 @@ impl Tally {
     fn line(&self) -> String {
         let mean = |sum: f32, n: u32| if n == 0 { 0.0 } else { sum / n as f32 };
         format!(
-            "met {} of {} strikes, planned landings {:.2} from target, landed {:.2} from planned",
+            "met {} of {} strikes, planned landings {:.2} from target, landed {:.2} from planned ({} holed)",
             self.met,
             self.intended,
             mean(self.aimed_off, self.met),
             mean(self.landed_off, self.landed),
+            self.holed,
         )
     }
 }

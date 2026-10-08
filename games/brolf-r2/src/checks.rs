@@ -1,5 +1,5 @@
 //! The instrument: an accumulator for failed checks, and the float comparisons
-//! every reading in this example is spelled with.
+//! every reading in this game's verify is spelled with (prototype_kit's, unchanged).
 //!
 //! Nobody running `--verify` can look at the game, so these messages are the
 //! only instrument there is. Two rules follow, and both cost a cycle to learn:

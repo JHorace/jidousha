@@ -130,12 +130,9 @@ pub fn play(player: &mut dyn Player, plan: &Plan) -> Session {
                 &format!("tick {tick}: Startup should have inserted `Course` on tick 1"),
             );
         };
-        session.panels.push(
-            whole(&snap)
-                .all_strings()
-                .map(str::to_owned)
-                .collect(),
-        );
+        session
+            .panels
+            .push(whole(&snap).all_strings().map(str::to_owned).collect());
         let over = snap.over.is_some();
         if let Some(drawer) = drawer.as_mut() {
             let frame = drawer.draw(&mut sim);
@@ -162,7 +159,11 @@ pub fn play(player: &mut dyn Player, plan: &Plan) -> Session {
 // --- staging helpers ----------------------------------------------------------
 
 /// Change the golfer in `seat`.
-pub fn with_golfer(world: &mut World, seat: usize, change: impl FnOnce(&mut Golfer, &mut Transform)) {
+pub fn with_golfer(
+    world: &mut World,
+    seat: usize,
+    change: impl FnOnce(&mut Golfer, &mut Transform),
+) {
     for (_, golfer, transform) in world.query_mut::<(&mut Golfer, &mut Transform)>() {
         if golfer.seat == seat {
             change(golfer, transform);
@@ -225,6 +226,9 @@ fn a_after_300(world: &mut World) {
     let me = golfer_pos(world, 0);
     place_ball(world, 1, me + Vec2::new(0.6, 0.0));
     with_golfer(world, 0, |g, _| g.aim = Radians::ZERO);
+    // Whatever N1 looted since its stun, it holds nothing now: the sledge is
+    // asserted at the full 13.5, which a Heavy would halve.
+    with_golfer(world, 1, |g, _| g.held.clear());
     for seat in 1..4 {
         with_golfer(world, seat, |g, _| g.cooldown = 10_000);
     }

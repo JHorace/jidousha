@@ -9,6 +9,7 @@
 use jidousha::prelude::*;
 use jidousha::ui::{Cell, Floors, Icon, Mapping, Panel, TextRun};
 
+use crate::TURF;
 use crate::layers;
 use crate::rules::{
     BALL_RADIUS, CUP_RADIUS, Circle, Fate, GOLFER_RADIUS, GRACE_TICKS, Item, Landing, SLOTS,
@@ -16,7 +17,6 @@ use crate::rules::{
     walk_ticks, zone_at,
 };
 use crate::sim::{Match, Snapshot, read_snapshot};
-use crate::TURF;
 
 /// The design space chrome is laid out in.
 pub const DESIGN: Vec2 = Vec2::new(960.0, 540.0);
@@ -204,14 +204,13 @@ pub fn status_panel(snap: &Snapshot, seat: usize) -> Panel<Art> {
         panel.text(row(i).run(text, small(color)));
     };
     let me = snap.golfer(seat);
-    let (k, phase) = phase_of(snap.tick);
+    let (k, _) = phase_of(snap.tick);
     let zone_word = if k >= 4 {
         "zone closed".to_owned()
     } else {
         format!("zone {}/4", k + 1)
     };
     put(0, &format!("BROLF {} {zone_word}", clock(snap.tick)), INK);
-    let _ = phase;
     put(1, &phase_line(snap.tick), DIM);
     put(
         2,
@@ -258,7 +257,11 @@ pub fn status_panel(snap: &Snapshot, seat: usize) -> Panel<Art> {
             let degrees = me.aim.to_degrees().rem_euclid(360.0).round() as i32;
             let charge = me.charge * 100 / crate::rules::CHARGE_TICKS;
             put(8, &format!("aim: {degrees} deg charge {charge}%"), INK);
-            let word = if preview.in_zone_at_arrival { "IN" } else { "OUT" };
+            let word = if preview.in_zone_at_arrival {
+                "IN"
+            } else {
+                "OUT"
+            };
             let color = if preview.in_zone_at_arrival { OK } else { WARN };
             let distance = preview.landing.at.distance(preview.from);
             put(9, &format!("reach {distance:.1} lands {word}"), color);
@@ -308,7 +311,11 @@ pub fn status_panel(snap: &Snapshot, seat: usize) -> Panel<Art> {
             && snap.course.pad.contains(me.pos)
             && snap.course.pad.contains(ball.pos)
         {
-            put(16, &format!("X: extract, keeps {}", snap.banked(seat)), GOLD);
+            put(
+                16,
+                &format!("X: extract, keeps {}", snap.banked(seat)),
+                GOLD,
+            );
         }
     }
     for (i, npc) in (1..4).enumerate() {
@@ -397,7 +404,12 @@ pub fn draw_play(ctx: &mut DrawCtx) {
         } else if golfer.out_ticks > 0 {
             ring(ctx, golfer.pos, 0.52, WARN, layers::PLAY, 0.2);
         }
-        ctx.circle(golfer.pos, GOLFER_RADIUS, SEAT_COLORS[golfer.seat], play(1.0));
+        ctx.circle(
+            golfer.pos,
+            GOLFER_RADIUS,
+            SEAT_COLORS[golfer.seat],
+            play(1.0),
+        );
     }
     for ball in &snap.balls {
         if !snap.golfer(ball.owner).fate.alive() {

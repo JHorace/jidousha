@@ -17,8 +17,8 @@
 use jidousha::prelude::*;
 
 use crate::rules::{
-    EXTRACT_PHASE, Landing, atan_to, bank_now, charge_for, course, effects, landing_of,
-    phase_of, polar, shot_speed_for, walk_ticks, zone_at,
+    EXTRACT_PHASE, Landing, atan_to, bank_now, charge_for, course, effects, landing_of, phase_of,
+    polar, shot_speed_for, walk_ticks, zone_at,
 };
 use crate::sim::{Aim, Intent, Snapshot};
 
