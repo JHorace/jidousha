@@ -2,17 +2,18 @@
 
 task: stack-card-game-r3v1
 variant: V1
-stage: design
+stage: implement
 tick: live
 resumes: 0
 gates-green-at: none
-updated: 2026-10-07 21:08 PDT
+updated: 2026-10-07 21:11 PDT
 
 ## Done so far
 - claimed
+- design inline: games/stack-card-game-r3v1/DESIGN.md + run DESIGN.md
 
 ## Exact next step
-Read tools/yakin/tasks/stack-card-game.md and the make-game skill; write games/stack-card-game-r3v1/DESIGN.md and tools/yakin/runs/stack-card-game-r3v1/DESIGN.md.
+Write games/stack-card-game-r3v1/Cargo.toml and src/rules.rs (pure duel model per DESIGN.md), then main.rs/screen.rs.
 
 ## Deviations
 - none
